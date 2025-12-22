@@ -2,35 +2,24 @@
 	/**
 	 * Aero Dynamic Window - Main Page
 	 *
-	 * Immersive airplane window experience with:
+	 * Circadian-aware airplane window display with:
 	 * - Real terrain and buildings (Cesium)
-	 * - Wing, clouds, weather (Three.js)
-	 * - Flight simulation (moving view)
+	 * - Wing, clouds, weather (Threlte/Three.js)
+	 * - Time-synced sky states
 	 * - Cabin interior context
 	 */
 
-	import { onMount } from "svelte";
-	import { createViewerState } from "$lib/core/state.svelte";
-	import { getFlightSimulation } from "$lib/core/FlightSimulation.svelte";
+	import { createAppState, LOCATIONS } from "$lib/core";
 	import Window from "$lib/layers/Window.svelte";
 	import Controls from "$lib/layers/Controls.svelte";
 
-	// Create the viewer state (provides context to all child components)
-	const viewerState = createViewerState();
-	const flight = getFlightSimulation();
+	// Create unified app state (provides context to all child components)
+	// All state is reactive via $state/$derived in WindowModel
+	const { model } = createAppState();
 
-	// Auto-start flight simulation with proper cleanup
-	onMount(() => {
-		// Start gentle drift motion after a brief delay
-		const startTimeout = setTimeout(() => {
-			flight.start();
-		}, 2000);
-
-		return () => {
-			clearTimeout(startTimeout);
-			flight.stop();
-		};
-	});
+	// Derived display values
+	const currentLocation = $derived(LOCATIONS.find(l => l.id === model.location)?.name ?? 'Unknown');
+	const altitudeDisplay = $derived(`${(model.altitude / 1000).toFixed(0)}k ft`);
 </script>
 
 <svelte:head>
@@ -56,14 +45,11 @@
 	</div>
 
 	<!-- Flight status indicator -->
-	<div class="flight-status" class:active={flight.isRunning}>
+	<div class="flight-status" class:active={model.blindOpen}>
 		<span class="status-dot"></span>
 		<span class="status-text">
-			{flight.isRunning ? `Flying ${flight.groundSpeed} kts` : "Paused"}
+			{model.isTransitioning ? `Flying to ${model.transitionDestination}...` : `${currentLocation} · ${altitudeDisplay}`}
 		</span>
-		<button class="flight-toggle" onclick={() => flight.toggle()}>
-			{flight.isRunning ? "⏸" : "▶"}
-		</button>
 	</div>
 
 	<!-- Controls Panel -->
@@ -216,24 +202,5 @@
 
 	.status-text {
 		min-width: 100px;
-	}
-
-	.flight-toggle {
-		background: rgba(255, 255, 255, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		color: white;
-		width: 28px;
-		height: 28px;
-		border-radius: 50%;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 0.7rem;
-		transition: all 0.2s;
-	}
-
-	.flight-toggle:hover {
-		background: rgba(255, 255, 255, 0.2);
 	}
 </style>

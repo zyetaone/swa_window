@@ -1,7 +1,5 @@
 /**
- * Shader Index
- *
- * Export all shader modules for easy importing
+ * Shader Index - Common GLSL utilities
  */
 
-export * from './volumetricClouds';
+export * from './common.glsl';
