@@ -12,21 +12,3 @@ export interface SunPosition {
 	azimuth: number;
 	height: number;
 }
-
-export type ViewType =
-	| 'dubai'
-	| 'mumbai'
-	| 'hyderabad'
-	| 'dallas'
-	| 'phoenix'
-	| 'las_vegas'
-	| 'himalayas'
-	| 'ocean'
-	| 'desert'
-	| 'clouds';
-
-export interface GeoCoordinate {
-	lat: number;
-	lon: number;
-	altitude?: number;
-}

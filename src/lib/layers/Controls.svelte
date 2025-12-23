@@ -1,132 +1,53 @@
 <script lang="ts">
 	/**
-	 * Controls.svelte - Modern comprehensive control panel
+	 * Controls.svelte - Minimal kiosk-friendly control panel
 	 *
-	 * Sections: Presets, Location, Camera, Time, Atmosphere, Window
+	 * Design: Hidden by default, tap to reveal, auto-hide after inactivity
+	 * For circadian-aware passive display - not a complex control app
 	 */
 
-	import {
-		getViewerState,
-		LOCATIONS,
-		type LocationId,
-	} from "$lib/core/state.svelte";
-	import {
-		getFlightSimulation,
-		FLIGHT_PATHS,
-	} from "$lib/core/FlightSimulation.svelte";
+	import { useAppState, LOCATIONS, type LocationId } from "$lib/core";
 
-	const viewer = getViewerState();
-	const flight = getFlightSimulation();
+	const { model } = useAppState();
 
-	// UI state
-	let showPanel = $state(true);
-	let currentFlightPathId = $state<string | null>(null);
+	// Panel visibility state
+	let showPanel = $state(false);
+	let showAdvanced = $state(false);
+	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// Real-time sync is handled by ViewerState - we just toggle it
+	// Auto-hide after 8 seconds of inactivity
+	const AUTO_HIDE_MS = 8000;
 
-	// Helper to start a flight path and track it
-	function startFlightPath(pathId: string) {
-		flight.followPath(pathId);
-		currentFlightPathId = pathId;
+	function resetHideTimer() {
+		if (hideTimeout) clearTimeout(hideTimeout);
+		hideTimeout = setTimeout(() => {
+			showPanel = false;
+			showAdvanced = false;
+		}, AUTO_HIDE_MS);
 	}
 
-	function startDriftMode() {
-		flight.driftMode = true;
-		flight.start();
-		currentFlightPathId = null;
+	function openPanel() {
+		showPanel = true;
+		resetHideTimer();
 	}
 
-	// Presets
-	const PRESETS = [
-		{
-			id: "sunrise-dubai",
-			name: "Dubai Sunrise",
-			location: "dubai" as LocationId,
-			altitude: 5000,
-			heading: 90,
-			pitch: 60,
-			time: 6.5,
-			showBuildings: true,
-			showClouds: true,
-			blindOpen: true,
-		},
-		{
-			id: "sunset-mumbai",
-			name: "Mumbai Sunset",
-			location: "mumbai" as LocationId,
-			altitude: 8000,
-			heading: 270,
-			pitch: 50,
-			time: 18.5,
-			showBuildings: true,
-			showClouds: true,
-			blindOpen: true,
-		},
-		{
-			id: "night-vegas",
-			name: "Vegas Night",
-			location: "las_vegas" as LocationId,
-			altitude: 3000,
-			heading: 0,
-			pitch: 70,
-			time: 22,
-			showBuildings: true,
-			showClouds: false,
-			blindOpen: true,
-		},
-		{
-			id: "noon-desert",
-			name: "Desert Noon",
-			location: "desert" as LocationId,
-			altitude: 15000,
-			heading: 180,
-			pitch: 45,
-			time: 12,
-			showBuildings: false,
-			showClouds: true,
-			blindOpen: true,
-		},
-		{
-			id: "high-altitude",
-			name: "High Altitude",
-			location: "clouds" as LocationId,
-			altitude: 35000,
-			heading: 90,
-			pitch: 30,
-			time: 14,
-			showBuildings: false,
-			showClouds: true,
-			blindOpen: true,
-		},
-		{
-			id: "himalayas-dawn",
-			name: "Himalayan Dawn",
-			location: "himalayas" as LocationId,
-			altitude: 25000,
-			heading: 45,
-			pitch: 40,
-			time: 6,
-			showBuildings: false,
-			showClouds: true,
-			blindOpen: true,
-		},
-	];
-
-	function applyPreset(presetId: string) {
-		const preset = PRESETS.find((p) => p.id === presetId);
-		if (!preset) return;
-
-		viewer.setLocation(preset.location);
-		viewer.setAltitude(preset.altitude);
-		viewer.setHeading(preset.heading);
-		viewer.pitch = preset.pitch;
-		viewer.setTime(preset.time);
-		viewer.showBuildings = preset.showBuildings;
-		viewer.showClouds = preset.showClouds;
-		viewer.blindOpen = preset.blindOpen;
+	function closePanel() {
+		showPanel = false;
+		showAdvanced = false;
+		if (hideTimeout) clearTimeout(hideTimeout);
 	}
 
-	// Formatting helpers
+	function handleInteraction() {
+		if (showPanel) resetHideTimer();
+	}
+
+	// Location selection with smooth transition
+	function flyTo(locationId: LocationId) {
+		model.setLocation(locationId);
+		handleInteraction();
+	}
+
+	// Time helpers
 	function formatTime(time: number): string {
 		const hours = Math.floor(time);
 		const minutes = Math.floor((time % 1) * 60);
@@ -135,607 +56,476 @@
 		return `${h}:${minutes.toString().padStart(2, "0")} ${period}`;
 	}
 
-	function formatAltitude(alt: number): string {
-		return `${(alt / 1000).toFixed(1)}k ft`;
-	}
+	const skyEmoji = $derived(
+		model.skyState === "night" ? "🌙" :
+		model.skyState === "dawn" ? "🌅" :
+		model.skyState === "dusk" ? "🌇" : "☀️"
+	);
 
-	function getCompassDirection(heading: number): string {
-		const directions = [
-			"N",
-			"NNE",
-			"NE",
-			"ENE",
-			"E",
-			"ESE",
-			"SE",
-			"SSE",
-			"S",
-			"SSW",
-			"SW",
-			"WSW",
-			"W",
-			"WNW",
-			"NW",
-			"NNW",
-		];
-		const index = Math.round(heading / 22.5) % 16;
-		return directions[index];
-	}
+	// Group locations by type
+	const cities = LOCATIONS.filter(l => l.hasBuildings);
+	const nature = LOCATIONS.filter(l => !l.hasBuildings);
 
-	function getSkyStateEmoji(state: string): string {
-		const map: Record<string, string> = {
-			day: "☀️",
-			dawn: "🌅",
-			dusk: "🌇",
-			night: "🌙",
-		};
-		return map[state] || "☀️";
+	// Quick time presets
+	function setTime(hours: number) {
+		model.syncToRealTime = false;
+		model.setTime(hours);
+		handleInteraction();
 	}
 </script>
 
-<!-- Toggle button when panel is hidden -->
+<!-- Invisible tap target when panel is hidden -->
 {#if !showPanel}
-	<button class="show-panel-btn" onclick={() => (showPanel = true)}>
-		Controls
+	<button class="tap-zone" onclick={openPanel} aria-label="Open settings">
+		<span class="tap-hint">⚙️</span>
 	</button>
 {/if}
 
+<!-- Minimal floating panel -->
 {#if showPanel}
-	<div class="controls-panel">
-		<div class="controls-header">
-			<h3>Viewer Controls</h3>
-			<button class="close-btn" onclick={() => (showPanel = false)}
-				>×</button
-			>
-		</div>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div class="panel" onclick={handleInteraction}>
+		<header>
+			<span class="status">{skyEmoji} {formatTime(model.timeOfDay)}</span>
+			<button class="close" onclick={closePanel}>×</button>
+		</header>
 
-		<!-- Presets Section -->
-		<section class="section">
-			<h4 class="section-header">Presets</h4>
-			<div class="preset-grid">
-				{#each PRESETS as preset}
+		<!-- Location Grid -->
+		<section>
+			<h4>Cities</h4>
+			<div class="location-grid">
+				{#each cities as loc}
 					<button
-						class="preset-btn"
-						onclick={() => applyPreset(preset.id)}
+						class="loc-btn"
+						class:active={model.location === loc.id}
+						onclick={() => flyTo(loc.id)}
 					>
-						{preset.name}
+						{loc.name}
 					</button>
 				{/each}
 			</div>
 		</section>
 
-		<!-- Location Section -->
-		<section class="section">
-			<h4 class="section-header">Location</h4>
-			<div class="control-group">
-				<label>
-					Select Location
-					<select
-						value={viewer.location}
-						onchange={(e) =>
-							viewer.setLocation(
-								e.currentTarget.value as LocationId,
-							)}
-					>
-						{#each LOCATIONS as loc}
-							<option value={loc.id}>{loc.name}</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-			<div class="coords">
-				<span class="coord-label">Lat:</span>
-				{viewer.lat.toFixed(4)}°
-				<span class="coord-label">Lon:</span>
-				{viewer.lon.toFixed(4)}°
-			</div>
-		</section>
-
-		<!-- Camera Section -->
-		<section class="section">
-			<h4 class="section-header">Camera</h4>
-			<div class="control-group">
-				<label>
-					Altitude: {formatAltitude(viewer.altitude)}
-					<input
-						type="range"
-						min="500"
-						max="45000"
-						step="500"
-						value={viewer.altitude}
-						oninput={(e) =>
-							viewer.setAltitude(parseInt(e.currentTarget.value))}
-					/>
-				</label>
-			</div>
-			<div class="control-group">
-				<label>
-					Heading: {viewer.heading}° ({getCompassDirection(
-						viewer.heading,
-					)})
-					<input
-						type="range"
-						min="0"
-						max="360"
-						step="5"
-						value={viewer.heading}
-						oninput={(e) =>
-							flight.setBaseHeading(parseInt(e.currentTarget.value))}
-					/>
-				</label>
-			</div>
-			<div class="control-group">
-				<label>
-					Pitch: {viewer.pitch}°
-					<input
-						type="range"
-						min="0"
-						max="90"
-						step="5"
-						value={viewer.pitch}
-						oninput={(e) =>
-							flight.setBasePitch(parseInt(e.currentTarget.value))}
-					/>
-				</label>
-			</div>
-		</section>
-
-		<!-- Flight Section -->
-		<section class="section">
-			<h4 class="section-header">Flight</h4>
-			<div class="control-group">
-				<label class:disabled={!flight.driftMode}>
-					Ground Speed: {flight.groundSpeed} kts {!flight.driftMode
-						? "(path override)"
-						: ""}
-					<input
-						type="range"
-						min="100"
-						max="500"
-						step="10"
-						value={flight.groundSpeed}
-						disabled={!flight.driftMode}
-						oninput={(e) =>
-							(flight.groundSpeed = parseInt(
-								e.currentTarget.value,
-							))}
-					/>
-				</label>
-			</div>
-			<div class="flight-paths">
-				<span class="label">Flight Paths:</span>
-				<div class="path-buttons">
+		<section>
+			<h4>Nature</h4>
+			<div class="location-grid">
+				{#each nature as loc}
 					<button
-						class="path-btn"
-						class:active={flight.driftMode &&
-							currentFlightPathId === null}
-						onclick={startDriftMode}
+						class="loc-btn"
+						class:active={model.location === loc.id}
+						onclick={() => flyTo(loc.id)}
 					>
-						Drift
+						{loc.name}
 					</button>
-					{#each FLIGHT_PATHS as path}
-						<button
-							class="path-btn"
-							class:active={currentFlightPathId === path.id}
-							onclick={() => startFlightPath(path.id)}
-						>
-							{path.name}
-						</button>
-					{/each}
-				</div>
+				{/each}
 			</div>
 		</section>
 
-		<!-- Time Section -->
-		<section class="section">
-			<h4 class="section-header">Time</h4>
-			<div class="control-group">
-				<label>
-					Time of Day: {formatTime(viewer.timeOfDay)}
-					<input
-						type="range"
-						min="0"
-						max="24"
-						step="0.25"
-						value={viewer.timeOfDay}
-						oninput={(e) =>
-							viewer.setTime(parseFloat(e.currentTarget.value))}
-						disabled={viewer.syncToRealTime}
-					/>
-				</label>
-			</div>
+		<!-- Essential Controls -->
+		<section class="controls-row">
 			<label class="toggle">
 				<input
 					type="checkbox"
-					checked={viewer.syncToRealTime}
-					onchange={() =>
-						(viewer.syncToRealTime = !viewer.syncToRealTime)}
+					checked={model.syncToRealTime}
+					onchange={() => (model.syncToRealTime = !model.syncToRealTime)}
 				/>
-				Sync to real time
+				Real Time
 			</label>
-			<div class="sky-state">
-				{getSkyStateEmoji(viewer.skyState)}
-				{viewer.skyState.toUpperCase()}
-			</div>
+			<label class="toggle">
+				<input
+					type="checkbox"
+					checked={model.blindOpen}
+					onchange={() => model.toggleBlind()}
+				/>
+				Blind Open
+			</label>
 		</section>
 
-		<!-- Atmosphere Section -->
-		<section class="section">
-			<h4 class="section-header">Atmosphere</h4>
-			<div class="control-group">
-				<label>
-					Cloud Density: {viewer.cloudDensity.toFixed(2)}
+		<!-- Speed Control -->
+		<section class="control">
+			<label for="speed-slider">Speed: {model.flightSpeed.toFixed(1)}x</label>
+			<input
+				id="speed-slider"
+				type="range"
+				min="0.2"
+				max="5"
+				step="0.2"
+				value={model.flightSpeed}
+				oninput={(e) => (model.flightSpeed = parseFloat(e.currentTarget.value))}
+			/>
+		</section>
+
+		<!-- Time Control -->
+		<section class="control">
+			<label for="time-slider">Time: {formatTime(model.syncToRealTime ? model.localTimeOfDay : model.timeOfDay)}</label>
+			<input
+				id="time-slider"
+				type="range"
+				min="0"
+				max="24"
+				step="0.5"
+				value={model.timeOfDay}
+				oninput={(e) => { model.syncToRealTime = false; model.setTime(parseFloat(e.currentTarget.value)); }}
+			/>
+		</section>
+
+		<!-- Time Quick Select -->
+		<section class="time-buttons">
+			<button onclick={() => setTime(6.5)}>🌅 Dawn</button>
+			<button onclick={() => setTime(12)}>☀️ Noon</button>
+			<button onclick={() => setTime(18.5)}>🌇 Dusk</button>
+			<button onclick={() => setTime(22)}>🌙 Night</button>
+		</section>
+
+		<!-- Advanced Toggle -->
+		<button class="advanced-toggle" onclick={() => (showAdvanced = !showAdvanced)}>
+			{showAdvanced ? "▼ Less" : "▶ More options"}
+		</button>
+
+		<!-- Advanced Controls (collapsed by default) -->
+		{#if showAdvanced}
+			<section class="advanced">
+				<!-- Altitude Control -->
+				<h4>Flight</h4>
+				<div class="control">
+					<label for="altitude-slider">Altitude: {(model.altitude / 1000).toFixed(0)}k ft</label>
 					<input
+						id="altitude-slider"
 						type="range"
-						min="0"
-						max="1"
-						step="0.05"
-						value={viewer.cloudDensity}
-						oninput={(e) =>
-							(viewer.cloudDensity = parseFloat(
-								e.currentTarget.value,
-							))}
+						min="10000"
+						max="50000"
+						step="1000"
+						value={model.altitude}
+						oninput={(e) => model.setAltitude(parseInt(e.currentTarget.value))}
 					/>
-				</label>
-			</div>
-			<div class="control-group">
-				<label>
-					Haze: {(viewer.haze * 100).toFixed(0)}%
-					<input
-						type="range"
-						min="0"
-						max="1"
-						step="0.05"
-						value={viewer.haze}
-						oninput={(e) =>
-							(viewer.haze = parseFloat(e.currentTarget.value))}
-					/>
-				</label>
-			</div>
-			<div class="control-group">
-				<label>
-					Weather
+				</div>
+
+				<!-- Weather/Atmosphere -->
+				<h4>Atmosphere</h4>
+				<div class="control">
+					<label for="weather-select">Weather</label>
 					<select
-						value={viewer.weather}
-						onchange={(e) =>
-							(viewer.weather = e.currentTarget.value as
-								| "clear"
-								| "cloudy"
-								| "overcast"
-								| "storm")}
+						id="weather-select"
+						value={model.weather}
+						onchange={(e) => (model.weather = e.currentTarget.value as "clear" | "cloudy" | "overcast" | "storm")}
 					>
 						<option value="clear">Clear</option>
 						<option value="cloudy">Cloudy</option>
 						<option value="overcast">Overcast</option>
 						<option value="storm">Storm</option>
 					</select>
-				</label>
-			</div>
-			<div class="toggles">
+				</div>
+				<div class="control">
+					<label for="clouds-slider">Clouds: {(model.cloudDensity * 100).toFixed(0)}%</label>
+					<input
+						id="clouds-slider"
+						type="range"
+						min="0"
+						max="1"
+						step="0.1"
+						value={model.cloudDensity}
+						oninput={(e) => (model.cloudDensity = parseFloat(e.currentTarget.value))}
+					/>
+				</div>
+				<div class="control">
+					<label for="visibility-slider">Visibility: {model.visibility} km</label>
+					<input
+						id="visibility-slider"
+						type="range"
+						min="5"
+						max="100"
+						step="5"
+						value={model.visibility}
+						oninput={(e) => (model.visibility = parseInt(e.currentTarget.value))}
+					/>
+				</div>
+				<div class="control">
+					<label for="haze-slider">Haze: {(model.haze * 100).toFixed(0)}%</label>
+					<input
+						id="haze-slider"
+						type="range"
+						min="0"
+						max="1"
+						step="0.05"
+						value={model.haze}
+						oninput={(e) => (model.haze = parseFloat(e.currentTarget.value))}
+					/>
+				</div>
+
+				<!-- Night Mode Controls (only visible at night/dusk) -->
+				{#if model.skyState === 'night' || model.skyState === 'dusk'}
+					<h4>Night Mode</h4>
+					<div class="control">
+						<label for="night-lights-slider">City Lights: {model.nightLightIntensity.toFixed(1)}x</label>
+						<input
+							id="night-lights-slider"
+							type="range"
+							min="0.5"
+							max="5"
+							step="0.5"
+							value={model.nightLightIntensity}
+							oninput={(e) => (model.nightLightIntensity = parseFloat(e.currentTarget.value))}
+						/>
+					</div>
+					<div class="control">
+						<label for="terrain-dark-slider">Terrain Darkness: {(model.terrainDarkness * 100).toFixed(0)}%</label>
+						<input
+							id="terrain-dark-slider"
+							type="range"
+							min="0"
+							max="1"
+							step="0.05"
+							value={model.terrainDarkness}
+							oninput={(e) => (model.terrainDarkness = parseFloat(e.currentTarget.value))}
+						/>
+					</div>
+				{/if}
+
+				<!-- Toggles -->
+				<h4>Display</h4>
 				<label class="toggle">
 					<input
 						type="checkbox"
-						checked={viewer.showClouds}
-						onchange={() => viewer.toggleClouds()}
+						checked={model.showClouds}
+						onchange={() => model.toggleClouds()}
 					/>
 					Show Clouds
 				</label>
 				<label class="toggle">
 					<input
 						type="checkbox"
-						checked={viewer.showBuildings}
-						onchange={() => viewer.toggleBuildings()}
+						checked={model.showBuildings}
+						onchange={() => model.toggleBuildings()}
 					/>
 					Show Buildings
 				</label>
-			</div>
-		</section>
-
-		<!-- Window Section -->
-		<section class="section">
-			<h4 class="section-header">Window</h4>
-			<label class="toggle">
-				<input
-					type="checkbox"
-					checked={viewer.blindOpen}
-					onchange={() => viewer.toggleBlind()}
-				/>
-				Blind Open
-			</label>
-		</section>
+			</section>
+		{/if}
 	</div>
 {/if}
 
 <style>
-	.show-panel-btn {
+	/* Tap zone - corner trigger */
+	.tap-zone {
 		position: fixed;
-		top: 1rem;
-		right: 1rem;
-		background: rgba(0, 0, 0, 0.8);
-		color: white;
-		border: 1px solid #444;
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
+		top: 0;
+		right: 0;
+		width: 60px;
+		height: 60px;
+		background: transparent;
+		border: none;
 		cursor: pointer;
-		z-index: 100;
-		font-size: 0.8rem;
-		transition: background 0.2s;
+		z-index: 90;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
-	.show-panel-btn:hover {
-		background: rgba(0, 0, 0, 0.95);
+	.tap-hint {
+		opacity: 0.3;
+		font-size: 1.2rem;
+		transition: opacity 0.3s;
 	}
 
-	.controls-panel {
+	.tap-zone:hover .tap-hint {
+		opacity: 0.8;
+	}
+
+	/* Panel */
+	.panel {
 		position: fixed;
 		top: 1rem;
 		right: 1rem;
-		background: rgba(0, 0, 0, 0.92);
+		background: rgba(0, 0, 0, 0.9);
 		color: white;
 		padding: 1rem;
 		border-radius: 12px;
 		font-size: 0.85rem;
 		z-index: 100;
-		width: 280px;
+		width: 260px;
 		max-height: calc(100vh - 2rem);
 		overflow-y: auto;
-		backdrop-filter: blur(5px);
-		border: 1px solid rgba(74, 158, 255, 0.2);
+		backdrop-filter: blur(10px);
+		border: 1px solid rgba(255, 255, 255, 0.1);
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 	}
 
-	.controls-panel::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.controls-panel::-webkit-scrollbar-track {
-		background: rgba(255, 255, 255, 0.05);
-		border-radius: 3px;
-	}
-
-	.controls-panel::-webkit-scrollbar-thumb {
-		background: rgba(74, 158, 255, 0.3);
-		border-radius: 3px;
-	}
-
-	.controls-panel::-webkit-scrollbar-thumb:hover {
-		background: rgba(74, 158, 255, 0.5);
-	}
-
-	.controls-header {
+	header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1rem;
 		padding-bottom: 0.75rem;
-		border-bottom: 1px solid rgba(74, 158, 255, 0.3);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 	}
 
-	.controls-header h3 {
-		margin: 0;
+	.status {
 		font-size: 1rem;
-		font-weight: 600;
-		color: #4a9eff;
-		text-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
+		font-weight: 500;
 	}
 
-	.close-btn {
-		background: rgba(255, 255, 255, 0.1);
+	.close {
+		background: none;
+		border: none;
 		color: white;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		padding: 0.15rem 0.5rem;
-		border-radius: 4px;
+		font-size: 1.5rem;
 		cursor: pointer;
-		font-size: 1.2rem;
+		opacity: 0.6;
+		padding: 0;
 		line-height: 1;
-		transition: all 0.2s;
 	}
 
-	.close-btn:hover {
-		background: rgba(255, 255, 255, 0.2);
-		border-color: rgba(255, 255, 255, 0.3);
+	.close:hover {
+		opacity: 1;
 	}
 
-	.section {
-		margin-bottom: 1.25rem;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	section {
+		margin-bottom: 1rem;
 	}
 
-	.section:last-child {
-		border-bottom: none;
-		margin-bottom: 0;
-		padding-bottom: 0;
-	}
-
-	.section-header {
-		margin: 0 0 0.75rem 0;
-		font-size: 0.75rem;
-		font-weight: 600;
+	h4 {
+		margin: 0 0 0.5rem 0;
+		font-size: 0.7rem;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: rgba(74, 158, 255, 0.8);
+		letter-spacing: 0.08em;
+		opacity: 0.5;
+		font-weight: 500;
 	}
 
-	.preset-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.5rem;
-	}
-
-	.preset-btn {
-		background: rgba(74, 158, 255, 0.15);
-		color: white;
-		border: 1px solid rgba(74, 158, 255, 0.3);
-		padding: 0.5rem;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.7rem;
-		transition: all 0.2s;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.preset-btn:hover {
-		background: rgba(74, 158, 255, 0.25);
-		border-color: rgba(74, 158, 255, 0.5);
-		transform: translateY(-1px);
-	}
-
-	.preset-btn:active {
-		transform: translateY(0);
-	}
-
-	/* Flight path controls */
-	.flight-paths {
-		margin-top: 0.5rem;
-	}
-
-	.flight-paths .label {
-		font-size: 0.7rem;
-		opacity: 0.7;
-		display: block;
-		margin-bottom: 0.4rem;
-	}
-
-	.path-buttons {
+	/* Location grid */
+	.location-grid {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.4rem;
 	}
 
-	.path-btn {
-		padding: 0.35rem 0.6rem;
-		font-size: 0.65rem;
+	.loc-btn {
+		padding: 0.4rem 0.7rem;
+		font-size: 0.75rem;
 		background: rgba(255, 255, 255, 0.08);
 		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 4px;
+		border-radius: 6px;
 		color: white;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.15s;
 	}
 
-	.path-btn:hover {
-		background: rgba(74, 158, 255, 0.2);
-		border-color: rgba(74, 158, 255, 0.4);
+	.loc-btn:hover {
+		background: rgba(255, 255, 255, 0.15);
+		border-color: rgba(255, 255, 255, 0.3);
 	}
 
-	.path-btn.active {
+	.loc-btn.active {
 		background: rgba(74, 158, 255, 0.3);
 		border-color: rgba(74, 158, 255, 0.6);
-		color: #4a9eff;
+		color: #7bb8ff;
 	}
 
-	.control-group {
-		margin-bottom: 0.75rem;
-	}
-
-	.control-group:last-child {
-		margin-bottom: 0;
-	}
-
-	label {
-		display: block;
-		font-size: 0.75rem;
-		opacity: 0.9;
-	}
-
-	input[type="range"] {
-		width: 100%;
-		margin-top: 0.4rem;
-		accent-color: #4a9eff;
-		cursor: pointer;
-	}
-
-	input[type="range"]:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	label.disabled {
-		opacity: 0.6;
-	}
-
-	select {
-		width: 100%;
-		margin-top: 0.4rem;
-		padding: 0.5rem;
-		background: rgba(255, 255, 255, 0.05);
-		color: white;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: 6px;
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	select:hover {
-		background: rgba(255, 255, 255, 0.08);
-		border-color: rgba(74, 158, 255, 0.4);
-	}
-
-	select:focus {
-		outline: none;
-		border-color: #4a9eff;
-		box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
-	}
-
-	.coords {
-		margin-top: 0.5rem;
-		font-size: 0.7rem;
-		padding: 0.4rem 0.6rem;
-		background: rgba(255, 255, 255, 0.05);
-		border-radius: 4px;
-		font-family: "Courier New", monospace;
-	}
-
-	.coord-label {
-		color: rgba(74, 158, 255, 0.8);
-		font-weight: 600;
-		margin-left: 0.5rem;
-	}
-
-	.coord-label:first-child {
-		margin-left: 0;
-	}
-
-	.toggles {
+	/* Controls row */
+	.controls-row {
 		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
+		gap: 1rem;
+		padding: 0.75rem 0;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
 	.toggle {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.4rem;
 		font-size: 0.75rem;
 		cursor: pointer;
-		padding: 0.3rem 0;
-		transition: opacity 0.2s;
 	}
 
-	.toggle:hover {
-		opacity: 1;
-	}
-
-	.toggle input[type="checkbox"] {
+	.toggle input {
 		accent-color: #4a9eff;
-		cursor: pointer;
-		width: 16px;
-		height: 16px;
+		width: 14px;
+		height: 14px;
 	}
 
-	.sky-state {
-		margin-top: 0.5rem;
-		padding: 0.5rem;
-		background: rgba(74, 158, 255, 0.1);
-		border: 1px solid rgba(74, 158, 255, 0.3);
+	/* Time buttons */
+	.time-buttons {
+		display: flex;
+		gap: 0.4rem;
+	}
+
+	.time-buttons button {
+		flex: 1;
+		padding: 0.5rem 0.3rem;
+		font-size: 0.7rem;
+		background: rgba(255, 200, 100, 0.1);
+		border: 1px solid rgba(255, 200, 100, 0.3);
 		border-radius: 6px;
-		text-align: center;
+		color: white;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.time-buttons button:hover {
+		background: rgba(255, 200, 100, 0.2);
+	}
+
+	/* Advanced toggle */
+	.advanced-toggle {
+		width: 100%;
+		padding: 0.5rem;
+		font-size: 0.7rem;
+		background: none;
+		border: none;
+		color: rgba(255, 255, 255, 0.5);
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.advanced-toggle:hover {
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	/* Advanced section */
+	.advanced {
+		padding-top: 0.5rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
+	.control {
+		margin-bottom: 0.75rem;
+	}
+
+	.control label {
+		display: block;
+		font-size: 0.7rem;
+		opacity: 0.7;
+		margin-bottom: 0.3rem;
+	}
+
+	.control input[type="range"] {
+		width: 100%;
+		accent-color: #4a9eff;
+	}
+
+	.control select {
+		width: 100%;
+		padding: 0.4rem;
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 4px;
+		color: white;
 		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.05em;
+	}
+
+	.advanced .toggle {
+		margin-top: 0.5rem;
+	}
+
+	/* Scrollbar */
+	.panel::-webkit-scrollbar {
+		width: 4px;
+	}
+
+	.panel::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.2);
+		border-radius: 2px;
 	}
 </style>

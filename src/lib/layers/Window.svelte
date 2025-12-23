@@ -1,86 +1,75 @@
 <script lang="ts">
 	/**
-	 * Window Component - Realistic airplane window
+	 * Window Component - Simplified to use model.flyTo()
 	 *
-	 * Layering (back to front):
-	 * 1. Cesium terrain/buildings (base)
-	 * 2. Three.js overlay (wing, clouds)
-	 * 3. Glass effects (frost at altitude)
-	 * 4. Frame border
+	 * All flight transition logic is now in WindowModel
 	 */
-
-	import {
-		getViewerState,
-		LOCATIONS,
-	} from "$lib/core/state.svelte";
+	import { useAppState, LOCATIONS, BLIND } from "$lib/core";
 	import CesiumViewer from "./CesiumViewer.svelte";
 	import Scene3DOverlay from "./Scene3DOverlay.svelte";
 
-	const viewer = getViewerState();
+	const { model } = useAppState();
 
-	// Track current location index for cycling
 	let locationIndex = $state(0);
+	let autoCycleEnabled = $state(true);
 
-	// Close blind and switch to next city
-	function closeBlindAndSwitchCity() {
-		if (viewer.blindOpen) {
-			viewer.blindOpen = false;
-			setTimeout(() => {
-				locationIndex = (locationIndex + 1) % LOCATIONS.length;
-				const nextLocation = LOCATIONS[locationIndex];
-				viewer.setLocation(nextLocation.id);
-			}, 300);
-		}
+	function handleBlindClick() {
+		if (model.isTransitioning) return;
+		model.blindOpen = true;
 	}
 
-	// Open blind
-	function openBlind() {
-		if (!viewer.blindOpen) {
-			viewer.blindOpen = true;
-		}
+	async function handleWindowClick() {
+		if (model.isTransitioning) return;
+		const nextIndex = (locationIndex + 1) % LOCATIONS.length;
+		locationIndex = nextIndex;
+		const nextLoc = LOCATIONS[nextIndex];
+		if (nextLoc) await model.flyTo(nextLoc.id);
 	}
 
-	// Frost at high altitude (above 25,000 ft)
-	const frostAmount = $derived(
-		Math.max(0, Math.min(1, (viewer.altitude - 25000) / 15000))
-	);
+	// Auto-cycle
+	$effect(() => {
+		if (!autoCycleEnabled) return;
+		const interval = setInterval(() => {
+			if (!model.isTransitioning && model.blindOpen) {
+				handleWindowClick();
+			}
+		}, BLIND.AUTO_CYCLE_INTERVAL);
+		return () => clearInterval(interval);
+	});
 
-	// Atmospheric haze overlay (works with Cesium fog)
-	const hazeOpacity = $derived(viewer.haze * 0.12);
+	// Derived values from model
+	const frostRange = BLIND.FROST_MAX_ALTITUDE - BLIND.FROST_START_ALTITUDE;
+	const frostAmount = $derived(Math.max(0, Math.min(1, (model.altitude - BLIND.FROST_START_ALTITUDE) / frostRange)));
+	const hazeOpacity = $derived(model.haze * 0.12);
 
-	// Combined filter: brightness + contrast + slight desaturation for haze
 	const filterString = $derived.by(() => {
-		const timeBrightness = viewer.skyState === "night" ? 0.85 :
-			viewer.skyState === "dawn" || viewer.skyState === "dusk" ? 0.92 : 1.0;
-		const weatherBrightness = viewer.weather === "storm" ? 0.9 :
-			viewer.weather === "overcast" ? 0.95 : 1.0;
-		const hazeContrast = 1 - viewer.haze * 0.08;
-		const hazeSaturate = 1 - viewer.haze * 0.1;
-
+		const timeBrightness = model.skyState === "night" ? 0.85 :
+			model.skyState === "dawn" || model.skyState === "dusk" ? 0.92 : 1.0;
+		const weatherBrightness = model.weather === "storm" ? 0.9 :
+			model.weather === "overcast" ? 0.95 : 1.0;
+		const hazeContrast = 1 - model.haze * 0.08;
+		const hazeSaturate = 1 - model.haze * 0.1;
 		const brightness = timeBrightness * weatherBrightness;
 		return `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)})`;
 	});
 
-	// Sun glare position (subtle circular glow)
-	const sunVisible = $derived(
-		viewer.skyState === "day" || viewer.skyState === "dawn" || viewer.skyState === "dusk"
-	);
-	const sunGlareX = $derived(50 + Math.sin(((viewer.timeOfDay - 6) / 12) * Math.PI) * 25);
-	const sunGlareY = $derived(35 - Math.cos(((viewer.timeOfDay - 6) / 12) * Math.PI) * 20);
-	const sunGlareOpacity = $derived(
-		viewer.skyState === "day" ? 0.12 :
-		viewer.skyState === "dawn" || viewer.skyState === "dusk" ? 0.2 : 0
-	);
+	const sunVisible = $derived(model.skyState === "day" || model.skyState === "dawn" || model.skyState === "dusk");
+	const sunGlareX = $derived(50 + Math.sin(((model.timeOfDay - 6) / 12) * Math.PI) * 25);
+	const sunGlareY = $derived(35 - Math.cos(((model.timeOfDay - 6) / 12) * Math.PI) * 20);
+	const sunGlareOpacity = $derived(model.skyState === "day" ? 0.12 : model.skyState === "dawn" || model.skyState === "dusk" ? 0.2 : 0);
+
+	const nextLocation = $derived(LOCATIONS[(locationIndex + 1) % Math.max(LOCATIONS.length, 1)]);
 </script>
 
 <div class="window-container">
 	<!-- The oval window -->
 	<button
 		class="window-viewport"
-		onclick={closeBlindAndSwitchCity}
+		onclick={handleWindowClick}
 		type="button"
 		aria-label="Close blind and fly to next city"
 		style:filter={filterString}
+		disabled={model.isTransitioning}
 	>
 		<!-- Cesium terrain/buildings -->
 		<div class="render-layer">
@@ -116,9 +105,16 @@
 		<div class="vignette"></div>
 
 		<!-- Click hint -->
-		{#if viewer.blindOpen}
+		{#if model.blindOpen && !model.isTransitioning && nextLocation}
 			<div class="click-hint">
-				<span>Click to visit {LOCATIONS[(locationIndex + 1) % LOCATIONS.length].name}</span>
+				<span>Click to visit {nextLocation.name}</span>
+			</div>
+		{/if}
+
+		<!-- Transition status -->
+		{#if model.isTransitioning && model.transitionDestination}
+			<div class="transition-status">
+				<span>Flying to {model.transitionDestination}...</span>
 			</div>
 		{/if}
 	</button>
@@ -130,13 +126,14 @@
 	<div class="blind-clip">
 		<button
 			class="blind-overlay"
-			class:open={viewer.blindOpen}
-			onclick={openBlind}
+			class:open={model.blindOpen}
+			onclick={handleBlindClick}
 			type="button"
 			aria-label="Open window blind"
+			disabled={model.isTransitioning}
 		>
 			<div class="blind-slats"></div>
-			<span class="blind-label">Click to open</span>
+			<span class="blind-label">{model.isTransitioning ? 'In flight...' : 'Click to open'}</span>
 		</button>
 	</div>
 </div>
@@ -144,9 +141,28 @@
 <style>
 	.window-container {
 		position: relative;
-		width: min(50vw, 60vh);
-		height: min(75vh, 85vw);
+		/* Wider airplane window - 3:4 aspect ratio */
+		width: min(90vw, 70vh);
+		aspect-ratio: 3 / 4;
 		margin: auto;
+		max-height: 90vh;
+	}
+
+	/* Portrait orientation */
+	@media (orientation: portrait) {
+		.window-container {
+			width: min(88vw, 75vh);
+			max-height: 88vh;
+		}
+	}
+
+	/* Landscape orientation */
+	@media (orientation: landscape) {
+		.window-container {
+			width: auto;
+			height: min(88vh, 65vw);
+			aspect-ratio: 3 / 4;
+		}
 	}
 
 	.window-viewport {
@@ -161,8 +177,12 @@
 		transition: filter 0.5s;
 	}
 
-	.window-viewport:hover {
+	.window-viewport:hover:not(:disabled) {
 		filter: brightness(1.02);
+	}
+
+	.window-viewport:disabled {
+		cursor: not-allowed;
 	}
 
 	.render-layer {
@@ -223,6 +243,10 @@
 		pointer-events: none;
 	}
 
+	.blind-overlay:disabled {
+		cursor: not-allowed;
+	}
+
 	.blind-slats {
 		position: absolute;
 		inset: 0;
@@ -256,6 +280,7 @@
 		background: rgba(255, 255, 255, 0.8);
 		padding: 8px 16px;
 		border-radius: 20px;
+		transition: opacity 0.3s;
 	}
 
 	.blind-overlay.open .blind-label {
@@ -342,5 +367,36 @@
 		font-size: 12px;
 		white-space: nowrap;
 		backdrop-filter: blur(5px);
+	}
+
+	.transition-status {
+		position: absolute;
+		top: 10%;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 20;
+		pointer-events: none;
+		animation: pulse 2s ease-in-out infinite;
+	}
+
+	.transition-status span {
+		background: rgba(0, 0, 0, 0.85);
+		color: white;
+		padding: 12px 24px;
+		border-radius: 25px;
+		font-size: 14px;
+		font-weight: 500;
+		white-space: nowrap;
+		backdrop-filter: blur(10px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.8;
+		}
 	}
 </style>

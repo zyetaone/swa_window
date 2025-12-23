@@ -1,5 +1,7 @@
-import { type SkyState, type SunPosition } from './types';
-import { getSkyState, calculateSunPosition } from './utils/time-utils';
+/**
+ * Biome Colors - Color palettes for different locations and sky states
+ */
+import { type SkyState } from './types';
 
 export interface BiomeColors {
     ground: string;
@@ -8,7 +10,7 @@ export interface BiomeColors {
     secondary: string;
 }
 
-const BIOME_PALETTES: Record<string, Record<SkyState, BiomeColors>> = {
+const BIOME_PALETTES: Partial<Record<string, Record<SkyState, BiomeColors>>> & Record<'dubai', Record<SkyState, BiomeColors>> = {
     dubai: {
         day: { ground: '#d4a574', horizon: '#87ceeb', accent: '#c49464', secondary: '#e4c594' },
         night: { ground: '#3a2a1a', horizon: '#0a0a1a', accent: '#2a1a0a', secondary: '#4a3a2a' },
@@ -42,34 +44,13 @@ const BIOME_PALETTES: Record<string, Record<SkyState, BiomeColors>> = {
 };
 
 // Desert uses same palette as Dubai
-BIOME_PALETTES.desert = BIOME_PALETTES.dubai;
+(BIOME_PALETTES as Record<string, Record<SkyState, BiomeColors>>).desert = BIOME_PALETTES.dubai;
 
-const DEFAULT_PALETTE = BIOME_PALETTES.dubai;
-
-export class EnvironmentSystem {
-    // State
-    timeOfDay: number;
-    currentView: string = 'dubai';
-
-    constructor(initialTime: number) {
-        this.timeOfDay = initialTime;
-    }
-
-    public setView(viewId: string) {
-        this.currentView = viewId;
-    }
-
-    // Derived properties (computed on demand or cached)
-    get skyState(): SkyState {
-        return getSkyState(this.timeOfDay);
-    }
-
-    get sunPosition(): SunPosition {
-        return calculateSunPosition(this.timeOfDay);
-    }
-
-    get biomeColors(): BiomeColors {
-        const viewPalette = BIOME_PALETTES[this.currentView] || BIOME_PALETTES.dubai;
-        return viewPalette[this.skyState] || viewPalette.day;
-    }
+/**
+ * Get biome colors for a location and sky state
+ * Used by ViewerState for reactive color derivation
+ */
+export function getBiomeColors(location: string, skyState: SkyState): BiomeColors {
+    const viewPalette = BIOME_PALETTES[location] ?? BIOME_PALETTES.dubai;
+    return viewPalette[skyState] ?? viewPalette.day;
 }

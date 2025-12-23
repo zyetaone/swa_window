@@ -2,6 +2,14 @@
 import { type SkyState, type SunPosition } from '../types';
 
 export function getSkyState(timeOfDay: number): SkyState {
+	/**
+	 * Determine sky state based on time of day (hours, 0-24)
+	 * Time thresholds:
+	 * - Night: before 5:00 or after 20:00
+	 * - Dawn: 5:00 - 7:00 (sunrise period)
+	 * - Day: 7:00 - 18:00 (full daylight)
+	 * - Dusk: 18:00 - 20:00 (sunset period)
+	 */
     if (timeOfDay < 5 || timeOfDay > 20) return 'night';
     if (timeOfDay < 7) return 'dawn';
     if (timeOfDay > 18) return 'dusk';
@@ -11,18 +19,35 @@ export function getSkyState(timeOfDay: number): SkyState {
 /**
  * Calculate sun position for Three.js that matches Cesium's sun position.
  *
- * Coordinate system (Three.js default, matching Cesium's East-North-Up):
- * - +X = East
- * - +Y = Up (zenith)
- * - +Z = North
+ * Coordinate System Details:
+ * - Three.js uses a right-handed coordinate system:
+ *   - +X = East
+ *   - +Y = Up (zenith, pointing away from Earth center)
+ *   - +Z = North
+ * - Cesium uses similar ENU (East-North-Up) for local coordinates
  *
- * Sun path:
- * - 6am (sunrise): East, low on horizon
- * - 12pm (solar noon): South, highest point
- * - 6pm (sunset): West, low on horizon
- * - Night: Below horizon
+ * Solar Path (Northern Hemisphere, mid-latitudes):
+ * - 6am (sunrise): East (+X), low elevation (~0°)
+ * - 9am (morning): Northeast, rising elevation (~45°)
+ * - 12pm (solar noon): South (-Z), highest elevation (~60-90° depending on latitude)
+ * - 3pm (afternoon): Southwest, descending elevation (~45°)
+ * - 6pm (sunset): West (-X), low elevation (~0°)
+ * - Night: Below horizon (negative elevation)
+ *
+ * Calculation Details:
+ * - Solar hour angle: 0° at noon, negative in morning, positive in afternoon
+ * - Solar declination: Approximated as 0° (equinox) for simplicity
+ *   - Full accuracy would require day-of-year calculation
+ * - Latitude: Uses actual location latitude (defaults to 25°N)
+ * - Elevation: Angle above horizon (-90° to +90°)
+ * - Azimuth: Compass direction from North (0°=N, 90°=E, 180°=S, 270°=W)
+ *
+ * Returns:
+ * - x, y, z: Cartesian coordinates for Three.js light position
+ * - azimuth: Compass angle in degrees for reference
+ * - height: Normalized 0-1 value for shader use (0=below horizon, 1=zenith)
  */
-export function calculateSunPosition(timeOfDay: number): SunPosition {
+export function calculateSunPosition(timeOfDay: number, latitudeDeg: number = 25): SunPosition {
     // Solar hour angle: 0 at noon, negative in morning, positive in afternoon
     // Ranges from -180° (midnight) to +180° (midnight)
     const solarHourAngle = (timeOfDay - 12) * 15; // 15 degrees per hour
@@ -32,8 +57,8 @@ export function calculateSunPosition(timeOfDay: number): SunPosition {
     // For full accuracy, would need day of year
     const declination = 0; // radians (0 = equinox)
 
-    // Approximate latitude for mid-latitudes (25° N like Dubai)
-    const latitude = 25 * Math.PI / 180;
+    // Use actual latitude from model (defaults to 25°N like Dubai)
+    const latitude = latitudeDeg * Math.PI / 180;
 
     // Calculate solar elevation (altitude above horizon)
     // sin(elevation) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(hourAngle)
