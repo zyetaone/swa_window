@@ -1,11 +1,11 @@
 <script lang="ts">
 	/**
-	 * CityLights - Ground-fixed city lights
+	 * CityLights - Static ambient city lights
 	 *
-	 * Uses THREE.Points at fixed ground level
-	 * Lights stay stationary on ground as plane flies over
+	 * Simple decorative lights - no movement tracking.
+	 * Cesium handles world movement, these are just atmosphere.
 	 */
-	import { T, useTask } from "@threlte/core";
+	import { T } from "@threlte/core";
 	import * as THREE from "three";
 	import { useAppState } from "$lib/core";
 	import { BLOOM_LAYER } from "$lib/plugins";
@@ -13,16 +13,17 @@
 	const { model } = useAppState();
 
 	// Configuration
-	const NUM_LIGHTS = 800;
-	const SPREAD = 50000; // meters spread
-	const GROUND_LEVEL = -10000; // Fixed depth below camera (represents ground)
+	const NUM_LIGHTS = 500;
+	const SPREAD_X = 80000;
+	const SPREAD_Z = 60000;
+	const GROUND_LEVEL = -12000;
 
 	// HDR colors (warm city lights)
 	const COLORS = [
-		[1.5, 1.2, 0.8],   // Warm yellow
-		[1.4, 1.0, 0.6],   // Orange-yellow
-		[1.3, 1.3, 1.0],   // White-ish
-		[1.2, 0.9, 0.5],   // Deep orange
+		[1.5, 1.2, 0.8],
+		[1.4, 1.0, 0.6],
+		[1.3, 1.3, 1.0],
+		[1.2, 0.9, 0.5],
 	];
 
 	// Generate static positions once
@@ -31,17 +32,16 @@
 	const sizes = new Float32Array(NUM_LIGHTS);
 
 	for (let i = 0; i < NUM_LIGHTS; i++) {
-		// Spread lights on ground plane
-		positions[i * 3] = (Math.random() - 0.5) * SPREAD;
-		positions[i * 3 + 1] = GROUND_LEVEL + Math.random() * 50; // Small height variation
-		positions[i * 3 + 2] = (Math.random() - 0.5) * SPREAD;
+		positions[i * 3] = (Math.random() - 0.5) * SPREAD_X;
+		positions[i * 3 + 1] = GROUND_LEVEL + Math.random() * 100;
+		positions[i * 3 + 2] = (Math.random() - 0.5) * SPREAD_Z;
 
 		const c = COLORS[Math.floor(Math.random() * COLORS.length)];
 		colors[i * 3] = c[0];
 		colors[i * 3 + 1] = c[1];
 		colors[i * 3 + 2] = c[2];
 
-		sizes[i] = 40 + Math.random() * 60;
+		sizes[i] = 30 + Math.random() * 50;
 	}
 
 	const geometry = new THREE.BufferGeometry();
@@ -49,10 +49,14 @@
 	geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 	geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
+	// Derived values for shader uniforms
+	const opacity = $derived(model.skyState === "night" ? 1.0 : model.skyState === "dusk" ? 0.5 : 0);
+	const brightness = $derived(model.nightLightIntensity);
+
 	const material = new THREE.ShaderMaterial({
 		uniforms: {
-			opacity: { value: 1.0 },
-			brightness: { value: 1.0 }
+			opacity: { value: opacity },
+			brightness: { value: brightness }
 		},
 		vertexShader: `
 			attribute float size;
@@ -61,7 +65,7 @@
 			void main() {
 				vColor = color;
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
-				gl_PointSize = clamp(size * (500.0 / -mv.z), 1.0, 40.0);
+				gl_PointSize = clamp(size * (400.0 / -mv.z), 1.0, 30.0);
 				gl_Position = projectionMatrix * mv;
 			}
 		`,
@@ -86,16 +90,14 @@
 	const points = new THREE.Points(geometry, material);
 	points.layers.enable(BLOOM_LAYER);
 
-	// Derived
-	const visible = $derived(model.skyState === "night" || model.skyState === "dusk");
-	const opacity = $derived(model.skyState === "night" ? 1.0 : model.skyState === "dusk" ? 0.6 : 0);
-	const brightness = $derived(model.nightLightIntensity);
-
-	// Update uniforms
-	useTask('city-lights', () => {
+	// Update uniforms reactively
+	$effect(() => {
 		material.uniforms.opacity.value = opacity;
 		material.uniforms.brightness.value = brightness;
 	});
+
+	// Derived visibility
+	const visible = $derived(model.skyState === "night" || model.skyState === "dusk");
 
 	// Cleanup
 	$effect(() => {

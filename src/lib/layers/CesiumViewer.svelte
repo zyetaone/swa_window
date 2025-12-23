@@ -191,35 +191,35 @@ import type * as CesiumType from 'cesium';
 	}
 
 	// Calculate night lights opacity based on altitude
-	// At cruising altitude (10k-30k ft): 15-20% opacity (subtle overlay)
-	// Above 30k ft: fades out gradually
-	// Above 60k ft: nearly invisible (space view)
+	// NASA imagery is low-res (level 8), so fade at lower altitudes to hide pixelation
+	// Best visibility at high cruise altitude where blur isn't noticeable
 	function getNightLightsOpacity(altitudeFt: number): number {
-		const MIN_ALT = 10000;   // Start showing lights
-		const PEAK_ALT = 25000;  // Maximum visibility
-		const FADE_ALT = 40000;  // Start fading
-		const MAX_ALT = 60000;   // Nearly invisible
+		const LOW_ALT = 15000;   // Below this: very faint (pixelation visible)
+		const MID_ALT = 30000;   // Ramp up zone
+		const HIGH_ALT = 45000;  // Peak visibility
+		const MAX_ALT = 70000;   // Fade out for space view
 
-		const BASE_OPACITY = 0.15; // 15% base opacity
-		const PEAK_OPACITY = 0.20; // 20% max at optimal altitude
+		const LOW_OPACITY = 0.08;  // 8% at low altitude (hide pixelation)
+		const PEAK_OPACITY = 0.25; // 25% at high altitude
 
-		if (altitudeFt < MIN_ALT) {
-			// Below 10k: fade in (too close to ground)
-			return BASE_OPACITY * (altitudeFt / MIN_ALT);
-		} else if (altitudeFt < PEAK_ALT) {
-			// 10k-25k: ramp up to peak
-			const t = (altitudeFt - MIN_ALT) / (PEAK_ALT - MIN_ALT);
-			return BASE_OPACITY + (PEAK_OPACITY - BASE_OPACITY) * t;
-		} else if (altitudeFt < FADE_ALT) {
-			// 25k-40k: hold at peak
-			return PEAK_OPACITY;
+		if (altitudeFt < LOW_ALT) {
+			// Below 15k: very subtle to hide pixelation
+			return LOW_OPACITY * (altitudeFt / LOW_ALT);
+		} else if (altitudeFt < MID_ALT) {
+			// 15k-30k: ramp up as we get higher
+			const t = (altitudeFt - LOW_ALT) / (MID_ALT - LOW_ALT);
+			return LOW_OPACITY + (PEAK_OPACITY - LOW_OPACITY) * t * 0.5;
+		} else if (altitudeFt < HIGH_ALT) {
+			// 30k-45k: continue to peak
+			const t = (altitudeFt - MID_ALT) / (HIGH_ALT - MID_ALT);
+			return LOW_OPACITY + (PEAK_OPACITY - LOW_OPACITY) * (0.5 + t * 0.5);
 		} else if (altitudeFt < MAX_ALT) {
-			// 40k-60k: fade out
-			const t = (altitudeFt - FADE_ALT) / (MAX_ALT - FADE_ALT);
-			return PEAK_OPACITY * (1 - t);
+			// 45k-70k: hold then fade
+			const t = (altitudeFt - HIGH_ALT) / (MAX_ALT - HIGH_ALT);
+			return PEAK_OPACITY * (1 - t * 0.7);
 		} else {
-			// Above 60k: nearly invisible
-			return 0.02;
+			// Above 70k: minimal
+			return 0.03;
 		}
 	}
 
@@ -247,12 +247,14 @@ import type * as CesiumType from 'cesium';
 			dayImageryLayer.gamma = 1.0 + (darkness * 2.0);
 			dayImageryLayer.alpha = 1.0;
 
-			// Night lights as subtle overlay - opacity based on altitude
+			// Night lights overlay - geo-located city lights from NASA imagery
+			// Subtle effect to avoid showing low-res pixelation
 			if (nightImageryLayer) {
 				nightImageryLayer.alpha = altitudeOpacity;
-				nightImageryLayer.brightness = 2.5; // Boost brightness since opacity is low
-				nightImageryLayer.contrast = 1.5;
-				nightImageryLayer.gamma = 0.8;
+				nightImageryLayer.brightness = 2.0;
+				nightImageryLayer.contrast = 1.3;
+				nightImageryLayer.saturation = 1.0;
+				nightImageryLayer.gamma = 0.9;
 			}
 
 			// Reduce atmosphere glow at night
@@ -275,12 +277,12 @@ import type * as CesiumType from 'cesium';
 			dayImageryLayer.gamma = 1.5;
 			dayImageryLayer.alpha = 1.0;
 
-			// Dusk: half the night opacity
+			// Dusk: reduced night lights
 			if (nightImageryLayer) {
-				nightImageryLayer.alpha = altitudeOpacity * 0.5;
-				nightImageryLayer.brightness = 2.0;
-				nightImageryLayer.contrast = 1.3;
-				nightImageryLayer.gamma = 0.9;
+				nightImageryLayer.alpha = altitudeOpacity * 0.4;
+				nightImageryLayer.brightness = 1.5;
+				nightImageryLayer.contrast = 1.2;
+				nightImageryLayer.gamma = 1.0;
 			}
 		}
 		// Dawn: Transitioning from night
@@ -291,12 +293,12 @@ import type * as CesiumType from 'cesium';
 			dayImageryLayer.gamma = 1.2;
 			dayImageryLayer.alpha = 1.0;
 
-			// Dawn: quarter the night opacity (lights fading)
+			// Dawn: fading night lights
 			if (nightImageryLayer) {
-				nightImageryLayer.alpha = altitudeOpacity * 0.25;
-				nightImageryLayer.brightness = 1.5;
-				nightImageryLayer.contrast = 1.2;
-				nightImageryLayer.gamma = 0.9;
+				nightImageryLayer.alpha = altitudeOpacity * 0.2;
+				nightImageryLayer.brightness = 1.2;
+				nightImageryLayer.contrast = 1.1;
+				nightImageryLayer.gamma = 1.0;
 			}
 		}
 		// Day: Full brightness, no night overlay

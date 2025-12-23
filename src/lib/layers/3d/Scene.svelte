@@ -13,7 +13,8 @@
 	import EnhancedWing from "./EnhancedWing.svelte";
 	import VolumetricClouds from "./VolumetricClouds.svelte";
 	import WeatherEffects from "./WeatherEffects.svelte";
-	import CityLights from "./CityLights.svelte";
+	// CityLights removed - using Cesium's NASA Earth at Night imagery instead
+	// Three.js overlay can't sync with Cesium's geo-coordinates
 	import { useAppState } from "$lib/core";
 	import { turbulence, daynight } from "$lib/plugins";
 
@@ -65,5 +66,5 @@
 <EnhancedWing />
 <VolumetricClouds />
 <WeatherEffects />
-<CityLights />
+<!-- City lights come from Cesium's NASA Earth at Night imagery layer -->
 
