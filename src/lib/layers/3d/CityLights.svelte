@@ -1,9 +1,9 @@
 <script lang="ts">
 	/**
-	 * CityLights - City lights with bloom at night
+	 * CityLights - Ground-fixed city lights
 	 *
-	 * Uses THREE.Points for single draw call
-	 * HDR colors (>1.0) trigger bloom post-processing
+	 * Uses THREE.Points at fixed ground level
+	 * Lights stay stationary on ground as plane flies over
 	 */
 	import { T, useTask } from "@threlte/core";
 	import * as THREE from "three";
@@ -13,10 +13,11 @@
 	const { model } = useAppState();
 
 	// Configuration
-	const NUM_LIGHTS = 600;
-	const SPREAD = 40000;
+	const NUM_LIGHTS = 800;
+	const SPREAD = 50000; // meters spread
+	const GROUND_LEVEL = -10000; // Fixed depth below camera (represents ground)
 
-	// HDR colors (warm city lights - values > 1.0 for bloom)
+	// HDR colors (warm city lights)
 	const COLORS = [
 		[1.5, 1.2, 0.8],   // Warm yellow
 		[1.4, 1.0, 0.6],   // Orange-yellow
@@ -24,14 +25,15 @@
 		[1.2, 0.9, 0.5],   // Deep orange
 	];
 
-	// Generate geometry once
+	// Generate static positions once
 	const positions = new Float32Array(NUM_LIGHTS * 3);
 	const colors = new Float32Array(NUM_LIGHTS * 3);
 	const sizes = new Float32Array(NUM_LIGHTS);
 
 	for (let i = 0; i < NUM_LIGHTS; i++) {
+		// Spread lights on ground plane
 		positions[i * 3] = (Math.random() - 0.5) * SPREAD;
-		positions[i * 3 + 1] = 10 + Math.random() * 300;
+		positions[i * 3 + 1] = GROUND_LEVEL + Math.random() * 50; // Small height variation
 		positions[i * 3 + 2] = (Math.random() - 0.5) * SPREAD;
 
 		const c = COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -39,7 +41,7 @@
 		colors[i * 3 + 1] = c[1];
 		colors[i * 3 + 2] = c[2];
 
-		sizes[i] = 60 + Math.random() * 80;
+		sizes[i] = 40 + Math.random() * 60;
 	}
 
 	const geometry = new THREE.BufferGeometry();
@@ -59,7 +61,7 @@
 			void main() {
 				vColor = color;
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
-				gl_PointSize = clamp(size * (300.0 / -mv.z), 2.0, 60.0);
+				gl_PointSize = clamp(size * (500.0 / -mv.z), 1.0, 40.0);
 				gl_Position = projectionMatrix * mv;
 			}
 		`,
@@ -71,7 +73,6 @@
 				float d = length(gl_PointCoord - 0.5) * 2.0;
 				if (d > 1.0) discard;
 				float glow = (1.0 - d * d);
-				// HDR output for bloom - multiply by brightness
 				vec3 hdrColor = vColor * brightness * glow;
 				gl_FragColor = vec4(hdrColor, glow * opacity);
 			}
@@ -79,11 +80,11 @@
 		transparent: true,
 		depthWrite: false,
 		blending: THREE.AdditiveBlending,
-		toneMapped: false, // Required for bloom to work with HDR colors
+		toneMapped: false,
 	});
 
 	const points = new THREE.Points(geometry, material);
-	points.layers.enable(BLOOM_LAYER); // Add to bloom layer for selective bloom
+	points.layers.enable(BLOOM_LAYER);
 
 	// Derived
 	const visible = $derived(model.skyState === "night" || model.skyState === "dusk");
