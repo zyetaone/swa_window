@@ -29,21 +29,22 @@ export interface Location {
 	name: string;
 	lat: number;
 	lon: number;
+	utcOffset: number; // Hours offset from UTC (e.g., +5.5 for India, -6 for Dallas)
 	hasBuildings: boolean;
 	defaultAltitude: number;
 }
 
 export const LOCATIONS: Location[] = [
-	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, hasBuildings: true, defaultAltitude: 28000 },
-	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, hasBuildings: true, defaultAltitude: 30000 },
-	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, hasBuildings: true, defaultAltitude: 28000 },
-	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.7970, hasBuildings: true, defaultAltitude: 32000 },
-	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, hasBuildings: true, defaultAltitude: 30000 },
-	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, hasBuildings: true, defaultAltitude: 28000 },
-	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, hasBuildings: false, defaultAltitude: 38000 },
-	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, hasBuildings: false, defaultAltitude: 40000 },
-	{ id: 'desert', name: 'Sahara Desert', lat: 23.4241, lon: 25.6628, hasBuildings: false, defaultAltitude: 35000 },
-	{ id: 'clouds', name: 'Above Clouds', lat: 35.6762, lon: 139.6503, hasBuildings: false, defaultAltitude: 45000 },
+	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, hasBuildings: true, defaultAltitude: 28000 },
+	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000 },
+	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 28000 },
+	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.7970, utcOffset: -6, hasBuildings: true, defaultAltitude: 32000 },
+	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, utcOffset: -7, hasBuildings: true, defaultAltitude: 30000 },
+	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000 },
+	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, utcOffset: 5.75, hasBuildings: false, defaultAltitude: 38000 },
+	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, utcOffset: -10, hasBuildings: false, defaultAltitude: 40000 },
+	{ id: 'desert', name: 'Sahara Desert', lat: 23.4241, lon: 25.6628, utcOffset: 2, hasBuildings: false, defaultAltitude: 35000 },
+	{ id: 'clouds', name: 'Above Clouds', lat: 35.6762, lon: 139.6503, utcOffset: 9, hasBuildings: false, defaultAltitude: 45000 },
 ];
 
 // ============================================================================
@@ -90,6 +91,7 @@ export class WindowModel {
 	// --- Position (authoritative) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
+	utcOffset = $state(4); // Hours from UTC (Dubai default)
 	altitude = $state(35000);
 	heading = $state(45);
 	pitch = $state(75);
@@ -114,7 +116,7 @@ export class WindowModel {
 
 	// --- Night rendering ---
 	nightLightIntensity = $state(2.5);
-	terrainDarkness = $state(0.95);
+	terrainDarkness = $state(0.60); // Balanced default (was 0.95 = too dark)
 
 	// --- Flight speed (drift rate multiplier) ---
 	flightSpeed = $state(1.0); // 0.5 = slow scenic, 1.0 = normal, 3.0 = fast
@@ -153,13 +155,13 @@ export class WindowModel {
 	// DERIVED (pure computations)
 	// ========================================================================
 
-	// Local time at current location (adjusted for longitude-based timezone)
+	// Local time at current location (using proper UTC offset)
 	localTimeOfDay = $derived.by(() => {
 		if (!this.syncToRealTime) return this.timeOfDay;
-		// Approximate timezone from longitude: 15° = 1 hour
-		const tzOffset = this.lon / 15;
-		const utcHours = this.timeOfDay - (new Date().getTimezoneOffset() / -60);
-		let localTime = (utcHours + tzOffset) % 24;
+		// Convert browser local time to UTC, then to destination local time
+		const browserTzOffset = new Date().getTimezoneOffset() / -60; // Browser's UTC offset in hours
+		const utcHours = this.timeOfDay - browserTzOffset;
+		let localTime = (utcHours + this.utcOffset) % 24;
 		if (localTime < 0) localTime += 24;
 		return localTime;
 	});
@@ -177,6 +179,21 @@ export class WindowModel {
 	cloudBase = $derived(this.weather === 'storm' ? 20000 : this.weather === 'overcast' ? 12000 : 8000);
 	showRain = $derived((this.weather === 'storm' || this.weather === 'overcast') && this.altitude < this.cloudBase);
 	showLightning = $derived(this.weather === 'storm');
+
+	// Effective cloud density (user setting + weather adjustment)
+	effectiveCloudDensity = $derived(
+		this.weather === 'storm' ? Math.max(this.cloudDensity, 0.85) :
+		this.weather === 'overcast' ? Math.max(this.cloudDensity, 0.7) :
+		this.weather === 'cloudy' ? Math.max(this.cloudDensity, 0.4) :
+		this.cloudDensity * 0.3 // Clear weather = sparse clouds
+	);
+
+	// Ambient intensity affected by weather
+	weatherAmbientReduction = $derived(
+		this.weather === 'storm' ? 0.6 :
+		this.weather === 'overcast' ? 0.8 :
+		1.0
+	);
 
 	// Lighting-derived
 	showNavLights = $derived(this.skyState === 'night' || this.skyState === 'dusk' || this.skyState === 'dawn');
@@ -197,6 +214,7 @@ export class WindowModel {
 				this.location = saved.location;
 				this.lat = loc.lat;
 				this.lon = loc.lon;
+				this.utcOffset = loc.utcOffset;
 			}
 		}
 		if (saved.altitude !== undefined) this.altitude = saved.altitude;
@@ -249,6 +267,7 @@ export class WindowModel {
 		this.location = locationId;
 		this.lat = loc.lat;
 		this.lon = loc.lon;
+		this.utcOffset = loc.utcOffset;
 	}
 
 	setAltitude(alt: number): void {
