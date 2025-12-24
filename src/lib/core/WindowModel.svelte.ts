@@ -105,7 +105,9 @@ export class WindowModel {
 
 	// --- Environment ---
 	weather = $state<WeatherType>('cloudy');
-	cloudDensity = $state(0.6);
+	cloudDensity = $state(0.7);
+	cloudSpeed = $state(0.4);        // 0.1 = slow drift, 1.0 = fast flight
+	cloudScale = $state(1.5);        // Cloud size multiplier (1.0 = normal, 2.0 = huge)
 	visibility = $state(35);
 	haze = $state(0.025); // Reduced 10x for clearer view
 
@@ -142,11 +144,9 @@ export class WindowModel {
 	isTransitioning = $state(false);
 	transitionDestination = $state<string | null>(null);
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Used internally in flyTo()
 	_transitionPhase: 'idle' | 'ascending' | 'cruise' | 'descending' = 'idle';
 	_transitionTarget: Location | null = null;
 	_transitionStartAlt = 0;
-	_transitionProgress = 0;
 
 	// --- Animation time (public for plugins) ---
 	time = 0;
@@ -180,12 +180,24 @@ export class WindowModel {
 	showRain = $derived((this.weather === 'storm' || this.weather === 'overcast') && this.altitude < this.cloudBase);
 	showLightning = $derived(this.weather === 'storm');
 
-	// Effective cloud density (user setting + weather adjustment)
-	effectiveCloudDensity = $derived(
-		this.weather === 'storm' ? Math.max(this.cloudDensity, 0.85) :
-		this.weather === 'overcast' ? Math.max(this.cloudDensity, 0.7) :
-		this.weather === 'cloudy' ? Math.max(this.cloudDensity, 0.4) :
-		this.cloudDensity * 0.3 // Clear weather = sparse clouds
+	// Effective cloud density (user setting + weather + night adjustment)
+	effectiveCloudDensity = $derived.by(() => {
+		let density = this.weather === 'storm' ? Math.max(this.cloudDensity, 0.85) :
+			this.weather === 'overcast' ? Math.max(this.cloudDensity, 0.7) :
+			this.weather === 'cloudy' ? Math.max(this.cloudDensity, 0.4) :
+			this.cloudDensity * 0.3; // Clear weather = sparse clouds
+		// Night boost: 30% more clouds at night for atmospheric effect
+		if (this.skyState === 'night' || this.skyState === 'dusk') {
+			density = Math.min(1.0, density * 1.3);
+		}
+		return density;
+	});
+
+	// Target altitude for night (higher for city lights visibility)
+	nightAltitudeTarget = $derived(
+		this.skyState === 'night' ? 42000 :
+		this.skyState === 'dusk' || this.skyState === 'dawn' ? 38000 :
+		35000
 	);
 
 	// Ambient intensity affected by weather
@@ -255,6 +267,25 @@ export class WindowModel {
 				syncToRealTime: this.syncToRealTime,
 			});
 		});
+
+		// Auto-adjust altitude for night (gradual climb for better city lights view)
+		$effect(() => {
+			const target = this.nightAltitudeTarget;
+			const current = this.altitude;
+			const diff = target - current;
+			// Only adjust if significant difference and not transitioning
+			if (Math.abs(diff) > 1000 && !this.isTransitioning) {
+				// Gradual adjustment over time (100ft per tick via RAF)
+				const step = Math.sign(diff) * Math.min(Math.abs(diff), 100);
+				const raf = requestAnimationFrame(() => {
+					if (!this.isTransitioning) {
+						this.altitude = current + step;
+					}
+				});
+				return () => cancelAnimationFrame(raf);
+			}
+			return undefined;
+		});
 	}
 
 	// ========================================================================
@@ -308,7 +339,6 @@ export class WindowModel {
 		this.transitionDestination = target.name;
 		this._transitionTarget = target;
 		this._transitionStartAlt = this.altitude;
-		this._transitionProgress = 0;
 
 		if (this.blindOpen) {
 			this.blindOpen = false;
@@ -400,7 +430,7 @@ export class WindowModel {
 				this.lightningIntensity = Math.max(0, this.lightningIntensity - delta * AIRCRAFT.LIGHTNING_DECAY_RATE);
 			}
 
-			if (this.lightningIntensity === 0 && this.lightningTimer > this.nextLightning) {
+			if (this.lightningIntensity < 0.01 && this.lightningTimer > this.nextLightning) {
 				this.lightningIntensity = 0.5 + Math.random() * 0.5;
 				this.lightningTimer = 0;
 				this.nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;

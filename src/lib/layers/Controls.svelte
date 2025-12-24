@@ -158,7 +158,10 @@
 
 		<!-- Time Control -->
 		<section class="control">
-			<label for="time-slider">Time: {formatTime(model.syncToRealTime ? model.localTimeOfDay : model.timeOfDay)}</label>
+			<label for="time-slider">
+				{model.syncToRealTime ? `Local (${LOCATIONS.find(l => l.id === model.location)?.name}): ` : 'Time: '}
+				{formatTime(model.localTimeOfDay)} ({model.skyState})
+			</label>
 			<input
 				id="time-slider"
 				type="range"
@@ -217,7 +220,7 @@
 					</select>
 				</div>
 				<div class="control">
-					<label for="clouds-slider">Clouds: {(model.cloudDensity * 100).toFixed(0)}%</label>
+					<label for="clouds-slider">Cloud Density: {(model.cloudDensity * 100).toFixed(0)}%</label>
 					<input
 						id="clouds-slider"
 						type="range"
@@ -226,6 +229,30 @@
 						step="0.1"
 						value={model.cloudDensity}
 						oninput={(e) => (model.cloudDensity = parseFloat(e.currentTarget.value))}
+					/>
+				</div>
+				<div class="control">
+					<label for="cloud-speed-slider">Cloud Speed: {model.cloudSpeed.toFixed(1)}x</label>
+					<input
+						id="cloud-speed-slider"
+						type="range"
+						min="0.1"
+						max="2"
+						step="0.1"
+						value={model.cloudSpeed}
+						oninput={(e) => (model.cloudSpeed = parseFloat(e.currentTarget.value))}
+					/>
+				</div>
+				<div class="control">
+					<label for="cloud-scale-slider">Cloud Size: {model.cloudScale.toFixed(1)}x</label>
+					<input
+						id="cloud-scale-slider"
+						type="range"
+						min="0.5"
+						max="3"
+						step="0.25"
+						value={model.cloudScale}
+						oninput={(e) => (model.cloudScale = parseFloat(e.currentTarget.value))}
 					/>
 				</div>
 				<div class="control">

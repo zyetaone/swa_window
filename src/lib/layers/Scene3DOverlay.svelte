@@ -1,9 +1,7 @@
 <script lang="ts">
 	/**
-	 * Scene3DOverlay - Enhanced Three.js overlay for realistic flight view
-	 *
+	 * Scene3DOverlay - Three.js overlay for clouds/effects
 	 * Renders on top of Cesium with transparent background
-	 * Follows Threlte best practice: Canvas wrapper + separate Scene component
 	 */
 	import { Canvas } from "@threlte/core";
 	import * as THREE from "three";
@@ -13,16 +11,15 @@
 <div class="scene-overlay">
 	<Canvas
 		createRenderer={(canvas) => {
-			return new THREE.WebGLRenderer({
+			const renderer = new THREE.WebGLRenderer({
 				canvas,
 				alpha: true,
 				antialias: true,
-				powerPreference: "high-performance",
-				logarithmicDepthBuffer: true,
 			});
+			renderer.setClearColor(0x000000, 0);
+			return renderer;
 		}}
 	>
-		<!-- All scene content extracted to Scene.svelte (Threlte best practice) -->
 		<Scene />
 	</Canvas>
 </div>
@@ -34,9 +31,9 @@
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
-		z-index: 10;
 	}
 
+	/* Ensure Threlte's wrapper divs fill the space */
 	.scene-overlay :global(div) {
 		width: 100% !important;
 		height: 100% !important;
@@ -45,6 +42,6 @@
 	.scene-overlay :global(canvas) {
 		width: 100% !important;
 		height: 100% !important;
-		display: block;
+		display: block !important;
 	}
 </style>
