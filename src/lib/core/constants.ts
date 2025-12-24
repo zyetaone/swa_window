@@ -116,7 +116,7 @@ export const AIRCRAFT = {
 
 	// Altitude bounds (feet)
 	MIN_ALTITUDE: 10000,
-	MAX_ALTITUDE: 50000,
+	MAX_ALTITUDE: 65000,
 
 	// Heading wander range (degrees)
 	WANDER_RANGE_SLOW: 0.02,
