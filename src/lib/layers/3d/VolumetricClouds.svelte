@@ -88,6 +88,7 @@
 	// Generate cloud positions
 	function generateClouds(): { positions: Float32Array; sizes: Float32Array; alphas: Float32Array; count: number } {
 		const alt = model.altitude;
+		const density = model.effectiveCloudDensity; // Uses weather-adjusted density
 		const clouds: { x: number; y: number; z: number; size: number; alpha: number }[] = [];
 
 		// Cloud layers relative to altitude
@@ -101,19 +102,23 @@
 			const distance = Math.abs(alt - (layer.minAlt + layer.maxAlt) / 2);
 			if (distance > 30000) continue;
 
-			const count = Math.floor(60 * layer.density * model.cloudDensity * Math.max(0.3, 1 - distance / 30000));
+			// Use effectiveCloudDensity (weather-adjusted)
+			const count = Math.floor(50 * layer.density * density * Math.max(0.2, 1 - distance / 35000));
 
 			for (let i = 0; i < count && clouds.length < MAX_CLOUDS; i++) {
 				const angle = Math.random() * Math.PI * 2;
 				const dist = 2000 + Math.random() * 40000;
 				const layerAlt = layer.minAlt + Math.random() * (layer.maxAlt - layer.minAlt);
 
+				// Size decreases slightly at higher altitudes
+				const altFactor = 1 - (layerAlt - layer.minAlt) / (layer.maxAlt - layer.minAlt) * 0.3;
+
 				clouds.push({
 					x: Math.cos(angle) * dist,
 					y: (layerAlt - alt) * 0.3048, // feet to meters
 					z: Math.sin(angle) * dist,
-					size: 800 + Math.random() * 2000,
-					alpha: 0.4 + Math.random() * 0.4,
+					size: (600 + Math.random() * 1800) * altFactor,
+					alpha: 0.35 + Math.random() * 0.45,
 				});
 			}
 		}
@@ -136,7 +141,8 @@
 	// Create geometry
 	const geometry = new THREE.BufferGeometry();
 	let lastAltitude = model.altitude;
-	let lastDensity = model.cloudDensity;
+	let lastDensity = model.effectiveCloudDensity;
+	let lastWeather = model.weather;
 
 	function updateGeometry() {
 		const data = generateClouds();
@@ -157,20 +163,33 @@
 	// Animation
 	useTask('clouds', (delta) => {
 		time += delta;
-		driftX = Math.sin(time * 0.02) * 500;
-		driftZ = time * 30;
+
+		// Wind-influenced drift based on heading
+		const headingRad = (model.heading * Math.PI) / 180;
+		const windSpeed = 25 + Math.sin(time * 0.01) * 10;
+		driftX = Math.sin(headingRad + Math.PI / 2) * time * windSpeed;
+		driftZ = Math.cos(headingRad + Math.PI / 2) * time * windSpeed;
 
 		cloudMaterial.uniforms.time.value = time;
-		cloudMaterial.uniforms.opacity.value = model.cloudDensity;
+		cloudMaterial.uniforms.opacity.value = Math.min(1.0, model.effectiveCloudDensity * 1.2);
 
-		const color = CLOUD_COLORS[model.skyState] || CLOUD_COLORS.day;
-		cloudMaterial.uniforms.cloudColor.value.setRGB(color[0], color[1], color[2]);
+		// Weather-adjusted cloud color (darker in storms)
+		let baseColor = CLOUD_COLORS[model.skyState] || CLOUD_COLORS.day;
+		if (model.weather === 'storm') {
+			baseColor = [baseColor[0] * 0.55, baseColor[1] * 0.6, baseColor[2] * 0.65];
+		} else if (model.weather === 'overcast') {
+			baseColor = [baseColor[0] * 0.75, baseColor[1] * 0.78, baseColor[2] * 0.82];
+		}
+		cloudMaterial.uniforms.cloudColor.value.setRGB(baseColor[0], baseColor[1], baseColor[2]);
 
-		// Regenerate if altitude/density changed significantly
-		if (Math.abs(model.altitude - lastAltitude) > 3000 || Math.abs(model.cloudDensity - lastDensity) > 0.2) {
+		// Regenerate if altitude/density/weather changed
+		if (Math.abs(model.altitude - lastAltitude) > 3000 ||
+		    Math.abs(model.effectiveCloudDensity - lastDensity) > 0.15 ||
+		    model.weather !== lastWeather) {
 			updateGeometry();
 			lastAltitude = model.altitude;
-			lastDensity = model.cloudDensity;
+			lastDensity = model.effectiveCloudDensity;
+			lastWeather = model.weather;
 		}
 	});
 

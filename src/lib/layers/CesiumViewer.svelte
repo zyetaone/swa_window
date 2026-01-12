@@ -236,69 +236,82 @@ import type * as CesiumType from 'cesium';
 		// Calculate altitude-based opacity for night lights
 		const altitudeOpacity = getNightLightsOpacity(altitudeFt);
 
-		// Night: Dark terrain + subtle city lights overlay (altitude-based)
+		// Night: Dark terrain with visible detail + city lights overlay
 		if (skyState === 'night') {
 			const darkness = viewerState.terrainDarkness;
 
-			// Make terrain imagery dark based on terrainDarkness
-			dayImageryLayer.brightness = 1.0 - (darkness * 0.98);
-			dayImageryLayer.contrast = 1.0 - (darkness * 0.5);
-			dayImageryLayer.saturation = 1.0 - (darkness * 0.9);
-			dayImageryLayer.gamma = 1.0 + (darkness * 2.0);
+			// Terrain darkening - preserve some detail (moonlit landscape effect)
+			// FIXED: gamma < 1.0 darkens (was > 1.0 which brightens!)
+			// FIXED: brightness min 20% to keep terrain readable
+			dayImageryLayer.brightness = Math.max(0.20, 1.0 - (darkness * 0.75));
+			dayImageryLayer.contrast = Math.max(0.70, 1.0 - (darkness * 0.25));
+			dayImageryLayer.saturation = 1.0 - (darkness * 0.7);
+			dayImageryLayer.gamma = 0.7 + (1 - darkness) * 0.2; // 0.7-0.9 range (darkens)
 			dayImageryLayer.alpha = 1.0;
 
-			// Night lights overlay - geo-located city lights from NASA imagery
-			// Subtle effect to avoid showing low-res pixelation
+			// Night lights overlay - boosted visibility
 			if (nightImageryLayer) {
-				nightImageryLayer.alpha = altitudeOpacity;
+				nightImageryLayer.alpha = Math.min(0.55, altitudeOpacity * 2.0); // 2x boost, max 55%
+				nightImageryLayer.brightness = 2.5;
+				nightImageryLayer.contrast = 1.4;
+				nightImageryLayer.saturation = 1.1; // Warm glow
+				nightImageryLayer.gamma = 0.85;
+			}
+
+			// Keep some atmosphere for depth (dark blue sky gradient)
+			if (viewer.scene.skyAtmosphere) {
+				viewer.scene.skyAtmosphere.brightnessShift = -0.25;
+				viewer.scene.skyAtmosphere.saturationShift = -0.1;
+			}
+			viewer.scene.globe.showGroundAtmosphere = true; // Keep for depth cues
+
+			// Subtle blue tint for night globe
+			const baseColorValue = Math.floor((1 - darkness) * 40 + 15);
+			viewer.scene.globe.baseColor = Cesium.Color.fromBytes(baseColorValue, baseColorValue, baseColorValue + 20, 255);
+
+		}
+		// Dusk: Transitioning to night (golden hour fading)
+		else if (skyState === 'dusk') {
+			dayImageryLayer.brightness = 0.45;
+			dayImageryLayer.contrast = 0.95;
+			dayImageryLayer.saturation = 0.7;
+			dayImageryLayer.gamma = 0.9; // Slightly darker
+			dayImageryLayer.alpha = 1.0;
+
+			// Dusk: city lights emerging
+			if (nightImageryLayer) {
+				nightImageryLayer.alpha = Math.min(0.35, altitudeOpacity * 1.2);
 				nightImageryLayer.brightness = 2.0;
 				nightImageryLayer.contrast = 1.3;
-				nightImageryLayer.saturation = 1.0;
 				nightImageryLayer.gamma = 0.9;
 			}
 
-			// Reduce atmosphere glow at night
+			// Keep atmosphere with warm tint
 			if (viewer.scene.skyAtmosphere) {
-				viewer.scene.skyAtmosphere.brightnessShift = -0.5;
-				viewer.scene.skyAtmosphere.saturationShift = -0.3;
-			}
-			viewer.scene.globe.showGroundAtmosphere = false;
-
-			// Darken the globe's base color for night
-			const baseColorValue = Math.floor((1 - darkness) * 30);
-			viewer.scene.globe.baseColor = Cesium.Color.fromBytes(baseColorValue, baseColorValue, baseColorValue + 10, 255);
-
-		}
-		// Dusk: Transitioning to night
-		else if (skyState === 'dusk') {
-			dayImageryLayer.brightness = 0.25;
-			dayImageryLayer.contrast = 1.0;
-			dayImageryLayer.saturation = 0.5;
-			dayImageryLayer.gamma = 1.5;
-			dayImageryLayer.alpha = 1.0;
-
-			// Dusk: reduced night lights
-			if (nightImageryLayer) {
-				nightImageryLayer.alpha = altitudeOpacity * 0.4;
-				nightImageryLayer.brightness = 1.5;
-				nightImageryLayer.contrast = 1.2;
-				nightImageryLayer.gamma = 1.0;
+				viewer.scene.skyAtmosphere.brightnessShift = -0.1;
+				viewer.scene.skyAtmosphere.saturationShift = 0.1; // Warmer
 			}
 		}
-		// Dawn: Transitioning from night
+		// Dawn: Transitioning from night (sunrise colors)
 		else if (skyState === 'dawn') {
-			dayImageryLayer.brightness = 0.45;
-			dayImageryLayer.contrast = 1.0;
-			dayImageryLayer.saturation = 0.7;
-			dayImageryLayer.gamma = 1.2;
+			dayImageryLayer.brightness = 0.55;
+			dayImageryLayer.contrast = 0.95;
+			dayImageryLayer.saturation = 0.75;
+			dayImageryLayer.gamma = 0.95;
 			dayImageryLayer.alpha = 1.0;
 
 			// Dawn: fading night lights
 			if (nightImageryLayer) {
-				nightImageryLayer.alpha = altitudeOpacity * 0.2;
-				nightImageryLayer.brightness = 1.2;
-				nightImageryLayer.contrast = 1.1;
-				nightImageryLayer.gamma = 1.0;
+				nightImageryLayer.alpha = Math.min(0.20, altitudeOpacity * 0.6);
+				nightImageryLayer.brightness = 1.5;
+				nightImageryLayer.contrast = 1.2;
+				nightImageryLayer.gamma = 0.95;
+			}
+
+			// Keep atmosphere with cool morning tint
+			if (viewer.scene.skyAtmosphere) {
+				viewer.scene.skyAtmosphere.brightnessShift = 0.0;
+				viewer.scene.skyAtmosphere.saturationShift = 0.0;
 			}
 		}
 		// Day: Full brightness, no night overlay
@@ -333,15 +346,34 @@ import type * as CesiumType from 'cesium';
 		if (!viewer) return;
 
 		// Base fog from visibility setting (5-100 km)
-		const baseFogDensity = 0.00015 / (viewerState.visibility / 50);
+		// Higher visibility = less fog
+		const baseFogDensity = 0.00012 / (viewerState.visibility / 50);
 
-		// Haze increases fog density significantly (0-1 range)
-		// At max haze (1.0), fog is 100x denser
-		const hazeMultiplier = 1 + viewerState.haze * 99;
-		viewer.scene.fog.density = baseFogDensity * hazeMultiplier;
+		// Weather affects base haze
+		const weatherHaze =
+			viewerState.weather === 'storm' ? 0.4 :
+			viewerState.weather === 'overcast' ? 0.2 :
+			viewerState.weather === 'cloudy' ? 0.05 : 0;
 
-		// Haze slightly brightens shadows
-		viewer.scene.fog.minimumBrightness = 0.03 + viewerState.haze * 0.08;
+		// Combined haze (user setting + weather)
+		const effectiveHaze = Math.min(1.0, viewerState.haze + weatherHaze);
+
+		// FIXED: Curved multiplier instead of exponential (was 1 + haze * 99)
+		// Now: haze 0→1 maps smoothly to 1→4x fog density
+		const hazeMultiplier = 1 + Math.pow(effectiveHaze, 0.5) * 3;
+
+		// Altitude attenuation - fog thins at high altitude
+		const altitudeM = viewerState.altitude * 0.3048;
+		const altitudeAtten = Math.exp(-altitudeM / 8000); // Scale height 8km
+
+		viewer.scene.fog.density = baseFogDensity * hazeMultiplier * altitudeAtten;
+
+		// Fog brightness based on time of day
+		const baseBrightness =
+			viewerState.skyState === 'day' ? 0.12 :
+			viewerState.skyState === 'dawn' || viewerState.skyState === 'dusk' ? 0.08 :
+			0.04;
+		viewer.scene.fog.minimumBrightness = baseBrightness + effectiveHaze * 0.06;
 	}
 
 	// Initialize Cesium viewer and handle cleanup
