@@ -1,20 +1,14 @@
 <script lang="ts">
 	/**
-	 * Scene - Main 3D scene using Threlte extras + custom plugins
+	 * Scene - Three.js effects overlay for clouds and weather
 	 *
-	 * Plugins:
-	 * - layers: For selective bloom rendering
-	 * - turbulence: Motion noise based on weather
-	 * - daynight: Material adjustments for time of day
-	 * - selectiveBloom: Bloom only for BLOOM_LAYER objects
+	 * Renders on top of Cesium with transparent background.
+	 * Terrain, buildings, and atmosphere are handled by Cesium.
 	 */
 	import { T, useTask } from "@threlte/core";
 	import { Float, layers } from "@threlte/extras";
-	import EnhancedWing from "./EnhancedWing.svelte";
 	import VolumetricClouds from "./VolumetricClouds.svelte";
 	import WeatherEffects from "./WeatherEffects.svelte";
-	// CityLights removed - using Cesium's NASA Earth at Night imagery instead
-	// Three.js overlay can't sync with Cesium's geo-coordinates
 	import { useAppState } from "$lib/core";
 	import { turbulence, daynight } from "$lib/plugins";
 
@@ -24,12 +18,6 @@
 	layers();
 	turbulence();
 	daynight();
-
-	// NOTE: Selective bloom disabled - it hijacks rendering and breaks Cesium transparency
-	// TODO: Fix bloom to preserve alpha channel for overlay mode
-
-	// NOTE: Sky and Stars disabled - they render solid backgrounds covering Cesium
-	// Using Cesium's native atmosphere instead
 
 	// Camera base position
 	const cameraY = $derived(1 + model.motionOffsetY);
@@ -62,9 +50,8 @@
 	color={model.skyState === "night" ? 0x404060 : 0xffffff}
 />
 
-<!-- 3D Objects -->
-<EnhancedWing />
+<!-- 3D Effects (clouds, weather) - terrain/buildings via Cesium -->
 <VolumetricClouds />
 <WeatherEffects />
-<!-- City lights come from Cesium's NASA Earth at Night imagery layer -->
+
 

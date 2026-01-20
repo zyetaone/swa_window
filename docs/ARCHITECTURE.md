@@ -19,7 +19,7 @@ Screen (Portrait/Landscape) + Raspberry Pi 4/5
 └── Remote stream capability (optional)
 ```
 
-## Hybrid Layered Compositing (3D + CSS)
+## Hybrid Layered Compositing (Cesium + Three.js + CSS)
 
 ```
 ┌─────────────────────────────────────────┐
@@ -29,12 +29,18 @@ Screen (Portrait/Landscape) + Raspberry Pi 4/5
 ├─────────────────────────────────────────┤
 │ CSS: Blind (animated)               z:40│
 ├─────────────────────────────────────────┤
-│ CSS: Events (Santa, birds...)       z:25│
+│ CSS: Vignette overlay               z:20│
 ├─────────────────────────────────────────┤
-│ THRELTE CANVAS (3D scene)           z:0 │
-│  ├── Sky3D (gradient shader sphere)     │
-│  ├── Clouds3D (drifting 3D planes)      │
-│  └── Ground3D (parallax terrain layers) │
+│ THREE.JS OVERLAY (transparent)       z:2│
+│  ├── VolumetricClouds (3D positioned)   │
+│  ├── WeatherEffects (rain, lightning)   │
+│  └── Float (camera turbulence)          │
+├─────────────────────────────────────────┤
+│ CESIUM VIEWER (terrain + buildings)  z:1│
+│  ├── Ion terrain + imagery              │
+│  ├── NASA night lights layer            │
+│  ├── OSM 3D buildings                   │
+│  └── Atmosphere + time-of-day lighting  │
 └─────────────────────────────────────────┘
 ```
 
@@ -48,31 +54,46 @@ Screen (Portrait/Landscape) + Raspberry Pi 4/5
 ## Core State (Implemented)
 
 ```typescript
-// src/lib/core/state.svelte.ts
-class WindowState {
+// src/lib/core/WindowModel.svelte.ts
+class WindowModel {
+  // Position
+  lat = $state(25.2048);
+  lon = $state(55.2708);
+  utcOffset = $state(4);  // Hours from UTC
+  altitude = $state(35000);
+  heading = $state(45);
+
   // Time (circadian sync)
-  timeOfDay = $state(getCurrentTimeOfDay());  // 0-24, from system clock
-  skyState = $derived(getSkyState(this.timeOfDay));  // 'night' | 'dawn' | 'day' | 'dusk'
+  timeOfDay = $state(12);  // 0-24, syncs with system clock
+  syncToRealTime = $state(true);
+  localTimeOfDay = $derived(...);  // Adjusted for location timezone
+  skyState = $derived(getSkyState(this.localTimeOfDay));
 
-  // View
+  // Location
+  location = $state<LocationId>('dubai');
+
+  // Environment
+  weather = $state<WeatherType>('cloudy');
+  cloudDensity = $state(0.7);
+  cloudSpeed = $state(0.4);   // Drift speed multiplier
+  cloudScale = $state(1.5);   // Cloud size multiplier
+
+  // View toggles
   blindOpen = $state(true);
-  currentView = $state<ViewType>('dubai');
-  viewAngle = $state<ViewAngle>('right');  // Camera/seat position
-  skyRatio = $derived(...);  // Adjusts based on viewAngle
-
-  // Events
-  activeEvent = $state<EventType>(null);
+  showBuildings = $state(true);
+  showClouds = $state(true);
 
   // Methods
+  setLocation(id: LocationId): void;
+  setTime(hours: number): void;
+  setAltitude(feet: number): void;
   toggleBlind(): void;
-  setView(view: ViewType): void;
-  setViewAngle(angle: ViewAngle): void;
-  triggerEvent(event: EventType): void;
+  flyTo(locationId: LocationId): Promise<void>;  // Animated transition
+  tick(delta: number): void;  // Animation frame update
 }
 
-type ViewType = 'dubai' | 'himalayas' | 'mumbai' | 'ocean' | 'desert' | 'clouds';
-type ViewAngle = 'left' | 'right' | 'down' | 'forward';
-type EventType = 'christmas' | 'diwali' | 'newyear' | 'birds' | 'storm' | null;
+type LocationId = 'dubai' | 'himalayas' | 'mumbai' | 'ocean' | 'desert' | 'clouds' | 'hyderabad' | 'dallas' | 'phoenix' | 'las_vegas';
+type WeatherType = 'clear' | 'cloudy' | 'overcast' | 'storm';
 type SkyState = 'night' | 'dawn' | 'day' | 'dusk';
 ```
 
@@ -81,35 +102,38 @@ type SkyState = 'night' | 'dawn' | 'day' | 'dusk';
 ```
 /src
   /lib
-    /core                # Core state management
-      state.svelte.ts    # WindowState class with Svelte 5 runes
+    /core                    # Core state management
+      WindowModel.svelte.ts  # Central state class with Svelte 5 runes
+      EnvironmentSystem.ts   # Time-of-day, biome colors
+      constants.ts           # All magic numbers centralized
+      types.ts               # TypeScript type definitions
+      index.ts               # Public exports
 
-    /layers              # Visual layer components
-      Window.svelte      # Hybrid compositor: 3D canvas + CSS overlays
-      Scene3D.svelte     # Threlte scene orchestrator
-      Events.svelte      # CSS event overlays (Santa, birds, etc.)
-      Controls.svelte    # Dev controls panel
-      /3d                # Three.js/Threlte 3D components
-        Sky3D.svelte     # Shader-based sky sphere with stars
-        Ground3D.svelte  # Multi-layer parallax terrain
-        Clouds3D.svelte  # Drifting 3D cloud planes
+    /layers                  # Visual layer components
+      Window.svelte          # Layer compositor: Cesium + Three.js + CSS
+      CesiumViewer.svelte    # Cesium terrain, buildings, atmosphere
+      Scene3DOverlay.svelte  # Threlte canvas (transparent overlay)
+      Controls.svelte        # Dev controls panel
 
-    /events              # Event system configuration
-      index.ts           # Event configs and date checking
+      /3d                    # Three.js/Threlte 3D components
+        Scene.svelte         # Main 3D scene orchestrator
+        VolumetricClouds.svelte  # 3D positioned shader clouds
+        WeatherEffects.svelte    # Rain, lightning effects
+        EnhancedWing.svelte      # Aircraft wing model
+        CityLights.svelte        # Point cloud city lights
 
-    /views               # View configurations
-      index.ts           # ViewConfig for each destination
+    /plugins                 # Threlte plugins
+      turbulence.ts          # Camera shake plugin
+      daynight.ts            # Material time-of-day adjustments
 
-    /assets              # Static assets
-    /server              # Server-side code
+    /shaders                 # GLSL shader code
+      index.ts               # Shader exports
 
   /routes
-    +page.svelte         # Main entry point
-    +layout.svelte       # App layout
+    +page.svelte             # Main entry point
 
   /static
-    /videos              # Video textures (future: aerial footage)
-    /images              # Fallback images
+    /models                  # 3D models (GLTF)
 ```
 
 ## Video Texture Strategy

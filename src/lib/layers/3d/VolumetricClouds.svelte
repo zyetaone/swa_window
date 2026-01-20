@@ -1,9 +1,9 @@
 <script lang="ts">
 	/**
-	 * VolumetricClouds - Simplified cloud rendering
+	 * VolumetricClouds - 3D positioned clouds that drift through the scene
 	 *
-	 * Uses billboard sprites with procedural noise in shader
-	 * Removed: 3D noise texture generation, complex light scattering
+	 * NOT screen-space overlay - actual 3D cloud planes positioned in world space
+	 * that move independently as the "plane" flies forward
 	 */
 	import { T, useTask } from '@threlte/core';
 	import * as THREE from 'three';
@@ -11,202 +11,261 @@
 
 	const { model } = useAppState();
 
-	// Configuration
-	const MAX_CLOUDS = 200;
+	// Cloud configuration - SIDE WINDOW VIEW
+	// Plane flies forward, passenger looks out side window
+	// Clouds appear to drift from FRONT of plane to BACK (right to left in view)
+	const CLOUD_COUNT = 20;
+	const CLOUD_DEPTH_MIN = -80;   // Closest clouds
+	const CLOUD_DEPTH_MAX = -300;  // Farthest clouds
+	const CLOUD_SPAWN_X = -120;    // Spawn on LEFT (front of plane in view)
+	const CLOUD_EXIT_X = 120;      // Exit on RIGHT (back of plane in view)
+	const CLOUD_MIN_Y = -25;       // Below eye level
+	const CLOUD_MAX_Y = 40;        // Above eye level
 
 	// Cloud colors by time of day
-	const CLOUD_COLORS: Record<string, [number, number, number]> = {
-		day: [1.0, 1.0, 1.0],
-		dawn: [1.0, 0.85, 0.75],
-		dusk: [1.0, 0.75, 0.65],
-		night: [0.3, 0.35, 0.45],
+	const CLOUD_COLORS: Record<string, THREE.Color> = {
+		day: new THREE.Color(0.98, 0.98, 1.0),
+		dawn: new THREE.Color(1.0, 0.85, 0.75),
+		dusk: new THREE.Color(1.0, 0.7, 0.6),
+		night: new THREE.Color(0.25, 0.28, 0.38),
 	};
 
-	// Simple cloud shader with procedural noise
-	const cloudMaterial = new THREE.ShaderMaterial({
-		uniforms: {
-			time: { value: 0 },
-			opacity: { value: 1.0 },
-			cloudColor: { value: new THREE.Color(1, 1, 1) },
-		},
-		vertexShader: `
-			attribute float size;
-			attribute float alpha;
-			varying float vAlpha;
-			varying vec2 vUv;
-			void main() {
-				vAlpha = alpha;
-				vec4 mv = modelViewMatrix * vec4(position, 1.0);
-				gl_PointSize = clamp(size * (500.0 / -mv.z), 10.0, 300.0);
-				gl_Position = projectionMatrix * mv;
-			}
-		`,
-		fragmentShader: `
-			uniform float time;
-			uniform float opacity;
-			uniform vec3 cloudColor;
-			varying float vAlpha;
+	// Generate cloud shader material
+	function createCloudMaterial(): THREE.ShaderMaterial {
+		return new THREE.ShaderMaterial({
+			uniforms: {
+				uTime: { value: Math.random() * 100 },
+				uOpacity: { value: 0.6 },
+				uColor: { value: new THREE.Color(1, 1, 1) },
+				uScale: { value: 1.0 },
+			},
+			vertexShader: `
+				varying vec2 vUv;
+				varying float vFog;
+				void main() {
+					vUv = uv;
+					vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+					// Distance fog
+					vFog = smoothstep(50.0, 200.0, -mvPosition.z);
+					gl_Position = projectionMatrix * mvPosition;
+				}
+			`,
+			fragmentShader: `
+				uniform float uTime;
+				uniform float uOpacity;
+				uniform vec3 uColor;
+				uniform float uScale;
+				varying vec2 vUv;
+				varying float vFog;
 
-			float hash(vec2 p) {
-				return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-			}
+				float hash(vec2 p) {
+					return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+				}
 
-			float noise(vec2 p) {
-				vec2 i = floor(p);
-				vec2 f = fract(p);
-				f = f * f * (3.0 - 2.0 * f);
-				return mix(
-					mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-					mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
-					f.y
-				);
-			}
+				float noise(vec2 p) {
+					vec2 i = floor(p);
+					vec2 f = fract(p);
+					f = f * f * (3.0 - 2.0 * f);
+					return mix(
+						mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+						mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+						f.y
+					);
+				}
 
-			void main() {
-				vec2 uv = gl_PointCoord;
-				float d = length(uv - 0.5) * 2.0;
-				if (d > 1.0) discard;
+				float fbm(vec2 p) {
+					float v = 0.0;
+					float a = 0.5;
+					mat2 rot = mat2(0.87, 0.5, -0.5, 0.87);
+					for (int i = 0; i < 5; i++) {
+						v += a * noise(p);
+						p = rot * p * 2.0;
+						a *= 0.5;
+					}
+					return v;
+				}
 
-				// Procedural cloud shape
-				float n = noise(uv * 8.0 + time * 0.1) * 0.5 +
-				          noise(uv * 16.0 - time * 0.05) * 0.3 +
-				          noise(uv * 32.0) * 0.2;
+				void main() {
+					vec2 uv = vUv;
+					vec2 center = uv - 0.5;
+					float dist = length(center);
 
-				float edge = smoothstep(1.0, 0.3, d);
-				float density = smoothstep(0.3, 0.6, n) * edge;
+					// Circular cloud shape with soft edges
+					float circle = 1.0 - smoothstep(0.2, 0.5, dist);
 
-				float alpha = density * vAlpha * opacity;
-				if (alpha < 0.05) discard;
+					// Organic noise texture
+					float t = uTime * 0.02;
+					vec2 noiseUv = uv * 3.0 * uScale;
+					float n = fbm(noiseUv + t);
+					float n2 = fbm(noiseUv * 2.0 - t * 0.5 + 10.0);
 
-				gl_FragColor = vec4(cloudColor, alpha);
-			}
-		`,
-		transparent: true,
-		depthWrite: false,
-	});
+					// Combine for fluffy cloud
+					float cloud = circle * smoothstep(0.3, 0.6, n * 0.6 + n2 * 0.4);
 
-	// Generate cloud positions
-	function generateClouds(): { positions: Float32Array; sizes: Float32Array; alphas: Float32Array; count: number } {
-		const alt = model.altitude;
-		const density = model.effectiveCloudDensity; // Uses weather-adjusted density
-		const clouds: { x: number; y: number; z: number; size: number; alpha: number }[] = [];
+					// Edge detail
+					float edge = smoothstep(0.15, 0.45, dist);
+					cloud *= mix(1.0, n2, edge * 0.5);
 
-		// Cloud layers relative to altitude
-		const layers = [
-			{ minAlt: 3000, maxAlt: 12000, density: 1.0 },
-			{ minAlt: 12000, maxAlt: 25000, density: 0.7 },
-			{ minAlt: 25000, maxAlt: 40000, density: 0.4 },
-		];
+					// Apply opacity and distance fog
+					float alpha = cloud * uOpacity * (1.0 - vFog * 0.7);
 
-		for (const layer of layers) {
-			const distance = Math.abs(alt - (layer.minAlt + layer.maxAlt) / 2);
-			if (distance > 30000) continue;
+					if (alpha < 0.02) discard;
 
-			// Use effectiveCloudDensity (weather-adjusted)
-			const count = Math.floor(50 * layer.density * density * Math.max(0.2, 1 - distance / 35000));
+					// Slight brightness variation
+					float brightness = 0.9 + n * 0.15;
 
-			for (let i = 0; i < count && clouds.length < MAX_CLOUDS; i++) {
-				const angle = Math.random() * Math.PI * 2;
-				const dist = 2000 + Math.random() * 40000;
-				const layerAlt = layer.minAlt + Math.random() * (layer.maxAlt - layer.minAlt);
-
-				// Size decreases slightly at higher altitudes
-				const altFactor = 1 - (layerAlt - layer.minAlt) / (layer.maxAlt - layer.minAlt) * 0.3;
-
-				clouds.push({
-					x: Math.cos(angle) * dist,
-					y: (layerAlt - alt) * 0.3048, // feet to meters
-					z: Math.sin(angle) * dist,
-					size: (600 + Math.random() * 1800) * altFactor,
-					alpha: 0.35 + Math.random() * 0.45,
-				});
-			}
-		}
-
-		const positions = new Float32Array(clouds.length * 3);
-		const sizes = new Float32Array(clouds.length);
-		const alphas = new Float32Array(clouds.length);
-
-		clouds.forEach((c, i) => {
-			positions[i * 3] = c.x;
-			positions[i * 3 + 1] = c.y;
-			positions[i * 3 + 2] = c.z;
-			sizes[i] = c.size;
-			alphas[i] = c.alpha;
+					gl_FragColor = vec4(uColor * brightness, alpha);
+				}
+			`,
+			transparent: true,
+			depthWrite: false,
+			side: THREE.DoubleSide,
+			blending: THREE.NormalBlending,
 		});
-
-		return { positions, sizes, alphas, count: clouds.length };
 	}
 
-	// Create geometry
-	const geometry = new THREE.BufferGeometry();
-	let lastAltitude = model.altitude;
-	let lastDensity = model.effectiveCloudDensity;
-	let lastWeather = model.weather;
-
-	function updateGeometry() {
-		const data = generateClouds();
-		geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-		geometry.setAttribute('size', new THREE.BufferAttribute(data.sizes, 1));
-		geometry.setAttribute('alpha', new THREE.BufferAttribute(data.alphas, 1));
-		geometry.setDrawRange(0, data.count);
+	// Cloud instances
+	interface CloudInstance {
+		mesh: THREE.Mesh;
+		material: THREE.ShaderMaterial;
+		velocity: THREE.Vector3;
+		baseY: number;
+		scale: number;
+		seed: number;
+		depthFactor: number;
+		lastAppliedScale: number; // Cache to avoid unnecessary scale updates
 	}
 
-	updateGeometry();
-	const points = new THREE.Points(geometry, cloudMaterial);
+	const clouds: CloudInstance[] = [];
+	const cloudGroup = new THREE.Group();
 
-	// State
+	// Initialize clouds - spread across the view at different depths
+	function initClouds() {
+		for (let i = 0; i < CLOUD_COUNT; i++) {
+			const material = createCloudMaterial();
+			// MUCH bigger base geometry for voluminous clouds
+			const geometry = new THREE.PlaneGeometry(60, 50);
+			const mesh = new THREE.Mesh(geometry, material);
+
+			// Random depth (Z) - some close, some far
+			const depth = CLOUD_DEPTH_MIN + Math.random() * (CLOUD_DEPTH_MAX - CLOUD_DEPTH_MIN);
+			mesh.position.z = depth;
+
+			// Random starting X position (spread across the view)
+			mesh.position.x = CLOUD_SPAWN_X + Math.random() * (CLOUD_EXIT_X - CLOUD_SPAWN_X);
+
+			// Random Y position
+			mesh.position.y = CLOUD_MIN_Y + Math.random() * (CLOUD_MAX_Y - CLOUD_MIN_Y);
+
+			// Face camera with slight random tilt
+			mesh.rotation.x = (Math.random() - 0.5) * 0.1;
+			mesh.rotation.z = (Math.random() - 0.5) * 0.15;
+
+			// Random scale - closer clouds bigger, use model.cloudScale
+			const depthFactor = 1 - (depth - CLOUD_DEPTH_MAX) / (CLOUD_DEPTH_MIN - CLOUD_DEPTH_MAX);
+			const baseScale = (0.6 + Math.random() * 0.8) * (0.7 + depthFactor * 0.5);
+			mesh.scale.set(baseScale, baseScale * 0.75, 1);
+
+			// Speed based on depth (parallax - closer = faster)
+			// POSITIVE X = moving RIGHT (from front to back of plane)
+			const speed = 3 + depthFactor * 8; // Slower base speed
+
+			clouds.push({
+				mesh,
+				material,
+				velocity: new THREE.Vector3(speed, 0, 0), // Moving RIGHT (plane flying, clouds drift back)
+				baseY: mesh.position.y,
+				scale: baseScale,
+				seed: Math.random() * 100,
+				depthFactor,
+				lastAppliedScale: baseScale,
+			});
+
+			cloudGroup.add(mesh);
+		}
+	}
+
+	initClouds();
+
+	// Animation - clouds drift SIDEWAYS (side window view)
 	let time = 0;
-	let driftX = 0;
-	let driftZ = 0;
-
-	// Animation
-	useTask('clouds', (delta) => {
+	useTask('clouds-drift', (delta) => {
 		time += delta;
 
-		// Wind-influenced drift based on heading
-		const headingRad = (model.heading * Math.PI) / 180;
-		const windSpeed = 25 + Math.sin(time * 0.01) * 10;
-		driftX = Math.sin(headingRad + Math.PI / 2) * time * windSpeed;
-		driftZ = Math.cos(headingRad + Math.PI / 2) * time * windSpeed;
+		// Use model's cloud speed setting (slower = more realistic)
+		const speedMultiplier = model.cloudSpeed * model.flightSpeed;
+		const scaleMultiplier = model.cloudScale;
 
-		cloudMaterial.uniforms.time.value = time;
-		cloudMaterial.uniforms.opacity.value = Math.min(1.0, model.effectiveCloudDensity * 1.2);
-
-		// Weather-adjusted cloud color (darker in storms)
-		let baseColor = CLOUD_COLORS[model.skyState] || CLOUD_COLORS.day;
+		// Get current cloud color
+		const skyColor = CLOUD_COLORS[model.skyState] || CLOUD_COLORS.day;
+		let color = skyColor.clone();
 		if (model.weather === 'storm') {
-			baseColor = [baseColor[0] * 0.55, baseColor[1] * 0.6, baseColor[2] * 0.65];
+			color.multiplyScalar(0.5);
 		} else if (model.weather === 'overcast') {
-			baseColor = [baseColor[0] * 0.75, baseColor[1] * 0.78, baseColor[2] * 0.82];
+			color.multiplyScalar(0.75);
 		}
-		cloudMaterial.uniforms.cloudColor.value.setRGB(baseColor[0], baseColor[1], baseColor[2]);
 
-		// Regenerate if altitude/density/weather changed
-		if (Math.abs(model.altitude - lastAltitude) > 3000 ||
-		    Math.abs(model.effectiveCloudDensity - lastDensity) > 0.15 ||
-		    model.weather !== lastWeather) {
-			updateGeometry();
-			lastAltitude = model.altitude;
-			lastDensity = model.effectiveCloudDensity;
-			lastWeather = model.weather;
+		const baseOpacity = model.effectiveCloudDensity * 0.8;
+
+		for (const cloud of clouds) {
+			// Move clouds RIGHT (from front to back of plane as seen from side window)
+			cloud.mesh.position.x += cloud.velocity.x * speedMultiplier * delta;
+
+			// Gentle vertical bobbing
+			cloud.mesh.position.y = cloud.baseY + Math.sin(time * 0.15 + cloud.seed) * 3;
+
+			// Apply scale from model (only if changed to avoid unnecessary matrix updates)
+			const finalScale = cloud.scale * scaleMultiplier;
+			if (Math.abs(finalScale - cloud.lastAppliedScale) > 0.01) {
+				cloud.mesh.scale.set(finalScale, finalScale * 0.75, 1);
+				cloud.lastAppliedScale = finalScale;
+			}
+
+			// Respawn when cloud exits RIGHT side of view
+			if (cloud.mesh.position.x > CLOUD_EXIT_X) {
+				// Respawn on the LEFT side (front of plane)
+				cloud.mesh.position.x = CLOUD_SPAWN_X - Math.random() * 20;
+
+				// New random depth
+				const depth = CLOUD_DEPTH_MIN + Math.random() * (CLOUD_DEPTH_MAX - CLOUD_DEPTH_MIN);
+				cloud.mesh.position.z = depth;
+
+				// New Y position
+				cloud.baseY = CLOUD_MIN_Y + Math.random() * (CLOUD_MAX_Y - CLOUD_MIN_Y);
+				cloud.mesh.position.y = cloud.baseY;
+
+				// Recalculate speed based on new depth (parallax)
+				cloud.depthFactor = 1 - (depth - CLOUD_DEPTH_MAX) / (CLOUD_DEPTH_MIN - CLOUD_DEPTH_MAX);
+				cloud.velocity.x = 3 + cloud.depthFactor * 8;
+
+				// New random seed for noise variation
+				cloud.seed = Math.random() * 100;
+
+				// Resize based on depth
+				cloud.scale = (0.6 + Math.random() * 0.8) * (0.7 + cloud.depthFactor * 0.5);
+				cloud.lastAppliedScale = 0; // Force scale update on next frame
+			}
+
+			// Update material uniforms
+			cloud.material.uniforms.uTime.value = time + cloud.seed;
+			cloud.material.uniforms.uColor.value.copy(color);
+			cloud.material.uniforms.uOpacity.value = baseOpacity;
+			cloud.material.uniforms.uScale.value = cloud.scale * scaleMultiplier;
 		}
-	});
-
-	// Update points position reactively
-	$effect(() => {
-		points.position.set(driftX, 0, driftZ);
 	});
 
 	// Cleanup
 	$effect(() => {
 		return () => {
-			geometry.dispose();
-			cloudMaterial.dispose();
+			for (const cloud of clouds) {
+				cloud.material.dispose();
+				cloud.mesh.geometry.dispose();
+			}
+			clouds.length = 0;
 		};
 	});
 </script>
 
 {#if model.showClouds}
-	<T is={points} />
+	<T is={cloudGroup} />
 {/if}

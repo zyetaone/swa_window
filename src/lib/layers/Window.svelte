@@ -71,13 +71,13 @@
 		style:filter={filterString}
 		disabled={model.isTransitioning}
 	>
-		<!-- Cesium terrain/buildings -->
-		<div class="render-layer">
+		<!-- Cesium terrain/buildings (base layer) -->
+		<div class="render-layer cesium-layer">
 			<CesiumViewer />
 		</div>
 
-		<!-- Three.js overlay (wing, clouds) -->
-		<div class="render-layer">
+		<!-- Three.js overlay (clouds, effects) - must be on top -->
+		<div class="render-layer threejs-layer">
 			<Scene3DOverlay />
 		</div>
 
@@ -190,6 +190,14 @@
 		inset: 0;
 		width: 100%;
 		height: 100%;
+	}
+
+	.cesium-layer {
+		z-index: 1;
+	}
+
+	.threejs-layer {
+		z-index: 2;
 	}
 
 	.render-layer > :global(*) {

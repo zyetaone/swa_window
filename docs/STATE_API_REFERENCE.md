@@ -1,154 +1,172 @@
-# State Management API Reference
+# WindowModel API Reference
 
-Quick reference for the consolidated state architecture.
+Quick reference for the consolidated state architecture using Svelte 5 runes.
 
 ## Import
 
 ```typescript
-import { useAppState, createAppState, LOCATIONS, FLIGHT_PATHS } from '$lib/core';
+import { useAppState, createAppState, LOCATIONS, type LocationId } from '$lib/core';
 ```
 
 ## Root Component Setup
 
 ```typescript
-// In +page.svelte or root layout
+// In +page.svelte
 const appState = createAppState();
-const { viewer, flight } = appState;
-
-// Optional: Sync turbulence with weather
-$effect(() => {
-    flight.setTurbulenceFromWeather(viewer.weather);
-});
 ```
 
 ## Child Component Access
 
 ```typescript
 // In any child component
-const { viewer, flight } = useAppState();
+const { model } = useAppState();
 ```
 
-## ViewerState API
+## WindowModel API
 
-### Properties (reactive with $state)
+### Position & Camera
 
 ```typescript
-// Position & Camera
-viewer.lat: number           // Latitude (-90 to 90)
-viewer.lon: number           // Longitude (-180 to 180)
-viewer.altitude: number      // Altitude in feet (10k-50k)
-viewer.heading: number       // Compass heading (0-360)
-viewer.pitch: number         // Camera pitch angle (0-90)
-
-// Time
-viewer.timeOfDay: number     // Hour of day (0-24, decimal)
-viewer.syncToRealTime: boolean  // Auto-sync with system time
-
-// Location
-viewer.location: LocationId  // Current location preset
-
-// Toggles
-viewer.showBuildings: boolean
-viewer.showClouds: boolean
-viewer.blindOpen: boolean
-
-// Weather & Atmosphere
-viewer.cloudDensity: number  // 0-1
-viewer.visibility: number    // km
-viewer.haze: number         // 0-1
-viewer.weather: 'clear' | 'cloudy' | 'overcast' | 'storm'
-
-// Night rendering
-viewer.nightLightIntensity: number  // 0.5-5
-viewer.terrainDarkness: number      // 0-1
-
-// Transition state
-viewer.isTransitioning: boolean
-viewer.transitionDestination: string | null
+model.lat: number           // Latitude
+model.lon: number           // Longitude
+model.utcOffset: number     // Hours from UTC for location timezone
+model.altitude: number      // Altitude in feet (10k-50k)
+model.heading: number       // Compass heading (0-360)
+model.pitch: number         // Camera pitch angle
 ```
 
-### Derived Properties (reactive with $derived)
+### Time
 
 ```typescript
-viewer.skyState: SkyState          // 'day' | 'night' | 'dawn' | 'dusk'
-viewer.sunPosition: SunPosition    // { x, y, z, azimuth, height }
-viewer.biomeColors: BiomeColors    // Color palette for current view
-viewer.mapZoom: number            // Calculated zoom based on altitude
+model.timeOfDay: number        // Hour of day (0-24, decimal)
+model.syncToRealTime: boolean  // Auto-sync with system time
+model.localTimeOfDay: number   // (derived) Time at current location
 ```
 
-### Methods
+### Location
 
 ```typescript
-// Location
-viewer.setLocation(locationId: LocationId): void
-
-// Camera
-viewer.setTime(hours: number): void         // 0-24
-viewer.setAltitude(feet: number): void      // 500-45000
-viewer.setHeading(degrees: number): void    // 0-360
-
-// Toggles
-viewer.toggleBlind(): void
-viewer.toggleBuildings(): void
-viewer.toggleClouds(): void
+model.location: LocationId     // Current location preset
 ```
 
-## FlightDynamics API
-
-### Properties
+### Environment
 
 ```typescript
-// Simulation control
-flight.isRunning: boolean           // Read-only
-flight.driftMode: boolean          // Drift vs waypoint mode
-flight.groundSpeed: number         // Knots
-
-// Motion effects
-flight.turbulenceLevel: TurbulenceLevel  // 'none' | 'light' | 'moderate' | 'severe'
-flight.engineVibration: boolean
-flight.motionEnabled: boolean
-
-// Motion state (read-only)
-flight.motionState: MotionState    // Camera offsets and rotations
+model.weather: WeatherType     // 'clear' | 'cloudy' | 'overcast' | 'storm'
+model.cloudDensity: number     // 0-1
+model.cloudSpeed: number       // 0.1-2.0 (drift speed multiplier)
+model.cloudScale: number       // 0.5-3.0 (cloud size multiplier)
+model.visibility: number       // km
+model.haze: number             // 0-1
 ```
 
-### Motion State Structure
+### Night Rendering
 
 ```typescript
-interface MotionState {
-    // Camera position offsets
-    offsetX: number;
-    offsetY: number;
-    offsetZ: number;
-
-    // Camera rotation offsets
-    roll: number;
-    pitch: number;
-    yaw: number;
-}
+model.nightLightIntensity: number  // 0.5-5 (city lights brightness)
+model.terrainDarkness: number      // 0-1 (terrain darkening at night)
 ```
 
-### Methods
+### Display Toggles
 
 ```typescript
-// Simulation control
-flight.start(): void
-flight.stop(): void
-flight.toggle(): void
+model.blindOpen: boolean
+model.showBuildings: boolean
+model.showClouds: boolean
+```
 
-// Manual control
-flight.setBaseHeading(degrees: number): void
-flight.setBasePitch(degrees: number): void
+### Flight Speed
 
-// Path following
-flight.followPath(pathId: string): void
+```typescript
+model.flightSpeed: number  // 0.5-5 (drift rate multiplier)
+```
 
-// Weather sync
-flight.setTurbulenceFromWeather(weather: string): void
+### Motion State (updated by tick())
 
-// Internal (called by createAppState)
-flight.connectViewer(callback: UpdateCallback): void
-flight.initialize(state: InitialState): void
+```typescript
+model.motionOffsetX: number
+model.motionOffsetY: number
+model.motionOffsetZ: number
+model.motionPitch: number
+model.motionYaw: number
+model.motionRoll: number
+```
+
+### Aircraft Systems
+
+```typescript
+model.strobeOn: boolean           // Strobe light state (auto-animated)
+model.lightningIntensity: number  // 0-1 (storm lightning flashes)
+```
+
+### Transition State
+
+```typescript
+model.isTransitioning: boolean
+model.transitionDestination: string | null
+```
+
+## Derived Properties
+
+```typescript
+model.localTimeOfDay: number       // Time adjusted for location UTC offset
+model.skyState: SkyState           // 'day' | 'night' | 'dawn' | 'dusk'
+model.sunPosition: SunPosition     // { x, y, z, azimuth, height }
+model.biomeColors: BiomeColors     // Color palette for current location
+model.altitudeMeters: number       // Altitude in meters
+model.mapZoom: number              // Calculated zoom for Cesium
+
+// Weather-derived
+model.turbulenceLevel: 'light' | 'moderate' | 'severe'
+model.cloudBase: number            // Cloud base altitude (weather-dependent)
+model.showRain: boolean            // Rain visible below cloud base
+model.showLightning: boolean       // Lightning enabled in storm
+model.effectiveCloudDensity: number // Adjusted for weather
+model.weatherAmbientReduction: number // Light reduction factor
+
+// Lighting-derived
+model.showNavLights: boolean
+model.navLightIntensity: number
+model.sunIntensity: number
+model.ambientIntensity: number
+```
+
+## Methods
+
+### Location
+
+```typescript
+model.setLocation(locationId: LocationId): void
+```
+
+### Camera/Time
+
+```typescript
+model.setTime(hours: number): void      // 0-24
+model.setAltitude(feet: number): void   // 10000-50000
+model.setWeather(weather: WeatherType): void
+```
+
+### Toggles
+
+```typescript
+model.toggleBlind(): void
+model.toggleBuildings(): void
+model.toggleClouds(): void
+```
+
+### Flight Transition
+
+```typescript
+model.flyTo(locationId: LocationId): Promise<void>
+// Animated transition: blind close → ascend → cruise → descend → blind open
+```
+
+### Animation Tick
+
+```typescript
+model.tick(delta: number): void
+// Called every frame - updates motion, strobe, lightning, drift
 ```
 
 ## Types
@@ -157,45 +175,35 @@ flight.initialize(state: InitialState): void
 
 ```typescript
 type LocationId =
-    | 'dubai'
-    | 'himalayas'
-    | 'mumbai'
-    | 'ocean'
-    | 'desert'
-    | 'clouds'
-    | 'hyderabad'
-    | 'dallas'
-    | 'phoenix'
-    | 'las_vegas';
+  | 'dubai'
+  | 'himalayas'
+  | 'mumbai'
+  | 'ocean'
+  | 'desert'
+  | 'clouds'
+  | 'hyderabad'
+  | 'dallas'
+  | 'phoenix'
+  | 'las_vegas';
 ```
 
-### LocationPreset
+### WeatherType
 
 ```typescript
-interface LocationPreset {
-    id: LocationId;
-    name: string;
-    lat: number;
-    lon: number;
-    hasBuildings: boolean;
-    defaultAltitude: number;  // feet
-}
+type WeatherType = 'clear' | 'cloudy' | 'overcast' | 'storm';
 ```
 
-### FlightPath
+### Location
 
 ```typescript
-interface FlightPath {
-    id: string;
-    name: string;
-    waypoints: Array<{
-        lat: number;
-        lon: number;
-        altitude: number;
-        heading: number;
-    }>;
-    speed: number;  // knots
-    loop: boolean;
+interface Location {
+  id: LocationId;
+  name: string;
+  lat: number;
+  lon: number;
+  utcOffset: number;      // Hours from UTC
+  hasBuildings: boolean;
+  defaultAltitude: number;
 }
 ```
 
@@ -209,11 +217,11 @@ type SkyState = 'day' | 'night' | 'dawn' | 'dusk';
 
 ```typescript
 interface SunPosition {
-    x: number;
-    y: number;
-    z: number;
-    azimuth: number;   // degrees
-    height: number;    // 0-1
+  x: number;
+  y: number;
+  z: number;
+  azimuth: number;   // degrees
+  height: number;    // 0-1
 }
 ```
 
@@ -221,10 +229,10 @@ interface SunPosition {
 
 ```typescript
 interface BiomeColors {
-    ground: string;     // hex color
-    horizon: string;    // hex color
-    accent: string;     // hex color
-    secondary: string;  // hex color
+  ground: string;     // hex color
+  horizon: string;    // hex color
+  accent: string;     // hex color
+  secondary: string;  // hex color
 }
 ```
 
@@ -232,141 +240,62 @@ interface BiomeColors {
 
 ### LOCATIONS
 
-Array of all location presets:
-
 ```typescript
+import { LOCATIONS } from '$lib/core';
+
 const dubai = LOCATIONS.find(l => l.id === 'dubai');
-// { id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, ... }
+// { id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, ... }
 ```
-
-### FLIGHT_PATHS
-
-Array of predefined flight paths:
-
-```typescript
-const path = FLIGHT_PATHS.find(p => p.id === 'dubai-circle');
-flight.followPath(path.id);
-```
-
-Available paths:
-- `'dubai-circle'` - Circular pattern over Dubai
-- `'approach'` - Airport approach simulation
 
 ## Common Patterns
 
 ### Change Location
 
 ```typescript
-viewer.setLocation('mumbai');
+model.setLocation('mumbai');
+// or animated:
+await model.flyTo('mumbai');
 ```
 
 ### Set Specific Time
 
 ```typescript
-viewer.syncToRealTime = false;
-viewer.setTime(18.5);  // 6:30 PM
+model.syncToRealTime = false;
+model.setTime(18.5);  // 6:30 PM
 ```
 
-### Change Weather and Turbulence
+### Change Weather
 
 ```typescript
-viewer.weather = 'storm';
-// Turbulence syncs automatically if you set up the $effect in root
+model.weather = 'storm';
+// Turbulence automatically syncs via derived state
 ```
 
 ### Access Motion for Camera
 
-```typescript
+```svelte
 <T.PerspectiveCamera
-    position={[
-        baseX + flight.motionState.offsetX,
-        baseY + flight.motionState.offsetY,
-        baseZ + flight.motionState.offsetZ
-    ]}
-    rotation={[
-        flight.motionState.pitch,
-        flight.motionState.yaw,
-        flight.motionState.roll
-    ]}
+  position.y={1 + model.motionOffsetY}
 />
-```
-
-### Follow Flight Path
-
-```typescript
-flight.followPath('dubai-circle');
-// Simulation automatically switches to waypoint mode
-```
-
-### Manual Flight Control
-
-```typescript
-flight.driftMode = true;
-flight.groundSpeed = 350;  // Faster
-flight.setBaseHeading(90); // East
 ```
 
 ## Reactivity
 
-All state properties are reactive using Svelte 5 runes:
+All state uses Svelte 5 runes:
 
 ```svelte
-{#if viewer.skyState === 'night'}
-    <NightSky />
-{:else}
-    <DaySky />
+{#if model.skyState === 'night'}
+  <NightEffects />
 {/if}
 
-<p>Altitude: {viewer.altitude.toFixed(0)} ft</p>
-<p>Time: {viewer.timeOfDay.toFixed(1)}</p>
+<p>Altitude: {model.altitude.toFixed(0)} ft</p>
+<p>Local Time: {model.localTimeOfDay.toFixed(1)}</p>
 ```
 
-Derived values update automatically:
+## Storage
 
-```svelte
-<div style="background: {viewer.biomeColors.horizon}">
-    Sky State: {viewer.skyState}
-</div>
-```
+State is automatically persisted to localStorage:
+- `location`, `altitude`, `weather`, `cloudDensity`
+- `showBuildings`, `showClouds`, `syncToRealTime`
 
-## Error Handling
-
-The API fails fast with helpful errors:
-
-```typescript
-// ❌ Calling useAppState outside component tree
-const { viewer } = useAppState();
-// Error: Cannot get context outside component tree
-
-// ✅ Correct usage
-<script>
-    const { viewer } = useAppState();
-</script>
-```
-
-## Performance Notes
-
-- FlightDynamics runs a single `requestAnimationFrame` loop
-- Updates are batched (position + motion in one frame)
-- Motion state is recalculated every frame (~60 FPS)
-- ViewerState uses Svelte's fine-grained reactivity
-- Derived values are only recomputed when dependencies change
-
-## Debugging
-
-Access state in dev tools:
-
-```typescript
-// In root component
-const appState = createAppState();
-if (import.meta.env.DEV) {
-    (window as any).__APP_STATE__ = appState;
-}
-```
-
-Then in console:
-
-```javascript
-__APP_STATE__.viewer.setLocation('himalayas')
-__APP_STATE__.flight.turbulenceLevel = 'severe'
-```
+Key: `aero-window-v2`
