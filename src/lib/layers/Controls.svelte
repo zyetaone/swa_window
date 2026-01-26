@@ -197,7 +197,7 @@
 						id="altitude-slider"
 						type="range"
 						min="10000"
-						max="50000"
+						max="65000"
 						step="1000"
 						value={model.altitude}
 						oninput={(e) => model.setAltitude(parseInt(e.currentTarget.value))}

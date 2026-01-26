@@ -195,8 +195,8 @@ export class WindowModel {
 
 	// Target altitude for night (higher for city lights visibility)
 	nightAltitudeTarget = $derived(
-		this.skyState === 'night' ? 42000 :
-		this.skyState === 'dusk' || this.skyState === 'dawn' ? 38000 :
+		this.skyState === 'night' ? 48000 :
+		this.skyState === 'dusk' || this.skyState === 'dawn' ? 42000 :
 		35000
 	);
 
