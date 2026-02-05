@@ -1,444 +1,473 @@
 <script lang="ts">
 	/**
-	 * CesiumViewer.svelte - Terrain and Building Rendering
+	 * CesiumViewer - Terrain, imagery, night lighting, globe rendering, post-processing
 	 *
-	 * Coordinate Systems:
-	 * - Cesium uses ECEF (Earth-Centered, Earth-Fixed) internally
-	 * - Camera positioning uses: lon (degrees, -180 to 180), lat (degrees, -90 to 90), altitude (meters)
-	 * - Camera orientation: heading (degrees, 0=N, 90=E), pitch (degrees, -90=down, 90=up), roll (degrees)
-	 * - Pitch conversion: Three.js uses horizon-relative, Cesium uses zenith-relative
-	 *   - Cesium pitch 0 = looking at zenith (straight up)
-	 *   - Cesium pitch -90 = looking at horizon
-	 *   - Our model.pitch (75° looking down) converts to: pitch - 90 + 75 = -15° in Cesium
-	 *
-	 * Side Window View:
-	 * - Right-side window = flight heading + 90°
-	 * - Left-side window = flight heading - 90°
+	 * Cesium owns: terrain, satellite imagery, sky atmosphere, globe lighting,
+	 *   NASA VIIRS City Lights (night lights), CartoDB Dark (real OSM road glow),
+	 *   OSM 3D Buildings (enhanced night window shader), Google 3D Tiles (optional),
+	 *   Post-processing: selective night bloom, environmental color grading.
+	 * CSS layers handle: clouds, atmospheric glow, weather effects.
 	 */
-import { useAppState } from '$lib/core';
-import { UNITS } from '$lib/core/constants';
-import type * as CesiumType from 'cesium';
+	import { useAppState, CESIUM } from "$lib/core";
+	import { lerp } from "$lib/core/utils";
+	import type * as CesiumType from "cesium";
 
-	// Get viewer state
-	const { model: viewerState } = useAppState();
+	const model = useAppState();
 
-	// ============================================
-	// HMR-SAFE: Module-level cache for Cesium viewer
-	// These persist across hot module reloads
-	// ============================================
+	// ========================================================================
+	// HMR CACHE — persists Cesium viewer across Vite hot reloads
+	// ========================================================================
+
 	interface CesiumHMRCache {
 		viewer: CesiumType.Viewer | null;
 		Cesium: typeof CesiumType | null;
-		osmBuildings: CesiumType.Cesium3DTileset | null;
-		nightImageryLayer: CesiumType.ImageryLayer | null;
-		dayImageryLayer: CesiumType.ImageryLayer | null;
 		initialized: boolean;
+		nightLayer: CesiumType.ImageryLayer | null;
+		buildingsTileset: CesiumType.Cesium3DTileset | null;
+		buildingsShader: CesiumType.CustomShader | null;
+		google3DTileset: CesiumType.Cesium3DTileset | null;
+		roadLightLayer: CesiumType.ImageryLayer | null;
+		colorGradingStage: unknown | null;
 	}
 
-	// Use a typed global cache
-	const globalAny = globalThis as unknown as { __CESIUM_HMR_CACHE__?: CesiumHMRCache };
+	const globalAny = globalThis as unknown as {
+		__CESIUM_HMR_CACHE__?: CesiumHMRCache;
+	};
 	if (!globalAny.__CESIUM_HMR_CACHE__) {
 		globalAny.__CESIUM_HMR_CACHE__ = {
 			viewer: null,
 			Cesium: null,
-			osmBuildings: null,
-			nightImageryLayer: null,
-			dayImageryLayer: null,
-			initialized: false
+			initialized: false,
+			nightLayer: null,
+			buildingsTileset: null,
+			buildingsShader: null,
+			google3DTileset: null,
+			roadLightLayer: null,
+			colorGradingStage: null,
 		};
 	}
-	const HMR_CACHE = globalAny.__CESIUM_HMR_CACHE__;
+	const HMR = globalAny.__CESIUM_HMR_CACHE__;
 
-	// Local state (component-level)
-	let container: HTMLDivElement;
-	let viewer = $state<CesiumType.Viewer | null>(HMR_CACHE.viewer);
-	let Cesium: typeof CesiumType | null = HMR_CACHE.Cesium;
-	let osmBuildings: CesiumType.Cesium3DTileset | null = HMR_CACHE.osmBuildings;
-	let nightImageryLayer: CesiumType.ImageryLayer | null = HMR_CACHE.nightImageryLayer;
-	let dayImageryLayer: CesiumType.ImageryLayer | null = HMR_CACHE.dayImageryLayer;
+	// ========================================================================
+	// LOCAL STATE
+	// ========================================================================
 
-	// Debouncing state for performance optimization
-	let lastSyncedTime: number | null = null;
-	let lastCameraState: {lat: number, lon: number, alt: number, heading: number, pitch: number} | null = null;
-	let lastSkyState: string | null = null;
+	let viewer = $state<CesiumType.Viewer | null>(HMR.viewer);
+	let Cesium: typeof CesiumType | null = HMR.Cesium;
+	let nightLayer: CesiumType.ImageryLayer | null = HMR.nightLayer;
+	let buildingsTileset: CesiumType.Cesium3DTileset | null =
+		HMR.buildingsTileset;
+	let buildingsShader = $state<CesiumType.CustomShader | null>(
+		HMR.buildingsShader,
+	);
+	let google3DTileset: CesiumType.Cesium3DTileset | null =
+		HMR.google3DTileset;
+	let roadLightLayer: CesiumType.ImageryLayer | null = HMR.roadLightLayer;
 
-	// Material colors for building styling (day)
-	const MATERIAL_COLORS: Record<string, string> = {
-		glass: '#87ceeb', // sky blue
-		brick: '#cd5c5c', // indian red
-		concrete: '#808080', // grey
-		metal: '#c0c0c0', // silver
-		stone: '#deb887', // burlywood
-		wood: '#8b4513', // saddle brown
-		default: '#f5f5dc' // beige
-	};
+	// ========================================================================
+	// GLSL: Enhanced building shader
+	// ========================================================================
 
-	// Night colors - warm glow for lit buildings
-	const NIGHT_EMISSIVE_COLORS: Record<string, string> = {
-		glass: '#ffd580', // warm amber for lit glass buildings
-		brick: '#ff9966', // warm orange for lit brick
-		concrete: '#ffcc99', // soft warm white for concrete
-		metal: '#ffffcc', // bright warm white for metal
-		stone: '#ffb366', // warm amber for stone
-		wood: '#ff8833', // warm orange for wood
-		default: '#ffaa55' // warm yellow-orange default
-	};
+	const BUILDING_SHADER_GLSL = `
+		void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+			vec3 normal = normalize(fsInput.attributes.normalMC);
 
-	// Sync camera position to state
-	function syncCamera() {
+			// Surface orientation detection
+			float upDot = abs(dot(normal, vec3(0.0, 0.0, 1.0)));
+			float isWall = smoothstep(0.3, 0.7, 1.0 - upDot);
+			float isRoof = smoothstep(0.7, 0.9, upDot);
+
+			vec3 wp = fsInput.attributes.positionMC;
+			float buildingHeight = wp.z;
+			float floorHeight = 3.0;
+			float floorIndex = floor(wp.z / floorHeight);
+			float isGroundFloor = step(floorIndex, 0.5);
+
+			// Height-based window density: taller buildings = more lit (office towers)
+			float heightFactor = smoothstep(10.0, 80.0, buildingHeight);
+			float adjustedDensity = mix(u_windowDensity * 0.4, u_windowDensity * 1.3, heightFactor);
+
+			// Window grid pattern
+			float windowWidth = mix(0.55, 0.8, isGroundFloor);
+			float windowHeight = mix(0.65, 0.85, isGroundFloor);
+			vec2 gridUV = fract(vec2(wp.x * 0.12, wp.z / floorHeight));
+			float windowX = smoothstep(0.5 - windowWidth * 0.5, 0.5 - windowWidth * 0.5 + 0.05, gridUV.x)
+			             * smoothstep(0.5 + windowWidth * 0.5, 0.5 + windowWidth * 0.5 - 0.05, gridUV.x);
+			float windowY = smoothstep(0.5 - windowHeight * 0.5, 0.5 - windowHeight * 0.5 + 0.05, gridUV.y)
+			             * smoothstep(0.5 + windowHeight * 0.5, 0.5 + windowHeight * 0.5 - 0.05, gridUV.y);
+			float windowMask = windowX * windowY;
+
+			// Per-window random (hash from cell position)
+			vec2 cellId = vec2(floor(wp.x * 0.12), floorIndex);
+			float rand = fract(sin(dot(cellId, vec2(127.1, 311.7))) * 43758.5453);
+
+			// Floor-level randomization (some whole floors dark = empty offices)
+			float floorRand = fract(sin(floorIndex * 131.7) * 43758.5453);
+			float floorLit = step(0.2, floorRand);
+			float fullyLitFloor = step(0.93, floorRand); // ~7% of floors fully lit
+
+			float lit = step(1.0 - adjustedDensity, rand) * floorLit;
+			lit = max(lit, fullyLitFloor); // fully lit floors override
+
+			// Window color variation (5 types)
+			float colorMix = fract(sin(dot(cellId, vec2(269.5, 183.3))) * 7461.7);
+			vec3 warmColor = vec3(1.0, 0.65, 0.35);     // warm residential
+			vec3 coolColor = vec3(0.8, 0.9, 1.0);        // cool office
+			vec3 retailColor = vec3(1.0, 0.85, 0.6);     // retail/lobby
+			vec3 screenColor = vec3(0.55, 0.65, 1.0);    // blueish screens
+			vec3 officeWhite = vec3(1.0, 0.97, 0.92);    // fluorescent office
+
+			vec3 upperColor = mix(
+				mix(warmColor, coolColor, smoothstep(0.0, 0.4, colorMix)),
+				mix(screenColor, officeWhite, smoothstep(0.6, 1.0, colorMix)),
+				step(0.5, colorMix)
+			);
+			vec3 windowColor = mix(upperColor, retailColor, isGroundFloor);
+
+			// Per-window brightness variation
+			float brightVar = fract(sin(dot(cellId, vec2(419.2, 371.9))) * 29475.1);
+			float windowBright = mix(0.6, 1.4, brightVar);
+
+			// Subtle flicker (AC hum simulation)
+			float flicker = 0.93 + 0.07 * sin(u_time * 0.3 + rand * 6.28);
+
+			// Street-level ambient glow (sodium lamps illuminate building bases)
+			float streetGlow = smoothstep(6.0, 0.0, wp.z) * 0.4;
+			vec3 streetLampColor = vec3(1.0, 0.82, 0.45);
+
+			// Rooftop aviation warning lights (tall buildings only, slow blink)
+			float isTall = smoothstep(30.0, 50.0, buildingHeight);
+			float blink = step(0.4, fract(u_time * 0.5));
+			float rooftopLight = isRoof * isTall * blink;
+			vec3 aviationRed = vec3(1.0, 0.08, 0.03);
+
+			// Darken building surfaces at night
+			material.diffuse *= mix(1.0, 0.015, u_nightFactor);
+
+			// Compose emission layers
+			vec3 emission = vec3(0.0);
+			emission += windowColor * windowMask * lit * isWall * flicker * windowBright * 2.2;
+			emission += streetLampColor * streetGlow * isWall;
+			emission += aviationRed * rooftopLight * 4.0;
+
+			material.emissive = emission * u_nightFactor;
+		}
+	`;
+
+	// ========================================================================
+	// GLSL: Environmental color grading post-process
+	// ========================================================================
+
+	const COLOR_GRADING_GLSL = `
+		uniform sampler2D colorTexture;
+		uniform float u_nightFactor;
+		uniform float u_dawnDuskFactor;
+		uniform float u_lightIntensity;
+		in vec2 v_textureCoordinates;
+
+		void main() {
+			vec4 color = texture(colorTexture, v_textureCoordinates);
+			vec3 rgb = color.rgb;
+			float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+
+			// --- Night City Light Coloring ---
+			// Threshold raised so dim terrain stays neutral — only actual lights get warm tint
+			float lightMask = smoothstep(0.12, 0.5, lum);
+
+			// Desaturate the base world color where lights are present
+			// This prevents the underlying blue atmosphere/ground from turning orange lights into purple/mud
+			vec3 grayBase = vec3(dot(rgb, vec3(0.2126, 0.7152, 0.0722)));
+			rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
+
+			// Sodium Vapor Palette (Warm/Industrial)
+			vec3 sodium = vec3(1.0, 0.6, 0.2);     // Deep Orange
+			vec3 amber  = vec3(1.0, 0.8, 0.4);     // Amber/Gold
+			vec3 white  = vec3(1.0, 0.95, 0.9);    // Warm White
+
+			// Simple distinct regions based on luminance intensity
+			// (Brighter centers = white/amber, dimmer outskirts = sodium orange)
+			vec3 lightColor = mix(sodium, amber, smoothstep(0.2, 0.6, lum));
+			lightColor = mix(lightColor, white, smoothstep(0.6, 1.0, lum));
+
+			// Additive blending for lights (emissive feel)
+			// We add the light color on top of the darkened/desaturated terrain
+			rgb += lightColor * lum * 2.5 * u_nightFactor;
+
+			// Light pollution glow (subtle warm haze — only near bright sources)
+			float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
+			rgb += vec3(0.12, 0.06, 0.01) * pollution * u_lightIntensity;
+
+			// Crush shadows
+			float shadowCrush = 1.0 - (0.4 * u_nightFactor);
+			rgb = pow(rgb, vec3(1.0 / shadowCrush));
+
+			// High Contrast
+			float contrast = 1.0 + (0.3 * u_nightFactor);
+			rgb = (rgb - 0.5) * contrast + 0.5;
+
+			out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
+		}
+	`;
+
+	// ========================================================================
+	// SYNC FUNCTIONS
+	// ========================================================================
+
+	function syncCamera(): void {
 		if (!viewer || !Cesium) return;
-
-		const { lat, lon, altitude, heading, pitch } = viewerState;
-
-		// Debounce: skip if position unchanged
-		// Thresholds lowered to allow smooth flight drift movement
-		if (lastCameraState &&
-			Math.abs(lastCameraState.lat - lat) < 0.00001 &&
-			Math.abs(lastCameraState.lon - lon) < 0.00001 &&
-			Math.abs(lastCameraState.alt - altitude) < 10 &&
-			Math.abs(lastCameraState.heading - heading) < 0.1 &&
-			Math.abs(lastCameraState.pitch - pitch) < 0.1) return;
-
-		lastCameraState = { lat, lon, alt: altitude, heading, pitch };
-
-		// Convert altitude from feet to meters
-		const altitudeMeters = altitude * UNITS.FEET_TO_METERS;
-
-		// SIDE WINDOW VIEW: Camera looks perpendicular to flight direction
-		// Right-side window = flight heading + 90°
-		// Left-side window = flight heading - 90°
-		const sideWindowOffset = 90; // Right side window
-		const cameraHeading = (heading + sideWindowOffset) % 360;
-
-		// Set camera position
 		viewer.camera.setView({
-			destination: Cesium.Cartesian3.fromDegrees(lon, lat, altitudeMeters),
+			destination: Cesium.Cartesian3.fromDegrees(
+				model.lon,
+				model.lat,
+				model.altitude * 0.3048,
+			),
 			orientation: {
-				heading: Cesium.Math.toRadians(cameraHeading),
-				pitch: Cesium.Math.toRadians(pitch - 90), // Convert to Cesium's pitch convention
-				roll: 0
-			}
+				heading: Cesium.Math.toRadians((model.heading + 90) % 360),
+				pitch: Cesium.Math.toRadians(model.pitch - 90),
+				roll: Cesium.Math.toRadians(-model.bankAngle),
+			},
 		});
 	}
 
-	// Sync time of day to Cesium clock
-	function syncTime() {
+	function syncClock(): void {
 		if (!viewer || !Cesium) return;
-
-		const { timeOfDay } = viewerState;
-
-		// Debounce: only update if time changed by > 1 minute
-		if (lastSyncedTime !== null && Math.abs(timeOfDay - lastSyncedTime) < 1/60) return;
-		lastSyncedTime = timeOfDay;
-
-		// Create a JulianDate for current day at specified time
 		const now = new Date();
-		const currentDate = new Date(
-			now.getFullYear(),
-			now.getMonth(),
-			now.getDate(),
-			Math.floor(timeOfDay),
-			(timeOfDay % 1) * 60
+		// Normalize to [0,24) to handle negative UTC offsets safely
+		const utcHour = (((model.timeOfDay - model.utcOffset) % 24) + 24) % 24;
+		const hours = Math.floor(utcHour);
+		const minutes = Math.floor((utcHour % 1) * 60);
+		viewer.clock.currentTime = Cesium.JulianDate.fromDate(
+			new Date(
+				Date.UTC(
+					now.getUTCFullYear(),
+					now.getUTCMonth(),
+					now.getUTCDate(),
+					hours,
+					minutes,
+				),
+			),
+		);
+	}
+
+	function syncTerrainBrightness(
+		layer: CesiumType.ImageryLayer,
+		darkness: number,
+	): void {
+		const nf = model.nightFactor;
+		// At night: darken terrain so city light layers dominate
+		// Keep min at 0.08 — dark enough that shader only tints actual lights, not terrain
+		layer.brightness = lerp(1.0, Math.max(0.08, 1.0 - darkness * 1.4), nf);
+		layer.saturation = lerp(1.0, 0.0, nf); // full desaturation at night — kills blue
+		layer.contrast = lerp(1.0, Math.max(0.6, 1.0 - darkness * 0.3), nf);
+	}
+
+	function syncNightLayers(): void {
+		const nf = model.nightFactor;
+		const intensityScale = model.nightLightScale;
+
+		if (nightLayer) {
+			// NASA VIIRS: high alpha so warm light data dominates over darkened terrain
+			nightLayer.alpha = nf * 0.8;
+			nightLayer.brightness = lerp(1.0, 3.5, nf) * intensityScale;
+			nightLayer.contrast = 2.5;
+			nightLayer.hue = 0.0;
+			nightLayer.saturation = 0.0; // grayscale — shader applies warm tint
+		}
+
+		if (roadLightLayer) {
+			// CartoDB Dark: Sharp road/building lines (The "mask")
+			roadLightLayer.show = nf > 0.01;
+			roadLightLayer.alpha = nf * 1.0; // Full visibility at night
+			roadLightLayer.brightness = lerp(1.0, 4.0, nf) * intensityScale; // Very bright to cut through
+			roadLightLayer.contrast = 1.5; // High contrast for "filament" look
+			roadLightLayer.saturation = 0.0; // White/Grey roads
+		}
+	}
+
+	function syncBuildings(): void {
+		const nf = model.nightFactor;
+		const intensityScale = model.nightLightScale;
+		const google3DActive = !!google3DTileset;
+
+		if (google3DTileset) {
+			google3DTileset.show = true;
+		}
+		if (buildingsTileset) {
+			buildingsTileset.show =
+				model.showBuildings &&
+				model.currentLocation.hasBuildings &&
+				!google3DActive;
+
+			if (buildingsShader) {
+				buildingsShader.setUniform("u_nightFactor", nf);
+				buildingsShader.setUniform(
+					"u_windowDensity",
+					nf > 0.01 ? 0.4 * intensityScale : 0.0,
+				);
+			}
+		}
+	}
+
+	function syncGlobe(): void {
+		if (!viewer || !Cesium) return;
+		const nf = model.nightFactor;
+		const dd = model.dawnDuskFactor;
+		const loc = model.currentLocation;
+
+		viewer.scene.globe.enableLighting = true;
+		if (viewer.scene.light) viewer.scene.light.intensity = 1.0 - nf * 0.5;
+
+		// Sky-aware base color (neutral dark at night — shader handles warm tint on lights only)
+		let r = lerp(140, 8, nf),
+			g = lerp(170, 8, nf),
+			b = lerp(200, 8, nf);
+		r = lerp(r, 100, dd * 0.3);
+		g = lerp(g, 80, dd * 0.3);
+		b = lerp(b, 70, dd * 0.3);
+		viewer.scene.globe.baseColor = Cesium.Color.fromBytes(
+			Math.round(r),
+			Math.round(g),
+			Math.round(b),
+			255,
 		);
 
-		viewer.clock.currentTime = Cesium.JulianDate.fromDate(currentDate);
-	}
+		// Location-aware terrain detail:
+		// Nature locations — terrain IS the experience, demand sharper tiles
+		// Cities — buildings provide visual interest, terrain can be coarser
+		viewer.scene.globe.maximumScreenSpaceError = loc.hasBuildings
+			? 1.2
+			: 0.5;
 
-	// Sync building visibility
-	function syncBuildingVisibility() {
-		if (!osmBuildings) return;
-		osmBuildings.show = viewerState.showBuildings;
-	}
-
-	// Sync building style based on time of day
-	function syncBuildingStyle() {
-		if (!osmBuildings || !Cesium) return;
-
-		const isNight = viewerState.skyState === 'night' || viewerState.skyState === 'dusk';
-
-		// Night: emissive colors for lit buildings
-		if (isNight) {
-			osmBuildings.style = new Cesium.Cesium3DTileStyle({
-				color: {
-					conditions: [
-						["${feature['building:material']} === 'glass'", `color('${NIGHT_EMISSIVE_COLORS.glass}')`],
-						["${feature['building:material']} === 'brick'", `color('${NIGHT_EMISSIVE_COLORS.brick}')`],
-						["${feature['building:material']} === 'concrete'", `color('${NIGHT_EMISSIVE_COLORS.concrete}')`],
-						["${feature['building:material']} === 'metal'", `color('${NIGHT_EMISSIVE_COLORS.metal}')`],
-						["${feature['building:material']} === 'stone'", `color('${NIGHT_EMISSIVE_COLORS.stone}')`],
-						["${feature['building:material']} === 'wood'", `color('${NIGHT_EMISSIVE_COLORS.wood}')`],
-						['true', `color('${NIGHT_EMISSIVE_COLORS.default}')`]
-					]
-				}
-			});
-		}
-		// Day: normal material colors
-		else {
-			osmBuildings.style = new Cesium.Cesium3DTileStyle({
-				color: {
-					conditions: [
-						["${feature['building:material']} === 'glass'", `color('${MATERIAL_COLORS.glass}')`],
-						["${feature['building:material']} === 'brick'", `color('${MATERIAL_COLORS.brick}')`],
-						["${feature['building:material']} === 'concrete'", `color('${MATERIAL_COLORS.concrete}')`],
-						["${feature['building:material']} === 'metal'", `color('${MATERIAL_COLORS.metal}')`],
-						["${feature['building:material']} === 'stone'", `color('${MATERIAL_COLORS.stone}')`],
-						["${feature['building:material']} === 'wood'", `color('${MATERIAL_COLORS.wood}')`],
-						['true', `color('${MATERIAL_COLORS.default}')`]
-					]
-				}
-			});
-		}
-	}
-
-	// Calculate night lights opacity based on altitude
-	// NASA imagery is low-res (level 8), so fade at lower altitudes to hide pixelation
-	// Best visibility at high cruise altitude where blur isn't noticeable
-	function getNightLightsOpacity(altitudeFt: number): number {
-		const LOW_ALT = 15000;   // Below this: very faint (pixelation visible)
-		const MID_ALT = 30000;   // Ramp up zone
-		const HIGH_ALT = 45000;  // Peak visibility
-		const MAX_ALT = 70000;   // Fade out for space view
-
-		const LOW_OPACITY = 0.08;  // 8% at low altitude (hide pixelation)
-		const PEAK_OPACITY = 0.25; // 25% at high altitude
-
-		if (altitudeFt < LOW_ALT) {
-			// Below 15k: very subtle to hide pixelation
-			return LOW_OPACITY * (altitudeFt / LOW_ALT);
-		} else if (altitudeFt < MID_ALT) {
-			// 15k-30k: ramp up as we get higher
-			const t = (altitudeFt - LOW_ALT) / (MID_ALT - LOW_ALT);
-			return LOW_OPACITY + (PEAK_OPACITY - LOW_OPACITY) * t * 0.5;
-		} else if (altitudeFt < HIGH_ALT) {
-			// 30k-45k: continue to peak
-			const t = (altitudeFt - MID_ALT) / (HIGH_ALT - MID_ALT);
-			return LOW_OPACITY + (PEAK_OPACITY - LOW_OPACITY) * (0.5 + t * 0.5);
-		} else if (altitudeFt < MAX_ALT) {
-			// 45k-70k: hold then fade
-			const t = (altitudeFt - HIGH_ALT) / (MAX_ALT - HIGH_ALT);
-			return PEAK_OPACITY * (1 - t * 0.7);
-		} else {
-			// Above 70k: minimal
-			return 0.03;
-		}
-	}
-
-	// Switch imagery layers between day and night with darkening effect
-	function syncImageryLayer() {
-		if (!viewer || !Cesium || !dayImageryLayer) {
-			if (import.meta.env.DEV) console.log('syncImageryLayer skipped - missing refs');
-			return;
+		if (viewer.scene.skyAtmosphere) {
+			viewer.scene.skyAtmosphere.brightnessShift = nf * -0.5;
+			viewer.scene.skyAtmosphere.saturationShift = lerp(0, -0.8, nf) + dd * 0.2;
+			viewer.scene.skyAtmosphere.hueShift = nf * 0.05; // warm shift at night
 		}
 
-		const skyState = viewerState.skyState;
-		const altitudeFt = viewerState.altitude;
+		// Kill ground atmosphere blue scattering at night —
+		// this is the #1 source of blue tint on city lights
+		viewer.scene.globe.showGroundAtmosphere = nf < 0.3;
 
-		// Calculate altitude-based opacity for night lights
-		const altitudeOpacity = getNightLightsOpacity(altitudeFt);
-
-		// Night: Dark terrain with visible detail + city lights overlay
-		if (skyState === 'night') {
-			const darkness = viewerState.terrainDarkness;
-
-			// Terrain darkening - preserve some detail (moonlit landscape effect)
-			// FIXED: gamma < 1.0 darkens (was > 1.0 which brightens!)
-			// FIXED: brightness min 20% to keep terrain readable
-			dayImageryLayer.brightness = Math.max(0.20, 1.0 - (darkness * 0.75));
-			dayImageryLayer.contrast = Math.max(0.70, 1.0 - (darkness * 0.25));
-			dayImageryLayer.saturation = 1.0 - (darkness * 0.7);
-			dayImageryLayer.gamma = 0.7 + (1 - darkness) * 0.2; // 0.7-0.9 range (darkens)
-			dayImageryLayer.alpha = 1.0;
-
-			// Night lights overlay - boosted visibility
-			if (nightImageryLayer) {
-				nightImageryLayer.alpha = Math.min(0.55, altitudeOpacity * 2.0); // 2x boost, max 55%
-				nightImageryLayer.brightness = 2.5;
-				nightImageryLayer.contrast = 1.4;
-				nightImageryLayer.saturation = 1.1; // Warm glow
-				nightImageryLayer.gamma = 0.85;
-			}
-
-			// Keep some atmosphere for depth (dark blue sky gradient)
-			if (viewer.scene.skyAtmosphere) {
-				viewer.scene.skyAtmosphere.brightnessShift = -0.25;
-				viewer.scene.skyAtmosphere.saturationShift = -0.1;
-			}
-			viewer.scene.globe.showGroundAtmosphere = true; // Keep for depth cues
-
-			// Subtle blue tint for night globe
-			const baseColorValue = Math.floor((1 - darkness) * 40 + 15);
-			viewer.scene.globe.baseColor = Cesium.Color.fromBytes(baseColorValue, baseColorValue, baseColorValue + 20, 255);
-
+		// Bloom disabled — it processes raw scene colors before our warm shader,
+		// amplifying any residual blue. The color grading shader handles glow instead.
+		if (viewer.scene.postProcessStages?.bloom) {
+			viewer.scene.postProcessStages.bloom.enabled = false;
 		}
-		// Dusk: Transitioning to night (golden hour fading)
-		else if (skyState === 'dusk') {
-			dayImageryLayer.brightness = 0.45;
-			dayImageryLayer.contrast = 0.95;
-			dayImageryLayer.saturation = 0.7;
-			dayImageryLayer.gamma = 0.9; // Slightly darker
-			dayImageryLayer.alpha = 1.0;
 
-			// Dusk: city lights emerging
-			if (nightImageryLayer) {
-				nightImageryLayer.alpha = Math.min(0.35, altitudeOpacity * 1.2);
-				nightImageryLayer.brightness = 2.0;
-				nightImageryLayer.contrast = 1.3;
-				nightImageryLayer.gamma = 0.9;
+		// Location-aware atmosphere:
+		// Each place has a distinct atmospheric character a passenger would feel
+		//   Desert: crystal-clear dry air, minimal fog, vast visibility
+		//   Ocean: marine haze, moisture in the air, softer horizon
+		//   Mountains: thin crisp air, very clear, sharp edges
+		//   Clouds: above the weather, minimal ground fog
+		//   Cities: light haze, pollution softening the edges
+		if (viewer.scene.fog) {
+			viewer.scene.fog.enabled = true;
+			viewer.scene.fog.screenSpaceErrorFactor = 2.0;
+
+			const locId = model.location;
+			let dayFogDensity: number;
+			let nightFogDensity: number;
+			let dayMinBright: number;
+			let nightMinBright: number;
+
+			if (locId === "desert") {
+				// Sahara: dry, clear, vast — you can see forever
+				dayFogDensity = 0.0003;
+				nightFogDensity = 0.0001;
+				dayMinBright = 0.6;
+				nightMinBright = 0.005;
+			} else if (locId === "ocean") {
+				// Pacific: marine haze softens the horizon, moisture in air
+				dayFogDensity = 0.0012;
+				nightFogDensity = 0.0006;
+				dayMinBright = 0.45;
+				nightMinBright = 0.01;
+			} else if (locId === "himalayas") {
+				// Mountains: thin air, incredible clarity
+				dayFogDensity = 0.0002;
+				nightFogDensity = 0.0001;
+				dayMinBright = 0.55;
+				nightMinBright = 0.005;
+			} else if (locId === "clouds") {
+				// Above clouds: we ARE the weather layer
+				dayFogDensity = 0.0005;
+				nightFogDensity = 0.0002;
+				dayMinBright = 0.7;
+				nightMinBright = 0.01;
+			} else if (loc.hasBuildings) {
+				// Cities: urban haze, light pollution glow
+				dayFogDensity = 0.0008;
+				nightFogDensity = 0.0004;
+				dayMinBright = 0.5;
+				nightMinBright = 0.03;
+			} else {
+				// Default nature
+				dayFogDensity = 0.0005;
+				nightFogDensity = 0.0002;
+				dayMinBright = 0.5;
+				nightMinBright = 0.01;
 			}
 
-			// Keep atmosphere with warm tint
-			if (viewer.scene.skyAtmosphere) {
-				viewer.scene.skyAtmosphere.brightnessShift = -0.1;
-				viewer.scene.skyAtmosphere.saturationShift = 0.1; // Warmer
-			}
-		}
-		// Dawn: Transitioning from night (sunrise colors)
-		else if (skyState === 'dawn') {
-			dayImageryLayer.brightness = 0.55;
-			dayImageryLayer.contrast = 0.95;
-			dayImageryLayer.saturation = 0.75;
-			dayImageryLayer.gamma = 0.95;
-			dayImageryLayer.alpha = 1.0;
-
-			// Dawn: fading night lights
-			if (nightImageryLayer) {
-				nightImageryLayer.alpha = Math.min(0.20, altitudeOpacity * 0.6);
-				nightImageryLayer.brightness = 1.5;
-				nightImageryLayer.contrast = 1.2;
-				nightImageryLayer.gamma = 0.95;
-			}
-
-			// Keep atmosphere with cool morning tint
-			if (viewer.scene.skyAtmosphere) {
-				viewer.scene.skyAtmosphere.brightnessShift = 0.0;
-				viewer.scene.skyAtmosphere.saturationShift = 0.0;
-			}
-		}
-		// Day: Full brightness, no night overlay
-		else {
-			if (dayImageryLayer) {
-				dayImageryLayer.brightness = 1.0;
-				dayImageryLayer.contrast = 1.0;
-				dayImageryLayer.saturation = 1.0;
-				dayImageryLayer.gamma = 1.0;
-				dayImageryLayer.alpha = 1.0;
-			}
-
-			if (nightImageryLayer) {
-				nightImageryLayer.alpha = 0.0;
-			}
-
-			// Restore atmosphere for daytime
-			if (viewer.scene.skyAtmosphere) {
-				viewer.scene.skyAtmosphere.brightnessShift = 0.0;
-				viewer.scene.skyAtmosphere.saturationShift = 0.0;
-			}
-			viewer.scene.globe.showGroundAtmosphere = true;
-
-			// Reset globe base color to default blue
-			viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#000010');
-
+			viewer.scene.fog.density = lerp(dayFogDensity, nightFogDensity, nf);
+			viewer.scene.fog.minimumBrightness = lerp(
+				dayMinBright,
+				nightMinBright,
+				nf,
+			);
 		}
 	}
 
-	// Sync atmospheric visibility (fog density)
-	function syncVisibility() {
-		if (!viewer) return;
-
-		// Base fog from visibility setting (5-100 km)
-		// Higher visibility = less fog
-		const baseFogDensity = 0.00012 / (viewerState.visibility / 50);
-
-		// Weather affects base haze
-		const weatherHaze =
-			viewerState.weather === 'storm' ? 0.4 :
-			viewerState.weather === 'overcast' ? 0.2 :
-			viewerState.weather === 'cloudy' ? 0.05 : 0;
-
-		// Combined haze (user setting + weather)
-		const effectiveHaze = Math.min(1.0, viewerState.haze + weatherHaze);
-
-		// FIXED: Curved multiplier instead of exponential (was 1 + haze * 99)
-		// Now: haze 0→1 maps smoothly to 1→4x fog density
-		const hazeMultiplier = 1 + Math.pow(effectiveHaze, 0.5) * 3;
-
-		// Altitude attenuation - fog thins at high altitude
-		const altitudeM = viewerState.altitude * 0.3048;
-		const altitudeAtten = Math.exp(-altitudeM / 8000); // Scale height 8km
-
-		viewer.scene.fog.density = baseFogDensity * hazeMultiplier * altitudeAtten;
-
-		// Fog brightness based on time of day
-		const baseBrightness =
-			viewerState.skyState === 'day' ? 0.12 :
-			viewerState.skyState === 'dawn' || viewerState.skyState === 'dusk' ? 0.08 :
-			0.04;
-		viewer.scene.fog.minimumBrightness = baseBrightness + effectiveHaze * 0.06;
+	function syncAtmosphere(): void {
+		if (!viewer || !Cesium) return;
+		const baseLayer = viewer.imageryLayers.get(0);
+		if (baseLayer) syncTerrainBrightness(baseLayer, model.terrainDarkness);
+		syncNightLayers();
+		syncBuildings();
+		syncGlobe();
 	}
 
-	// Initialize Cesium viewer and handle cleanup
-	// HMR-SAFE: Reuses existing viewer if available
-	$effect(() => {
-		// Skip if already initialized and viewer is valid
-		if (HMR_CACHE.initialized && HMR_CACHE.viewer && !HMR_CACHE.viewer.isDestroyed()) {
-			// Restore from cache
-			viewer = HMR_CACHE.viewer;
-			Cesium = HMR_CACHE.Cesium;
-			osmBuildings = HMR_CACHE.osmBuildings;
-			nightImageryLayer = HMR_CACHE.nightImageryLayer;
-			dayImageryLayer = HMR_CACHE.dayImageryLayer;
+	// ========================================================================
+	// ATTACHMENT — Cesium init via {@attach}
+	// ========================================================================
 
-			// Re-parent the canvas to the new container if needed
-			if (container && viewer.container !== container) {
-				// Move cesium widget to new container
-				const cesiumWidget = viewer.cesiumWidget.container;
-				if (cesiumWidget.parentElement !== container) {
-					container.appendChild(cesiumWidget);
-				}
+	function initCesium(node: HTMLDivElement) {
+		// Restore from HMR cache if already initialized
+		if (HMR.initialized && HMR.viewer && !HMR.viewer.isDestroyed()) {
+			viewer = HMR.viewer;
+			Cesium = HMR.Cesium;
+			nightLayer = HMR.nightLayer;
+			buildingsTileset = HMR.buildingsTileset;
+			buildingsShader = HMR.buildingsShader;
+			google3DTileset = HMR.google3DTileset;
+			roadLightLayer = HMR.roadLightLayer;
+
+			if (viewer.container !== node) {
+				const w = viewer.cesiumWidget.container;
+				if (w.parentElement !== node) node.appendChild(w);
 			}
-
-			if (import.meta.env.DEV) console.log('Cesium viewer restored from HMR cache');
-			// Re-sync everything after HMR restore
 			syncCamera();
-			syncImageryLayer();
-			syncBuildingStyle();
-			lastSkyState = viewerState.skyState;
-			viewer.scene.requestRender();
+			syncClock();
+			syncAtmosphere();
 			return;
 		}
 
-		// Dynamically import Cesium to avoid SSR issues
+		// Fresh init — AbortController cancels in-flight async work if HMR fires mid-init
+		const abort = new AbortController();
+
 		(async () => {
 			try {
-				Cesium = await import('cesium');
-				HMR_CACHE.Cesium = Cesium;
+				(globalThis as Record<string, unknown>).CESIUM_BASE_URL =
+					"/cesiumStatic";
+				Cesium = await import("cesium");
+				if (abort.signal.aborted || !Cesium?.Viewer) return;
+				HMR.Cesium = Cesium;
 
-				// Set Cesium Ion access token
-				const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
-				if (cesiumToken && cesiumToken !== 'your-cesium-ion-token-here') {
-					Cesium.Ion.defaultAccessToken = cesiumToken;
-				} else {
-					console.warn('⚠️ Cesium Ion token not configured. Some features may not work. Get a free token at https://cesium.com/ion/tokens');
-				}
-
-				if (!container) return;
-
-				// Create Cesium Viewer with minimal UI and no default imagery
-				viewer = new Cesium.Viewer(container, {
-					// Terrain with high resolution
-					terrain: Cesium.Terrain.fromWorldTerrain({
-						requestVertexNormals: true, // Better lighting on terrain
-						requestWaterMask: true // Water surfaces
-					}),
-
-					// Start with no base imagery (we'll add layers manually)
+				viewer = new Cesium.Viewer(node, {
 					baseLayer: false,
-
-					// Hide default UI widgets
 					animation: false,
 					baseLayerPicker: false,
 					fullscreenButton: false,
-					vrButton: false,
 					geocoder: false,
 					homeButton: false,
 					infoBox: false,
@@ -447,279 +476,279 @@ import type * as CesiumType from 'cesium';
 					timeline: false,
 					navigationHelpButton: false,
 					navigationInstructionsInitiallyVisible: false,
-
-					// Scene settings
-					shadows: true,
-					terrainShadows: Cesium.ShadowMode.ENABLED,
-					// Don't use requestRenderMode - it prevents continuous tile loading
-					requestRenderMode: false,
-					targetFrameRate: 60,
-					// Use FXAA for smoother edges
-					useBrowserRecommendedResolution: true
+					shadows: false,
+					useBrowserRecommendedResolution: false,
+					contextOptions: {
+						webgl: {
+							alpha: false,
+							antialias: true,
+							preserveDrawingBuffer: true,
+						},
+					},
 				});
-				HMR_CACHE.viewer = viewer;
 
-				// === QUALITY SETTINGS (optimized for RPi 4) ===
-				// Screen space error: higher = less detail, lower = more detail
-				// Default is 2, using 5 for RPi performance (less terrain detail)
-				viewer.scene.globe.maximumScreenSpaceError = 5.0;
-				// Disable preloading to reduce memory pressure
-				viewer.scene.globe.preloadAncestors = false;
-				viewer.scene.globe.preloadSiblings = false;
-				// Smaller tile cache for RPi memory constraints (~32-64MB)
-				viewer.scene.globe.tileCacheSize = 128;
+				// Visual quality
+				viewer.scene.logarithmicDepthBuffer = true;
+				viewer.scene.highDynamicRange = true;
+				viewer.scene.postProcessStages.fxaa.enabled = true;
+				if (abort.signal.aborted) return;
+				HMR.viewer = viewer;
 
-				// Add day imagery layer (Cesium World Imagery - Bing Maps based)
-				let dayImagerySource = 'none';
-				try {
-					dayImageryLayer = viewer.imageryLayers.addImageryProvider(
-						await Cesium.IonImageryProvider.fromAssetId(2, {
-							accessToken: Cesium.Ion.defaultAccessToken
-						})
-					);
-					dayImageryLayer.alpha = 1.0;
-					HMR_CACHE.dayImageryLayer = dayImageryLayer;
-					dayImagerySource = 'Cesium Ion World Imagery (Bing)';
-				} catch (error) {
-					console.warn('Cesium Ion imagery failed, trying ESRI fallback...');
-					// ESRI World Imagery - excellent quality, NO AUTH REQUIRED
-					try {
-						// Use fromUrl for Cesium 1.104+ API
-						const esriProvider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-							'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
-						);
-						dayImageryLayer = viewer.imageryLayers.addImageryProvider(esriProvider);
-						dayImageryLayer.alpha = 1.0;
-						HMR_CACHE.dayImageryLayer = dayImageryLayer;
-						dayImagerySource = 'ESRI World Imagery (no auth required)';
-					} catch (esriError) {
-						console.warn('ESRI failed, trying OSM fallback...');
-						// Final fallback: OSM (lower resolution)
-						try {
-							dayImageryLayer = viewer.imageryLayers.addImageryProvider(
-								new Cesium.OpenStreetMapImageryProvider({
-									url: 'https://a.tile.openstreetmap.org/'
-								})
-							);
-							dayImageryLayer.alpha = 1.0;
-							HMR_CACHE.dayImageryLayer = dayImageryLayer;
-							dayImagerySource = 'OpenStreetMap (fallback)';
-						} catch (osmError) {
-							console.error('All imagery providers failed');
-						}
-					}
-				}
-				if (import.meta.env.DEV) console.log(`Day imagery: ${dayImagerySource}`);
+				// Globe setup
+				const globe = viewer.scene.globe;
+				globe.enableLighting = true;
+				globe.baseColor = Cesium.Color.fromBytes(10, 8, 10, 255);
+				globe.preloadAncestors = true; // Always on — gray void is the #1 immersion killer
+				globe.preloadSiblings = true; // Smoother tile transitions at all locations
+				globe.showGroundAtmosphere = true;
 
-				// Add night lights layer (NASA sources - no API key required)
-				// The night layer will be ON TOP of the day layer for proper overlay
-				let nightSource = 'none';
-
-				try {
-					// NASA Earth at Night 2012 tiles (reliable, no API key)
-					nightImageryLayer = viewer.imageryLayers.addImageryProvider(
-						new Cesium.UrlTemplateImageryProvider({
-							url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',
-							maximumLevel: 8,
-							credit: new Cesium.Credit('NASA Earth at Night')
-						})
-					);
-					nightSource = 'NASA Earth at Night 2012';
-				} catch (error) {
-					console.warn('NASA Earth at Night not available, trying GIBS...', error);
-
-					// Fallback to NASA GIBS VIIRS Day/Night Band
-					try {
-						nightImageryLayer = viewer.imageryLayers.addImageryProvider(
-							new Cesium.WebMapTileServiceImageryProvider({
-								url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/VIIRS_SNPP_DayNightBand_ENCC/default/2023-01-01/500m/{TileMatrix}/{TileRow}/{TileCol}.png',
-								layer: 'VIIRS_SNPP_DayNightBand_ENCC',
-								style: 'default',
-								format: 'image/png',
-								tileMatrixSetID: '500m',
-								maximumLevel: 8,
-								credit: new Cesium.Credit('NASA GIBS')
-							})
-						);
-						nightSource = 'NASA GIBS VIIRS';
-					} catch (gibsError) {
-						console.error('All night imagery sources failed:', gibsError);
-					}
-				}
-
-				if (nightImageryLayer) {
-					nightImageryLayer.alpha = 0.0; // Start hidden (day mode)
-					// Ensure night layer is always on top of day layer
-					viewer.imageryLayers.raiseToTop(nightImageryLayer);
-					HMR_CACHE.nightImageryLayer = nightImageryLayer;
-					if (import.meta.env.DEV) console.log(`Night lights: ${nightSource}`);
-				}
-
-				// Enable time-of-day lighting
-				viewer.scene.globe.enableLighting = true;
-
-				// === ATMOSPHERE & REALISM ===
-				// Enable atmosphere for that realistic sky gradient
-				if (viewer.scene.skyAtmosphere) {
+				if (viewer.scene.skyAtmosphere)
 					viewer.scene.skyAtmosphere.show = true;
+				if (viewer.scene.skyBox) viewer.scene.skyBox.show = true;
+
+				// Bloom post-processing defaults (tuned for selective city lights)
+				if (viewer.scene.postProcessStages?.bloom) {
+					const bloom = viewer.scene.postProcessStages.bloom;
+					bloom.enabled = false;
+					bloom.uniforms.brightness = CESIUM.BLOOM_BRIGHTNESS;
+					bloom.uniforms.glowOnly = false;
+					bloom.uniforms.contrast = CESIUM.BLOOM_NIGHT_CONTRAST;
+					bloom.uniforms.delta = CESIUM.BLOOM_DELTA;
+					bloom.uniforms.sigma = CESIUM.BLOOM_SIGMA;
+					bloom.uniforms.stepSize = CESIUM.BLOOM_STEP_SIZE;
 				}
-				viewer.scene.globe.showGroundAtmosphere = true;
 
-				// Fog for depth perception (things fade in distance)
-				viewer.scene.fog.enabled = true;
-				viewer.scene.fog.density = 0.0001;
-				viewer.scene.fog.minimumBrightness = 0.1;
-
-				// HDR disabled for performance (can re-enable on powerful hardware)
-				viewer.scene.highDynamicRange = false;
-
-				// Shadows disabled for performance (major GPU cost)
-				viewer.shadowMap.enabled = false;
-
-				// Add OSM 3D Buildings
+				// Environmental color grading post-process stage
 				try {
-					osmBuildings = await Cesium.createOsmBuildingsAsync();
-					viewer.scene.primitives.add(osmBuildings);
-					HMR_CACHE.osmBuildings = osmBuildings;
-
-					// Quality settings for buildings (balanced for performance)
-					osmBuildings.maximumScreenSpaceError = 16;
-					osmBuildings.skipLevelOfDetail = true;
-					osmBuildings.preferLeaves = false;
-					osmBuildings.maximumMemoryUsage = 256;
-
-					// Apply building material styling
-					if (osmBuildings.style) {
-						osmBuildings.style = new Cesium.Cesium3DTileStyle({
-							color: {
-								conditions: [
-									["${feature['building:material']} === 'glass'", `color('${MATERIAL_COLORS.glass}')`],
-									["${feature['building:material']} === 'brick'", `color('${MATERIAL_COLORS.brick}')`],
-									["${feature['building:material']} === 'concrete'", `color('${MATERIAL_COLORS.concrete}')`],
-									["${feature['building:material']} === 'metal'", `color('${MATERIAL_COLORS.metal}')`],
-									["${feature['building:material']} === 'stone'", `color('${MATERIAL_COLORS.stone}')`],
-									["${feature['building:material']} === 'wood'", `color('${MATERIAL_COLORS.wood}')`],
-									['true', `color('${MATERIAL_COLORS.default}')`]
-								]
-							}
-						});
-					}
-				} catch (error) {
-					console.error('Failed to load OSM buildings:', error);
+					const colorGrading = new Cesium.PostProcessStage({
+						fragmentShader: COLOR_GRADING_GLSL,
+						uniforms: {
+							u_nightFactor: () => model.nightFactor,
+							u_dawnDuskFactor: () => model.dawnDuskFactor,
+							u_lightIntensity: () => model.nightLightScale,
+						},
+					});
+					viewer.scene.postProcessStages.add(colorGrading);
+					HMR.colorGradingStage = colorGrading;
+				} catch {
+					/* color grading is optional enhancement */
 				}
 
-				// Mark as initialized
-				HMR_CACHE.initialized = true;
-				if (import.meta.env.DEV) console.log('Cesium viewer initialized');
+				// Base imagery (ESRI with OSM fallback)
+				try {
+					const esri =
+						await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+							"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+						);
+					if (abort.signal.aborted) return;
+					viewer.imageryLayers.addImageryProvider(esri);
+				} catch {
+					if (abort.signal.aborted) return;
+					viewer.imageryLayers.addImageryProvider(
+						new Cesium.OpenStreetMapImageryProvider({
+							url: "https://a.tile.openstreetmap.org/",
+						}),
+					);
+				}
 
-				// Initial sync - camera, imagery, and building styles
+				// Cesium Ion features (terrain, 3D buildings)
+				const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
+				const hasIonToken =
+					cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
+
+				if (hasIonToken) {
+					(Cesium.Ion as typeof CesiumType.Ion).defaultAccessToken =
+						cesiumToken;
+
+					try {
+						viewer.terrainProvider =
+							await Cesium.createWorldTerrainAsync({
+								requestVertexNormals: true,
+							});
+					} catch {
+						/* flat fallback */
+					}
+				}
+				if (abort.signal.aborted) return;
+
+				// NASA VIIRS City Lights (GIBS WMTS — free, no token required)
+				try {
+					const nightProvider =
+						new Cesium.WebMapTileServiceImageryProvider({
+							url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
+							layer: "VIIRS_CityLights_2012",
+							style: "default",
+							tileMatrixSetID: "GoogleMapsCompatible_Level8",
+							maximumLevel: 8,
+							format: "image/jpeg",
+							credit: new Cesium.Credit("NASA Earth Observatory"),
+						});
+
+					nightLayer =
+						viewer.imageryLayers.addImageryProvider(nightProvider);
+					nightLayer.alpha = 0.0;
+					nightLayer.brightness = 5.0; // "Radiance" intensity
+					nightLayer.contrast = 2.5; // Clear data separation
+					nightLayer.saturation = 0.0; // Raw data is grayscale, tinted by shader
+				} catch {
+					nightLayer = null;
+				}
+				if (abort.signal.aborted) return;
+
+				// Google 3D Tiles OR OSM Buildings (mutually exclusive)
+				const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+				const hasGoogleKey =
+					googleApiKey &&
+					googleApiKey !== "your_google_maps_api_key_here";
+
+				if (hasGoogleKey) {
+					try {
+						google3DTileset =
+							await Cesium.createGooglePhotorealistic3DTileset(
+								googleApiKey,
+							);
+						if (abort.signal.aborted) return;
+						google3DTileset.show = true;
+						viewer.scene.primitives.add(google3DTileset);
+					} catch {
+						/* optional */
+					}
+				} else if (hasIonToken) {
+					try {
+						buildingsTileset =
+							await Cesium.Cesium3DTileset.fromIonAssetId(96188);
+						if (abort.signal.aborted) return;
+						buildingsTileset.show = false;
+
+						buildingsShader = new Cesium.CustomShader({
+							uniforms: {
+								u_nightFactor: {
+									type: Cesium.UniformType.FLOAT,
+									value: 0.0,
+								},
+								u_windowDensity: {
+									type: Cesium.UniformType.FLOAT,
+									value: 0.4,
+								},
+								u_time: {
+									type: Cesium.UniformType.FLOAT,
+									value: 0.0,
+								},
+							},
+							fragmentShaderText: BUILDING_SHADER_GLSL,
+						});
+						buildingsTileset.customShader = buildingsShader;
+						viewer.scene.primitives.add(buildingsTileset);
+					} catch {
+						/* buildings optional */
+					}
+				}
+				if (abort.signal.aborted) return;
+
+				// CartoDB Dark basemap for night road glow (street grid + traffic)
+				const darkRoadProvider = new Cesium.UrlTemplateImageryProvider({
+					url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
+					credit: new Cesium.Credit(
+						"OpenStreetMap contributors, CARTO",
+					),
+					maximumLevel: 18,
+					minimumLevel: 0,
+				});
+				roadLightLayer =
+					viewer.imageryLayers.addImageryProvider(darkRoadProvider);
+				roadLightLayer.alpha = 0;
+				roadLightLayer.colorToAlpha = new Cesium.Color(
+					0.0,
+					0.0,
+					0.0,
+					1.0,
+				);
+				roadLightLayer.colorToAlphaThreshold = 0.0; // Show all dark tiles as base
+
+				// Ensure NASA night lights render ABOVE CartoDB roads
+				if (nightLayer) viewer.imageryLayers.raiseToTop(nightLayer);
+
+				// Persist to HMR cache
+				HMR.nightLayer = nightLayer;
+				HMR.buildingsTileset = buildingsTileset;
+				HMR.buildingsShader = buildingsShader;
+				HMR.google3DTileset = google3DTileset;
+				HMR.roadLightLayer = roadLightLayer;
+				HMR.initialized = true;
+
 				syncCamera();
-				syncImageryLayer();
-				syncBuildingStyle();
-				lastSkyState = viewerState.skyState;
-			} catch (error) {
-				console.error('Failed to initialize Cesium:', error);
+				syncClock();
+				syncAtmosphere();
+			} catch (e) {
+				if (!abort.signal.aborted)
+					console.error("Cesium init failed:", e);
 			}
 		})();
 
-		// Cleanup function - only destroy on full unmount, not HMR
-		return () => {
-			// Don't destroy on HMR - keep the viewer alive
-			// Only clear local references
-		};
+		return () => abort.abort();
+	}
+
+	// --- Camera sync (every frame — orbit changes lat/lon/heading continuously) ---
+	$effect(() => {
+		if (!viewer) return;
+		void model.lat;
+		void model.lon;
+		void model.altitude;
+		void model.heading;
+		void model.pitch;
+		void model.bankAngle;
+		syncCamera();
 	});
 
-	// Track last settings for change detection
-	let lastNightLightIntensity: number | null = null;
-	let lastTerrainDarkness: number | null = null;
-	let lastAltitudeForImagery: number | null = null;
-
-	// Consolidated effect for all viewer state changes
+	// --- Atmosphere + lighting sync (fires on time/lighting/settings changes) ---
 	$effect(() => {
-		if (!viewer || !Cesium) return;
+		if (!viewer) return;
+		void model.nightFactor;
+		void model.dawnDuskFactor;
+		void model.terrainDarkness;
+		void model.altitude;
+		void model.showBuildings;
+		void model.location;
+		void model.timeOfDay;
+		void model.nightLightIntensity;
+		syncClock();
+		syncAtmosphere();
+	});
 
-		// Explicitly read position values to trigger reactivity when they change
-		const {
-			lat, lon, altitude, heading, pitch,
-			skyState, nightLightIntensity, terrainDarkness
-		} = viewerState;
-
-		// Use position values to ensure Svelte tracks them
-		void lat; void lon; void heading; void pitch;
-
-		syncCamera();
-		syncTime();
-		syncBuildingVisibility();
-		syncVisibility();
-
-		const isNightTime = skyState === 'night' || skyState === 'dusk' || skyState === 'dawn';
-		const nightSettingsChanged = isNightTime &&
-			(lastNightLightIntensity !== nightLightIntensity || lastTerrainDarkness !== terrainDarkness);
-
-		// Also update imagery when altitude changes significantly (affects night lights opacity)
-		const altitudeChangedSignificantly = isNightTime &&
-			lastAltitudeForImagery !== null &&
-			Math.abs(altitude - lastAltitudeForImagery) > 500; // 500ft threshold
-
-		if (lastSkyState !== skyState || nightSettingsChanged || altitudeChangedSignificantly) {
-			syncImageryLayer();
-			syncBuildingStyle();
-			lastSkyState = skyState;
-			lastNightLightIntensity = nightLightIntensity;
-			lastTerrainDarkness = terrainDarkness;
-			lastAltitudeForImagery = altitude;
-		}
-
-		viewer.scene.requestRender();
+	// --- Building shader flicker (10fps timer) ---
+	$effect(() => {
+		if (!buildingsShader) return;
+		const shader = buildingsShader;
+		const interval = setInterval(() => {
+			shader.setUniform("u_time", performance.now() / 1000);
+		}, 100);
+		return () => clearInterval(interval);
 	});
 </script>
 
-<div
-	bind:this={container}
-	class="cesium-container"
-></div>
+<div {@attach initCesium} class="cesium-viewer"></div>
 
 <style>
-	.cesium-container {
+	.cesium-viewer {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
+		overflow: hidden;
 	}
 
-	.cesium-container :global(.cesium-viewer) {
+	.cesium-viewer :global(canvas) {
 		width: 100% !important;
 		height: 100% !important;
+		position: absolute !important;
+		top: 0 !important;
+		left: 0 !important;
 	}
 
-	.cesium-container :global(.cesium-viewer-cesiumWidgetContainer) {
-		width: 100% !important;
-		height: 100% !important;
-	}
-
-	.cesium-container :global(.cesium-widget) {
-		width: 100% !important;
-		height: 100% !important;
-	}
-
-	.cesium-container :global(.cesium-widget canvas) {
-		width: 100% !important;
-		height: 100% !important;
-	}
-
-	.cesium-container :global(.cesium-viewer-bottom) {
-		display: none !important;
-	}
-
-	.cesium-container :global(.cesium-viewer-toolbar) {
-		display: none !important;
-	}
-
-	.cesium-container :global(.cesium-credit-textContainer) {
-		display: none !important;
-	}
-
-	.cesium-container :global(.cesium-credit-logoContainer) {
+	.cesium-viewer :global(.cesium-viewer-bottom),
+	.cesium-viewer :global(.cesium-viewer-toolbar),
+	.cesium-viewer :global(.cesium-credit-textContainer),
+	.cesium-viewer :global(.cesium-credit-logoContainer) {
 		display: none !important;
 	}
 </style>

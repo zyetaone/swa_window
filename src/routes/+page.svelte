@@ -4,26 +4,77 @@
 	 *
 	 * Circadian-aware airplane window display with:
 	 * - Real terrain and buildings (Cesium)
-	 * - Wing, clouds, weather (Threlte/Three.js)
+	 * - CSS effect layers (clouds, weather, city lights)
 	 * - Time-synced sky states
 	 * - Cabin interior context
 	 */
 
-	import { createAppState, LOCATIONS } from "$lib/core";
+	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core";
+	import type { LocationId } from "$lib/core";
+	import { savePersistedState } from "$lib/core/persistence";
 	import Window from "$lib/layers/Window.svelte";
 	import Controls from "$lib/layers/Controls.svelte";
+	import SidePanel from "$lib/layers/SidePanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel
-	const { model } = createAppState();
+	const model = createAppState();
 
-	// Derived display values
-	const currentLocation = $derived(LOCATIONS.find(l => l.id === model.location)?.name ?? 'Unknown');
-	const altitudeDisplay = $derived(`${(model.altitude / 1000).toFixed(0)}k ft`);
+	// Real-time sync (moved out of WindowModel for testability)
+	$effect(() => {
+		if (model.syncToRealTime && typeof window !== "undefined") {
+			const update = () => model.updateTimeFromSystem();
+			const interval = setInterval(
+				update,
+				AIRCRAFT.REAL_TIME_SYNC_INTERVAL,
+			);
+			return () => clearInterval(interval);
+		}
+		return undefined;
+	});
+
+	// Debounced auto-save (moved out of WindowModel for testability)
+	$effect(() => {
+		const data = model.getPersistedSnapshot();
+		const timeout = setTimeout(() => savePersistedState(data), 2000);
+		return () => clearTimeout(timeout);
+	});
+
+	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
+	if (typeof window !== "undefined") {
+		const params = new URLSearchParams(window.location.search);
+
+		const locationParam = params.get("location")?.toLowerCase();
+		if (locationParam && LOCATION_MAP.has(locationParam)) {
+			model.setLocation(locationParam as LocationId);
+		}
+
+		const altitudeParam = params.get("altitude");
+		if (altitudeParam) {
+			const alt = Number(altitudeParam);
+			if (
+				Number.isFinite(alt) &&
+				alt >= AIRCRAFT.MIN_ALTITUDE &&
+				alt <= AIRCRAFT.MAX_ALTITUDE
+			) {
+				model.setAltitude(alt);
+			}
+		}
+	}
 </script>
 
 <svelte:head>
-	<title>Aero Dynamic Window</title>
+	<title>Sky Portal</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link
+		rel="preconnect"
+		href="https://fonts.gstatic.com"
+		crossorigin="anonymous"
+	/>
+	<link
+		href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+		rel="stylesheet"
+	/>
 </svelte:head>
 
 <main class="app">
@@ -44,16 +95,11 @@
 		</div>
 	</div>
 
-	<!-- Flight status indicator -->
-	<div class="flight-status" class:active={model.blindOpen}>
-		<span class="status-dot"></span>
-		<span class="status-text">
-			{model.isTransitioning ? `Flying to ${model.transitionDestination}...` : `${currentLocation} · ${altitudeDisplay}`}
-		</span>
-	</div>
-
-	<!-- Controls Panel -->
+	<!-- Controls (HUD + blind info) -->
 	<Controls />
+
+	<!-- Side panel (location picker + settings) -->
+	<SidePanel />
 </main>
 
 <style>
@@ -61,7 +107,17 @@
 		margin: 0;
 		padding: 0;
 		overflow: hidden;
+		background: #000;
+
+		/* SouthWest Airlines Branding */
+		--sw-blue: #304cb2;
+		--sw-red: #d5152e;
+		--sw-yellow: #ffbf27;
+		--sw-silver: #cccccc;
+		--sw-dark-blue: #0a0a1e;
+
 		font-family:
+			"Ubuntu",
 			system-ui,
 			-apple-system,
 			sans-serif;
@@ -80,8 +136,8 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
-		max-width: 1920px;
-		max-height: 1080px;
+		max-width: 3840px;
+		max-height: 2160px;
 		/* Cabin wall color - warm gray plastic */
 		background: linear-gradient(
 			180deg,
@@ -160,47 +216,18 @@
 		right: 20%;
 	}
 
-	.flight-status {
-		position: fixed;
-		bottom: 1rem;
-		left: 1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		background: rgba(0, 0, 0, 0.8);
-		color: white;
-		padding: 0.5rem 1rem;
-		border-radius: 20px;
-		font-size: 0.8rem;
-		z-index: 100;
-		backdrop-filter: blur(5px);
+	/* Accessibility: focus indicators */
+	:global(:focus-visible) {
+		outline: 2px solid var(--sw-yellow);
+		outline-offset: 2px;
 	}
 
-	.status-dot {
-		width: 8px;
-		height: 8px;
-		background: #666;
-		border-radius: 50%;
-		transition: background 0.3s;
-	}
-
-	.flight-status.active .status-dot {
-		background: #4ade80;
-		box-shadow: 0 0 8px #4ade80;
-		animation: pulse 2s infinite;
-	}
-
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
+	/* Accessibility: reduced motion */
+	@media (prefers-reduced-motion: reduce) {
+		:global(*) {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
 		}
-		50% {
-			opacity: 0.5;
-		}
-	}
-
-	.status-text {
-		min-width: 100px;
 	}
 </style>

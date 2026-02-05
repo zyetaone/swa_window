@@ -1,32 +1,42 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
-import cesium from 'vite-plugin-cesium';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { normalizePath } from 'vite';
+import path from 'node:path';
+
+const cesiumSource = 'node_modules/cesium/Build/Cesium';
+const cesiumBaseUrl = 'cesiumStatic';
 
 export default defineConfig({
-	plugins: [tailwindcss(), cesium(), sveltekit()],
+	plugins: [
+		tailwindcss(),
+		viteStaticCopy({
+			targets: [
+				{ src: normalizePath(path.join(cesiumSource, 'ThirdParty')), dest: cesiumBaseUrl },
+				{ src: normalizePath(path.join(cesiumSource, 'Workers')), dest: cesiumBaseUrl },
+				{ src: normalizePath(path.join(cesiumSource, 'Assets')), dest: cesiumBaseUrl },
+				{ src: normalizePath(path.join(cesiumSource, 'Widgets')), dest: cesiumBaseUrl },
+			],
+		}),
+		sveltekit(),
+	],
+	define: {
+		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
+	},
 	build: {
 		rollupOptions: {
 			output: {
 				manualChunks(id) {
 					if (id.includes('node_modules')) {
-						if (id.includes('three/build') || id.includes('three/src')) {
-							return 'three';
-						}
-						if (id.includes('@threlte')) {
-							return 'threlte';
-						}
 						if (id.includes('cesium')) {
 							return 'cesium';
 						}
-						if (id.includes('tweakpane') || id.includes('lucide-svelte')) {
-							return 'ui-libs';
-						}
 					}
 					return undefined;
-				}
-			}
+				},
+			},
 		},
-		chunkSizeWarningLimit: 1500
-	}
+		chunkSizeWarningLimit: 5000,
+	},
 });

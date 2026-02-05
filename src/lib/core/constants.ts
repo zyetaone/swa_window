@@ -5,81 +5,13 @@
  * to improve maintainability and clarity.
  */
 
-// =============================================================================
-// UNIT CONVERSIONS
-// =============================================================================
-
-export const UNITS = {
-	FEET_TO_METERS: 0.3048,
-	METERS_TO_FEET: 3.28084,
-} as const;
-
-// =============================================================================
-// ATMOSPHERIC EFFECTS
-// =============================================================================
-
-export const ATMOSPHERE = {
-	// Frost appears above this altitude (feet)
-	FROST_START_ALTITUDE: 25000,
-	FROST_FULL_ALTITUDE: 40000,
-
-	// Contrails appear above this altitude (feet)
-	CONTRAIL_MIN_ALTITUDE: 28000,
-
-	// Fog density calculation base
-	FOG_DENSITY_BASE: 0.00015,
-	FOG_MIN_BRIGHTNESS: 0.1,
-
-	// Visibility bounds (km)
-	MIN_VISIBILITY: 5,
-	MAX_VISIBILITY: 100
-} as const;
-
-// =============================================================================
-// PERFORMANCE
-// =============================================================================
-
-export const PERFORMANCE = {
-	// Cloud material cloning threshold
-	MAX_CLOUD_INSTANCES: 300,
-
-	// Contrail particle limits
-	MAX_CONTRAIL_PARTICLES: 100,
-	CONTRAIL_LIFETIME: 3, // seconds
-
-	// Animation frame budget (ms)
-	TARGET_FRAME_TIME: 16.67 // 60 FPS
-} as const;
-
-// =============================================================================
-// COLORS - Time of day lighting colors (RGB 0-1)
-// =============================================================================
-
-export const SUN_COLORS_RGB = {
-	night: { r: 0.2, g: 0.25, b: 0.4 },
-	dawn: { r: 1.0, g: 0.7, b: 0.5 },
-	dusk: { r: 1.0, g: 0.5, b: 0.3 },
-	day: { r: 1.0, g: 0.98, b: 0.95 },
-} as const;
-
-export const CLOUD_COLORS_RGB = {
-	night: { r: 0.25, g: 0.28, b: 0.35 },
-	dawn: { r: 1.0, g: 0.85, b: 0.75 },
-	dusk: { r: 1.0, g: 0.75, b: 0.65 },
-	day: { r: 1.0, g: 1.0, b: 1.0 },
-} as const;
-
-export type SkyStateKey = keyof typeof SUN_COLORS_RGB;
+import type { WeatherType } from './types';
 
 // =============================================================================
 // AIRCRAFT SYSTEMS
 // =============================================================================
 
 export const AIRCRAFT = {
-	// Strobe light timing (seconds)
-	STROBE_INTERVAL: 1.5,
-	STROBE_DURATION: 0.1,
-
 	// Lightning timing (seconds)
 	LIGHTNING_MIN_INTERVAL: 5,
 	LIGHTNING_MAX_INTERVAL: 30,
@@ -88,19 +20,9 @@ export const AIRCRAFT = {
 	// Flight drift (degrees per second at speed=1.0)
 	DRIFT_RATE: 0.006,
 
-	// Bank angle adjustments (degrees)
-	BANK_THRESHOLD: 0.95,
-	BANK_AMOUNT: 0.1,
-
-	// Turbulence frequencies (Hz - affects natural movement feel)
-	WANDER_SLOW: 0.03,
-	WANDER_MEDIUM: 0.11,
-	WANDER_FAST: 0.37,
-	BANK_TRIGGER_FREQ: 0.02,
-
-	// Vibration frequencies (Hz)
-	VIBRATION_FREQ_1: 60,
-	VIBRATION_FREQ_2: 47,
+	// Orbit path shape (elongated ellipse for sustained forward flight feel)
+	ORBIT_MAJOR: 2.0,    // degrees (~220km) — long axis (extended straight legs)
+	ORBIT_MINOR: 0.06,   // degrees (~7km)  — short axis (tight turns, zipped through quickly)
 
 	// Turbulence base multipliers
 	TURBULENCE_MULTIPLIERS: {
@@ -109,36 +31,16 @@ export const AIRCRAFT = {
 		light: 1,
 	} as const,
 
-	// Flight speed multipliers
-	MIN_SPEED: 0.2,
-	MAX_SPEED: 5.0,
-	DEFAULT_SPEED: 1.0,
-
 	// Altitude bounds (feet)
 	MIN_ALTITUDE: 10000,
 	MAX_ALTITUDE: 65000,
 
-	// Heading wander range (degrees)
-	WANDER_RANGE_SLOW: 0.02,
-	WANDER_RANGE_MEDIUM: 0.01,
-	WANDER_RANGE_FAST: 0.005,
+	// Frost thresholds (feet)
+	FROST_START_ALTITUDE: 25000,
+	FROST_MAX_ALTITUDE: 40000,
 
 	// Motion effect scalars
-	TURBULENCE_OFFSET_X: 0.1,
 	TURBULENCE_OFFSET_Y: 0.05,
-	TURBULENCE_OFFSET_Z: 0.1,
-
-	// Rotation scalars (radians)
-	MOTION_PITCH_SCALE: 0.005,
-	MOTION_ROLL_SCALE: 0.008,
-	MOTION_YAW_SCALE: 0.003,
-
-	// Transition animation
-	TRANSITION_BLIND_DELAY: 500,
-	TRANSITION_ASCEND_DURATION: 2000,
-	TRANSITION_CRUISE_DURATION: 1000,
-	TRANSITION_DESCEND_DURATION: 2000,
-	TRANSITION_TARGET_ALTITUDE: 38000,
 
 	// Time of day bounds
 	MIN_TIME: 0,
@@ -148,15 +50,150 @@ export const AIRCRAFT = {
 } as const;
 
 // =============================================================================
-// WINDOW BLIND
+// FLIGHT FEEL (modular motion layers)
 // =============================================================================
 
-export const BLIND = {
-	// Frost opacity calculation
-	FROST_START_ALTITUDE: 25000,
-	FROST_MAX_ALTITUDE: 40000,
+export const FLIGHT_FEEL = {
+	// Banking — horizon tilt during orbit turns
+	BANK_ANGLE_MAX: 6.0,       // degrees max bank (visible tilt during turns)
+	BANK_SMOOTHING: 2.5,       // lerp speed (smooth roll in/out)
 
-	// Auto-cycle timing
-	AUTO_CYCLE_INTERVAL: 25 * 60 * 1000, // 25 minutes
+	// Pitch breathing — slow nose-up/down oscillation
+	BREATHING_PERIOD: 22,      // seconds for one full cycle
+	BREATHING_AMPLITUDE: 1.5,  // pixels of Y translation
 
+	// Engine micro-vibration — constant fine hum (below 30Hz Nyquist)
+	ENGINE_VIBE_FREQ_X: 7,     // Hz (lowered for visible movement at 60fps)
+	ENGINE_VIBE_FREQ_Y: 11,    // Hz (different to avoid Lissajous lock)
+	ENGINE_VIBE_AMP: 0.35,     // pixels amplitude (perceptible tremor)
+
+	// Turbulence bumps — occasional jolts simulating air pockets
+	BUMP_MIN_INTERVAL: 30,   // seconds between bumps (minimum)
+	BUMP_MAX_INTERVAL: 120,  // seconds between bumps (maximum)
+	BUMP_DECAY: 8,           // exponential decay rate
+	BUMP_RING_FREQ: 15,      // damped oscillation frequency
+	BUMP_AMPLITUDE: 3,       // pixels peak displacement
 } as const;
+
+// =============================================================================
+// MICRO-EVENTS (moments of surprise for attentive viewers)
+// =============================================================================
+
+export const MICRO_EVENTS = {
+	// Timing (seconds)
+	MIN_INTERVAL: 1200,      // minimum 20 minutes between events
+	MAX_INTERVAL: 2400,      // maximum 40 minutes between events
+	INITIAL_DELAY: 300,      // first event after 5 minutes
+
+	// Duration (seconds)
+	SHOOTING_STAR_DURATION: 1.5,
+	BIRD_DURATION: 8,
+	CONTRAIL_DURATION: 12,
+} as const;
+
+// =============================================================================
+// AMBIENT RANDOMIZATION
+// =============================================================================
+
+export const AMBIENT = {
+	// Timer intervals (seconds)
+	INITIAL_MIN_DELAY: 120,   // first change after 2 minutes
+	INITIAL_MAX_DELAY: 300,   // first change before 5 minutes
+	SUBSEQUENT_MIN_DELAY: 180, // subsequent changes after 3 minutes
+	SUBSEQUENT_MAX_DELAY: 480, // subsequent changes before 8 minutes
+
+	// Drift ranges per cycle
+	CLOUD_DENSITY_SHIFT: 0.3,
+	CLOUD_DENSITY_MIN: 0.2,
+	CLOUD_DENSITY_MAX: 1.0,
+	CLOUD_SPEED_SHIFT: 0.4,
+	CLOUD_SPEED_MIN: 0.2,
+	CLOUD_SPEED_MAX: 1.5,
+	HAZE_SHIFT: 0.04,
+	HAZE_MIN: 0,
+	HAZE_MAX: 0.15,
+
+	// Probability of weather transition per cycle
+	WEATHER_CHANGE_CHANCE: 0.2,
+} as const;
+
+// =============================================================================
+// CESIUM LAYER THRESHOLDS & TUNING
+// =============================================================================
+
+export const CESIUM = {
+	// Road light layer (CartoDB Dark basemap, real OSM roads)
+	ROAD_LIGHT_NIGHT_ALPHA: 0.55,
+	ROAD_LIGHT_NIGHT_BRIGHTNESS: 3.5,
+	ROAD_LIGHT_CONTRAST: 1.6,
+	ROAD_LIGHT_SATURATION: 1.4,
+
+	// Selective night bloom (tuned to only bloom bright pixels = city lights)
+	BLOOM_NIGHT_CONTRAST: 180,
+	BLOOM_BRIGHTNESS: -0.3,
+	BLOOM_SIGMA: 4.0,
+	BLOOM_DELTA: 1.5,
+	BLOOM_STEP_SIZE: 2.0,
+} as const;
+
+// =============================================================================
+// WEATHER EFFECTS
+// =============================================================================
+
+export interface WeatherEffect {
+	turbulence: 'light' | 'moderate' | 'severe';
+	hasLightning: boolean;
+	cloudDensityRange: [min: number, max: number];
+	nightCloudFloor: number;
+	rainOpacity: number;
+	windAngle: number;
+	filterBrightness: number;
+}
+
+export const WEATHER_EFFECTS: Record<WeatherType, WeatherEffect> = {
+	clear: {
+		turbulence: 'light',
+		hasLightning: false,
+		cloudDensityRange: [0, 0.3],
+		nightCloudFloor: 0,
+		rainOpacity: 0,
+		windAngle: 88,
+		filterBrightness: 1.0,
+	},
+	cloudy: {
+		turbulence: 'light',
+		hasLightning: false,
+		cloudDensityRange: [0.4, 1],
+		nightCloudFloor: 0,
+		rainOpacity: 0,
+		windAngle: 87,
+		filterBrightness: 1.0,
+	},
+	rain: {
+		turbulence: 'moderate',
+		hasLightning: false,
+		cloudDensityRange: [0.5, 0.9],
+		nightCloudFloor: 0.3,
+		rainOpacity: 0.25,
+		windAngle: 86,
+		filterBrightness: 0.95,
+	},
+	overcast: {
+		turbulence: 'moderate',
+		hasLightning: false,
+		cloudDensityRange: [0.7, 1],
+		nightCloudFloor: 0.5,
+		rainOpacity: 0.18,
+		windAngle: 86,
+		filterBrightness: 0.95,
+	},
+	storm: {
+		turbulence: 'severe',
+		hasLightning: true,
+		cloudDensityRange: [0.85, 1],
+		nightCloudFloor: 0.65,
+		rainOpacity: 0.35,
+		windAngle: 84,
+		filterBrightness: 0.9,
+	},
+};

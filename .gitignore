@@ -23,3 +23,6 @@ vite.config.ts.timestamp-*
 
 # Build output
 dist/
+
+# Cesium static assets (copied from node_modules during setup)
+static/cesium/
