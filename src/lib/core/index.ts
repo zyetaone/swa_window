@@ -21,7 +21,6 @@ export { LOCATIONS, LOCATION_MAP } from './locations';
 
 // Re-export constants
 export { AIRCRAFT, CESIUM, FLIGHT_FEEL, WEATHER_EFFECTS };
-export type { WeatherEffect } from './constants';
 
 const APP_STATE_KEY = Symbol('APP_STATE');
 

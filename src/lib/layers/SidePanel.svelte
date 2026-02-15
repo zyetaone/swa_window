@@ -19,6 +19,10 @@
 	const model = useAppState();
 
 	let panelOpen = $state(false);
+	let closing = $state(false);
+
+	let panelEl: HTMLDivElement | undefined = $state();
+	let tabButtonEl: HTMLButtonElement | undefined = $state();
 
 	const cities = LOCATIONS.filter((l) => l.hasBuildings);
 	const nature = LOCATIONS.filter((l) => !l.hasBuildings);
@@ -27,15 +31,72 @@
 		model.flyTo(locationId);
 	}
 
+	function openPanel() {
+		panelOpen = true;
+	}
+
+	function closePanel() {
+		if (closing) return;
+		closing = true;
+		setTimeout(() => {
+			panelOpen = false;
+			closing = false;
+			tabButtonEl?.focus();
+		}, 200);
+	}
+
 	function togglePanel() {
-		panelOpen = !panelOpen;
+		if (panelOpen) {
+			closePanel();
+		} else {
+			openPanel();
+		}
+	}
+
+	// Focus trap: when panel opens, focus the first interactive element
+	$effect(() => {
+		if (panelOpen && !closing && panelEl) {
+			const firstFocusable = panelEl.querySelector<HTMLElement>(
+				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+			);
+			firstFocusable?.focus();
+		}
+	});
+
+	function handlePanelKeydown(e: KeyboardEvent) {
+		if (e.key === "Escape") {
+			closePanel();
+			return;
+		}
+
+		if (e.key !== "Tab" || !panelEl) return;
+
+		const focusable = Array.from(
+			panelEl.querySelectorAll<HTMLElement>(
+				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+			),
+		);
+
+		if (focusable.length === 0) return;
+
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
 	}
 </script>
 
 <!-- Tab button (always visible on right edge) -->
 <button
+	bind:this={tabButtonEl}
 	class="panel-tab"
-	class:open={panelOpen}
+	class:open={panelOpen && !closing}
 	onclick={togglePanel}
 	type="button"
 	aria-label={panelOpen ? "Close settings" : "Open settings"}
@@ -47,7 +108,7 @@
 		stroke="currentColor"
 		stroke-width="2"
 	>
-		{#if panelOpen}
+		{#if panelOpen && !closing}
 			<path d="M9 18l6-6-6-6" />
 		{:else}
 			<path d="M15 18l-6-6 6-6" />
@@ -59,13 +120,23 @@
 {#if panelOpen}
 	<button
 		class="backdrop"
-		onclick={togglePanel}
+		class:closing
+		onclick={closePanel}
 		type="button"
 		aria-label="Close settings panel"
 		tabindex="-1"
 	></button>
 
-	<div class="panel">
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		bind:this={panelEl}
+		class="panel"
+		class:closing
+		role="dialog"
+		aria-label="Settings panel"
+		tabindex="-1"
+		onkeydown={handlePanelKeydown}
+	>
 		<header>
 			<h2>Sky Portal</h2>
 		</header>
@@ -352,10 +423,25 @@
 		position: absolute;
 		inset: 0;
 		z-index: 99;
-		background: transparent;
+		background: rgba(0, 0, 0, 0.15);
 		border: none;
 		cursor: default;
 		padding: 0;
+		animation: backdrop-fade-in 0.25s ease both;
+	}
+
+	.backdrop.closing {
+		animation: backdrop-fade-out 0.2s ease both;
+	}
+
+	@keyframes backdrop-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes backdrop-fade-out {
+		from { opacity: 1; }
+		to { opacity: 0; }
 	}
 
 	/* --- Panel --- */
@@ -378,6 +464,10 @@
 		animation: panel-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 	}
 
+	.panel.closing {
+		animation: panel-slide-out 0.2s cubic-bezier(0.4, 0, 0.8, 0.2) both;
+	}
+
 	@keyframes panel-slide-in {
 		from {
 			transform: translateX(100%);
@@ -386,6 +476,17 @@
 		to {
 			transform: translateX(0);
 			opacity: 1;
+		}
+	}
+
+	@keyframes panel-slide-out {
+		from {
+			transform: translateX(0);
+			opacity: 1;
+		}
+		to {
+			transform: translateX(100%);
+			opacity: 0.8;
 		}
 	}
 
@@ -530,6 +631,10 @@
 	.loc-btn {
 		padding: 0.45rem 0.75rem;
 		font-size: 0.75rem;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: rgba(255, 255, 255, 0.08);
 		border: 1px solid rgba(255, 255, 255, 0.12);
 		border-radius: 5px;
@@ -566,6 +671,10 @@
 	.weather-btn {
 		padding: 0.45rem 0.75rem;
 		font-size: 0.75rem;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: rgba(255, 255, 255, 0.05);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 5px;

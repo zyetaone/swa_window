@@ -16,7 +16,29 @@
 	const locationName = $derived(model.currentLocation.name);
 	const destName = $derived(model.cruiseDestinationName ?? "");
 	const isCruising = $derived(model.flightMode !== "orbit");
+
+	// aria-live announcement for flight transitions
+	let prevTransitioning = false; // plain JS — not reactive, just previous-frame tracking
+	let liveAnnouncement = $state("");
+
+	$effect(() => {
+		const transitioning = model.isTransitioning;
+		const destination = model.cruiseDestinationName;
+
+		if (transitioning && destination && !prevTransitioning) {
+			liveAnnouncement = `Flying to ${destination}`;
+		} else if (!transitioning && prevTransitioning) {
+			liveAnnouncement = `Arrived at ${model.currentLocation.name}`;
+		}
+
+		prevTransitioning = transitioning;
+	});
 </script>
+
+<!-- Screen-reader announcement for flight transitions -->
+<div class="sr-only" aria-live="polite" role="status">
+	{liveAnnouncement}
+</div>
 
 {#if model.blindOpen}
 	<!-- HUD: Cinematic telemetry overlay -->
@@ -90,13 +112,18 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: space-between;
+		background: radial-gradient(
+			ellipse at top right,
+			rgba(0, 0, 0, 0.35) 0%,
+			transparent 70%
+		);
 	}
 
 	.status-group {
 		align-self: flex-end;
 		text-align: right;
 		color: rgba(255, 255, 255, 0.85);
-		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.3);
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
@@ -225,5 +252,18 @@
 		letter-spacing: 0.2em;
 		text-transform: uppercase;
 		margin-top: 1rem;
+	}
+
+	/* --- Screen-reader only --- */
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		border: 0;
 	}
 </style>

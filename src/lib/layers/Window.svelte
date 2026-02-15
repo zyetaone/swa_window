@@ -39,13 +39,11 @@
 				lastTime = now;
 				model.tick(dt);
 				consecutiveErrors = 0;
-			} catch (err) {
+			} catch {
 				consecutiveErrors++;
-				console.error("[Window] RAF tick failed:", err);
 				if (consecutiveErrors >= 10) {
-					console.error(
-						"[Window] Too many consecutive errors, reloading...",
-					);
+					// Clear potentially corrupt persisted state before reload
+					try { localStorage.removeItem('aero-window-v2'); } catch { /* noop */ }
 					window.location.reload();
 					return;
 				}
@@ -230,6 +228,13 @@
 		model.toggleBlind();
 	}
 
+	// --- Blind handle discoverability (plays once per session) ---
+	let hasAnimated = $state(false);
+
+	function onHandleAnimationEnd() {
+		hasAnimated = true;
+	}
+
 	// --- Timed click-hint (touch kiosks have no :hover) ---
 	let showHint = $state(false);
 	$effect(() => {
@@ -376,7 +381,9 @@
 		<button
 			class="blind-overlay"
 			class:open={model.blindOpen}
+			class:discoverable={!model.blindOpen && !hasAnimated}
 			onclick={handleBlindClick}
+			onanimationend={onHandleAnimationEnd}
 			type="button"
 			aria-label="Open window blind"
 			disabled={model.isTransitioning}
@@ -562,6 +569,24 @@
 		box-shadow:
 			0 2px 4px rgba(0, 0, 0, 0.3),
 			inset 0 1px 0 rgba(255, 255, 255, 0.4);
+	}
+
+	/* --- Blind handle discoverability pulse (once per session) --- */
+
+	@keyframes handle-breathe {
+		0%,
+		100% {
+			transform: translateY(0);
+			opacity: 0.9;
+		}
+		50% {
+			transform: translateY(-3px);
+			opacity: 1;
+		}
+	}
+
+	.blind-overlay.discoverable::after {
+		animation: handle-breathe 1s ease-in-out 3;
 	}
 
 	/* .blind-label telemetry badge removed for de-cluttered UI */
