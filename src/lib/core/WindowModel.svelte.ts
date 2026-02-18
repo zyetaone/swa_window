@@ -12,12 +12,13 @@
  * - flyTo(): Synchronous state transition to cruise mode
  */
 
-import { clamp, normalizeHeading } from './utils';
+import { clamp, lerp, normalizeHeading } from './utils';
 import { AIRCRAFT, FLIGHT_FEEL, AMBIENT, MICRO_EVENTS } from './constants';
 import type { SkyState, LocationId, WeatherType } from './types';
 import { LOCATIONS, LOCATION_MAP } from './locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
 import { WEATHER_EFFECTS } from './constants';
+import { pickScenario, type FlightScenario } from './flight-scenarios';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
@@ -98,13 +99,18 @@ export class WindowModel {
 	// --- Flight speed ---
 	flightSpeed = $state(1.0);
 
-	// --- Orbit flight path (elongated ellipse for linear flight feel) ---
+	// --- Orbit flight path (fallback ellipse when no scenario exists) ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor = $state(AIRCRAFT.ORBIT_MAJOR); // long axis (~33km straight legs)
-	orbitRadiusMinor = $state(AIRCRAFT.ORBIT_MINOR); // short axis (~9km turn radius)
+	orbitRadiusMajor = $state(AIRCRAFT.ORBIT_MAJOR); // long axis (~33km)
+	orbitRadiusMinor = $state(AIRCRAFT.ORBIT_MINOR); // short axis (~1.7km)
 	orbitBearing = $state(0); // radians — orientation of the flight path
 	orbitAngle = $state(0); // radians, increments over time
+
+	// --- Waypoint-based flight scenario (replaces orbit when available) ---
+	private currentScenario: FlightScenario | null = null;
+	private scenarioWaypointIndex = 0;
+	private scenarioProgress = 0; // 0-1 between current and next waypoint
 
 	// --- Weather animation ---
 	lightningIntensity = $state(0);
@@ -267,6 +273,9 @@ export class WindowModel {
 
 		// Initialize prevHeading to avoid bank angle jump on first frame
 		this.prevHeading = this.heading;
+
+		// Pick an initial flight scenario for the starting location
+		this.initScenario(this.location);
 	}
 
 	/** Update timeOfDay from the system clock (called by external $effect) */
@@ -304,6 +313,9 @@ export class WindowModel {
 		this.orbitCenterLon = loc.lon;
 		this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
 		this.orbitAngle = 0;
+
+		// Pick a new scenario for the destination
+		this.initScenario(locationId);
 	}
 
 	// Deterministic hash to spread orbit orientations across locations
@@ -435,11 +447,11 @@ export class WindowModel {
 
 		if (this.flightMode === 'cruise_departure') {
 			this.tickDeparture(delta);
-			this.tickOrbit(delta); // Keep orbiting — terrain rushes past during acceleration
+			this.tickFlightPath(delta); // Keep moving — terrain rushes past during acceleration
 		} else if (this.flightMode === 'cruise_transit') {
 			this.tickTransit(delta);
 		} else {
-			this.tickOrbit(delta);
+			this.tickFlightPath(delta);
 			this.tickDirector(delta);
 		}
 
@@ -555,6 +567,88 @@ export class WindowModel {
 			+ Math.sin(this.time * 0.031) * 0.15
 			+ Math.sin(this.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
+	}
+
+	/** Dispatch to scenario interpolation or fallback orbit */
+	private tickFlightPath(delta: number): void {
+		if (this.currentScenario) {
+			this.tickScenario(delta);
+		} else {
+			this.tickOrbit(delta);
+		}
+	}
+
+	/** Initialize a scenario for the given location (or null for orbit fallback) */
+	private initScenario(locationId: LocationId): void {
+		const scenario = pickScenario(locationId, this.skyState);
+		this.currentScenario = scenario;
+		this.scenarioWaypointIndex = 0;
+		this.scenarioProgress = 0;
+	}
+
+	/**
+	 * Interpolate position/heading/altitude along waypoint path.
+	 * Uses smoothstep easing for natural acceleration/deceleration between waypoints.
+	 * Adds subtle jitter so paths don't feel scripted.
+	 */
+	private tickScenario(delta: number): void {
+		const scenario = this.currentScenario;
+		if (!scenario || scenario.waypoints.length < 2) return;
+
+		const waypoints = scenario.waypoints;
+		const idx = this.scenarioWaypointIndex;
+		const nextIdx = (idx + 1) % waypoints.length;
+		const current = waypoints[idx];
+		const next = waypoints[nextIdx];
+
+		// Advance progress (duration is in seconds, flightSpeed scales it)
+		const duration = next.duration > 0 ? next.duration : 30;
+		this.scenarioProgress += (delta * this.flightSpeed) / duration;
+
+		// Smoothstep easing: ease-in-out for natural acceleration
+		const raw = clamp(this.scenarioProgress, 0, 1);
+		const t = raw * raw * (3 - 2 * raw);
+
+		// Subtle jitter (Perlin-like from time) — keeps paths from feeling scripted
+		const jitterScale = 0.0003;
+		const jitterLat = Math.sin(this.time * 0.13) * jitterScale + Math.sin(this.time * 0.31) * jitterScale * 0.5;
+		const jitterLon = Math.sin(this.time * 0.17) * jitterScale + Math.sin(this.time * 0.37) * jitterScale * 0.5;
+
+		// Interpolate position
+		const newLat = lerp(current.lat, next.lat, t) + jitterLat;
+		const newLon = lerp(current.lon, next.lon, t) + jitterLon;
+		if (Number.isFinite(newLat)) this.lat = newLat;
+		if (Number.isFinite(newLon)) this.lon = newLon;
+
+		// Interpolate altitude (only if user isn't manually adjusting)
+		if (!this.userAdjustingAltitude) {
+			const altJitter = Math.sin(this.time * 0.07) * 50;
+			this.altitude = lerp(current.altitude, next.altitude, t) + altJitter;
+		}
+
+		// Interpolate heading — shortest arc
+		let headingDiff = next.heading - current.heading;
+		if (headingDiff > 180) headingDiff -= 360;
+		if (headingDiff < -180) headingDiff += 360;
+		const headingJitter = Math.sin(this.time * 0.05) * 0.25 + Math.sin(this.time * 0.031) * 0.15;
+		this.heading = normalizeHeading(current.heading + headingDiff * t + headingJitter);
+
+		// Move to next waypoint when progress completes
+		if (this.scenarioProgress >= 1) {
+			this.scenarioProgress = 0;
+			this.scenarioWaypointIndex = nextIdx;
+
+			// If we looped back to 0, check if we should pick a new scenario
+			// (sky state may have changed during the loop)
+			if (nextIdx === 0 && scenario.loop) {
+				const fresh = pickScenario(this.location, this.skyState);
+				if (fresh && fresh.id !== scenario.id) {
+					this.currentScenario = fresh;
+					this.scenarioWaypointIndex = 0;
+					this.scenarioProgress = 0;
+				}
+			}
+		}
 	}
 
 	private tickLightning(delta: number): void {

@@ -20,9 +20,9 @@ export const AIRCRAFT = {
 	// Flight drift (degrees per second at speed=1.0)
 	DRIFT_RATE: 0.006,
 
-	// Orbit path shape (elongated ellipse for sustained forward flight feel)
-	ORBIT_MAJOR: 2.0,    // degrees (~220km) — long axis (extended straight legs)
-	ORBIT_MINOR: 0.06,   // degrees (~7km)  — short axis (tight turns, zipped through quickly)
+	// Orbit path shape (fallback ellipse when no waypoint scenario exists)
+	ORBIT_MAJOR: 0.3,    // degrees (~33km) — long axis (realistic holding pattern)
+	ORBIT_MINOR: 0.015,  // degrees (~1.7km) — short axis (tight turns)
 
 	// Turbulence base multipliers
 	TURBULENCE_MULTIPLIERS: {
