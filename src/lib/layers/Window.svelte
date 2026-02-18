@@ -3,11 +3,11 @@
 	 * Window - Layer compositor + game loop
 	 *
 	 * Owns the RAF tick loop (single game clock).
-	 * Composes: Cesium (terrain) + CSS effect overlays (glass, weather, clouds).
+	 * Composes: Cesium (terrain) + Threlte clouds + CSS effect overlays.
 	 *
 	 * Z-order:
 	 *   0: Cesium (terrain, buildings, NASA night lights, CartoDB roads)
-	 *   1: Clouds (CSS blur gradients)
+	 *   1: Clouds (Threlte volumetric raymarching)
 	 *   2: Weather (CSS rain + lightning)
 	 *   5: Frost
 	 *   7: Wing silhouette
@@ -22,11 +22,14 @@
 	} from "$lib/core";
 	import { clamp } from "$lib/core/utils";
 	import CesiumViewer from "./CesiumViewer.svelte";
+	import CloudCanvas from './CloudCanvas.svelte';
 	const model = useAppState();
 
 	// ========================================================================
 	// GAME LOOP — single RAF driving model.tick()
 	// ========================================================================
+
+	let elapsedTime = $state(0);
 
 	$effect(() => {
 		let lastTime = performance.now();
@@ -38,6 +41,7 @@
 				const dt = Math.min((now - lastTime) / 1000, 0.1);
 				lastTime = now;
 				model.tick(dt);
+				elapsedTime += dt;
 				consecutiveErrors = 0;
 			} catch {
 				consecutiveErrors++;
@@ -124,7 +128,6 @@
 
 	const cloudOpacity = $derived(model.effectiveCloudDensity);
 	const cloudSpeed = $derived(model.cloudSpeed);
-	const isNight = $derived(model.skyState === "night");
 
 	// --- Weather (inlined from WeatherLayer) ---
 
@@ -286,20 +289,17 @@
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1 — Clouds (CSS blur gradients) -->
-			{#if cloudOpacity > 0.01}
-				<div
-					class="cloud-container"
-					class:night={isNight}
-					style:z-index={1}
-					style:opacity={cloudOpacity}
-					style:--cloud-speed={cloudSpeed}
-				>
-					<div class="cloud-layer near"></div>
-					<div class="cloud-layer mid"></div>
-					<div class="cloud-layer far"></div>
-				</div>
-			{/if}
+			<!-- z:1 — Volumetric clouds (Threlte WebGL overlay) -->
+			<div class="render-layer" style:z-index={1} style:opacity={cloudOpacity}>
+				<CloudCanvas
+					density={cloudOpacity}
+					cloudSpeed={cloudSpeed}
+					nightFactor={model.nightFactor}
+					dawnDuskFactor={model.dawnDuskFactor}
+					skyState={model.skyState}
+					time={elapsedTime}
+				/>
+			</div>
 
 			<!-- z:2 — Rain streaks -->
 			{#if rainOpacity > 0}
@@ -591,147 +591,6 @@
 	}
 
 	/* .blind-label telemetry badge removed for de-cluttered UI */
-
-	/* --- Clouds (inlined from CloudLayer) --- */
-
-	.cloud-container {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		transition: opacity 2s ease;
-		contain: layout style paint;
-	}
-
-	.cloud-layer {
-		position: absolute;
-		inset: -20%;
-		border-radius: 50%;
-		will-change: transform;
-	}
-
-	.cloud-layer.near {
-		background: radial-gradient(
-				ellipse 45% 30% at 25% 40%,
-				rgba(255, 255, 255, 0.6) 0%,
-				transparent 70%
-			),
-			radial-gradient(
-				ellipse 50% 35% at 70% 55%,
-				rgba(255, 255, 255, 0.5) 0%,
-				transparent 70%
-			),
-			radial-gradient(
-				ellipse 35% 25% at 50% 30%,
-				rgba(255, 255, 255, 0.4) 0%,
-				transparent 65%
-			);
-		filter: blur(12px);
-		animation: cloud-drift-near calc(40s / var(--cloud-speed, 1)) linear
-			infinite;
-	}
-
-	.cloud-layer.mid {
-		background: radial-gradient(
-				ellipse 40% 28% at 60% 45%,
-				rgba(240, 245, 255, 0.4) 0%,
-				transparent 65%
-			),
-			radial-gradient(
-				ellipse 30% 22% at 30% 60%,
-				rgba(240, 245, 255, 0.35) 0%,
-				transparent 65%
-			);
-		filter: blur(16px);
-		animation: cloud-drift-mid calc(55s / var(--cloud-speed, 1)) linear
-			infinite;
-	}
-
-	.cloud-layer.far {
-		background: radial-gradient(
-				ellipse 55% 35% at 45% 50%,
-				rgba(230, 240, 255, 0.25) 0%,
-				transparent 60%
-			),
-			radial-gradient(
-				ellipse 30% 20% at 75% 35%,
-				rgba(230, 240, 255, 0.2) 0%,
-				transparent 60%
-			);
-		filter: blur(20px);
-		animation: cloud-drift-far calc(70s / var(--cloud-speed, 1)) linear
-			infinite;
-	}
-
-	.cloud-container.night .cloud-layer.near {
-		background: radial-gradient(
-				ellipse 45% 30% at 25% 40%,
-				rgba(100, 110, 140, 0.5) 0%,
-				transparent 70%
-			),
-			radial-gradient(
-				ellipse 50% 35% at 70% 55%,
-				rgba(100, 110, 140, 0.4) 0%,
-				transparent 70%
-			),
-			radial-gradient(
-				ellipse 35% 25% at 50% 30%,
-				rgba(100, 110, 140, 0.3) 0%,
-				transparent 65%
-			);
-	}
-
-	.cloud-container.night .cloud-layer.mid {
-		background: radial-gradient(
-				ellipse 40% 28% at 60% 45%,
-				rgba(80, 90, 120, 0.35) 0%,
-				transparent 65%
-			),
-			radial-gradient(
-				ellipse 30% 22% at 30% 60%,
-				rgba(80, 90, 120, 0.3) 0%,
-				transparent 65%
-			);
-	}
-
-	.cloud-container.night .cloud-layer.far {
-		background: radial-gradient(
-				ellipse 55% 35% at 45% 50%,
-				rgba(60, 70, 100, 0.2) 0%,
-				transparent 60%
-			),
-			radial-gradient(
-				ellipse 30% 20% at 75% 35%,
-				rgba(60, 70, 100, 0.15) 0%,
-				transparent 60%
-			);
-	}
-
-	@keyframes cloud-drift-near {
-		from {
-			transform: translateX(-8%);
-		}
-		to {
-			transform: translateX(8%);
-		}
-	}
-
-	@keyframes cloud-drift-mid {
-		from {
-			transform: translateX(6%) translateY(-2%);
-		}
-		to {
-			transform: translateX(-6%) translateY(2%);
-		}
-	}
-
-	@keyframes cloud-drift-far {
-		from {
-			transform: translateX(-4%) translateY(1%);
-		}
-		to {
-			transform: translateX(4%) translateY(-1%);
-		}
-	}
 
 	/* --- Weather: Rain (inlined from WeatherLayer) --- */
 
