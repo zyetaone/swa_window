@@ -2,6 +2,8 @@
  * GLSL Shaders for CesiumViewer
  *
  * Color grading post-process for night city light rendering.
+ * Includes: sodium vapor city lights, dark void crush,
+ * horizon atmospheric haze, dawn/dusk directional rim light.
  */
 
 // ========================================================================
@@ -43,6 +45,12 @@ export const COLOR_GRADING_GLSL = `
 		// We add the light color on top of the darkened/desaturated terrain
 		rgb += lightColor * lum * 2.5 * u_nightFactor;
 
+		// --- Dark Void Crush ---
+		// Push non-city terrain to true black at night so city light islands pop.
+		// Rural areas and ocean become deep black; only lit areas survive.
+		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
+		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * 0.7);
+
 		// Light pollution glow (subtle warm haze — only near bright sources)
 		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
 		rgb += vec3(0.12, 0.06, 0.01) * pollution * u_lightIntensity;
@@ -54,6 +62,25 @@ export const COLOR_GRADING_GLSL = `
 		// High Contrast
 		float contrast = 1.0 + (0.3 * u_nightFactor);
 		rgb = (rgb - 0.5) * contrast + 0.5;
+
+		// --- Horizon Atmospheric Haze ---
+		// The defining visual of aerial photography: a pale band where the
+		// atmosphere is thickest, sitting at the horizon line (~35% from top).
+		// Fades to warm amber at dawn/dusk, invisible at night.
+		float horizonY = 0.35;
+		float horizonBand = 1.0 - abs(v_textureCoordinates.y - horizonY) / 0.2;
+		horizonBand = clamp(horizonBand, 0.0, 1.0);
+		vec3 hazeColor = mix(vec3(0.7, 0.85, 1.0), vec3(1.0, 0.8, 0.5), u_dawnDuskFactor);
+		rgb = mix(rgb, hazeColor, horizonBand * 0.15 * (1.0 - u_nightFactor));
+
+		// --- Dawn/Dusk Directional Rim Light ---
+		// Simulates the sun rising/setting from one side. The left edge of the
+		// frame gets a warm gold wash, fading across the viewport. Only active
+		// during dawn/dusk transitions (dawnDuskFactor > 0).
+		float rimX = 1.0 - v_textureCoordinates.x;  // left edge = brightest
+		float rimLight = rimX * u_dawnDuskFactor * 0.25;
+		vec3 warmRim = vec3(1.0, 0.7, 0.3) * rimLight;
+		rgb += warmRim * (1.0 - u_nightFactor);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}
