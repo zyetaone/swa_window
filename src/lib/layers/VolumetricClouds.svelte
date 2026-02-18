@@ -86,6 +86,12 @@
 
 	// Sync uniforms reactively
 	$effect(() => {
+		const w = size.current.width;
+		const h = size.current.height;
+
+		// Skip rendering until canvas has real dimensions
+		if (w === 0 || h === 0) return;
+
 		material.uniforms.uDensity.value = density;
 		material.uniforms.uCloudSteps.value = cloudSteps;
 		material.uniforms.uSunPosition.value.copy(sunPosition);
@@ -93,12 +99,8 @@
 		material.uniforms.uSkyColor.value.copy(skyColor);
 		material.uniforms.uTime.value = time * cloudSpeed;
 
-		const dpr =
-			typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-		material.uniforms.uResolution.value.set(
-			size.current.width * dpr,
-			size.current.height * dpr,
-		);
+		const dpr = window.devicePixelRatio ?? 1;
+		material.uniforms.uResolution.value.set(w * dpr, h * dpr);
 
 		// Trigger re-render after uniform update
 		advance();
@@ -108,4 +110,6 @@
 	const geometry = new THREE.PlaneGeometry(2, 2);
 </script>
 
+<!-- Threlte requires a default camera even though the shader bypasses it -->
+<T.OrthographicCamera makeDefault args={[-1, 1, 1, -1, 0, 1]} />
 <T.Mesh {geometry} {material} frustumCulled={false} />
