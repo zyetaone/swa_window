@@ -130,16 +130,19 @@
 			name: 'Clouds',
 			z: 'z:1',
 			condition: 'cloudOpacity > 0',
-			description: 'near (blur:12px) · mid (blur:16px) · far (blur:20px)',
-			category: 'css',
+			description: 'Three.js WebGL — texture-based FBM with camera parallax (3 depth layers)',
+			category: 'gpu',
 			previewType: 'cloud',
 			details: [
-				'Rendered by: Window.svelte .cloud-layer.near/.mid/.far',
-				'Blur: near=12px, mid=16px, far=20px',
-				'Animation: cloud-drift-near 40s, mid 55s, far 70s (÷ cloudSpeed)',
-				'Night: reduced opacity (×0.5, floor per weather), blue-shifted tint',
-				'Dusk: opacity ×0.7',
-				'Density range: clear=[0,0.3], cloudy=[0.4,1], storm=[0.85,1]',
+				'Rendered by: CloudCanvas.svelte → Three.js ShaderMaterial (cloud-shader.ts)',
+				'Textures: cloud-noise.png (512², FBM shapes), cloud-detail.png (256², Worley cells), cloud-wisp.png (256², cirrus streaks)',
+				'Layers: far (parallax=0.05, scale=1.5) · mid (parallax=0.2, scale=3.0) · near (parallax=0.5, scale=5.0)',
+				'Camera parallax: heading shifts UV.x, pitch shifts UV.y — per-layer depth rates',
+				'Altitude masking: above 30k ft (deck below), 15–25k ft (whiteout), below 15k ft (deck above)',
+				'Half-res rendering: devicePixelRatio × 0.5 (saves 4× fill rate)',
+				'Lighting: Beer-Lambert self-shadowing, silver-lining edge glow',
+				'Fallback: computed 3-octave FBM noise when textures fail to load',
+				'Output: premultiplied alpha for transparent compositing over Cesium',
 			],
 		},
 		{
@@ -152,8 +155,8 @@
 			previewType: 'shader',
 			details: [
 				'Rendered by: CesiumViewer.svelte → viewer.scene.postProcessStages.bloom',
-				'Contrast: 135, Brightness: 0.05',
-				'Sigma: 3.0, Delta: 1.0, StepSize: 1.0',
+				'Contrast: 135, Brightness: 0.04',
+				'Sigma: 7.0, Delta: 1.0, StepSize: 2.0',
 				'Enable: nightFactor > 0.7 (full night only)',
 				'Constants: CESIUM.BLOOM_*',
 			],
@@ -544,6 +547,8 @@
 			<div class="pipeline-sub">
 				<div class="sub-label">model.tick(dt) dispatches to:</div>
 				<div class="sub-grid">
+					<span class="sub-fn">tickFlightPath</span>
+					<span class="sub-fn">tickScenario</span>
 					<span class="sub-fn">tickOrbit</span>
 					<span class="sub-fn">tickDeparture</span>
 					<span class="sub-fn">tickTransit</span>
