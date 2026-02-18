@@ -173,6 +173,9 @@
 
 		viewer.scene.globe.showGroundAtmosphere = nf < 0.3;
 
+		// Water: animated waves + specular highlights (requires requestWaterMask on terrain)
+		viewer.scene.globe.showWaterEffect = true;
+
 		// Built-in bloom: enable only at full night for warm city glow
 		if (viewer.scene.postProcessStages?.bloom) {
 			viewer.scene.postProcessStages.bloom.enabled = nf > 0.7;
@@ -264,6 +267,9 @@
 			v.scene.moon.show = true;
 		}
 
+		// Ocean: use higher-res normal map for sharper wave detail on dedicated display
+		globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
+
 		if (v.scene.postProcessStages?.bloom) {
 			const bloom = v.scene.postProcessStages.bloom;
 			bloom.enabled = false;
@@ -336,6 +342,7 @@
 			try {
 				v.terrainProvider = await C.createWorldTerrainAsync({
 					requestVertexNormals: true,
+					requestWaterMask: true,
 				});
 			} catch (e) {
 				console.warn("[CesiumViewer] Ion terrain failed, using flat ellipsoid:", e);
