@@ -1,9 +1,10 @@
 <script lang="ts">
 	/**
-	 * CloudCanvas — Raw Three.js volumetric cloud overlay
+	 * CloudCanvas — Procedural cloud overlay (Three.js + {@attach})
 	 *
-	 * Uses Svelte 5 {@attach} + raw Three.js (same pattern as CesiumViewer).
-	 * Renders FBM raymarched clouds on a fullscreen quad with premultiplied alpha.
+	 * Screen-space FBM noise clouds on a fullscreen quad.
+	 * Three parallax layers (far cirrus, mid cumulus, near wisps) with
+	 * self-shadowing and silver lining. Premultiplied alpha output.
 	 *
 	 * Pattern: {@attach} creates Three.js objects once on mount.
 	 * A nested $effect handles per-frame uniform sync and renderer.render().
@@ -30,8 +31,8 @@
 		time = 0,
 	}: Props = $props();
 
-	// Sun position per sky state
-	const sunPosition = $derived.by(() => {
+	// Sun direction per sky state (normalized in shader)
+	const sunDirection = $derived.by(() => {
 		switch (skyState) {
 			case 'dawn':  return new THREE.Vector3(-1.0, 0.5, 1.0);
 			case 'dusk':  return new THREE.Vector3(1.0, 0.3, -1.0);
@@ -54,8 +55,6 @@
 		return new THREE.Color(0.2, 0.47, 1.0);
 	});
 
-	const cloudSteps = $derived(nightFactor > 0.7 ? 12 : 16);
-
 	function initCloud(canvas: HTMLCanvasElement) {
 		const renderer = new THREE.WebGLRenderer({
 			canvas,
@@ -76,19 +75,13 @@
 			transparent: true,
 			depthWrite: false,
 			uniforms: {
-				uCloudSize:      { value: new THREE.Vector3(0.5, 1.0, 0.5) },
-				uSunPosition:    { value: new THREE.Vector3(1.0, 2.0, 1.0) },
-				uCameraPosition: { value: new THREE.Vector3(8.0, -5.5, 8.0) },
-				uCloudColor:     { value: new THREE.Color(0.92, 0.92, 0.95) },
-				uSkyColor:       { value: new THREE.Color(0.2, 0.47, 1.0) },
-				uCloudSteps:     { value: 16 },
-				uShadowSteps:    { value: 3 },
-				uCloudLength:    { value: 16 },
-				uShadowLength:   { value: 2 },
-				uResolution:     { value: new THREE.Vector2() },
-				uTime:           { value: 0 },
-				uFocalLength:    { value: 2.0 },
-				uDensity:        { value: 0.5 },
+				uCloudColor:    { value: new THREE.Color(0.92, 0.92, 0.95) },
+				uSkyColor:      { value: new THREE.Color(0.2, 0.47, 1.0) },
+				uSunDirection:  { value: new THREE.Vector3(1.0, 2.0, 1.0) },
+				uTime:          { value: 0 },
+				uDensity:       { value: 0.5 },
+				uWindSpeed:     { value: 1.0 },
+				uResolution:    { value: new THREE.Vector2() },
 			},
 		});
 
@@ -114,11 +107,11 @@
 			// Sync uniforms from reactive props/$derived
 			const u = material.uniforms;
 			u.uDensity.value = density;
-			u.uCloudSteps.value = cloudSteps;
-			u.uSunPosition.value.copy(sunPosition);
+			u.uWindSpeed.value = cloudSpeed;
+			u.uSunDirection.value.copy(sunDirection);
 			u.uCloudColor.value.copy(cloudColor);
 			u.uSkyColor.value.copy(skyColor);
-			u.uTime.value = time * cloudSpeed;
+			u.uTime.value = time;
 			u.uResolution.value.set(w * dpr, h * dpr);
 
 			renderer.render(scene, camera);

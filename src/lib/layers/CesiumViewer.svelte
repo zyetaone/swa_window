@@ -161,9 +161,14 @@
 			255,
 		);
 
-		// LOD: Cesium default is 2. Lower = sharper but slower to load at distance.
-		// 1.5 balances detail vs pop-in artifacts on far-away textures.
-		viewer.scene.globe.maximumScreenSpaceError = loc.hasBuildings ? 1.5 : 2.0;
+		// LOD: Lower = sharper but harder on memory/network. At cruise altitude
+		// (28-35k ft) far tiles are visible, so a softer threshold prevents the
+		// hard LOD seam where high-res stops and low-res begins.
+		const altFt = model.altitude;
+		const isCruise = altFt > 20000;
+		viewer.scene.globe.maximumScreenSpaceError = isCruise
+			? 2.5  // Softer at cruise — hides LOD seam on far terrain
+			: loc.hasBuildings ? 1.5 : 2.0;
 
 		if (viewer.scene.skyAtmosphere) {
 			viewer.scene.skyAtmosphere.brightnessShift = nf * -0.5;
@@ -247,8 +252,8 @@
 		globe.baseColor = C.Color.fromBytes(40, 50, 60, 255);
 		globe.preloadAncestors = true;
 		globe.preloadSiblings = true;
-		globe.tileCacheSize = 200;
-		globe.loadingDescendantLimit = 4;
+		globe.tileCacheSize = 300;
+		globe.loadingDescendantLimit = 8;
 		globe.showGroundAtmosphere = true;
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;

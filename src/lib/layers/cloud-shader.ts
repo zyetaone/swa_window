@@ -1,14 +1,15 @@
 /**
- * Volumetric Cloud Shaders
+ * Procedural Cloud Shaders — Airplane Window View
  *
- * FBM raymarching shader for volumetric clouds rendered on a fullscreen quad.
- * Adapted for the Aero Window pipeline — uniforms driven by WindowModel state.
+ * Screen-space FBM noise clouds designed for a window-out perspective.
+ * Three parallax layers at different scales/speeds create depth illusion:
+ *   - Far layer: large, slow-moving cloud sheets (high altitude cirrus)
+ *   - Mid layer: medium cumulus formations with self-shadowing
+ *   - Near layer: fast-moving wisps that drift across the window
  *
- * The fragment shader implements:
- * - 3D FBM noise (3 octaves) with rotation between octaves
- * - Raymarching through an ellipsoidal cloud volume
- * - Shadow-marching toward the sun for self-shadowing
- * - Premultiplied alpha output for transparent canvas compositing over Cesium
+ * Each layer uses 3-octave FBM noise sampled at UV coordinates (not raymarched).
+ * GPU cost: ~9 noise evaluations per pixel (3 octaves × 3 layers). Pi 5 friendly.
+ * Output: premultiplied alpha for transparent compositing over Cesium.
  */
 
 export const CLOUD_VERTEX = /* glsl */ `
@@ -23,24 +24,17 @@ export const CLOUD_VERTEX = /* glsl */ `
 export const CLOUD_FRAGMENT = /* glsl */ `
 	precision highp float;
 
-	// --- Uniforms driven by WindowModel state ---
-	uniform vec3 uCloudSize;       // ellipsoid shape of the cloud volume
-	uniform vec3 uSunPosition;     // light direction
-	uniform vec3 uCameraPosition;  // viewer position
-	uniform vec3 uCloudColor;      // main cloud tint (white/amber/blue-gray by time)
-	uniform vec3 uSkyColor;        // sky color for scattering through cloud
-	uniform float uCloudSteps;     // ray march steps (24 day, 16 night)
-	uniform float uShadowSteps;    // shadow march steps
-	uniform float uCloudLength;    // total ray distance
-	uniform float uShadowLength;   // shadow ray distance
-	uniform vec2 uResolution;      // viewport size in pixels
-	uniform float uTime;           // elapsed time for animation
-	uniform float uFocalLength;    // camera focal length
-	uniform float uDensity;        // cloud density multiplier (0-1)
+	uniform vec3  uCloudColor;    // main cloud tint (circadian)
+	uniform vec3  uSkyColor;      // sky scattering color
+	uniform vec3  uSunDirection;  // normalized sun direction
+	uniform float uTime;          // elapsed time (animated)
+	uniform float uDensity;       // cloud density multiplier (0-1)
+	uniform float uWindSpeed;     // wind drift speed
+	uniform vec2  uResolution;    // viewport size in pixels
 
 	varying vec2 vUv;
 
-	// --- Rotation matrix applied between FBM octaves ---
+	// --- Rotation matrix between FBM octaves ---
 	// Prevents axis-aligned banding artifacts
 	mat3 m = mat3(
 		 0.00,  0.80,  0.60,
@@ -57,7 +51,6 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 	float noise(vec3 x) {
 		vec3 p = floor(x);
 		vec3 f = fract(x);
-		// Smooth Hermite interpolation
 		f = f * f * (3.0 - 2.0 * f);
 
 		float n = p.x + p.y * 57.0 + 113.0 * p.z;
@@ -77,95 +70,92 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		);
 	}
 
-	// --- Fractional Brownian Motion (3 octaves — optimized for Pi 5) ---
+	// --- 3-octave FBM ---
 	float fbm(vec3 p) {
 		float f = 0.0;
 		f += 0.5000 * noise(p); p = m * p * 2.02;
 		f += 0.2500 * noise(p); p = m * p * 2.03;
 		f += 0.1250 * noise(p);
-		return f / 0.875; // renormalize to ~0-1 range
+		return f / 0.875;
 	}
 
-	// --- Cloud density at a point in the volume ---
-	// Ellipsoid falloff combined with FBM noise
-	float cloudDepth(vec3 position) {
-		// Ellipsoidal distance: 1.0 at center, 0.0 at boundary
-		float ellipse = 1.0 - length(position * uCloudSize);
-		// Animated noise adds detail; uTime drift creates slow movement
-		float cloud = ellipse + fbm(position + uTime * 0.02) * 2.2;
-		return clamp(cloud * uDensity, 0.0, 1.0);
-	}
+	// --- Cloud layer: returns density at a screen position ---
+	// scale: UV multiplier (larger = smaller cloud features)
+	// speed: time drift multiplier (larger = faster)
+	// zLayer: z offset for 3D noise (separates layers)
+	// threshold: noise cutoff (higher = sparser clouds)
+	float cloudLayer(vec2 uv, float scale, float speed, float zLayer, float threshold) {
+		vec3 p = vec3(uv * scale, zLayer + uTime * 0.005);
+		p.x += uTime * speed * uWindSpeed;
+		p.y += uTime * speed * uWindSpeed * 0.3;
 
-	// --- Camera look-at matrix for constructing view rays ---
-	mat3 lookAt(vec3 target, vec3 origin) {
-		vec3 cw = normalize(origin - target);
-		vec3 cu = normalize(cross(cw, origin));
-		vec3 cv = normalize(cross(cu, cw));
-		return mat3(cu, cv, cw);
+		float n = fbm(p);
+
+		// Shape clouds: threshold creates gaps, smoothstep gives soft edges
+		float cloud = smoothstep(threshold, threshold + 0.25, n);
+
+		return cloud;
 	}
 
 	void main() {
-		// --- Construct view ray from screen coordinates ---
-		vec2 screenPos = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
-		screenPos.x *= uResolution.x / uResolution.y; // aspect correction
+		vec2 uv = vUv;
+		float aspect = uResolution.x / uResolution.y;
+		uv.x *= aspect;
 
-		mat3 viewMatrix = lookAt(vec3(0.0), uCameraPosition);
-		vec3 rayDir = normalize(viewMatrix * vec3(screenPos, -uFocalLength));
-		vec3 rayPos = uCameraPosition;
+		// === Three parallax cloud layers ===
 
-		// --- Normalize sun direction for lighting ---
-		vec3 sunDir = normalize(uSunPosition);
+		// Far layer: large slow-moving sheets (high cirrus)
+		float far = cloudLayer(uv, 1.5, 0.01, 0.0, 0.35);
 
-		// --- Raymarch parameters ---
-		float stepSize = uCloudLength / uCloudSteps;
-		float shadowStepSize = uShadowLength / uShadowSteps;
+		// Mid layer: medium cumulus formations
+		float mid = cloudLayer(uv, 3.0, 0.025, 10.0, 0.38);
 
-		// --- Accumulation variables ---
-		float transmittance = 1.0;   // how much light passes through
-		vec3 scatteredLight = vec3(0.0); // accumulated light toward camera
+		// Near layer: fast-moving wisps across the window
+		float near = cloudLayer(uv, 5.0, 0.06, 20.0, 0.42);
 
-		// --- Primary ray march through the cloud volume ---
-		for (float i = 0.0; i < 64.0; i += 1.0) {
-			if (i >= uCloudSteps) break;
+		// === Composite layers with depth-based opacity ===
+		// Far clouds are dimmer (atmospheric scattering), near clouds are brighter
+		float farDensity  = far  * 0.4;
+		float midDensity  = mid  * 0.6;
+		float nearDensity = near * 0.8;
 
-			vec3 samplePos = rayPos + rayDir * (i * stepSize);
-			float density = cloudDepth(samplePos);
+		// Total cloud coverage
+		float totalDensity = clamp(farDensity + midDensity + nearDensity, 0.0, 1.0);
+		totalDensity *= uDensity;
 
-			if (density > 0.001) {
-				// --- Shadow march toward the sun for self-shadowing ---
-				float shadowDensity = 0.0;
-				for (float j = 0.0; j < 16.0; j += 1.0) {
-					if (j >= uShadowSteps) break;
-					vec3 shadowPos = samplePos + sunDir * (j * shadowStepSize);
-					shadowDensity += cloudDepth(shadowPos);
-				}
-
-				// Beer-Lambert attenuation for shadow
-				float shadowAtten = exp(-shadowDensity * shadowStepSize * 3.0);
-
-				// --- Lighting: blend cloud color with sky scattering ---
-				// Sunlit portions get the cloud color; shadowed portions scatter sky color
-				vec3 lightContrib = mix(uSkyColor * 0.3, uCloudColor, shadowAtten);
-
-				// Accumulate using Beer-Lambert along the primary ray
-				float sampleAtten = exp(-density * stepSize * 2.0);
-				scatteredLight += lightContrib * density * transmittance * stepSize;
-				transmittance *= sampleAtten;
-
-				// Early exit when cloud is fully opaque
-				if (transmittance < 0.01) break;
-			}
+		if (totalDensity < 0.001) {
+			gl_FragColor = vec4(0.0);
+			return;
 		}
 
-		// --- Alpha is the amount of cloud coverage at this pixel ---
-		float alpha = 1.0 - transmittance;
-		alpha = clamp(alpha, 0.0, 1.0);
+		// === Lighting ===
+		// Approximate self-shadowing: sample noise offset in sun direction
+		vec3 sunDir = normalize(uSunDirection);
+		vec2 shadowOffset = sunDir.xz * 0.08;
 
-		// --- Tone mapping: prevent over-bright clouds ---
-		vec3 finalColor = scatteredLight / (scatteredLight + vec3(1.0));
+		float shadowFar = cloudLayer(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35);
+		float shadowMid = cloudLayer(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38);
+		float shadowDensity = clamp(shadowFar * 0.5 + shadowMid * 0.5, 0.0, 1.0);
 
-		// --- Premultiplied alpha output ---
-		// Non-cloud pixels are fully transparent so Cesium terrain shows through
+		// Beer-Lambert shadow attenuation
+		float shadowAtten = exp(-shadowDensity * 2.0);
+
+		// Sunlit areas get cloud color, shadowed areas scatter sky color
+		vec3 litColor = mix(uSkyColor * 0.4, uCloudColor, shadowAtten);
+
+		// Silver lining: bright edges where sun backlights thin cloud
+		float edgeFactor = smoothstep(0.0, 0.3, totalDensity) * (1.0 - smoothstep(0.3, 0.7, totalDensity));
+		vec3 silverLining = uCloudColor * 1.3 * edgeFactor * max(shadowAtten, 0.3);
+
+		vec3 finalColor = litColor + silverLining * 0.2;
+
+		// Soft tone mapping
+		finalColor = finalColor / (finalColor + vec3(1.0));
+
+		// Alpha from total density
+		float alpha = clamp(totalDensity, 0.0, 1.0);
+
+		// Premultiplied alpha output
 		gl_FragColor = vec4(finalColor * alpha, alpha);
 	}
 `;
