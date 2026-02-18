@@ -5,7 +5,7 @@
  * Adapted for the Aero Window pipeline — uniforms driven by WindowModel state.
  *
  * The fragment shader implements:
- * - 3D FBM noise (4 octaves) with rotation between octaves
+ * - 3D FBM noise (3 octaves) with rotation between octaves
  * - Raymarching through an ellipsoidal cloud volume
  * - Shadow-marching toward the sun for self-shadowing
  * - Premultiplied alpha output for transparent canvas compositing over Cesium

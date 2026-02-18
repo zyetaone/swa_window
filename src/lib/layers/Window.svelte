@@ -3,11 +3,11 @@
 	 * Window - Layer compositor + game loop
 	 *
 	 * Owns the RAF tick loop (single game clock).
-	 * Composes: Cesium (terrain) + Threlte clouds + CSS effect overlays.
+	 * Composes: Cesium (terrain) + Three.js clouds + CSS effect overlays.
 	 *
 	 * Z-order:
 	 *   0: Cesium (terrain, buildings, NASA night lights, CartoDB roads)
-	 *   1: Clouds (Threlte volumetric raymarching)
+	 *   1: Clouds (Three.js volumetric raymarching)
 	 *   2: Weather (CSS rain + lightning)
 	 *   5: Frost
 	 *   7: Wing silhouette
@@ -289,7 +289,7 @@
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1 — Volumetric clouds (Threlte WebGL overlay) -->
+			<!-- z:1 — Volumetric clouds (Three.js WebGL overlay) -->
 			<div class="render-layer" style:z-index={1} style:opacity={cloudOpacity}>
 				<CloudCanvas
 					density={cloudOpacity}
