@@ -155,7 +155,7 @@
 			previewType: 'shader',
 			details: [
 				'Rendered by: CesiumViewer.svelte → viewer.scene.postProcessStages.bloom',
-				'Contrast: 135, Brightness: 0.04',
+				'Contrast: 128, Brightness: 0.04',
 				'Sigma: 7.0, Delta: 1.0, StepSize: 2.0',
 				'Enable: nightFactor > 0.7 (full night only)',
 				'Constants: CESIUM.BLOOM_*',
@@ -173,12 +173,13 @@
 				'Rendered by: CesiumViewer.svelte → PostProcessStage',
 				'Shader: cesium-shaders.ts COLOR_GRADING_GLSL',
 				'Uniforms: u_nightFactor, u_dawnDuskFactor, u_lightIntensity',
-				'Pipeline: luminance → lightMask (smoothstep 0.12→0.5) → desaturate ×0.8',
-				'  → sodium/amber/white palette → additive blend ×2.5',
-				'  → dark void crush (smoothstep 0.05→0.2, ×0.7)',
-				'  → light pollution haze → shadow crush → contrast ×1.3',
+				'Pipeline: luminance → brightGuard (smoothstep 0.75→0.95) → lightMask (smoothstep 0.12→0.5) → desaturate ×0.8',
+				'  → sodium/amber/white palette → additive blend ×2.0',
+				'  → dark void crush (smoothstep 0.05→0.2, ×0.7, exempt bright pixels)',
+				'  → light pollution haze → shadow crush (pow, max(0) guard) → contrast',
 				'  → horizon atmospheric haze (band at y=0.35)',
 				'  → dawn/dusk directional rim light (left edge warm gold)',
+				'  brightGuard: prevents sun/sky from being crushed to black dot by night effects',
 			],
 		},
 		{
@@ -251,6 +252,23 @@
 				'Key insight: full-brightness grayscale terrain → color grading shader → warm city glow',
 			],
 		},
+		{
+			id: 'water',
+			name: 'Ocean Water Effect',
+			z: 'Globe',
+			condition: 'water mask tiles loaded',
+			description: 'Animated normal-mapped waves with sun/moon specular highlights',
+			category: 'imagery',
+			previewType: 'imagery',
+			details: [
+				'Rendered by: Cesium Globe shader (GlobeFS.glsl, built-in)',
+				'Enabled by: requestWaterMask: true on createWorldTerrainAsync()',
+				'Normal map: waterNormals.jpg (high-res, tiling)',
+				'Features: animated wave ripple, sun specular, moon specular (0.25×)',
+				'Wave fade: visible within 70km of surface (cruise alt ~9km = fully visible)',
+				'Globe.showWaterEffect: true, Globe.oceanNormalMapUrl: waterNormals.jpg',
+			],
+		},
 	];
 
 	const categoryColors: Record<string, string> = {
@@ -278,7 +296,7 @@
 
 	const dataSources: DataSource[] = [
 		{ name: 'ESRI World Imagery', format: 'ArcGIS REST', maxZoom: '~19', cost: 'Free', role: 'Base satellite terrain', status: 'active' },
-		{ name: 'Cesium World Terrain', format: 'Ion (quantized-mesh)', maxZoom: '~15', cost: 'Free (Ion token)', role: '3D terrain elevation', status: 'active' },
+		{ name: 'Cesium World Terrain', format: 'Ion (quantized-mesh)', maxZoom: '~15', cost: 'Free (Ion token)', role: '3D terrain + water mask + normals', status: 'active' },
 		{ name: 'NASA VIIRS 2012', format: 'WMTS (JPEG)', maxZoom: '8', cost: 'Free', role: 'City light overlay (night)', status: 'active' },
 		{ name: 'CartoDB Dark (no labels)', format: 'XYZ tiles (PNG @2x)', maxZoom: '18', cost: 'Free', role: 'OSM road glow (night)', status: 'active' },
 		{ name: 'Ion OSM Buildings', format: '3D Tiles (asset 96188)', maxZoom: '—', cost: 'Free (Ion token)', role: '3D extruded buildings', status: 'disabled' },
@@ -686,7 +704,7 @@
 						<span>syncClock()</span>
 						<span>syncAtmosphere()</span>
 						<span>syncNightLayers()</span>
-						<span>syncGlobe()</span>
+						<span>syncGlobe() (+ water effect)</span>
 					</div>
 				</div>
 				<div class="flow-connector">
@@ -720,7 +738,12 @@
 					<div class="own-connector"></div>
 					<div class="own-node own-cesium">
 						<span class="own-title">CesiumViewer.svelte</span>
-						<span class="own-detail">Terrain, imagery, GPU post-process, sync $effects</span>
+						<span class="own-detail">Terrain, imagery, water mask, GPU post-process, sync $effects</span>
+					</div>
+					<div class="own-connector"></div>
+					<div class="own-node own-cesium">
+						<span class="own-title">CloudCanvas.svelte</span>
+						<span class="own-detail">Three.js WebGL clouds, texture-based FBM, camera parallax</span>
 					</div>
 				</div>
 				<div class="own-node own-controls">
