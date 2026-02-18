@@ -116,10 +116,17 @@
 		const hazeContrast = 1 - model.haze * 0.08;
 		const hazeSaturate = 1 - model.haze * 0.1;
 		const brightness = timeBrightness * fx.filterBrightness;
-		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)})`;
-
-		// Compose warp filter into same string to avoid double stacking context
 		const w = model.warpFactor;
+
+		// Return 'none' when all factors are identity — avoids creating a
+		// compositing layer that can break WebGL premultiplied alpha output
+		const isIdentity = Math.abs(brightness - 1) < 0.005
+			&& Math.abs(hazeContrast - 1) < 0.005
+			&& Math.abs(hazeSaturate - 1) < 0.005
+			&& w < 0.01;
+		if (isIdentity) return 'none';
+
+		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)})`;
 		if (w < 0.01) return base;
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
