@@ -22,6 +22,7 @@
 		time?: number;
 		heading?: number;
 		pitch?: number;
+		altitude?: number;
 	}
 
 	let {
@@ -33,6 +34,7 @@
 		time = 0,
 		heading = 0,
 		pitch = -15,
+		altitude = 35000,
 	}: Props = $props();
 
 	// Sun direction per sky state (normalized in shader)
@@ -68,7 +70,6 @@
 			powerPreference: 'high-performance',
 		});
 		renderer.setClearColor(0x000000, 0);
-		renderer.setPixelRatio(window.devicePixelRatio);
 
 		const scene = new THREE.Scene();
 		const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -88,6 +89,7 @@
 				uResolution:    { value: new THREE.Vector2() },
 				uHeading:       { value: 0 },
 				uPitch:         { value: 0 },
+				uAltitude:      { value: 35000 },
 			},
 		});
 
@@ -98,14 +100,20 @@
 
 		// Per-frame reactive sync — nested $effect runs inside the attachment's
 		// reactive scope, so it's automatically torn down on unmount.
+		// Half-resolution rendering — clouds are soft/blurry by nature,
+		// the CSS upscale is invisible and saves 4x fill rate on Pi 5.
+		const HALF_RES = 0.5;
+
 		$effect(() => {
 			const w = canvas.clientWidth;
 			const h = canvas.clientHeight;
 			if (w === 0 || h === 0) return;
 
-			// Resize renderer if canvas layout changed
-			const dpr = window.devicePixelRatio;
-			if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+			// Resize renderer at half resolution
+			const dpr = window.devicePixelRatio * HALF_RES;
+			const targetW = Math.round(w * dpr);
+			const targetH = Math.round(h * dpr);
+			if (canvas.width !== targetW || canvas.height !== targetH) {
 				renderer.setPixelRatio(dpr);
 				renderer.setSize(w, h, false);
 			}
@@ -118,10 +126,11 @@
 			u.uCloudColor.value.copy(cloudColor);
 			u.uSkyColor.value.copy(skyColor);
 			u.uTime.value = time;
-			u.uResolution.value.set(w * dpr, h * dpr);
+			u.uResolution.value.set(targetW, targetH);
 			// Camera parallax: convert degrees to radians for smooth UV offset
 			u.uHeading.value = heading * Math.PI / 180;
 			u.uPitch.value = pitch * Math.PI / 180;
+			u.uAltitude.value = altitude;
 
 			renderer.render(scene, camera);
 		});

@@ -307,6 +307,7 @@
 					time={elapsedTime}
 					heading={model.heading}
 					pitch={model.pitch}
+					altitude={model.altitude}
 				/>
 			</div>
 

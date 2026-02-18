@@ -36,6 +36,7 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 	uniform vec2  uResolution;    // viewport size in pixels
 	uniform float uHeading;       // camera heading in radians
 	uniform float uPitch;         // camera pitch offset in radians
+	uniform float uAltitude;      // aircraft altitude in feet
 
 	varying vec2 vUv;
 
@@ -134,6 +135,33 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		// Total cloud coverage
 		float totalDensity = clamp(farDensity + midDensity + nearDensity, 0.0, 1.0);
 		totalDensity *= uDensity;
+
+		// === Altitude-based cloud deck masking ===
+		// Clouds form a deck at ~15k-30k ft. The view through the window
+		// changes depending on whether we're above, inside, or below it.
+		float alt = uAltitude;
+		float y = vUv.y; // 0 = bottom, 1 = top of screen
+
+		// Above cloud deck (>30k ft): clouds below us — fade toward bottom
+		float aboveMask = smoothstep(30000.0, 35000.0, alt) * smoothstep(0.6, 0.1, y);
+
+		// Inside cloud deck (15k-25k): fog/whiteout, thicker at edges
+		float inCloud = smoothstep(15000.0, 18000.0, alt) * (1.0 - smoothstep(25000.0, 30000.0, alt));
+		float edgeDist = 2.0 * abs(y - 0.5); // 0 at center, 1 at edges
+		float inMask = inCloud * mix(0.7, 1.0, edgeDist);
+
+		// Below cloud deck (<15k ft): clouds above us — fade toward top
+		float belowMask = (1.0 - smoothstep(12000.0, 15000.0, alt)) * smoothstep(0.4, 0.9, y);
+
+		// Blend: use whichever zone we're in (they don't overlap due to smoothstep ranges)
+		float altMask = clamp(aboveMask + inMask + belowMask, 0.0, 1.0);
+
+		// In the transition zones where no mask dominates, keep some base density
+		float anyZone = max(max(smoothstep(30000.0, 35000.0, alt), inCloud),
+		                     1.0 - smoothstep(12000.0, 15000.0, alt));
+		altMask = mix(1.0, altMask, anyZone);
+
+		totalDensity *= altMask;
 
 		if (totalDensity < 0.001) {
 			gl_FragColor = vec4(0.0);
