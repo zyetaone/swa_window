@@ -122,13 +122,20 @@ export const AMBIENT = {
 // =============================================================================
 
 export const CESIUM = {
-	// Road light layer (CartoDB Dark basemap, real OSM roads)
-	ROAD_LIGHT_NIGHT_ALPHA: 0.55,
-	ROAD_LIGHT_NIGHT_BRIGHTNESS: 3.5,
-	ROAD_LIGHT_CONTRAST: 1.6,
-	ROAD_LIGHT_SATURATION: 1.4,
+	// NASA VIIRS night lights layer
+	VIIRS_NIGHT_ALPHA: 0.45,
+	VIIRS_NIGHT_BRIGHTNESS: 2.0,
+	VIIRS_CONTRAST: 1.8,
+	VIIRS_COLOR_TO_ALPHA_THRESHOLD: 0.15,
 
-	// Selective night bloom (tuned to only bloom bright pixels = city lights)
+	// Road light layer (CartoDB Dark basemap, real OSM roads)
+	ROAD_LIGHT_NIGHT_ALPHA: 0.5,
+	ROAD_LIGHT_NIGHT_BRIGHTNESS: 2.5,
+	ROAD_LIGHT_CONTRAST: 1.6,
+	ROAD_LIGHT_SATURATION: 0.0,
+	ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD: 0.15,
+
+	// Cesium built-in bloom (currently disabled)
 	BLOOM_NIGHT_CONTRAST: 180,
 	BLOOM_BRIGHTNESS: -0.3,
 	BLOOM_SIGMA: 4.0,

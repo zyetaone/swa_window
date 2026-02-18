@@ -4,8 +4,7 @@
 	 *
 	 * Cesium owns: terrain, satellite imagery, sky atmosphere, globe lighting,
 	 *   NASA VIIRS City Lights (night lights), CartoDB Dark (real OSM road glow),
-	 *   OSM 3D Buildings (enhanced night window shader), Google 3D Tiles (optional),
-	 *   Post-processing: selective night bloom, environmental color grading.
+	 *   Google 3D Tiles (optional), color grading post-process.
 	 * CSS layers handle: clouds, atmospheric glow, weather effects.
 	 */
 	import { useAppState, CESIUM } from "$lib/core";
@@ -13,12 +12,7 @@
 	import type { WindowModel } from "$lib/core/WindowModel.svelte";
 	import type * as CesiumType from "cesium";
 	import {
-		BUILDING_SHADER_GLSL,
 		COLOR_GRADING_GLSL,
-		BLOOM_EXTRACT_GLSL,
-		BLOOM_BLUR_X_GLSL,
-		BLOOM_BLUR_Y_GLSL,
-		BLOOM_COMPOSITE_GLSL,
 	} from "./cesium-shaders";
 
 	const model = useAppState();
@@ -31,7 +25,7 @@
 		initialized: boolean;
 		nightLayer: CesiumType.ImageryLayer | null;
 		buildingsTileset: CesiumType.Cesium3DTileset | null;
-		buildingsShader: CesiumType.CustomShader | null;
+
 		google3DTileset: CesiumType.Cesium3DTileset | null;
 		roadLightLayer: CesiumType.ImageryLayer | null;
 	}
@@ -46,7 +40,7 @@
 			initialized: false,
 			nightLayer: null,
 			buildingsTileset: null,
-			buildingsShader: null,
+
 			google3DTileset: null,
 			roadLightLayer: null,
 		};
@@ -65,9 +59,6 @@
 	let nightLayer: CesiumType.ImageryLayer | null = HMR.nightLayer;
 	let buildingsTileset: CesiumType.Cesium3DTileset | null =
 		HMR.buildingsTileset;
-	let buildingsShader = $state<CesiumType.CustomShader | null>(
-		HMR.buildingsShader,
-	);
 	let google3DTileset: CesiumType.Cesium3DTileset | null =
 		HMR.google3DTileset;
 	let roadLightLayer: CesiumType.ImageryLayer | null = HMR.roadLightLayer;
@@ -121,45 +112,27 @@
 		const intensityScale = model.nightLightScale;
 
 		if (nightLayer) {
-			// NASA VIIRS: high alpha so warm light data dominates over darkened terrain
-			nightLayer.alpha = nf * 0.8;
-			nightLayer.brightness = lerp(1.0, 3.5, nf) * intensityScale;
-			nightLayer.contrast = 2.5;
+			// NASA VIIRS: city light overlay — subtle glow, not a full layer replacement
+			nightLayer.alpha = nf * CESIUM.VIIRS_NIGHT_ALPHA;
+			nightLayer.brightness = lerp(1.0, CESIUM.VIIRS_NIGHT_BRIGHTNESS, nf) * intensityScale;
+			nightLayer.contrast = CESIUM.VIIRS_CONTRAST;
 			nightLayer.hue = 0.0;
-			nightLayer.saturation = 0.0; // grayscale — shader applies warm tint
+			nightLayer.saturation = 0.0;
 		}
 
 		if (roadLightLayer) {
-			// CartoDB Dark: Sharp road/building lines (The "mask")
+			// CartoDB Dark: road/building outlines — colorToAlpha makes dark areas transparent
 			roadLightLayer.show = nf > 0.01;
-			roadLightLayer.alpha = nf * 1.0; // Full visibility at night
-			roadLightLayer.brightness = lerp(1.0, 4.0, nf) * intensityScale; // Very bright to cut through
-			roadLightLayer.contrast = 1.5; // High contrast for "filament" look
-			roadLightLayer.saturation = 0.0; // White/Grey roads
+			roadLightLayer.alpha = nf * CESIUM.ROAD_LIGHT_NIGHT_ALPHA;
+			roadLightLayer.brightness = lerp(1.0, CESIUM.ROAD_LIGHT_NIGHT_BRIGHTNESS, nf) * intensityScale;
+			roadLightLayer.contrast = CESIUM.ROAD_LIGHT_CONTRAST;
+			roadLightLayer.saturation = CESIUM.ROAD_LIGHT_SATURATION;
 		}
 	}
 
 	function syncBuildings(): void {
-		const nf = model.nightFactor;
-		const intensityScale = model.nightLightScale;
-		const google3DActive = !!google3DTileset;
-
 		if (google3DTileset) {
 			google3DTileset.show = true;
-		}
-		if (buildingsTileset) {
-			buildingsTileset.show =
-				model.showBuildings &&
-				model.currentLocation.hasBuildings &&
-				!google3DActive;
-
-			if (buildingsShader) {
-				buildingsShader.setUniform("u_nightFactor", nf);
-				buildingsShader.setUniform(
-					"u_windowDensity",
-					nf > 0.01 ? 0.4 * intensityScale : 0.0,
-				);
-			}
 		}
 	}
 
@@ -264,7 +237,7 @@
 
 		const globe = v.scene.globe;
 		globe.enableLighting = true;
-		globe.baseColor = C.Color.fromBytes(10, 8, 10, 255);
+		globe.baseColor = C.Color.fromBytes(40, 50, 60, 255);
 		globe.preloadAncestors = true;
 		globe.preloadSiblings = true;
 		globe.showGroundAtmosphere = true;
@@ -301,57 +274,16 @@
 				},
 			});
 			v.scene.postProcessStages.add(colorGrading);
-		} catch {
-			/* color grading is optional enhancement */
+		} catch (e) {
+			console.warn("[CesiumViewer] Color grading shader failed:", e);
 		}
 
-		// Selective night bloom (3-pass: extract bright pixels -> blur -> composite)
-		try {
-			const extractStage = new C.PostProcessStage({
-				name: "bloom_extract",
-				fragmentShader: BLOOM_EXTRACT_GLSL,
-				uniforms: {
-					u_nightFactor: () => m.nightFactor,
-					u_threshold: 0.4,
-				},
-			});
-
-			const blurXStage = new C.PostProcessStage({
-				name: "bloom_blur_x",
-				fragmentShader: BLOOM_BLUR_X_GLSL,
-				textureScale: 0.5,
-			});
-
-			const blurYStage = new C.PostProcessStage({
-				name: "bloom_blur_y",
-				fragmentShader: BLOOM_BLUR_Y_GLSL,
-				textureScale: 0.5,
-			});
-
-			const blurComposite = new C.PostProcessStageComposite({
-				name: "bloom_blur",
-				stages: [blurXStage, blurYStage],
-			});
-
-			const compositeStage = new C.PostProcessStage({
-				name: "bloom_composite",
-				fragmentShader: BLOOM_COMPOSITE_GLSL,
-				uniforms: {
-					bloomTexture: "bloom_blur",
-					u_intensity: () => m.nightFactor * 1.5,
-				},
-			});
-
-			const bloomPipeline = new C.PostProcessStageComposite({
-				name: "selective_night_bloom",
-				stages: [extractStage, blurComposite, compositeStage],
-				inputPreviousStageTexture: true,
-			});
-
-			v.scene.postProcessStages.add(bloomPipeline);
-		} catch {
-			/* selective bloom is optional enhancement */
-		}
+		// NOTE: Selective night bloom pipeline removed — it was architecturally broken.
+		// With inputPreviousStageTexture: true, the composite stage's colorTexture
+		// received the blurred bloom output (not the original scene), causing a black
+		// screen at nightFactor=0 since extract × 0 = black propagated through.
+		// TODO: Re-implement bloom using Cesium's built-in bloom or a correct
+		// two-branch pipeline that preserves access to the original scene texture.
 	}
 
 	async function setupImageryLayers(
@@ -365,7 +297,8 @@
 			);
 			if (signal.aborted) return;
 			v.imageryLayers.addImageryProvider(esri);
-		} catch {
+		} catch (e) {
+			console.warn("[CesiumViewer] ESRI imagery failed, falling back to OSM:", e);
 			if (signal.aborted) return;
 			v.imageryLayers.addImageryProvider(
 				new C.OpenStreetMapImageryProvider({
@@ -385,15 +318,15 @@
 				v.terrainProvider = await C.createWorldTerrainAsync({
 					requestVertexNormals: true,
 				});
-			} catch {
-				/* flat fallback */
+			} catch (e) {
+				console.warn("[CesiumViewer] Ion terrain failed, using flat ellipsoid:", e);
 			}
 		}
 		if (signal.aborted) return;
 
 		try {
 			const nightProvider = new C.WebMapTileServiceImageryProvider({
-				url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
+				url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
 				layer: "VIIRS_CityLights_2012",
 				style: "default",
 				tileMatrixSetID: "GoogleMapsCompatible_Level8",
@@ -404,24 +337,32 @@
 
 			nightLayer = v.imageryLayers.addImageryProvider(nightProvider);
 			nightLayer.alpha = 0.0;
-			nightLayer.brightness = 5.0;
-			nightLayer.contrast = 2.5;
+			nightLayer.brightness = 1.0;
+			nightLayer.contrast = CESIUM.VIIRS_CONTRAST;
 			nightLayer.saturation = 0.0;
-		} catch {
+			nightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
+			nightLayer.colorToAlphaThreshold = CESIUM.VIIRS_COLOR_TO_ALPHA_THRESHOLD;
+		} catch (e) {
+			console.warn("[CesiumViewer] NASA VIIRS night lights failed:", e);
 			nightLayer = null;
 		}
 		if (signal.aborted) return;
 
-		const darkRoadProvider = new C.UrlTemplateImageryProvider({
-			url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
-			credit: new C.Credit("OpenStreetMap contributors, CARTO"),
-			maximumLevel: 18,
-			minimumLevel: 0,
-		});
-		roadLightLayer = v.imageryLayers.addImageryProvider(darkRoadProvider);
-		roadLightLayer.alpha = 0;
-		roadLightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
-		roadLightLayer.colorToAlphaThreshold = 0.0;
+		try {
+			const darkRoadProvider = new C.UrlTemplateImageryProvider({
+				url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
+				credit: new C.Credit("OpenStreetMap contributors, CARTO"),
+				maximumLevel: 18,
+				minimumLevel: 0,
+			});
+			roadLightLayer = v.imageryLayers.addImageryProvider(darkRoadProvider);
+			roadLightLayer.alpha = 0;
+			roadLightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
+			roadLightLayer.colorToAlphaThreshold = CESIUM.ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD;
+		} catch (e) {
+			console.warn("[CesiumViewer] CartoDB road glow failed:", e);
+			roadLightLayer = null;
+		}
 
 		if (nightLayer) v.imageryLayers.raiseToTop(nightLayer);
 	}
@@ -431,9 +372,6 @@
 		C: typeof CesiumType,
 		signal: AbortSignal,
 	): Promise<void> {
-		const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
-		const hasIonToken =
-			cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
 		const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 		const hasGoogleKey =
 			googleApiKey && googleApiKey !== "your_google_maps_api_key_here";
@@ -445,39 +383,14 @@
 				if (signal.aborted) return;
 				google3DTileset.show = true;
 				v.scene.primitives.add(google3DTileset);
-			} catch {
-				/* optional */
-			}
-		} else if (hasIonToken) {
-			try {
-				buildingsTileset =
-					await C.Cesium3DTileset.fromIonAssetId(96188);
-				if (signal.aborted) return;
-				buildingsTileset.show = false;
-
-				buildingsShader = new C.CustomShader({
-					uniforms: {
-						u_nightFactor: {
-							type: C.UniformType.FLOAT,
-							value: 0.0,
-						},
-						u_windowDensity: {
-							type: C.UniformType.FLOAT,
-							value: 0.4,
-						},
-						u_time: {
-							type: C.UniformType.FLOAT,
-							value: 0.0,
-						},
-					},
-					fragmentShaderText: BUILDING_SHADER_GLSL,
-				});
-				buildingsTileset.customShader = buildingsShader;
-				v.scene.primitives.add(buildingsTileset);
-			} catch {
-				/* buildings optional */
+			} catch (e) {
+				console.warn("[CesiumViewer] Google 3D Tiles failed:", e);
 			}
 		}
+		// NOTE: Ion OSM buildings (asset 96188) disabled — the CESIUM_primitive_outline
+		// extension in the tileset globally disables imagery draping, causing a black globe.
+		// Night city effect is provided by NASA VIIRS + CartoDB Dark + color grading shader.
+		// TODO: Re-enable with a buildings source that doesn't use primitive outlines.
 	}
 
 	// ATTACHMENT — Cesium init via {@attach}
@@ -502,7 +415,7 @@
 			Cesium = HMR.Cesium;
 			nightLayer = HMR.nightLayer;
 			buildingsTileset = HMR.buildingsTileset;
-			buildingsShader = HMR.buildingsShader;
+
 			google3DTileset = HMR.google3DTileset;
 			roadLightLayer = HMR.roadLightLayer;
 
@@ -542,7 +455,7 @@
 				// Persist to HMR cache
 				HMR.nightLayer = nightLayer;
 				HMR.buildingsTileset = buildingsTileset;
-				HMR.buildingsShader = buildingsShader;
+
 				HMR.google3DTileset = google3DTileset;
 				HMR.roadLightLayer = roadLightLayer;
 				HMR.initialized = true;
@@ -591,15 +504,6 @@
 		syncAtmosphere();
 	});
 
-	// Building shader flicker (10fps timer)
-	$effect(() => {
-		if (!buildingsShader) return;
-		const shader = buildingsShader;
-		const interval = setInterval(() => {
-			shader.setUniform("u_time", performance.now() / 1000);
-		}, 100);
-		return () => clearInterval(interval);
-	});
 </script>
 
 <div class="cesium-container">

@@ -1,6 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { normalizePath } from 'vite';
 import path from 'node:path';
@@ -10,7 +9,6 @@ const cesiumBaseUrl = 'cesiumStatic';
 
 export default defineConfig({
 	plugins: [
-		tailwindcss(),
 		viteStaticCopy({
 			targets: [
 				{ src: normalizePath(path.join(cesiumSource, 'ThirdParty')), dest: cesiumBaseUrl },

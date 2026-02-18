@@ -16,12 +16,15 @@ npm run check        # Type check with svelte-check
 npm run check:watch  # Type check in watch mode
 ```
 
+No test runner is configured. No linter is configured.
+
 ## Tech Stack
 
 - **Framework**: SvelteKit 2 with Svelte 5 runes (`$state`, `$derived`, `$effect`)
 - **Terrain**: Cesium for real-world imagery and terrain
-- **Styling**: Tailwind CSS v4 (via @tailwindcss/vite plugin)
+- **Styling**: Tailwind CSS v4 (via @tailwindcss/vite plugin), component-scoped `<style>` blocks
 - **State**: Context-based singleton with `setContext`/`getContext`
+- **Build**: Vite 7, SSR disabled (`+page.ts` exports `ssr = false`)
 
 ## Architecture
 
@@ -31,9 +34,9 @@ The window uses Cesium for terrain and CSS for all effect overlays.
 
 ```
 ┌─────────────────────────────────────────┐
+│ CSS: Glass recess rim              z:11 │
 │ CSS: Vignette                      z:10 │
-│ CSS: Glass imperfections            z:9 │
-│ CSS: Cabin reflection               z:8 │
+│ CSS: Glass vignette                 z:9 │
 │ CSS: Wing silhouette                z:7 │
 │ CSS: Frost                          z:5 │
 │ CSS: Micro-events (star/bird/trail) z:3 │
@@ -45,35 +48,70 @@ The window uses Cesium for terrain and CSS for all effect overlays.
 │  ├── NASA Black Marble (night lights)   │
 │  ├── CartoDB Dark (road glow at night)  │
 │  ├── 3D terrain elevation               │
-│  ├── OSM buildings (night window shader)│
-│  └── Google 3D Tiles (optional)         │
+│  ├── Color grading post-process         │
+│  └── Built-in bloom (night, TODO)       │
 └─────────────────────────────────────────┘
 ```
 
 ### Core Modules
 
-- **`src/lib/core/WindowModel.svelte.ts`**: Simulation state — flight position, time, weather, physics, `tick()` (decomposed into `tickOrbit`, `tickLightning`, `tickMotion`, `tickAltitude`)
-- **`src/lib/core/index.ts`**: Context provider (`createAppState`, `useAppState`) → returns `WindowModel` directly
-- **`src/lib/core/constants.ts`**: Aircraft physics constants and tuning values
+- **`src/lib/core/WindowModel.svelte.ts`**: Single source of truth — flight position, time, weather, physics, all `tick*()` methods, flight mode state machine
+- **`src/lib/core/index.ts`**: Context provider (`createAppState`, `useAppState`) + re-exports of types, constants, locations
+- **`src/lib/core/constants.ts`**: All tuning values — `AIRCRAFT`, `FLIGHT_FEEL`, `MICRO_EVENTS`, `AMBIENT`, `CESIUM`, `WEATHER_EFFECTS`
+- **`src/lib/core/persistence.ts`**: localStorage save/load with validation (key: `aero-window-v2`)
+- **`src/lib/core/locations.ts`**: Location definitions with `LOCATION_MAP` for O(1) lookups
+- **`src/lib/layers/cesium-shaders.ts`**: GLSL color grading post-process shader (night city light tinting)
 
-### Key Component Flow
+### Component Flow
 
 ```
 +page.svelte
-└── createAppState() → WindowModel
-    └── Window.svelte (Layer Compositor + RAF tick loop + presentation $derived values)
-        ├── CesiumViewer.svelte (terrain/buildings/NASA night lights/road glow)
-        ├── CloudLayer.svelte (CSS blur gradients)
-        ├── WeatherLayer.svelte (CSS rain + lightning)
-        └── Controls.svelte (kiosk control panel)
+└── createAppState() → WindowModel (context set)
+    ├── Window.svelte (Layer compositor + RAF tick loop + presentation $derived values)
+    │   └── CesiumViewer.svelte (terrain/buildings/NASA night lights/road glow/post-processing)
+    ├── Controls.svelte (HUD overlay when blind open, branding when blind closed)
+    └── SidePanel.svelte (slide-out settings: location picker, sliders, weather)
 ```
+
+### State Ownership
+
+**WindowModel** owns all simulation state and derived values:
+- `$state` fields: position, time, weather, flight mode, motion offsets, micro-events
+- `$derived` fields: `skyState`, `nightFactor`, `dawnDuskFactor`, `effectiveCloudDensity`, `nightAltitudeTarget`, `isTransitioning`
+- `tick(delta)`: Single entry point called by Window.svelte RAF loop. Dispatches to: `tickOrbit`, `tickDeparture`, `tickTransit`, `tickDirector`, `tickLightning`, `tickMotion`, `tickAltitude`, `tickMicroEvents`, `tickRandomize`
+- Actions: `flyTo()`, `setLocation()`, `applyPatch()`, `pickNextLocation()`
+
+**Window.svelte** owns presentation derivations (local `$derived` values):
+- `skyBackground`, `filterString`: CSS values for sky rendering
+- `frostAmount`, `motionTransform`: Atmospheric and motion effects
+- All clouds, rain, lightning CSS are inlined in Window.svelte (not separate components)
+
+**+page.svelte** owns side-effects:
+- Real-time clock sync (`$effect` with setInterval)
+- Debounced auto-save to localStorage (`$effect`)
+- URL search params for device-specific config (`?location=dubai&altitude=30000`)
+
+### Flight Mode State Machine
+
+```
+orbit ──flyTo()──→ cruise_departure ──(2s)──→ cruise_transit ──(2s)──→ orbit
+                   (warp ramp up,              (teleport location,
+                    blind closes)               blind opens)
+```
+
+The Director auto-pilot (`tickDirector`) triggers `flyTo()` every 2-5 minutes during orbit mode.
+
+### Cesium Initialization Pattern
+
+`CesiumViewer.svelte` uses an HMR cache (`globalThis.__CESIUM_HMR_CACHE__`) to persist the Cesium viewer across Vite hot reloads. Initialization uses Svelte 5's `{@attach}` directive and an `AbortController` for cleanup. Post-processing uses a custom color grading GLSL shader. Night rendering works via full-brightness grayscale terrain with NASA Black Marble lights, tinted warm by the color grading shader. 3D buildings are currently disabled (Ion OSM buildings' `CESIUM_primitive_outline` extension conflicts with imagery draping).
 
 ### State Types
 
 ```typescript
 type LocationId = 'dubai' | 'himalayas' | 'mumbai' | 'ocean' | 'desert' | 'clouds' | 'hyderabad' | 'dallas' | 'phoenix' | 'las_vegas';
 type SkyState = 'day' | 'night' | 'dawn' | 'dusk';
-type WeatherType = 'clear' | 'cloudy' | 'overcast' | 'storm';
+type WeatherType = 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
+type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 ```
 
 ## Key Patterns
@@ -81,23 +119,12 @@ type WeatherType = 'clear' | 'cloudy' | 'overcast' | 'storm';
 ### Context-Based State Access
 
 ```typescript
-// Creating (in +page.svelte)
+// Creating (in +page.svelte only)
 const model = createAppState();
 
 // Consuming (in any descendant component)
 const model = useAppState();
 ```
-
-### WindowModel Tick Pattern
-
-The `WindowModel.tick(delta)` method handles all time-based simulation:
-- Flight drift (lat/lon movement based on heading)
-- Heading wander (natural heading variation)
-- Lightning effects (weather)
-- Motion offsets (turbulence/vibration)
-- Auto-altitude adjustment for night
-
-Window.svelte owns the single RAF loop that calls `model.tick(dt)`.
 
 ### CRITICAL: Variable Naming with Svelte 5
 
@@ -109,40 +136,30 @@ const state = useAppState();
 let x = $state(0);
 
 // GOOD
-const appState = useAppState();
+const model = useAppState();
 let x = $state(0);
 ```
 
-### Derived Values
+### Derived Value Split
 
-**WindowModel** (simulation derived):
-- `localTimeOfDay`: Browser time → UTC → destination local time
-- `skyState`: Time of day → day/night/dawn/dusk
-- `effectiveCloudDensity`: Weather + user setting + night boost
-- `nightAltitudeTarget`: Location + sky state → target altitude
+Simulation-level derived values go in `WindowModel.svelte.ts` as class fields. Presentation-level derived values (CSS strings, pixel offsets) stay local in Window.svelte as `$derived` declarations. This keeps the model testable and the presentation co-located with the template.
 
-**Window.svelte** (local presentation `$derived`):
-- `skyBackground`, `filterString`: CSS values for sky rendering
-- `sunGlareX/Y/Opacity`: Sun position and intensity
-- `frostAmount`, `hazeOpacity`: Atmospheric effects
-- `turbulenceY/Rotate`, `motionTransform`: Motion shake offsets
-- `isNight`, `lightPollutionOpacity`, `glassVignetteOpacity`
+### User Override Pattern
+
+When the user adjusts a setting (altitude, time, atmosphere), `onUserInteraction(type)` sets a flag that pauses the corresponding auto-behavior for 8 seconds. This prevents the auto-pilot and ambient randomizer from fighting user input.
 
 ## Environment Variables
 
 Copy `.env.example` to `.env` and configure:
 ```
-VITE_CESIUM_ION_TOKEN=...  # Required for Cesium terrain/imagery
-VITE_BING_MAPS_API_KEY=...
-VITE_MAPBOX_TOKEN=...
-VITE_GOOGLE_MAPS_API_KEY=...
-VITE_DEV_MAPS_ENABLED=true
+VITE_CESIUM_ION_TOKEN=...       # Required for Cesium terrain/imagery
+VITE_GOOGLE_MAPS_API_KEY=...    # Optional, enables Google 3D Tiles
 ```
 
-## Vite Build Configuration
+## Build Configuration
 
-Manual chunks configured in `vite.config.ts` split:
-- `cesium`: Cesium globe engine (largest)
-- `ui-libs`: UI libraries (if any)
-
-Chunk size warning limit set to 1500KB due to Cesium size.
+- **Cesium static assets** are copied via `vite-plugin-static-copy` to `/cesiumStatic`
+- **Manual chunks**: Cesium is split into its own chunk (`cesium`)
+- **Chunk size warning** set to 5000KB due to Cesium size
+- **SSR disabled** via `+page.ts` (`export const ssr = false`) because Cesium requires browser APIs
+- **TypeScript**: Strict mode with all strict flags enabled, `noUnusedLocals`, `noUnusedParameters`

@@ -89,8 +89,11 @@ export class WindowModel {
 	showClouds = $state(true);
 
 	// --- Night rendering ---
-	nightLightIntensity = $state(2.5);
-	terrainDarkness = $state(0.60);
+	// terrainDarkness=0: terrain stays bright at night, color grading shader
+	// warm-tints the grayscale terrain to create city glow from the hi-res texture.
+	// nightLightIntensity=0.6: VIIRS/CartoDB overlays kept very subtle (scale=0.24).
+	nightLightIntensity = $state(0.6);
+	terrainDarkness = $state(0);
 
 	// --- Flight speed ---
 	flightSpeed = $state(1.0);
@@ -212,7 +215,7 @@ export class WindowModel {
 
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
 
-	/** Normalized night light intensity: 1.0 = default (2.5), range [0, 2.0] */
+	/** Normalized night light scale: multiplies VIIRS/CartoDB brightness. Default 0.6 → scale 0.24. */
 	nightLightScale = $derived(this.nightLightIntensity / 2.5);
 
 	nightAltitudeTarget = $derived.by(() => {
@@ -391,7 +394,7 @@ export class WindowModel {
 		if (patch.terrainDarkness !== undefined) this.setTerrainDarkness(patch.terrainDarkness);
 		if (patch.cloudSpeed !== undefined) this.cloudSpeed = clamp(patch.cloudSpeed, 0.1, 3);
 		if (patch.haze !== undefined) this.haze = clamp(patch.haze, 0, 0.15);
-		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0.5, 5);
+		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
 		if (patch.flightSpeed !== undefined) this.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined) this.syncToRealTime = patch.syncToRealTime;
 	}

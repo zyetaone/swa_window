@@ -15,13 +15,31 @@ const config = {
 		csp: {
 			directives: {
 				'default-src': ['self'],
-				'script-src': ['self', 'unsafe-eval'],       // Cesium protobufjs needs eval; SvelteKit auto-adds nonces for inline scripts
-				'style-src': ['self', 'unsafe-inline'],       // Svelte component styles
-				'img-src': ['self', 'data:', 'blob:', 'https://*.arcgis.com', 'https://*.arcgisonline.com', 'https://*.cesium.com', 'https://*.bing.com', 'https://*.googleapis.com', 'https://*.gstatic.com', 'https://basemaps.cartocdn.com', 'https://*.basemaps.cartocdn.com'],
-				'connect-src': ['self', 'https://*.arcgis.com', 'https://*.arcgisonline.com', 'https://*.cesium.com', 'https://*.bing.com', 'https://*.googleapis.com', 'https://basemaps.cartocdn.com', 'https://*.basemaps.cartocdn.com', 'https://api.cesium.com'],
+				'script-src': ['self', 'unsafe-eval'],       // Cesium protobufjs needs eval
+				'style-src': ['self', 'unsafe-inline', 'https://fonts.googleapis.com'],
+				'img-src': [
+					'self', 'data:', 'blob:',
+					'https://*.arcgis.com', 'https://*.arcgisonline.com',
+					'https://*.cesium.com', 'https://assets.ion.cesium.com',
+					'https://*.bing.com',
+					'https://*.googleapis.com', 'https://*.gstatic.com',
+					'https://*.cartocdn.com',
+					'https://*.tile.openstreetmap.org',
+					'https://gibs.earthdata.nasa.gov',
+				],
+				'connect-src': [
+					'self',
+					'https://*.arcgis.com', 'https://*.arcgisonline.com',
+					'https://*.cesium.com', 'https://api.cesium.com', 'https://assets.ion.cesium.com',
+					'https://*.bing.com',
+					'https://*.googleapis.com',
+					'https://*.cartocdn.com',
+					'https://*.tile.openstreetmap.org',
+					'https://gibs.earthdata.nasa.gov',
+				],
 				'worker-src': ['self', 'blob:'],              // Cesium web workers
-				'child-src': ['blob:'],                       // Cesium iframes
-				'font-src': ['self'],
+				'child-src': ['blob:'],
+				'font-src': ['self', 'https://fonts.gstatic.com'],
 			},
 		},
 	}
