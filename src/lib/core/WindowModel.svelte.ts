@@ -102,8 +102,8 @@ export class WindowModel {
 	// --- Orbit flight path (fallback ellipse when no scenario exists) ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor = $state(AIRCRAFT.ORBIT_MAJOR); // long axis (~33km)
-	orbitRadiusMinor = $state(AIRCRAFT.ORBIT_MINOR); // short axis (~1.7km)
+	orbitRadiusMajor: number = $state(AIRCRAFT.ORBIT_MAJOR);
+	orbitRadiusMinor: number = $state(AIRCRAFT.ORBIT_MINOR);
 	orbitBearing = $state(0); // radians — orientation of the flight path
 	orbitAngle = $state(0); // radians, increments over time
 
@@ -529,6 +529,14 @@ export class WindowModel {
 	}
 
 	private tickOrbit(delta: number): void {
+		// Dynamic orbit breathing: radius oscillates slowly for natural variation
+		const breathePhase = (this.time / AIRCRAFT.ORBIT_BREATHE_PERIOD) * Math.PI * 2;
+		const breathe = (Math.sin(breathePhase) + 1) * 0.5; // 0→1 smoothly
+		const majorRange = AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN;
+		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * majorRange;
+		// Keep aspect ratio between 2:1 and 3:1 for gentle banking
+		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
+
 		const a = this.orbitRadiusMajor;
 		const b = this.orbitRadiusMinor;
 

@@ -21,8 +21,13 @@ export const AIRCRAFT = {
 	DRIFT_RATE: 0.006,
 
 	// Orbit path shape (fallback ellipse when no waypoint scenario exists)
-	ORBIT_MAJOR: 0.3,    // degrees (~33km) — long axis (realistic holding pattern)
-	ORBIT_MINOR: 0.015,  // degrees (~1.7km) — short axis (tight turns)
+	ORBIT_MAJOR: 0.15,   // degrees (~17km) — long axis
+	ORBIT_MINOR: 0.06,   // degrees (~7km) — short axis (~2.5:1 aspect — gentle banking turns)
+
+	// Dynamic orbit breathing range (orbit dimensions slowly oscillate within these bounds)
+	ORBIT_MAJOR_MIN: 0.08,  // tightest orbit (dense city passes)
+	ORBIT_MAJOR_MAX: 0.25,  // widest orbit (sweeping vista passes)
+	ORBIT_BREATHE_PERIOD: 180, // seconds per full breathe cycle
 
 	// Turbulence base multipliers
 	TURBULENCE_MULTIPLIERS: {
