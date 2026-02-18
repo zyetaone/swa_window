@@ -131,6 +131,9 @@
 	}
 
 	function syncBuildings(): void {
+		if (buildingsTileset) {
+			buildingsTileset.show = model.showBuildings;
+		}
 		if (google3DTileset) {
 			google3DTileset.show = true;
 		}
@@ -158,7 +161,9 @@
 			255,
 		);
 
-		viewer.scene.globe.maximumScreenSpaceError = loc.hasBuildings ? 1.2 : 0.5;
+		// LOD: Cesium default is 2. Lower = sharper but slower to load at distance.
+		// 1.5 balances detail vs pop-in artifacts on far-away textures.
+		viewer.scene.globe.maximumScreenSpaceError = loc.hasBuildings ? 1.5 : 2.0;
 
 		if (viewer.scene.skyAtmosphere) {
 			viewer.scene.skyAtmosphere.brightnessShift = nf * -0.5;
@@ -167,14 +172,16 @@
 		}
 
 		viewer.scene.globe.showGroundAtmosphere = nf < 0.3;
+
+		// Built-in bloom: enable only at full night for warm city glow
 		if (viewer.scene.postProcessStages?.bloom) {
-			viewer.scene.postProcessStages.bloom.enabled = false;
+			viewer.scene.postProcessStages.bloom.enabled = nf > 0.7;
 		}
 
 		// Location-aware fog: [dayDensity, nightDensity, dayMinBright, nightMinBright]
 		if (viewer.scene.fog) {
 			viewer.scene.fog.enabled = true;
-			viewer.scene.fog.screenSpaceErrorFactor = 2.0;
+			viewer.scene.fog.screenSpaceErrorFactor = 4.0;
 			const locId = model.location;
 			const fogParams: Record<string, [number, number, number, number]> = {
 				desert:    [0.0003, 0.0001, 0.6,  0.005],
@@ -240,6 +247,8 @@
 		globe.baseColor = C.Color.fromBytes(40, 50, 60, 255);
 		globe.preloadAncestors = true;
 		globe.preloadSiblings = true;
+		globe.tileCacheSize = 200;
+		globe.loadingDescendantLimit = 4;
 		globe.showGroundAtmosphere = true;
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
@@ -372,6 +381,13 @@
 		C: typeof CesiumType,
 		signal: AbortSignal,
 	): Promise<void> {
+		// NOTE: Ion OSM Buildings (asset 96188) still triggers "Primitive outlines
+		// disable imagery draping" on Cesium 1.138. The CESIUM_primitive_outline
+		// extension in the tileset degrades terrain imagery quality. At cruise altitude
+		// (28-35k ft) the extruded boxes are invisible anyway — not worth the tradeoff.
+		// Keeping disabled until Cesium fixes the extension or we find an alternative source.
+
+		// Google 3D Tiles (optional, photorealistic)
 		const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 		const hasGoogleKey =
 			googleApiKey && googleApiKey !== "your_google_maps_api_key_here";
@@ -387,10 +403,6 @@
 				console.warn("[CesiumViewer] Google 3D Tiles failed:", e);
 			}
 		}
-		// NOTE: Ion OSM buildings (asset 96188) disabled — the CESIUM_primitive_outline
-		// extension in the tileset globally disables imagery draping, causing a black globe.
-		// Night city effect is provided by NASA VIIRS + CartoDB Dark + color grading shader.
-		// TODO: Re-enable with a buildings source that doesn't use primitive outlines.
 	}
 
 	// ATTACHMENT — Cesium init via {@attach}

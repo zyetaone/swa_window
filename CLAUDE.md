@@ -49,7 +49,7 @@ The window uses Cesium for terrain and CSS for all effect overlays.
 │  ├── CartoDB Dark (road glow at night)  │
 │  ├── 3D terrain elevation               │
 │  ├── Color grading post-process         │
-│  └── Built-in bloom (night, TODO)       │
+│  └── Built-in bloom (night only)        │
 └─────────────────────────────────────────┘
 ```
 

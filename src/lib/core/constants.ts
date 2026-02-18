@@ -135,12 +135,12 @@ export const CESIUM = {
 	ROAD_LIGHT_SATURATION: 0.0,
 	ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD: 0.15,
 
-	// Cesium built-in bloom (currently disabled)
-	BLOOM_NIGHT_CONTRAST: 180,
-	BLOOM_BRIGHTNESS: -0.3,
-	BLOOM_SIGMA: 4.0,
-	BLOOM_DELTA: 1.5,
-	BLOOM_STEP_SIZE: 2.0,
+	// Cesium built-in bloom (night city glow)
+	BLOOM_NIGHT_CONTRAST: 135,
+	BLOOM_BRIGHTNESS: 0.05,
+	BLOOM_SIGMA: 3.0,
+	BLOOM_DELTA: 1.0,
+	BLOOM_STEP_SIZE: 1.0,
 } as const;
 
 // =============================================================================
