@@ -41,9 +41,8 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 	uniform float uPitch;         // camera pitch offset in radians
 	uniform float uAltitude;      // aircraft altitude in feet
 	uniform float uUseTextures;   // 0.0 = computed FBM, 1.0 = texture lookups
-	uniform sampler2D uCloudNoise;  // 512x512 FBM cloud shapes
-	uniform sampler2D uCloudDetail; // 256x256 Worley cellular detail
-	uniform sampler2D uCloudWisp;   // 256x256 cirrus wisps (stretched noise)
+	uniform sampler2D uCloudNoise;  // 512x512 RGBA: R=Perlin-Worley, G=Worley F1, B=Worley hi, A=Perlin lo
+	uniform sampler2D uCloudDetail; // 256x256 RGBA: R=Worley F2, G=Curl X, B=Curl Y, A=hi-freq Perlin
 
 	varying vec2 vUv;
 
@@ -115,9 +114,9 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 	}
 
 	// --- Texture-based cloud layer (replaces FBM with texture lookups) ---
-	// Same parallax logic but samples pre-baked noise instead of computing it.
-	// Uses different textures per layer type for visual variety.
-	float cloudLayerTex(vec2 uv, float scale, float speed, float zLayer, float threshold, float parallax, sampler2D noiseTex) {
+	// Same parallax logic but samples RGBA-packed noise textures.
+	// layerType: 0=far (Perlin-Worley base + coverage), 1=mid (Worley edges), 2=near (hi-freq + curl distortion)
+	float cloudLayerTex(vec2 uv, float scale, float speed, float zLayer, float threshold, float parallax, int layerType) {
 		vec2 cameraOffset = vec2(
 			uHeading * parallax,
 			uPitch * parallax * 0.5
@@ -127,18 +126,28 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		st.x += uTime * speed * uWindSpeed;
 		st.y += uTime * speed * uWindSpeed * 0.3;
 
-		// Animated z-slice: use time to shift the UV slightly for temporal variation
-		// (texture is 2D, so we fake the z-axis drift by rotating/shifting UV)
+		// Animated z-slice: time-based UV drift fakes 3D evolution
 		float zDrift = uTime * 0.005 + zLayer * 0.01;
 		st += vec2(sin(zDrift) * 0.1, cos(zDrift) * 0.08);
 
-		// Sample the noise texture (hardware bilinear filtering + wrapping)
-		float n = texture2D(noiseTex, fract(st)).r;
+		float n;
 
-		// Add a second octave from the detail texture for extra complexity
-		vec2 detailSt = st * 2.03 + vec2(zDrift * 0.7);
-		float detail = texture2D(uCloudDetail, fract(detailSt)).r;
-		n = n * 0.7 + detail * 0.3;
+		if (layerType == 0) {
+			// Far layer: R=Perlin-Worley (base shapes) blended with A=low-freq coverage
+			vec4 s = texture2D(uCloudNoise, fract(st));
+			n = s.r * 0.6 + s.a * 0.4;
+		} else if (layerType == 1) {
+			// Mid layer: R=base shapes + G=Worley edges for cumulus definition
+			vec4 s = texture2D(uCloudNoise, fract(st));
+			float detail = texture2D(uCloudDetail, fract(st * 2.03 + zDrift * 0.7)).r;
+			n = s.r * 0.5 + s.g * 0.2 + detail * 0.3;
+		} else {
+			// Near layer: B=hi-freq Worley + curl-distorted UVs for wispy look
+			vec4 curl = texture2D(uCloudDetail, fract(st * 0.5));
+			vec2 distorted = st + vec2(curl.g, curl.b) * 0.15;
+			vec4 s = texture2D(uCloudNoise, fract(distorted));
+			n = s.b * 0.5 + curl.a * 0.3 + s.r * 0.2;
+		}
 
 		float cloud = smoothstep(threshold, threshold + 0.25, n);
 		return cloud;
@@ -157,10 +166,10 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		float far, mid, near;
 
 		if (uUseTextures > 0.5) {
-			// Texture mode: pre-baked noise, ~4.7x faster
-			far  = cloudLayerTex(uv, 1.5, 0.01, 0.0,  0.35, 0.05, uCloudNoise);
-			mid  = cloudLayerTex(uv, 3.0, 0.025, 10.0, 0.38, 0.2,  uCloudNoise);
-			near = cloudLayerTex(uv, 5.0, 0.06, 20.0,  0.42, 0.5,  uCloudWisp);
+			// Texture mode: RGBA channel-packed noise, ~4.7x faster
+			far  = cloudLayerTex(uv, 1.5, 0.01, 0.0,  0.35, 0.05, 0);  // Perlin-Worley + coverage
+			mid  = cloudLayerTex(uv, 3.0, 0.025, 10.0, 0.38, 0.2,  1); // Worley edges + detail
+			near = cloudLayerTex(uv, 5.0, 0.06, 20.0,  0.42, 0.5,  2); // Hi-freq + curl distortion
 		} else {
 			// FBM fallback: computed noise
 			far  = cloudLayer(uv, 1.5, 0.01, 0.0,  0.35, 0.05);
@@ -217,8 +226,8 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 
 		float shadowFar, shadowMid;
 		if (uUseTextures > 0.5) {
-			shadowFar = cloudLayerTex(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35, 0.05, uCloudNoise);
-			shadowMid = cloudLayerTex(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38, 0.2, uCloudNoise);
+			shadowFar = cloudLayerTex(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35, 0.05, 0);
+			shadowMid = cloudLayerTex(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38, 0.2, 1);
 		} else {
 			shadowFar = cloudLayer(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35, 0.05);
 			shadowMid = cloudLayer(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38, 0.2);

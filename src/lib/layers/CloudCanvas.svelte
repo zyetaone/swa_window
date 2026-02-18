@@ -16,11 +16,10 @@
 	import * as THREE from 'three';
 	import { CLOUD_VERTEX, CLOUD_FRAGMENT } from './cloud-shader';
 
-	// Texture paths — loaded once, shared across instances
+	// Texture paths — RGBA channel-packed noise (see generate-textures.ts for channel layout)
 	const TEXTURE_PATHS = {
-		noise: '/textures/cloud-noise.png',
-		detail: '/textures/cloud-detail.png',
-		wisp: '/textures/cloud-wisp.png',
+		noise: '/textures/cloud-noise.png',   // 512² RGBA: R=Perlin-Worley, G=Worley, B=Worley hi, A=Perlin lo
+		detail: '/textures/cloud-detail.png', // 256² RGBA: R=Worley F2, G=Curl X, B=Curl Y, A=hi-freq Perlin
 	} as const;
 
 	interface Props {
@@ -104,14 +103,12 @@
 		const loader = new THREE.TextureLoader();
 		const cloudNoiseTex = loadCloudTexture(loader, TEXTURE_PATHS.noise);
 		const cloudDetailTex = loadCloudTexture(loader, TEXTURE_PATHS.detail);
-		const cloudWispTex = loadCloudTexture(loader, TEXTURE_PATHS.wisp);
 
 		// Track whether all textures loaded successfully
 		let texturesReady = false;
 		const checkTextures = () => {
 			texturesReady = cloudNoiseTex.image != null
-				&& cloudDetailTex.image != null
-				&& cloudWispTex.image != null;
+				&& cloudDetailTex.image != null;
 		};
 
 		const material = new THREE.ShaderMaterial({
@@ -133,7 +130,6 @@
 				uUseTextures:   { value: 0.0 },
 				uCloudNoise:    { value: cloudNoiseTex },
 				uCloudDetail:   { value: cloudDetailTex },
-				uCloudWisp:     { value: cloudWispTex },
 			},
 		});
 
@@ -186,7 +182,6 @@
 		return () => {
 			cloudNoiseTex.dispose();
 			cloudDetailTex.dispose();
-			cloudWispTex.dispose();
 			geometry.dispose();
 			material.dispose();
 			renderer.dispose();

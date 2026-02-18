@@ -135,7 +135,7 @@
 			previewType: 'cloud',
 			details: [
 				'Rendered by: CloudCanvas.svelte → Three.js ShaderMaterial (cloud-shader.ts)',
-				'Textures: cloud-noise.png (512², FBM shapes), cloud-detail.png (256², Worley cells), cloud-wisp.png (256², cirrus streaks)',
+				'Textures: cloud-noise.png (512² RGBA: Perlin-Worley/Worley/Worley-hi/Perlin-lo), cloud-detail.png (256² RGBA: Worley-F2/Curl-X/Curl-Y/hi-freq-Perlin)',
 				'Layers: far (parallax=0.05, scale=1.5) · mid (parallax=0.2, scale=3.0) · near (parallax=0.5, scale=5.0)',
 				'Camera parallax: heading shifts UV.x, pitch shifts UV.y — per-layer depth rates',
 				'Altitude masking: above 30k ft (deck below), 15–25k ft (whiteout), below 15k ft (deck above)',
