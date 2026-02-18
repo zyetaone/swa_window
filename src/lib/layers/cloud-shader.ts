@@ -77,14 +77,13 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		);
 	}
 
-	// --- Fractional Brownian Motion (4 octaves) ---
+	// --- Fractional Brownian Motion (3 octaves — optimized for Pi 5) ---
 	float fbm(vec3 p) {
 		float f = 0.0;
 		f += 0.5000 * noise(p); p = m * p * 2.02;
 		f += 0.2500 * noise(p); p = m * p * 2.03;
-		f += 0.1250 * noise(p); p = m * p * 2.01;
-		f += 0.0625 * noise(p);
-		return f;
+		f += 0.1250 * noise(p);
+		return f / 0.875; // renormalize to ~0-1 range
 	}
 
 	// --- Cloud density at a point in the volume ---

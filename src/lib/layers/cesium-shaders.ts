@@ -31,19 +31,22 @@ export const COLOR_GRADING_GLSL = `
 		vec3 grayBase = vec3(dot(rgb, vec3(0.2126, 0.7152, 0.0722)));
 		rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
 
-		// Sodium Vapor Palette (Warm/Industrial)
-		vec3 sodium = vec3(1.0, 0.6, 0.2);     // Deep Orange
-		vec3 amber  = vec3(1.0, 0.8, 0.4);     // Amber/Gold
-		vec3 white  = vec3(1.0, 0.95, 0.9);    // Warm White
+		// City Light Palette (mixed lighting types)
+		vec3 sodium   = vec3(1.0, 0.6, 0.2);     // Deep Orange (sodium vapor)
+		vec3 amber    = vec3(1.0, 0.8, 0.4);     // Amber/Gold (halogen)
+		vec3 warmWht  = vec3(1.0, 0.95, 0.9);    // Warm White (incandescent)
+		vec3 coolWht  = vec3(0.85, 0.92, 1.0);   // Cool White (LED/fluorescent)
+		vec3 blueWht  = vec3(0.75, 0.85, 1.0);   // Blue-White (modern LED)
 
-		// Simple distinct regions based on luminance intensity
-		// (Brighter centers = white/amber, dimmer outskirts = sodium orange)
-		vec3 lightColor = mix(sodium, amber, smoothstep(0.2, 0.6, lum));
-		lightColor = mix(lightColor, white, smoothstep(0.6, 1.0, lum));
+		// Luminance-based palette: dim outskirts = sodium, mid = amber/warm,
+		// bright centers = cool white, brightest = blue-white LED
+		vec3 lightColor = mix(sodium, amber, smoothstep(0.15, 0.4, lum));
+		lightColor = mix(lightColor, warmWht, smoothstep(0.4, 0.65, lum));
+		lightColor = mix(lightColor, coolWht, smoothstep(0.65, 0.85, lum));
+		lightColor = mix(lightColor, blueWht, smoothstep(0.85, 1.0, lum));
 
-		// Additive blending for lights (emissive feel)
-		// We add the light color on top of the darkened/desaturated terrain
-		rgb += lightColor * lum * 2.5 * u_nightFactor;
+		// Additive blending for lights (emissive feel, reduced multiplier to prevent wash-out)
+		rgb += lightColor * lum * 2.0 * u_nightFactor;
 
 		// --- Dark Void Crush ---
 		// Push non-city terrain to true black at night so city light islands pop.

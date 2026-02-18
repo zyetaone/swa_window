@@ -136,11 +136,12 @@ export const CESIUM = {
 	ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD: 0.15,
 
 	// Cesium built-in bloom (night city glow)
-	BLOOM_NIGHT_CONTRAST: 135,
-	BLOOM_BRIGHTNESS: 0.05,
-	BLOOM_SIGMA: 3.0,
+	// Larger sigma = smoother bloom (reduces jitter), larger stepSize = fewer samples
+	BLOOM_NIGHT_CONTRAST: 128,
+	BLOOM_BRIGHTNESS: 0.04,
+	BLOOM_SIGMA: 7.0,
 	BLOOM_DELTA: 1.0,
-	BLOOM_STEP_SIZE: 1.0,
+	BLOOM_STEP_SIZE: 2.0,
 } as const;
 
 // =============================================================================
