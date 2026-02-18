@@ -22,6 +22,12 @@ export const COLOR_GRADING_GLSL = `
 		vec3 rgb = color.rgb;
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
+		// --- Bright Pixel Guard ---
+		// Preserve sun disc, bright sky highlights, and specular reflections from
+		// night crush effects. Without this, pow() shadow crush can turn the sun
+		// into a black dot (negative HDR values → NaN, or bright values get crushed).
+		float brightGuard = smoothstep(0.75, 0.95, lum);
+
 		// --- Night City Light Coloring ---
 		// Threshold raised so dim terrain stays neutral — only actual lights get warm tint
 		float lightMask = smoothstep(0.12, 0.5, lum);
@@ -51,19 +57,21 @@ export const COLOR_GRADING_GLSL = `
 		// --- Dark Void Crush ---
 		// Push non-city terrain to true black at night so city light islands pop.
 		// Rural areas and ocean become deep black; only lit areas survive.
+		// brightGuard exempts sun/sky highlights from being crushed to black.
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
-		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * 0.7);
+		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * 0.7 * (1.0 - brightGuard));
 
 		// Light pollution glow (subtle warm haze — only near bright sources)
 		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
 		rgb += vec3(0.12, 0.06, 0.01) * pollution * u_lightIntensity;
 
-		// Crush shadows
-		float shadowCrush = 1.0 - (0.4 * u_nightFactor);
-		rgb = pow(rgb, vec3(1.0 / shadowCrush));
+		// Crush shadows — max(0) prevents NaN from pow() on negative HDR values
+		// Reduce crush effect on bright pixels (sun, specular) via brightGuard
+		float shadowCrush = 1.0 - (0.4 * u_nightFactor * (1.0 - brightGuard));
+		rgb = pow(max(rgb, vec3(0.0)), vec3(1.0 / shadowCrush));
 
-		// High Contrast
-		float contrast = 1.0 + (0.3 * u_nightFactor);
+		// High Contrast — reduced for bright pixels to preserve sun/sky
+		float contrast = 1.0 + (0.3 * u_nightFactor * (1.0 - brightGuard));
 		rgb = (rgb - 0.5) * contrast + 0.5;
 
 		// --- Horizon Atmospheric Haze ---

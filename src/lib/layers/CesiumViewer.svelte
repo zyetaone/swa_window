@@ -254,6 +254,16 @@
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
 		if (v.scene.skyBox) v.scene.skyBox.show = true;
 
+		// Sun: explicit glow factor prevents the "black dot" sun artifact
+		if (v.scene.sun) {
+			v.scene.sun.show = true;
+			v.scene.sun.glowFactor = 2.0;
+		}
+		// Moon: visible at night for ambient sky illumination
+		if (v.scene.moon) {
+			v.scene.moon.show = true;
+		}
+
 		if (v.scene.postProcessStages?.bloom) {
 			const bloom = v.scene.postProcessStages.bloom;
 			bloom.enabled = false;
