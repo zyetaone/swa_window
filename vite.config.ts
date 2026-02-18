@@ -30,6 +30,9 @@ export default defineConfig({
 						if (id.includes('cesium')) {
 							return 'cesium';
 						}
+						if (id.includes('three') || id.includes('@threlte')) {
+							return 'three';
+						}
 					}
 					return undefined;
 				},
