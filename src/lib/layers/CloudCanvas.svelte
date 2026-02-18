@@ -1,14 +1,14 @@
 <script lang="ts">
 	/**
-	 * CloudCanvas — Procedural cloud overlay (Three.js + {@attach})
+	 * CloudCanvas — Camera-parallax procedural cloud overlay
 	 *
-	 * Screen-space FBM noise clouds on a fullscreen quad.
-	 * Three parallax layers (far cirrus, mid cumulus, near wisps) with
-	 * self-shadowing and silver lining. Premultiplied alpha output.
+	 * Three FBM noise layers shift with camera heading/pitch at different
+	 * parallax rates: near clouds slide fast, far clouds barely move.
+	 * This creates the illusion of clouds at different distances rather
+	 * than a flat decal stuck on the window glass.
 	 *
 	 * Pattern: {@attach} creates Three.js objects once on mount.
 	 * A nested $effect handles per-frame uniform sync and renderer.render().
-	 * Cleanup disposes all GPU resources on unmount.
 	 */
 	import * as THREE from 'three';
 	import { CLOUD_VERTEX, CLOUD_FRAGMENT } from './cloud-shader';
@@ -20,6 +20,8 @@
 		dawnDuskFactor?: number;
 		skyState?: 'day' | 'night' | 'dawn' | 'dusk';
 		time?: number;
+		heading?: number;
+		pitch?: number;
 	}
 
 	let {
@@ -29,6 +31,8 @@
 		dawnDuskFactor = 0,
 		skyState = 'day',
 		time = 0,
+		heading = 0,
+		pitch = -15,
 	}: Props = $props();
 
 	// Sun direction per sky state (normalized in shader)
@@ -82,6 +86,8 @@
 				uDensity:       { value: 0.5 },
 				uWindSpeed:     { value: 1.0 },
 				uResolution:    { value: new THREE.Vector2() },
+				uHeading:       { value: 0 },
+				uPitch:         { value: 0 },
 			},
 		});
 
@@ -113,6 +119,9 @@
 			u.uSkyColor.value.copy(skyColor);
 			u.uTime.value = time;
 			u.uResolution.value.set(w * dpr, h * dpr);
+			// Camera parallax: convert degrees to radians for smooth UV offset
+			u.uHeading.value = heading * Math.PI / 180;
+			u.uPitch.value = pitch * Math.PI / 180;
 
 			renderer.render(scene, camera);
 		});

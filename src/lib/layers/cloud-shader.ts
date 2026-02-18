@@ -1,14 +1,17 @@
 /**
  * Procedural Cloud Shaders — Airplane Window View
  *
- * Screen-space FBM noise clouds designed for a window-out perspective.
- * Three parallax layers at different scales/speeds create depth illusion:
- *   - Far layer: large, slow-moving cloud sheets (high altitude cirrus)
- *   - Mid layer: medium cumulus formations with self-shadowing
- *   - Near layer: fast-moving wisps that drift across the window
+ * Camera-driven parallax clouds: UV offsets respond to heading/pitch so
+ * clouds shift as the plane turns, creating a 3D depth illusion.
  *
- * Each layer uses 3-octave FBM noise sampled at UV coordinates (not raymarched).
- * GPU cost: ~9 noise evaluations per pixel (3 octaves × 3 layers). Pi 5 friendly.
+ * Three layers at different parallax depths:
+ *   - Far layer:  large cirrus sheets, barely shifts with camera (distant)
+ *   - Mid layer:  cumulus formations, moderate parallax
+ *   - Near layer: fast wisps, strong parallax (close to window)
+ *
+ * Each layer uses 3-octave FBM noise. The parallax multiplier per layer
+ * makes near clouds appear closer by shifting more when the camera moves.
+ * GPU cost: ~9 noise evaluations per pixel (3 octaves × 3 layers).
  * Output: premultiplied alpha for transparent compositing over Cesium.
  */
 
@@ -31,6 +34,8 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 	uniform float uDensity;       // cloud density multiplier (0-1)
 	uniform float uWindSpeed;     // wind drift speed
 	uniform vec2  uResolution;    // viewport size in pixels
+	uniform float uHeading;       // camera heading in radians
+	uniform float uPitch;         // camera pitch offset in radians
 
 	varying vec2 vUv;
 
@@ -79,13 +84,17 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		return f / 0.875;
 	}
 
-	// --- Cloud layer: returns density at a screen position ---
-	// scale: UV multiplier (larger = smaller cloud features)
-	// speed: time drift multiplier (larger = faster)
-	// zLayer: z offset for 3D noise (separates layers)
-	// threshold: noise cutoff (higher = sparser clouds)
-	float cloudLayer(vec2 uv, float scale, float speed, float zLayer, float threshold) {
-		vec3 p = vec3(uv * scale, zLayer + uTime * 0.005);
+	// --- Cloud layer with camera-driven parallax ---
+	// parallax: how much this layer shifts with camera (0 = locked to sky, 1 = stuck to window)
+	float cloudLayer(vec2 uv, float scale, float speed, float zLayer, float threshold, float parallax) {
+		// Camera parallax: heading shifts horizontally, pitch shifts vertically.
+		// Each layer shifts proportional to its parallax depth.
+		vec2 cameraOffset = vec2(
+			uHeading * parallax,
+			uPitch * parallax * 0.5
+		);
+
+		vec3 p = vec3((uv + cameraOffset) * scale, zLayer + uTime * 0.005);
 		p.x += uTime * speed * uWindSpeed;
 		p.y += uTime * speed * uWindSpeed * 0.3;
 
@@ -103,15 +112,18 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		uv.x *= aspect;
 
 		// === Three parallax cloud layers ===
+		// Parallax values: far=0.05 (barely moves), mid=0.2 (moderate), near=0.5 (strong)
+		// This creates depth: when the plane turns, near clouds slide fast,
+		// far clouds barely move — revealing layers at different distances.
 
-		// Far layer: large slow-moving sheets (high cirrus)
-		float far = cloudLayer(uv, 1.5, 0.01, 0.0, 0.35);
+		// Far layer: large slow-moving sheets (high cirrus) — barely shifts
+		float far = cloudLayer(uv, 1.5, 0.01, 0.0, 0.35, 0.05);
 
-		// Mid layer: medium cumulus formations
-		float mid = cloudLayer(uv, 3.0, 0.025, 10.0, 0.38);
+		// Mid layer: medium cumulus formations — moderate shift
+		float mid = cloudLayer(uv, 3.0, 0.025, 10.0, 0.38, 0.2);
 
-		// Near layer: fast-moving wisps across the window
-		float near = cloudLayer(uv, 5.0, 0.06, 20.0, 0.42);
+		// Near layer: fast-moving wisps across the window — strong shift
+		float near = cloudLayer(uv, 5.0, 0.06, 20.0, 0.42, 0.5);
 
 		// === Composite layers with depth-based opacity ===
 		// Far clouds are dimmer (atmospheric scattering), near clouds are brighter
@@ -133,8 +145,8 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		vec3 sunDir = normalize(uSunDirection);
 		vec2 shadowOffset = sunDir.xz * 0.08;
 
-		float shadowFar = cloudLayer(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35);
-		float shadowMid = cloudLayer(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38);
+		float shadowFar = cloudLayer(uv + shadowOffset, 1.5, 0.01, 0.0, 0.35, 0.05);
+		float shadowMid = cloudLayer(uv + shadowOffset * 0.6, 3.0, 0.025, 10.0, 0.38, 0.2);
 		float shadowDensity = clamp(shadowFar * 0.5 + shadowMid * 0.5, 0.0, 1.0);
 
 		// Beer-Lambert shadow attenuation

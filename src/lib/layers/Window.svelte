@@ -7,7 +7,7 @@
 	 *
 	 * Z-order:
 	 *   0: Cesium (terrain, buildings, NASA night lights, CartoDB roads)
-	 *   1: Clouds (Three.js volumetric raymarching)
+	 *   1: Clouds (Three.js camera-parallax FBM)
 	 *   2: Weather (CSS rain + lightning)
 	 *   5: Frost
 	 *   7: Wing silhouette
@@ -296,7 +296,7 @@
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1 — Volumetric clouds (Three.js WebGL overlay) -->
+			<!-- z:1 — Procedural clouds with camera-driven parallax -->
 			<div class="render-layer" style:z-index={1} style:opacity={cloudOpacity}>
 				<CloudCanvas
 					density={cloudOpacity}
@@ -305,6 +305,8 @@
 					dawnDuskFactor={model.dawnDuskFactor}
 					skyState={model.skyState}
 					time={elapsedTime}
+					heading={model.heading}
+					pitch={model.pitch}
 				/>
 			</div>
 
