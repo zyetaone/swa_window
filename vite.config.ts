@@ -19,6 +19,9 @@ export default defineConfig({
 		}),
 		sveltekit(),
 	],
+	server: {
+		host: true,
+	},
 	define: {
 		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
 	},
