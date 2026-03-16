@@ -67,9 +67,10 @@ export class DisplayWsClient {
 	constructor(model: WindowModel, serverUrl?: string) {
 		this.model = model;
 		this.deviceId = getDeviceId();
-		// Default to same host, port 3001
+		// Default to same host, port 3001. Try localhost as fallback if hostname differs.
 		this.serverUrl = serverUrl
 			|| `ws://${window.location.hostname}:3001/ws?role=display`;
+		console.info(`[ws-client] Connecting to ${this.serverUrl} (device: ${this.deviceId})`);
 		this.connect();
 	}
 
@@ -80,7 +81,8 @@ export class DisplayWsClient {
 			this.ws = new WebSocket(this.serverUrl);
 
 			this.ws.onopen = () => {
-				this.reconnectDelay = 1000; // Reset backoff on successful connect
+				console.info('[ws-client] Connected to fleet server');
+				this.reconnectDelay = 1000;
 				this.sendRegister();
 				this.startStatusUpdates();
 			};
@@ -91,6 +93,13 @@ export class DisplayWsClient {
 
 			this.ws.onclose = () => {
 				this.stopStatusUpdates();
+				// If we were using a non-localhost URL and it failed, try localhost
+				if (this.reconnectDelay > 4000 && !this.serverUrl.includes('localhost')) {
+					const fallback = `ws://localhost:3001/ws?role=display`;
+					console.info(`[ws-client] Trying fallback: ${fallback}`);
+					this.serverUrl = fallback;
+					this.reconnectDelay = 1000;
+				}
 				this.scheduleReconnect();
 			};
 
