@@ -29,6 +29,8 @@ const config = {
 				],
 				'connect-src': [
 					'self',
+					'ws://localhost:*', 'http://localhost:*',
+					'ws://127.0.0.1:*', 'http://127.0.0.1:*',
 					'https://*.arcgis.com', 'https://*.arcgisonline.com',
 					'https://*.cesium.com', 'https://api.cesium.com', 'https://assets.ion.cesium.com',
 					'https://*.bing.com',
