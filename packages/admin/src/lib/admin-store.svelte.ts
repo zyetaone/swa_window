@@ -1,11 +1,18 @@
 /**
- * Admin Store — manages WebSocket connection to server + device state
+ * Admin Store — dual-transport fleet management state
  *
- * Provides reactive device list, connection status, and methods to
- * push scenes/modes/configs to individual or all displays.
+ * Supports two push transports (auto-detected):
+ *   - WebSocket: for local admin (same machine, lowest latency)
+ *   - SSE: for remote admin (proxy/CDN friendly, auto-reconnect)
+ *
+ * Commands always go via REST (both transports).
+ * Transport is chosen by URL param: ?transport=sse or ?transport=ws
+ * Default: auto-detect (same-origin → WS, cross-origin → SSE)
  */
 
 import type { DeviceInfo, LocationId, WeatherType, DisplayMode, DisplayConfig } from '@zyeta/shared';
+
+export type Transport = 'ws' | 'sse';
 
 export interface FleetHealth {
 	total: number;
@@ -24,40 +31,106 @@ export interface HealthAlert {
 export class AdminStore {
 	devices = $state<DeviceInfo[]>([]);
 	connected = $state(false);
-	readonly serverUrl: string;
+	transport = $state<Transport>('ws');
 	readonly apiBase: string;
 	fleetHealth = $state<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
 	alerts = $state<HealthAlert[]>([]);
 	serverUptime = $state(0);
+
 	private ws: WebSocket | null = null;
+	private sse: EventSource | null = null;
 	private healthInterval: ReturnType<typeof setInterval> | null = null;
 
-	constructor(serverUrl?: string) {
-		this.serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
-		this.apiBase = this.serverUrl
+	constructor(serverUrl?: string, forceTransport?: Transport) {
+		// Derive API base from server URL or default to same-host :3001
+		const wsUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
+		this.apiBase = wsUrl
 			.replace(/^ws(s?):\/\//, 'http$1://')
 			.replace(/\/ws.*$/, '');
-		this.connect();
+
+		// Auto-detect transport: same hostname → WS, different → SSE
+		if (forceTransport) {
+			this.transport = forceTransport;
+		} else {
+			const serverHost = new URL(this.apiBase).hostname;
+			const isSameHost = serverHost === window.location.hostname || serverHost === 'localhost' || serverHost === '127.0.0.1';
+			this.transport = isSameHost ? 'ws' : 'sse';
+		}
+
+		console.info(`[admin] Transport: ${this.transport}, API: ${this.apiBase}`);
+
+		if (this.transport === 'ws') {
+			this.connectWs(wsUrl);
+		} else {
+			this.connectSse();
+		}
+
 		this.fetchDevices();
 		this.startHealthPolling();
 	}
 
-	private connect(): void {
+	// ========================================================================
+	// WEBSOCKET TRANSPORT (local admin)
+	// ========================================================================
+
+	private connectWs(url: string): void {
 		try {
-			this.ws = new WebSocket(this.serverUrl);
+			this.ws = new WebSocket(url);
 			this.ws.onopen = () => { this.connected = true; };
 			this.ws.onclose = () => {
 				this.connected = false;
-				setTimeout(() => this.connect(), 3000);
+				setTimeout(() => this.connectWs(url), 3000);
 			};
-			this.ws.onmessage = (e) => this.handleMessage(e.data);
+			this.ws.onmessage = (e) => this.handleEvent(e.data);
 			this.ws.onerror = () => { /* onclose will fire */ };
 		} catch {
-			setTimeout(() => this.connect(), 3000);
+			setTimeout(() => this.connectWs(url), 3000);
 		}
 	}
 
-	private handleMessage(raw: string): void {
+	// ========================================================================
+	// SSE TRANSPORT (remote admin)
+	// ========================================================================
+
+	private connectSse(): void {
+		const sseUrl = `${this.apiBase}/api/events`;
+		console.info(`[admin] SSE connecting to ${sseUrl}`);
+
+		this.sse = new EventSource(sseUrl);
+
+		this.sse.onopen = () => {
+			this.connected = true;
+		};
+
+		this.sse.onerror = () => {
+			this.connected = false;
+			// EventSource auto-reconnects — no manual retry needed
+		};
+
+		// Named event listeners (match SSE event: field from server)
+		this.sse.addEventListener('device_registered', (e: MessageEvent) => {
+			this.handleEvent(e.data);
+		});
+
+		this.sse.addEventListener('device_status', (e: MessageEvent) => {
+			this.handleEvent(e.data);
+		});
+
+		this.sse.addEventListener('device_offline', (e: MessageEvent) => {
+			this.handleEvent(e.data);
+		});
+
+		// Fallback: unnamed events (data-only, no event: field)
+		this.sse.onmessage = (e: MessageEvent) => {
+			this.handleEvent(e.data);
+		};
+	}
+
+	// ========================================================================
+	// SHARED EVENT HANDLING
+	// ========================================================================
+
+	private handleEvent(raw: string): void {
 		let msg: Record<string, unknown>;
 		try { msg = JSON.parse(raw); } catch { return; }
 		switch (msg.type) {
@@ -94,7 +167,7 @@ export class AdminStore {
 			device.uptime = status.uptime;
 			device.online = true;
 			device.lastSeen = Date.now();
-			this.devices = [...this.devices]; // trigger reactivity
+			this.devices = [...this.devices];
 		}
 	}
 
@@ -108,19 +181,15 @@ export class AdminStore {
 
 	private async fetchDevices(): Promise<void> {
 		try {
-			const apiBase = this.apiBase;
-			const res = await fetch(`${apiBase}/api/devices`);
-			if (res.ok) {
-				this.devices = (await res.json()) as DeviceInfo[];
-			}
+			const res = await fetch(`${this.apiBase}/api/devices`);
+			if (res.ok) this.devices = (await res.json()) as DeviceInfo[];
 		} catch { /* server not available yet */ }
 	}
 
 	private startHealthPolling(): void {
 		const poll = async () => {
 			try {
-				const apiBase = this.apiBase;
-				const res = await fetch(`${apiBase}/api/health`);
+				const res = await fetch(`${this.apiBase}/api/health`);
 				if (res.ok) {
 					const data = await res.json() as {
 						serverUptime: number;
@@ -138,12 +207,11 @@ export class AdminStore {
 	}
 
 	// ========================================================================
-	// ACTIONS
+	// ACTIONS (always REST — works with both transports)
 	// ========================================================================
 
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType): Promise<void> {
-		const apiBase = this.apiBase;
-		await fetch(`${apiBase}/api/devices/${deviceId}/scene`, {
+		await fetch(`${this.apiBase}/api/devices/${deviceId}/scene`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ location, weather }),
@@ -151,8 +219,7 @@ export class AdminStore {
 	}
 
 	async pushMode(deviceId: string, mode: DisplayMode, payload?: string): Promise<void> {
-		const apiBase = this.apiBase;
-		await fetch(`${apiBase}/api/devices/${deviceId}/mode`, {
+		await fetch(`${this.apiBase}/api/devices/${deviceId}/mode`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ mode, payload }),
@@ -160,8 +227,7 @@ export class AdminStore {
 	}
 
 	async pushConfig(deviceId: string, config: DisplayConfig): Promise<void> {
-		const apiBase = this.apiBase;
-		await fetch(`${apiBase}/api/devices/${deviceId}/config`, {
+		await fetch(`${this.apiBase}/api/devices/${deviceId}/config`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(config),
@@ -169,8 +235,7 @@ export class AdminStore {
 	}
 
 	async broadcastScene(location: LocationId, weather?: WeatherType): Promise<void> {
-		const apiBase = this.apiBase;
-		await fetch(`${apiBase}/api/broadcast/scene`, {
+		await fetch(`${this.apiBase}/api/broadcast/scene`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ location, weather }),
@@ -180,6 +245,8 @@ export class AdminStore {
 	destroy(): void {
 		this.ws?.close();
 		this.ws = null;
+		this.sse?.close();
+		this.sse = null;
 		if (this.healthInterval) {
 			clearInterval(this.healthInterval);
 			this.healthInterval = null;

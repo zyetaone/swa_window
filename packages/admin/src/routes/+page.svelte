@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { AdminStore } from '$lib/admin-store.svelte';
+	import { AdminStore, type Transport } from '$lib/admin-store.svelte';
 	import type { LocationId, WeatherType, DisplayMode, DisplayConfig } from '@zyeta/shared';
 	import { LOCATIONS } from '@zyeta/shared';
 	import { onDestroy } from 'svelte';
 
-	// Read server URL from ?server= query param or env, enabling remote admin
-	const serverParam = typeof window !== 'undefined'
-		? new URLSearchParams(window.location.search).get('server')
-		: null;
-	const store = new AdminStore(serverParam || undefined);
+	// Read config from URL params: ?server=ws://...&transport=sse
+	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+	const serverParam = params?.get('server') || undefined;
+	const transportParam = (params?.get('transport') as Transport) || undefined;
+	const store = new AdminStore(serverParam, transportParam);
 	onDestroy(() => store.destroy());
 
 	// Selection state
@@ -141,7 +141,7 @@
 		</div>
 		<div class="header-right">
 			<span class="connection-badge" class:online={store.connected}>
-				{store.connected ? 'Connected' : 'Disconnected'}
+				{store.connected ? store.transport.toUpperCase() : 'Disconnected'}
 			</span>
 			<span class="device-count">
 				{onlineCount}/{totalCount} online

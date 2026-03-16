@@ -28,12 +28,31 @@ const devices = new Map<string, DeviceInfo>();
 const displaySockets = new Map<string, ServerWebSocket<WsData>>();
 const adminSockets = new Set<ServerWebSocket<WsData>>();
 
+// SSE admin clients — each has a controller to push events
+const sseClients = new Map<string, ReadableStreamDirectController>();
+let sseEventSeq = 0;
+
 const HEARTBEAT_TIMEOUT = 30_000; // 30s no pong → mark offline
 
+/** Broadcast to all admin clients (both WS and SSE) */
 function broadcastToAdmins(data: unknown): void {
 	const msg = JSON.stringify(data);
+	const eventType = (data as { type?: string })?.type ?? 'message';
+
+	// WS clients
 	for (const ws of adminSockets) {
 		try { ws.send(msg); } catch { /* admin disconnected, will be cleaned up on close */ }
+	}
+
+	// SSE clients — send as named event
+	const sseId = `evt-${++sseEventSeq}`;
+	const ssePayload = `id: ${sseId}\nevent: ${eventType}\ndata: ${msg}\n\n`;
+	for (const [clientId, controller] of sseClients) {
+		try {
+			controller.write(ssePayload);
+		} catch {
+			sseClients.delete(clientId);
+		}
 	}
 }
 
@@ -150,6 +169,55 @@ export function serve(port: number): void {
 				const upgraded = server.upgrade(req, { data: { role } });
 				if (upgraded) return undefined as unknown as Response;
 				return new Response('WebSocket upgrade failed', { status: 400 });
+			}
+
+			// SSE endpoint for remote admin clients
+			if (url.pathname === '/api/events') {
+				server.timeout(req, 0); // Disable Bun's 10s idle timeout for SSE
+
+				const clientId = crypto.randomUUID();
+				console.log(`[server] SSE admin connected: ${clientId}`);
+
+				const stream = new ReadableStream({
+					type: 'direct',
+					pull(controller: ReadableStreamDirectController) {
+						sseClients.set(clientId, controller);
+
+						// Send current device list as initial state
+						const initDevices = getDeviceList();
+						for (const device of initDevices) {
+							const payload = JSON.stringify({ type: 'device_registered', device });
+							controller.write(`id: init-${device.deviceId}\nevent: device_registered\ndata: ${payload}\n\n`);
+						}
+
+						controller.write(`event: connected\ndata: ${JSON.stringify({ clientId, transport: 'sse' })}\n\n`);
+
+						// Keep alive — send comment every 30s to prevent proxy timeout
+						const keepAlive = setInterval(() => {
+							try { controller.write(': keepalive\n\n'); }
+							catch { clearInterval(keepAlive); }
+						}, 30_000);
+
+						// Block until client disconnects
+						return new Promise<void>(() => {
+							// Cleanup happens in cancel()
+						});
+					},
+					cancel() {
+						sseClients.delete(clientId);
+						console.log(`[server] SSE admin disconnected: ${clientId}, active: ${sseClients.size}`);
+					},
+				} as unknown as UnderlyingSource);
+
+				return new Response(stream, {
+					headers: {
+						'Content-Type': 'text/event-stream',
+						'Cache-Control': 'no-cache',
+						'Connection': 'keep-alive',
+						'X-Accel-Buffering': 'no',
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
 			}
 
 			// CORS headers for admin SPA
