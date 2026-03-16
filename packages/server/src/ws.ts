@@ -255,6 +255,22 @@ export function serve(port: number): void {
 				return Response.json({ success: true, sentTo: sent }, { headers: corsHeaders });
 			}
 
+			// POST /api/tiles/push — notify displays to download tile updates
+			if (url.pathname === '/api/tiles/push' && req.method === 'POST') {
+				const body = await req.json() as { locationId: LocationId; version: string; url: string };
+				const message: ServerMessage = {
+					type: 'tile_update',
+					locationId: body.locationId,
+					version: body.version,
+					url: body.url,
+				};
+				let sent = 0;
+				for (const id of displaySockets.keys()) {
+					if (sendToDevice(id, message)) sent++;
+				}
+				return Response.json({ success: true, sentTo: sent }, { headers: corsHeaders });
+			}
+
 			return new Response('Not found', { status: 404 });
 		},
 		websocket: {

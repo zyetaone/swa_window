@@ -53,6 +53,26 @@
       "name": "@zyeta/shared",
       "version": "0.0.1",
     },
+    "packages/tile-packager": {
+      "name": "@zyeta/tile-packager",
+      "version": "0.0.1",
+      "bin": {
+        "tile-packager": "./src/index.ts",
+      },
+      "dependencies": {
+        "@zyeta/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "bun-types": "^1.3.10",
+      },
+    },
+    "packages/tile-server": {
+      "name": "@zyeta/tile-server",
+      "version": "0.0.1",
+      "devDependencies": {
+        "bun-types": "^1.3.10",
+      },
+    },
   },
   "packages": {
     "@cesium/engine": ["@cesium/engine@22.3.0", "", { "dependencies": { "@cesium/wasm-splats": "^0.1.0-alpha.2", "@spz-loader/core": "0.3.0", "@tweenjs/tween.js": "^25.0.0", "@zip.js/zip.js": "^2.8.1", "autolinker": "^4.0.0", "bitmap-sdf": "^1.0.3", "dompurify": "^3.3.0", "draco3d": "^1.5.1", "earcut": "^3.0.0", "grapheme-splitter": "^1.0.4", "jsep": "^1.3.8", "kdbush": "^4.0.1", "ktx-parse": "^1.0.0", "lerc": "^2.0.0", "mersenne-twister": "^1.1.0", "meshoptimizer": "^1.0.1", "pako": "^2.0.4", "protobufjs": "^8.0.0", "rbush": "^4.0.1", "topojson-client": "^3.1.0", "urijs": "^1.19.7" } }, "sha512-oDl+nWX/qfHYQ0lEdGxLqZoKEtTMghvJDzZKTycYfiIuDYDh8Kh0Oy45wr3mSJse3PuTj1e6hDmbw8vbycCOxw=="],
@@ -222,6 +242,10 @@
     "@zyeta/server": ["@zyeta/server@workspace:packages/server"],
 
     "@zyeta/shared": ["@zyeta/shared@workspace:packages/shared"],
+
+    "@zyeta/tile-packager": ["@zyeta/tile-packager@workspace:packages/tile-packager"],
+
+    "@zyeta/tile-server": ["@zyeta/tile-server@workspace:packages/tile-server"],
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 

@@ -329,19 +329,42 @@
 		// TODO: Re-implement night bloom with a two-branch pipeline preserving the original scene texture.
 	}
 
+	// ── OFFLINE TILE SERVER DETECTION ──────────────────────────────────────
+	const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || 'http://localhost:8888';
+
+	async function checkTileServer(): Promise<boolean> {
+		try {
+			const resp = await fetch(`${TILE_SERVER_URL}/health`, { signal: AbortSignal.timeout(500) });
+			return resp.ok;
+		} catch { return false; }
+	}
+
 	async function setupImageryLayers(
 		v: CesiumType.Viewer,
 		C: typeof CesiumType,
 		signal: AbortSignal,
 	): Promise<void> {
+		const useLocal = await checkTileServer();
+		if (useLocal) console.info('[CesiumViewer] Local tile server detected — using offline tiles');
+
+		// ── BASE IMAGERY ────────────────────────────────────────────────────
 		try {
-			const esri = await C.ArcGisMapServerImageryProvider.fromUrl(
-				"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
-			);
-			if (signal.aborted) return;
-			v.imageryLayers.addImageryProvider(esri);
+			if (useLocal) {
+				const localImagery = new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`,
+					maximumLevel: 14,
+					credit: new C.Credit("ESRI World Imagery (offline cache)"),
+				});
+				v.imageryLayers.addImageryProvider(localImagery);
+			} else {
+				const esri = await C.ArcGisMapServerImageryProvider.fromUrl(
+					"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+				);
+				if (signal.aborted) return;
+				v.imageryLayers.addImageryProvider(esri);
+			}
 		} catch (e) {
-			console.warn("[CesiumViewer] ESRI imagery failed, falling back to OSM:", e);
+			console.warn("[CesiumViewer] Base imagery failed, falling back to OSM:", e);
 			if (signal.aborted) return;
 			v.imageryLayers.addImageryProvider(
 				new C.OpenStreetMapImageryProvider({
@@ -350,34 +373,41 @@
 			);
 		}
 
-		const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
-		const hasIonToken =
-			cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
-
-		if (hasIonToken) {
-			(C.Ion as typeof CesiumType.Ion).defaultAccessToken = cesiumToken;
-
+		// ── TERRAIN ─────────────────────────────────────────────────────────
+		if (useLocal) {
 			try {
-				v.terrainProvider = await C.createWorldTerrainAsync({
-					requestVertexNormals: true,
-					requestWaterMask: true,
-				});
+				v.terrainProvider = await C.CesiumTerrainProvider.fromUrl(
+					`${TILE_SERVER_URL}/terrain`, {
+						requestVertexNormals: true,
+						requestWaterMask: true,
+					}
+				);
 			} catch (e) {
-				console.warn("[CesiumViewer] Ion terrain failed, using flat ellipsoid:", e);
+				console.warn("[CesiumViewer] Local terrain failed, trying Ion:", e);
+				await setupIonTerrain(v, C);
 			}
+		} else {
+			await setupIonTerrain(v, C);
 		}
 		if (signal.aborted) return;
 
+		// ── VIIRS NIGHT LIGHTS ──────────────────────────────────────────────
 		try {
-			const nightProvider = new C.WebMapTileServiceImageryProvider({
-				url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
-				layer: "VIIRS_CityLights_2012",
-				style: "default",
-				tileMatrixSetID: "GoogleMapsCompatible_Level8",
-				maximumLevel: 8,
-				format: "image/jpeg",
-				credit: new C.Credit("NASA Earth Observatory"),
-			});
+			const nightProvider = useLocal
+				? new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/viirs/{z}/{x}/{y}.jpg`,
+					maximumLevel: 8,
+					credit: new C.Credit("NASA Earth Observatory (offline cache)"),
+				})
+				: new C.WebMapTileServiceImageryProvider({
+					url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
+					layer: "VIIRS_CityLights_2012",
+					style: "default",
+					tileMatrixSetID: "GoogleMapsCompatible_Level8",
+					maximumLevel: 8,
+					format: "image/jpeg",
+					credit: new C.Credit("NASA Earth Observatory"),
+				});
 
 			nightLayer = v.imageryLayers.addImageryProvider(nightProvider);
 			nightLayer.alpha = 0.0;
@@ -387,28 +417,54 @@
 			nightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
 			nightLayer.colorToAlphaThreshold = CESIUM.VIIRS_COLOR_TO_ALPHA_THRESHOLD;
 		} catch (e) {
-			console.warn("[CesiumViewer] NASA VIIRS night lights failed:", e);
+			console.warn("[CesiumViewer] Night lights failed:", e);
 			nightLayer = null;
 		}
 		if (signal.aborted) return;
 
+		// ── ROAD GLOW (CARTODB DARK) ────────────────────────────────────────
 		try {
-			const darkRoadProvider = new C.UrlTemplateImageryProvider({
-				url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
-				credit: new C.Credit("OpenStreetMap contributors, CARTO"),
-				maximumLevel: 18,
-				minimumLevel: 0,
-			});
+			const darkRoadProvider = useLocal
+				? new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/roads/{z}/{x}/{y}.png`,
+					maximumLevel: 14,
+					credit: new C.Credit("OpenStreetMap contributors (offline cache)"),
+				})
+				: new C.UrlTemplateImageryProvider({
+					url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
+					credit: new C.Credit("OpenStreetMap contributors, CARTO"),
+					maximumLevel: 18,
+					minimumLevel: 0,
+				});
+
 			roadLightLayer = v.imageryLayers.addImageryProvider(darkRoadProvider);
 			roadLightLayer.alpha = 0;
 			roadLightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
 			roadLightLayer.colorToAlphaThreshold = CESIUM.ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD;
 		} catch (e) {
-			console.warn("[CesiumViewer] CartoDB road glow failed:", e);
+			console.warn("[CesiumViewer] Road glow failed:", e);
 			roadLightLayer = null;
 		}
 
 		if (nightLayer) v.imageryLayers.raiseToTop(nightLayer);
+	}
+
+	/** Setup Ion terrain (extracted to avoid duplication in online/offline fallback) */
+	async function setupIonTerrain(v: CesiumType.Viewer, C: typeof CesiumType): Promise<void> {
+		const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
+		const hasIonToken = cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
+
+		if (hasIonToken) {
+			(C.Ion as typeof CesiumType.Ion).defaultAccessToken = cesiumToken;
+			try {
+				v.terrainProvider = await C.createWorldTerrainAsync({
+					requestVertexNormals: true,
+					requestWaterMask: true,
+				});
+			} catch (e) {
+				console.warn("[CesiumViewer] Ion terrain failed, using flat ellipsoid:", e);
+			}
+		}
 	}
 
 	async function setupBuildings3D(

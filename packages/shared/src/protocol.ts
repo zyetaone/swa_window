@@ -72,6 +72,7 @@ export type ServerMessage =
 	| { type: 'set_mode'; mode: DisplayMode; payload?: string }
 	| { type: 'set_scene'; location: LocationId; weather?: WeatherType }
 	| { type: 'set_config'; patch: DisplayConfig }
+	| { type: 'tile_update'; locationId: LocationId; version: string; url: string }
 	| { type: 'ping' };
 
 // ============================================================================
@@ -81,4 +82,14 @@ export type ServerMessage =
 export type DisplayMessage =
 	| { type: 'register'; deviceId: string; hostname: string; capabilities: DeviceCaps }
 	| { type: 'status'; fps: number; mode: DisplayMode; location: string; uptime: number }
+	| { type: 'tile_status'; cachedLocations: LocationId[]; diskUsageBytes: number }
 	| { type: 'pong' };
+
+// ============================================================================
+// SERVER → ADMIN MESSAGES (push events over WebSocket)
+// ============================================================================
+
+export type ServerAdminMessage =
+	| { type: 'device_registered'; device: DeviceInfo }
+	| { type: 'device_status'; deviceId: string; fps: number; mode: DisplayMode; location: string; uptime: number }
+	| { type: 'device_offline'; deviceId: string };

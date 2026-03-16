@@ -164,6 +164,11 @@ export class DisplayWsClient {
 			case 'set_config':
 				this.model.applyPatch(msg.patch);
 				break;
+
+			case 'tile_update':
+				// Tile update notification — log for now; future: trigger SW cache refresh
+				console.info(`[ws-client] Tile update available: ${msg.locationId} v${msg.version}`);
+				break;
 		}
 	}
 

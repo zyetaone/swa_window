@@ -7,6 +7,7 @@ export { LOCATIONS, LOCATION_IDS, LOCATION_MAP } from './locations';
 export { clamp, lerp, normalizeHeading, formatTime } from './utils';
 export type {
 	ServerMessage,
+	ServerAdminMessage,
 	DisplayMessage,
 	DeviceCaps,
 	DisplayConfig,

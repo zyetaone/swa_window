@@ -9,6 +9,9 @@
 		"check": "bun run --filter @zyeta/display check",
 		"dev:server": "bun run --filter @zyeta/server dev",
 		"dev:admin": "bun run --filter @zyeta/admin dev",
-		"dev:all": "bun run --filter '*' dev"
+		"dev:all": "bun run --filter '*' dev",
+		"dev:tiles": "bun run --filter @zyeta/tile-server dev",
+		"tiles:estimate": "bun run --filter @zyeta/tile-packager start -- --estimate",
+		"tiles:pack": "bun run --filter @zyeta/tile-packager start"
 	}
 }

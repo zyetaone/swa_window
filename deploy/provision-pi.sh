@@ -65,7 +65,16 @@ if ! id -u kiosk &>/dev/null; then
     usermod -aG video,render,input kiosk
 fi
 
-# ─── 5. Create Install Directory ─────────────────────────────────────────────
+# ─── 5. Install Bun Runtime (for tile server) ─────────────────────────────
+
+echo "[5/8] Installing Bun runtime..."
+if ! command -v bun &>/dev/null; then
+    curl -fsSL https://bun.sh/install | bash
+    export BUN_INSTALL="/home/kiosk/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+fi
+
+# ─── 5b. Create Install Directory ────────────────────────────────────────────
 
 echo "[5/7] Creating configuration..."
 mkdir -p "${INSTALL_DIR}"
@@ -175,6 +184,26 @@ TimeoutStartSec=30
 WantedBy=multi-user.target
 EOF
 
+# Tile server — serves pre-cached map tiles for offline Cesium operation
+cat > /etc/systemd/system/aero-tiles.service <<EOF
+[Unit]
+Description=Zyeta Aero Tile Server
+After=local-fs.target
+
+[Service]
+Type=simple
+User=kiosk
+Environment=TILE_DIR=/opt/zyeta-aero/tiles
+Environment=TILE_PORT=8888
+Environment=HOME=/home/kiosk
+ExecStart=/home/kiosk/.bun/bin/bun run /opt/zyeta-aero/tile-server/index.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # Watchdog timer — restarts if Chromium is hung
 cat > /etc/systemd/system/aero-watchdog.service <<EOF
 [Unit]
@@ -199,9 +228,40 @@ Unit=aero-watchdog.service
 WantedBy=timers.target
 EOF
 
+# Pre-seed tiles from SD card or fleet server
+echo "  Pre-seeding tiles..."
+mkdir -p /opt/zyeta-aero/tiles
+if [ -d "/boot/firmware/aero-tiles" ]; then
+    echo "  Copying tiles from SD card..."
+    cp -r /boot/firmware/aero-tiles/* /opt/zyeta-aero/tiles/
+elif curl -s --max-time 5 "http://${SERVER_HOST}:3001/api/health" > /dev/null 2>&1; then
+    echo "  Fleet server reachable — tiles will be fetched on first boot"
+fi
+chown -R kiosk:kiosk /opt/zyeta-aero/tiles
+
+# Copy tile server script
+mkdir -p /opt/zyeta-aero/tile-server
+# In production, copy the built tile-server here
+# For now, create a minimal inline version
+cat > /opt/zyeta-aero/tile-server/index.ts <<'TILE_SERVER'
+const DIR = process.env.TILE_DIR || '/opt/zyeta-aero/tiles';
+const PORT = parseInt(process.env.TILE_PORT || '8888', 10);
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET' };
+Bun.serve({ port: PORT, async fetch(req) {
+  const url = new URL(req.url);
+  if (url.pathname === '/health') return Response.json({ status: 'ok' }, { headers: CORS });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  const file = Bun.file(`${DIR}${url.pathname}`);
+  if (await file.exists()) return new Response(file, { headers: { ...CORS, 'Cache-Control': 'public, max-age=31536000, immutable' } });
+  return new Response('Not found', { status: 404, headers: CORS });
+}});
+console.log(`[tile-server] http://localhost:${PORT}`);
+TILE_SERVER
+
 # Enable services
 systemctl daemon-reload
 systemctl enable aero-xserver.service
+systemctl enable aero-tiles.service
 systemctl enable aero-display.service
 systemctl enable aero-watchdog.timer
 
