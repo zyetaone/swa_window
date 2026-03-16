@@ -5,7 +5,7 @@ node_modules
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
+**/.svelte-kit
 /build
 
 # OS
@@ -26,3 +26,6 @@ dist/
 
 # Cesium static assets (copied from node_modules during setup)
 static/cesium/
+
+# Serena memories (local agent state)
+.serena/memories/

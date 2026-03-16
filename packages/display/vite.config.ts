@@ -4,6 +4,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { normalizePath } from 'vite';
 import path from 'node:path';
 
+// In Bun workspace, cesium is hoisted — resolve from node_modules
 const cesiumSource = 'node_modules/cesium/Build/Cesium';
 const cesiumBaseUrl = 'cesiumStatic';
 

@@ -26,7 +26,7 @@ npm run check:watch    # Type-check in watch mode
 |-------|------------|
 | Framework | SvelteKit 2, Svelte 5 (runes: `$state`, `$derived`, `$effect`) |
 | Terrain | Cesium (ESRI imagery, NASA VIIRS night lights, CartoDB roads) |
-| Clouds | Three.js via @threlte/core + @threlte/extras (WebGL canvas) |
+| Clouds | Threlte 8 (`<Canvas>`, `<T>`, `useTask`) wrapping Three.js ShaderMaterial |
 | Build | Vite 7, vite-plugin-static-copy (Cesium assets → `/cesiumStatic`) |
 | Types | TypeScript strict mode (all strict flags + `noUnusedLocals/Parameters`) |
 | Styling | Component-scoped `<style>` blocks. No Tailwind config. |
@@ -57,7 +57,8 @@ src/routes/architecture/ — Interactive architecture visualization page
 ```
 +page.svelte → createAppState() → WindowModel (set in Svelte context)
   ├── Window.svelte      (RAF tick loop, CSS layer compositor, local $derived for presentation)
-  │   └── CesiumViewer   (terrain, imagery, post-processing shaders)
+  │   ├── CesiumViewer   (terrain, imagery, post-processing shaders)
+  │   └── CloudCanvas    (Threlte <Canvas>) → CloudScene (<T.Mesh> + useTask)
   ├── Controls.svelte    (HUD overlay / branding)
   └── SidePanel.svelte   (settings: location, sliders, weather)
 ```
@@ -69,7 +70,8 @@ src/routes/architecture/ — Interactive architecture visualization page
 - **User override**: `onUserInteraction(type)` pauses auto-behavior for 8 seconds.
 - **Flight state machine**: `orbit → cruise_departure → cruise_transit → orbit`.
 - **HMR cache**: `globalThis.__CESIUM_HMR_CACHE__` persists Cesium viewer across Vite hot reloads.
-- **Attach directive**: `{@attach}` for imperative DOM setup (Cesium, Three.js).
+- **Attach directive**: `{@attach}` for imperative DOM setup (Cesium).
+- **Threlte pattern**: `<Canvas>` + `<T>` components + `useTask` for Three.js cloud rendering. Scene logic in `CloudScene.svelte`, canvas config in `CloudCanvas.svelte`.
 
 ## Code Style
 
