@@ -4,7 +4,11 @@
 	import { LOCATIONS } from '@zyeta/shared';
 	import { onDestroy } from 'svelte';
 
-	const store = new AdminStore();
+	// Read server URL from ?server= query param or env, enabling remote admin
+	const serverParam = typeof window !== 'undefined'
+		? new URLSearchParams(window.location.search).get('server')
+		: null;
+	const store = new AdminStore(serverParam || undefined);
 	onDestroy(() => store.destroy());
 
 	// Selection state
@@ -15,6 +19,7 @@
 	let videoUrl = $state('');
 
 	// Config controls — fine-grained display overrides
+	// These push live to selected devices on change (debounced 300ms)
 	let cfgAltitude = $state(35000);
 	let cfgTimeOfDay = $state(12);
 	let cfgFlightSpeed = $state(1.0);
@@ -35,6 +40,19 @@
 	const speedLabel = $derived(`${cfgFlightSpeed.toFixed(1)}x`);
 	const cloudLabel = $derived(`${Math.round(cfgCloudDensity * 100)}%`);
 	const nightLabel = $derived(cfgNightLightIntensity.toFixed(1));
+
+	// Live push: debounced config sync on slider change
+	let livePushTimeout: ReturnType<typeof setTimeout> | null = null;
+	let livePushEnabled = $state(true);
+
+	function pushConfigLive(partial: DisplayConfig) {
+		if (!livePushEnabled) return;
+		if (livePushTimeout) clearTimeout(livePushTimeout);
+		livePushTimeout = setTimeout(async () => {
+			const targets = getTargets();
+			await Promise.all(targets.map(id => store.pushConfig(id, partial)));
+		}, 200);
+	}
 
 	function getTargets(): string[] {
 		return selectedDevices.size > 0
@@ -217,54 +235,67 @@
 			</section>
 
 			<section class="control-section">
-				<h3>Display Config</h3>
+				<h3>
+					Display Config
+					<label class="live-toggle">
+						<input type="checkbox" bind:checked={livePushEnabled} />
+						<span>Live</span>
+					</label>
+				</h3>
 				<label>
 					<div class="slider-header">
 						<span>Altitude</span>
 						<span class="slider-value">{altitudeLabel}</span>
 					</div>
-					<input type="range" min="5000" max="48000" step="1000" bind:value={cfgAltitude} class="range" />
+					<input type="range" min="5000" max="48000" step="1000" bind:value={cfgAltitude}
+						oninput={() => pushConfigLive({ altitude: cfgAltitude })} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Time of Day</span>
 						<span class="slider-value">{timeLabel}</span>
 					</div>
-					<input type="range" min="0" max="24" step="0.25" bind:value={cfgTimeOfDay} class="range" />
+					<input type="range" min="0" max="24" step="0.25" bind:value={cfgTimeOfDay}
+						oninput={() => pushConfigLive({ timeOfDay: cfgTimeOfDay })} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Flight Speed</span>
 						<span class="slider-value">{speedLabel}</span>
 					</div>
-					<input type="range" min="0.1" max="5" step="0.1" bind:value={cfgFlightSpeed} class="range" />
+					<input type="range" min="0.1" max="5" step="0.1" bind:value={cfgFlightSpeed}
+						oninput={() => pushConfigLive({ flightSpeed: cfgFlightSpeed })} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Cloud Density</span>
 						<span class="slider-value">{cloudLabel}</span>
 					</div>
-					<input type="range" min="0" max="1" step="0.05" bind:value={cfgCloudDensity} class="range" />
+					<input type="range" min="0" max="1" step="0.05" bind:value={cfgCloudDensity}
+						oninput={() => pushConfigLive({ cloudDensity: cfgCloudDensity })} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Night Lights</span>
 						<span class="slider-value">{nightLabel}</span>
 					</div>
-					<input type="range" min="0" max="5" step="0.1" bind:value={cfgNightLightIntensity} class="range" />
+					<input type="range" min="0" max="5" step="0.1" bind:value={cfgNightLightIntensity}
+						oninput={() => pushConfigLive({ nightLightIntensity: cfgNightLightIntensity })} class="range" />
 				</label>
 				<div class="toggle-row">
 					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgSyncToRealTime} />
+						<input type="checkbox" bind:checked={cfgSyncToRealTime}
+							onchange={() => pushConfigLive({ syncToRealTime: cfgSyncToRealTime })} />
 						<span>Sync to Real Time</span>
 					</label>
 					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgShowClouds} />
+						<input type="checkbox" bind:checked={cfgShowClouds}
+							onchange={() => pushConfigLive({ showClouds: cfgShowClouds })} />
 						<span>Show Clouds</span>
 					</label>
 				</div>
 				<button class="btn btn-primary" onclick={handlePushConfig}>
-					Push Config {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
+					Push All Config {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
 
@@ -493,6 +524,28 @@
 		letter-spacing: 0.08em;
 		color: #71717a;
 		margin-bottom: 12px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.live-toggle {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 4px;
+		font-size: 10px;
+		color: #52525b;
+		text-transform: none;
+		letter-spacing: normal;
+		margin-bottom: 0;
+		cursor: pointer;
+	}
+
+	.live-toggle input {
+		width: 12px;
+		height: 12px;
+		accent-color: #22c55e;
 	}
 
 	label {

@@ -36,6 +36,7 @@ export interface PatchableState {
 	nightLightIntensity: number;
 	flightSpeed: number;
 	syncToRealTime: boolean;
+	showClouds: boolean;
 }
 
 // ============================================================================
@@ -440,20 +441,31 @@ export class WindowModel {
 		}
 	}
 
-	/** Validated batch update from UI controls */
+	/** Validated batch update from UI controls or fleet commands */
 	applyPatch(patch: Partial<PatchableState>): void {
-		if (patch.altitude !== undefined) this.setAltitude(patch.altitude);
-		if (patch.timeOfDay !== undefined) this.setTime(patch.timeOfDay);
+		// Pause auto-behavior for fields that the auto-pilot would override
+		if (patch.altitude !== undefined) {
+			this.setAltitude(patch.altitude);
+			this.onUserInteraction('altitude');
+		}
+		if (patch.timeOfDay !== undefined) {
+			this.setTime(patch.timeOfDay);
+			this.onUserInteraction('time');
+		}
 		if (patch.heading !== undefined) this.setHeading(patch.heading);
 		if (patch.pitch !== undefined) this.setPitch(patch.pitch);
 		if (patch.weather !== undefined) this.setWeather(patch.weather);
-		if (patch.cloudDensity !== undefined) this.setCloudDensity(patch.cloudDensity);
+		if (patch.cloudDensity !== undefined) {
+			this.setCloudDensity(patch.cloudDensity);
+			this.onUserInteraction('atmosphere');
+		}
 		if (patch.terrainDarkness !== undefined) this.setTerrainDarkness(patch.terrainDarkness);
 		if (patch.cloudSpeed !== undefined) this.cloudSpeed = clamp(patch.cloudSpeed, 0.1, 3);
 		if (patch.haze !== undefined) this.haze = clamp(patch.haze, 0, 0.15);
 		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
 		if (patch.flightSpeed !== undefined) this.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined) this.syncToRealTime = patch.syncToRealTime;
+		if (patch.showClouds !== undefined) this.showClouds = patch.showClouds;
 	}
 
 	destroy(): void {
