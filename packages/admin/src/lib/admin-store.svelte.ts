@@ -24,7 +24,8 @@ export interface HealthAlert {
 export class AdminStore {
 	devices = $state<DeviceInfo[]>([]);
 	connected = $state(false);
-	serverUrl = $state('');
+	readonly serverUrl: string;
+	readonly apiBase: string;
 	fleetHealth = $state<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
 	alerts = $state<HealthAlert[]>([]);
 	serverUptime = $state(0);
@@ -33,6 +34,9 @@ export class AdminStore {
 
 	constructor(serverUrl?: string) {
 		this.serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
+		this.apiBase = this.serverUrl
+			.replace(/^ws(s?):\/\//, 'http$1://')
+			.replace(/\/ws.*$/, '');
 		this.connect();
 		this.fetchDevices();
 		this.startHealthPolling();
@@ -54,16 +58,20 @@ export class AdminStore {
 	}
 
 	private handleMessage(raw: string): void {
-		const msg = JSON.parse(raw);
+		let msg: Record<string, unknown>;
+		try { msg = JSON.parse(raw); } catch { return; }
 		switch (msg.type) {
 			case 'device_registered':
-				this.upsertDevice(msg.device);
+				this.upsertDevice(msg.device as DeviceInfo);
 				break;
 			case 'device_status':
-				this.updateDeviceStatus(msg.deviceId, msg);
+				this.updateDeviceStatus(
+					msg.deviceId as string,
+					msg as unknown as { fps: number; mode: DisplayMode; location: string; uptime: number },
+				);
 				break;
 			case 'device_offline':
-				this.markOffline(msg.deviceId);
+				this.markOffline(msg.deviceId as string);
 				break;
 		}
 	}
@@ -100,7 +108,7 @@ export class AdminStore {
 
 	private async fetchDevices(): Promise<void> {
 		try {
-			const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+			const apiBase = this.apiBase;
 			const res = await fetch(`${apiBase}/api/devices`);
 			if (res.ok) {
 				this.devices = (await res.json()) as DeviceInfo[];
@@ -111,7 +119,7 @@ export class AdminStore {
 	private startHealthPolling(): void {
 		const poll = async () => {
 			try {
-				const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+				const apiBase = this.apiBase;
 				const res = await fetch(`${apiBase}/api/health`);
 				if (res.ok) {
 					const data = await res.json() as {
@@ -134,7 +142,7 @@ export class AdminStore {
 	// ========================================================================
 
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType): Promise<void> {
-		const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+		const apiBase = this.apiBase;
 		await fetch(`${apiBase}/api/devices/${deviceId}/scene`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -143,7 +151,7 @@ export class AdminStore {
 	}
 
 	async pushMode(deviceId: string, mode: DisplayMode, payload?: string): Promise<void> {
-		const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+		const apiBase = this.apiBase;
 		await fetch(`${apiBase}/api/devices/${deviceId}/mode`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -152,7 +160,7 @@ export class AdminStore {
 	}
 
 	async pushConfig(deviceId: string, config: DisplayConfig): Promise<void> {
-		const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+		const apiBase = this.apiBase;
 		await fetch(`${apiBase}/api/devices/${deviceId}/config`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -161,7 +169,7 @@ export class AdminStore {
 	}
 
 	async broadcastScene(location: LocationId, weather?: WeatherType): Promise<void> {
-		const apiBase = this.serverUrl.replace('ws://', 'http://').replace('/ws?role=admin', '');
+		const apiBase = this.apiBase;
 		await fetch(`${apiBase}/api/broadcast/scene`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

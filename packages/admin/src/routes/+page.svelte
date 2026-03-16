@@ -25,7 +25,7 @@
 
 	// Derived display labels for sliders
 	const altitudeLabel = $derived(`${(cfgAltitude / 1000).toFixed(0)}k ft`);
-	const timeLabel = $derived(() => {
+	const timeLabel = $derived.by(() => {
 		const h = Math.floor(cfgTimeOfDay);
 		const m = Math.floor((cfgTimeOfDay % 1) * 60);
 		const period = h >= 12 ? 'PM' : 'AM';
@@ -228,7 +228,7 @@
 				<label>
 					<div class="slider-header">
 						<span>Time of Day</span>
-						<span class="slider-value">{timeLabel()}</span>
+						<span class="slider-value">{timeLabel}</span>
 					</div>
 					<input type="range" min="0" max="24" step="0.25" bind:value={cfgTimeOfDay} class="range" />
 				</label>
