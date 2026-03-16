@@ -426,18 +426,24 @@ export class WindowModel {
 
 	/** Switch display mode (flight / screensaver / video) */
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
+		const prev = this.displayMode;
 		this.displayMode = mode;
+
 		if (mode === 'video' && payload) {
 			this.videoUrl = payload;
 		}
-		// Screensaver: slow orbit, paused auto-pilot
+
+		// Screensaver: slow dreamy orbit, sync to real time, ensure blind is open
 		if (mode === 'screensaver') {
 			this.flightSpeed = 0.3;
 			this.syncToRealTime = true;
+			this.blindOpen = true;
 		}
-		// Flight: restore normal speed
-		if (mode === 'flight') {
+
+		// Flight: restore normal speed from screensaver, ensure blind open
+		if (mode === 'flight' && prev === 'screensaver') {
 			this.flightSpeed = 1.0;
+			this.blindOpen = true;
 		}
 	}
 

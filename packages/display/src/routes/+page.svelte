@@ -110,6 +110,9 @@
 			playsinline
 			class="video-fullscreen"
 		></video>
+		<div class="video-brand">
+			<span class="brand-text">Southwest Airlines</span>
+		</div>
 	</main>
 {:else}
 	<main class="app" class:screensaver-mode={model.isScreensaverMode}>
@@ -131,6 +134,16 @@
 		<!-- Side panel (location picker + settings) — hidden in screensaver mode -->
 		{#if model.isFlightMode}
 			<SidePanel />
+		{/if}
+
+		<!-- Screensaver subtle branding overlay -->
+		{#if model.isScreensaverMode}
+			<div class="screensaver-overlay">
+				<div class="screensaver-brand">
+					<span class="screensaver-logo">Sky Portal</span>
+					<span class="screensaver-location">{LOCATION_MAP.get(model.location)?.name ?? ''}</span>
+				</div>
+			</div>
 		{/if}
 	</main>
 {/if}
@@ -210,6 +223,63 @@
 
 	.screensaver-mode {
 		cursor: none;
+	}
+
+	/* Screensaver branding */
+	.screensaver-overlay {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		z-index: 100;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		padding-bottom: 5vh;
+		animation: screensaver-fade-in 3s ease-out;
+	}
+
+	.screensaver-brand {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		opacity: 0.4;
+	}
+
+	.screensaver-logo {
+		font-size: 1.2rem;
+		font-weight: 300;
+		color: rgba(255, 255, 255, 0.6);
+		letter-spacing: 0.3em;
+		text-transform: uppercase;
+	}
+
+	.screensaver-location {
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.3);
+		letter-spacing: 0.15em;
+	}
+
+	@keyframes screensaver-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	/* Video mode branding */
+	.video-brand {
+		position: fixed;
+		bottom: 3vh;
+		right: 4vw;
+		z-index: 10;
+		opacity: 0.3;
+	}
+
+	.brand-text {
+		font-size: 0.9rem;
+		font-weight: 300;
+		color: white;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
 	}
 
 	.cabin-wall {
