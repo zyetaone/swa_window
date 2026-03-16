@@ -204,6 +204,39 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+# OTA updater — checks for code updates daily
+cp "${INSTALL_DIR}/app/deploy/aero-updater.sh" "${INSTALL_DIR}/aero-updater.sh" 2>/dev/null || true
+
+cat > /etc/systemd/system/aero-updater.service <<EOF
+[Unit]
+Description=Zyeta Aero OTA Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=AERO_BRANCH=main
+Environment=AERO_FLEET_SERVER=${SERVER_HOST}
+ExecStart=/bin/bash /opt/zyeta-aero/aero-updater.sh
+StandardOutput=journal
+StandardError=journal
+EOF
+
+cat > /etc/systemd/system/aero-updater.timer <<EOF
+[Unit]
+Description=Zyeta Aero Daily Update Check
+
+[Timer]
+OnBootSec=5min
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=1800
+Unit=aero-updater.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # Watchdog timer — restarts if Chromium is hung
 cat > /etc/systemd/system/aero-watchdog.service <<EOF
 [Unit]
@@ -264,6 +297,7 @@ systemctl enable aero-xserver.service
 systemctl enable aero-tiles.service
 systemctl enable aero-display.service
 systemctl enable aero-watchdog.timer
+systemctl enable aero-updater.timer
 
 # ─── 7. Set Hostname ─────────────────────────────────────────────────────────
 
