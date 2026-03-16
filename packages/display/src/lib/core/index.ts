@@ -14,7 +14,7 @@ import { WindowModel } from './WindowModel.svelte';
 
 // Re-export everything from @zyeta/shared for convenience
 export { AIRCRAFT, CESIUM, FLIGHT_FEEL, WEATHER_EFFECTS, LOCATIONS, LOCATION_MAP } from '@zyeta/shared';
-export type { SkyState, LocationId, WeatherType, Location } from '@zyeta/shared';
+export type { SkyState, LocationId, WeatherType, Location, DisplayMode } from '@zyeta/shared';
 
 const APP_STATE_KEY = Symbol('APP_STATE');
 

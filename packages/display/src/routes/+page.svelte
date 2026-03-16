@@ -10,7 +10,7 @@
 	 */
 
 	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core";
-	import type { LocationId } from "$lib/core";
+	import type { LocationId, WeatherType, DisplayMode } from "$lib/core";
 	import { savePersistedState } from "$lib/core/persistence";
 	import { createWsClient } from "$lib/core/ws-client";
 	import { onDestroy } from "svelte";
@@ -19,38 +19,114 @@
 	import SidePanel from "$lib/layers/SidePanel.svelte";
 
 	// Create unified app state (provides context to all child components)
-	// All state is reactive via $state/$derived in WindowModel
 	const model = createAppState();
 	onDestroy(() => model.destroy());
 
-	// Connect to fleet management server (auto-registers this display)
+	// ========================================================================
+	// URL PROVISIONING SPEC
+	// ========================================================================
+	// Full declarative URL:
+	//   /?display=lobby-1&location=dubai&mode=screensaver&altitude=35000
+	//   &weather=clear&speed=0.5&clouds=0.8&nightLights=0.6&time=14.5
+	//   &realtime=true&server=ws://fleet:3001/ws?role=display
+	//
+	// All params are optional. Unset params use defaults or persisted state.
+	// The admin can override any of these at runtime via WS push.
+	// ========================================================================
+
+	const VALID_MODES: Set<string> = new Set(['flight', 'screensaver', 'video']);
+	const VALID_WEATHER: Set<string> = new Set(['clear', 'cloudy', 'rain', 'overcast', 'storm']);
+
+	if (typeof window !== "undefined") {
+		const p = new URLSearchParams(window.location.search);
+
+		// Identity (also read by ws-client for device registration)
+		// ?display=lobby-1 — human-readable device name
+
+		// Location
+		const loc = p.get("location")?.toLowerCase();
+		if (loc && LOCATION_MAP.has(loc as LocationId)) {
+			model.setLocation(loc as LocationId);
+		}
+
+		// Display mode
+		const mode = p.get("mode")?.toLowerCase();
+		if (mode && VALID_MODES.has(mode)) {
+			const videoUrl = p.get("videoUrl") || p.get("url") || '';
+			model.setDisplayMode(mode as DisplayMode, videoUrl || undefined);
+		}
+
+		// Altitude
+		const alt = Number(p.get("altitude"));
+		if (Number.isFinite(alt) && alt >= AIRCRAFT.MIN_ALTITUDE && alt <= AIRCRAFT.MAX_ALTITUDE) {
+			model.setAltitude(alt);
+		}
+
+		// Weather
+		const weather = p.get("weather")?.toLowerCase();
+		if (weather && VALID_WEATHER.has(weather)) {
+			model.setWeather(weather as WeatherType);
+		}
+
+		// Flight speed
+		const speed = Number(p.get("speed"));
+		if (Number.isFinite(speed) && speed >= 0.1 && speed <= 5) {
+			model.flightSpeed = speed;
+		}
+
+		// Cloud density
+		const clouds = Number(p.get("clouds"));
+		if (Number.isFinite(clouds) && clouds >= 0 && clouds <= 1) {
+			model.setCloudDensity(clouds);
+		}
+
+		// Night light intensity
+		const nightLights = Number(p.get("nightLights"));
+		if (Number.isFinite(nightLights) && nightLights >= 0 && nightLights <= 5) {
+			model.nightLightIntensity = nightLights;
+		}
+
+		// Time of day override
+		const time = Number(p.get("time"));
+		if (Number.isFinite(time) && time >= 0 && time <= 24) {
+			model.setTime(time);
+			model.syncToRealTime = false; // Explicit time → disable real-time sync
+		}
+
+		// Real-time sync (overrides time param if both set)
+		const realtime = p.get("realtime");
+		if (realtime === 'true') model.syncToRealTime = true;
+		if (realtime === 'false') model.syncToRealTime = false;
+	}
+
+	// ========================================================================
+	// FLEET SERVER CONNECTION
+	// ========================================================================
+
 	const wsClient = createWsClient(model);
 	onDestroy(() => wsClient.destroy());
 
-	// Register service worker for offline tile caching (kiosk resilience)
+	// Register service worker for offline tile caching
 	if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-		navigator.serviceWorker.register('/sw.js').catch(() => {
-			// SW registration failed — tiles will load from network only
-		});
+		navigator.serviceWorker.register('/sw.js').catch(() => {});
 	}
 
-	// Real-time sync (moved out of WindowModel for testability)
+	// ========================================================================
+	// SIDE EFFECTS
+	// ========================================================================
+
+	// Real-time clock sync
 	$effect(() => {
 		if (model.syncToRealTime && typeof window !== "undefined") {
 			const update = () => model.updateTimeFromSystem();
-			const interval = setInterval(
-				update,
-				AIRCRAFT.REAL_TIME_SYNC_INTERVAL,
-			);
+			const interval = setInterval(update, AIRCRAFT.REAL_TIME_SYNC_INTERVAL);
 			return () => clearInterval(interval);
 		}
 		return undefined;
 	});
 
-	// Debounced auto-save — saves 2s after the last reactive change.
-	// Touch reactive fields to subscribe, but defer snapshot+save to the timeout.
+	// Debounced auto-save
 	$effect(() => {
-		// Subscribe to persisted fields (triggers re-run on any change)
 		void model.location;
 		void model.altitude;
 		void model.weather;
@@ -61,28 +137,6 @@
 		const timeout = setTimeout(() => savePersistedState(model.getPersistedSnapshot()), 2000);
 		return () => clearTimeout(timeout);
 	});
-
-	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
-	if (typeof window !== "undefined") {
-		const params = new URLSearchParams(window.location.search);
-
-		const locationParam = params.get("location")?.toLowerCase();
-		if (locationParam && LOCATION_MAP.has(locationParam as LocationId)) {
-			model.setLocation(locationParam as LocationId);
-		}
-
-		const altitudeParam = params.get("altitude");
-		if (altitudeParam) {
-			const alt = Number(altitudeParam);
-			if (
-				Number.isFinite(alt) &&
-				alt >= AIRCRAFT.MIN_ALTITUDE &&
-				alt <= AIRCRAFT.MAX_ALTITUDE
-			) {
-				model.setAltitude(alt);
-			}
-		}
-	}
 </script>
 
 <svelte:head>

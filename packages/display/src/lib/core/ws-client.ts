@@ -124,10 +124,12 @@ export class DisplayWsClient {
 	}
 
 	private sendRegister(): void {
+		// Use ?display= param as hostname if available (human-readable name)
+		const displayName = new URLSearchParams(window.location.search).get('display');
 		this.send({
 			type: 'register',
 			deviceId: this.deviceId,
-			hostname: window.location.hostname,
+			hostname: displayName || this.deviceId,
 			capabilities: getDeviceCaps(),
 		});
 	}
