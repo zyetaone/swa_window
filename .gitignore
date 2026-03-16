@@ -29,3 +29,7 @@ static/cesium/
 
 # Serena memories (local agent state)
 .serena/memories/
+
+# Downloaded tile packages (generated, large)
+**/tiles/
+!packages/tile-packager/src/
