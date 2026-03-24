@@ -30,6 +30,12 @@ export function loadPersistedState(): Partial<PersistedState> {
 		const saved = localStorage.getItem(STORAGE_KEY);
 		if (!saved) return {};
 		const parsed = JSON.parse(saved);
+
+		// 🔒 Security: Ensure parsed value is a plain object
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			return {};
+		}
+
 		if (parsed.altitude !== undefined) {
 			parsed.altitude = safeNum(parsed.altitude, 35000, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
 		}
@@ -43,6 +49,18 @@ export function loadPersistedState(): Partial<PersistedState> {
 		if (parsed.weather && !VALID_WEATHER.includes(parsed.weather)) {
 			delete parsed.weather;
 		}
+
+		// Validate boolean flags
+		if (parsed.showBuildings !== undefined && typeof parsed.showBuildings !== 'boolean') {
+			delete parsed.showBuildings;
+		}
+		if (parsed.showClouds !== undefined && typeof parsed.showClouds !== 'boolean') {
+			delete parsed.showClouds;
+		}
+		if (parsed.syncToRealTime !== undefined && typeof parsed.syncToRealTime !== 'boolean') {
+			delete parsed.syncToRealTime;
+		}
+
 		return parsed;
 	} catch {
 		return {};
