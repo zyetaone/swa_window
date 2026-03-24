@@ -51,11 +51,14 @@ export function loadPersistedState(): Partial<PersistedState> {
 		}
 
 		// Validate boolean flags
-		const BOOL_KEYS: (keyof PersistedState)[] = ['showBuildings', 'showClouds', 'syncToRealTime'];
-		for (const key of BOOL_KEYS) {
-			if (parsed[key] !== undefined && typeof parsed[key] !== 'boolean') {
-				delete parsed[key];
-			}
+		if (parsed.showBuildings !== undefined && typeof parsed.showBuildings !== 'boolean') {
+			delete parsed.showBuildings;
+		}
+		if (parsed.showClouds !== undefined && typeof parsed.showClouds !== 'boolean') {
+			delete parsed.showClouds;
+		}
+		if (parsed.syncToRealTime !== undefined && typeof parsed.syncToRealTime !== 'boolean') {
+			delete parsed.syncToRealTime;
 		}
 
 		return parsed;
