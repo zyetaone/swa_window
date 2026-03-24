@@ -42,12 +42,16 @@ export function loadPersistedState(): Partial<PersistedState> {
 		if (parsed.cloudDensity !== undefined) {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.7, 0, 1);
 		}
-		if (parsed.location && !LOCATION_IDS.has(parsed.location)) {
-			delete parsed.location;
+		if (parsed.location !== undefined) {
+			if (typeof parsed.location !== 'string' || !LOCATION_IDS.has(parsed.location)) {
+				delete parsed.location;
+			}
 		}
 		const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
-		if (parsed.weather && !VALID_WEATHER.includes(parsed.weather)) {
-			delete parsed.weather;
+		if (parsed.weather !== undefined) {
+			if (typeof parsed.weather !== 'string' || !VALID_WEATHER.includes(parsed.weather)) {
+				delete parsed.weather;
+			}
 		}
 
 		// Validate boolean flags
