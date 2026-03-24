@@ -421,8 +421,6 @@
 										</div>
 									{:else if layer.id === 'bloom'}
 										<div class="preview-bloom"><div class="preview-bloom-dot"></div></div>
-									{:else if layer.id === 'viirs' || layer.id === 'roads' || layer.id === 'esri'}
-										<div class="preview-imagery"><div class="preview-imagery-label">{layer.name}</div></div>
 									{:else}
 										<div class="preview-imagery"><div class="preview-imagery-label">{layer.name}</div></div>
 									{/if}
