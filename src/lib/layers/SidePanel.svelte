@@ -186,7 +186,7 @@
 		<section>
 			<h4>Cities</h4>
 			<div class="location-grid">
-				{#each cities as loc}
+				{#each cities as loc (loc.id)}
 					<button
 						class="loc-btn"
 						class:active={model.location === loc.id}
@@ -201,7 +201,7 @@
 		<section>
 			<h4>Nature</h4>
 			<div class="location-grid">
-				{#each nature as loc}
+				{#each nature as loc (loc.id)}
 					<button
 						class="loc-btn"
 						class:active={model.location === loc.id}
