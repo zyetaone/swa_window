@@ -20,6 +20,9 @@ export default defineConfig({
 		sveltekit(),
 	],
 	server: {
+		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
+		// In untrusted network environments, remove `host: true` or restrict
+		// with an allowedHosts list: https://vite.dev/config/server-options#server-allowedhosts
 		host: true,
 	},
 	define: {
