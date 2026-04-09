@@ -204,13 +204,16 @@ export const CLOUD_FRAGMENT = /* glsl */ `
 		// Below cloud deck (<15k ft): clouds above us — fade toward top
 		float belowMask = (1.0 - smoothstep(12000.0, 15000.0, alt)) * smoothstep(0.4, 0.9, y);
 
-		// Blend: use whichever zone we're in (they don't overlap due to smoothstep ranges)
+		// Blend: use whichever zone we are in.
+		// Zones are intentionally non-overlapping; the per-pixel y-fade inside each
+		// mask already handles the transitions. Previously there was an anyZone
+		// fallback that mixed toward 1.0 (full clouds) in transition regions --
+		// at alt=30,100 ft it flipped altMask from ~0.001 to ~0.999, making clouds
+		// occlude the entire Cesium viewport. Removed 2026-04-09: trust altMask
+		// directly so clouds correctly taper to zero when we are cleanly above the
+		// deck. If we later want visible high-altitude clouds below us, widen
+		// aboveMask upper smoothstep bound instead of reintroducing the fallback.
 		float altMask = clamp(aboveMask + inMask + belowMask, 0.0, 1.0);
-
-		// In the transition zones where no mask dominates, keep some base density
-		float anyZone = max(max(smoothstep(30000.0, 35000.0, alt), inCloud),
-		                     1.0 - smoothstep(12000.0, 15000.0, alt));
-		altMask = mix(1.0, altMask, anyZone);
 
 		totalDensity *= altMask;
 
