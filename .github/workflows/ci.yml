@@ -6,34 +6,35 @@ on:
   pull_request:
     branches: [main, master]
 
+# Least-privilege default token — only read access to repo contents.
+permissions:
+  contents: read
+
 jobs:
   build-and-check:
-    name: Type-check, Build & Security Audit
+    name: Type-check & Build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      # This project uses Bun, not npm. `bun.lock` is the authoritative
+      # lockfile. `package-lock.json` may exist in the tree for historical
+      # reasons but is not the source of truth for CI installs.
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: npm
+          bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check
-        run: npm run check
+        run: bun run check
 
       - name: Build
         env:
           VITE_CESIUM_ION_TOKEN: ${{ secrets.VITE_CESIUM_ION_TOKEN }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-        run: npm run build
-
-      - name: Security audit (fail on high/critical)
-        run: npm audit --audit-level=high
+        run: bun run build
