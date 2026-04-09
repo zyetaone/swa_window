@@ -1,0 +1,3 @@
+## 2024-05-23 - Svelte `$state` vs `$state.raw` for Large Objects
+**Learning:** By default, `$state()` in Svelte 5 makes objects and arrays deeply reactive using proxies. When dealing with large complex objects (like a `Cesium.Viewer` instance or Three.js objects), this deep proxying creates a massive performance bottleneck. These external class instances manage their own internal state and should never be deeply proxied by Svelte.
+**Action:** Always use `$state.raw()` for large external library instances (e.g. CesiumViewer, Three.js scenes, Leaflet maps) so Svelte only tracks reassignment of the variable, avoiding the severe performance overhead of deep reactivity on massive objects.

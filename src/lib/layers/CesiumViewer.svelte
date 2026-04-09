@@ -54,7 +54,7 @@
 	let error = $state<string | null>(null);
 	let viewerContainer: HTMLDivElement; // bind:this for retry
 
-	let viewer = $state<CesiumType.Viewer | null>(HMR.viewer);
+	let viewer = $state.raw<CesiumType.Viewer | null>(HMR.viewer);
 	let Cesium: typeof CesiumType | null = HMR.Cesium;
 	let nightLayer: CesiumType.ImageryLayer | null = HMR.nightLayer;
 	let buildingsTileset: CesiumType.Cesium3DTileset | null =
