@@ -44,9 +44,11 @@
 	if (typeof window !== "undefined") {
 		const params = new URLSearchParams(window.location.search);
 
-		const locationParam = params.get("location")?.toLowerCase();
+		const locationParam = params.get("location")?.toLowerCase() as
+			| LocationId
+			| undefined;
 		if (locationParam && LOCATION_MAP.has(locationParam)) {
-			model.setLocation(locationParam as LocationId);
+			model.setLocation(locationParam);
 		}
 
 		const altitudeParam = params.get("altitude");

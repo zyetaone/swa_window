@@ -1,14 +1,6 @@
-export type SkyState = 'day' | 'night' | 'dawn' | 'dusk';
-export type LocationId = 'dubai' | 'himalayas' | 'mumbai' | 'ocean' | 'desert' | 'clouds' | 'hyderabad' | 'dallas' | 'phoenix' | 'las_vegas';
-export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
-
-export interface Location {
-	id: LocationId;
-	name: string;
-	lat: number;
-	lon: number;
-	utcOffset: number;
-	hasBuildings: boolean;
-	defaultAltitude: number;
-	nightAltitude: number;
-}
+/**
+ * Re-export of shared types. SSOT lives in `$lib/shared/types`.
+ * Kept here so existing `./types` relative imports inside `core/`
+ * continue to work without path changes.
+ */
+export type { SkyState, LocationId, WeatherType, Location } from '$lib/shared/types';
