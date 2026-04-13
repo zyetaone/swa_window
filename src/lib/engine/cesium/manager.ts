@@ -15,8 +15,26 @@
 import { lerp } from '$lib/shared/utils';
 import { CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/shared/constants';
 import type { QualityMode } from '$lib/shared/constants';
-import type { WindowModel } from '$lib/core/WindowModel.svelte';
+import type { LocationId, WeatherType } from '$lib/shared/types';
 import type * as CesiumType from 'cesium';
+
+/** Narrow interface — what CesiumManager reads from the model. Avoids circular import from core/. */
+export interface CesiumModelView {
+	lat: number;
+	lon: number;
+	altitude: number;
+	heading: number;
+	pitch: number;
+	bankAngle: number;
+	nightFactor: number;
+	dawnDuskFactor: number;
+	nightLightScale: number;
+	haze: number;
+	showBuildings: boolean;
+	qualityMode: QualityMode;
+	location: LocationId;
+	weather: WeatherType;
+}
 
 const TILE_SERVER_URL =
 	(typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TILE_SERVER_URL) || null;
@@ -33,23 +51,15 @@ class CesiumTerrain {
 	}
 
 	async setup(): Promise<void> {
-		const hasIonToken = this.checkIonToken();
 		const useLocal = await this.checkTileServer();
 
 		if (useLocal) {
 			await this.setupLocal();
-		} else if (hasIonToken) {
+		} else if (this.checkIonToken()) {
 			await this.setupIon();
 		} else {
-			console.warn('[CesiumTerrain] No Ion token — using flat ellipsoid terrain');
+			await this.setupFreeTerrain();
 		}
-
-		this.setupNightBasemap();
-	}
-
-	private checkIonToken(): boolean {
-		const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
-		return !!(token && token !== 'your-cesium-ion-token-here');
 	}
 
 	private async checkTileServer(): Promise<boolean> {
@@ -60,17 +70,34 @@ class CesiumTerrain {
 		} catch { return false; }
 	}
 
-	private async setupIon(): Promise<void> {
+	private checkIonToken(): boolean {
 		const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
+		return !!(token && token !== 'your-cesium-ion-token-here');
+	}
+
+	private async setupIon(): Promise<void> {
 		const C = this.C;
-		(C.Ion as typeof C.Ion).defaultAccessToken = token;
 		try {
 			this.viewer.terrainProvider = await C.createWorldTerrainAsync({
 				requestVertexNormals: true,
 				requestWaterMask: true,
 			});
 		} catch (e) {
-			console.warn('[CesiumTerrain] Ion terrain failed:', e);
+			console.warn('[CesiumTerrain] Ion terrain failed, falling back to free terrain:', e);
+			await this.setupFreeTerrain();
+		}
+	}
+
+	private async setupFreeTerrain(): Promise<void> {
+		const C = this.C;
+		try {
+			this.viewer.terrainProvider = await C.CesiumTerrainProvider.fromUrl(
+				'https://s3.us-west-2.amazonaws.com/elevation-tiles-prod/terrarium',
+				{ requestVertexNormals: false, requestWaterMask: false },
+			);
+		} catch (e) {
+			console.warn('[CesiumTerrain] Free terrain unavailable, using ellipsoid:', e);
+			this.viewer.terrainProvider = new C.EllipsoidTerrainProvider();
 		}
 	}
 
@@ -82,19 +109,9 @@ class CesiumTerrain {
 				{ requestVertexNormals: true, requestWaterMask: true },
 			);
 		} catch (e) {
-			console.warn('[CesiumTerrain] Local terrain failed, trying Ion:', e);
+			console.warn('[CesiumTerrain] Local terrain failed, falling back to Ion:', e);
 			await this.setupIon();
 		}
-	}
-
-	private setupNightBasemap(): void {
-		const C = this.C;
-		const provider = new C.UrlTemplateImageryProvider({
-			url: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-			maximumLevel: 18,
-			minimumLevel: 9,
-		});
-		this.viewer.imageryLayers.addImageryProvider(provider);
 	}
 
 	applyQualityMode(mode: QualityMode): void {
@@ -156,26 +173,37 @@ class CesiumImagery {
 			});
 			this.viewer.imageryLayers.addImageryProvider(provider);
 		} else {
-			try {
-				const esri = await this.C.IonImageryProvider.fromAssetId(3954);
-				this.viewer.imageryLayers.addImageryProvider(esri);
-			} catch (e) {
-				console.warn('[CesiumImagery] ESRI imagery unavailable:', e);
-			}
+			// ESRI World Imagery — free, no auth needed
+			const C = this.C;
+			const provider = new C.UrlTemplateImageryProvider({
+				url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+				maximumLevel: 19,
+				minimumLevel: 0,
+			});
+			this.viewer.imageryLayers.addImageryProvider(provider);
 		}
 	}
 
 	private setupNightLights(useLocal: boolean): void {
 		if (useLocal) return;
-		this.C.IonImageryProvider.fromAssetId(3812).then((viirs) => {
-			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(viirs);
+		// CartoDB dark_all serves as the night city glow overlay
+		// — shown at night via sync() alpha on top of the dark_nolabels base
+		const C = this.C;
+		try {
+			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
+				new C.UrlTemplateImageryProvider({
+					url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+					maximumLevel: 18,
+					minimumLevel: 0,
+				}),
+			);
 			if (this.nightLayer) {
 				this.nightLayer.alpha = 0;
 				this.nightLayer.show = false;
 			}
-		}).catch((e: unknown) => {
-			console.warn('[CesiumImagery] VIIRS night lights unavailable:', e);
-		});
+		} catch (e) {
+			console.warn('[CesiumImagery] Night lights unavailable:', e);
+		}
 	}
 
 	private setupRoadGlow(useLocal: boolean): void {
@@ -197,7 +225,7 @@ class CesiumImagery {
 		}
 	}
 
-	sync(m: WindowModel): void {
+	sync(m: CesiumModelView): void {
 		if (!this.nightLayer) return;
 		const nf = m.nightFactor;
 		const scale = m.nightLightScale;
@@ -258,7 +286,7 @@ class CesiumImagery {
 class CesiumAtmosphere {
 	private readonly viewer: CesiumType.Viewer;
 	private readonly C: typeof CesiumType;
-	private readonly model: WindowModel;
+	private readonly model: CesiumModelView;
 
 	private lastGlobeColor = '';
 	private lastFogDensity = -1;
@@ -266,7 +294,7 @@ class CesiumAtmosphere {
 	private lastLightIntensity = -1;
 	private lastSkySatShift = 999;
 
-	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: WindowModel) {
+	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: CesiumModelView) {
 		this.viewer = viewer;
 		this.C = C;
 		this.model = model;
@@ -331,12 +359,12 @@ class CesiumAtmosphere {
 class CesiumBuildings {
 	private readonly viewer: CesiumType.Viewer;
 	private readonly C: typeof CesiumType;
-	private readonly model: WindowModel;
+	private readonly model: CesiumModelView;
 
 	private tileset: CesiumType.Cesium3DTileset | null = null;
 	private lastNightFactor = -1;
 
-	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: WindowModel) {
+	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: CesiumModelView) {
 		this.viewer = viewer;
 		this.C = C;
 		this.model = model;
@@ -344,6 +372,13 @@ class CesiumBuildings {
 
 	async setup(qualityMode: QualityMode = 'balanced'): Promise<void> {
 		if (!this.C) return;
+		// createOsmBuildingsAsync() requires a valid Ion token. If the token
+		// is missing or invalid (401/404), it will fail — no point calling it.
+		const hasIonToken = this.checkIonToken();
+		if (!hasIonToken) {
+			console.warn('[CesiumBuildings] Ion token missing — buildings disabled');
+			return;
+		}
 		try {
 			this.tileset = await this.C.createOsmBuildingsAsync();
 			this.tileset.show = this.model.showBuildings;
@@ -351,8 +386,13 @@ class CesiumBuildings {
 			this.viewer.scene.primitives.add(this.tileset);
 			this.applyNightStyle(0);
 		} catch (err) {
-			console.warn('[CesiumBuildings] OSM buildings unavailable (Ion token may be missing):', err);
+			console.warn('[CesiumBuildings] OSM buildings unavailable:', (err as Error).message ?? err);
 		}
+	}
+
+	private checkIonToken(): boolean {
+		const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
+		return !!(token && token !== 'your-cesium-ion-token-here');
 	}
 
 	applyQualityMode(mode: QualityMode): void {
@@ -411,9 +451,9 @@ class CesiumBuildings {
 class CesiumPostProcess {
 	private readonly viewer: CesiumType.Viewer;
 	private readonly C: typeof CesiumType;
-	private readonly model: WindowModel;
+	private readonly model: CesiumModelView;
 
-	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: WindowModel) {
+	constructor(viewer: CesiumType.Viewer, C: typeof CesiumType, model: CesiumModelView) {
 		this.viewer = viewer;
 		this.C = C;
 		this.model = model;
@@ -447,7 +487,7 @@ class CesiumPostProcess {
 
 export class CesiumManager {
 	private readonly CesiumModule: typeof CesiumType;
-	private readonly model: WindowModel;
+	private readonly model: CesiumModelView;
 	private readonly viewer: CesiumType.Viewer;
 	private readonly abortController = new AbortController();
 
@@ -470,7 +510,7 @@ export class CesiumManager {
 	private buildings!: CesiumBuildings;
 	private postProcess!: CesiumPostProcess;
 
-	constructor(model: WindowModel, CesiumModule: typeof CesiumType) {
+	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
 		this.model = model;
 		this.CesiumModule = CesiumModule;
 		this.viewer = new CesiumModule.Viewer(this.viewerContainer(), this.viewerOptions());
