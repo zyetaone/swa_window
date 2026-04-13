@@ -8,7 +8,7 @@
 	 * Location picker and settings are in SidePanel.svelte.
 	 */
 
-	import { useAppState } from "$lib/state";
+	import { useAppState } from "$lib/context";
 	import { formatTime } from "$lib/shared/utils";
 	const model = useAppState();
 

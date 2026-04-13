@@ -7,16 +7,16 @@ import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/shared/constants';
 import { LOCATION_MAP, LOCATIONS } from '$lib/shared/locations';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
-import { loadPersistedState, type QualityMode, type PersistedState } from '$lib/shared/persistence';
-import { FlightSimEngine } from '$lib/engine/FlightSim.svelte';
-import { MotionEngine } from '$lib/engine/Motion.svelte';
-import { EventEngine } from '$lib/engine/Events.svelte';
-import { DirectorEngine } from '$lib/engine/Director.svelte';
-import { AtmosphereEngine } from '$lib/engine/Atmosphere.svelte';
-import type { SimulationContext } from '$lib/engine/ISimulationEngine';
+import { loadPersistedState, type QualityMode, type PersistedState } from '$lib/services/persistence';
+import { FlightSimEngine } from '$lib/engine/flight.svelte';
+import { MotionEngine } from '$lib/engine/motion.svelte';
+import { EventEngine } from '$lib/engine/events.svelte';
+import { DirectorEngine } from '$lib/engine/director.svelte';
+import { AtmosphereEngine } from '$lib/engine/atmosphere.svelte';
+import type { SimulationContext } from '$lib/engine/types';
 
-export type { QualityMode } from '$lib/shared/persistence';
-export type { FlightMode } from '$lib/engine/FlightSim.svelte';
+export type { QualityMode } from '$lib/services/persistence';
+export type { FlightMode } from '$lib/engine/flight.svelte';
 
 export interface PatchableState {
 	altitude: number;

@@ -14,7 +14,7 @@
  */
 
 import { setContext, getContext } from 'svelte';
-import { WindowModel } from './WindowModel.svelte';
+import { WindowModel } from './model.svelte';
 
 // --- Shared SSOT re-exports ---
 

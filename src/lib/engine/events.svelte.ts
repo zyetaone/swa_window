@@ -3,7 +3,7 @@
  */
 
 import { MICRO_EVENTS } from '$lib/shared/constants';
-import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 export interface MicroEvent {
 	type: 'shooting-star' | 'bird' | 'contrail';

@@ -9,10 +9,10 @@
 	 *   - Reactive effects that call CesiumManager methods
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { useAppState } from '$lib/state';
+	import { useAppState } from '$lib/context';
 	import { CesiumManager } from './manager';
 	import { COLOR_GRADING_GLSL } from './shaders';
-	import { initCesiumGlobal } from '$lib/cesium/config';
+	import { initCesiumGlobal } from './config';
 
 	const model = useAppState();
 

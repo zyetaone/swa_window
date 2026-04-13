@@ -4,7 +4,7 @@
 
 import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/shared/constants';
-import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 export interface MotionContext extends SimulationContext {
 	turbulenceLevel: 'light' | 'moderate' | 'severe';

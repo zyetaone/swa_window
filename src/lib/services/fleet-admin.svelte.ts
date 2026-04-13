@@ -3,7 +3,7 @@
  */
 
 import type { DeviceInfo, LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-import { BaseTransport } from './BaseTransport';
+import { BaseTransport } from './base-transport';
 
 export type Transport = 'ws' | 'sse';
 

@@ -5,7 +5,7 @@
 import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, AMBIENT } from '$lib/shared/constants';
 import type { WeatherType } from '$lib/shared/types';
-import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 export interface AtmospherePatch {
 	cloudDensity?: number;

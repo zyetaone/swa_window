@@ -3,7 +3,7 @@
  */
 
 import type { LocationId } from '$lib/shared/types';
-import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 export interface DirectorContext extends SimulationContext {
 	pickNextLocation: () => LocationId;

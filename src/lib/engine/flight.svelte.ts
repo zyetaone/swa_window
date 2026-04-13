@@ -7,7 +7,7 @@ import { AIRCRAFT } from '$lib/shared/constants';
 import type { LocationId, SkyState } from '$lib/shared/types';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { pickScenario, type FlightScenario } from '$lib/engine/flight-scenarios';
-import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 

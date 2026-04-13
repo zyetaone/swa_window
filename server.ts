@@ -8,7 +8,7 @@
  * SvelteKit: everything else (handled by adapter-node)
  */
 
-import { fleet } from './src/lib/server/fleet';
+import { fleet } from './src/lib/server/fleet-hub';
 
 const PORT = parseInt(process.env.PORT || '5173', 10);
 

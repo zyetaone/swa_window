@@ -3,8 +3,8 @@
  */
 
 import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
-import type { WindowModel } from '$lib/state/WindowModel.svelte';
-import { BaseTransport } from './BaseTransport';
+import type { WindowModel } from '$lib/model.svelte';
+import { BaseTransport } from './base-transport';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
