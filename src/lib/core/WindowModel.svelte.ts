@@ -20,7 +20,7 @@ import type { QualityMode } from '$lib/shared/constants';
 // re-export for consumers
 export type { QualityMode };
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
-import { loadPersistedState, safeNum, type PersistedState } from './persistence';
+import { loadPersistedState, safeNum, type PersistedState } from '$lib/shared/persistence';
 import { FlightSimEngine } from '$lib/engine/FlightSim.svelte';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
 import { EventEngine } from '$lib/engine/Events.svelte';

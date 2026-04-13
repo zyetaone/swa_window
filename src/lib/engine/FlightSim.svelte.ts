@@ -14,7 +14,7 @@ import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
 import { AIRCRAFT } from '$lib/shared/constants';
 import type { LocationId, SkyState } from '$lib/shared/types';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
-import { pickScenario, type FlightScenario } from '$lib/core/flight-scenarios';
+import { pickScenario, type FlightScenario } from './flight-scenarios';
 
 // ============================================================================
 // TYPES

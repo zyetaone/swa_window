@@ -22,10 +22,10 @@
 	} from "$lib/core";
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/loop.svelte";
-	import CesiumViewer from "./CesiumViewer.svelte";
+	import CesiumViewer from "$lib/adapters/cesium/Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
-	import Weather from '$lib/components/Weather.svelte';
-	import MicroEvent from '$lib/components/MicroEvent.svelte';
+	import Weather from './Weather.svelte';
+	import MicroEvent from './MicroEvent.svelte';
 	const model = useAppState();
 
 	// ========================================================================

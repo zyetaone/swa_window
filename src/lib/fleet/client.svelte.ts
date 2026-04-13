@@ -11,7 +11,7 @@
  */
 
 import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
-import type { WindowModel } from './WindowModel.svelte';
+import type { WindowModel } from '$lib/core/WindowModel.svelte';
 
 // ============================================================================
 // DEVICE IDENTITY

@@ -11,11 +11,11 @@
 
 	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core";
 	import type { LocationId } from "$lib/core";
-	import { savePersistedState } from "$lib/core/persistence";
-	import { createWsClient } from "$lib/core/ws-client.svelte";
-	import Window from "$lib/layers/Window.svelte";
-	import Controls from "$lib/layers/Controls.svelte";
-	import SidePanel from "$lib/layers/SidePanel.svelte";
+	import { savePersistedState } from "$lib/shared/persistence";
+	import { createWsClient } from "$lib/fleet/client.svelte";
+	import Window from "$lib/components/Window.svelte";
+	import Controls from "$lib/components/HUD.svelte";
+	import SidePanel from "$lib/components/SidePanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel

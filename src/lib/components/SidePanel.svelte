@@ -13,8 +13,8 @@
 	} from "$lib/core";
 	import { formatTime } from "$lib/shared/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
-	import Toggle from "./controls/Toggle.svelte";
-	import RangeSlider from "./controls/RangeSlider.svelte";
+	import Toggle from "./Toggle.svelte";
+	import RangeSlider from "./RangeSlider.svelte";
 
 	const model = useAppState();
 
