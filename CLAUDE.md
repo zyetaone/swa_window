@@ -29,11 +29,55 @@ No test runner configured. No linter configured. Type checking is the primary va
 - **State**: Context-based singleton (`setContext`/`getContext`) + composed engine classes
 - **Build**: Vite 7, adapter-node, bundleStrategy:'single', SSR disabled
 
+## Directory Structure
+
+```
+src/lib/
+├── types.ts              # SSOT — all domain types, const-array-derived unions
+├── constants.ts          # Tuning: AIRCRAFT, FLIGHT_FEEL, AMBIENT, WEATHER_EFFECTS, CESIUM
+├── locations.ts          # 18 cities with lat/lon/scene defaults
+├── utils.ts              # clamp, lerp, normalizeHeading, shortestAngleDelta, getSkyState, formatTime
+├── validation.ts         # isValidWeather/DisplayMode/QualityMode + safeParse
+├── persistence.ts        # localStorage save/load with validation
+├── app-state.svelte.ts   # WindowModel orchestrator + context DI
+├── game-loop.ts          # RAF singleton (subscriber pattern, per-callback error tracking)
+│
+├── simulation/           # Pure tick engines (zero DOM, zero Cesium)
+│   ├── flight.svelte.ts  # FlightSimEngine — orbit, scenarios, cruise state machine
+│   ├── motion.svelte.ts  # MotionEngine — turbulence, banking, breathing, vibration
+│   ├── world.svelte.ts   # WorldEngine — weather, lightning, micro-events, auto-pilot
+│   └── scenarios.ts      # Flight path waypoint data + weighted picker
+│
+├── cesium/               # Globe render boundary (isolated Cesium dependency)
+│   ├── manager.ts        # CesiumManager — viewer, terrain, imagery, camera, post-process
+│   ├── config.ts         # Ion token, Mapbox/ESRI/Sentinel imagery URLs, tile server
+│   └── shaders.ts        # GLSL color grading
+│
+├── fleet/                # Remote Pi fleet management (bounded context)
+│   ├── protocol.ts       # Wire message types (server ↔ display ↔ admin)
+│   ├── transport.svelte.ts # BaseTransport — WS/SSE with $state + auto-reconnect
+│   ├── client.svelte.ts  # Display → fleet server connection
+│   ├── admin.svelte.ts   # Admin dashboard store (dual WS/SSE transport)
+│   ├── hub.ts            # Server-side WS hub + SSE broadcast
+│   └── url.ts            # Fleet endpoint resolver (dev override gated)
+│
+└── ui/                   # Svelte presentation components
+    ├── Window.svelte     # Layer compositor — RAF tick, blind drag (useBlind)
+    ├── Globe.svelte      # CesiumManager mount/destroy lifecycle
+    ├── CloudBlobs.svelte # SVG feTurbulence 3-layer parallax
+    ├── Weather.svelte    # Rain, lightning flash, frost (CSS)
+    ├── TreeLayer.svelte  # Procedural CSS trees (seeded per location)
+    ├── MicroEvent.svelte # Shooting stars, birds, contrails (CSS)
+    ├── HUD.svelte        # Telemetry controls overlay
+    ├── SidePanel.svelte  # Location picker + settings
+    └── use-blind.svelte.ts # Composable — blind drag/snap controller
+```
+
 ## Architecture
 
 ### WindowModel (app-state.svelte.ts) — Single Source of Truth
 
-Single class holding all simulation state. Composes 3 engines. Provides context DI via `createAppState()`/`useAppState()`.
+Single class holding all simulation state. Composes 3 engines. Provides context DI.
 
 ```typescript
 model.flight      // FlightSimEngine — lat/lon/altitude/heading/warpFactor/flightMode
@@ -42,24 +86,22 @@ model.world       // WorldEngine — lightningIntensity, microEvent, resetDirect
 
 // Derived
 model.currentLocation  // LOCATION_MAP.get(location)
-model.localTimeOfDay   // timeOfDay + utcOffset
 model.skyState         // day|dawn|dusk|night
 model.nightFactor      // 0-1
+model.sceneFog         // per-location fog settings
+model.terrainExaggeration // per-location (Himalayas 1.5x, cities 1.0x)
 ```
 
 ### Engine Design
 
-Engine modules are **pure TypeScript classes with `$state` output fields**. Zero DOM dependencies, zero Cesium references, independently testable.
+Engines are **pure TypeScript classes with `$state` output fields**. Zero DOM, zero Cesium, independently testable. Each `tick()` accepts `SimulationContext` and returns a patch (or void).
 
-Each engine's `tick()` accepts a narrow **context interface** (not the full model):
+**Intention pattern** — engines propose, coordinator disposes:
 ```typescript
-interface ISimulationEngine<TContext, TPatch> {
-    tick(delta: number, ctx: TContext): TPatch;
-}
-```
+const flightPatch = this.flight.tick(delta, ctx);
+if (flightPatch.blindOpen !== undefined) this.blindOpen = flightPatch.blindOpen;
+if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
 
-**WorldEngine** uses the **intention pattern** — returns a `WorldPatch` (atmosphere changes, next location), coordinator decides whether to apply:
-```typescript
 const worldPatch = this.world.tick(delta, ctx);
 if (worldPatch.atmosphere) this.applyPatch(worldPatch.atmosphere);
 if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
@@ -68,15 +110,15 @@ if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
 ### Tick Pipeline
 
 ```
-Window.svelte (RAF loop via game-loop.svelte)
+Window.svelte (RAF loop via game-loop.ts)
 └── model.tick(delta)
-    ├── flight.tick(delta, ctx)
-    ├── motion.tick(delta, ctx + turbulenceLevel)
-    └── world.tick(delta, ctx + showLightning, isOrbitMode, pickNextLocation)
+    ├── flight.tick(delta, ctx) → FlightPatch
+    ├── motion.tick(delta, ctx) → void (mutates own $state)
+    └── world.tick(delta, ctx) → WorldPatch
         ├── #tickLightning → lightningIntensity/X/Y
-        ├── #tickRandomize → AtmospherePatch (cloudDensity/speed/haze/weather)
-        ├── #tickEvents → microEvent (bird/shooting-star/contrail)
-        └── #tickDirector → LocationId (auto-pilot)
+        ├── #tickRandomize → AtmospherePatch
+        ├── #tickEvents → microEvent
+        └── #tickDirector → LocationId
 ```
 
 ### Component Flow
@@ -84,7 +126,7 @@ Window.svelte (RAF loop via game-loop.svelte)
 ```
 +page.svelte (createAppState() sets context, owns side-effects)
 └── useAppState() → model
-    ├── Window.svelte (RAF tick, layer compositor, blind drag)
+    ├── Window.svelte (RAF tick, layer compositor, useBlind composable)
     │   ├── Globe.svelte (Cesium terrain/buildings — CesiumManager lifecycle)
     │   ├── CloudBlobs.svelte (SVG feTurbulence clouds)
     │   ├── Weather.svelte (rain, lightning, frost — CSS)
@@ -94,16 +136,12 @@ Window.svelte (RAF loop via game-loop.svelte)
     └── SidePanel.svelte (settings)
 ```
 
-**+page.svelte** owns side-effects (real-time clock sync, debounced auto-save, fleet WS connection, URL param config) — kept out of WindowModel for testability.
-
 ### Flight Mode State Machine
 
 ```
 orbit ──flyTo()──→ cruise_departure ──(2s)──→ cruise_transit ──(2s)──→ orbit
                    (warp ramp, blind closes)      (teleport, blind opens)
 ```
-
-Director triggers `flyTo()` every 2-5 minutes, weighted by time of day.
 
 ### CSS Layer System (z-order)
 
@@ -112,7 +150,7 @@ z:0   Cesium globe (terrain, buildings, night lights)
 z:1   CloudBlobs (SVG feTurbulence + CSS drift)
 z:2   Weather (rain drops + lightning flash)
 z:3   Micro-events (shooting star, bird, contrail)
-z:4   TreeLayer (procedural CSS trees, city parks + nature spots)
+z:4   TreeLayer (procedural CSS trees)
 z:5   Frost (altitude-dependent)
 z:7   Wing silhouette
 z:9   Glass vignette
@@ -122,38 +160,22 @@ z:11  Glass recess rim
 
 ### Imagery Sources (in priority order)
 
-| Source | Auth | Storage | Notes |
-|--------|------|---------|-------|
-| **Local tile server** | `VITE_TILE_SERVER_URL` | ~2-8GB per Pi | Pre-fetched via `bun scripts/prefetch-tiles.ts` |
-| **Mapbox Satellite** | `VITE_MAPBOX_TOKEN` | N/A | 50k req/mo free — good for dev/quick setup |
-| **Sentinel-2 L2A** | `VITE_SENTINEL2=true` | N/A | Free global 10m multispectral — needs tiling proxy |
-| **ESRI World Imagery** | None | N/A | Fallback — reliable, no rate limit, no auth |
-
-### Pre-fetching Tiles for Pi (Always-On Display)
-
-For 24/7 always-on displays, pre-fetch tiles to local storage to eliminate per-tile API costs:
-
-```bash
-# Download all 18 locations (zoom 10-16, ~3-6K tiles/location)
-bun scripts/prefetch-tiles.ts
-
-# Download specific location only
-bun scripts/prefetch-tiles.ts dubai
-
-# Preview what would be downloaded (no network calls)
-bun scripts/prefetch-tiles.ts --dry-run
-```
-
-Tiles saved to `public/tiles/{source}/{locationId}/{z}/{x}/{y}.jpg`.
-Manifest at `public/tiles/manifest.json`.
-
-**Sentinel-2 note:** Uses non-standard path format (`tiles/{z}/{x}/{y}/L2A/{date}.jpg`). A tiling proxy (e.g. tileserver-gl) is needed for direct Cesium integration. The pre-fetch script handles reformatting.
-
-### User Override Pattern
-
-`onUserInteraction(type)` pauses auto-behavior for 8 seconds, preventing auto-pilot and ambient randomizer from fighting user input.
+| Source | Auth | When to use |
+|--------|------|-------------|
+| **Local tile server** | `VITE_TILE_SERVER_URL` | Pi deployment — pre-fetched tiles |
+| **Mapbox Satellite** | `VITE_MAPBOX_TOKEN` | Primary online — 50k req/mo free |
+| **ESRI World Imagery** | None | Fallback — reliable, no auth |
 
 ## Key Patterns
+
+### Type SSOT (types.ts)
+
+All domain types derive from const arrays for both compile-time and runtime validation:
+```typescript
+export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const;
+export type WeatherType = typeof WEATHER_TYPES[number];
+// Same pattern for DISPLAY_MODES, QUALITY_MODES
+```
 
 ### Context-Based State Access
 
@@ -162,33 +184,24 @@ const model = createAppState();  // in +page.svelte only
 const model = useAppState();     // in any descendant
 ```
 
-Import `createAppState`/`useAppState` from `$lib/app-state.svelte`. Import types, constants, and locations directly from `$lib/shared/`.
+Import `createAppState`/`useAppState` from `$lib/app-state.svelte`. Import types from `$lib/types`, constants from `$lib/constants`, etc.
 
 ### CRITICAL: Variable Naming with Svelte 5
 
 **Never name a variable `state` when using `$state` rune.** Use `model`, `engine`, etc.
 
-### Game Loop (game-loop.svelte.ts)
+### Fleet Bounded Context
 
-Singleton RAF loop with subscriber pattern. Auto-starts when first subscriber registers, stops when last unsubscribes. Includes visibility check (pauses when tab hidden — saves CPU on Pi kiosk) and error recovery (reloads page after 10 consecutive errors).
+All fleet management lives in `fleet/`. The display client uses `FleetClientModel` (narrow interface in `fleet/protocol.ts`) — never imports WindowModel directly. Fleet files only import from `$lib/types`, `$lib/locations`, and sibling `./` files.
 
-### CesiumManager (cesium-manager.ts)
+### User Override Pattern
 
-Flat class handling all Cesium concerns: viewer lifecycle, terrain, buildings, imagery, atmosphere sync, post-processing, camera. Receives a `CesiumModelView` interface (not WindowModel directly) to stay decoupled.
-
-### TreeLayer (TreeLayer.svelte)
-
-Pure CSS procedural tree layer. No images, no WebGL, no Cesium dependency.
-- Trees generated from seeded pseudo-random function (stable per location)
-- City/nature spots get 30 trees, others get 8
-- Subtle sway animation via CSS keyframes (3-5s period, -2deg to +2deg)
-- Night dimming via CSS `brightness()` filter
-- Only renders when `showClouds && cloudDensity > 0.1`
+`onUserInteraction(type)` pauses auto-behavior for 8 seconds via `UserOverrideTracker` — each flag (altitude/time/atmosphere) has its own independent timeout.
 
 ## Routes
 
 - `/` — Main window display (production route for Pi kiosk)
-- `/playground` — Isolated sandbox for cloud rendering experiments (no WindowModel)
+- `/playground` — Isolated sandbox for rendering experiments (no WindowModel)
 - `/admin` — Fleet admin panel
 - `/architecture` — Architecture visualization
 - `/api/fleet` — Fleet server endpoint
