@@ -3,7 +3,7 @@
  * Returns a WorldPatch each tick so WindowModel can apply changes imperatively.
  */
 
-import { clamp } from '$lib/utils';
+import { clamp, randomBetween } from '$lib/utils';
 import { AIRCRAFT, AMBIENT, MICRO_EVENTS } from '$lib/constants';
 import type { WeatherType, LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
 
@@ -18,16 +18,16 @@ export class WorldEngine {
 
 	// ── Private timers ────────────────────────────────────────────────────────
 	#lightningTimer = 0;
-	#nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
+	#nextLightning = randomBetween(AIRCRAFT.LIGHTNING_MIN_INTERVAL, AIRCRAFT.LIGHTNING_MAX_INTERVAL);
 
 	#randomizeTimer = 0;
-	#nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY + Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
+	#nextRandomizeTime = randomBetween(AMBIENT.INITIAL_MIN_DELAY, AMBIENT.INITIAL_MAX_DELAY);
 
 	#eventTimer = 0;
-	#timeToNextEvent = MICRO_EVENTS.MIN_INTERVAL + Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
+	#timeToNextEvent = randomBetween(MICRO_EVENTS.MIN_INTERVAL, MICRO_EVENTS.MAX_INTERVAL);
 
 	#directorTimer = 0;
-	#timeToNextLocation = 120 + Math.random() * 180;
+	#timeToNextLocation = randomBetween(120, 300);
 
 	// ─────────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ export class WorldEngine {
 
 	resetDirector(): void {
 		this.#directorTimer = 0;
-		this.#timeToNextLocation = 120 + Math.random() * 180;
+		this.#timeToNextLocation = randomBetween(120, 300);
 	}
 
 	// ─── Lightning ────────────────────────────────────────────────────────────
@@ -63,11 +63,11 @@ export class WorldEngine {
 			this.lightningIntensity = clamp(this.lightningIntensity - delta * AIRCRAFT.LIGHTNING_DECAY_RATE, 0, 1);
 		}
 		if (this.lightningIntensity < 0.01 && this.#lightningTimer > this.#nextLightning) {
-			this.lightningIntensity = 0.5 + Math.random() * 0.5;
-			this.lightningX = 20 + Math.random() * 60;
-			this.lightningY = 15 + Math.random() * 50;
+			this.lightningIntensity = randomBetween(0.5, 1);
+			this.lightningX = randomBetween(20, 80);
+			this.lightningY = randomBetween(15, 65);
 			this.#lightningTimer = 0;
-			this.#nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
+			this.#nextLightning = randomBetween(AIRCRAFT.LIGHTNING_MIN_INTERVAL, AIRCRAFT.LIGHTNING_MAX_INTERVAL);
 		}
 	}
 
@@ -79,7 +79,7 @@ export class WorldEngine {
 		if (ctx.userAdjustingAtmosphere) return null;
 
 		this.#randomizeTimer = 0;
-		this.#nextRandomizeTime = AMBIENT.SUBSEQUENT_MIN_DELAY + Math.random() * (AMBIENT.SUBSEQUENT_MAX_DELAY - AMBIENT.SUBSEQUENT_MIN_DELAY);
+		this.#nextRandomizeTime = randomBetween(AMBIENT.SUBSEQUENT_MIN_DELAY, AMBIENT.SUBSEQUENT_MAX_DELAY);
 
 		const patch: AtmospherePatch = {};
 		patch.cloudDensity = clamp(ctx.cloudDensity + (Math.random() - 0.5) * AMBIENT.CLOUD_DENSITY_SHIFT, AMBIENT.CLOUD_DENSITY_MIN, AMBIENT.CLOUD_DENSITY_MAX);
@@ -110,7 +110,7 @@ export class WorldEngine {
 		if (this.#eventTimer < this.#timeToNextEvent) return;
 
 		this.#eventTimer = 0;
-		this.#timeToNextEvent = MICRO_EVENTS.MIN_INTERVAL + Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
+		this.#timeToNextEvent = randomBetween(MICRO_EVENTS.MIN_INTERVAL, MICRO_EVENTS.MAX_INTERVAL);
 
 		const types: Array<'bird' | 'shooting-star' | 'contrail'> = [];
 		if (ctx.altitude < 15000 && ctx.skyState === 'day' && ctx.weather !== 'rain' && ctx.weather !== 'overcast') types.push('bird');
@@ -122,7 +122,7 @@ export class WorldEngine {
 		const duration = type === 'bird' ? MICRO_EVENTS.BIRD_DURATION
 			: type === 'shooting-star' ? MICRO_EVENTS.SHOOTING_STAR_DURATION
 			: MICRO_EVENTS.CONTRAIL_DURATION;
-		this.microEvent = { type, duration, elapsed: 0, x: 10 + Math.random() * 80, y: type === 'bird' ? 20 + Math.random() * 60 : 10 + Math.random() * 30 };
+		this.microEvent = { type, duration, elapsed: 0, x: randomBetween(10, 90), y: type === 'bird' ? randomBetween(20, 80) : randomBetween(10, 40) };
 	}
 
 	// ─── Auto-pilot director ──────────────────────────────────────────────────

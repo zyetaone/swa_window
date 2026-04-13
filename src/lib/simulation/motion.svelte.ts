@@ -2,7 +2,7 @@
  * MotionEngine — turbulence, banking, breathing, engine vibration.
  */
 
-import { clamp, shortestAngleDelta } from '$lib/utils';
+import { clamp, shortestAngleDelta, randomBetween } from '$lib/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
 import type { SimulationContext } from '$lib/types';
 
@@ -18,8 +18,7 @@ export class MotionEngine {
 	// ── Internal state ─────────────────────────────────────────────────────────
 	#prevHeading = 0;
 	#bumpTimer = 0;
-	#nextBump = FLIGHT_FEEL.BUMP_MIN_INTERVAL
-		+ Math.random() * (FLIGHT_FEEL.BUMP_MAX_INTERVAL - FLIGHT_FEEL.BUMP_MIN_INTERVAL);
+	#nextBump = randomBetween(FLIGHT_FEEL.BUMP_MIN_INTERVAL, FLIGHT_FEEL.BUMP_MAX_INTERVAL);
 	#bumpElapsed = -1;
 	#bumpSign = 1;
 
@@ -52,9 +51,7 @@ export class MotionEngine {
 			this.#bumpTimer = 0;
 			this.#bumpElapsed = 0;
 			this.#bumpSign = Math.random() > 0.5 ? 1 : -1;
-			this.#nextBump = (FLIGHT_FEEL.BUMP_MIN_INTERVAL
-				+ Math.random() * (FLIGHT_FEEL.BUMP_MAX_INTERVAL - FLIGHT_FEEL.BUMP_MIN_INTERVAL))
-				/ turbMult;
+			this.#nextBump = randomBetween(FLIGHT_FEEL.BUMP_MIN_INTERVAL, FLIGHT_FEEL.BUMP_MAX_INTERVAL) / turbMult;
 		}
 
 		this.motionOffsetY = (baseTurbY * AIRCRAFT.TURBULENCE_OFFSET_Y + chatterY + bumpValue) * altFactor;
