@@ -131,10 +131,14 @@ export class WindowModel {
 	isScreensaverMode = $derived(this.displayMode === 'screensaver');
 	isVideoMode = $derived(this.displayMode === 'video');
 
-	// --- Cesium quality ---
+	// --- Cesium quality (auto-adjusts based on measured FPS) ---
 	qualityMode = $state<QualityMode>('balanced');
+	autoQuality = $state(true);
+	private _qualityCheckTimer = 0;
+	private readonly QUALITY_CHECK_INTERVAL = 5;
+	private readonly QUALITY_MODES: QualityMode[] = ['performance', 'balanced', 'ultra'];
 
-	// --- FPS tracking (for fleet health reporting) ---
+	// --- FPS tracking (for fleet health reporting + auto-quality) ---
 	private _frameCount = 0;
 	private _fpsLastTime = performance.now();
 	measuredFps = $state(0);
@@ -456,6 +460,7 @@ export class WindowModel {
 		this.tickMotion(delta);
 		this.tickMicroEvents(delta);
 		this.tickRandomize(delta);
+		this.tickAutoQuality(delta);
 	}
 
 	private tickDirector(delta: number): void {
@@ -482,6 +487,20 @@ export class WindowModel {
 
 	private tickMicroEvents(delta: number): void {
 		this.events.tick(delta, { skyState: this.skyState });
+	}
+
+	private tickAutoQuality(delta: number): void {
+		if (!this.autoQuality || this.measuredFps === 0) return;
+		this._qualityCheckTimer += delta;
+		if (this._qualityCheckTimer < this.QUALITY_CHECK_INTERVAL) return;
+		this._qualityCheckTimer = 0;
+
+		const idx = this.QUALITY_MODES.indexOf(this.qualityMode);
+		if (this.measuredFps < 20 && idx > 0) {
+			this.qualityMode = this.QUALITY_MODES[idx - 1];
+		} else if (this.measuredFps > 40 && idx < this.QUALITY_MODES.length - 1) {
+			this.qualityMode = this.QUALITY_MODES[idx + 1];
+		}
 	}
 
 	private tickRandomize(delta: number): void {
