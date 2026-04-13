@@ -5,7 +5,7 @@
 
 import { clamp, randomBetween } from '$lib/utils';
 import { AIRCRAFT, AMBIENT, MICRO_EVENTS } from '$lib/constants';
-import type { WeatherType, LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
+import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
 
@@ -87,8 +87,7 @@ export class WorldEngine {
 		patch.haze         = clamp(ctx.haze         + (Math.random() - 0.5) * AMBIENT.HAZE_SHIFT,          AMBIENT.HAZE_MIN,          AMBIENT.HAZE_MAX);
 
 		if (Math.random() < AMBIENT.WEATHER_CHANGE_CHANCE) {
-			const options: WeatherType[] = ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'];
-			patch.weather = options[Math.floor(Math.random() * options.length)];
+			patch.weather = AMBIENT.WEATHER_POOL[Math.floor(Math.random() * AMBIENT.WEATHER_POOL.length)];
 		}
 
 		return patch;

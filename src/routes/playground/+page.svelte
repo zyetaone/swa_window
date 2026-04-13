@@ -10,7 +10,7 @@
 
 	import type { SkyState } from '$lib/types';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
-	import MapLibreGlobe from './MapLibreGlobe.svelte';
+	import MapLibreGlobe from '$lib/ui/MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import * as Cesium from 'cesium';
@@ -19,7 +19,6 @@
 
 	let activeTab = $state<Tab>('cesium');
 	let viewerContainer = $state<HTMLDivElement | null>(null);
-		let maplibreRef = $state<MapLibreGlobe | null>(null);
 	let cesiumViewer: Cesium.Viewer | null = null;
 	let cesiumLoaded = $state(false);
 
@@ -38,15 +37,15 @@
 		},
 		{
 			id: 'sentinel2',
-			label: 'Sentinel-2 (RODA)',
-			url: 'https://roda.sentinel-hub.com/sentinel-s2-l2a/tiles/{z}/{x}/{y}/L2A/2023-07-15.jpg',
-			note: '10m resolution, needs tiling proxy',
+			label: 'Sentinel-2 (EOX via MapLibre)',
+			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
+			note: 'Free, global, no auth — works in MapLibre only',
 		},
 		{
-			id: 'landsat',
-			label: 'Landsat 8 (AWS)',
-			url: 'https://landsat-pds.s3.us-west-2.amazonaws.com/tiles/{z}/{x}/{y}.jpg',
-			note: '30m resolution, free forever',
+			id: 'mapbox',
+			label: 'Mapbox Satellite',
+			url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${import.meta.env.VITE_MAPBOX_TOKEN ?? ''}`,
+			note: 'Requires VITE_MAPBOX_TOKEN env var',
 		},
 	] as const;
 
@@ -152,12 +151,7 @@
 		}
 	});
 
-	// Fly to Dubai on MapLibre init
-	$effect(() => {
-		if (activeTab === 'maplibre' && maplibreRef) {
-			maplibreRef.flyTo(DUBAI);
-		}
-	});
+	// Fly to Dubai on MapLibre init — already handled by center prop on init
 
 	onMount(() => {
 		setTimeout(initCesium, 100);
@@ -186,22 +180,20 @@
 	<div class="viewport" style:background={bgGradient}>
 		<!-- Cesium tab -->
 		{#if activeTab === 'cesium' || activeTab === 'compare'}
-			<div class="globe-pane" class:left-half={activeTab === 'compare'}>
+			<div class="globe-pane cesium-pane">
 				<div bind:this={viewerContainer} class="cesium-viewer"></div>
 			</div>
 		{/if}
 
 		<!-- MapLibre tab -->
 		{#if activeTab === 'maplibre' || activeTab === 'compare'}
-			<div class="globe-pane" class:right-half={activeTab === 'compare'}>
+			<div class="globe-pane maplibre-pane">
 				<MapLibreGlobe
-					bind:this={maplibreRef}
 					lat={DUBAI.lat}
 					lon={DUBAI.lon}
 					zoom={10}
 					pitch={-45}
 					imageryUrl={MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.url ?? MAPLIBRE_SOURCES[0].url}
-					showAtmosphere={true}
 				/>
 			</div>
 		{/if}
@@ -350,16 +342,16 @@
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		left: 0;
 		width: 100%;
 	}
 
-	.globe-pane.right-half {
-		left: 50%;
+	.globe-pane.cesium-pane {
+		left: 0;
 		width: 50%;
 	}
 
-	.globe-pane.left-half {
+	.globe-pane.maplibre-pane {
+		left: 50%;
 		width: 50%;
 	}
 

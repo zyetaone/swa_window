@@ -10,8 +10,6 @@ import type { LocationId, SkyState, FlightScenario } from '$lib/types';
 import { LOCATION_IDS } from '$lib/locations';
 import { getSkyState } from '$lib/utils';
 
-export type { FlightScenario, Waypoint } from '$lib/types';
-
 // ============================================================================
 // SCENARIO DATA
 // ============================================================================

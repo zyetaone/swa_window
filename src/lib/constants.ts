@@ -119,6 +119,8 @@ export const AMBIENT = {
 
 	// Probability of weather transition per cycle
 	WEATHER_CHANGE_CHANCE: 0.2,
+	// Weighted pool for auto-cycle (storm excluded, cloudy doubled for probability)
+	WEATHER_POOL: ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'] as const,
 } as const;
 
 // =============================================================================

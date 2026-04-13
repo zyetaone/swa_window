@@ -5,7 +5,7 @@
  * (server.ts) wires this into the Bun WebSocket handlers.
  *
  * Usage:
- *   import { fleet } from '$lib/server/fleet-hub';
+ *   import { fleet } from '$lib/fleet/hub';
  *   // In Bun.serve websocket handlers:
  *   fleet.onOpen(ws);
  *   fleet.onMessage(ws, raw);
