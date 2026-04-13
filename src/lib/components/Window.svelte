@@ -26,6 +26,7 @@
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';
+	import Blind from './Blind.svelte';
 	const model = useAppState();
 
 	// ========================================================================
@@ -160,148 +161,6 @@
 		model.skyState === "night" ? 0.3 : model.skyState === "day" ? 0.1 : 0.2,
 	);
 
-	// --- Input / Gestures ---
-	let touchStartY = 0;
-	let touchStartX = 0;
-	let pressTimer: ReturnType<typeof setTimeout> | null = null;
-	const LONG_PRESS_MS = 8000;
-	const SWIPE_THRESHOLD = 50;
-
-	// --- Draggable blind (ported from feat/offline-tiles Windows version) ---
-	// blindDragY: 0 = fully closed (visible), -105 = fully open (off-screen).
-	// During drag, CSS transition is disabled for instant response.
-	// On release, snap to open or closed with transition.
-	let isDragging = $state(false);
-	let blindDragY = $state(0);
-	let dragStartBlindY = 0;
-	let dragStartPointerY = 0;
-	let blindContainerHeight = 0;
-	const SNAP_THRESHOLD = 0.3;
-
-	// Sync blindDragY with model.blindOpen when not dragging
-	$effect(() => {
-		if (!isDragging) {
-			blindDragY = model.blindOpen ? -105 : 0;
-		}
-	});
-
-	const blindTransform = $derived(
-		`translateY(${blindDragY.toFixed(1)}%)`
-	);
-
-	const blindTransition = $derived(
-		isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.05)'
-	);
-
-	function getBlindHeight(): number {
-		const el = document.querySelector('.blind-clip') as HTMLElement | null;
-		return el?.offsetHeight ?? 1;
-	}
-
-	function startBlindDrag(pointerY: number) {
-		if (model.isTransitioning) return;
-		blindContainerHeight = getBlindHeight();
-		isDragging = true;
-		dragStartBlindY = blindDragY;
-		dragStartPointerY = pointerY;
-	}
-
-	function moveBlindDrag(pointerY: number) {
-		if (!isDragging) return;
-		const deltaPixels = pointerY - dragStartPointerY;
-		const deltaPct = (deltaPixels / blindContainerHeight) * 100;
-		blindDragY = clamp(dragStartBlindY + deltaPct, -105, 0);
-	}
-
-	function endBlindDrag() {
-		if (!isDragging) return;
-		isDragging = false;
-		const totalTravel = 105;
-		const distanceTraveled = Math.abs(blindDragY - dragStartBlindY);
-		const travelRatio = distanceTraveled / totalTravel;
-		if (travelRatio > SNAP_THRESHOLD) {
-			model.blindOpen = blindDragY < dragStartBlindY;
-		}
-		// If not past threshold, $effect syncs blindDragY back
-	}
-
-	function handleStart(y: number, x: number) {
-		touchStartY = y;
-		touchStartX = x;
-		startBlindDrag(y);
-		pressTimer = setTimeout(() => {
-			model.flyTo(model.pickNextLocation());
-			pressTimer = null;
-		}, LONG_PRESS_MS);
-	}
-
-	function handleMove(y: number) {
-		if (isDragging) {
-			moveBlindDrag(y);
-			if (pressTimer) {
-				clearTimeout(pressTimer);
-				pressTimer = null;
-			}
-		}
-	}
-
-	function handleEnd(y: number, x: number) {
-		if (pressTimer) {
-			clearTimeout(pressTimer);
-			pressTimer = null;
-		}
-
-		if (isDragging) {
-			endBlindDrag();
-			return;
-		}
-
-		const dy = y - touchStartY;
-		const dx = x - touchStartX;
-
-		if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-			if (dy > 0 && model.blindOpen) {
-				model.blindOpen = false;
-			} else if (dy < 0 && !model.blindOpen) {
-				model.blindOpen = true;
-			}
-		}
-	}
-
-	function onTouchStart(e: TouchEvent) {
-		handleStart(e.touches[0].clientY, e.touches[0].clientX);
-	}
-
-	function onTouchMove(e: TouchEvent) {
-		handleMove(e.touches[0].clientY);
-	}
-
-	function onTouchEnd(e: TouchEvent) {
-		handleEnd(e.changedTouches[0].clientY, e.changedTouches[0].clientX);
-	}
-
-	function onMouseDown(e: MouseEvent) {
-		handleStart(e.clientY, e.clientX);
-	}
-
-	function onMouseMove(e: MouseEvent) {
-		handleMove(e.clientY);
-	}
-
-	function onMouseUp(e: MouseEvent) {
-		handleEnd(e.clientY, e.clientX);
-	}
-
-	// Double-click and long-press disabled for kiosk mode —
-	// only drag gesture controls the blind, preventing accidental triggers.
-
-	// --- Blind handle discoverability (plays once per session) ---
-	let hasAnimated = $state(false);
-
-	function onHandleAnimationEnd() {
-		hasAnimated = true;
-	}
-
 	// --- Timed click-hint (touch kiosks have no :hover) ---
 	let showHint = $state(false);
 	$effect(() => {
@@ -322,12 +181,6 @@
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
 	tabindex="0"
-	ontouchstart={onTouchStart}
-	ontouchmove={onTouchMove}
-	ontouchend={onTouchEnd}
-	onmousedown={onMouseDown}
-	onmousemove={onMouseMove}
-	onmouseup={onMouseUp}
 	onkeydown={(e) => {
 		if (e.key === "Enter" || e.key === " ") {
 			model.toggleBlind();
@@ -405,25 +258,12 @@
 		{/if}
 	</button>
 
-	<!-- Blind -->
-	<div class="blind-clip">
-		<div
-			class="blind-overlay"
-			class:discoverable={!model.blindOpen && !hasAnimated}
-			onanimationend={onHandleAnimationEnd}
-			role="slider"
-			aria-label="Window blind — drag to open or close"
-			aria-valuenow={Math.round(Math.abs(blindDragY))}
-			aria-valuemin={0}
-			aria-valuemax={105}
-			style:transform={blindTransform}
-			style:transition={blindTransition}
-			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
-		>
-			<div class="blind-slats"></div>
-			<!-- Removing blind-label for cleaner, physical look -->
-		</div>
-	</div>
+	<!-- Blind (self-contained drag gesture) -->
+	<Blind
+		open={model.blindOpen}
+		transitioning={model.isTransitioning}
+		onToggle={(open) => { model.blindOpen = open; }}
+	/>
 </div>
 
 <style>
@@ -529,92 +369,6 @@
 			inset 0 0 10px 4px rgba(0, 0, 0, 0.25),
 			inset 2px 2px 6px rgba(0, 0, 0, 0.15);
 	}
-
-	/* --- Blind --- */
-
-	.blind-clip {
-		position: absolute;
-		inset: var(--frame-width);
-		border-radius: var(--inner-radius);
-		overflow: hidden;
-		z-index: 5;
-		pointer-events: none;
-	}
-
-	.blind-overlay {
-		position: absolute;
-		inset: 0;
-		border-radius: var(--inner-radius);
-		background: rgba(240, 238, 235, 0.95);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border: none;
-		padding: 0;
-		/* transform, transition, pointer-events set via inline style for drag support */
-	}
-
-	.blind-overlay:disabled {
-		cursor: not-allowed;
-	}
-
-	.blind-slats {
-		position: absolute;
-		inset: 0;
-		background: repeating-linear-gradient(
-			180deg,
-			rgba(230, 228, 225, 0.9) 0px,
-			rgba(230, 228, 225, 0.9) 6px,
-			rgba(210, 208, 205, 0.7) 6px,
-			rgba(210, 208, 205, 0.7) 8px
-		);
-		box-shadow: inset 0 -20px 30px rgba(0, 0, 0, 0.1);
-	}
-
-	.blind-overlay::after {
-		content: "";
-		position: absolute;
-		bottom: 8%;
-		left: 30%;
-		right: 30%;
-		height: 14px;
-		background:
-			repeating-linear-gradient(
-				180deg,
-				transparent 0px,
-				transparent 3px,
-				rgba(0, 0, 0, 0.15) 3px,
-				rgba(0, 0, 0, 0.15) 4px,
-				transparent 4px,
-				transparent 5px
-			),
-			linear-gradient(180deg, var(--sw-silver) 0%, #908880 100%);
-		border-radius: 6px;
-		box-shadow:
-			0 2px 4px rgba(0, 0, 0, 0.3),
-			inset 0 1px 0 rgba(255, 255, 255, 0.4);
-	}
-
-	/* --- Blind handle discoverability pulse (once per session) --- */
-
-	@keyframes handle-breathe {
-		0%,
-		100% {
-			transform: translateY(0);
-			opacity: 0.9;
-		}
-		50% {
-			transform: translateY(-3px);
-			opacity: 1;
-		}
-	}
-
-	.blind-overlay.discoverable::after {
-		animation: handle-breathe 1s ease-in-out 3;
-	}
-
-	/* .blind-label telemetry badge removed for de-cluttered UI */
 
 	/* --- Glass vignette --- */
 
