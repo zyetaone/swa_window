@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { AdminStore, type Transport } from '$lib/admin-store.svelte';
+	import { AdminStore, type Transport } from '$lib/core/admin-store.svelte';
 	import type { LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-	import { LOCATIONS } from '$lib/shared';
+	import { LOCATIONS, type QualityMode } from '$lib/shared';
 	import { onDestroy } from 'svelte';
 
 	// Read config from URL params: ?server=ws://...&transport=sse
@@ -27,6 +27,7 @@
 	let cfgNightLightIntensity = $state(0.6);
 	let cfgSyncToRealTime = $state(true);
 	let cfgShowClouds = $state(true);
+	let cfgQualityMode = $state<QualityMode>('balanced');
 
 	// Derived display labels for sliders
 	const altitudeLabel = $derived(`${(cfgAltitude / 1000).toFixed(0)}k ft`);
@@ -281,6 +282,17 @@
 					</div>
 					<input type="range" min="0" max="5" step="0.1" bind:value={cfgNightLightIntensity}
 						oninput={() => pushConfigLive({ nightLightIntensity: cfgNightLightIntensity })} class="range" />
+				</label>
+				<label>
+					<div class="slider-header">
+						<span>Quality</span>
+						<span class="slider-value">{cfgQualityMode}</span>
+					</div>
+					<select bind:value={cfgQualityMode} onchange={() => pushConfigLive({ qualityMode: cfgQualityMode })} class="select">
+						<option value="performance">Performance (Pi/Raspberry)</option>
+						<option value="balanced">Balanced (default)</option>
+						<option value="ultra">Ultra (high-end)</option>
+					</select>
 				</label>
 				<div class="toggle-row">
 					<label class="toggle-label">

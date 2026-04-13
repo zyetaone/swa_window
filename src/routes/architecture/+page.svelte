@@ -130,19 +130,21 @@
 			name: 'Clouds',
 			z: 'z:1',
 			condition: 'cloudOpacity > 0',
-			description: 'Three.js WebGL — texture-based FBM with camera parallax (3 depth layers)',
-			category: 'gpu',
+			description: 'CSS-only — SVG feTurbulence + box-shadow drift (CSS-Tricks technique)',
+			category: 'css',
 			previewType: 'cloud',
 			details: [
-				'Rendered by: CloudCanvas.svelte → Three.js ShaderMaterial (cloud-shader.ts)',
-				'Textures: cloud-noise.png (512² RGBA: Perlin-Worley/Worley/Worley-hi/Perlin-lo), cloud-detail.png (256² RGBA: Worley-F2/Curl-X/Curl-Y/hi-freq-Perlin)',
-				'Layers: far (parallax=0.05, scale=1.5) · mid (parallax=0.2, scale=3.0) · near (parallax=0.5, scale=5.0)',
-				'Camera parallax: heading shifts UV.x, pitch shifts UV.y — per-layer depth rates',
-				'Altitude masking: above 30k ft (deck below), 15–25k ft (whiteout), below 15k ft (deck above)',
-				'Half-res rendering: devicePixelRatio × 0.5 (saves 4× fill rate)',
-				'Lighting: Beer-Lambert self-shadowing, silver-lining edge glow',
-				'Fallback: computed 3-octave FBM noise when textures fail to load',
-				'Output: premultiplied alpha for transparent compositing over Cesium',
+				'Rendered by: CloudBlobs.svelte → SVG feTurbulence + feDisplacementMap',
+				'Technique: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/',
+				'Container: perspective(600px) rotateX(35deg) — horizon compresses, foreground widens',
+				'Cloud layer: 10 blurred ellipses. Far=small/hazy/slow, near=large/sharp/fast',
+				'Box-shadow offset positions visible cloud; element itself is off-screen',
+				'Depth model: size, blur, speed, opacity all scale with depth (0=horizon, 1=foreground)',
+				'SVG filter: feTurbulence (fractalNoise, deterministic seed per cloud)',
+				'feDisplacementMap: scale varies by depth (80=far subtle, 160=near dramatic)',
+				'Drift animation: CSS translateX (-60% → 130%), duration scales with cloudSpeed',
+				'Circadian tinting: rgb shifts per nightFactor/dawnDuskFactor',
+				'Pi 5 friendly: GPU-composited filter, no per-frame JS',
 			],
 		},
 		{
@@ -740,8 +742,8 @@
 					</div>
 					<div class="own-connector"></div>
 					<div class="own-node own-cesium">
-						<span class="own-title">CloudCanvas.svelte</span>
-						<span class="own-detail">Three.js WebGL clouds, texture-based FBM, camera parallax</span>
+						<span class="own-title">CloudBlobs.svelte</span>
+						<span class="own-detail">SVG feTurbulence clouds, CSS drift animation, zero GPU cost</span>
 					</div>
 				</div>
 				<div class="own-node own-controls">

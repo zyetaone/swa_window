@@ -15,8 +15,9 @@ export {
 	MICRO_EVENTS,
 	CESIUM,
 	WEATHER_EFFECTS,
+	CESIUM_QUALITY_PRESETS,
 } from './constants';
-export type { WeatherEffect } from './constants';
+export type { WeatherEffect, QualityMode } from './constants';
 
 export { LOCATIONS, LOCATION_IDS, LOCATION_MAP } from './locations';
 

@@ -126,6 +126,40 @@ export const AMBIENT = {
 // CESIUM LAYER THRESHOLDS & TUNING
 // =============================================================================
 
+export type QualityMode = 'performance' | 'balanced' | 'ultra';
+
+export interface CesiumQualityPreset {
+	maximumScreenSpaceError: number;
+	tileCacheSize: number;
+	preloadSiblings: boolean;
+	preloadAncestors: boolean;
+	loadingDescendantLimit: number;
+}
+
+export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
+	performance: {
+		maximumScreenSpaceError: 6,    // Lower detail — fewer tiles, less GPU work
+		tileCacheSize: 20,             // Tight memory budget
+		preloadSiblings: false,       // No extra tile loads
+		preloadAncestors: true,
+		loadingDescendantLimit: 4,
+	},
+	balanced: {
+		maximumScreenSpaceError: 4,    // Default quality
+		tileCacheSize: 50,            // Moderate memory budget
+		preloadSiblings: false,
+		preloadAncestors: true,
+		loadingDescendantLimit: 4,
+	},
+	ultra: {
+		maximumScreenSpaceError: 2,   // High detail — sharper edges
+		tileCacheSize: 100,           // Generous memory budget
+		preloadSiblings: true,        // Pre-load neighboring tiles
+		preloadAncestors: true,
+		loadingDescendantLimit: 6,
+	},
+};
+
 export const CESIUM = {
 	// NASA VIIRS night lights layer
 	VIIRS_NIGHT_ALPHA: 0.45,

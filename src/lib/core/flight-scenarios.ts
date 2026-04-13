@@ -8,7 +8,7 @@
  * Waypoint durations total 3-5 minutes per loop so terrain keeps changing.
  */
 
-import type { LocationId, SkyState } from './types';
+import type { LocationId, SkyState } from '$lib/shared/types';
 
 // ============================================================================
 // TYPES

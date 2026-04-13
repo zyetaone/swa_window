@@ -26,3 +26,6 @@ dist/
 
 # Cesium static assets (copied from node_modules during setup)
 static/cesium/
+
+# Project management symlink (sidecar, not part of repo)
+_project

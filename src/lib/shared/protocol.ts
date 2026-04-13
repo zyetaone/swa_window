@@ -7,6 +7,7 @@
  */
 
 import type { LocationId, WeatherType } from './types';
+import type { QualityMode } from './constants';
 
 // ============================================================================
 // DISPLAY MODES
@@ -46,6 +47,8 @@ export interface DisplayConfig {
 	syncToRealTime?: boolean;
 	showClouds?: boolean;
 	nightLightIntensity?: number;
+	/** Cesium terrain LOD preset: performance / balanced / ultra */
+	qualityMode?: QualityMode;
 }
 
 // ============================================================================
@@ -73,7 +76,8 @@ export type ServerMessage =
 	| { type: 'set_scene'; location: LocationId; weather?: WeatherType }
 	| { type: 'set_config'; patch: DisplayConfig }
 	| { type: 'tile_update'; locationId: LocationId; version: string; url: string }
-	| { type: 'ping' };
+	| { type: 'ping' }
+	| { type: 'set_quality'; mode: QualityMode };
 
 // ============================================================================
 // DISPLAY → SERVER MESSAGES

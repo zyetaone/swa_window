@@ -9,7 +9,7 @@
 	 */
 
 	import { useAppState } from "$lib/core";
-	import { formatTime } from "$lib/core/utils";
+	import { formatTime } from "$lib/shared/utils";
 	const model = useAppState();
 
 	// HUD derived values

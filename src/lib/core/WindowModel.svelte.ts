@@ -12,19 +12,19 @@
  * - flyTo(): Synchronous state transition to cruise mode
  */
 
-import { clamp, lerp, normalizeHeading } from './utils';
-import { AIRCRAFT, FLIGHT_FEEL, AMBIENT, MICRO_EVENTS } from './constants';
-import type { SkyState, LocationId, WeatherType } from './types';
+import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
+import { AIRCRAFT, FLIGHT_FEEL, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/shared/constants';
+import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
-import { LOCATIONS, LOCATION_MAP } from './locations';
+import type { QualityMode } from '$lib/shared/constants';
+import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
-import { WEATHER_EFFECTS } from './constants';
 import { pickScenario, type FlightScenario } from './flight-scenarios';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
 // ============================================================================
-// TYPES (local to this module)
+// TYPES
 // ============================================================================
 
 export interface PatchableState {
@@ -43,10 +43,6 @@ export interface PatchableState {
 	showClouds: boolean;
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
 function getSkyState(timeOfDay: number): SkyState {
 	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
 	if (timeOfDay < 7) return 'dawn';
@@ -59,123 +55,126 @@ function getSkyState(timeOfDay: number): SkyState {
 // ============================================================================
 
 export class WindowModel {
-	// --- Position ---
+	// ── Position ────────────────────────────────────────────────────────────────
 	lat = $state(25.2048);
 	lon = $state(55.2708);
-	utcOffset = $state(4);
 	altitude = $state(35000);
 	heading = $state(45);
 	pitch = $state(75);
 
-	// --- Time ---
+	// ── Time ────────────────────────────────────────────────────────────────────
 	timeOfDay = $state(12);
 	syncToRealTime = $state(true);
 
-	// --- User override (pause auto-behavior during manual control) ---
+	// ── User override (pause auto-behavior during manual control) ──────────────
 	userAdjustingAltitude = $state(false);
 	userAdjustingTime = $state(false);
 	userAdjustingAtmosphere = $state(false);
 	private userOverrideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// --- Location ---
+	// ── Location ───────────────────────────────────────────────────────────────
 	location = $state<LocationId>('dubai');
+	utcOffset = $state(4);
 
-	// --- Environment ---
+	// ── Environment ─────────────────────────────────────────────────────────────
 	weather = $state<WeatherType>('cloudy');
 	cloudDensity = $state(0.7);
 	cloudSpeed = $state(0.4);
 	haze = $state(0.025);
 
-	// --- View ---
+	// ── View ───────────────────────────────────────────────────────────────────
 	blindOpen = $state(true);
 	showBuildings = $state(true);
 	showClouds = $state(true);
 
-	// --- Display mode (fleet-managed) ---
+	// ── Display mode (fleet-managed) ────────────────────────────────────────────
 	displayMode = $state<DisplayMode>('flight');
 	videoUrl = $state('');
 	isFlightMode = $derived(this.displayMode === 'flight');
 	isScreensaverMode = $derived(this.displayMode === 'screensaver');
 	isVideoMode = $derived(this.displayMode === 'video');
 
-	// --- FPS tracking (for fleet health reporting) ---
+	// ── Cesium quality ─────────────────────────────────────────────────────────
+	qualityMode = $state<QualityMode>('balanced');
+
+	// ── FPS tracking ───────────────────────────────────────────────────────────
 	private _frameCount = 0;
 	private _fpsLastTime = performance.now();
 	measuredFps = $state(0);
 
-	// --- Night rendering ---
+	// ── Night rendering ─────────────────────────────────────────────────────────
 	// terrainDarkness=0: terrain stays bright at night, color grading shader
 	// warm-tints the grayscale terrain to create city glow from the hi-res texture.
 	// nightLightIntensity=0.6: VIIRS/CartoDB overlays kept very subtle (scale=0.24).
 	nightLightIntensity = $state(0.6);
 	terrainDarkness = $state(0);
 
-	// --- Flight speed ---
+	// ── Flight speed ────────────────────────────────────────────────────────────
 	flightSpeed = $state(1.0);
 
-	// --- Orbit flight path (fallback ellipse when no scenario exists) ---
+	// ── Orbit flight path (fallback ellipse when no scenario exists) ────────────
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
 	orbitRadiusMajor: number = $state(AIRCRAFT.ORBIT_MAJOR);
 	orbitRadiusMinor: number = $state(AIRCRAFT.ORBIT_MINOR);
 	orbitBearing = $state(0); // radians — orientation of the flight path
-	orbitAngle = $state(0); // radians, increments over time
+	orbitAngle = $state(0);   // radians, increments over time
 
-	// --- Waypoint-based flight scenario (replaces orbit when available) ---
+	// ── Waypoint-based flight scenario (replaces orbit when available) ───────────
 	private currentScenario: FlightScenario | null = null;
 	private scenarioWaypointIndex = 0;
 	private scenarioProgress = 0; // 0-1 between current and next waypoint
 
-	// --- Weather animation ---
+	// ── Weather animation ───────────────────────────────────────────────────────
 	lightningIntensity = $state(0);
 	lightningX = $state(50);    // % position for positional lightning
 	lightningY = $state(40);    // % position for positional lightning
 	private lightningTimer = 0;
 	private nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
 
-	// --- Motion (each layer independent and modular) ---
+	// ── Motion (each layer independent and modular) ──────────────────────────────
 	motionOffsetX = $state(0);     // lateral sway (0.3x Y amplitude)
 	motionOffsetY = $state(0);     // turbulence + base vibration
 	bankAngle = $state(0);         // degrees — horizon tilt from turn rate
 	breathingOffset = $state(0);   // normalized — slow pitch oscillation
 	engineVibeX = $state(0);       // pixels — high-freq engine hum X
 	engineVibeY = $state(0);       // pixels — high-freq engine hum Y
-	private prevHeading = 0;       // for computing turn rate
+	private prevHeading = 0;        // for computing turn rate
 
-	// --- Turbulence bumps (occasional jolts simulating air pockets) ---
+	// ── Turbulence bumps (occasional jolts simulating air pockets) ──────────────
 	private bumpTimer = 0;
 	private nextBump = FLIGHT_FEEL.BUMP_MIN_INTERVAL + Math.random() * (FLIGHT_FEEL.BUMP_MAX_INTERVAL - FLIGHT_FEEL.BUMP_MIN_INTERVAL);
-	private bumpElapsed = -1;      // <0 means no active bump
-	private bumpSign = 1;          // direction of current bump
+	private bumpElapsed = -1;       // <0 means no active bump
+	private bumpSign = 1;           // direction of current bump
 
-	// --- Micro-events (moments of surprise for attentive viewers) ---
+	// ── Micro-events (moments of surprise for attentive viewers) ────────────────
 	microEvent = $state<{ type: 'shooting-star' | 'bird' | 'contrail'; elapsed: number; duration: number; x: number; y: number } | null>(null);
 	private microEventTimer = 0;
 	private nextMicroEvent: number = MICRO_EVENTS.INITIAL_DELAY;
 
-	// --- Flight Modes (Cinematic) ---
+	// ── Flight Modes (Cinematic) ────────────────────────────────────────────────
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
-	cruiseElapsed = 0; // Timer for transition phases
+	cruiseElapsed = 0;   // Timer for transition phases
 	warpFactor = $state(0); // 0=normal, 1=full warp speed
 	private preWarpSpeed = 1.0; // saved flightSpeed before warp acceleration
 
-	// --- Derived from flight mode (replaces old isTransitioning $state) ---
+	// ── Derived from flight mode ────────────────────────────────────────────────
 	isTransitioning = $derived(this.flightMode !== 'orbit');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
 	);
 
-	// --- Director (Auto-Pilot) ---
+	// ── Director (Auto-Pilot) ───────────────────────────────────────────────────
 	// "Loiter" for 2-5 minutes, then "Cruise" to new location
 	private directorTimer = 0;
 	private timeToNextCruise = 120 + Math.random() * 180; // seconds
 
-	// --- Ambient randomization ---
+	// ── Ambient randomization ────────────────────────────────────────────────────
 	private nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY + Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
 	private randomizeTimer = 0;
 
-	// --- Animation clock (single source of time) ---
+	// ── Animation clock (single source of time) ─────────────────────────────────
 	time = 0;
 
 	// ========================================================================
@@ -198,18 +197,16 @@ export class WindowModel {
 	 */
 	nightFactor = $derived.by(() => {
 		const t = this.timeOfDay;
-		// Dawn: 5->7 (night->day), Dusk: 18->20 (day->night)
-		if (t >= 7 && t <= 18) return 0;          // full day
-		if (t < 5 || t > 20) return 1;            // full night
-		if (t < 7) return 1 - (t - 5) / 2;       // dawn: 1->0
-		return (t - 18) / 2;                       // dusk: 0->1
+		if (t >= 7 && t <= 18) return 0;
+		if (t < 5 || t > 20) return 1;
+		if (t < 7) return 1 - (t - 5) / 2;
+		return (t - 18) / 2;
 	});
 
 	dawnDuskFactor = $derived.by(() => {
 		const t = this.timeOfDay;
-		// Peak at midpoints of transition bands (6.0 and 19.0)
-		if (t >= 5 && t < 7) return 1 - Math.abs(t - 6);    // dawn: 0->1->0
-		if (t >= 18 && t <= 20) return 1 - Math.abs(t - 19); // dusk: 0->1->0
+		if (t >= 5 && t < 7) return 1 - Math.abs(t - 6);
+		if (t >= 18 && t <= 20) return 1 - Math.abs(t - 19);
 		return 0;
 	});
 
@@ -223,8 +220,6 @@ export class WindowModel {
 		const fx = WEATHER_EFFECTS[this.weather];
 		const [min, max] = fx.cloudDensityRange;
 		let density = max > 0 ? clamp(this.cloudDensity, min, max) : this.cloudDensity * 0.3;
-		// At night, reduce cloud opacity so Cesium city lights show through.
-		// Clouds are CSS layers above the Cesium canvas — they block NASA lights.
 		if (this.skyState === 'night') {
 			density = Math.max(density * 0.5, fx.nightCloudFloor);
 		} else if (this.skyState === 'dusk') {
@@ -247,7 +242,6 @@ export class WindowModel {
 		return loc.defaultAltitude;
 	});
 
-
 	// ========================================================================
 	// CONSTRUCTOR
 	// ========================================================================
@@ -266,11 +260,9 @@ export class WindowModel {
 				this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
 			}
 		} else {
-			// Default location (Dubai)
 			this.orbitBearing = this.computeOrbitBearing(this.lat, this.lon);
 		}
 
-		// Initial Director timer
 		this.timeToNextCruise = 120 + Math.random() * 180;
 
 		if (saved.altitude !== undefined) this.altitude = saved.altitude;
@@ -285,10 +277,7 @@ export class WindowModel {
 			this.timeOfDay = now.getHours() + now.getMinutes() / 60;
 		}
 
-		// Initialize prevHeading to avoid bank angle jump on first frame
 		this.prevHeading = this.heading;
-
-		// Pick an initial flight scenario for the starting location
 		this.initScenario(this.location);
 	}
 
@@ -328,7 +317,6 @@ export class WindowModel {
 		this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
 		this.orbitAngle = 0;
 
-		// Pick a new scenario for the destination
 		this.initScenario(locationId);
 	}
 
@@ -371,16 +359,6 @@ export class WindowModel {
 		this.terrainDarkness = clamp(darkness, 0, 1);
 	}
 
-	setLat(lat: number): void {
-		if (!Number.isFinite(lat)) return;
-		this.lat = clamp(lat, -90, 90);
-	}
-
-	setLon(lon: number): void {
-		if (!Number.isFinite(lon)) return;
-		this.lon = clamp(lon, -180, 180);
-	}
-
 	/** Pick next location weighted by time of day (nature mornings, cities midday/night) */
 	pickNextLocation(): LocationId {
 		const hour = this.localTimeOfDay;
@@ -416,14 +394,12 @@ export class WindowModel {
 			this.videoUrl = payload;
 		}
 
-		// Screensaver: slow dreamy orbit, sync to real time, ensure blind is open
 		if (mode === 'screensaver') {
 			this.flightSpeed = 0.3;
 			this.syncToRealTime = true;
 			this.blindOpen = true;
 		}
 
-		// Flight: restore normal speed from screensaver, ensure blind open
 		if (mode === 'flight' && prev === 'screensaver') {
 			this.flightSpeed = 1.0;
 			this.blindOpen = true;
@@ -482,10 +458,8 @@ export class WindowModel {
 	// ========================================================================
 
 	flyTo(locationId: LocationId): void {
-		// If already there/cruising there, ignore
 		if (this.location === locationId && this.flightMode === 'orbit') return;
 		if (this.cruiseTargetId === locationId) return;
-
 		const target = LOCATION_MAP.get(locationId);
 		if (!target) return;
 
@@ -506,7 +480,7 @@ export class WindowModel {
 
 		if (this.flightMode === 'cruise_departure') {
 			this.tickDeparture(delta);
-			this.tickFlightPath(delta); // Keep moving — terrain rushes past during acceleration
+			this.tickFlightPath(delta);
 		} else if (this.flightMode === 'cruise_transit') {
 			this.tickTransit(delta);
 		} else {
@@ -522,22 +496,17 @@ export class WindowModel {
 	}
 
 	// --- Cruise Logic ---
-	// --- Cruise / Transition Logic ---
 
 	private tickDeparture(delta: number): void {
 		this.cruiseElapsed += delta;
 
-		// Warp ramp: 0→1 over ~2.5s with smoothstep
 		const warpDuration = 2.5;
 		const t = clamp(this.cruiseElapsed / warpDuration, 0, 1);
-		this.warpFactor = t * t * (3 - 2 * t); // smoothstep
+		this.warpFactor = t * t * (3 - 2 * t);
 
-		// Physically accelerate: ramp orbit speed from normal to 100x
-		// The terrain actually rushes past in Cesium — real "acceleration" feel
 		const warpSpeed = this.preWarpSpeed + this.warpFactor * 100;
 		this.flightSpeed = warpSpeed;
 
-		// After warp peaks (2.0s), close blind and transition
 		if (this.cruiseElapsed > 2.0) {
 			this.blindOpen = false;
 			this.flightMode = 'cruise_transit';
@@ -548,26 +517,17 @@ export class WindowModel {
 	private tickTransit(delta: number): void {
 		this.cruiseElapsed += delta;
 
-		// Fade warp back to 0 with ease-out (matches smoothstep ramp-up)
 		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
-		this.warpFactor = decay * decay; // quadratic ease-out: fast initial decay, smooth end
+		this.warpFactor = decay * decay;
 
-		// Decelerate back toward normal speed behind the blind
 		this.flightSpeed = this.preWarpSpeed + this.warpFactor * 100;
 
-		// While blind is closed, we teleport.
-		// Wait 2 seconds for the "feel" of travel/blind closing animation
 		if (this.cruiseElapsed > 2.0 && this.cruiseTargetId) {
 			this.setLocation(this.cruiseTargetId);
 			this.cruiseTargetId = null;
 			this.flightMode = 'orbit';
-
-			// Open the blind to reveal new location
 			this.blindOpen = true;
-
-			// Reset flight parameters
 			this.warpFactor = 0;
-			this.bankAngle = 0;
 			this.flightSpeed = this.preWarpSpeed;
 			this.timeToNextCruise = 120 + Math.random() * 180;
 		}
@@ -587,21 +547,18 @@ export class WindowModel {
 		}
 	}
 
+	// --- Flight Path ---
+
 	private tickOrbit(delta: number): void {
-		// Dynamic orbit breathing: radius oscillates slowly for natural variation
 		const breathePhase = (this.time / AIRCRAFT.ORBIT_BREATHE_PERIOD) * Math.PI * 2;
-		const breathe = (Math.sin(breathePhase) + 1) * 0.5; // 0→1 smoothly
+		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
 		const majorRange = AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN;
 		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * majorRange;
-		// Keep aspect ratio between 2:1 and 3:1 for gentle banking
 		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
 
 		const a = this.orbitRadiusMajor;
 		const b = this.orbitRadiusMinor;
 
-		// Arc-length parameterization: constant ground speed, variable angular speed.
-		// On straights (near major axis): slow angular speed -> sustained forward flight.
-		// On turns (near minor axis): fast angular speed -> quick heading changes.
 		const tx = a * Math.cos(this.orbitAngle);
 		const ty = -b * Math.sin(this.orbitAngle);
 		const localSpeed = Math.sqrt(tx * tx + ty * ty);
@@ -609,7 +566,6 @@ export class WindowModel {
 		this.orbitAngle += angularSpeed * delta;
 		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
 
-		// Elliptical position, rotated by orbit bearing
 		const ex = a * Math.sin(this.orbitAngle);
 		const ey = b * Math.cos(this.orbitAngle);
 		const cb = Math.cos(this.orbitBearing);
@@ -621,22 +577,17 @@ export class WindowModel {
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
-		// Heading from ellipse tangent (reuse tx/ty, rotate by bearing)
-		// rtx = northward velocity, rty = eastward velocity
-		// Geographic heading = atan2(east, north) — clockwise from north
 		const rtx = tx * cb - ty * sb;
 		const rty = tx * sb + ty * cb;
 		const tangentHeading = (Math.atan2(rty, rtx) * 180) / Math.PI;
 		const baseHeading = normalizeHeading(tangentHeading);
 
-		// Subtle heading wander (barely perceptible — avoids forward/back oscillation)
 		const wander = Math.sin(this.time * 0.05) * 0.25
 			+ Math.sin(this.time * 0.031) * 0.15
 			+ Math.sin(this.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
 	}
 
-	/** Dispatch to scenario interpolation or fallback orbit */
 	private tickFlightPath(delta: number): void {
 		if (this.currentScenario) {
 			this.tickScenario(delta);
@@ -645,7 +596,6 @@ export class WindowModel {
 		}
 	}
 
-	/** Initialize a scenario for the given location (or null for orbit fallback) */
 	private initScenario(locationId: LocationId): void {
 		const scenario = pickScenario(locationId, this.skyState);
 		this.currentScenario = scenario;
@@ -653,11 +603,6 @@ export class WindowModel {
 		this.scenarioProgress = 0;
 	}
 
-	/**
-	 * Interpolate position/heading/altitude along waypoint path.
-	 * Uses smoothstep easing for natural acceleration/deceleration between waypoints.
-	 * Adds subtle jitter so paths don't feel scripted.
-	 */
 	private tickScenario(delta: number): void {
 		const scenario = this.currentScenario;
 		if (!scenario || scenario.waypoints.length < 2) return;
@@ -668,45 +613,36 @@ export class WindowModel {
 		const current = waypoints[idx];
 		const next = waypoints[nextIdx];
 
-		// Advance progress (duration is in seconds, flightSpeed scales it)
 		const duration = next.duration > 0 ? next.duration : 30;
 		this.scenarioProgress += (delta * this.flightSpeed) / duration;
 
-		// Smoothstep easing: ease-in-out for natural acceleration
 		const raw = clamp(this.scenarioProgress, 0, 1);
 		const t = raw * raw * (3 - 2 * raw);
 
-		// Subtle jitter (Perlin-like from time) — keeps paths from feeling scripted
 		const jitterScale = 0.0003;
 		const jitterLat = Math.sin(this.time * 0.13) * jitterScale + Math.sin(this.time * 0.31) * jitterScale * 0.5;
 		const jitterLon = Math.sin(this.time * 0.17) * jitterScale + Math.sin(this.time * 0.37) * jitterScale * 0.5;
 
-		// Interpolate position
 		const newLat = lerp(current.lat, next.lat, t) + jitterLat;
 		const newLon = lerp(current.lon, next.lon, t) + jitterLon;
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
-		// Interpolate altitude (only if user isn't manually adjusting)
 		if (!this.userAdjustingAltitude) {
 			const altJitter = Math.sin(this.time * 0.07) * 50;
 			this.altitude = lerp(current.altitude, next.altitude, t) + altJitter;
 		}
 
-		// Interpolate heading — shortest arc
 		let headingDiff = next.heading - current.heading;
 		if (headingDiff > 180) headingDiff -= 360;
 		if (headingDiff < -180) headingDiff += 360;
 		const headingJitter = Math.sin(this.time * 0.05) * 0.25 + Math.sin(this.time * 0.031) * 0.15;
 		this.heading = normalizeHeading(current.heading + headingDiff * t + headingJitter);
 
-		// Move to next waypoint when progress completes
 		if (this.scenarioProgress >= 1) {
 			this.scenarioProgress = 0;
 			this.scenarioWaypointIndex = nextIdx;
 
-			// If we looped back to 0, check if we should pick a new scenario
-			// (sky state may have changed during the loop)
 			if (nextIdx === 0 && scenario.loop) {
 				const fresh = pickScenario(this.location, this.skyState);
 				if (fresh && fresh.id !== scenario.id) {
@@ -718,6 +654,8 @@ export class WindowModel {
 		}
 	}
 
+	// --- Weather ---
+
 	private tickLightning(delta: number): void {
 		if (this.showLightning) {
 			this.lightningTimer += delta;
@@ -726,7 +664,6 @@ export class WindowModel {
 			}
 			if (this.lightningIntensity < 0.01 && this.lightningTimer > this.nextLightning) {
 				this.lightningIntensity = 0.5 + Math.random() * 0.5;
-				// Randomize flash position (illumination from within clouds)
 				this.lightningX = 20 + Math.random() * 60;
 				this.lightningY = 15 + Math.random() * 50;
 				this.lightningTimer = 0;
@@ -737,28 +674,26 @@ export class WindowModel {
 		}
 	}
 
+	// --- Motion ---
+
 	private tickMotion(delta: number): void {
 		const t = this.time;
 		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[this.turbulenceLevel];
 
-		// Altitude-dependent turbulence: near-zero above 40k in clear, stronger near tropopause
 		const altFactor = this.altitude > 40000 && this.weather === 'clear'
 			? clamp(1 - (this.altitude - 40000) / 10000, 0.05, 1)
 			: 1;
 
-		// Base low-freq sway (Y + X at 0.3x with phase offset)
 		const baseTurbY = (Math.sin(t * 0.5) * 0.1 + Math.sin(t * 1.1) * 0.08) * turbMult;
 		const baseTurbX = (Math.sin(t * 0.37) * 0.08 + Math.sin(t * 0.83) * 0.06) * turbMult;
 
-		// Mid-frequency chatter (2.5Hz + 3.7Hz — constant "airplane" feel)
 		const chatterY = (Math.sin(t * 2.5 * Math.PI * 2) * 0.03
 			+ Math.sin(t * 3.7 * Math.PI * 2) * 0.02) * turbMult;
 		const chatterX = (Math.sin(t * 2.1 * Math.PI * 2) * 0.01
 			+ Math.sin(t * 3.3 * Math.PI * 2) * 0.008) * turbMult;
 
-		// Turbulence bumps — amplitude and interval scale with turbulence level
 		const bumpAmpScale = turbMult;
-		const bumpIntervalScale = 1 / turbMult; // more frequent in heavy turbulence
+		const bumpIntervalScale = 1 / turbMult;
 		let bumpValue = 0;
 		this.bumpTimer += delta;
 		if (this.bumpElapsed >= 0) {
@@ -766,7 +701,7 @@ export class WindowModel {
 			bumpValue = this.bumpSign * FLIGHT_FEEL.BUMP_AMPLITUDE * bumpAmpScale
 				* Math.exp(-FLIGHT_FEEL.BUMP_DECAY * this.bumpElapsed)
 				* Math.sin(FLIGHT_FEEL.BUMP_RING_FREQ * this.bumpElapsed);
-			if (this.bumpElapsed > 1.5) this.bumpElapsed = -1; // bump faded
+			if (this.bumpElapsed > 1.5) this.bumpElapsed = -1;
 		} else if (this.bumpTimer > this.nextBump) {
 			this.bumpTimer = 0;
 			this.bumpElapsed = 0;
@@ -779,7 +714,6 @@ export class WindowModel {
 		this.motionOffsetY = (baseTurbY * AIRCRAFT.TURBULENCE_OFFSET_Y + chatterY + bumpValue) * altFactor;
 		this.motionOffsetX = (baseTurbX * AIRCRAFT.TURBULENCE_OFFSET_Y * 0.3 + chatterX) * altFactor;
 
-		// Banking (roll from turn rate)
 		let headingDelta = this.heading - this.prevHeading;
 		if (headingDelta > 180) headingDelta -= 360;
 		if (headingDelta < -180) headingDelta += 360;
@@ -788,10 +722,7 @@ export class WindowModel {
 		this.bankAngle += (targetBank - this.bankAngle) * Math.min(FLIGHT_FEEL.BANK_SMOOTHING * delta, 1);
 		this.prevHeading = this.heading;
 
-		// Pitch breathing (slow sinusoidal)
 		this.breathingOffset = Math.sin(t * (2 * Math.PI / FLIGHT_FEEL.BREATHING_PERIOD));
-
-		// Engine micro-vibration
 		this.engineVibeX = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_X) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
 		this.engineVibeY = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
 	}
@@ -806,7 +737,6 @@ export class WindowModel {
 	}
 
 	private tickMicroEvents(delta: number): void {
-		// Advance active event
 		if (this.microEvent) {
 			this.microEvent.elapsed += delta;
 			if (this.microEvent.elapsed >= this.microEvent.duration) {
@@ -815,7 +745,6 @@ export class WindowModel {
 			return;
 		}
 
-		// Count down to next event
 		this.microEventTimer += delta;
 		if (this.microEventTimer < this.nextMicroEvent) return;
 
@@ -823,17 +752,14 @@ export class WindowModel {
 		this.nextMicroEvent = MICRO_EVENTS.MIN_INTERVAL
 			+ Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
 
-		// Choose event type based on sky state
 		const isNightTime = this.skyState === 'night';
-		const roll = Math.random();
-
 		let type: 'shooting-star' | 'bird' | 'contrail';
 		let duration: number;
 
 		if (isNightTime) {
 			type = 'shooting-star';
 			duration = MICRO_EVENTS.SHOOTING_STAR_DURATION;
-		} else if (roll < 0.4) {
+		} else if (Math.random() < 0.4) {
 			type = 'bird';
 			duration = MICRO_EVENTS.BIRD_DURATION;
 		} else {

@@ -4,13 +4,13 @@
  * Generates seamless tileable RGBA noise textures for volumetric cloud rendering.
  * Each RGBA channel carries an independent noise field, sampled in the shader.
  *
- * Texture A (cloud-noise.png) — 512x512 RGBA:
+ * Texture A (cloud-noise.png) — 1024x1024 RGBA:
  *   R: Perlin-Worley blend (low freq, base cloud shapes)
  *   G: Worley F1 (medium freq, cumulus edges)
  *   B: Worley F1 (high freq, fine detail)
  *   A: Perlin FBM (very low freq, coverage gradient)
  *
- * Texture B (cloud-detail.png) — 256x256 RGBA:
+ * Texture B (cloud-detail.png) — 512x512 RGBA (upscaled from 256 for more detail):
  *   R: Worley F2 (erosion)
  *   G: Curl noise X (distortion field)
  *   B: Curl noise Y (distortion field)
@@ -471,15 +471,15 @@ async function main() {
 
 	const results: { name: string; size: number }[] = [];
 
-	// --- Texture A: Primary cloud noise (512x512 RGBA) ---
+	// --- Texture A: Primary cloud noise (1024x1024 RGBA) ---
 	{
 		const name = 'cloud-noise.png';
 		const outPath = path.join(OUTPUT_DIR, name);
-		console.log(`[1/3] Generating ${name} (512x512 RGBA)`);
+		console.log(`[1/3] Generating ${name} (1024x1024 RGBA)`);
 		console.log('  R: Perlin-Worley | G: Worley F1 (med) | B: Worley F1 (hi) | A: Perlin (lo)');
 
-		const pixels = generateTextureA(512, 512);
-		const png = encodeRGBA_PNG(512, 512, pixels);
+		const pixels = generateTextureA(1024, 1024);
+		const png = encodeRGBA_PNG(1024, 1024, pixels);
 		fs.writeFileSync(outPath, png);
 
 		const kb = png.length / 1024;
@@ -487,15 +487,15 @@ async function main() {
 		results.push({ name, size: png.length });
 	}
 
-	// --- Texture B: Detail/distortion noise (256x256 RGBA) ---
+	// --- Texture B: Detail/distortion noise (512x512 RGBA) ---
 	{
 		const name = 'cloud-detail.png';
 		const outPath = path.join(OUTPUT_DIR, name);
-		console.log(`[2/3] Generating ${name} (256x256 RGBA)`);
+		console.log(`[2/3] Generating ${name} (512x512 RGBA)`);
 		console.log('  R: Worley F2 | G: Curl X | B: Curl Y | A: Hi-freq Perlin');
 
-		const pixels = generateTextureB(256, 256);
-		const png = encodeRGBA_PNG(256, 256, pixels);
+		const pixels = generateTextureB(512, 512);
+		const png = encodeRGBA_PNG(512, 512, pixels);
 		fs.writeFileSync(outPath, png);
 
 		const kb = png.length / 1024;

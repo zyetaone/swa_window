@@ -1,6 +1,6 @@
-import type { LocationId, WeatherType } from './types';
-import { LOCATION_IDS } from './locations';
-import { AIRCRAFT } from './constants';
+import type { LocationId, WeatherType } from '$lib/shared/types';
+import { LOCATION_IDS } from '$lib/shared/locations';
+import { AIRCRAFT } from '$lib/shared/constants';
 
 const STORAGE_KEY = 'aero-window-v2';
 

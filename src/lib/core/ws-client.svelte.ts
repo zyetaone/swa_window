@@ -174,9 +174,13 @@ export class DisplayWsClient {
 				this.model.setDisplayMode(msg.mode, msg.payload);
 				break;
 
-			case 'set_config':
-				this.model.applyPatch(msg.patch);
-				break;
+		case 'set_config':
+			this.model.applyPatch(msg.patch);
+			break;
+
+		case 'set_quality':
+			this.model.qualityMode = msg.mode;
+			break;
 
 			case 'tile_update':
 				console.info(`[ws-client] Tile update available: ${msg.locationId} v${msg.version}`);

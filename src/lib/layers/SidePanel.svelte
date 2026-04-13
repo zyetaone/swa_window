@@ -11,7 +11,7 @@
 		AIRCRAFT,
 		type LocationId,
 	} from "$lib/core";
-	import { formatTime } from "$lib/core/utils";
+	import { formatTime } from "$lib/shared/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./controls/Toggle.svelte";
 	import RangeSlider from "./controls/RangeSlider.svelte";
@@ -341,6 +341,11 @@
 						),
 					})}
 			/>
+			<Toggle
+				label="3D Buildings"
+				checked={model.showBuildings}
+				onchange={() => model.toggleBuildings()}
+			/>
 
 			<div class="divider"></div>
 
@@ -349,27 +354,27 @@
 				<button
 					class="weather-btn"
 					class:active={model.weather === "clear"}
-					onclick={() => model.setWeather("clear")}>Clear</button
+					onclick={() => model.applyPatch({ weather: "clear" })}>Clear</button
 				>
 				<button
 					class="weather-btn"
 					class:active={model.weather === "cloudy"}
-					onclick={() => model.setWeather("cloudy")}>Cloudy</button
+					onclick={() => model.applyPatch({ weather: "cloudy" })}>Cloudy</button
 				>
 				<button
 					class="weather-btn"
 					class:active={model.weather === "overcast"}
-					onclick={() => model.setWeather("overcast")}>Overcast</button
+					onclick={() => model.applyPatch({ weather: "overcast" })}>Overcast</button
 				>
 				<button
 					class="weather-btn"
 					class:active={model.weather === "rain"}
-					onclick={() => model.setWeather("rain")}>Rain</button
+					onclick={() => model.applyPatch({ weather: "rain" })}>Rain</button
 				>
 				<button
 					class="weather-btn"
 					class:active={model.weather === "storm"}
-					onclick={() => model.setWeather("storm")}>Storm</button
+					onclick={() => model.applyPatch({ weather: "storm" })}>Storm</button
 				>
 			</div>
 		</section>
@@ -699,7 +704,4 @@
 	:global(.panel .control input[type="range"]) {
 		background: rgba(255, 255, 255, 0.1);
 	}
-
-	/* --- Footer --- */
-
 </style>

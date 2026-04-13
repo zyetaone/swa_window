@@ -4,38 +4,51 @@
  * WindowModel is the authoritative simulation state.
  * Presentation derivations live in Window.svelte as local $derived values.
  *
+ * All re-exports live here — no proxy files in core/. Constants, types,
+ * locations, and utils are canonical in $lib/shared; this barrel re-exports
+ * them so that $lib/core/* relative imports continue to resolve.
+ *
  * Usage:
- * 1. In root component: createAppState()
- * 2. In child components: useAppState()
+ *   In root component: createAppState()
+ *   In child components: useAppState()
  */
 
 import { setContext, getContext } from 'svelte';
 import { WindowModel } from './WindowModel.svelte';
-import { AIRCRAFT, CESIUM, FLIGHT_FEEL, WEATHER_EFFECTS } from './constants';
 
-// Re-export types
-export type { SkyState, LocationId, WeatherType, Location } from './types';
+// --- Shared SSOT re-exports ---
 
-// Re-export locations
-export { LOCATIONS, LOCATION_MAP } from './locations';
+// Constants
+export {
+	AIRCRAFT,
+	CESIUM,
+	FLIGHT_FEEL,
+	WEATHER_EFFECTS,
+	AMBIENT,
+	MICRO_EVENTS,
+	CESIUM_QUALITY_PRESETS,
+} from '$lib/shared/constants';
+export type { WeatherEffect, QualityMode } from '$lib/shared/constants';
 
-// Re-export constants
-export { AIRCRAFT, CESIUM, FLIGHT_FEEL, WEATHER_EFFECTS };
+// Locations
+export { LOCATIONS, LOCATION_IDS, LOCATION_MAP } from '$lib/shared/locations';
+
+// Utils
+export { clamp, lerp, normalizeHeading, formatTime } from '$lib/shared/utils';
+
+// Types
+export type { SkyState, LocationId, WeatherType, Location } from '$lib/shared/types';
+
+// --- Context API ---
 
 const APP_STATE_KEY = Symbol('APP_STATE');
 
-/**
- * Create app state and set context
- */
 export function createAppState(): WindowModel {
 	const model = new WindowModel();
 	setContext(APP_STATE_KEY, model);
 	return model;
 }
 
-/**
- * Get app state from context
- */
 export function useAppState(): WindowModel {
 	const model = getContext<WindowModel>(APP_STATE_KEY);
 	if (!model) {

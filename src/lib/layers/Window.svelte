@@ -547,7 +547,7 @@
 		padding: 0;
 		cursor: pointer;
 
-		transition: background 3s ease;
+		transition: background 1s ease;
 	}
 
 	.window-viewport:disabled {
