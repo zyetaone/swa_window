@@ -3,6 +3,24 @@
 	import maplibregl from 'maplibre-gl';
 	import { PMTiles } from 'pmtiles';
 
+	// Module-level PMTiles protocol — registered once, survives remounts
+	const archives = new Map<string, PMTiles>();
+	let protocolRegistered = false;
+
+	function ensurePmtilesProtocol() {
+		if (protocolRegistered) return;
+		maplibregl.addProtocol('pmtiles', async (params) => {
+			const match = params.url.match(/^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/);
+			if (!match) throw new Error('Invalid PMTiles URL');
+			const path = match[1];
+			if (!archives.has(path)) archives.set(path, new PMTiles(path));
+			const archive = archives.get(path)!;
+			const res = await archive.getZxy(+match[2], +match[3], +match[4]);
+			return res ? { data: res.data } : { data: null };
+		});
+		protocolRegistered = true;
+	}
+
 	let {
 		lat = 25.2,
 		lon = 55.3,
@@ -28,28 +46,34 @@
 	} = $props();
 
 	let container: HTMLDivElement;
-	let map: maplibregl.Map | null = null;
+	let map = $state.raw<maplibregl.Map | null>(null);
+
+	function buildSourceSpec() {
+		return {
+			type: 'raster' as const,
+			tiles: pmtilesUrl
+				? [`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]
+				: [imageryUrl],
+			tileSize: 256,
+			attribution: pmtilesUrl
+				? '© ESRI World Imagery (cached)'
+				: '© Sentinel-2 cloudless (EOX)',
+		};
+	}
 
 	function swapSource() {
-		if (!map) return;
+		if (!map || (!imageryUrl && !pmtilesUrl)) return;
 		try {
 			if (map.getLayer('Satellite')) map.removeLayer('Satellite');
 			if (map.getSource('satellite')) map.removeSource('satellite');
-			map.addSource('satellite', {
-				type: 'raster',
-				tiles: pmtilesUrl
-					? [`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]
-					: [imageryUrl],
-				tileSize: 256,
-				attribution: pmtilesUrl
-					? '© ESRI World Imagery (cached)'
-					: '© Sentinel-2 cloudless (EOX)',
-			});
+			map.addSource('satellite', buildSourceSpec());
 			map.addLayer({ id: 'Satellite', type: 'raster', source: 'satellite' });
 		} catch (e) { console.warn('[MapLibreGlobe] source swap failed:', e); }
 	}
 
 	$effect(() => {
+		void imageryUrl;
+		void pmtilesUrl;
 		if (!map) return;
 		if (!map.isStyleLoaded()) {
 			map.once('styledata', () => swapSource());
@@ -59,35 +83,13 @@
 	});
 
 	onMount(() => {
-		if (pmtilesUrl) {
-			maplibregl.addProtocol('pmtiles', async (params) => {
-				const url = params.url;
-				const match = url.match(/^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/);
-				if (!match) throw new Error('Invalid PMTiles URL');
-				const archive = new PMTiles(match[1]);
-				const z = parseInt(match[2]);
-				const x = parseInt(match[3]);
-				const y = parseInt(match[4]);
-				const res = await archive.getZxy(z, x, y);
-				if (!res) return { data: null };
-				return { data: res.data };
-			});
-		}
+		ensurePmtilesProtocol();
 
 		const style: maplibregl.StyleSpecification = {
 			version: 8,
 			projection: { type: 'globe' as const },
 			sources: {
-				satellite: {
-					type: 'raster' as const,
-					tiles: pmtilesUrl
-						? [`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]
-						: [imageryUrl],
-					tileSize: 256,
-					attribution: pmtilesUrl
-						? '© ESRI World Imagery (cached)'
-						: '© Sentinel-2 cloudless (EOX)',
-				},
+				satellite: buildSourceSpec(),
 			},
 			layers: [
 				{

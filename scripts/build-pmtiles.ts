@@ -61,18 +61,26 @@ async function main() {
 
   const sources = ['esri'];
   const entries: ManifestEntry[] = [];
+  const force = process.argv.includes('--force');
 
-  const locations = readdirSync(PUBLIC_TILES).filter(s => {
-    try {
-      return statSync(join(PUBLIC_TILES, s)).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  try {
+    runCmd('pmtiles-convert --version');
+  } catch {
+    console.error('pmtiles-convert not found on PATH.\nInstall: cargo install pmtiles-convert (or npm i -g pmtiles)');
+    process.exit(1);
+  }
 
   for (const source of sources) {
     const sourceDir = join(PUBLIC_TILES, source);
     if (!existsSync(sourceDir)) continue;
+
+    const locations = readdirSync(sourceDir).filter(s => {
+      try {
+        return statSync(join(sourceDir, s)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
 
     for (const locationId of locations) {
       const locationDir = join(sourceDir, locationId);
@@ -100,8 +108,8 @@ async function main() {
       console.log(`  Zoom levels: ${zoomLevels.join(', ')}`);
       console.log(`  Total tiles: ${totalTileCount}`);
 
-      if (existsSync(pmtPath)) {
-        console.log(`  Skipping — PMTiles already exists`);
+      if (existsSync(pmtPath) && !force) {
+        console.log(`  Skipping — PMTiles already exists (use --force to rebuild)`);
       } else {
         const maxZoom = Math.max(...zoomLevels);
         const minZoom = Math.min(...zoomLevels);

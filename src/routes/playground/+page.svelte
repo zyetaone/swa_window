@@ -5,10 +5,14 @@
 	 * preview sky states, and drive cloud parallax from simulated plane motion.
 	 */
 
-	import type { SkyState, LocationId } from '$lib/types';
+	import type { SkyState, LocationId, WeatherType } from '$lib/types';
+	import { WEATHER_TYPES } from '$lib/types';
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
-	import { randomBetween } from '$lib/utils';
+	import { WEATHER_EFFECTS } from '$lib/constants';
+	import { randomBetween, getSkyState, formatTime, clamp } from '$lib/utils';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
+	import Weather from '$lib/ui/Weather.svelte';
+	import TreeLayer from '$lib/ui/TreeLayer.svelte';
 	import MapLibreGlobe from '$lib/ui/MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -38,7 +42,8 @@
 	// ─── State ───────────────────────────────────────────────────────────────
 	let activeTab = $state<Tab>('cesium');
 	let activeLocation = $state<LocationId>('dubai');
-	let skyState = $state<SkyState>('day');
+	let timeOfDay = $state(12);  // 0-24, drives skyState
+	let weather = $state<WeatherType>('clear');
 	let cesiumSource = $state<SourceId>('esri');
 	let maplibreSource = $state<SourceId>('eox');
 
@@ -51,10 +56,17 @@
 	let heading = $state(90);
 	let planeSpeed = $state(1.0);
 	let altitude = $state(30000);
-	let windAngle = $state(88);
 
 	// Auto-orbit — gentle drift for demo
 	let autoOrbit = $state(false);
+	let autoTime = $state(false);  // advance timeOfDay in real time
+
+	// Lightning preview (simplified — just pulses every 3-8s when enabled)
+	let lightningIntensity = $state(0);
+	let lightningX = $state(50);
+	let lightningY = $state(30);
+	let lightningTimer = 0;
+	let nextLightning = randomBetween(3, 8);
 
 	// Cesium lifecycle
 	let viewerContainer = $state<HTMLDivElement | null>(null);
@@ -65,6 +77,20 @@
 	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
 	const maplibreSrc = $derived(MAPLIBRE_SOURCES.find(s => s.id === maplibreSource) ?? MAPLIBRE_SOURCES[0]);
 	const cesiumSrc = $derived(CESIUM_SOURCES.find(s => s.id === cesiumSource) ?? CESIUM_SOURCES[0]);
+	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
+	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
+	const windAngle = $derived(weatherFx.windAngle);
+
+	const nightFactor = $derived.by(() => {
+		const t = timeOfDay;
+		if (t >= 7 && t <= 18) return 0;
+		if (t < 5 || t > 20) return 1;
+		if (t < 7) return 1 - (t - 5) / 2;
+		return (t - 18) / 2;
+	});
+
+	// Frost altitude-driven (matches Window.svelte logic)
+	const frostAmount = $derived(clamp((altitude - 25000) / 15000, 0, 1));
 
 	const bgGradient = $derived.by(() => {
 		switch (skyState) {
@@ -84,6 +110,23 @@
 			last = now;
 			time += dt * planeSpeed;
 			if (autoOrbit) heading = (heading + dt * 5) % 360;
+			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;  // 48s = full day
+
+			// Lightning decay + trigger
+			if (weatherFx.hasLightning) {
+				lightningTimer += dt;
+				if (lightningIntensity > 0) lightningIntensity = Math.max(0, lightningIntensity - dt * 8);
+				if (lightningIntensity < 0.01 && lightningTimer > nextLightning) {
+					lightningIntensity = randomBetween(0.5, 1);
+					lightningX = randomBetween(20, 80);
+					lightningY = randomBetween(15, 65);
+					lightningTimer = 0;
+					nextLightning = randomBetween(3, 8);
+				}
+			} else if (lightningIntensity > 0) {
+				lightningIntensity = 0;
+			}
+
 			raf = requestAnimationFrame(loop);
 		};
 		raf = requestAnimationFrame(loop);
@@ -168,6 +211,7 @@
 		altitude = Math.floor(randomBetween(15000, 45000));
 		density = randomBetween(0.3, 0.9);
 		cloudSpeed = randomBetween(0.5, 2);
+		timeOfDay = randomBetween(0, 24);
 	}
 
 	function reset() {
@@ -176,10 +220,11 @@
 		planeSpeed = 1.0;
 		density = 0.6;
 		cloudSpeed = 1.0;
+		timeOfDay = 12;
+		weather = 'clear';
 		autoOrbit = false;
+		autoTime = false;
 	}
-
-	const skyOptions: SkyState[] = ['day', 'dawn', 'dusk', 'night'];
 </script>
 
 <div class="playground">
@@ -210,6 +255,17 @@
 
 		<CloudBlobs {density} speed={cloudSpeed} {skyState} {time} {heading} {altitude} {windAngle} />
 
+		<Weather
+			rainOpacity={weatherFx.rainOpacity}
+			{windAngle}
+			lightningOpacity={lightningIntensity * 0.3}
+			{lightningX}
+			{lightningY}
+			{frostAmount}
+		/>
+
+		<TreeLayer locationId={activeLocation} {nightFactor} cloudDensity={density} showTrees={true} />
+
 		{#if activeTab === 'compare'}
 			<div class="compare-divider" aria-hidden="true">
 				<span>CESIUM</span>
@@ -224,8 +280,9 @@
 			<span>HDG {heading.toFixed(0)}°</span>
 			<span>ALT {(altitude / 1000).toFixed(0)}k</span>
 			<span>SPD {planeSpeed.toFixed(1)}×</span>
-			<span>T {time.toFixed(0)}s</span>
+			<span>{formatTime(timeOfDay)}</span>
 			<span class="sky-tag sky-{skyState}">{skyState.toUpperCase()}</span>
+			<span class="wx-tag">{weather.toUpperCase()}</span>
 		</div>
 	</div>
 
@@ -254,12 +311,24 @@
 			</select>
 		</fieldset>
 
-		<!-- Sky -->
+		<!-- Time of day -->
 		<fieldset>
-			<legend>Sky</legend>
-			<div class="chip-row">
-				{#each skyOptions as opt (opt)}
-					<button class:active={skyState === opt} onclick={() => skyState = opt}>{opt}</button>
+			<legend>Time of day</legend>
+			<label>{formatTime(timeOfDay)} <span class="val sky-{skyState}">{skyState}</span>
+				<input type="range" bind:value={timeOfDay} min="0" max="24" step="0.1" disabled={autoTime} />
+			</label>
+			<label class="check">
+				<input type="checkbox" bind:checked={autoTime} />
+				Auto-advance (48s = full day)
+			</label>
+		</fieldset>
+
+		<!-- Weather -->
+		<fieldset>
+			<legend>Weather</legend>
+			<div class="chip-row weather-chips">
+				{#each WEATHER_TYPES as w (w)}
+					<button class:active={weather === w} onclick={() => weather = w}>{w}</button>
 				{/each}
 			</div>
 		</fieldset>
@@ -432,16 +501,25 @@
 	}
 	.hud b { color: rgba(255, 255, 255, 0.9); font-weight: 600; }
 
-	.sky-tag {
+	.sky-tag, .wx-tag {
 		padding: 2px 6px;
 		border-radius: 3px;
 		font-weight: 600;
 		letter-spacing: 0.05em;
 	}
+	.wx-tag {
+		background: rgba(255, 255, 255, 0.08);
+		color: #ccc;
+	}
 	.sky-day    { background: rgba(100, 160, 230, 0.25); color: #9ec6f5; }
 	.sky-dawn   { background: rgba(230, 120, 80, 0.25);  color: #e09070; }
 	.sky-dusk   { background: rgba(200, 100, 70, 0.25);  color: #d68060; }
 	.sky-night  { background: rgba(60, 70, 110, 0.4);    color: #8090c0; }
+
+	.val.sky-day   { color: #9ec6f5; }
+	.val.sky-dawn  { color: #e09070; }
+	.val.sky-dusk  { color: #d68060; }
+	.val.sky-night { color: #8090c0; }
 
 	/* Controls panel */
 	.controls {
@@ -548,6 +626,9 @@
 		display: grid;
 		grid-template-columns: repeat(4, 1fr);
 		gap: 4px;
+	}
+	.chip-row.weather-chips {
+		grid-template-columns: repeat(3, 1fr);
 	}
 	.chip-row button {
 		padding: 6px 4px;
