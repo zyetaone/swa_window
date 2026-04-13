@@ -42,15 +42,11 @@
 	});
 
 	// Fleet server connection — receives admin push (location, weather, config).
-	// Only connects when a server URL is provided via ?server= param or VITE_FLEET_SERVER env.
-	// When null, the display runs standalone with no fleet transport.
+	// createWsClient reads ?server= URL param or VITE_FLEET_SERVER env internally,
+	// falls back to ws://hostname:3001. Always connects so the Pi registers
+	// with the fleet server even if Cesium/WebGL fails downstream.
 	$effect(() => {
 		if (typeof window === "undefined") return;
-		const serverUrl =
-			new URLSearchParams(window.location.search).get("server") ||
-			import.meta.env.VITE_FLEET_SERVER ||
-			null;
-		if (!serverUrl) return;
 		const client = createWsClient(model);
 		return () => client.destroy();
 	});

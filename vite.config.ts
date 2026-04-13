@@ -29,21 +29,9 @@ export default defineConfig({
 		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
 	},
 	build: {
-		rollupOptions: {
-			output: {
-				manualChunks(id) {
-					if (id.includes('node_modules')) {
-						if (id.includes('cesium')) {
-							return 'cesium';
-						}
-						if (id.includes('three') || id.includes('@threlte')) {
-							return 'three';
-						}
-					}
-					return undefined;
-				},
-			},
-		},
+		// manualChunks removed — incompatible with bundleStrategy:'single'
+		// in svelte.config.js (which enables inlineDynamicImports).
+		// Single-bundle mode already handles Cesium bundling.
 		chunkSizeWarningLimit: 5000,
 	},
 });

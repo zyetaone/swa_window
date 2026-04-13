@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 /** @type {import('@sveltejs/kit').Config} */
@@ -32,6 +32,7 @@ const config = {
 				],
 				'connect-src': [
 					'self',
+					'ws:', 'wss:', 'http:', 'https:',            // Fleet server on any LAN host/port
 					'https://*.arcgis.com', 'https://*.arcgisonline.com',
 					'https://*.cesium.com', 'https://api.cesium.com', 'https://assets.ion.cesium.com',
 					'https://*.bing.com',
