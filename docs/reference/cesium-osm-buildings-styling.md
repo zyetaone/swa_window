@@ -115,3 +115,52 @@ if (altitude > 15000) {
 
 Cesium Sandcastle: 3D Tiles Styling
 https://github.com/CesiumGS/3d-tiles/tree/main/specification/Styling
+
+---
+
+## Gaussian Splats (3D Tiles)
+
+Cesium supports loading Gaussian splat photogrammetry as 3D Tiles. Captured from Sandcastle.
+
+### Loading a splat tileset
+
+```javascript
+const splat = await Cesium.Cesium3DTileset.fromIonAssetId(ASSET_ID);
+viewer.scene.primitives.add(splat);
+viewer.zoomTo(splat, new Cesium.HeadingPitchRange(
+  Cesium.Math.toRadians(-50),
+  Cesium.Math.toRadians(-20),
+  100.0,
+));
+```
+
+### Split-screen comparison (two tilesets)
+
+```javascript
+const left = await Cesium.Cesium3DTileset.fromIonAssetId(3667784);
+left.splitDirection = Cesium.SplitDirection.LEFT;
+viewer.scene.primitives.add(left);
+
+const right = await Cesium.Cesium3DTileset.fromIonAssetId(3443919);
+right.splitDirection = Cesium.SplitDirection.RIGHT;
+viewer.scene.primitives.add(right);
+
+viewer.scene.splitPosition = 0.5; // slider at center
+```
+
+### Aero Window application
+
+Altitude-based source switching:
+- 35k ft: Cesium terrain + satellite + 3D Tiles OSM Buildings
+- 15k ft: Switch to Overpass buildings (per-building night lights)
+-  5k ft: Switch to Gaussian splat of SWA Hyderabad office area
+
+The splat gives photorealistic ground-level detail on approach —
+employees see their actual building from the window.
+
+Requirements:
+- Drone scan of the SWA office neighborhood (~20 min flight)
+- Process: Luma AI / Polycam / Nerfstudio → Gaussian splat
+- Upload to Cesium Ion → auto-converts to 3D Tiles
+- ~50-200MB per neighborhood as tiled data
+- Free via Cesium Ion free tier
