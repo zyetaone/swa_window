@@ -164,3 +164,35 @@ Requirements:
 - Upload to Cesium Ion → auto-converts to 3D Tiles
 - ~50-200MB per neighborhood as tiled data
 - Free via Cesium Ion free tier
+
+---
+
+## Entity API vs Primitive API — Performance Decision
+
+**Entity API** (high-level): Easy, few lines of code, but CPU-managed.
+Each entity's properties (color, visibility) are evaluated per-frame on CPU.
+Our Overpass buildings use this — `GeoJsonDataSource` with `CallbackProperty`
+for per-building night lighting. This is why Pi GPU process hits 35% CPU.
+
+**Primitive API** (low-level): Direct GPU access, instanced rendering.
+`Cesium3DTileset` (OSM Buildings) uses this internally — LOD-managed,
+GPU-instanced, minimal CPU overhead.
+
+### Decision for Aero Window
+
+```
+Cruise (>15k ft): Primitive API via 3D Tiles — GPU handles 350M buildings
+Approach (<15k ft): Entity API via Overpass — CPU manages ~5K buildings
+                    with per-frame night lighting (acceptable at low count)
+```
+
+### Key patterns for future GPU work
+
+- `CZM_batchTable` prefix: bridge between batch table and GLSL shaders
+- Instance attributes: per-object color/visibility without CPU overhead
+- Vertex attributes: geometry scaling (e.g., sensor visibility at zoom)
+- Custom GLSL via `Appearance`: full shader control
+
+Our `cesium-shaders.ts` color grading already uses custom GLSL post-process.
+If we ever need per-cloud GPU control, the Primitive API + custom Appearance
+is the path.
