@@ -5,20 +5,20 @@
 import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
 import { AIRCRAFT } from '$lib/shared/constants';
 import type { LocationId, SkyState } from '$lib/shared/types';
-import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
+import { LOCATION_MAP } from '$lib/shared/locations';
 import { pickScenario, type FlightScenario } from '$lib/engine/flight-scenarios';
 import type { ISimulationEngine, SimulationContext } from './types';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
-export interface FlightCallbacks {
-	setBlindOpen: (open: boolean) => void;
-	resetDirector: () => void;
-	onLocationChanged: (locationId: LocationId) => void;
-	resetBankAngle: () => void;
+/** Events emitted by FlightSimEngine each tick for WindowModel to apply. */
+export interface FlightPatch {
+	blindOpen?: boolean;
+	locationArrived?: LocationId;
+	resetDirector?: boolean;
 }
 
-export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
+export class FlightSimEngine implements ISimulationEngine<SimulationContext, FlightPatch> {
 	// --- Position (reactive) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
@@ -46,17 +46,12 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 	#currentScenario: FlightScenario | null = null;
 	#scenarioWaypointIndex = 0;
 	#scenarioProgress = 0;
-	#callbacks: FlightCallbacks;
 
 	// --- Derived ---
 	isTransitioning = $derived(this.flightMode !== 'orbit');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
 	);
-
-	constructor(callbacks: FlightCallbacks) {
-		this.#callbacks = callbacks;
-	}
 
 	// ====================================================================
 	// PUBLIC API
@@ -71,6 +66,7 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.#cruiseElapsed = 0;
 		this.warpFactor = 0;
 		this.#preWarpSpeed = this.flightSpeed;
+		this.#initScenario(locationId, 'day');
 	}
 
 	setLocationWithSky(locationId: LocationId, skyState: SkyState): void {
@@ -94,23 +90,27 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 	// TICK (ISimulationEngine)
 	// ====================================================================
 
-	tick(delta: number, ctx: SimulationContext): void {
+	tick(delta: number, ctx: SimulationContext): FlightPatch {
+		const patch: FlightPatch = {};
+
 		if (this.flightMode === 'cruise_departure') {
-			this.#tickDeparture(delta);
+			this.#tickDeparture(delta, patch);
 			this.#tickFlightPath(delta, ctx);
 		} else if (this.flightMode === 'cruise_transit') {
-			this.#tickTransit(delta);
+			this.#tickTransit(delta, patch);
 		} else {
 			this.#tickFlightPath(delta, ctx);
 		}
 		this.#tickAltitude(delta, ctx);
+
+		return patch;
 	}
 
 	// ====================================================================
 	// PRIVATE
 	// ====================================================================
 
-	#tickDeparture(delta: number): void {
+	#tickDeparture(delta: number, patch: FlightPatch): void {
 		this.#cruiseElapsed += delta;
 		const warpDuration = 2.5;
 		const t = clamp(this.#cruiseElapsed / warpDuration, 0, 1);
@@ -118,13 +118,13 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
 		if (this.#cruiseElapsed > 2.0) {
-			this.#callbacks.setBlindOpen(false);
+			patch.blindOpen = false;
 			this.flightMode = 'cruise_transit';
 			this.#cruiseElapsed = 0;
 		}
 	}
 
-	#tickTransit(delta: number): void {
+	#tickTransit(delta: number, patch: FlightPatch): void {
 		this.#cruiseElapsed += delta;
 		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
 		this.warpFactor = decay * decay;
@@ -132,14 +132,13 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 
 		if (this.#cruiseElapsed > 2.0 && this.cruiseTargetId) {
 			const arrivedAt = this.cruiseTargetId;
-			this.#callbacks.onLocationChanged(arrivedAt);
 			this.cruiseTargetId = null;
 			this.flightMode = 'orbit';
-			this.#callbacks.setBlindOpen(true);
 			this.warpFactor = 0;
-			this.#callbacks.resetBankAngle();
 			this.flightSpeed = this.#preWarpSpeed;
-			this.#callbacks.resetDirector();
+			patch.locationArrived = arrivedAt;
+			patch.blindOpen = true;
+			patch.resetDirector = true;
 		}
 	}
 
@@ -219,7 +218,7 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 			this.#scenarioProgress = 0;
 			this.#scenarioWaypointIndex = nextIdx;
 			if (nextIdx === 0 && this.#currentScenario.loop) {
-				const fresh = pickScenario(this.#currentLocationId(), ctx.skyState);
+				const fresh = pickScenario(ctx.locationId, ctx.skyState);
 				if (fresh && fresh.id !== this.#currentScenario.id) {
 					this.#currentScenario = fresh;
 					this.#scenarioWaypointIndex = 0;
@@ -231,8 +230,10 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 
 	#tickAltitude(delta: number, ctx: SimulationContext): void {
 		if (ctx.userAdjustingAltitude) return;
-		// Simplification: target altitude can be location-specific at night
-		const targetAlt = ctx.nightFactor > 0.5 ? (LOCATION_MAP.get(this.#currentLocationId())?.nightAltitude ?? 35000) : 35000;
+		const loc = LOCATION_MAP.get(ctx.locationId);
+		const targetAlt = ctx.nightFactor > 0.5
+			? (loc?.nightAltitude ?? 35000)
+			: (loc?.defaultAltitude ?? 35000);
 		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
 	}
 
@@ -250,18 +251,5 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.#currentScenario = pickScenario(locationId, skyState);
 		this.#scenarioWaypointIndex = 0;
 		this.#scenarioProgress = 0;
-	}
-
-	#currentLocationId(): LocationId {
-		let closest: LocationId = 'dubai';
-		let minDist = Infinity;
-		for (const loc of LOCATIONS) {
-			const dist = Math.pow(loc.lat - this.orbitCenterLat, 2) + Math.pow(loc.lon - this.orbitCenterLon, 2);
-			if (dist < minDist) {
-				minDist = dist;
-				closest = loc.id;
-			}
-		}
-		return closest;
 	}
 }

@@ -19,11 +19,13 @@
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/game-loop";
 	import { untrack } from "svelte";
+	import { useBlind } from "./use-blind.svelte";
 	import CesiumViewer from "./Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';
 	const model = useAppState();
+	const blind = useBlind(model);
 
 	// ========================================================================
 	// GAME LOOP — single RAF driving model.tick()
@@ -168,60 +170,9 @@
 	});
 
 	// ========================================================================
-	// BLIND LOGIC (Inlined from Blind.svelte)
+	// BLIND LOGIC — see useBlind composable
 	// ========================================================================
 
-	let blindClipEl: HTMLDivElement | undefined = $state();
-	let isDraggingBlind = $state(false);
-	let blindContainerHeight = 0;
-	const BLIND_SNAP_THRESHOLD = 0.3;
-
-	// blindDragY is internal visual state. It syncs with model.blindOpen when NOT dragging.
-	let blindDragY = $state(model.blindOpen ? -105 : 0);
-	let dragStartBlindY = 0;
-	let dragStartPointerY = 0;
-
-	// Keep blindDragY in sync with external model changes
-	$effect(() => {
-		if (!isDraggingBlind) {
-			blindDragY = model.blindOpen ? -105 : 0;
-		}
-	});
-
-	const blindTransform = $derived(`translateY(${blindDragY.toFixed(1)}%)`);
-	const blindTransition = $derived(
-		isDraggingBlind ? 'none' : 'transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.05)'
-	);
-
-	function startBlindDrag(pointerY: number) {
-		if (model.flight.isTransitioning) return;
-		blindContainerHeight = blindClipEl?.offsetHeight ?? 1;
-		isDraggingBlind = true;
-		dragStartBlindY = blindDragY;
-		dragStartPointerY = pointerY;
-	}
-
-	function moveBlindDrag(pointerY: number) {
-		if (!isDraggingBlind) return;
-		const deltaPct = ((pointerY - dragStartPointerY) / blindContainerHeight) * 100;
-		blindDragY = clamp(dragStartBlindY + deltaPct, -105, 0);
-	}
-
-	function endBlindDrag() {
-		if (!isDraggingBlind) return;
-		isDraggingBlind = false;
-		const travelRatio = Math.abs(blindDragY - dragStartBlindY) / 105;
-		if (travelRatio > BLIND_SNAP_THRESHOLD) {
-			model.blindOpen = blindDragY < dragStartBlindY;
-		}
-	}
-
-	function onBlindPointerDown(e: PointerEvent) {
-		startBlindDrag(e.clientY);
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}
-
-	let blindHasAnimated = $state(false);
 </script>
 
 <div
@@ -252,6 +203,7 @@
 
 			<!-- z:1 — Cloud deck along the horizon (viewed from above at cruise) -->
 			<div class="render-layer" style:z-index={1}>
+				{#if model.showClouds}
 				<CloudBlobs
 					density={cloudOpacity}
 					speed={cloudSpeed}
@@ -261,6 +213,7 @@
 					altitude={model.flight.altitude}
 					windAngle={windAngle}
 				/>
+				{/if}
 			</div>
 
 			<!-- z:2 Rain + Lightning, z:5 Frost -->
@@ -301,26 +254,24 @@
 		{/if}
 	</button>
 
-	<!-- Blind (Inlined) -->
-	<div class="blind-clip" bind:this={blindClipEl}>
+	<!-- Blind (useBlind composable) -->
+	<div class="blind-clip" bind:this={blind.clipEl}>
 		<div
 			class="blind-overlay"
-			class:discoverable={!model.blindOpen && !blindHasAnimated}
-			onanimationend={() => { blindHasAnimated = true; }}
-			onpointerdown={onBlindPointerDown}
-			onpointermove={(e) => moveBlindDrag(e.clientY)}
-			onpointerup={endBlindDrag}
-			onkeydown={(e) => {
-				if (e.key === 'Enter' || e.key === ' ') model.blindOpen = !model.blindOpen;
-			}}
+			class:discoverable={!model.blindOpen && !blind.hasAnimated}
+			onanimationend={() => { blind.hasAnimated = true; }}
+			onpointerdown={blind.onPointerDown}
+			onpointermove={blind.onPointerMove}
+			onpointerup={blind.onPointerUp}
+			onkeydown={blind.onKeyDown}
 			role="slider"
 			tabindex={0}
 			aria-label="Window blind — drag to open or close"
-			aria-valuenow={Math.round(Math.abs(blindDragY))}
+			aria-valuenow={Math.round(Math.abs(blind.dragY))}
 			aria-valuemin={0}
 			aria-valuemax={105}
-			style:transform={blindTransform}
-			style:transition={blindTransition}
+			style:transform={blind.transform}
+			style:transition={blind.transition}
 			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
 		>
 			<div class="blind-slats"></div>

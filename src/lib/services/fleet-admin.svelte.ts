@@ -107,16 +107,28 @@ export class AdminStore extends BaseTransport {
 	}
 
 	#updateDeviceStatus(deviceId: string, status: any): void {
-		const device = this.devices.find(d => d.deviceId === deviceId);
-		if (device) {
-			device.fps = status.fps;
-			device.currentMode = status.mode;
-			device.currentLocation = status.location as LocationId;
-			device.uptime = status.uptime;
-			device.online = true;
-			device.lastSeen = Date.now();
-			this.devices = [...this.devices];
+		let device = this.devices.find(d => d.deviceId === deviceId);
+		if (!device) {
+			device = {
+				deviceId,
+				hostname: deviceId,
+				capabilities: {} as any,
+				currentMode: status.mode ?? 'flight',
+				currentLocation: (status.location ?? 'dubai') as LocationId,
+				fps: 0,
+				uptime: 0,
+				lastSeen: Date.now(),
+				online: true,
+			};
+			this.devices = [...this.devices, device];
 		}
+		device.fps = status.fps;
+		device.currentMode = status.mode;
+		device.currentLocation = status.location as LocationId;
+		device.uptime = status.uptime;
+		device.online = true;
+		device.lastSeen = Date.now();
+		this.devices = [...this.devices];
 	}
 
 	#markOffline(deviceId: string): void {
@@ -131,7 +143,8 @@ export class AdminStore extends BaseTransport {
 		try {
 			const res = await fetch(`${this.apiBase}/api/devices`);
 			if (res.ok) this.devices = await res.json();
-		} catch {}
+			else console.warn(`[FleetAdmin] #fetchDevices failed: ${res.status}`);
+		} catch (e) { console.warn(`[FleetAdmin] #fetchDevices network error:`, e); }
 	}
 
 	#startHealthPolling(): void {
@@ -151,35 +164,47 @@ export class AdminStore extends BaseTransport {
 	}
 
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType) {
-		await fetch(`${this.apiBase}/api/devices/${deviceId}/scene`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ location, weather }),
-		});
+		try {
+			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/scene`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ location, weather }),
+			});
+			if (!res.ok) console.warn(`[FleetAdmin] pushScene ${deviceId} failed: ${res.status}`);
+		} catch (e) { console.warn(`[FleetAdmin] pushScene ${deviceId} network error:`, e); }
 	}
 
 	async pushMode(deviceId: string, mode: DisplayMode, payload?: string) {
-		await fetch(`${this.apiBase}/api/devices/${deviceId}/mode`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ mode, payload }),
-		});
+		try {
+			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/mode`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ mode, payload }),
+			});
+			if (!res.ok) console.warn(`[FleetAdmin] pushMode ${deviceId} failed: ${res.status}`);
+		} catch (e) { console.warn(`[FleetAdmin] pushMode ${deviceId} network error:`, e); }
 	}
 
 	async pushConfig(deviceId: string, config: DisplayConfig) {
-		await fetch(`${this.apiBase}/api/devices/${deviceId}/config`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(config),
-		});
+		try {
+			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/config`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(config),
+			});
+			if (!res.ok) console.warn(`[FleetAdmin] pushConfig ${deviceId} failed: ${res.status}`);
+		} catch (e) { console.warn(`[FleetAdmin] pushConfig ${deviceId} network error:`, e); }
 	}
 
 	async broadcastScene(location: LocationId, weather?: WeatherType) {
-		await fetch(`${this.apiBase}/api/broadcast/scene`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ location, weather }),
-		});
+		try {
+			const res = await fetch(`${this.apiBase}/api/broadcast/scene`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ location, weather }),
+			});
+			if (!res.ok) console.warn(`[FleetAdmin] broadcastScene failed: ${res.status}`);
+		} catch (e) { console.warn(`[FleetAdmin] broadcastScene network error:`, e); }
 	}
 
 	override destroy(): void {

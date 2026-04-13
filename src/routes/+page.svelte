@@ -9,6 +9,7 @@
 	 * - Cabin interior context
 	 */
 
+	import { onDestroy } from "svelte";
 	import { createAppState } from "$lib/app-state.svelte";
 	import { AIRCRAFT } from "$lib/shared/constants";
 	import { LOCATION_MAP } from "$lib/shared/locations";
@@ -52,6 +53,9 @@
 		const client = createWsClient(model);
 		return () => client.destroy();
 	});
+
+	// Clean up model timers on page teardown
+	onDestroy(() => model.destroy());
 
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
 	if (typeof window !== "undefined") {

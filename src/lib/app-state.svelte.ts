@@ -11,7 +11,7 @@
  */
 
 import { setContext, getContext } from 'svelte';
-import { clamp, getSkyState } from '$lib/shared/utils';
+import { clamp } from '$lib/shared/utils';
 import { WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { QualityMode } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
@@ -40,16 +40,36 @@ export interface PatchableState {
 	showBuildings: boolean;
 }
 
+// ─── UserOverrideTracker ─────────────────────────────────────────────────────
+
+/** Tracks short-lived user interaction flags that pause auto-behaviors. */
+class UserOverrideTracker {
+	altitude   = $state(false);
+	time       = $state(false);
+	atmosphere = $state(false);
+
+	#timers: { altitude?: ReturnType<typeof setTimeout>; time?: ReturnType<typeof setTimeout>; atmosphere?: ReturnType<typeof setTimeout> } = {};
+
+	track(type: 'altitude' | 'time' | 'atmosphere', durationMs = 8000): void {
+		this[type] = true;
+		const existing = this.#timers[type];
+		if (existing) clearTimeout(existing);
+		this.#timers[type] = setTimeout(() => { this[type] = false; }, durationMs);
+	}
+
+	destroy(): void {
+		clearTimeout(this.#timers.altitude);
+		clearTimeout(this.#timers.time);
+		clearTimeout(this.#timers.atmosphere);
+		this.#timers = {};
+	}
+}
+
 // ─── WindowModel ─────────────────────────────────────────────────────────────
 
 export class WindowModel {
 	// ── Engines ───────────────────────────────────────────────────────────────
-	readonly flight = new FlightSimEngine({
-		setBlindOpen:      (open) => { this.blindOpen = open; },
-		resetDirector:     () => { this.world.resetDirector(); },
-		onLocationChanged: (id) => { this.setLocation(id); },
-		resetBankAngle:    () => {},
-	});
+	readonly flight = new FlightSimEngine();
 	readonly motion = new MotionEngine();
 	readonly world  = new WorldEngine();
 
@@ -70,7 +90,9 @@ export class WindowModel {
 	showBuildings = $state(true);
 	showClouds    = $state(true);
 
-	// Display
+	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
+	// Window.svelte does not consume this yet; add a display-path consumer here
+	// when screensaver/video modes are implemented.
 	displayMode = $state<DisplayMode>('flight');
 	videoUrl    = $state('');
 
@@ -79,23 +101,28 @@ export class WindowModel {
 	autoQuality = $state(true);
 	measuredFps = $state(0);
 
-	// User-interaction flags
-	userAdjustingAltitude   = $state(false);
-	userAdjustingTime       = $state(false);
-	userAdjustingAtmosphere = $state(false);
+	// User-interaction override tracker (pauses auto-behavior for 8 s)
+	readonly #overrides = new UserOverrideTracker();
+	get userAdjustingAltitude()   { return this.#overrides.altitude; }
+	get userAdjustingTime()       { return this.#overrides.time; }
+	get userAdjustingAtmosphere() { return this.#overrides.atmosphere; }
 
 	// High-frequency animation time (not reactive — updated via untrack in game loop)
 	time = 0;
 
-	// Private timers
-	#altitudeTimeout: ReturnType<typeof setTimeout> | null = null;
-	#timeTimeout: ReturnType<typeof setTimeout> | null = null;
-	#atmosphereTimeout: ReturnType<typeof setTimeout> | null = null;
+	// Private perf counters
 	#frameCount    = 0;
 	#fpsLastTime   = 0;
 	#qualityCheckTimer = 0;
 
 	// ── Derived ───────────────────────────────────────────────────────────────
+	#computeSkyState(t: number): SkyState {
+		if (t < 5 || t >= 20) return 'night';
+		if (t < 7) return 'dawn';
+		if (t >= 18) return 'dusk';
+		return 'day';
+	}
+
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
 	localTimeOfDay = $derived.by(() => {
 		const offset = this.currentLocation.utcOffset;
@@ -105,7 +132,8 @@ export class WindowModel {
 		return lt;
 	});
 
-	skyState = $derived<SkyState>(getSkyState(this.timeOfDay));
+	skyState = $derived<SkyState>(this.#computeSkyState(this.timeOfDay));
+
 	sceneFog = $derived(this.currentLocation.scene.fog);
 	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
 
@@ -206,7 +234,10 @@ export class WindowModel {
 
 		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
-		if (patch.weather !== undefined && VALID_WEATHER.includes(patch.weather)) this.weather = patch.weather;
+		if (patch.weather !== undefined && VALID_WEATHER.includes(patch.weather)) {
+			this.weather = patch.weather;
+			this.onUserInteraction('atmosphere');
+		}
 		if (patch.cloudDensity !== undefined)       { this.cloudDensity = clamp(patch.cloudDensity, 0, 1); this.onUserInteraction('atmosphere'); }
 		if (patch.cloudSpeed !== undefined)         this.cloudSpeed = clamp(patch.cloudSpeed, 0, 2);
 		if (patch.haze !== undefined)               this.haze = clamp(patch.haze, 0, 0.2);
@@ -218,21 +249,7 @@ export class WindowModel {
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
-		const OVERRIDE_DURATION = 8000;
-
-		if (type === 'altitude') {
-			this.userAdjustingAltitude = true;
-			if (this.#altitudeTimeout) clearTimeout(this.#altitudeTimeout);
-			this.#altitudeTimeout = setTimeout(() => { this.userAdjustingAltitude = false; }, OVERRIDE_DURATION);
-		} else if (type === 'time') {
-			this.userAdjustingTime = true;
-			if (this.#timeTimeout) clearTimeout(this.#timeTimeout);
-			this.#timeTimeout = setTimeout(() => { this.userAdjustingTime = false; }, OVERRIDE_DURATION);
-		} else {
-			this.userAdjustingAtmosphere = true;
-			if (this.#atmosphereTimeout) clearTimeout(this.#atmosphereTimeout);
-			this.#atmosphereTimeout = setTimeout(() => { this.userAdjustingAtmosphere = false; }, OVERRIDE_DURATION);
-		}
+		this.#overrides.track(type);
 	}
 
 	getPersistedSnapshot(): PersistedState {
@@ -262,7 +279,11 @@ export class WindowModel {
 
 		const ctx = this.#createContext();
 
-		this.flight.tick(delta, ctx);
+		const flightPatch = this.flight.tick(delta, ctx);
+		if (flightPatch.blindOpen !== undefined) this.blindOpen = flightPatch.blindOpen;
+		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
+		if (flightPatch.resetDirector)           this.world.resetDirector();
+
 		this.motion.tick(delta, ctx);
 
 		const wctx = this.#worldCtx;
@@ -331,9 +352,7 @@ export class WindowModel {
 	}
 
 	destroy(): void {
-		if (this.#altitudeTimeout) clearTimeout(this.#altitudeTimeout);
-		if (this.#timeTimeout) clearTimeout(this.#timeTimeout);
-		if (this.#atmosphereTimeout) clearTimeout(this.#atmosphereTimeout);
+		this.#overrides.destroy();
 	}
 }
 
