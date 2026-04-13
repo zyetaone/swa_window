@@ -12,23 +12,25 @@
  * - flyTo(): Synchronous state transition to cruise mode
  */
 
-import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
+import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
+// re-export for consumers
+export type { QualityMode };
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
-import { pickScenario, type FlightScenario } from './flight-scenarios';
+import { FlightSimEngine } from '$lib/engine/FlightSim.svelte';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
 import { EventEngine } from '$lib/engine/Events.svelte';
 import { DirectorEngine } from '$lib/engine/Director.svelte';
 import { AtmosphereEngine } from '$lib/engine/Atmosphere.svelte';
 
-export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
+export type { FlightMode } from '$lib/engine/FlightSim.svelte';
 
 // ============================================================================
-// TYPES
+// TYPES (local to this module)
 // ============================================================================
 
 export interface PatchableState {
@@ -47,6 +49,10 @@ export interface PatchableState {
 	showClouds: boolean;
 }
 
+// ============================================================================
+// HELPERS
+// ============================================================================
+
 function getSkyState(timeOfDay: number): SkyState {
 	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
 	if (timeOfDay < 7) return 'dawn';
@@ -59,75 +65,84 @@ function getSkyState(timeOfDay: number): SkyState {
 // ============================================================================
 
 export class WindowModel {
-	// ── Position ────────────────────────────────────────────────────────────────
-	lat = $state(25.2048);
-	lon = $state(55.2708);
-	altitude = $state(35000);
-	heading = $state(45);
-	pitch = $state(75);
+	// --- Flight Engine (position, orbit, cruise state machine) ---
+	private readonly flight = new FlightSimEngine({
+		setBlindOpen: (open) => { this.blindOpen = open; },
+		resetDirector: () => { this.director.reset(); },
+		onLocationChanged: (id) => { this.setLocation(id); },
+		resetBankAngle: () => { /* bankAngle owned by MotionEngine, resets naturally */ },
+	});
 
-	// ── Time ────────────────────────────────────────────────────────────────────
+	// --- Position (proxy to flight engine) ---
+	get lat() { return this.flight.lat; }
+	set lat(v: number) { this.flight.lat = v; }
+	get lon() { return this.flight.lon; }
+	set lon(v: number) { this.flight.lon = v; }
+	get altitude() { return this.flight.altitude; }
+	set altitude(v: number) { this.flight.altitude = v; }
+	get heading() { return this.flight.heading; }
+	set heading(v: number) { this.flight.heading = v; }
+	get pitch() { return this.flight.pitch; }
+	set pitch(v: number) { this.flight.pitch = v; }
+
+	// --- Flight mode (proxy to flight engine) ---
+	get flightMode() { return this.flight.flightMode; }
+	get cruiseTargetId() { return this.flight.cruiseTargetId; }
+	get warpFactor() { return this.flight.warpFactor; }
+	get flightSpeed() { return this.flight.flightSpeed; }
+	set flightSpeed(v: number) { this.flight.flightSpeed = v; }
+	get isTransitioning() { return this.flight.isTransitioning; }
+	get cruiseDestinationName() { return this.flight.cruiseDestinationName; }
+
+	// --- Orbit (proxy to flight engine) ---
+	get orbitCenterLat() { return this.flight.orbitCenterLat; }
+	get orbitCenterLon() { return this.flight.orbitCenterLon; }
+	get orbitAngle() { return this.flight.orbitAngle; }
+
+	utcOffset = $state(4);
+
+	// --- Time ---
 	timeOfDay = $state(12);
 	syncToRealTime = $state(true);
 
-	// ── User override (pause auto-behavior during manual control) ──────────────
+	// --- User override (pause auto-behavior during manual control) ---
 	userAdjustingAltitude = $state(false);
 	userAdjustingTime = $state(false);
 	userAdjustingAtmosphere = $state(false);
 	private userOverrideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-	// ── Location ───────────────────────────────────────────────────────────────
+	// --- Location ---
 	location = $state<LocationId>('dubai');
-	utcOffset = $state(4);
 
-	// ── Environment ─────────────────────────────────────────────────────────────
+	// --- Environment ---
 	weather = $state<WeatherType>('cloudy');
 	cloudDensity = $state(0.7);
 	cloudSpeed = $state(0.4);
 	haze = $state(0.025);
 
-	// ── View ───────────────────────────────────────────────────────────────────
+	// --- View ---
 	blindOpen = $state(true);
 	showBuildings = $state(true);
 	showClouds = $state(true);
 
-	// ── Display mode (fleet-managed) ────────────────────────────────────────────
+	// --- Display mode (fleet-managed) ---
 	displayMode = $state<DisplayMode>('flight');
 	videoUrl = $state('');
 	isFlightMode = $derived(this.displayMode === 'flight');
 	isScreensaverMode = $derived(this.displayMode === 'screensaver');
 	isVideoMode = $derived(this.displayMode === 'video');
 
-	// ── Cesium quality ─────────────────────────────────────────────────────────
+	// --- Cesium quality ---
 	qualityMode = $state<QualityMode>('balanced');
 
-	// ── FPS tracking ───────────────────────────────────────────────────────────
+	// --- FPS tracking (for fleet health reporting) ---
 	private _frameCount = 0;
 	private _fpsLastTime = performance.now();
 	measuredFps = $state(0);
 
-	// ── Night rendering ─────────────────────────────────────────────────────────
-	// terrainDarkness=0: terrain stays bright at night, color grading shader
-	// warm-tints the grayscale terrain to create city glow from the hi-res texture.
-	// nightLightIntensity=0.6: VIIRS/CartoDB overlays kept very subtle (scale=0.24).
+	// --- Night rendering ---
 	nightLightIntensity = $state(0.6);
 	terrainDarkness = $state(0);
-
-	// ── Flight speed ────────────────────────────────────────────────────────────
-	flightSpeed = $state(1.0);
-
-	// ── Orbit flight path (fallback ellipse when no scenario exists) ────────────
-	orbitCenterLat = $state(25.2048);
-	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor: number = $state(AIRCRAFT.ORBIT_MAJOR);
-	orbitRadiusMinor: number = $state(AIRCRAFT.ORBIT_MINOR);
-	orbitBearing = $state(0); // radians — orientation of the flight path
-	orbitAngle = $state(0);   // radians, increments over time
-
-	// ── Waypoint-based flight scenario (replaces orbit when available) ───────────
-	private currentScenario: FlightScenario | null = null;
-	private scenarioWaypointIndex = 0;
-	private scenarioProgress = 0; // 0-1 between current and next waypoint
 
 	// ── Atmosphere (delegated to AtmosphereEngine) ─────────────────────────────
 	private readonly atmosphere = new AtmosphereEngine();
@@ -148,25 +163,12 @@ export class WindowModel {
 	private readonly events = new EventEngine();
 	get microEvent() { return this.events.microEvent; }
 
-	// ── Flight Modes (Cinematic) ────────────────────────────────────────────────
-	flightMode = $state<FlightMode>('orbit');
-	cruiseTargetId = $state<LocationId | null>(null);
-	cruiseElapsed = 0;   // Timer for transition phases
-	warpFactor = $state(0); // 0=normal, 1=full warp speed
-	private preWarpSpeed = 1.0; // saved flightSpeed before warp acceleration
-
-	// ── Derived from flight mode ────────────────────────────────────────────────
-	isTransitioning = $derived(this.flightMode !== 'orbit');
-	cruiseDestinationName = $derived(
-		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
-	);
-
 	// ── Director (delegated to DirectorEngine) ─────────────────────────────────
 	private readonly director = new DirectorEngine();
 
 	// (Ambient randomization delegated to AtmosphereEngine)
 
-	// ── Animation clock (single source of time) ─────────────────────────────────
+	// --- Animation clock (single source of time) ---
 	time = 0;
 
 	// ========================================================================
@@ -189,16 +191,18 @@ export class WindowModel {
 	 */
 	nightFactor = $derived.by(() => {
 		const t = this.timeOfDay;
-		if (t >= 7 && t <= 18) return 0;
-		if (t < 5 || t > 20) return 1;
-		if (t < 7) return 1 - (t - 5) / 2;
-		return (t - 18) / 2;
+		// Dawn: 5->7 (night->day), Dusk: 18->20 (day->night)
+		if (t >= 7 && t <= 18) return 0;          // full day
+		if (t < 5 || t > 20) return 1;            // full night
+		if (t < 7) return 1 - (t - 5) / 2;       // dawn: 1->0
+		return (t - 18) / 2;                       // dusk: 0->1
 	});
 
 	dawnDuskFactor = $derived.by(() => {
 		const t = this.timeOfDay;
-		if (t >= 5 && t < 7) return 1 - Math.abs(t - 6);
-		if (t >= 18 && t <= 20) return 1 - Math.abs(t - 19);
+		// Peak at midpoints of transition bands (6.0 and 19.0)
+		if (t >= 5 && t < 7) return 1 - Math.abs(t - 6);    // dawn: 0->1->0
+		if (t >= 18 && t <= 20) return 1 - Math.abs(t - 19); // dusk: 0->1->0
 		return 0;
 	});
 
@@ -212,6 +216,8 @@ export class WindowModel {
 		const fx = WEATHER_EFFECTS[this.weather];
 		const [min, max] = fx.cloudDensityRange;
 		let density = max > 0 ? clamp(this.cloudDensity, min, max) : this.cloudDensity * 0.3;
+		// At night, reduce cloud opacity so Cesium city lights show through.
+		// Clouds are CSS layers above the Cesium canvas — they block NASA lights.
 		if (this.skyState === 'night') {
 			density = Math.max(density * 0.5, fx.nightCloudFloor);
 		} else if (this.skyState === 'dusk') {
@@ -234,6 +240,7 @@ export class WindowModel {
 		return loc.defaultAltitude;
 	});
 
+
 	// ========================================================================
 	// CONSTRUCTOR
 	// ========================================================================
@@ -244,15 +251,13 @@ export class WindowModel {
 			const loc = LOCATION_MAP.get(saved.location);
 			if (loc) {
 				this.location = saved.location;
-				this.lat = loc.lat;
-				this.lon = loc.lon;
 				this.utcOffset = loc.utcOffset;
-				this.orbitCenterLat = loc.lat;
-				this.orbitCenterLon = loc.lon;
-				this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
+				// Initialize flight engine with saved location
+				this.flight.setLocationWithSky(saved.location, 'day');
 			}
 		} else {
-			this.orbitBearing = this.computeOrbitBearing(this.lat, this.lon);
+			// Default location (Dubai) — flight engine defaults match
+			this.flight.setLocationWithSky('dubai', 'day');
 		}
 
 		if (saved.altitude !== undefined) this.altitude = saved.altitude;
@@ -267,7 +272,6 @@ export class WindowModel {
 			this.timeOfDay = now.getHours() + now.getMinutes() / 60;
 		}
 
-		this.initScenario(this.location);
 	}
 
 	/** Update timeOfDay from the system clock (called by external $effect) */
@@ -298,26 +302,11 @@ export class WindowModel {
 		const loc = LOCATION_MAP.get(locationId);
 		if (!loc) return;
 		this.location = locationId;
-		this.lat = loc.lat;
-		this.lon = loc.lon;
 		this.utcOffset = loc.utcOffset;
-		this.orbitCenterLat = loc.lat;
-		this.orbitCenterLon = loc.lon;
-		this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
-		this.orbitAngle = 0;
-
-		this.initScenario(locationId);
+		this.flight.setLocationWithSky(locationId, this.skyState);
 	}
 
-	// Deterministic hash to spread orbit orientations across locations
-	private computeOrbitBearing(lat: number, lon: number): number {
-		return (Math.abs(lat * 37 + lon * 59) % 180) * Math.PI / 180;
-	}
-
-	setAltitude(alt: number): void {
-		if (!Number.isFinite(alt)) return;
-		this.altitude = clamp(alt, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
-	}
+	setAltitude(alt: number): void { this.flight.setAltitude(alt); }
 
 	setTime(time: number): void {
 		if (!Number.isFinite(time)) return;
@@ -328,15 +317,9 @@ export class WindowModel {
 		this.weather = weather;
 	}
 
-	setHeading(heading: number): void {
-		if (!Number.isFinite(heading)) return;
-		this.heading = normalizeHeading(heading);
-	}
+	setHeading(heading: number): void { this.flight.setHeading(heading); }
 
-	setPitch(pitch: number): void {
-		if (!Number.isFinite(pitch)) return;
-		this.pitch = clamp(pitch, -90, 90);
-	}
+	setPitch(pitch: number): void { this.flight.setPitch(pitch); }
 
 	setCloudDensity(density: number): void {
 		if (!Number.isFinite(density)) return;
@@ -348,14 +331,19 @@ export class WindowModel {
 		this.terrainDarkness = clamp(darkness, 0, 1);
 	}
 
+	setLat(lat: number): void {
+		if (!Number.isFinite(lat)) return;
+		this.lat = clamp(lat, -90, 90);
+	}
+
+	setLon(lon: number): void {
+		if (!Number.isFinite(lon)) return;
+		this.lon = clamp(lon, -180, 180);
+	}
+
 	/** Pick next location weighted by time of day (nature mornings, cities midday/night) */
 	pickNextLocation(): LocationId {
-		const hour = this.localTimeOfDay;
-		const preferCity = (hour >= 10 && hour < 16) || hour >= 19 || hour < 5;
-		const candidates = LOCATIONS.filter(l => l.id !== this.location);
-		const preferred = candidates.filter(l => preferCity ? l.hasBuildings : !l.hasBuildings);
-		const pool = preferred.length > 0 ? preferred : candidates;
-		return pool[Math.floor(Math.random() * pool.length)].id;
+		return this.flight.pickNextLocation(this.localTimeOfDay, this.location);
 	}
 
 	toggleBlind(): void { this.blindOpen = !this.blindOpen; }
@@ -383,12 +371,14 @@ export class WindowModel {
 			this.videoUrl = payload;
 		}
 
+		// Screensaver: slow dreamy orbit, sync to real time, ensure blind is open
 		if (mode === 'screensaver') {
 			this.flightSpeed = 0.3;
 			this.syncToRealTime = true;
 			this.blindOpen = true;
 		}
 
+		// Flight: restore normal speed from screensaver, ensure blind open
 		if (mode === 'flight' && prev === 'screensaver') {
 			this.flightSpeed = 1.0;
 			this.blindOpen = true;
@@ -447,16 +437,9 @@ export class WindowModel {
 	// ========================================================================
 
 	flyTo(locationId: LocationId): void {
+		// If already there/cruising there, ignore
 		if (this.location === locationId && this.flightMode === 'orbit') return;
-		if (this.cruiseTargetId === locationId) return;
-		const target = LOCATION_MAP.get(locationId);
-		if (!target) return;
-
-		this.cruiseTargetId = locationId;
-		this.flightMode = 'cruise_departure';
-		this.cruiseElapsed = 0;
-		this.warpFactor = 0;
-		this.preWarpSpeed = this.flightSpeed;
+		this.flight.flyTo(locationId);
 	}
 
 	// ========================================================================
@@ -467,59 +450,23 @@ export class WindowModel {
 		if (!Number.isFinite(delta) || delta < 0 || delta > 0.1) return;
 		this.time = (this.time + delta) % 3600;
 
-		if (this.flightMode === 'cruise_departure') {
-			this.tickDeparture(delta);
-			this.tickFlightPath(delta);
-		} else if (this.flightMode === 'cruise_transit') {
-			this.tickTransit(delta);
-		} else {
-			this.tickFlightPath(delta);
+		// Flight engine: position, orbit, cruise state machine, altitude
+		this.flight.tick(delta, {
+			time: this.time,
+			userAdjustingAltitude: this.userAdjustingAltitude,
+			nightAltitudeTarget: this.nightAltitudeTarget,
+			skyState: this.skyState,
+		});
+
+		// Director only runs during orbit (not during cruise transitions)
+		if (this.flightMode === 'orbit') {
 			this.tickDirector(delta);
 		}
 
 		this.tickLightning(delta);
 		this.tickMotion(delta);
-		this.tickAltitude(delta);
 		this.tickMicroEvents(delta);
 		this.tickRandomize(delta);
-	}
-
-	// --- Cruise Logic ---
-
-	private tickDeparture(delta: number): void {
-		this.cruiseElapsed += delta;
-
-		const warpDuration = 2.5;
-		const t = clamp(this.cruiseElapsed / warpDuration, 0, 1);
-		this.warpFactor = t * t * (3 - 2 * t);
-
-		const warpSpeed = this.preWarpSpeed + this.warpFactor * 100;
-		this.flightSpeed = warpSpeed;
-
-		if (this.cruiseElapsed > 2.0) {
-			this.blindOpen = false;
-			this.flightMode = 'cruise_transit';
-			this.cruiseElapsed = 0;
-		}
-	}
-
-	private tickTransit(delta: number): void {
-		this.cruiseElapsed += delta;
-
-		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
-		this.warpFactor = decay * decay;
-
-		this.flightSpeed = this.preWarpSpeed + this.warpFactor * 100;
-
-		if (this.cruiseElapsed > 2.0 && this.cruiseTargetId) {
-			this.setLocation(this.cruiseTargetId);
-			this.cruiseTargetId = null;
-			this.flightMode = 'orbit';
-			this.blindOpen = true;
-			this.warpFactor = 0;
-			this.flightSpeed = this.preWarpSpeed;
-			this.director.reset();
-		}
 	}
 
 	private tickDirector(delta: number): void {
@@ -530,120 +477,9 @@ export class WindowModel {
 		if (nextId) this.flyTo(nextId);
 	}
 
-	// --- Flight Path ---
-
-	private tickOrbit(delta: number): void {
-		const breathePhase = (this.time / AIRCRAFT.ORBIT_BREATHE_PERIOD) * Math.PI * 2;
-		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
-		const majorRange = AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN;
-		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * majorRange;
-		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
-
-		const a = this.orbitRadiusMajor;
-		const b = this.orbitRadiusMinor;
-
-		const tx = a * Math.cos(this.orbitAngle);
-		const ty = -b * Math.sin(this.orbitAngle);
-		const localSpeed = Math.sqrt(tx * tx + ty * ty);
-		const angularSpeed = (AIRCRAFT.DRIFT_RATE * this.flightSpeed) / Math.max(localSpeed, 0.001);
-		this.orbitAngle += angularSpeed * delta;
-		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
-
-		const ex = a * Math.sin(this.orbitAngle);
-		const ey = b * Math.cos(this.orbitAngle);
-		const cb = Math.cos(this.orbitBearing);
-		const sb = Math.sin(this.orbitBearing);
-		const cosLat = Math.cos(this.orbitCenterLat * Math.PI / 180);
-
-		const newLat = this.orbitCenterLat + (ex * cb - ey * sb);
-		const newLon = this.orbitCenterLon + (ex * sb + ey * cb) / Math.max(cosLat, 0.1);
-		if (Number.isFinite(newLat)) this.lat = newLat;
-		if (Number.isFinite(newLon)) this.lon = newLon;
-
-		const rtx = tx * cb - ty * sb;
-		const rty = tx * sb + ty * cb;
-		const tangentHeading = (Math.atan2(rty, rtx) * 180) / Math.PI;
-		const baseHeading = normalizeHeading(tangentHeading);
-
-		const wander = Math.sin(this.time * 0.05) * 0.25
-			+ Math.sin(this.time * 0.031) * 0.15
-			+ Math.sin(this.time * 0.017) * 0.1;
-		this.heading = normalizeHeading(baseHeading + wander);
-	}
-
-	private tickFlightPath(delta: number): void {
-		if (this.currentScenario) {
-			this.tickScenario(delta);
-		} else {
-			this.tickOrbit(delta);
-		}
-	}
-
-	private initScenario(locationId: LocationId): void {
-		const scenario = pickScenario(locationId, this.skyState);
-		this.currentScenario = scenario;
-		this.scenarioWaypointIndex = 0;
-		this.scenarioProgress = 0;
-	}
-
-	private tickScenario(delta: number): void {
-		const scenario = this.currentScenario;
-		if (!scenario || scenario.waypoints.length < 2) return;
-
-		const waypoints = scenario.waypoints;
-		const idx = this.scenarioWaypointIndex;
-		const nextIdx = (idx + 1) % waypoints.length;
-		const current = waypoints[idx];
-		const next = waypoints[nextIdx];
-
-		const duration = next.duration > 0 ? next.duration : 30;
-		this.scenarioProgress += (delta * this.flightSpeed) / duration;
-
-		const raw = clamp(this.scenarioProgress, 0, 1);
-		const t = raw * raw * (3 - 2 * raw);
-
-		const jitterScale = 0.0003;
-		const jitterLat = Math.sin(this.time * 0.13) * jitterScale + Math.sin(this.time * 0.31) * jitterScale * 0.5;
-		const jitterLon = Math.sin(this.time * 0.17) * jitterScale + Math.sin(this.time * 0.37) * jitterScale * 0.5;
-
-		const newLat = lerp(current.lat, next.lat, t) + jitterLat;
-		const newLon = lerp(current.lon, next.lon, t) + jitterLon;
-		if (Number.isFinite(newLat)) this.lat = newLat;
-		if (Number.isFinite(newLon)) this.lon = newLon;
-
-		if (!this.userAdjustingAltitude) {
-			const altJitter = Math.sin(this.time * 0.07) * 50;
-			this.altitude = lerp(current.altitude, next.altitude, t) + altJitter;
-		}
-
-		let headingDiff = next.heading - current.heading;
-		if (headingDiff > 180) headingDiff -= 360;
-		if (headingDiff < -180) headingDiff += 360;
-		const headingJitter = Math.sin(this.time * 0.05) * 0.25 + Math.sin(this.time * 0.031) * 0.15;
-		this.heading = normalizeHeading(current.heading + headingDiff * t + headingJitter);
-
-		if (this.scenarioProgress >= 1) {
-			this.scenarioProgress = 0;
-			this.scenarioWaypointIndex = nextIdx;
-
-			if (nextIdx === 0 && scenario.loop) {
-				const fresh = pickScenario(this.location, this.skyState);
-				if (fresh && fresh.id !== scenario.id) {
-					this.currentScenario = fresh;
-					this.scenarioWaypointIndex = 0;
-					this.scenarioProgress = 0;
-				}
-			}
-		}
-	}
-
-	// --- Weather ---
-
 	private tickLightning(delta: number): void {
 		this.atmosphere.tickLightning(delta, this.showLightning);
 	}
-
-	// --- Motion ---
 
 	private tickMotion(delta: number): void {
 		this.motion.tick(delta, {
@@ -653,15 +489,6 @@ export class WindowModel {
 			weather: this.weather,
 			turbulenceLevel: this.turbulenceLevel,
 		});
-	}
-
-	private tickAltitude(delta: number): void {
-		if (this.userAdjustingAltitude) return;
-		const target = this.nightAltitudeTarget;
-		const diff = target - this.altitude;
-		if (Math.abs(diff) > 500) {
-			this.altitude += Math.sign(diff) * Math.min(Math.abs(diff) * 0.01, 50) * delta * 60;
-		}
 	}
 
 	private tickMicroEvents(delta: number): void {
