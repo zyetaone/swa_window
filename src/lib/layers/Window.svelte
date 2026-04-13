@@ -21,6 +21,7 @@
 		WEATHER_EFFECTS,
 	} from "$lib/core";
 	import { clamp } from "$lib/shared/utils";
+	import { subscribe } from "$lib/engine/loop.svelte";
 	import CesiumViewer from "./CesiumViewer.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	const model = useAppState();
@@ -32,32 +33,11 @@
 	let elapsedTime = $state(0);
 
 	$effect(() => {
-		let lastTime = performance.now();
-		let raf: number;
-		let consecutiveErrors = 0;
-
-		function loop(now: number) {
-			try {
-				const dt = Math.min((now - lastTime) / 1000, 0.1);
-				lastTime = now;
-				model.tick(dt);
-				model.reportFrame();
-				elapsedTime += dt;
-				consecutiveErrors = 0;
-			} catch {
-				consecutiveErrors++;
-				if (consecutiveErrors >= 10) {
-					// Clear potentially corrupt persisted state before reload
-					try { localStorage.removeItem('aero-window-v2'); } catch { /* noop */ }
-					window.location.reload();
-					return;
-				}
-			}
-			raf = requestAnimationFrame(loop);
-		}
-
-		raf = requestAnimationFrame(loop);
-		return () => cancelAnimationFrame(raf);
+		return subscribe((dt) => {
+			model.tick(dt);
+			model.reportFrame();
+			elapsedTime += dt;
+		});
 	});
 
 	// ========================================================================
