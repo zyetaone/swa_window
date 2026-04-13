@@ -177,6 +177,9 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		const baseHeading = normalizeHeading((Math.atan2(tx * sb + ty * cb, tx * cb - ty * sb) * 180) / Math.PI);
 		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
+
+		// Subtle pitch breathing — ±1.5° around altitude-derived base
+		this.pitch = this.#altitudePitch() + Math.sin(ctx.time * 0.03) * 1.5;
 	}
 
 	#tickScenario(delta: number, ctx: SimulationContext): void {
@@ -210,6 +213,7 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		if (hDiff > 180) hDiff -= 360;
 		if (hDiff < -180) hDiff += 360;
 		this.heading = normalizeHeading(current.heading + hDiff * t + Math.sin(ctx.time * 0.05) * 0.25);
+		this.pitch = this.#altitudePitch() + Math.sin(ctx.time * 0.04) * 1.0;
 
 		if (this.#scenarioProgress >= 1) {
 			this.#scenarioProgress = 0;
@@ -230,6 +234,12 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		// Simplification: target altitude can be location-specific at night
 		const targetAlt = ctx.nightFactor > 0.5 ? (LOCATION_MAP.get(this.#currentLocationId())?.nightAltitude ?? 35000) : 35000;
 		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
+	}
+
+	/** Base pitch from altitude: higher = more downward (70-80° range) */
+	#altitudePitch(): number {
+		const altNorm = clamp((this.altitude - AIRCRAFT.MIN_ALTITUDE) / (AIRCRAFT.MAX_ALTITUDE - AIRCRAFT.MIN_ALTITUDE), 0, 1);
+		return 70 + altNorm * 10;
 	}
 
 	#computeOrbitBearing(lat: number, lon: number): number {

@@ -307,20 +307,6 @@
 						haze: parseFloat(e.currentTarget.value),
 					})}
 			/>
-			<RangeSlider
-				id="terrainDark"
-				label="Terrain Darkness"
-				min={0}
-				max={1.0}
-				step={0.05}
-				value={model.terrainDarkness}
-				formatValue={(v) => Math.round(v * 100) + "%"}
-				oninput={(e) =>
-					model.applyPatch({
-						terrainDarkness: parseFloat(e.currentTarget.value),
-					})}
-			/>
-
 			<div class="divider"></div>
 
 			<h4>Lighting</h4>

@@ -31,6 +31,8 @@ export interface CesiumModelView {
 	qualityMode: QualityMode;
 	location: LocationId;
 	weather: WeatherType;
+	sceneFog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
+	terrainExaggeration: number;
 }
 
 export class CesiumManager {
@@ -68,8 +70,10 @@ export class CesiumManager {
 	private lastNightAlpha = -1;
 	private lastRoadAlpha = -1;
 	private lastBuildingNightFactor = -1;
+	private lastTerrainExaggeration = -1;
 
 	#viewerContainerEl: HTMLElement | null = null;
+	#boundTick: (() => void) | null = null;
 
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
 		this.CesiumModule = CesiumModule;
@@ -96,7 +100,7 @@ export class CesiumManager {
 		});
 	}
 
-	viewerContainer(): HTMLElement {
+	private viewerContainer(): HTMLElement {
 		this.#viewerContainerEl = document.createElement('div');
 		this.#viewerContainerEl.style.display = 'none';
 		document.body.appendChild(this.#viewerContainerEl);
@@ -123,7 +127,8 @@ export class CesiumManager {
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		if (v.scene.moon) v.scene.moon.show = true;
 
-		v.scene.postRender.addEventListener(this.tick.bind(this));
+		this.#boundTick = this.tick.bind(this);
+		v.scene.postRender.addEventListener(this.#boundTick);
 
 		this.setupPostProcess(COLOR_GRADING_GLSL);
 		await this.setupTerrain();
@@ -193,6 +198,7 @@ export class CesiumManager {
 
 		this.syncCamera(dt);
 		this.syncAtmosphere();
+		this.syncTerrainExaggeration();
 		this.syncImagery();
 		this.syncBuildings();
 	}
@@ -257,8 +263,9 @@ export class CesiumManager {
 			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.saturationShift = satShift;
 		}
 
-		const targetDensity = lerp(0.0, 0.00008, nf) * (1 + m.haze * 8);
-		const targetBrightness = lerp(1.0, 0.1, nf);
+		const fog = m.sceneFog;
+		const targetDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + m.haze * 8);
+		const targetBrightness = lerp(fog.dayBrightness, fog.nightBrightness, nf);
 		if (Math.abs(targetDensity - this.lastFogDensity) > 0.00001) {
 			this.lastFogDensity = targetDensity;
 			if (v.scene.fog) {
@@ -275,6 +282,14 @@ export class CesiumManager {
 		if (Math.abs(targetIntensity - this.lastLightIntensity) > 0.01) {
 			this.lastLightIntensity = targetIntensity;
 			if (v.scene.light) v.scene.light.intensity = targetIntensity;
+		}
+	}
+
+	private syncTerrainExaggeration(): void {
+		const te = this.model.terrainExaggeration;
+		if (Math.abs(te - this.lastTerrainExaggeration) > 0.01) {
+			this.lastTerrainExaggeration = te;
+			this.viewer.scene.verticalExaggeration = te;
 		}
 	}
 
@@ -375,7 +390,12 @@ export class CesiumManager {
 	destroy(): void {
 		this.abortController.abort();
 		if (!this.viewer.isDestroyed()) {
+			if (this.#boundTick) {
+				this.viewer.scene.postRender.removeEventListener(this.#boundTick);
+			}
 			this.viewer.destroy();
 		}
+		this.#viewerContainerEl?.remove();
+		this.#viewerContainerEl = null;
 	}
 }

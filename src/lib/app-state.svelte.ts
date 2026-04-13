@@ -31,7 +31,6 @@ export interface PatchableState {
 	timeOfDay: number;
 	weather: WeatherType;
 	cloudDensity: number;
-	terrainDarkness: number;
 	cloudSpeed: number;
 	haze: number;
 	nightLightIntensity: number;
@@ -64,7 +63,6 @@ export class WindowModel {
 	cloudDensity        = $state(0.7);
 	cloudSpeed          = $state(0.4);
 	haze                = $state(0.025);
-	terrainDarkness     = $state(0);
 	nightLightIntensity = $state(0.6);
 
 	// View
@@ -108,6 +106,8 @@ export class WindowModel {
 	});
 
 	skyState = $derived<SkyState>(getSkyState(this.timeOfDay));
+	sceneFog = $derived(this.currentLocation.scene.fog);
+	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
 
 	nightFactor = $derived.by(() => {
 		const t = this.timeOfDay;
@@ -210,7 +210,6 @@ export class WindowModel {
 		if (patch.cloudDensity !== undefined)       { this.cloudDensity = clamp(patch.cloudDensity, 0, 1); this.onUserInteraction('atmosphere'); }
 		if (patch.cloudSpeed !== undefined)         this.cloudSpeed = clamp(patch.cloudSpeed, 0, 2);
 		if (patch.haze !== undefined)               this.haze = clamp(patch.haze, 0, 0.2);
-		if (patch.terrainDarkness !== undefined)    this.terrainDarkness = clamp(patch.terrainDarkness, 0, 1);
 		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
 		if (patch.flightSpeed !== undefined)        this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') this.syncToRealTime = patch.syncToRealTime;

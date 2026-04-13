@@ -30,9 +30,9 @@ export abstract class BaseTransport {
 		this.#reconnectDelay = this.#initialReconnectDelay;
 	}
 
-	protected onDisconnected(manual = true): void {
+	protected onDisconnected(autoReconnect = true): void {
 		this.#state = 'disconnected';
-		if (manual) this.#scheduleReconnect();
+		if (autoReconnect) this.#scheduleReconnect();
 	}
 
 	#scheduleReconnect(): void {

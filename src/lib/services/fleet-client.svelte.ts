@@ -2,8 +2,7 @@
  * WebSocket Client — connects display to fleet management server
  */
 
-import type { ServerMessage, DisplayMessage, DeviceCaps, DisplayMode } from '$lib/shared/protocol';
-import type { WindowModel } from '$lib/app-state.svelte';
+import type { ServerMessage, DisplayMessage, DeviceCaps, DisplayMode, FleetClientModel } from '$lib/shared/protocol';
 import { LOCATION_IDS } from '$lib/shared/locations';
 import { BaseTransport } from './base-transport';
 
@@ -45,13 +44,13 @@ function getDeviceCaps(): DeviceCaps {
 
 export class DisplayWsClient extends BaseTransport {
 	#ws: WebSocket | null = $state.raw(null);
-	#model: WindowModel;
+	#model: FleetClientModel;
 	#deviceId: string;
 	#serverUrl: string;
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
 	#bootTime = Date.now();
 
-	constructor(model: WindowModel, serverUrl?: string) {
+	constructor(model: FleetClientModel, serverUrl?: string) {
 		super();
 		this.#model = model;
 		this.#deviceId = getDeviceId();
@@ -150,7 +149,7 @@ export class DisplayWsClient extends BaseTransport {
 	}
 }
 
-export function createWsClient(model: WindowModel): DisplayWsClient {
+export function createWsClient(model: FleetClientModel): DisplayWsClient {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
 	const url = params.get('server') || (import.meta as any).env?.VITE_FLEET_SERVER;
 	return new DisplayWsClient(model, url);

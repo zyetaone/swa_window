@@ -10,6 +10,21 @@ import type { LocationId, WeatherType } from './types';
 import type { QualityMode } from './constants';
 
 // ============================================================================
+// FLEET CLIENT MODEL (narrow interface for display WS client)
+// ============================================================================
+
+export interface FleetClientModel {
+	measuredFps: number;
+	displayMode: DisplayMode;
+	location: LocationId;
+	weather: WeatherType;
+	qualityMode: QualityMode;
+	flight: { flyTo(locationId: LocationId): void };
+	setDisplayMode(mode: DisplayMode, payload?: string): void;
+	applyPatch(patch: Partial<DisplayConfig>): void;
+}
+
+// ============================================================================
 // DISPLAY MODES
 // ============================================================================
 

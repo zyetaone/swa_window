@@ -17,7 +17,7 @@
 	import { useAppState } from "$lib/app-state.svelte";
 	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/shared/constants";
 	import { clamp } from "$lib/shared/utils";
-	import { subscribe } from "$lib/engine/game-loop.svelte";
+	import { subscribe } from "$lib/engine/game-loop";
 	import { untrack } from "svelte";
 	import CesiumViewer from "./Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
