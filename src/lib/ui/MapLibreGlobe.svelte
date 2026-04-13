@@ -23,19 +23,28 @@
 	let container: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 
-	export function flyTo(
-		dst: { lat: number; lon: number; altitude?: number },
-		_duration = 2000
-	) {
-		if (!map) return;
-		map.flyTo({
-			center: [dst.lon, dst.lat],
-			zoom: dst.altitude ? Math.max(8, 16 - Math.log2(dst.altitude / 30000)) : zoom,
-			pitch,
-			bearing,
-			duration: _duration,
-		});
+	function swapSource() {
+		if (!map || !imageryUrl) return;
+		try {
+			if (map.getLayer('Satellite')) map.removeLayer('Satellite');
+			if (map.getSource('satellite')) map.removeSource('satellite');
+			map.addSource('satellite', {
+				type: 'raster',
+				tiles: [imageryUrl],
+				tileSize: 256,
+			});
+			map.addLayer({ id: 'Satellite', type: 'raster', source: 'satellite' });
+		} catch (e) { console.warn('[MapLibreGlobe] source swap failed:', e); }
 	}
+
+	$effect(() => {
+		if (!map || !imageryUrl) return;
+		if (!map.isStyleLoaded()) {
+			map.once('styledata', () => swapSource());
+			return;
+		}
+		swapSource();
+	});
 
 	onMount(() => {
 		map = new maplibregl.Map({
@@ -60,7 +69,6 @@
 						id: 'Satellite',
 						type: 'raster',
 						source: 'satellite',
-						paint: {},
 					},
 				],
 				...(showAtmosphere
@@ -91,23 +99,6 @@
 			map?.remove();
 			map = null;
 		};
-	});
-
-	// React to imagery source changes by swapping the raster tile URL
-	$effect(() => {
-		if (!map || !imageryUrl) return;
-		const source = map.getSource('satellite') as maplibregl.RasterTileSource | undefined;
-		if (source) {
-			// MapLibre doesn't support setTiles on RasterTileSource — recreate
-			map.removeLayer('Satellite');
-			map.removeSource('satellite');
-		}
-		map.addSource('satellite', {
-			type: 'raster',
-			tiles: [imageryUrl],
-			tileSize: 256,
-		});
-		map.addLayer({ id: 'Satellite', type: 'raster', source: 'satellite' });
 	});
 </script>
 

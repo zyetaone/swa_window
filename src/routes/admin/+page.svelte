@@ -74,7 +74,11 @@
 
 	async function handlePushMode() {
 		const targets = getTargets();
-		const payload = pushMode === 'video' ? videoUrl : undefined;
+		let payload: string | undefined;
+		if (pushMode === 'video' && videoUrl) {
+			try { const u = new URL(videoUrl); if (!['http:', 'https:'].includes(u.protocol)) return; } catch { return; }
+			payload = videoUrl;
+		}
 		await Promise.all(targets.map(id => store.pushMode(id, pushMode, payload)));
 	}
 
@@ -88,6 +92,7 @@
 			nightLightIntensity: cfgNightLightIntensity,
 			syncToRealTime: cfgSyncToRealTime,
 			showClouds: cfgShowClouds,
+			qualityMode: cfgQualityMode,
 		};
 		await Promise.all(targets.map(id => store.pushConfig(id, config)));
 	}

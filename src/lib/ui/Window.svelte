@@ -220,9 +220,7 @@
 			<!-- z:2 Rain + Lightning, z:4 Trees, z:5 Frost -->
 			<Weather {rainOpacity} {windAngle} {lightningOpacity} {lightningX} {lightningY} {frostAmount} />
 
-			{#if model.showClouds}
-				<TreeLayer locationId={model.location} nightFactor={model.nightFactor} cloudDensity={cloudOpacity} />
-			{/if}
+			<TreeLayer locationId={model.location} nightFactor={model.nightFactor} cloudDensity={cloudOpacity} showTrees={model.showClouds} />
 
 			<!-- z:3 — Micro-events (shooting stars, birds, contrails) -->
 			<MicroEvent event={microEvent} />

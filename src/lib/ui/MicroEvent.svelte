@@ -22,6 +22,7 @@
 {#if event}
 	<div
 		class="micro-event micro-event-{event.type}"
+		aria-hidden="true"
 		style:z-index={3}
 		style:left="{event.x}%"
 		style:top="{event.y}%"

@@ -7,11 +7,11 @@
  * GET /api/tiles/terrain/layer.json      → terrain metadata
  */
 
-import { join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
 import type { RequestHandler } from './$types';
 
-const TILE_DIR = process.env.TILE_DIR || '/opt/zyeta-aero/tiles';
+const TILE_DIR = (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '') + '/';
 
 const CORS = {
 	'Access-Control-Allow-Origin': '*',
@@ -31,14 +31,14 @@ export const GET: RequestHandler = async ({ params }) => {
 	const path = params.path ?? '';
 
 	if (path === 'health') {
-		return new Response(JSON.stringify({ status: 'ok', tileDir: TILE_DIR }), {
+		return new Response(JSON.stringify({ status: 'ok' }), {
 			headers: { ...CORS, 'Content-Type': 'application/json' },
 		});
 	}
 
-	const filePath = join(TILE_DIR, path);
+	const filePath = resolve(TILE_DIR, path);
 
-	// Prevent path traversal
+	// Prevent path traversal (trailing-slash guard + symlink resolution)
 	if (!filePath.startsWith(TILE_DIR)) {
 		return new Response('Forbidden', { status: 403 });
 	}
@@ -46,6 +46,12 @@ export const GET: RequestHandler = async ({ params }) => {
 	if (!existsSync(filePath)) {
 		return new Response('Not found', { status: 404, headers: CORS });
 	}
+
+	// Resolve symlinks and re-check containment
+	try {
+		const real = realpathSync(filePath);
+		if (!real.startsWith(TILE_DIR)) return new Response('Forbidden', { status: 403 });
+	} catch { return new Response('Not found', { status: 404, headers: CORS }); }
 
 	const ext = filePath.substring(filePath.lastIndexOf('.'));
 	const contentType = MIME[ext] ?? 'application/octet-stream';

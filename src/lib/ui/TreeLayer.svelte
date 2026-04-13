@@ -6,7 +6,6 @@
 	 * Uses seeded pseudo-random placement based on locationId for stable tree positions.
 	 */
 
-	import { useAppState } from "$lib/app-state.svelte";
 	import { LOCATION_MAP } from "$lib/locations";
 	import type { LocationId } from "$lib/types";
 
@@ -14,11 +13,10 @@
 		locationId: LocationId;
 		nightFactor: number;
 		cloudDensity: number;
+		showTrees: boolean;
 	}
 
-	let { locationId, nightFactor, cloudDensity }: Props = $props();
-
-	const model = useAppState();
+	let { locationId, nightFactor, cloudDensity, showTrees }: Props = $props();
 
 	function hashString(str: string): number {
 		let hash = 0;
@@ -73,7 +71,7 @@
 		return Math.max(0.1, 1 - nightFactor * 1.2);
 	});
 
-	const visible = $derived(model.showClouds && cloudDensity > 0.1);
+	const visible = $derived(showTrees && cloudDensity > 0.1);
 </script>
 
 {#if visible}

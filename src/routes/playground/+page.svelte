@@ -24,12 +24,6 @@
 
 	const IMAGERY_SOURCES = [
 		{
-			id: 'stadia',
-			label: 'Stadia Satellite',
-			url: 'https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg',
-			note: 'Free, no auth, global coverage',
-		},
-		{
 			id: 'esri',
 			label: 'ESRI World Imagery',
 			url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -43,12 +37,6 @@
 			label: 'Sentinel-2 Cloudless (EOX)',
 			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
 			note: 'Free, global, no auth',
-		},
-		{
-			id: 'stadia',
-			label: 'Stadia Satellite',
-			url: 'https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg',
-			note: 'Free, no auth, global coverage',
 		},
 		{
 			id: 'esri',

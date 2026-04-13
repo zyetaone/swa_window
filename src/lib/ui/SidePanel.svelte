@@ -8,7 +8,6 @@
 	import { useAppState } from "$lib/app-state.svelte";
 	import { LOCATIONS } from "$lib/locations";
 	import { AIRCRAFT } from "$lib/constants";
-	import type { LocationId } from "$lib/types";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./Toggle.svelte";
@@ -24,10 +23,6 @@
 
 	const cities = LOCATIONS.filter((l) => l.hasBuildings);
 	const nature = LOCATIONS.filter((l) => !l.hasBuildings);
-
-	function flyTo(locationId: LocationId) {
-		model.flyTo(locationId);
-	}
 
 	function openPanel() {
 		panelOpen = true;
@@ -188,7 +183,7 @@
 					<button
 						class="loc-btn"
 						class:active={model.location === loc.id}
-						onclick={() => flyTo(loc.id)}
+						onclick={() => model.flyTo(loc.id)}
 					>
 						{loc.name}
 					</button>
@@ -203,7 +198,7 @@
 					<button
 						class="loc-btn"
 						class:active={model.location === loc.id}
-						onclick={() => flyTo(loc.id)}
+						onclick={() => model.flyTo(loc.id)}
 					>
 						{loc.name}
 					</button>
