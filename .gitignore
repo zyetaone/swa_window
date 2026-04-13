@@ -29,3 +29,10 @@ static/cesium/
 
 # Project management symlink (sidecar, not part of repo)
 _project
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Tile packages (downloaded, not source)
+tile-packager/*.lock
+tile-server/*.lock
