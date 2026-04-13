@@ -26,7 +26,7 @@
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';
-	import Blind from './Blind.svelte';
+	// import Blind from './Blind.svelte'; (Inlined)
 	const model = useAppState();
 
 	// ========================================================================
@@ -168,6 +168,60 @@
 		showHint = false;
 		return undefined;
 	});
+
+	// ========================================================================
+	// BLIND LOGIC (Inlined from Blind.svelte)
+	// ========================================================================
+
+	let isDraggingBlind = $state(false);
+	let blindDragY = $state(0);
+	let dragStartBlindY = 0;
+	let dragStartPointerY = 0;
+	let blindContainerHeight = 0;
+	const BLIND_SNAP_THRESHOLD = 0.3;
+
+	let blindClipEl: HTMLDivElement | undefined = $state(undefined);
+
+	$effect(() => {
+		if (!isDraggingBlind) {
+			blindDragY = model.blindOpen ? -105 : 0;
+		}
+	});
+
+	const blindTransform = $derived(`translateY(${blindDragY.toFixed(1)}%)`);
+	const blindTransition = $derived(
+		isDraggingBlind ? 'none' : 'transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.05)'
+	);
+
+	function startBlindDrag(pointerY: number) {
+		if (model.isTransitioning) return;
+		blindContainerHeight = blindClipEl?.offsetHeight ?? 1;
+		isDraggingBlind = true;
+		dragStartBlindY = blindDragY;
+		dragStartPointerY = pointerY;
+	}
+
+	function moveBlindDrag(pointerY: number) {
+		if (!isDraggingBlind) return;
+		const deltaPct = ((pointerY - dragStartPointerY) / blindContainerHeight) * 100;
+		blindDragY = clamp(dragStartBlindY + deltaPct, -105, 0);
+	}
+
+	function endBlindDrag() {
+		if (!isDraggingBlind) return;
+		isDraggingBlind = false;
+		const travelRatio = Math.abs(blindDragY - dragStartBlindY) / 105;
+		if (travelRatio > BLIND_SNAP_THRESHOLD) {
+			model.blindOpen = blindDragY < dragStartBlindY;
+		}
+	}
+
+	function onBlindPointerDown(e: PointerEvent) {
+		startBlindDrag(e.clientY);
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+	}
+
+	let blindHasAnimated = $state(false);
 </script>
 
 <div
@@ -247,12 +301,31 @@
 		{/if}
 	</button>
 
-	<!-- Blind (self-contained drag gesture) -->
-	<Blind
-		open={model.blindOpen}
-		transitioning={model.isTransitioning}
-		onToggle={(open) => { model.blindOpen = open; }}
-	/>
+	<!-- Blind (Inlined) -->
+	<div class="blind-clip" bind:this={blindClipEl}>
+		<div
+			class="blind-overlay"
+			class:discoverable={!model.blindOpen && !blindHasAnimated}
+			onanimationend={() => { blindHasAnimated = true; }}
+			onpointerdown={onBlindPointerDown}
+			onpointermove={(e) => moveBlindDrag(e.clientY)}
+			onpointerup={endBlindDrag}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') model.blindOpen = !model.blindOpen;
+			}}
+			role="slider"
+			tabindex={0}
+			aria-label="Window blind — drag to open or close"
+			aria-valuenow={Math.round(Math.abs(blindDragY))}
+			aria-valuemin={0}
+			aria-valuemax={105}
+			style:transform={blindTransform}
+			style:transition={blindTransition}
+			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
+		>
+			<div class="blind-slats"></div>
+		</div>
+	</div>
 </div>
 
 <style>
@@ -439,5 +512,77 @@
 		white-space: nowrap;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 		border: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	/* --- Blind --- */
+
+	.blind-clip {
+		position: absolute;
+		inset: var(--frame-width);
+		border-radius: var(--inner-radius);
+		overflow: hidden;
+		z-index: 5;
+		pointer-events: none;
+	}
+
+	.blind-overlay {
+		position: absolute;
+		inset: 0;
+		border-radius: var(--inner-radius);
+		background: rgba(240, 238, 235, 0.95);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		padding: 0;
+		pointer-events: auto;
+		touch-action: none;
+	}
+
+	.blind-slats {
+		position: absolute;
+		inset: 0;
+		background: repeating-linear-gradient(
+			180deg,
+			rgba(230, 228, 225, 0.9) 0px,
+			rgba(230, 228, 225, 0.9) 6px,
+			rgba(210, 208, 205, 0.7) 6px,
+			rgba(210, 208, 205, 0.7) 8px
+		);
+		box-shadow: inset 0 -20px 30px rgba(0, 0, 0, 0.1);
+	}
+
+	.blind-overlay::after {
+		content: "";
+		position: absolute;
+		bottom: 8%;
+		left: 30%;
+		right: 30%;
+		height: 14px;
+		background:
+			repeating-linear-gradient(
+				180deg,
+				transparent 0px,
+				transparent 3px,
+				rgba(0, 0, 0, 0.15) 3px,
+				rgba(0, 0, 0, 0.15) 4px,
+				transparent 4px,
+				transparent 5px
+			),
+			linear-gradient(180deg, var(--sw-silver) 0%, #908880 100%);
+		border-radius: 6px;
+		box-shadow:
+			0 2px 4px rgba(0, 0, 0, 0.3),
+			inset 0 1px 0 rgba(255, 255, 255, 0.4);
+	}
+
+	@keyframes handle-breathe {
+		0%, 100% { transform: translateY(0); opacity: 0.9; }
+		50% { transform: translateY(-3px); opacity: 1; }
+	}
+
+	.blind-overlay.discoverable::after {
+		animation: handle-breathe 1s ease-in-out 3;
 	}
 </style>

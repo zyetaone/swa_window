@@ -11,8 +11,8 @@
 
 	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core";
 	import type { LocationId } from "$lib/core";
-	import { savePersistedState } from "$lib/shared/persistence";
-	import { createWsClient } from "$lib/core/fleet-client.svelte";
+	import { savePersistedState } from "$lib/core/persistence";
+	import { createWsClient } from "$lib/core/FleetClient.svelte";
 	import Window from "$lib/components/Window.svelte";
 	import Controls from "$lib/components/HUD.svelte";
 	import SidePanel from "$lib/components/SidePanel.svelte";

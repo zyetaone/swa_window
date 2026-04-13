@@ -19,7 +19,7 @@ import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
 export type { QualityMode } from '$lib/shared/constants';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
-import { loadPersistedState, safeNum, type PersistedState } from '$lib/shared/persistence';
+import { loadPersistedState, safeNum, type PersistedState } from '$lib/core/persistence';
 import { FlightSimEngine } from '$lib/engine/FlightSim.svelte';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
 import { EventEngine } from '$lib/engine/Events.svelte';

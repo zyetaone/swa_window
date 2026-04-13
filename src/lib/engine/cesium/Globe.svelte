@@ -28,6 +28,12 @@
 			const CesiumModule = await import('cesium');
 			(globalThis as Record<string, unknown>).CESIUM_BASE_URL = '/cesiumStatic';
 
+			// Set Ion token so all Cesium ion assets (terrain, buildings, imagery) use it
+			const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
+			if (token) {
+				CesiumModule.Ion.defaultAccessToken = token;
+			}
+
 			cesium = new CesiumManager(model, CesiumModule);
 			await cesium.start(viewerContainer, COLOR_GRADING_GLSL);
 

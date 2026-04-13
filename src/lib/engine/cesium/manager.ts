@@ -307,10 +307,10 @@ class CesiumAtmosphere {
 		const nf = m.nightFactor;
 		const dd = m.dawnDuskFactor;
 
-		// Globe color (day: blue-gray, night: near-black with warm tint from color grading)
-		let r = lerp(140, 8, nf);
-		let g = lerp(170, 8, nf);
-		let b = lerp(200, 8, nf);
+		// Globe color (day: blue-gray, night: dark navy — keeps terrain visible)
+		let r = lerp(140, 25, nf);
+		let g = lerp(170, 25, nf);
+		let b = lerp(200, 40, nf);
 		r = lerp(r, 100, dd * 0.3);
 		g = lerp(g, 80, dd * 0.3);
 		b = lerp(b, 70, dd * 0.3);
@@ -384,7 +384,8 @@ class CesiumBuildings {
 			this.tileset.show = this.model.showBuildings;
 			this.applyQualityMode(qualityMode);
 			this.viewer.scene.primitives.add(this.tileset);
-			this.applyNightStyle(0);
+			// Don't apply style here — tileset needs to load first. syncNightFactor is
+			// called every tick and will apply the style once tileset is ready.
 		} catch (err) {
 			console.warn('[CesiumBuildings] OSM buildings unavailable:', (err as Error).message ?? err);
 		}
@@ -416,32 +417,12 @@ class CesiumBuildings {
 		const t = this.tileset;
 		if (!t) return;
 
+		// Use a flat string expression — simplest valid color expression
+		const r = Math.round(lerp(240, 80, nf));
+		const g = Math.round(lerp(220, 75, nf));
+		const b = Math.round(lerp(200, 60, nf));
 		t.style = new this.C.Cesium3DTileStyle({
-			color: {
-				conditions: [
-					['${feature.cesium#buildingClass} === "apartments"', `rgba(255,${Math.round(lerp(220,80,nf))},${Math.round(lerp(180,40,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "office"', `rgba(${Math.round(lerp(200,90,nf))},${Math.round(lerp(210,100,nf))},${Math.round(lerp(190,130,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "industrial"', `rgba(${Math.round(lerp(160,70,nf))},${Math.round(lerp(155,65,nf))},${Math.round(lerp(150,60,nf))},0.88)`],
-					['${feature.cesium#buildingClass} === "commercial"', `rgba(${Math.round(lerp(230,100,nf))},${Math.round(lerp(220,95,nf))},${Math.round(lerp(210,120,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "retail"', `rgba(${Math.round(lerp(240,110,nf))},${Math.round(lerp(200,90,nf))},${Math.round(lerp(180,100,nf))},0.90)`],
-					['${feature.cesium#buildingClass} === "religious"', `rgba(${Math.round(lerp(200,90,nf))},${Math.round(lerp(195,85,nf))},${Math.round(lerp(190,80,nf))},0.88)`],
-					['${feature.cesium#buildingClass} === "education"', `rgba(${Math.round(lerp(200,90,nf))},${Math.round(lerp(210,95,nf))},${Math.round(lerp(220,100,nf))},0.88)`],
-					['${feature.cesium#buildingClass} === "hospital"', `rgba(${Math.round(lerp(240,200,nf))},${Math.round(lerp(240,180,nf))},${Math.round(lerp(230,170,nf))},0.88)`],
-					['${feature.cesium#buildingClass} === "hotel"', `rgba(${Math.round(lerp(240,200,nf))},${Math.round(lerp(220,95,nf))},${Math.round(lerp(180,80,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "government"', `rgba(${Math.round(lerp(210,95,nf))},${Math.round(lerp(205,90,nf))},${Math.round(lerp(200,85,nf))},0.90)`],
-					['${feature.cesium#buildingClass} === "residential"', `rgba(${Math.round(lerp(240,100,nf))},${Math.round(lerp(220,90,nf))},${Math.round(lerp(180,80,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "mixed-use"', `rgba(${Math.round(lerp(225,100,nf))},${Math.round(lerp(215,92,nf))},${Math.round(lerp(195,100,nf))},0.92)`],
-					['${feature.cesium#buildingClass} === "yes"', `rgba(${Math.round(lerp(240,100,nf))},${Math.round(lerp(220,90,nf))},${Math.round(lerp(180,80,nf))},0.92)`],
-					['${feature.building:material} === "glass"', `rgba(${Math.round(lerp(200,120,nf))},${Math.round(lerp(230,160,nf))},${Math.round(lerp(240,200,nf))},${lerp(0.7,0.85,1-nf).toFixed(2)})`],
-					['${feature.building:material} === "concrete"', `rgba(${Math.round(lerp(180,70,nf))},${Math.round(lerp(175,65,nf))},${Math.round(lerp(170,60,nf))},0.90)`],
-					['${feature.building:material} === "brick"', `rgba(${Math.round(lerp(200,80,nf))},${Math.round(lerp(120,50,nf))},${Math.round(lerp(100,40,nf))},0.88)`],
-					['${feature.building:material} === "stone"', `rgba(${Math.round(lerp(190,85,nf))},${Math.round(lerp(185,80,nf))},${Math.round(lerp(180,75,nf))},0.88)`],
-					['${feature.building:material} === "metal"', `rgba(${Math.round(lerp(170,75,nf))},${Math.round(lerp(170,75,nf))},${Math.round(lerp(180,80,nf))},0.90)`],
-					['${feature.building:material} === "steel"', `rgba(${Math.round(lerp(160,70,nf))},${Math.round(lerp(165,72,nf))},${Math.round(lerp(180,78,nf))},0.90)`],
-					['${feature.building:material} === "wood"', `rgba(${Math.round(lerp(180,70,nf))},${Math.round(lerp(140,55,nf))},${Math.round(lerp(90,35,nf))},0.85)`],
-					['true', `rgba(${Math.round(lerp(240,100,nf))},${Math.round(lerp(220,92,nf))},${Math.round(lerp(190,82,nf))},0.90)`],
-				],
-			},
+			color: `rgba(${r}, ${g}, ${b}, 0.9)`,
 		});
 	}
 }
@@ -570,7 +551,7 @@ export class CesiumManager {
 		v.scene.logarithmicDepthBuffer = true;
 		v.scene.highDynamicRange = true;
 		v.scene.postProcessStages.fxaa.enabled = true;
-		v.scene.globe.enableLighting = true;
+		v.scene.globe.enableLighting = false;
 		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;

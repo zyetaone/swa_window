@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AdminStore, type Transport } from '$lib/core/fleet-admin.svelte';
+	import { AdminStore, type Transport } from '$lib/core/FleetAdmin.svelte';
 	import type { LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
 	import { LOCATIONS, type QualityMode } from '$lib/shared';
 	import { onDestroy } from 'svelte';
