@@ -1,11 +1,5 @@
 /**
- * WorldEngine — Unified ambient world simulation.
- *
- * Consolidates three previously separate engines:
- *   - AtmosphereEngine  (weather randomisation, lightning)
- *   - EventEngine       (micro-events: birds, shooting stars, contrails)
- *   - DirectorEngine    (auto-pilot location cycling)
- *
+ * WorldEngine — ambient world simulation (weather, lightning, micro-events, auto-pilot).
  * Returns a WorldPatch each tick so WindowModel can apply changes imperatively.
  */
 
@@ -30,7 +24,7 @@ export class WorldEngine {
 	#nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY + Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
 
 	#eventTimer = 0;
-	#timeToNextEvent = Math.random() * 200 + 100;
+	#timeToNextEvent = MICRO_EVENTS.MIN_INTERVAL + Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
 
 	#directorTimer = 0;
 	#timeToNextLocation = 120 + Math.random() * 180;
@@ -116,7 +110,7 @@ export class WorldEngine {
 		if (this.#eventTimer < this.#timeToNextEvent) return;
 
 		this.#eventTimer = 0;
-		this.#timeToNextEvent = Math.random() * 200 + 100;
+		this.#timeToNextEvent = MICRO_EVENTS.MIN_INTERVAL + Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
 
 		const types: Array<'bird' | 'shooting-star' | 'contrail'> = [];
 		if (ctx.altitude < 15000 && ctx.skyState === 'day' && ctx.weather !== 'rain' && ctx.weather !== 'overcast') types.push('bird');

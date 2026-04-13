@@ -7,7 +7,7 @@
 
 import { CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
-import { normalizeHeading, lerp } from '$lib/utils';
+import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import type * as CesiumType from 'cesium';
 import { getIonToken, checkLocalTileServer, TILE_SERVER_URL, getSatelliteImageryUrl } from './config';
 
@@ -160,13 +160,7 @@ export class CesiumManager {
 
 	// ─── Imagery Setup ───────────────────────────────────────────────────────
 	private async setupImagery(): Promise<void> {
-		let useLocal = false;
-		if (TILE_SERVER_URL) {
-			try {
-				const resp = await fetch(`${TILE_SERVER_URL}/health`, { signal: AbortSignal.timeout(500) });
-				useLocal = resp.ok;
-			} catch {}
-		}
+		const useLocal = await checkLocalTileServer();
 
 		const C = this.CesiumModule;
 		const provider = new C.UrlTemplateImageryProvider({
@@ -222,10 +216,7 @@ export class CesiumManager {
 		this.camLon += (f.lon - this.camLon) * k;
 		this.camAlt += (f.altitude - this.camAlt) * k;
 
-		let dH = f.heading - this.camHeading;
-		if (dH > 180) dH -= 360;
-		if (dH < -180) dH += 360;
-		this.camHeading = normalizeHeading(this.camHeading + dH * k);
+		this.camHeading = normalizeHeading(this.camHeading + shortestAngleDelta(this.camHeading, f.heading) * k);
 		this.camPitch += (f.pitch - this.camPitch) * k;
 		this.camBank += (mot.bankAngle - this.camBank) * k;
 

@@ -15,7 +15,7 @@ export interface PersistedState {
 	syncToRealTime: boolean;
 }
 
-export function safeNum(value: unknown, fallback: number, min?: number, max?: number): number {
+function safeNum(value: unknown, fallback: number, min?: number, max?: number): number {
 	if (value === null || value === undefined || typeof value !== 'number' || !Number.isFinite(value)) {
 		return fallback;
 	}

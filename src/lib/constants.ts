@@ -86,9 +86,8 @@ export const FLIGHT_FEEL = {
 
 export const MICRO_EVENTS = {
 	// Timing (seconds)
-	MIN_INTERVAL: 1200, // minimum 20 minutes between events
-	MAX_INTERVAL: 2400, // maximum 40 minutes between events
-	INITIAL_DELAY: 300, // first event after 5 minutes
+	MIN_INTERVAL: 100,
+	MAX_INTERVAL: 300,
 
 	// Duration (seconds)
 	SHOOTING_STAR_DURATION: 1.5,
@@ -163,22 +162,11 @@ export const CESIUM = {
 	VIIRS_NIGHT_ALPHA: 0.6,
 	VIIRS_NIGHT_BRIGHTNESS: 2.5,
 	VIIRS_CONTRAST: 1.8,
-	VIIRS_COLOR_TO_ALPHA_THRESHOLD: 0.15,
 
 	// Road light layer (CartoDB Dark basemap, real OSM roads)
 	ROAD_LIGHT_NIGHT_ALPHA: 0.7,
 	ROAD_LIGHT_NIGHT_BRIGHTNESS: 2.5,
 	ROAD_LIGHT_CONTRAST: 1.6,
-	ROAD_LIGHT_SATURATION: 0.0,
-	ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD: 0.15,
-
-	// Cesium built-in bloom (night city glow)
-	// Larger sigma = smoother bloom (reduces jitter), larger stepSize = fewer samples
-	BLOOM_NIGHT_CONTRAST: 128,
-	BLOOM_BRIGHTNESS: 0.04,
-	BLOOM_SIGMA: 7.0,
-	BLOOM_DELTA: 1.0,
-	BLOOM_STEP_SIZE: 2.0,
 } as const;
 
 // =============================================================================

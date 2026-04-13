@@ -1,9 +1,5 @@
 /**
- * app-state.svelte.ts — Single Source of Truth + Context DI
- *
- * Unifies what was previously two files (model.svelte.ts + context.ts):
- *   - WindowModel class: authoritative reactive simulation state
- *   - createAppState / useAppState: Svelte context injection
+ * WindowModel — authoritative reactive simulation state + Svelte context DI.
  *
  * Usage:
  *   Root component: const model = createAppState()

@@ -25,6 +25,13 @@ export function normalizeHeading(heading: number): number {
 }
 
 /**
+ * Random number between min and max (inclusive).
+ */
+export function randomBetween(min: number, max: number): number {
+	return min + Math.random() * (max - min);
+}
+
+/**
  * Shortest-arc delta between two headings in degrees. Result in [-180, 180].
  */
 export function shortestAngleDelta(from: number, to: number): number {
