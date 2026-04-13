@@ -29,6 +29,12 @@ export type LocationId =
 
 export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
 
+export interface SceneDefaults {
+	fog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
+	clouds: { density: number; speed: number };
+	terrain: { exaggeration: number };
+}
+
 export interface Location {
 	id: LocationId;
 	name: string;
@@ -38,4 +44,5 @@ export interface Location {
 	hasBuildings: boolean;
 	defaultAltitude: number;
 	nightAltitude: number;
+	scene?: SceneDefaults;
 }
