@@ -14,14 +14,10 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
-	import {
-		useAppState,
-		AIRCRAFT,
-		FLIGHT_FEEL,
-		WEATHER_EFFECTS,
-	} from "$lib/core";
+	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/state";
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/loop.svelte";
+	import { untrack } from "svelte";
 	import CesiumViewer from "$lib/engine/cesium/Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
@@ -39,7 +35,9 @@
 		return subscribe((dt) => {
 			model.tick(dt);
 			model.reportFrame();
-			elapsedTime += dt;
+			untrack(() => {
+				elapsedTime += dt;
+			});
 		});
 	});
 
@@ -174,14 +172,15 @@
 	// ========================================================================
 
 	let isDraggingBlind = $state(false);
-	let blindDragY = $state(0);
-	let dragStartBlindY = 0;
-	let dragStartPointerY = 0;
 	let blindContainerHeight = 0;
 	const BLIND_SNAP_THRESHOLD = 0.3;
 
-	let blindClipEl: HTMLDivElement | undefined = $state(undefined);
+	// blindDragY is internal visual state. It syncs with model.blindOpen when NOT dragging.
+	let blindDragY = $state(model.blindOpen ? -105 : 0);
+	let dragStartBlindY = 0;
+	let dragStartPointerY = 0;
 
+	// Keep blindDragY in sync with external model changes
 	$effect(() => {
 		if (!isDraggingBlind) {
 			blindDragY = model.blindOpen ? -105 : 0;

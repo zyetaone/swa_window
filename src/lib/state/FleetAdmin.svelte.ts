@@ -29,15 +29,15 @@ export class AdminStore extends BaseTransport {
 	alerts = $state<HealthAlert[]>([]);
 	serverUptime = $state(0);
 
-	private ws: WebSocket | null = $state.raw(null);
-	private sse: EventSource | null = $state.raw(null);
-	private wsUrl: string;
-	private healthInterval: ReturnType<typeof setInterval> | null = null;
+	#ws: WebSocket | null = $state.raw(null);
+	#sse: EventSource | null = $state.raw(null);
+	#wsUrl: string;
+	#healthInterval: ReturnType<typeof setInterval> | null = null;
 
 	constructor(serverUrl?: string, forceTransport?: Transport) {
 		super();
-		this.wsUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
-		this.apiBase = this.wsUrl.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/ws.*$/, '');
+		this.#wsUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
+		this.apiBase = this.#wsUrl.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/ws.*$/, '');
 
 		if (forceTransport) {
 			this.transportType = forceTransport;
@@ -48,70 +48,65 @@ export class AdminStore extends BaseTransport {
 		}
 
 		this.connect();
-		this.fetchDevices();
-		this.startHealthPolling();
+		this.#fetchDevices();
+		this.#startHealthPolling();
 	}
 
 	connect(): void {
-		if (this.destroyed) return;
-		if (this.transportType === 'ws') this.connectWs();
-		else this.connectSse();
+		if (this.isDestroyed) return;
+		if (this.transportType === 'ws') this.#connectWs();
+		else this.#connectSse();
 	}
 
 	disconnect(): void {
-		if (this.ws) { this.ws.close(); this.ws = null; }
-		if (this.sse) { this.sse.close(); this.sse = null; }
+		if (this.#ws) { this.#ws.close(); this.#ws = null; }
+		if (this.#sse) { this.#sse.close(); this.#sse = null; }
 	}
 
-	private connectWs(): void {
+	#connectWs(): void {
 		try {
-			this.ws = new WebSocket(this.wsUrl);
-			this.ws.onopen = () => this.onConnected();
-			this.ws.onclose = () => this.onDisconnected();
-			this.ws.onmessage = (e) => this.handleEvent(e.data);
+			this.#ws = new WebSocket(this.#wsUrl);
+			this.#ws.onopen = () => this.onConnected();
+			this.#ws.onclose = () => this.onDisconnected();
+			this.#ws.onmessage = (e) => this.#handleEvent(e.data);
 		} catch {
 			this.onDisconnected();
 		}
 	}
 
-	private connectSse(): void {
+	#connectSse(): void {
 		try {
-			this.sse = new EventSource(`${this.apiBase}/api/events`);
-			this.sse.onopen = () => this.onConnected();
-			this.sse.onerror = () => {
-				this.state = 'disconnected'; 
-				// EventSource auto-reconnects, so we don't call onDisconnected()
-				// which would trigger our manual reconnect timer.
+			this.#sse = new EventSource(`${this.apiBase}/api/events`);
+			this.#sse.onopen = () => this.onConnected();
+			this.#sse.onerror = () => {
+				this.onDisconnected(false); // SSE auto-reconnects
 			};
-			this.sse.onmessage = (e) => this.handleEvent(e.data);
-			this.sse.addEventListener('device_registered', (e) => this.handleEvent(e.data));
-			this.sse.addEventListener('device_status', (e) => this.handleEvent(e.data));
-			this.sse.addEventListener('device_offline', (e) => this.handleEvent(e.data));
+			this.#sse.onmessage = (e) => this.#handleEvent(e.data);
+			this.#sse.addEventListener('device_registered', (e: MessageEvent) => this.#handleEvent(e.data));
+			this.#sse.addEventListener('device_status', (e: MessageEvent) => this.#handleEvent(e.data));
+			this.#sse.addEventListener('device_offline', (e: MessageEvent) => this.#handleEvent(e.data));
 		} catch {
 			this.onDisconnected();
 		}
 	}
 
-	private handleEvent(raw: string): void {
+	#handleEvent(raw: string): void {
 		let msg: any;
 		try { msg = JSON.parse(raw); } catch { return; }
 		switch (msg.type) {
-			case 'device_registered': this.upsertDevice(msg.device); break;
-			case 'device_status': this.updateDeviceStatus(msg.deviceId, msg); break;
-			case 'device_offline': this.markOffline(msg.deviceId); break;
+			case 'device_registered': this.#upsertDevice(msg.device); break;
+			case 'device_status': this.#updateDeviceStatus(msg.deviceId, msg); break;
+			case 'device_offline': this.#markOffline(msg.deviceId); break;
 		}
 	}
 
-	// ... rest of the status/health logic (omitted for brevity in prompt, but I'll write the full file)
-	// I'll copy the remaining methods from my previous view_file.
-
-	private upsertDevice(device: DeviceInfo): void {
+	#upsertDevice(device: DeviceInfo): void {
 		const idx = this.devices.findIndex(d => d.deviceId === device.deviceId);
 		if (idx >= 0) this.devices[idx] = device;
 		else this.devices = [...this.devices, device];
 	}
 
-	private updateDeviceStatus(deviceId: string, status: any): void {
+	#updateDeviceStatus(deviceId: string, status: any): void {
 		const device = this.devices.find(d => d.deviceId === deviceId);
 		if (device) {
 			device.fps = status.fps;
@@ -124,7 +119,7 @@ export class AdminStore extends BaseTransport {
 		}
 	}
 
-	private markOffline(deviceId: string): void {
+	#markOffline(deviceId: string): void {
 		const device = this.devices.find(d => d.deviceId === deviceId);
 		if (device) {
 			device.online = false;
@@ -132,14 +127,14 @@ export class AdminStore extends BaseTransport {
 		}
 	}
 
-	private async fetchDevices(): Promise<void> {
+	async #fetchDevices(): Promise<void> {
 		try {
 			const res = await fetch(`${this.apiBase}/api/devices`);
 			if (res.ok) this.devices = await res.json();
 		} catch {}
 	}
 
-	private startHealthPolling(): void {
+	#startHealthPolling(): void {
 		const poll = async () => {
 			try {
 				const res = await fetch(`${this.apiBase}/api/health`);
@@ -152,7 +147,7 @@ export class AdminStore extends BaseTransport {
 			} catch {}
 		};
 		poll();
-		this.healthInterval = setInterval(poll, 10000);
+		this.#healthInterval = setInterval(poll, 10000);
 	}
 
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType) {
@@ -185,5 +180,13 @@ export class AdminStore extends BaseTransport {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ location, weather }),
 		});
+	}
+
+	destroy(): void {
+		super.destroy();
+		if (this.#healthInterval) {
+			clearInterval(this.#healthInterval);
+			this.#healthInterval = null;
+		}
 	}
 }

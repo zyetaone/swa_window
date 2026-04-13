@@ -1,9 +1,7 @@
 import type * as CesiumType from 'cesium';
 import { CESIUM_QUALITY_PRESETS } from '$lib/shared/constants';
 import type { QualityMode } from '$lib/shared/constants';
-
-const TILE_SERVER_URL =
-	(typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TILE_SERVER_URL) || null;
+import { getIonToken, checkLocalTileServer } from '../config';
 
 export class TerrainSystem {
 	private readonly viewer: CesiumType.Viewer;
@@ -15,28 +13,15 @@ export class TerrainSystem {
 	}
 
 	async setup(): Promise<void> {
-		const useLocal = await this.checkTileServer();
+		const useLocal = await checkLocalTileServer();
 
 		if (useLocal) {
 			await this.setupLocal();
-		} else if (this.checkIonToken()) {
+		} else if (getIonToken()) {
 			await this.setupIon();
 		} else {
 			await this.setupFreeTerrain();
 		}
-	}
-
-	private async checkTileServer(): Promise<boolean> {
-		if (!TILE_SERVER_URL) return false;
-		try {
-			const resp = await fetch(`${TILE_SERVER_URL}/health`, { signal: AbortSignal.timeout(500) });
-			return resp.ok;
-		} catch { return false; }
-	}
-
-	private checkIonToken(): boolean {
-		const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
-		return !!(token && token !== 'your-cesium-ion-token-here');
 	}
 
 	private async setupIon(): Promise<void> {

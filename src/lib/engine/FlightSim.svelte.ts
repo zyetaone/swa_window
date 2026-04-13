@@ -1,26 +1,20 @@
 /**
  * FlightSimEngine - Flight position, orbit, scenario, and cruise state machine.
- *
- * Extracted from WindowModel Phase 6. Owns all position/heading/pitch state.
  */
 
 import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
 import { AIRCRAFT } from '$lib/shared/constants';
 import type { LocationId, SkyState } from '$lib/shared/types';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
-import { pickScenario, type FlightScenario } from '$lib/core/flight-scenarios';
+import { pickScenario, type FlightScenario } from '$lib/engine/flight-scenarios';
 import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
 export interface FlightCallbacks {
-	/** Close/open the window blind during cruise transitions */
 	setBlindOpen: (open: boolean) => void;
-	/** Reset the director timer after arriving at a new location */
 	resetDirector: () => void;
-	/** Apply the new location to WindowModel (sets location, utcOffset, etc.) */
 	onLocationChanged: (locationId: LocationId) => void;
-	/** Reset bank angle after transit */
 	resetBankAngle: () => void;
 }
 
@@ -41,19 +35,18 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor: number = $state(AIRCRAFT.ORBIT_MAJOR);
-	orbitRadiusMinor: number = $state(AIRCRAFT.ORBIT_MINOR);
+	orbitRadiusMajor = $state(AIRCRAFT.ORBIT_MAJOR);
+	orbitRadiusMinor = $state(AIRCRAFT.ORBIT_MINOR);
 	orbitBearing = $state(0);
 	orbitAngle = $state(0);
 
-	// --- Cruise (non-reactive timing) ---
-	cruiseElapsed = 0;
-	private preWarpSpeed = 1.0;
-
-	// --- Scenario (private) ---
-	private currentScenario: FlightScenario | null = null;
-	private scenarioWaypointIndex = 0;
-	private scenarioProgress = 0;
+	// --- Internal state (#private) ---
+	#cruiseElapsed = 0;
+	#preWarpSpeed = 1.0;
+	#currentScenario: FlightScenario | null = null;
+	#scenarioWaypointIndex = 0;
+	#scenarioProgress = 0;
+	#callbacks: FlightCallbacks;
 
 	// --- Derived ---
 	isTransitioning = $derived(this.flightMode !== 'orbit');
@@ -61,11 +54,8 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
 	);
 
-	// --- Callbacks ---
-	private callbacks: FlightCallbacks;
-
 	constructor(callbacks: FlightCallbacks) {
-		this.callbacks = callbacks;
+		this.#callbacks = callbacks;
 	}
 
 	// ====================================================================
@@ -78,21 +68,9 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		if (!target) return;
 		this.cruiseTargetId = locationId;
 		this.flightMode = 'cruise_departure';
-		this.cruiseElapsed = 0;
+		this.#cruiseElapsed = 0;
 		this.warpFactor = 0;
-		this.preWarpSpeed = this.flightSpeed;
-	}
-
-	setLocation(locationId: LocationId): void {
-		const loc = LOCATION_MAP.get(locationId);
-		if (!loc) return;
-		this.lat = loc.lat;
-		this.lon = loc.lon;
-		this.orbitCenterLat = loc.lat;
-		this.orbitCenterLon = loc.lon;
-		this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
-		this.orbitAngle = 0;
-		this.initScenario(locationId, 'day');
+		this.#preWarpSpeed = this.flightSpeed;
 	}
 
 	setLocationWithSky(locationId: LocationId, skyState: SkyState): void {
@@ -102,33 +80,14 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.lon = loc.lon;
 		this.orbitCenterLat = loc.lat;
 		this.orbitCenterLon = loc.lon;
-		this.orbitBearing = this.computeOrbitBearing(loc.lat, loc.lon);
+		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon);
 		this.orbitAngle = 0;
-		this.initScenario(locationId, skyState);
+		this.#initScenario(locationId, skyState);
 	}
 
 	setAltitude(alt: number): void {
 		if (!Number.isFinite(alt)) return;
 		this.altitude = clamp(alt, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
-	}
-
-	setHeading(heading: number): void {
-		if (!Number.isFinite(heading)) return;
-		this.heading = normalizeHeading(heading);
-	}
-
-	setPitch(pitch: number): void {
-		if (!Number.isFinite(pitch)) return;
-		this.pitch = clamp(pitch, -90, 90);
-	}
-
-	pickNextLocation(localTimeOfDay: number, currentLocationId: LocationId): LocationId {
-		const hour = localTimeOfDay;
-		const preferCity = (hour >= 10 && hour < 16) || hour >= 19 || hour < 5;
-		const candidates = LOCATIONS.filter(l => l.id !== currentLocationId);
-		const preferred = candidates.filter(l => preferCity ? l.hasBuildings : !l.hasBuildings);
-		const pool = preferred.length > 0 ? preferred : candidates;
-		return pool[Math.floor(Math.random() * pool.length)].id;
 	}
 
 	// ====================================================================
@@ -137,65 +96,61 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 
 	tick(delta: number, ctx: SimulationContext): void {
 		if (this.flightMode === 'cruise_departure') {
-			this.tickDeparture(delta);
-			this.tickFlightPath(delta, ctx);
+			this.#tickDeparture(delta);
+			this.#tickFlightPath(delta, ctx);
 		} else if (this.flightMode === 'cruise_transit') {
-			this.tickTransit(delta);
+			this.#tickTransit(delta);
 		} else {
-			this.tickFlightPath(delta, ctx);
+			this.#tickFlightPath(delta, ctx);
 		}
-		this.tickAltitude(delta, ctx);
+		this.#tickAltitude(delta, ctx);
 	}
 
 	// ====================================================================
 	// PRIVATE
 	// ====================================================================
 
-	private tickDeparture(delta: number): void {
-		this.cruiseElapsed += delta;
+	#tickDeparture(delta: number): void {
+		this.#cruiseElapsed += delta;
 		const warpDuration = 2.5;
-		const t = clamp(this.cruiseElapsed / warpDuration, 0, 1);
+		const t = clamp(this.#cruiseElapsed / warpDuration, 0, 1);
 		this.warpFactor = t * t * (3 - 2 * t);
-		this.flightSpeed = this.preWarpSpeed + this.warpFactor * 100;
+		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
-		if (this.cruiseElapsed > 2.0) {
-			this.callbacks.setBlindOpen(false);
+		if (this.#cruiseElapsed > 2.0) {
+			this.#callbacks.setBlindOpen(false);
 			this.flightMode = 'cruise_transit';
-			this.cruiseElapsed = 0;
+			this.#cruiseElapsed = 0;
 		}
 	}
 
-	private tickTransit(delta: number): void {
-		this.cruiseElapsed += delta;
+	#tickTransit(delta: number): void {
+		this.#cruiseElapsed += delta;
 		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
 		this.warpFactor = decay * decay;
-		this.flightSpeed = this.preWarpSpeed + this.warpFactor * 100;
+		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
-		if (this.cruiseElapsed > 2.0 && this.cruiseTargetId) {
-			this.callbacks.onLocationChanged(this.cruiseTargetId);
+		if (this.#cruiseElapsed > 2.0 && this.cruiseTargetId) {
+			this.#callbacks.onLocationChanged(this.cruiseTargetId);
 			this.cruiseTargetId = null;
 			this.flightMode = 'orbit';
-			this.callbacks.setBlindOpen(true);
+			this.#callbacks.setBlindOpen(true);
 			this.warpFactor = 0;
-			this.callbacks.resetBankAngle();
-			this.flightSpeed = this.preWarpSpeed;
-			this.callbacks.resetDirector();
+			this.#callbacks.resetBankAngle();
+			this.flightSpeed = this.#preWarpSpeed;
+			this.#callbacks.resetDirector();
 		}
 	}
 
-	private tickFlightPath(delta: number, ctx: SimulationContext): void {
-		if (this.currentScenario) {
-			this.tickScenario(delta, ctx);
-		} else {
-			this.tickOrbit(delta, ctx);
-		}
+	#tickFlightPath(delta: number, ctx: SimulationContext): void {
+		if (this.#currentScenario) this.#tickScenario(delta, ctx);
+		else this.#tickOrbit(delta, ctx);
 	}
 
-	private tickOrbit(delta: number, ctx: SimulationContext): void {
+	#tickOrbit(delta: number, ctx: SimulationContext): void {
 		const breathePhase = (ctx.time / AIRCRAFT.ORBIT_BREATHE_PERIOD) * Math.PI * 2;
 		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
-		const majorRange = AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN;
-		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * majorRange;
+		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * (AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN);
 		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
 
 		const a = this.orbitRadiusMajor;
@@ -204,8 +159,7 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		const tx = a * Math.cos(this.orbitAngle);
 		const ty = -b * Math.sin(this.orbitAngle);
 		const localSpeed = Math.sqrt(tx * tx + ty * ty);
-		const angularSpeed = (AIRCRAFT.DRIFT_RATE * this.flightSpeed) / Math.max(localSpeed, 0.001);
-		this.orbitAngle += angularSpeed * delta;
+		this.orbitAngle += ((AIRCRAFT.DRIFT_RATE * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
 		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
 
 		const ex = a * Math.sin(this.orbitAngle);
@@ -219,87 +173,75 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
-		const rtx = tx * cb - ty * sb;
-		const rty = tx * sb + ty * cb;
-		const tangentHeading = (Math.atan2(rty, rtx) * 180) / Math.PI;
-		const baseHeading = normalizeHeading(tangentHeading);
-
-		const wander = Math.sin(ctx.time * 0.05) * 0.25
-			+ Math.sin(ctx.time * 0.031) * 0.15
-			+ Math.sin(ctx.time * 0.017) * 0.1;
+		const baseHeading = normalizeHeading((Math.atan2(tx * sb + ty * cb, tx * cb - ty * sb) * 180) / Math.PI);
+		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
 	}
 
-	private tickScenario(delta: number, ctx: SimulationContext): void {
-		const scenario = this.currentScenario;
-		if (!scenario || scenario.waypoints.length < 2) return;
-
-		const waypoints = scenario.waypoints;
-		const idx = this.scenarioWaypointIndex;
+	#tickScenario(delta: number, ctx: SimulationContext): void {
+		if (!this.#currentScenario) return;
+		const waypoints = this.#currentScenario.waypoints;
+		const idx = this.#scenarioWaypointIndex;
 		const nextIdx = (idx + 1) % waypoints.length;
 		const current = waypoints[idx];
 		const next = waypoints[nextIdx];
 
 		const duration = next.duration > 0 ? next.duration : 30;
-		this.scenarioProgress += (delta * this.flightSpeed) / duration;
+		this.#scenarioProgress += (delta * this.flightSpeed) / duration;
 
-		const raw = clamp(this.scenarioProgress, 0, 1);
+		const raw = clamp(this.#scenarioProgress, 0, 1);
 		const t = raw * raw * (3 - 2 * raw);
 
-		const jitterScale = 0.0003;
-		const jitterLat = Math.sin(ctx.time * 0.13) * jitterScale + Math.sin(ctx.time * 0.31) * jitterScale * 0.5;
-		const jitterLon = Math.sin(ctx.time * 0.17) * jitterScale + Math.sin(ctx.time * 0.37) * jitterScale * 0.5;
+		const js = 0.0003;
+		const jLat = Math.sin(ctx.time * 0.13) * js + Math.sin(ctx.time * 0.31) * js * 0.5;
+		const jLon = Math.sin(ctx.time * 0.17) * js + Math.sin(ctx.time * 0.37) * js * 0.5;
 
-		const newLat = lerp(current.lat, next.lat, t) + jitterLat;
-		const newLon = lerp(current.lon, next.lon, t) + jitterLon;
+		const newLat = lerp(current.lat, next.lat, t) + jLat;
+		const newLon = lerp(current.lon, next.lon, t) + jLon;
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
 		if (!ctx.userAdjustingAltitude) {
-			const altJitter = Math.sin(ctx.time * 0.07) * 50;
-			this.altitude = lerp(current.altitude, next.altitude, t) + altJitter;
+			this.altitude = lerp(current.altitude, next.altitude, t) + Math.sin(ctx.time * 0.07) * 50;
 		}
 
-		let headingDiff = next.heading - current.heading;
-		if (headingDiff > 180) headingDiff -= 360;
-		if (headingDiff < -180) headingDiff += 360;
-		const headingJitter = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15;
-		this.heading = normalizeHeading(current.heading + headingDiff * t + headingJitter);
+		let hDiff = next.heading - current.heading;
+		if (hDiff > 180) hDiff -= 360;
+		if (hDiff < -180) hDiff += 360;
+		this.heading = normalizeHeading(current.heading + hDiff * t + Math.sin(ctx.time * 0.05) * 0.25);
 
-		if (this.scenarioProgress >= 1) {
-			this.scenarioProgress = 0;
-			this.scenarioWaypointIndex = nextIdx;
-			if (nextIdx === 0 && scenario.loop) {
-				const fresh = pickScenario(this.currentLocationId(), ctx.skyState);
-				if (fresh && fresh.id !== scenario.id) {
-					this.currentScenario = fresh;
-					this.scenarioWaypointIndex = 0;
-					this.scenarioProgress = 0;
+		if (this.#scenarioProgress >= 1) {
+			this.#scenarioProgress = 0;
+			this.#scenarioWaypointIndex = nextIdx;
+			if (nextIdx === 0 && this.#currentScenario.loop) {
+				const fresh = pickScenario(this.#currentLocationId(), ctx.skyState);
+				if (fresh && fresh.id !== this.#currentScenario.id) {
+					this.#currentScenario = fresh;
+					this.#scenarioWaypointIndex = 0;
+					this.#scenarioProgress = 0;
 				}
 			}
 		}
 	}
 
-	private tickAltitude(delta: number, ctx: SimulationContext): void {
+	#tickAltitude(delta: number, ctx: SimulationContext): void {
 		if (ctx.userAdjustingAltitude) return;
-		const target = ctx.nightFactor > 0.5 ? LOCATION_MAP.get(this.currentLocationId())?.nightAltitude ?? 35000 : 35000;
-		// Note: nightAltitudeTarget was passed in context before.
-		// Actually, I should probably keep passing it or compute it here.
-		// For consistency, I'll use the context if I add it to SimulationContext.
-		// Let's re-check SimulationContext.
+		// Simplification: target altitude can be location-specific at night
+		const targetAlt = ctx.nightFactor > 0.5 ? (LOCATION_MAP.get(this.#currentLocationId())?.nightAltitude ?? 35000) : 35000;
+		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
 	}
 
-	private computeOrbitBearing(lat: number, lon: number): number {
+	#computeOrbitBearing(lat: number, lon: number): number {
 		return (Math.abs(lat * 37 + lon * 59) % 180) * Math.PI / 180;
 	}
 
-	private initScenario(locationId: LocationId, skyState: SkyState): void {
-		this.currentScenario = pickScenario(locationId, skyState);
-		this.scenarioWaypointIndex = 0;
-		this.scenarioProgress = 0;
+	#initScenario(locationId: LocationId, skyState: SkyState): void {
+		this.#currentScenario = pickScenario(locationId, skyState);
+		this.#scenarioWaypointIndex = 0;
+		this.#scenarioProgress = 0;
 	}
 
-	private currentLocationId(): LocationId {
+	#currentLocationId(): LocationId {
 		let closest: LocationId = 'dubai';
 		let minDist = Infinity;
 		for (const loc of LOCATIONS) {

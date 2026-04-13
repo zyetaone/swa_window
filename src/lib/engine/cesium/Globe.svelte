@@ -9,7 +9,7 @@
 	 *   - Reactive effects that call CesiumManager methods
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { useAppState } from '$lib/core';
+	import { useAppState } from '$lib/state';
 	import { CesiumManager } from './manager';
 	import { COLOR_GRADING_GLSL } from './shaders';
 	import { initCesiumGlobal } from '$lib/cesium/config';
@@ -23,6 +23,7 @@
 	let fadingOut = $state(false);
 	let error = $state<string | null>(null);
 	let viewerContainer: HTMLDivElement;
+	let loadTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	onMount(async () => {
 		try {
@@ -33,7 +34,10 @@
 			await cesium.start(viewerContainer, COLOR_GRADING_GLSL);
 
 			fadingOut = true;
-			setTimeout(() => { loading = false; fadingOut = false; }, 600);
+			loadTimeout = setTimeout(() => {
+				loading = false;
+				fadingOut = false;
+			}, 600);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Unknown error';
 			loading = false;
@@ -41,7 +45,9 @@
 	});
 
 	onDestroy(() => {
+		if (loadTimeout) clearTimeout(loadTimeout);
 		cesium?.destroy();
+		cesium = null;
 	});
 
 	// ─── Reactive effects ─────────────────────────────────────────────────────

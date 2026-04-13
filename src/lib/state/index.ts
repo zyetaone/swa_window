@@ -6,7 +6,7 @@
  *
  * All re-exports live here — no proxy files in core/. Constants, types,
  * locations, and utils are canonical in $lib/shared; this barrel re-exports
- * them so that $lib/core/* relative imports continue to resolve.
+ * them so that $lib/state/* relative imports continue to resolve.
  *
  * Usage:
  *   In root component: createAppState()

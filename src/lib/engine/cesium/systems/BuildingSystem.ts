@@ -3,6 +3,7 @@ import { CESIUM_QUALITY_PRESETS } from '$lib/shared/constants';
 import { lerp } from '$lib/shared/utils';
 import type { CesiumModelView } from '../manager';
 import type { QualityMode } from '$lib/shared/constants';
+import { getIonToken } from '../config';
 
 export class BuildingSystem {
 	private readonly viewer: CesiumType.Viewer;
@@ -20,8 +21,7 @@ export class BuildingSystem {
 
 	async setup(qualityMode: QualityMode = 'balanced'): Promise<void> {
 		if (!this.C) return;
-		const hasIonToken = this.checkIonToken();
-		if (!hasIonToken) {
+		if (!getIonToken()) {
 			console.warn('[CesiumBuildings] Ion token missing — buildings disabled');
 			return;
 		}
@@ -35,11 +35,6 @@ export class BuildingSystem {
 		} catch (err) {
 			console.warn('[CesiumBuildings] OSM buildings unavailable:', (err as Error).message ?? err);
 		}
-	}
-
-	private checkIonToken(): boolean {
-		const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
-		return !!(token && token !== 'your-cesium-ion-token-here');
 	}
 
 	applyQualityMode(mode: QualityMode): void {

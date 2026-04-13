@@ -3,7 +3,7 @@
  */
 
 import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
-import type { WindowModel } from '$lib/core/WindowModel.svelte';
+import type { WindowModel } from '$lib/state/WindowModel.svelte';
 import { BaseTransport } from './BaseTransport';
 
 function getDeviceId(): string {
@@ -43,33 +43,33 @@ function getDeviceCaps(): DeviceCaps {
 }
 
 export class DisplayWsClient extends BaseTransport {
-	private ws: WebSocket | null = $state.raw(null);
-	private model: WindowModel;
-	private deviceId: string;
-	private serverUrl: string;
-	private statusInterval: ReturnType<typeof setInterval> | null = null;
-	private bootTime = Date.now();
+	#ws: WebSocket | null = $state.raw(null);
+	#model: WindowModel;
+	#deviceId: string;
+	#serverUrl: string;
+	#statusInterval: ReturnType<typeof setInterval> | null = null;
+	#bootTime = Date.now();
 
 	constructor(model: WindowModel, serverUrl?: string) {
 		super();
-		this.model = model;
-		this.deviceId = getDeviceId();
-		this.serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=display`;
+		this.#model = model;
+		this.#deviceId = getDeviceId();
+		this.#serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=display`;
 		this.connect();
 	}
 
 	connect(): void {
-		if (this.destroyed) return;
+		if (this.isDestroyed) return;
 		try {
-			this.ws = new WebSocket(this.serverUrl);
-			this.ws.onopen = () => {
+			this.#ws = new WebSocket(this.#serverUrl);
+			this.#ws.onopen = () => {
 				this.onConnected();
-				this.sendRegister();
-				this.startStatusUpdates();
+				this.#sendRegister();
+				this.#startStatusUpdates();
 			};
-			this.ws.onmessage = (e) => this.handleMessage(e.data);
-			this.ws.onclose = () => {
-				this.stopStatusUpdates();
+			this.#ws.onmessage = (e) => this.#handleMessage(e.data);
+			this.#ws.onclose = () => {
+				this.#stopStatusUpdates();
 				this.onDisconnected();
 			};
 		} catch {
@@ -78,61 +78,61 @@ export class DisplayWsClient extends BaseTransport {
 	}
 
 	disconnect(): void {
-		this.stopStatusUpdates();
-		if (this.ws) {
-			this.ws.close();
-			this.ws = null;
+		this.#stopStatusUpdates();
+		if (this.#ws) {
+			this.#ws.close();
+			this.#ws = null;
 		}
 	}
 
-	private send(msg: DisplayMessage): void {
-		if (this.ws?.readyState === WebSocket.OPEN) {
-			this.ws.send(JSON.stringify(msg));
+	#send(msg: DisplayMessage): void {
+		if (this.#ws?.readyState === WebSocket.OPEN) {
+			this.#ws.send(JSON.stringify(msg));
 		}
 	}
 
-	private sendRegister(): void {
+	#sendRegister(): void {
 		const params = new URLSearchParams(window.location.search);
 		const displayName = params.get('display');
-		this.send({
+		this.#send({
 			type: 'register',
-			deviceId: this.deviceId,
-			hostname: displayName || this.deviceId,
+			deviceId: this.#deviceId,
+			hostname: displayName || this.#deviceId,
 			capabilities: getDeviceCaps(),
 		});
 	}
 
-	private startStatusUpdates(): void {
-		this.stopStatusUpdates();
-		this.statusInterval = setInterval(() => {
-			this.send({
+	#startStatusUpdates(): void {
+		this.#stopStatusUpdates();
+		this.#statusInterval = setInterval(() => {
+			this.#send({
 				type: 'status',
-				fps: this.model.measuredFps,
-				mode: this.model.displayMode,
-				location: this.model.location,
-				uptime: Math.floor((Date.now() - this.bootTime) / 1000),
+				fps: this.#model.measuredFps,
+				mode: this.#model.displayMode,
+				location: this.#model.location,
+				uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
 			});
 		}, 5000);
 	}
 
-	private stopStatusUpdates(): void {
-		if (this.statusInterval) {
-			clearInterval(this.statusInterval);
-			this.statusInterval = null;
+	#stopStatusUpdates(): void {
+		if (this.#statusInterval) {
+			clearInterval(this.#statusInterval);
+			this.#statusInterval = null;
 		}
 	}
 
-	private handleMessage(raw: string): void {
+	#handleMessage(raw: string): void {
 		let msg: ServerMessage;
 		try { msg = JSON.parse(raw); } catch { return; }
 
 		switch (msg.type) {
-			case 'ping': this.send({ type: 'pong' }); break;
+			case 'ping': this.#send({ type: 'pong' }); break;
 			case 'set_scene':
-				this.model.flight.flyTo(msg.location);
-				if (msg.weather) this.model.weather = msg.weather;
+				this.#model.flight.flyTo(msg.location);
+				if (msg.weather) this.#model.weather = msg.weather;
 				break;
-			case 'set_mode': this.model.setDisplayMode(msg.mode, msg.payload); break;
+			case 'set_mode': this.#model.setDisplayMode(msg.mode, msg.payload); break;
 		}
 	}
 }

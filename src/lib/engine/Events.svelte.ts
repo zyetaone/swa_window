@@ -1,7 +1,5 @@
 /**
  * EventEngine — micro-events (shooting stars, birds, contrails).
- *
- * Moments of surprise for attentive viewers.
  */
 
 import { MICRO_EVENTS } from '$lib/shared/constants';
@@ -18,8 +16,8 @@ export interface MicroEvent {
 export class EventEngine implements ISimulationEngine<SimulationContext> {
 	microEvent = $state<MicroEvent | null>(null);
 
-	private timer = 0;
-	private nextEvent: number = MICRO_EVENTS.INITIAL_DELAY;
+	#timer = 0;
+	#nextEvent: number = MICRO_EVENTS.INITIAL_DELAY;
 
 	tick(delta: number, ctx: SimulationContext): void {
 		if (this.microEvent) {
@@ -30,11 +28,11 @@ export class EventEngine implements ISimulationEngine<SimulationContext> {
 			return;
 		}
 
-		this.timer += delta;
-		if (this.timer < this.nextEvent) return;
+		this.#timer += delta;
+		if (this.#timer < this.#nextEvent) return;
 
-		this.timer = 0;
-		this.nextEvent = MICRO_EVENTS.MIN_INTERVAL
+		this.#timer = 0;
+		this.#nextEvent = MICRO_EVENTS.MIN_INTERVAL
 			+ Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
 
 		const isNight = ctx.skyState === 'night';

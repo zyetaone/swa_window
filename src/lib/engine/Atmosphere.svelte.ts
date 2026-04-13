@@ -1,8 +1,5 @@
 /**
  * AtmosphereEngine — lightning + ambient randomization.
- *
- * Lightning: random flashes during storm weather.
- * Randomization: slow-drifts cloud density, haze, speed, weather.
  */
 
 import { clamp } from '$lib/shared/utils';
@@ -30,35 +27,35 @@ export class AtmosphereEngine implements ISimulationEngine<AtmosphereContext, At
 	lightningX = $state(50);
 	lightningY = $state(40);
 
-	private lightningTimer = 0;
-	private nextLightning = Math.random()
+	#lightningTimer = 0;
+	#nextLightning = Math.random()
 		* (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL)
 		+ AIRCRAFT.LIGHTNING_MIN_INTERVAL;
 
 	// ── Ambient randomization (internal timers) ────────────────────────────────
-	private randomizeTimer = 0;
-	private nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY
+	#randomizeTimer = 0;
+	#nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY
 		+ Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
 
 	tick(delta: number, ctx: AtmosphereContext): AtmospherePatch | null {
-		this.tickLightning(delta, ctx.showLightning);
-		return this.tickRandomize(delta, ctx);
+		this.#tickLightning(delta, ctx.showLightning);
+		return this.#tickRandomize(delta, ctx);
 	}
 
-	private tickLightning(delta: number, showLightning: boolean): void {
+	#tickLightning(delta: number, showLightning: boolean): void {
 		if (showLightning) {
-			this.lightningTimer += delta;
+			this.#lightningTimer += delta;
 			if (this.lightningIntensity > 0) {
 				this.lightningIntensity = clamp(
 					this.lightningIntensity - delta * AIRCRAFT.LIGHTNING_DECAY_RATE, 0, 1,
 				);
 			}
-			if (this.lightningIntensity < 0.01 && this.lightningTimer > this.nextLightning) {
+			if (this.lightningIntensity < 0.01 && this.#lightningTimer > this.#nextLightning) {
 				this.lightningIntensity = 0.5 + Math.random() * 0.5;
 				this.lightningX = 20 + Math.random() * 60;
 				this.lightningY = 15 + Math.random() * 50;
-				this.lightningTimer = 0;
-				this.nextLightning = Math.random()
+				this.#lightningTimer = 0;
+				this.#nextLightning = Math.random()
 					* (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL)
 					+ AIRCRAFT.LIGHTNING_MIN_INTERVAL;
 			}
@@ -67,13 +64,13 @@ export class AtmosphereEngine implements ISimulationEngine<AtmosphereContext, At
 		}
 	}
 
-	private tickRandomize(delta: number, ctx: AtmosphereContext): AtmospherePatch | null {
-		this.randomizeTimer += delta;
-		if (this.randomizeTimer < this.nextRandomizeTime) return null;
+	#tickRandomize(delta: number, ctx: AtmosphereContext): AtmospherePatch | null {
+		this.#randomizeTimer += delta;
+		if (this.#randomizeTimer < this.#nextRandomizeTime) return null;
 		if (ctx.userAdjustingAtmosphere) return null;
 
-		this.randomizeTimer = 0;
-		this.nextRandomizeTime = AMBIENT.SUBSEQUENT_MIN_DELAY
+		this.#randomizeTimer = 0;
+		this.#nextRandomizeTime = AMBIENT.SUBSEQUENT_MIN_DELAY
 			+ Math.random() * (AMBIENT.SUBSEQUENT_MAX_DELAY - AMBIENT.SUBSEQUENT_MIN_DELAY);
 
 		const patch: AtmospherePatch = {};
