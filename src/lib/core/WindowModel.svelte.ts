@@ -13,13 +13,14 @@
  */
 
 import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
-import { AIRCRAFT, FLIGHT_FEEL, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/shared/constants';
+import { AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
 import { pickScenario, type FlightScenario } from './flight-scenarios';
+import { MotionEngine } from '$lib/engine/Motion.svelte';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
@@ -132,20 +133,14 @@ export class WindowModel {
 	private lightningTimer = 0;
 	private nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
 
-	// ── Motion (each layer independent and modular) ──────────────────────────────
-	motionOffsetX = $state(0);     // lateral sway (0.3x Y amplitude)
-	motionOffsetY = $state(0);     // turbulence + base vibration
-	bankAngle = $state(0);         // degrees — horizon tilt from turn rate
-	breathingOffset = $state(0);   // normalized — slow pitch oscillation
-	engineVibeX = $state(0);       // pixels — high-freq engine hum X
-	engineVibeY = $state(0);       // pixels — high-freq engine hum Y
-	private prevHeading = 0;        // for computing turn rate
-
-	// ── Turbulence bumps (occasional jolts simulating air pockets) ──────────────
-	private bumpTimer = 0;
-	private nextBump = FLIGHT_FEEL.BUMP_MIN_INTERVAL + Math.random() * (FLIGHT_FEEL.BUMP_MAX_INTERVAL - FLIGHT_FEEL.BUMP_MIN_INTERVAL);
-	private bumpElapsed = -1;       // <0 means no active bump
-	private bumpSign = 1;           // direction of current bump
+	// ── Motion (delegated to MotionEngine) ──────────────────────────────────────
+	private readonly motion = new MotionEngine();
+	get motionOffsetX() { return this.motion.motionOffsetX; }
+	get motionOffsetY() { return this.motion.motionOffsetY; }
+	get bankAngle() { return this.motion.bankAngle; }
+	get breathingOffset() { return this.motion.breathingOffset; }
+	get engineVibeX() { return this.motion.engineVibeX; }
+	get engineVibeY() { return this.motion.engineVibeY; }
 
 	// ── Micro-events (moments of surprise for attentive viewers) ────────────────
 	microEvent = $state<{ type: 'shooting-star' | 'bird' | 'contrail'; elapsed: number; duration: number; x: number; y: number } | null>(null);
@@ -277,7 +272,6 @@ export class WindowModel {
 			this.timeOfDay = now.getHours() + now.getMinutes() / 60;
 		}
 
-		this.prevHeading = this.heading;
 		this.initScenario(this.location);
 	}
 
@@ -677,54 +671,13 @@ export class WindowModel {
 	// --- Motion ---
 
 	private tickMotion(delta: number): void {
-		const t = this.time;
-		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[this.turbulenceLevel];
-
-		const altFactor = this.altitude > 40000 && this.weather === 'clear'
-			? clamp(1 - (this.altitude - 40000) / 10000, 0.05, 1)
-			: 1;
-
-		const baseTurbY = (Math.sin(t * 0.5) * 0.1 + Math.sin(t * 1.1) * 0.08) * turbMult;
-		const baseTurbX = (Math.sin(t * 0.37) * 0.08 + Math.sin(t * 0.83) * 0.06) * turbMult;
-
-		const chatterY = (Math.sin(t * 2.5 * Math.PI * 2) * 0.03
-			+ Math.sin(t * 3.7 * Math.PI * 2) * 0.02) * turbMult;
-		const chatterX = (Math.sin(t * 2.1 * Math.PI * 2) * 0.01
-			+ Math.sin(t * 3.3 * Math.PI * 2) * 0.008) * turbMult;
-
-		const bumpAmpScale = turbMult;
-		const bumpIntervalScale = 1 / turbMult;
-		let bumpValue = 0;
-		this.bumpTimer += delta;
-		if (this.bumpElapsed >= 0) {
-			this.bumpElapsed += delta;
-			bumpValue = this.bumpSign * FLIGHT_FEEL.BUMP_AMPLITUDE * bumpAmpScale
-				* Math.exp(-FLIGHT_FEEL.BUMP_DECAY * this.bumpElapsed)
-				* Math.sin(FLIGHT_FEEL.BUMP_RING_FREQ * this.bumpElapsed);
-			if (this.bumpElapsed > 1.5) this.bumpElapsed = -1;
-		} else if (this.bumpTimer > this.nextBump) {
-			this.bumpTimer = 0;
-			this.bumpElapsed = 0;
-			this.bumpSign = Math.random() > 0.5 ? 1 : -1;
-			this.nextBump = (FLIGHT_FEEL.BUMP_MIN_INTERVAL
-				+ Math.random() * (FLIGHT_FEEL.BUMP_MAX_INTERVAL - FLIGHT_FEEL.BUMP_MIN_INTERVAL))
-				* bumpIntervalScale;
-		}
-
-		this.motionOffsetY = (baseTurbY * AIRCRAFT.TURBULENCE_OFFSET_Y + chatterY + bumpValue) * altFactor;
-		this.motionOffsetX = (baseTurbX * AIRCRAFT.TURBULENCE_OFFSET_Y * 0.3 + chatterX) * altFactor;
-
-		let headingDelta = this.heading - this.prevHeading;
-		if (headingDelta > 180) headingDelta -= 360;
-		if (headingDelta < -180) headingDelta += 360;
-		const turnRate = delta > 0 ? headingDelta / delta : 0;
-		const targetBank = clamp(turnRate * 0.3, -FLIGHT_FEEL.BANK_ANGLE_MAX, FLIGHT_FEEL.BANK_ANGLE_MAX);
-		this.bankAngle += (targetBank - this.bankAngle) * Math.min(FLIGHT_FEEL.BANK_SMOOTHING * delta, 1);
-		this.prevHeading = this.heading;
-
-		this.breathingOffset = Math.sin(t * (2 * Math.PI / FLIGHT_FEEL.BREATHING_PERIOD));
-		this.engineVibeX = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_X) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
-		this.engineVibeY = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
+		this.motion.tick(delta, {
+			time: this.time,
+			heading: this.heading,
+			altitude: this.altitude,
+			weather: this.weather,
+			turbulenceLevel: this.turbulenceLevel,
+		});
 	}
 
 	private tickAltitude(delta: number): void {
