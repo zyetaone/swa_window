@@ -22,7 +22,7 @@
 	} from "$lib/core";
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/loop.svelte";
-	import CesiumViewer from "$lib/adapters/cesium/Globe.svelte";
+	import CesiumViewer from "$lib/engine/cesium/Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';

@@ -10,7 +10,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { useAppState } from '$lib/core';
-	import { CesiumManager } from './CesiumManager';
+	import { CesiumManager } from './manager';
 	import { COLOR_GRADING_GLSL } from './shaders';
 
 	const model = useAppState();
