@@ -22,7 +22,6 @@
 	} from "$lib/core";
 	import { clamp } from "$lib/core/utils";
 	import CesiumViewer from "./CesiumViewer.svelte";
-	// import CloudCanvas from './CloudCanvas.svelte';
 	import CloudBlobs from './CloudBlobs.svelte';
 	const model = useAppState();
 
@@ -306,8 +305,7 @@
 				<CloudBlobs
 					density={cloudOpacity}
 					speed={cloudSpeed}
-					nightFactor={model.nightFactor}
-					dawnDuskFactor={model.dawnDuskFactor}
+					skyState={model.skyState}
 					time={elapsedTime}
 				/>
 			</div>
