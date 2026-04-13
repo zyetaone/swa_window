@@ -32,6 +32,13 @@ export function randomBetween(min: number, max: number): number {
 }
 
 /**
+ * Pick a random element from an array.
+ */
+export function pickRandom<T>(arr: readonly T[]): T {
+	return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
  * Shortest-arc delta between two headings in degrees. Result in [-180, 180].
  */
 export function shortestAngleDelta(from: number, to: number): number {

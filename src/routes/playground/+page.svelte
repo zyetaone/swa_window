@@ -44,6 +44,12 @@
 			url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
 			note: 'No auth, no rate limit',
 		},
+		{
+			id: 'pmtiles',
+			label: 'ESRI PMTiles (prefetched)',
+			url: '/pmtiles/esri_dubai.pmtiles',
+			note: 'Local PMTiles — run prefetch + build-pmtiles first',
+		},
 	] as const;
 
 	const DUBAI = { lat: 25.2, lon: 55.3, altitude: 50000 };
@@ -187,7 +193,8 @@
 					lon={DUBAI.lon}
 					zoom={10}
 					pitch={-45}
-					imageryUrl={MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.url ?? MAPLIBRE_SOURCES[0].url}
+					imageryUrl={MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.id === 'pmtiles' ? '' : MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.url ?? MAPLIBRE_SOURCES[0].url}
+					pmtilesUrl={MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.id === 'pmtiles' ? (MAPLIBRE_SOURCES.find(s => s.id === maplibreSource)?.url ?? '') : ''}
 				/>
 			</div>
 		{/if}

@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'fs';
-import { join, dirname, relative } from 'path';
-import PMTiles from 'pmtiles';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'fs';
+import { join, relative, dirname } from 'path';
+import { execSync } from 'child_process';
 
 const PUBLIC_TILES = join(process.cwd(), 'public', 'tiles');
 const OUTPUT_DIR = join(process.cwd(), 'public', 'pmtiles');
@@ -21,19 +21,6 @@ interface Manifest {
   pmtiles: ManifestEntry[];
 }
 
-function latToTile(lat: number, z: number): number {
-  const latRad = (lat * Math.PI) / 180;
-  const n = Math.pow(2, z);
-  return Math.floor(
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
-  );
-}
-
-function lonToTile(lon: number, z: number): number {
-  const n = Math.pow(2, z);
-  return Math.floor(((lon + 180) / 360) * n);
-}
-
 function countTiles(tileDir: string): number {
   if (!existsSync(tileDir)) return 0;
   let total = 0;
@@ -49,55 +36,17 @@ function countTiles(tileDir: string): number {
   return total;
 }
 
-async function buildPmtiles(
-  tileDir: string,
-  pmtPath: string,
-  onProgress: (msg: string) => void
-): Promise<{ tileCount: number; bytes: number } | null> {
-  if (existsSync(pmtPath)) {
-    unlinkSync(pmtPath);
+function runCmd(cmd: string, cwd?: string): string {
+  try {
+    return execSync(cmd, {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (e: unknown) {
+    const err = e as { message?: string; stderr?: string };
+    throw new Error(err.stderr || err.message || String(e));
   }
-
-  const archive = new PMTiles.Writer(pmtPath);
-
-  const zDirs = readdirSync(tileDir).filter(f => !f.startsWith('.'));
-  let tileCount = 0;
-  let bytes = 0;
-
-  for (const zStr of zDirs) {
-    const zPath = join(tileDir, zStr);
-    if (!statSync(zPath).isDirectory()) continue;
-    const z = parseInt(zStr);
-
-    const xDirs = readdirSync(zPath);
-    for (const xStr of xDirs) {
-      const xPath = join(zPath, xStr);
-      if (!statSync(xPath).isDirectory()) continue;
-      const x = parseInt(xStr);
-
-      const tiles = readdirSync(xPath).filter(f => f.endsWith('.jpg'));
-      for (const tile of tiles) {
-        const yStr = tile.replace('.jpg', '');
-        const y = parseInt(yStr);
-
-        const tilePath = join(xPath, tile);
-        const data = readFileSync(tilePath);
-        bytes += data.length;
-
-        const header = PMTiles.makeTileHeader(z, x, y, data.length);
-        await archive.addTile(header, data);
-        tileCount++;
-      }
-    }
-
-    if (tileCount % 500 === 0) {
-      onProgress(`  z${z}: ${tileCount} tiles written`);
-    }
-  }
-
-  await archive.finalize();
-
-  return { tileCount, bytes };
 }
 
 async function main() {
@@ -151,25 +100,50 @@ async function main() {
       console.log(`  Zoom levels: ${zoomLevels.join(', ')}`);
       console.log(`  Total tiles: ${totalTileCount}`);
 
-      const result = await buildPmtiles(
-        locationDir,
-        pmtPath,
-        msg => console.log(msg)
-      );
+      if (existsSync(pmtPath)) {
+        console.log(`  Skipping — PMTiles already exists`);
+      } else {
+        const maxZoom = Math.max(...zoomLevels);
+        const minZoom = Math.min(...zoomLevels);
+        console.log(`  Converting to PMTiles (z${minZoom}-z${maxZoom})...`);
 
-      if (!result) continue;
+        try {
+          const cmd = [
+            'pmtiles-convert',
+            `"${locationDir}"`,
+            `"${pmtPath}"`,
+            `--scheme zxy`,
+            `--format jpeg`,
+            `--maxzoom ${maxZoom}`,
+            `--verbose`,
+          ].join(' ');
+
+          const output = runCmd(cmd);
+          if (output.trim()) console.log(output);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`  pmtiles-convert failed: ${msg}`);
+          continue;
+        }
+      }
+
+      if (!existsSync(pmtPath)) {
+        console.error(`  PMTiles file not created!`);
+        continue;
+      }
+
+      const bytes = statSync(pmtPath).size;
+      const sizeMB = (bytes / 1024 / 1024).toFixed(2);
+      console.log(`  Done: ${sizeMB} MB → ${pmtLabel}.pmtiles`);
 
       entries.push({
         source,
         locationId,
         pmtilesPath: relative(process.cwd(), pmtPath),
         zoomLevels,
-        tileCount: result.tileCount,
-        bytes: result.bytes,
+        tileCount: totalTileCount,
+        bytes,
       });
-
-      const sizeMB = (result.bytes / 1024 / 1024).toFixed(2);
-      console.log(`  Done: ${result.tileCount} tiles, ${sizeMB} MB → ${pmtLabel}.pmtiles`);
     }
   }
 
@@ -183,6 +157,7 @@ async function main() {
 
   console.log('\n=== Manifest ===');
   console.log(JSON.stringify(manifest, null, 2));
+  console.log(`\nManifest: ${relative(process.cwd(), manifestPath)}`);
 }
 
 main().catch(err => {

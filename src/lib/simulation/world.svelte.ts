@@ -3,7 +3,7 @@
  * Returns a WorldPatch each tick so WindowModel can apply changes imperatively.
  */
 
-import { clamp, randomBetween } from '$lib/utils';
+import { clamp, randomBetween, pickRandom } from '$lib/utils';
 import { AIRCRAFT, AMBIENT, MICRO_EVENTS } from '$lib/constants';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
 
@@ -27,7 +27,7 @@ export class WorldEngine {
 	#timeToNextEvent = randomBetween(MICRO_EVENTS.MIN_INTERVAL, MICRO_EVENTS.MAX_INTERVAL);
 
 	#directorTimer = 0;
-	#timeToNextLocation = randomBetween(120, 300);
+	#timeToNextLocation = randomBetween(AMBIENT.DIRECTOR_MIN_INTERVAL, AMBIENT.DIRECTOR_MAX_INTERVAL);
 
 	// ─────────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ export class WorldEngine {
 
 	resetDirector(): void {
 		this.#directorTimer = 0;
-		this.#timeToNextLocation = randomBetween(120, 300);
+		this.#timeToNextLocation = randomBetween(AMBIENT.DIRECTOR_MIN_INTERVAL, AMBIENT.DIRECTOR_MAX_INTERVAL);
 	}
 
 	// ─── Lightning ────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ export class WorldEngine {
 		patch.haze         = clamp(ctx.haze         + (Math.random() - 0.5) * AMBIENT.HAZE_SHIFT,          AMBIENT.HAZE_MIN,          AMBIENT.HAZE_MAX);
 
 		if (Math.random() < AMBIENT.WEATHER_CHANGE_CHANCE) {
-			patch.weather = AMBIENT.WEATHER_POOL[Math.floor(Math.random() * AMBIENT.WEATHER_POOL.length)];
+			patch.weather = pickRandom(AMBIENT.WEATHER_POOL);
 		}
 
 		return patch;
@@ -119,7 +119,7 @@ export class WorldEngine {
 		if (ctx.skyState === 'day' && ctx.altitude > 20000 && ctx.cloudDensity < 0.8) types.push('contrail');
 		if (types.length === 0) return;
 
-		const type = types[Math.floor(Math.random() * types.length)];
+		const type = pickRandom(types);
 		const duration = type === 'bird' ? MICRO_EVENTS.BIRD_DURATION
 			: type === 'shooting-star' ? MICRO_EVENTS.SHOOTING_STAR_DURATION
 			: MICRO_EVENTS.CONTRAIL_DURATION;

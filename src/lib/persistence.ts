@@ -3,7 +3,7 @@ import { LOCATION_IDS } from '$lib/locations';
 import { AIRCRAFT } from '$lib/constants';
 import { isValidWeather } from '$lib/validation';
 
-const STORAGE_KEY = 'aero-window-v2';
+export const STORAGE_KEY = 'aero-window-v2';
 
 export interface PersistedState {
 	location: LocationId;
@@ -38,7 +38,7 @@ export function loadPersistedState(): Partial<PersistedState> {
 		}
 
 		if (parsed.altitude !== undefined) {
-			parsed.altitude = safeNum(parsed.altitude, 35000, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
+			parsed.altitude = safeNum(parsed.altitude, AIRCRAFT.DEFAULT_ALTITUDE, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
 		}
 		if (parsed.cloudDensity !== undefined) {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.7, 0, 1);

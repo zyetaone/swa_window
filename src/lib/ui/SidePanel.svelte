@@ -8,6 +8,7 @@
 	import { useAppState } from "$lib/app-state.svelte";
 	import { LOCATIONS } from "$lib/locations";
 	import { AIRCRAFT } from "$lib/constants";
+	import { WEATHER_TYPES } from "$lib/types";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./Toggle.svelte";
@@ -330,31 +331,13 @@
 
 			<h4>Weather</h4>
 			<div class="weather-grid">
-				<button
-					class="weather-btn"
-					class:active={model.weather === "clear"}
-					onclick={() => model.applyPatch({ weather: "clear" })}>Clear</button
-				>
-				<button
-					class="weather-btn"
-					class:active={model.weather === "cloudy"}
-					onclick={() => model.applyPatch({ weather: "cloudy" })}>Cloudy</button
-				>
-				<button
-					class="weather-btn"
-					class:active={model.weather === "overcast"}
-					onclick={() => model.applyPatch({ weather: "overcast" })}>Overcast</button
-				>
-				<button
-					class="weather-btn"
-					class:active={model.weather === "rain"}
-					onclick={() => model.applyPatch({ weather: "rain" })}>Rain</button
-				>
-				<button
-					class="weather-btn"
-					class:active={model.weather === "storm"}
-					onclick={() => model.applyPatch({ weather: "storm" })}>Storm</button
-				>
+				{#each WEATHER_TYPES as w (w)}
+					<button
+						class="weather-btn"
+						class:active={model.weather === w}
+						onclick={() => model.applyPatch({ weather: w })}
+					>{w[0].toUpperCase() + w.slice(1)}</button>
+				{/each}
 			</div>
 		</section>
 

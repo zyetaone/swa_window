@@ -5,7 +5,7 @@
  * atmosphere sync, post-processing, and the per-frame render loop.
  */
 
-import { CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
+import { AIRCRAFT, CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import type * as CesiumType from 'cesium';
@@ -43,7 +43,7 @@ export class CesiumManager {
 	// Camera lerp state
 	private camLat = 0;
 	private camLon = 0;
-	private camAlt = 35000;
+	private camAlt: number = AIRCRAFT.DEFAULT_ALTITUDE;
 	private camHeading = 45;
 	private camPitch = 75;
 	private camBank = 0;

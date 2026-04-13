@@ -5,6 +5,8 @@
  * error tracking with emergency reload after 10 consecutive failures.
  */
 
+import { STORAGE_KEY } from '$lib/persistence';
+
 type Callback = (dt: number) => void;
 
 const subscribers = new Set<Callback>();
@@ -31,7 +33,7 @@ function loop(now: number): void {
 			const count = (errorCounts.get(fn) ?? 0) + 1;
 			errorCounts.set(fn, count);
 			if (count >= 10) {
-				try { localStorage.removeItem('aero-window-v2'); } catch { /* noop */ }
+				try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
 				window.location.reload();
 				return;
 			}

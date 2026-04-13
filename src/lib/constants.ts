@@ -38,8 +38,9 @@ export const AIRCRAFT = {
 	} as const,
 
 	// Altitude bounds (feet)
-	MIN_ALTITUDE: 10000,
-	MAX_ALTITUDE: 65000,
+	DEFAULT_ALTITUDE: 35000 as const,
+	MIN_ALTITUDE: 10000 as const,
+	MAX_ALTITUDE: 65000 as const,
 
 	// Frost thresholds (feet)
 	FROST_START_ALTITUDE: 25000,
@@ -121,6 +122,10 @@ export const AMBIENT = {
 	WEATHER_CHANGE_CHANCE: 0.2,
 	// Weighted pool for auto-cycle (storm excluded, cloudy doubled for probability)
 	WEATHER_POOL: ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'] as const,
+
+	// Director auto-pilot cycling (seconds)
+	DIRECTOR_MIN_INTERVAL: 120,
+	DIRECTOR_MAX_INTERVAL: 300,
 } as const;
 
 // =============================================================================

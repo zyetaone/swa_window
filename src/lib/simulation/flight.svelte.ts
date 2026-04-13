@@ -12,7 +12,7 @@ export class FlightSimEngine {
 	// --- Position (reactive) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
-	altitude = $state(35000);
+	altitude = $state<number>(AIRCRAFT.DEFAULT_ALTITUDE);
 	heading = $state(45);
 	pitch = $state(75);
 
@@ -220,8 +220,8 @@ export class FlightSimEngine {
 		if (ctx.userAdjustingAltitude) return;
 		const loc = LOCATION_MAP.get(ctx.locationId);
 		const targetAlt = ctx.nightFactor > 0.5
-			? (loc?.nightAltitude ?? 35000)
-			: (loc?.defaultAltitude ?? 35000);
+			? (loc?.nightAltitude ?? AIRCRAFT.DEFAULT_ALTITUDE)
+			: (loc?.defaultAltitude ?? AIRCRAFT.DEFAULT_ALTITUDE);
 		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
 	}
 
