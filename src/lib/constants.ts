@@ -160,15 +160,10 @@ export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = 
 };
 
 export const CESIUM = {
-	// NASA VIIRS night lights layer
-	VIIRS_NIGHT_ALPHA: 0.6,
-	VIIRS_NIGHT_BRIGHTNESS: 2.5,
-	VIIRS_CONTRAST: 1.8,
-
-	// Road light layer (CartoDB Dark basemap, real OSM roads)
-	ROAD_LIGHT_NIGHT_ALPHA: 0.7,
-	ROAD_LIGHT_NIGHT_BRIGHTNESS: 2.5,
-	ROAD_LIGHT_CONTRAST: 1.6,
+	// Night city glow overlay (CartoDB dark basemap — shows roads + urban areas)
+	NIGHT_ALPHA: 0.7,
+	NIGHT_BRIGHTNESS: 2.5,
+	NIGHT_CONTRAST: 1.8,
 } as const;
 
 // =============================================================================

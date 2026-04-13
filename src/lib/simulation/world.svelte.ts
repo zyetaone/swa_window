@@ -97,10 +97,12 @@ export class WorldEngine {
 
 	#tickEvents(delta: number, ctx: SimulationContext): void {
 		if (this.microEvent) {
-			this.microEvent.elapsed += delta;
-			if (this.microEvent.elapsed >= this.microEvent.duration) {
+			const elapsed = this.microEvent.elapsed + delta;
+			if (elapsed >= this.microEvent.duration) {
 				this.#eventTimer = 0;
 				this.microEvent = null;
+			} else {
+				this.microEvent = { ...this.microEvent, elapsed };
 			}
 			return;
 		}

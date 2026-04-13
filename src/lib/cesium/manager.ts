@@ -39,7 +39,6 @@ export class CesiumManager {
 	private readonly CesiumModule: typeof CesiumType;
 	private readonly model: CesiumModelView;
 	private readonly viewer: CesiumType.Viewer;
-	private readonly abortController = new AbortController();
 
 	// Camera lerp state
 	private camLat = 0;
@@ -58,7 +57,6 @@ export class CesiumManager {
 	private lastNightFactor = -1;
 	// Imagery Layers
 	private nightLayer: CesiumType.ImageryLayer | null = null;
-	private roadLightLayer: CesiumType.ImageryLayer | null = null;
 
 	// Effect sync caches
 	private lastGlobeColor = '';
@@ -68,7 +66,6 @@ export class CesiumManager {
 	private lastSkySatShift = 999;
 	private lastTimeOfDay = -1;
 	private lastNightAlpha = -1;
-	private lastRoadAlpha = -1;
 	private lastBuildingNightFactor = -1;
 	private lastTerrainExaggeration = -1;
 
@@ -172,17 +169,13 @@ export class CesiumManager {
 
 		if (!useLocal) {
 			try {
+				// Single CartoDB dark basemap layer for both city glow + road lights at night
 				this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
 					new C.UrlTemplateImageryProvider({ url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', maximumLevel: 18, minimumLevel: 0 })
 				);
 				if (this.nightLayer) { this.nightLayer.alpha = 0; this.nightLayer.show = false; }
-				
-				this.roadLightLayer = this.viewer.imageryLayers.addImageryProvider(
-					new C.UrlTemplateImageryProvider({ url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', maximumLevel: 18, minimumLevel: 0 })
-				);
-				if (this.roadLightLayer) { this.roadLightLayer.alpha = 0; this.roadLightLayer.show = false; }
 			} catch (e) {
-				console.warn('[CesiumManager] Night layers failed:', e);
+				console.warn('[CesiumManager] Night layer failed:', e);
 			}
 		}
 	}
@@ -297,23 +290,12 @@ export class CesiumManager {
 		this.lastNightFactor = nf;
 
 		this.nightLayer.show = show || firstNight;
-		const nightAlpha = lerp(0, CESIUM.VIIRS_NIGHT_ALPHA, nf) * scale;
-		if (Math.abs(nightAlpha - this.lastNightAlpha) > 0.001) {
-			this.lastNightAlpha = nightAlpha;
-			this.nightLayer.alpha = nightAlpha;
-			this.nightLayer.brightness = lerp(1, CESIUM.VIIRS_NIGHT_BRIGHTNESS, nf) * scale;
-			this.nightLayer.contrast = lerp(1, CESIUM.VIIRS_CONTRAST, nf);
-		}
-
-		if (this.roadLightLayer) {
-			this.roadLightLayer.show = show;
-			const roadAlpha = lerp(0, CESIUM.ROAD_LIGHT_NIGHT_ALPHA, nf) * scale;
-			if (Math.abs(roadAlpha - this.lastRoadAlpha) > 0.001) {
-				this.lastRoadAlpha = roadAlpha;
-				this.roadLightLayer.alpha = roadAlpha;
-				this.roadLightLayer.brightness = lerp(1, CESIUM.ROAD_LIGHT_NIGHT_BRIGHTNESS, nf) * scale;
-				this.roadLightLayer.contrast = lerp(1, CESIUM.ROAD_LIGHT_CONTRAST, nf);
-			}
+		const alpha = lerp(0, CESIUM.NIGHT_ALPHA, nf) * scale;
+		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
+			this.lastNightAlpha = alpha;
+			this.nightLayer.alpha = alpha;
+			this.nightLayer.brightness = lerp(1, CESIUM.NIGHT_BRIGHTNESS, nf) * scale;
+			this.nightLayer.contrast = lerp(1, CESIUM.NIGHT_CONTRAST, nf);
 		}
 	}
 
@@ -382,7 +364,6 @@ export class CesiumManager {
 	}
 
 	destroy(): void {
-		this.abortController.abort();
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {
 				this.viewer.scene.postRender.removeEventListener(this.#boundTick);

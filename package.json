@@ -28,6 +28,7 @@
 	},
 	"dependencies": {
 		"cesium": "^1.138.0",
-		"maplibre-gl": "^5.23.0"
+		"maplibre-gl": "^5.23.0",
+		"pmtiles": "^4.4.1"
 	}
 }
