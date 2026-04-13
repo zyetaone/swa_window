@@ -22,6 +22,7 @@ import { loadPersistedState, safeNum, type PersistedState } from './persistence'
 import { pickScenario, type FlightScenario } from './flight-scenarios';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
 import { EventEngine } from '$lib/engine/Events.svelte';
+import { DirectorEngine } from '$lib/engine/Director.svelte';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
@@ -160,10 +161,8 @@ export class WindowModel {
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
 	);
 
-	// ── Director (Auto-Pilot) ───────────────────────────────────────────────────
-	// "Loiter" for 2-5 minutes, then "Cruise" to new location
-	private directorTimer = 0;
-	private timeToNextCruise = 120 + Math.random() * 180; // seconds
+	// ── Director (delegated to DirectorEngine) ─────────────────────────────────
+	private readonly director = new DirectorEngine();
 
 	// ── Ambient randomization ────────────────────────────────────────────────────
 	private nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY + Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
@@ -257,8 +256,6 @@ export class WindowModel {
 		} else {
 			this.orbitBearing = this.computeOrbitBearing(this.lat, this.lon);
 		}
-
-		this.timeToNextCruise = 120 + Math.random() * 180;
 
 		if (saved.altitude !== undefined) this.altitude = saved.altitude;
 		if (saved.weather) this.weather = saved.weather;
@@ -523,22 +520,16 @@ export class WindowModel {
 			this.blindOpen = true;
 			this.warpFactor = 0;
 			this.flightSpeed = this.preWarpSpeed;
-			this.timeToNextCruise = 120 + Math.random() * 180;
+			this.director.reset();
 		}
 	}
 
 	private tickDirector(delta: number): void {
-		if (this.userAdjustingAltitude || this.userAdjustingTime) {
-			this.directorTimer = 0;
-			return;
-		}
-
-		this.directorTimer += delta;
-		if (this.directorTimer > this.timeToNextCruise) {
-			const next = this.pickNextLocation();
-			this.flyTo(next);
-			this.directorTimer = 0;
-		}
+		const nextId = this.director.tick(delta, {
+			userAdjusting: this.userAdjustingAltitude || this.userAdjustingTime,
+			pickNextLocation: () => this.pickNextLocation(),
+		});
+		if (nextId) this.flyTo(nextId);
 	}
 
 	// --- Flight Path ---
