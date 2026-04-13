@@ -9,8 +9,8 @@
 	 * - Cabin interior context
 	 */
 
-	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/context";
-	import type { LocationId } from "$lib/context";
+	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core/app-state.svelte";
+	import type { LocationId } from "$lib/core/app-state.svelte";
 	import { savePersistedState } from "$lib/services/persistence";
 	import { createWsClient } from "$lib/services/fleet-client.svelte";
 	import Window from "$lib/components/Window.svelte";

@@ -3,7 +3,7 @@
  */
 
 import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
-import type { WindowModel } from '$lib/model.svelte';
+import type { WindowModel } from '$lib/core/app-state.svelte';
 import { BaseTransport } from './base-transport';
 
 function getDeviceId(): string {

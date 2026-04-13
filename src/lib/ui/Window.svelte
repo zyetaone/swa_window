@@ -14,9 +14,9 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
-	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/context";
+	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/core/app-state.svelte";
 	import { clamp } from "$lib/shared/utils";
-	import { subscribe } from "$lib/engine/loop.svelte";
+	import { subscribe } from "$lib/engine/game-loop.svelte";
 	import { untrack } from "svelte";
 	import CesiumViewer from "$lib/engine/cesium/Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
@@ -117,9 +117,9 @@
 
 	const rainOpacity = $derived(WEATHER_EFFECTS[model.weather].rainOpacity);
 	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);
-	const lightningOpacity = $derived(model.atmosphere.lightningIntensity * 0.3);
-	const lightningX = $derived(model.atmosphere.lightningX);
-	const lightningY = $derived(model.atmosphere.lightningY);
+	const lightningOpacity = $derived(model.world.lightningIntensity * 0.3);
+	const lightningX = $derived(model.world.lightningX);
+	const lightningY = $derived(model.world.lightningY);
 
 	// --- Motion (unified from 4 independent layers) ---
 
@@ -147,7 +147,7 @@
 
 	// --- Micro-events ---
 
-	const microEvent = $derived(model.events.microEvent);
+	const microEvent = $derived(model.world.microEvent);
 
 	// --- Glass ---
 
