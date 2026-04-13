@@ -20,7 +20,7 @@
 		FLIGHT_FEEL,
 		WEATHER_EFFECTS,
 	} from "$lib/core";
-	import { clamp } from "$lib/core/utils";
+	import { clamp } from "$lib/shared/utils";
 	import CesiumViewer from "./CesiumViewer.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	const model = useAppState();
@@ -63,10 +63,6 @@
 	// ========================================================================
 	// ACTIONS
 	// ========================================================================
-
-	function handleBlindClick() {
-		model.blindOpen = true;
-	}
 
 	function handleWindowClick() {
 		if (model.isTransitioning) return;
@@ -189,16 +185,85 @@
 	let touchStartY = 0;
 	let touchStartX = 0;
 	let pressTimer: ReturnType<typeof setTimeout> | null = null;
-	const LONG_PRESS_MS = 8000; // 8 seconds hold to cruise
+	const LONG_PRESS_MS = 8000;
 	const SWIPE_THRESHOLD = 50;
+
+	// --- Draggable blind (ported from feat/offline-tiles Windows version) ---
+	// blindDragY: 0 = fully closed (visible), -105 = fully open (off-screen).
+	// During drag, CSS transition is disabled for instant response.
+	// On release, snap to open or closed with transition.
+	let isDragging = $state(false);
+	let blindDragY = $state(0);
+	let dragStartBlindY = 0;
+	let dragStartPointerY = 0;
+	let blindContainerHeight = 0;
+	const SNAP_THRESHOLD = 0.3;
+
+	// Sync blindDragY with model.blindOpen when not dragging
+	$effect(() => {
+		if (!isDragging) {
+			blindDragY = model.blindOpen ? -105 : 0;
+		}
+	});
+
+	const blindTransform = $derived(
+		`translateY(${blindDragY.toFixed(1)}%)`
+	);
+
+	const blindTransition = $derived(
+		isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.05)'
+	);
+
+	function getBlindHeight(): number {
+		const el = document.querySelector('.blind-clip') as HTMLElement | null;
+		return el?.offsetHeight ?? 1;
+	}
+
+	function startBlindDrag(pointerY: number) {
+		if (model.isTransitioning) return;
+		blindContainerHeight = getBlindHeight();
+		isDragging = true;
+		dragStartBlindY = blindDragY;
+		dragStartPointerY = pointerY;
+	}
+
+	function moveBlindDrag(pointerY: number) {
+		if (!isDragging) return;
+		const deltaPixels = pointerY - dragStartPointerY;
+		const deltaPct = (deltaPixels / blindContainerHeight) * 100;
+		blindDragY = clamp(dragStartBlindY + deltaPct, -105, 0);
+	}
+
+	function endBlindDrag() {
+		if (!isDragging) return;
+		isDragging = false;
+		const totalTravel = 105;
+		const distanceTraveled = Math.abs(blindDragY - dragStartBlindY);
+		const travelRatio = distanceTraveled / totalTravel;
+		if (travelRatio > SNAP_THRESHOLD) {
+			model.blindOpen = blindDragY < dragStartBlindY;
+		}
+		// If not past threshold, $effect syncs blindDragY back
+	}
 
 	function handleStart(y: number, x: number) {
 		touchStartY = y;
 		touchStartX = x;
+		startBlindDrag(y);
 		pressTimer = setTimeout(() => {
 			model.flyTo(model.pickNextLocation());
 			pressTimer = null;
 		}, LONG_PRESS_MS);
+	}
+
+	function handleMove(y: number) {
+		if (isDragging) {
+			moveBlindDrag(y);
+			if (pressTimer) {
+				clearTimeout(pressTimer);
+				pressTimer = null;
+			}
+		}
 	}
 
 	function handleEnd(y: number, x: number) {
@@ -207,16 +272,18 @@
 			pressTimer = null;
 		}
 
+		if (isDragging) {
+			endBlindDrag();
+			return;
+		}
+
 		const dy = y - touchStartY;
 		const dx = x - touchStartX;
 
-		// Vertical Swipe Detection (ignore if horizontal movement is dominant)
 		if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
 			if (dy > 0 && model.blindOpen) {
-				// Swipe Down -> Close Blind
 				model.blindOpen = false;
 			} else if (dy < 0 && !model.blindOpen) {
-				// Swipe Up -> Open Blind
 				model.blindOpen = true;
 			}
 		}
@@ -226,12 +293,20 @@
 		handleStart(e.touches[0].clientY, e.touches[0].clientX);
 	}
 
+	function onTouchMove(e: TouchEvent) {
+		handleMove(e.touches[0].clientY);
+	}
+
 	function onTouchEnd(e: TouchEvent) {
 		handleEnd(e.changedTouches[0].clientY, e.changedTouches[0].clientX);
 	}
 
 	function onMouseDown(e: MouseEvent) {
 		handleStart(e.clientY, e.clientX);
+	}
+
+	function onMouseMove(e: MouseEvent) {
+		handleMove(e.clientY);
 	}
 
 	function onMouseUp(e: MouseEvent) {
@@ -270,8 +345,10 @@
 	aria-label="Window Viewport"
 	tabindex="0"
 	ontouchstart={onTouchStart}
+	ontouchmove={onTouchMove}
 	ontouchend={onTouchEnd}
 	onmousedown={onMouseDown}
+	onmousemove={onMouseMove}
 	onmouseup={onMouseUp}
 	ondblclick={onDoubleClick}
 	onkeydown={(e) => {
@@ -393,13 +470,15 @@
 	<div class="blind-clip">
 		<button
 			class="blind-overlay"
-			class:open={model.blindOpen}
 			class:discoverable={!model.blindOpen && !hasAnimated}
-			onclick={handleBlindClick}
+			onclick={() => { model.blindOpen = true; }}
 			onanimationend={onHandleAnimationEnd}
 			type="button"
 			aria-label="Open window blind"
 			disabled={model.isTransitioning}
+			style:transform={blindTransform}
+			style:transition={blindTransition}
+			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
 		>
 			<div class="blind-slats"></div>
 			<!-- Removing blind-label for cleaner, physical look -->
@@ -533,14 +612,7 @@
 		justify-content: center;
 		border: none;
 		padding: 0;
-		pointer-events: auto;
-		transform: translateY(0);
-		transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-	}
-
-	.blind-overlay.open {
-		transform: translateY(-105%);
-		pointer-events: none;
+		/* transform, transition, pointer-events set via inline style for drag support */
 	}
 
 	.blind-overlay:disabled {
