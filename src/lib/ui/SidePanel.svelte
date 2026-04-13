@@ -10,7 +10,7 @@
 		LOCATIONS,
 		AIRCRAFT,
 		type LocationId,
-	} from "$lib/core/app-state.svelte";
+	} from "$lib/app-state.svelte";
 	import { formatTime } from "$lib/shared/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./Toggle.svelte";

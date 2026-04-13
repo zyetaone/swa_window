@@ -14,7 +14,7 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
-	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/core/app-state.svelte";
+	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/app-state.svelte";
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/game-loop.svelte";
 	import { untrack } from "svelte";
