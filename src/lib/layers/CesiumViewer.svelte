@@ -161,9 +161,9 @@
 			255,
 		);
 
-		// LOD: Cesium default is 2. Lower = sharper but slower to load at distance.
-		// 1.5 balances detail vs pop-in artifacts on far-away textures.
-		viewer.scene.globe.maximumScreenSpaceError = loc.hasBuildings ? 1.5 : 2.0;
+		// NOTE: maximumScreenSpaceError is set at init time (Pi 5 tune).
+		// Do NOT override it dynamically per-location — the Pi-optimized
+		// value (6) is intentional and should persist for all locations.
 
 		if (viewer.scene.skyAtmosphere) {
 			viewer.scene.skyAtmosphere.brightnessShift = nf * -0.5;
@@ -182,6 +182,7 @@
 		}
 
 		// Location-aware fog: [dayDensity, nightDensity, dayMinBright, nightMinBright]
+		// Haze slider (0-0.15) multiplies fog density for atmospheric visibility control.
 		if (viewer.scene.fog) {
 			viewer.scene.fog.enabled = true;
 			viewer.scene.fog.screenSpaceErrorFactor = 4.0;
@@ -196,7 +197,9 @@
 			const natureDefault: [number, number, number, number] = [0.0005, 0.0002, 0.5, 0.01];
 			const [dayDens, nightDens, dayBright, nightBright] =
 				fogParams[locId] ?? (loc.hasBuildings ? cityDefault : natureDefault);
-			viewer.scene.fog.density = lerp(dayDens, nightDens, nf);
+			// haze: 0-0.15 slider → 1.0x to 2.2x fog density multiplier
+			const hazeMultiplier = 1.0 + model.haze * 8;
+			viewer.scene.fog.density = lerp(dayDens, nightDens, nf) * hazeMultiplier;
 			viewer.scene.fog.minimumBrightness = lerp(dayBright, nightBright, nf);
 		}
 	}
@@ -248,11 +251,16 @@
 		const globe = v.scene.globe;
 		globe.enableLighting = true;
 		globe.baseColor = C.Color.fromBytes(40, 50, 60, 255);
+		// Pi 5 16GB: aggressive LOD budget — tile artifacts (rectangular seams)
+		// indicate too much LOD or cache eviction. These values are tuned to
+		// eliminate seams. If you see blurry terrain at distance, lower
+		// maximumScreenSpaceError slightly (try 4, then 3). If still seeing
+		// rectangular pop-in, lower tileCacheSize further.
+		globe.maximumScreenSpaceError = 6; // was 1.5-2.0 (default 2)
+		globe.tileCacheSize = 20;          // was 200 (default 100) — limits GPU mem
+		globe.preloadSiblings = false;     // was true — was loading extra tiles
 		globe.preloadAncestors = true;
-		globe.preloadSiblings = true;
-		globe.tileCacheSize = 200;
 		globe.loadingDescendantLimit = 4;
-		globe.showGroundAtmosphere = true;
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
 		if (v.scene.skyBox) v.scene.skyBox.show = true;
@@ -311,34 +319,25 @@
 		// two-branch pipeline that preserves access to the original scene texture.
 	}
 
-	async function setupImageryLayers(
-		v: CesiumType.Viewer,
-		C: typeof CesiumType,
-		signal: AbortSignal,
-	): Promise<void> {
-		try {
-			const esri = await C.ArcGisMapServerImageryProvider.fromUrl(
-				"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
-			);
-			if (signal.aborted) return;
-			v.imageryLayers.addImageryProvider(esri);
-		} catch (e) {
-			console.warn("[CesiumViewer] ESRI imagery failed, falling back to OSM:", e);
-			if (signal.aborted) return;
-			v.imageryLayers.addImageryProvider(
-				new C.OpenStreetMapImageryProvider({
-					url: "https://a.tile.openstreetmap.org/",
-				}),
-			);
-		}
+	// ── OFFLINE TILE SERVER DETECTION ──────────────────────────────────────
+	// Read once at init — not reactive. This is a deploy-time flag.
+	const TILE_SERVER_URL: string | null = import.meta.env.VITE_TILE_SERVER_URL || null;
 
+	async function checkTileServer(): Promise<boolean> {
+		if (!TILE_SERVER_URL) return false;
+		try {
+			const resp = await fetch(`${TILE_SERVER_URL}/health`, { signal: AbortSignal.timeout(500) });
+			return resp.ok;
+		} catch { return false; }
+	}
+
+	/** Setup Ion terrain (extracted to avoid duplication in online/offline fallback) */
+	async function setupIonTerrain(v: CesiumType.Viewer, C: typeof CesiumType): Promise<void> {
 		const cesiumToken = import.meta.env.VITE_CESIUM_ION_TOKEN;
-		const hasIonToken =
-			cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
+		const hasIonToken = cesiumToken && cesiumToken !== "your-cesium-ion-token-here";
 
 		if (hasIonToken) {
 			(C.Ion as typeof CesiumType.Ion).defaultAccessToken = cesiumToken;
-
 			try {
 				v.terrainProvider = await C.createWorldTerrainAsync({
 					requestVertexNormals: true,
@@ -348,18 +347,77 @@
 				console.warn("[CesiumViewer] Ion terrain failed, using flat ellipsoid:", e);
 			}
 		}
+	}
+
+	async function setupImageryLayers(
+		v: CesiumType.Viewer,
+		C: typeof CesiumType,
+		signal: AbortSignal,
+	): Promise<void> {
+		const useLocal = await checkTileServer();
+		if (useLocal) console.info('[CesiumViewer] Local tile server detected — using offline tiles');
+
+		// ── BASE IMAGERY ────────────────────────────────────────────────────
+		try {
+			if (useLocal) {
+				const localImagery = new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`,
+					maximumLevel: 14,
+					credit: new C.Credit("ESRI World Imagery (offline cache)"),
+				});
+				v.imageryLayers.addImageryProvider(localImagery);
+			} else {
+				const esri = await C.ArcGisMapServerImageryProvider.fromUrl(
+					"https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+				);
+				if (signal.aborted) return;
+				v.imageryLayers.addImageryProvider(esri);
+			}
+		} catch (e) {
+			console.warn("[CesiumViewer] Base imagery failed, falling back to OSM:", e);
+			if (signal.aborted) return;
+			v.imageryLayers.addImageryProvider(
+				new C.OpenStreetMapImageryProvider({
+					url: "https://a.tile.openstreetmap.org/",
+				}),
+			);
+		}
+
+		// ── TERRAIN ─────────────────────────────────────────────────────────
+		if (useLocal) {
+			try {
+				v.terrainProvider = await C.CesiumTerrainProvider.fromUrl(
+					`${TILE_SERVER_URL}/terrain`, {
+						requestVertexNormals: true,
+						requestWaterMask: true,
+					}
+				);
+			} catch (e) {
+				console.warn("[CesiumViewer] Local terrain failed, trying Ion:", e);
+				await setupIonTerrain(v, C);
+			}
+		} else {
+			await setupIonTerrain(v, C);
+		}
 		if (signal.aborted) return;
 
+		// ── VIIRS NIGHT LIGHTS ──────────────────────────────────────────────
 		try {
-			const nightProvider = new C.WebMapTileServiceImageryProvider({
-				url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
-				layer: "VIIRS_CityLights_2012",
-				style: "default",
-				tileMatrixSetID: "GoogleMapsCompatible_Level8",
-				maximumLevel: 8,
-				format: "image/jpeg",
-				credit: new C.Credit("NASA Earth Observatory"),
-			});
+			const nightProvider = useLocal
+				? new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/viirs/{z}/{x}/{y}.jpg`,
+					maximumLevel: 8,
+					credit: new C.Credit("NASA Earth Observatory (offline cache)"),
+				})
+				: new C.WebMapTileServiceImageryProvider({
+					url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg",
+					layer: "VIIRS_CityLights_2012",
+					style: "default",
+					tileMatrixSetID: "GoogleMapsCompatible_Level8",
+					maximumLevel: 8,
+					format: "image/jpeg",
+					credit: new C.Credit("NASA Earth Observatory"),
+				});
 
 			nightLayer = v.imageryLayers.addImageryProvider(nightProvider);
 			nightLayer.alpha = 0.0;
@@ -374,19 +432,27 @@
 		}
 		if (signal.aborted) return;
 
+		// ── ROAD GLOW (CARTODB DARK) ────────────────────────────────────────
 		try {
-			const darkRoadProvider = new C.UrlTemplateImageryProvider({
-				url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
-				credit: new C.Credit("OpenStreetMap contributors, CARTO"),
-				maximumLevel: 18,
-				minimumLevel: 0,
-			});
+			const darkRoadProvider = useLocal
+				? new C.UrlTemplateImageryProvider({
+					url: `${TILE_SERVER_URL}/roads/{z}/{x}/{y}.png`,
+					maximumLevel: 14,
+					credit: new C.Credit("OpenStreetMap contributors (offline cache)"),
+				})
+				: new C.UrlTemplateImageryProvider({
+					url: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
+					credit: new C.Credit("OpenStreetMap contributors, CARTO"),
+					maximumLevel: 18,
+					minimumLevel: 0,
+				});
+
 			roadLightLayer = v.imageryLayers.addImageryProvider(darkRoadProvider);
 			roadLightLayer.alpha = 0;
 			roadLightLayer.colorToAlpha = new C.Color(0.0, 0.0, 0.0, 1.0);
 			roadLightLayer.colorToAlphaThreshold = CESIUM.ROAD_LIGHT_COLOR_TO_ALPHA_THRESHOLD;
 		} catch (e) {
-			console.warn("[CesiumViewer] CartoDB road glow failed:", e);
+			console.warn("[CesiumViewer] Road glow failed:", e);
 			roadLightLayer = null;
 		}
 
@@ -529,6 +595,7 @@
 		void model.location;
 		void model.timeOfDay;
 		void model.nightLightIntensity;
+		void model.haze;  // drives Cesium fog density
 		syncClock();
 		syncAtmosphere();
 	});

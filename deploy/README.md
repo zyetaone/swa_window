@@ -87,19 +87,27 @@ sudo bash deploy/provision-pi.sh <SERVER_HOST> <DEVICE_NAME>
 **Proper fix:** add a `git clone` step to provision-pi.sh. Deferred to Phase 5
 of the port plan.
 
-### 2. `provision-pi.sh` expects offline tiles infrastructure that main doesn't have yet
+### 2. `provision-pi.sh` inline tile-server stub should be replaced by real `tile-server/`
 
 The script creates `aero-tiles.service` and an inline `/opt/zyeta-aero/tile-server/index.ts`
-Bun app (provision-pi.sh lines ~240-270). It pre-seeds tiles from
-`/boot/firmware/aero-tiles` or fetches from the fleet server.
+Bun app (provision-pi.sh lines ~240-270). This inline stub is now **superseded** by the
+real tile server at `tile-server/` in the repo root.
 
-On main, the offline tile architecture (tile-packager + tile-server packages)
-doesn't exist yet — it's Phase 4 of the port. The inline tile-server created
-by provision-pi.sh will run but serve nothing (empty `/opt/zyeta-aero/tiles/`),
-and Cesium will fall back to fetching tiles from the internet (Cesium Ion).
+**Real tile server:** `tile-server/src/index.ts` — a Bun HTTP server (default port 8888)
+that serves pre-downloaded tiles from `TILE_DIR` (default `/opt/zyeta-aero/tiles`). Supports
+CORS, immutable caching, CesiumTerrainProvider-compatible `layer.json`, and a `/health`
+endpoint used by `CesiumViewer.svelte` to auto-detect offline mode.
 
-**Effect:** display works if the Pi has internet access. Offline mode doesn't
-work until Phase 4 is complete.
+**To use offline tiles on a Pi:**
+1. Pre-download tiles: `bun run tile-packager/src/index.ts --locations hyderabad,dallas --output /opt/zyeta-aero/tiles`
+2. Start the tile server: `TILE_DIR=/opt/zyeta-aero/tiles bun run tile-server/src/index.ts`
+3. Set `VITE_TILE_SERVER_URL=http://localhost:8888` in the display's `.env`
+4. CesiumViewer auto-detects the local server via `/health` probe and uses offline tiles
+
+**Remaining work:** update `provision-pi.sh` to launch `tile-server/src/index.ts` from
+the repo instead of writing the inline stub. The `aero-tiles.service` systemd unit should
+point at `tile-server/src/index.ts` with `TILE_DIR` and `TILE_PORT` env vars. This is a
+follow-up refactor — not done in this port to avoid breaking the provisioner.
 
 ### 3. `aero-updater.sh` was wrapped in a `packages/display/package.json` check
 
@@ -135,12 +143,12 @@ weather / config changes require an OTA pull.
 Items to land before this is production-ready for SWA Hyderabad:
 
 - [ ] Add `git clone` step to provision-pi.sh (remove the manual pre-clone requirement)
-- [ ] Port `packages/server/` → `server/` (fleet server) — Phase 3
-- [ ] Port `packages/admin/` → `src/routes/admin/` — Phase 3
-- [ ] Port `packages/shared/` → `src/lib/shared/` — Phase 3
-- [ ] Port `packages/tile-packager/` → `tile-packager/` — Phase 4
-- [ ] Port `packages/tile-server/` → `tile-server/` — Phase 4 (replaces the inline version in provision-pi.sh)
-- [ ] Port static assets (`boeing_737` model, cloud textures, service worker) — Phase 4
+- [x] Port `packages/server/` → `server/` (fleet server) — Phase 3
+- [x] Port `packages/admin/` → `src/routes/admin/` — Phase 3
+- [x] Port `packages/shared/` → `src/lib/shared/` — Phase 3
+- [x] Port `packages/tile-packager/` → `tile-packager/` — Phase 4
+- [x] Port `packages/tile-server/` → `tile-server/` — Phase 4 (replaces the inline version in provision-pi.sh)
+- [x] Port static assets (`boeing_737` model, cloud textures, service worker) — Phase 4
 - [ ] End-to-end Pi 5 validation — Phase 5
 
 See `~/Documents/projects/zyeta/W_25_SOUTHWEST_HYDERABAD/aero-window/docs/port-plan-feat-offline-tiles-to-main.md` for full details.
