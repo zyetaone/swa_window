@@ -13,7 +13,7 @@
  */
 
 import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
-import { AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/shared/constants';
+import { AIRCRAFT, AMBIENT, WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
@@ -21,6 +21,7 @@ import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
 import { pickScenario, type FlightScenario } from './flight-scenarios';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
+import { EventEngine } from '$lib/engine/Events.svelte';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
@@ -142,10 +143,9 @@ export class WindowModel {
 	get engineVibeX() { return this.motion.engineVibeX; }
 	get engineVibeY() { return this.motion.engineVibeY; }
 
-	// ── Micro-events (moments of surprise for attentive viewers) ────────────────
-	microEvent = $state<{ type: 'shooting-star' | 'bird' | 'contrail'; elapsed: number; duration: number; x: number; y: number } | null>(null);
-	private microEventTimer = 0;
-	private nextMicroEvent: number = MICRO_EVENTS.INITIAL_DELAY;
+	// ── Micro-events (delegated to EventEngine) ────────────────────────────────
+	private readonly events = new EventEngine();
+	get microEvent() { return this.events.microEvent; }
 
 	// ── Flight Modes (Cinematic) ────────────────────────────────────────────────
 	flightMode = $state<FlightMode>('orbit');
@@ -690,43 +690,7 @@ export class WindowModel {
 	}
 
 	private tickMicroEvents(delta: number): void {
-		if (this.microEvent) {
-			this.microEvent.elapsed += delta;
-			if (this.microEvent.elapsed >= this.microEvent.duration) {
-				this.microEvent = null;
-			}
-			return;
-		}
-
-		this.microEventTimer += delta;
-		if (this.microEventTimer < this.nextMicroEvent) return;
-
-		this.microEventTimer = 0;
-		this.nextMicroEvent = MICRO_EVENTS.MIN_INTERVAL
-			+ Math.random() * (MICRO_EVENTS.MAX_INTERVAL - MICRO_EVENTS.MIN_INTERVAL);
-
-		const isNightTime = this.skyState === 'night';
-		let type: 'shooting-star' | 'bird' | 'contrail';
-		let duration: number;
-
-		if (isNightTime) {
-			type = 'shooting-star';
-			duration = MICRO_EVENTS.SHOOTING_STAR_DURATION;
-		} else if (Math.random() < 0.4) {
-			type = 'bird';
-			duration = MICRO_EVENTS.BIRD_DURATION;
-		} else {
-			type = 'contrail';
-			duration = MICRO_EVENTS.CONTRAIL_DURATION;
-		}
-
-		this.microEvent = {
-			type,
-			elapsed: 0,
-			duration,
-			x: 10 + Math.random() * 80,
-			y: 5 + Math.random() * 40,
-		};
+		this.events.tick(delta, { skyState: this.skyState });
 	}
 
 	private tickRandomize(delta: number): void {
