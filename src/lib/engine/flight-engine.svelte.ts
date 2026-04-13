@@ -90,16 +90,6 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.altitude = clamp(alt, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
 	}
 
-	pickNextLocation(timeOfDay: number, currentId: LocationId): LocationId {
-		const isNight = timeOfDay < 5 || timeOfDay >= 20;
-		const candidates = LOCATIONS.filter(l => l.id !== currentId);
-		if (isNight) {
-			const cities = candidates.filter(l => l.hasBuildings);
-			if (cities.length > 0) return cities[Math.floor(Math.random() * cities.length)].id;
-		}
-		return candidates[Math.floor(Math.random() * candidates.length)].id;
-	}
-
 	// ====================================================================
 	// TICK (ISimulationEngine)
 	// ====================================================================

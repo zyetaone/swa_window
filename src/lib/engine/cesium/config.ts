@@ -7,7 +7,6 @@
 import type * as CesiumType from 'cesium';
 
 // Environment markers
-export const IS_PROD = import.meta.env.PROD;
 export const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || null;
 
 /**

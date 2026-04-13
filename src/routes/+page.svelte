@@ -13,9 +13,9 @@
 	import type { LocationId } from "$lib/app-state.svelte";
 	import { savePersistedState } from "$lib/services/persistence";
 	import { createWsClient } from "$lib/services/fleet-client.svelte";
-	import Window from "$lib/components/Window.svelte";
-	import Controls from "$lib/components/HUD.svelte";
-	import SidePanel from "$lib/components/SidePanel.svelte";
+	import Window from "$lib/ui/Window.svelte";
+	import Controls from "$lib/ui/HUD.svelte";
+	import SidePanel from "$lib/ui/SidePanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel

@@ -9,14 +9,14 @@ Aero Dynamic Window is a **circadian-aware digital airplane window display** for
 ## Commands
 
 ```bash
-bun run dev          # Start development server (Vite)
-bun run build        # Build for production
+bun run dev          # Start development server (Vite, binds 0.0.0.0 for LAN)
+bun run build        # Build for production (single-bundle for Pi)
 bun run preview      # Preview production build
 bun run check        # Type check with svelte-check
 bun run check:watch  # Type check in watch mode
 ```
 
-No test runner is configured. No linter is configured.
+No test runner configured. No linter configured. Type checking is the primary validation tool.
 
 ## Tech Stack
 
@@ -29,111 +29,84 @@ No test runner is configured. No linter is configured.
 
 ## Architecture
 
-```
-src/lib/
-├── engine/                  # Pure simulation (zero DOM, zero Svelte)
-│   ├── FlightSim.svelte.ts      Position, orbit, waypoint scenarios, cruise state machine
-│   ├── Motion.svelte.ts          Turbulence, banking, breathing, engine vibe
-│   ├── Atmosphere.svelte.ts      Lightning + ambient randomization
-│   ├── Director.svelte.ts        Auto-pilot city picker (returns intention, not side-effect)
-│   ├── Events.svelte.ts          Micro-events (shooting stars, birds, contrails)
-│   ├── loop.svelte.ts            Global RAF loop (subscriber pattern)
-│   ├── flight-scenarios.ts       Waypoint data for 10+ cities
-│   └── cesium/                   Globe rendering bridge
-│       ├── Globe.svelte              Mount/destroy lifecycle
-│       ├── manager.ts                6 inner classes (terrain, imagery, atmosphere, buildings, camera, post-process)
-│       └── shaders.ts                GLSL color grading
-│
-├── components/              # Svelte UI components
-│   ├── Window.svelte            Layer compositor (Cesium + clouds + effects)
-│   ├── SidePanel.svelte         Settings panel (location, weather, time, sliders)
-│   ├── HUD.svelte               Controls overlay
-│   ├── Blind.svelte             Draggable window blind (pointer events)
-│   ├── CloudBlobs.svelte        SVG feTurbulence clouds (3-depth parallax)
-│   ├── Weather.svelte           Rain, lightning, frost
-│   ├── MicroEvent.svelte        Sky event animations
-│   ├── AirlineLoader.svelte     Loading screen
-│   ├── RangeSlider.svelte       Reusable slider control
-│   └── Toggle.svelte            Reusable toggle control
-│
-├── core/                    # State coordination + fleet clients
-│   ├── index.ts                 Barrel: createAppState(), useAppState()
-│   ├── WindowModel.svelte.ts    Thin coordinator — composes engine modules
-│   ├── fleet-client.svelte.ts   Display WebSocket client (auto-connect, status heartbeat)
-│   └── fleet-admin.svelte.ts    Admin WS/SSE transport (dual-transport, REST actions)
-│
-└── shared/                  # Canonical types + constants
-    ├── constants.ts             AIRCRAFT, FLIGHT_FEEL, CESIUM, WEATHER_EFFECTS, AMBIENT, MICRO_EVENTS
-    ├── types.ts                 SkyState, LocationId, WeatherType, Location
-    ├── locations.ts             18 cities with lat/lon/altitude/hasBuildings
-    ├── protocol.ts              Fleet WebSocket message types
-    ├── persistence.ts           localStorage save/load with validation
-    ├── utils.ts                 clamp, lerp, normalizeHeading, formatTime
-    └── index.ts                 Barrel exports
+### WindowModel (app-state.svelte.ts) — Single Source of Truth
 
-server/                      # Fleet hub (separate Bun process)
-└── src/
-    ├── index.ts                 HTTP + WebSocket server entry
-    └── ws.ts                    Device registry, message routing, SSE
+Single class holding all simulation state. Composes 3 engines. Provides context DI via `createAppState()`/`useAppState()`.
 
-deploy/                      # Pi provisioning + OTA
-├── provision-pi.sh              First-time Pi setup
-├── aero-updater.sh              OTA update script (git pull + rebuild)
-└── README.md
+```typescript
+model.flight      // FlightSimEngine — lat/lon/altitude/heading/warpFactor/flightMode
+model.motion      // MotionEngine — motionOffsetX/Y, bankAngle, breathingOffset, engineVibeX/Y
+model.world       // WorldEngine — lightningIntensity, microEvent, resetDirector()
+
+// Derived
+model.currentLocation  // LOCATION_MAP.get(location)
+model.localTimeOfDay   // timeOfDay + utcOffset
+model.skyState         // day|dawn|dusk|night
+model.nightFactor      // 0-1
 ```
 
 ### Engine Design
 
-Engine modules are **pure TypeScript classes with `$state` output fields**. They have zero DOM dependencies, zero Cesium references, and are independently testable.
+Engine modules are **pure TypeScript classes with `$state` output fields**. Zero DOM dependencies, zero Cesium references, independently testable.
 
-Each engine's `tick()` method accepts a narrow **context interface** (not the full model):
+Each engine's `tick()` accepts a narrow **context interface** (not the full model):
 ```typescript
-motion.tick(delta, { time, heading, altitude, weather, turbulenceLevel })
-director.tick(delta, { userAdjusting, pickNextLocation })  // returns LocationId | null
-atmosphere.tickRandomize(delta, { userAdjusting, cloudDensity, ... })  // returns patch | null
+interface ISimulationEngine<TContext, TPatch> {
+    tick(delta: number, ctx: TContext): TPatch;
+}
 ```
 
-Director and Atmosphere use the **intention pattern** — they return what they want to do, the coordinator decides whether to execute.
+**WorldEngine** uses the **intention pattern** — returns a `WorldPatch` (atmosphere changes, next location), coordinator decides whether to apply:
+```typescript
+const worldPatch = this.world.tick(delta, ctx);
+if (worldPatch.atmosphere) this.applyPatch(worldPatch.atmosphere);
+if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
+```
 
-WindowModel composes all engines and provides **proxy getters/setters** so consumers access state through `model.altitude` without knowing which engine owns it.
+### Tick Pipeline
+
+```
+Window.svelte (RAF loop via game-loop.svelte)
+└── model.tick(delta)
+    ├── flight.tick(delta, ctx)
+    ├── motion.tick(delta, ctx + turbulenceLevel)
+    └── world.tick(delta, ctx + showLightning, isOrbitMode, pickNextLocation)
+        ├── #tickLightning → lightningIntensity/X/Y
+        ├── #tickRandomize → AtmospherePatch (cloudDensity/speed/haze/weather)
+        ├── #tickEvents → microEvent (bird/shooting-star/contrail)
+        └── #tickDirector → LocationId (auto-pilot)
+```
 
 ### Component Flow
 
 ```
-+page.svelte (context provider + side-effects)
-└── createAppState() → WindowModel
-    ├── Window.svelte (layer compositor — subscribes to RAF loop)
-    │   ├── Globe.svelte (Cesium terrain/buildings/night lights)
-    │   ├── CloudBlobs.svelte (SVG feTurbulence clouds)
-    │   ├── Weather.svelte (rain, lightning, frost)
-    │   ├── MicroEvent.svelte (shooting stars, birds, contrails)
-    │   └── Blind.svelte (draggable window blind)
-    ├── HUD.svelte (controls overlay)
-    └── SidePanel.svelte (settings panel)
++page.svelte (createAppState() sets context, owns side-effects)
+└── useAppState() → model
+    ├── Window.svelte (RAF tick, layer compositor, blind drag)
+    │   ├── Globe.svelte (Cesium terrain/buildings)
+    │   ├── CloudBlobs.svelte
+    │   ├── Weather.svelte
+    │   └── MicroEvent.svelte
+    ├── HUD.svelte (telemetry overlay)
+    └── SidePanel.svelte (settings)
 ```
 
-### State Ownership
-
-**WindowModel** (coordinator): composes engines, owns shared state (timeOfDay, weather, cloudDensity, blindOpen, displayMode), dispatches `tick()`.
-
-**Engine modules** (via proxy): FlightSim owns position/heading/altitude. Motion owns turbulence/banking. Atmosphere owns lightning. Events owns micro-events. Director owns auto-pilot timer.
-
-**+page.svelte** (side-effects): real-time clock sync, debounced auto-save, fleet WS connection, URL param config.
+**+page.svelte** owns side-effects (real-time clock sync, debounced auto-save, fleet WS connection, URL param config) — kept out of WindowModel for testability.
 
 ### Flight Mode State Machine
 
 ```
 orbit ──flyTo()──→ cruise_departure ──(2s)──→ cruise_transit ──(2s)──→ orbit
-                   (warp ramp, blind closes)  (teleport, blind opens)
+                   (warp ramp, blind closes)      (teleport, blind opens)
 ```
 
-Director triggers `flyTo()` every 2-5 minutes, weighted by time of day (nature mornings, cities midday/night).
+Director triggers `flyTo()` every 2-5 minutes, weighted by time of day.
 
 ### CSS Layer System (z-order)
 
 ```
-z:0   Cesium globe (terrain, buildings, night lights, post-process)
-z:1   CloudBlobs (SVG feTurbulence + CSS drift animation)
+z:0   Cesium globe (terrain, buildings, night lights)
+z:1   CloudBlobs (SVG feTurbulence + CSS drift)
 z:2   Weather (rain drops + lightning flash)
 z:3   Micro-events (shooting star, bird, contrail)
 z:5   Frost (altitude-dependent)
@@ -142,6 +115,10 @@ z:9   Glass vignette
 z:10  Vignette
 z:11  Glass recess rim
 ```
+
+### User Override Pattern
+
+`onUserInteraction(type)` pauses auto-behavior for 8 seconds, preventing auto-pilot and ambient randomizer from fighting user input.
 
 ## Key Patterns
 
@@ -152,43 +129,44 @@ const model = createAppState();  // in +page.svelte only
 const model = useAppState();     // in any descendant
 ```
 
-### Engine Composition (proxy delegation)
-
-```typescript
-class WindowModel {
-    private readonly flight = new FlightSimEngine(callbacks);
-    private readonly motion = new MotionEngine();
-    get altitude() { return this.flight.altitude; }
-    set altitude(v: number) { this.flight.altitude = v; }
-    get bankAngle() { return this.motion.bankAngle; }
-}
-```
+All imports from `$lib/app-state.svelte` — it barrel-exports types, constants, and locations.
 
 ### CRITICAL: Variable Naming with Svelte 5
 
 **Never name a variable `state` when using `$state` rune.** Use `model`, `engine`, etc.
 
-### User Override Pattern
+### Game Loop (game-loop.svelte.ts)
 
-`onUserInteraction(type)` pauses auto-behavior for 8 seconds, preventing auto-pilot and ambient randomizer from fighting user input.
+Singleton RAF loop with subscriber pattern. Auto-starts when first subscriber registers, stops when last unsubscribes. Includes visibility check (pauses when tab hidden — saves CPU on Pi kiosk) and error recovery (reloads page after 10 consecutive errors).
+
+### CesiumManager (cesium-manager.ts)
+
+Flat class handling all Cesium concerns: viewer lifecycle, terrain, buildings, imagery, atmosphere sync, post-processing, camera. Receives a `CesiumModelView` interface (not WindowModel directly) to stay decoupled.
+
+## Routes
+
+- `/` — Main window display (production route for Pi kiosk)
+- `/playground` — Isolated sandbox for cloud rendering experiments (no WindowModel)
+- `/admin` — Fleet admin panel
+- `/architecture` — Architecture visualization
+- `/api/fleet` — Fleet server endpoint
+- `/api/tiles/[...path]` — Tile proxy
 
 ## Environment Variables
 
 ```
-VITE_CESIUM_ION_TOKEN=...           # Required for terrain/imagery
-VITE_GOOGLE_MAPS_API_KEY=...        # Optional, Google 3D Tiles
-VITE_TILE_SERVER_URL=...            # Optional, self-hosted tiles for offline
-GOOGLE_GENAI_API_KEY=...            # Build-time only, texture generation
+VITE_CESIUM_ION_TOKEN=...     # Required for terrain/imagery (Cesium Ion)
+VITE_TILE_SERVER_URL=...      # Optional, self-hosted tiles for offline
 ```
 
 ## Build Configuration
 
 - **Cesium assets**: copied via `vite-plugin-static-copy` to `/cesiumStatic`
-- **Bundle**: `bundleStrategy: 'single'` for Pi deployment
+- **Bundle**: `bundleStrategy: 'single'` for Pi deployment (enables inlineDynamicImports)
 - **Adapter**: `adapter-node` (Bun serves the build)
-- **CSP**: configured for cross-port fleet server communication
+- **CSP**: configured for Cesium Ion, map tile providers, and fleet WS on any LAN host
 - **SSR**: disabled (`export const ssr = false`)
-- **TypeScript**: strict mode, `noUnusedLocals`, `noUnusedParameters`
+- **TypeScript**: strict mode
 
 ## Pi 5 Deployment
 

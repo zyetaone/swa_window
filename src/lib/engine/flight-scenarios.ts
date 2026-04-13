@@ -510,10 +510,3 @@ function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {
 	if (timeOfDay >= 18) return 'dusk';
 	return 'day';
 }
-
-/**
- * Get all scenarios (for debug/UI listing).
- */
-export function getAllScenarios(): readonly FlightScenario[] {
-	return SCENARIOS;
-}

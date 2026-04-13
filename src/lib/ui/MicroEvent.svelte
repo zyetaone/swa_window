@@ -8,13 +8,7 @@
 	 * Z-order 3 (set by parent via inline style).
 	 */
 
-	interface MicroEventData {
-		type: 'shooting-star' | 'bird' | 'contrail';
-		elapsed: number;
-		duration: number;
-		x: number;
-		y: number;
-	}
+	import type { MicroEventData } from '$lib/engine/world-engine.svelte';
 
 	interface Props {
 		event: MicroEventData | null;

@@ -10,7 +10,7 @@
 	 */
 
 	import type { SkyState } from '$lib/shared/types';
-	import CloudBlobs from '$lib/components/CloudBlobs.svelte';
+	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 
 	// Simulation state — all controlled by sliders
 	let density = $state(0.6);

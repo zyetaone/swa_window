@@ -22,7 +22,6 @@
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';
-	// import Blind from './Blind.svelte'; (Inlined)
 	const model = useAppState();
 
 	// ========================================================================

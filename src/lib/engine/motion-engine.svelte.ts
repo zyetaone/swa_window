@@ -28,10 +28,10 @@ export class MotionEngine implements ISimulationEngine<MotionContext> {
 	#bumpSign = 1;
 
 	tick(delta: number, ctx: MotionContext): void {
-		const { time: t, heading, altitude, weather, turbulenceLevel } = ctx;
+		const { time: t, heading, altitude, turbulenceLevel } = ctx;
 		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[turbulenceLevel];
 
-		const altFactor = altitude > 40000 && weather === 'clear'
+		const altFactor = altitude > 40000
 			? clamp(1 - (altitude - 40000) / 10000, 0.05, 1)
 			: 1;
 

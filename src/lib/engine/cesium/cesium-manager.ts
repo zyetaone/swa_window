@@ -9,9 +9,7 @@ import { CESIUM, CESIUM_QUALITY_PRESETS, type QualityMode } from '$lib/shared/co
 import type { LocationId, WeatherType } from '$lib/shared/types';
 import { normalizeHeading, lerp } from '$lib/shared/utils';
 import type * as CesiumType from 'cesium';
-import { getIonToken, checkLocalTileServer, TILE_SERVER_URL as CONFIG_TILE_SERVER } from './config';
-
-const TILE_SERVER_URL = CONFIG_TILE_SERVER;
+import { getIonToken, checkLocalTileServer, TILE_SERVER_URL } from './config';
 
 export interface CesiumModelView {
 	flight: {
@@ -68,7 +66,6 @@ export class CesiumManager {
 	private lastSkySatShift = 999;
 	private lastTimeOfDay = -1;
 	private lastNightAlpha = -1;
-	private lastNightFactor = -1;
 	private lastRoadAlpha = -1;
 
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
