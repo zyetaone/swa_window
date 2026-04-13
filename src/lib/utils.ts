@@ -25,6 +25,16 @@ export function normalizeHeading(heading: number): number {
 }
 
 /**
+ * Shortest-arc delta between two headings in degrees. Result in [-180, 180].
+ */
+export function shortestAngleDelta(from: number, to: number): number {
+	let d = to - from;
+	if (d > 180) d -= 360;
+	if (d < -180) d += 360;
+	return d;
+}
+
+/**
  * Derive sky state from decimal time of day.
  */
 export function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {

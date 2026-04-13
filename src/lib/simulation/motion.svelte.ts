@@ -2,7 +2,7 @@
  * MotionEngine — turbulence, banking, breathing, engine vibration.
  */
 
-import { clamp } from '$lib/utils';
+import { clamp, shortestAngleDelta } from '$lib/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
 import type { SimulationContext } from '$lib/types';
 
@@ -60,9 +60,7 @@ export class MotionEngine {
 		this.motionOffsetY = (baseTurbY * AIRCRAFT.TURBULENCE_OFFSET_Y + chatterY + bumpValue) * altFactor;
 		this.motionOffsetX = (baseTurbX * AIRCRAFT.TURBULENCE_OFFSET_Y * 0.3 + chatterX) * altFactor;
 
-		let hDelta = heading - this.#prevHeading;
-		if (hDelta > 180) hDelta -= 360;
-		if (hDelta < -180) hDelta += 360;
+		const hDelta = shortestAngleDelta(this.#prevHeading, heading);
 		const turnRate = delta > 0 ? hDelta / delta : 0;
 		const targetBank = clamp(turnRate * 0.3, -FLIGHT_FEEL.BANK_ANGLE_MAX, FLIGHT_FEEL.BANK_ANGLE_MAX);
 		this.bankAngle += (targetBank - this.bankAngle) * Math.min(FLIGHT_FEEL.BANK_SMOOTHING * delta, 1);

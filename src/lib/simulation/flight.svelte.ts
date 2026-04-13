@@ -2,7 +2,7 @@
  * FlightSimEngine - Flight position, orbit, scenario, and cruise state machine.
  */
 
-import { clamp, lerp, normalizeHeading } from '$lib/utils';
+import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import { AIRCRAFT } from '$lib/constants';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$lib/locations';
@@ -198,9 +198,7 @@ export class FlightSimEngine {
 			this.altitude = lerp(current.altitude, next.altitude, t) + Math.sin(ctx.time * 0.07) * 50;
 		}
 
-		let hDiff = next.heading - current.heading;
-		if (hDiff > 180) hDiff -= 360;
-		if (hDiff < -180) hDiff += 360;
+		const hDiff = shortestAngleDelta(current.heading, next.heading);
 		this.heading = normalizeHeading(current.heading + hDiff * t + Math.sin(ctx.time * 0.05) * 0.25);
 		this.pitch = this.#altitudePitch() + Math.sin(ctx.time * 0.04) * 1.0;
 

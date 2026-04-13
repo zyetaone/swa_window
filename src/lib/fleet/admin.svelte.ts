@@ -6,7 +6,7 @@ import type { DeviceInfo, DisplayConfig } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 import { BaseTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
-import { safeParse } from './validation';
+import { safeParse } from '$lib/validation';
 
 export type Transport = 'ws' | 'sse';
 

@@ -10,7 +10,7 @@
  */
 
 import { clamp } from '$lib/utils';
-import { AIRCRAFT, AMBIENT } from '$lib/constants';
+import { AIRCRAFT, AMBIENT, MICRO_EVENTS } from '$lib/constants';
 import type { WeatherType, LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
@@ -125,7 +125,9 @@ export class WorldEngine {
 		if (types.length === 0) return;
 
 		const type = types[Math.floor(Math.random() * types.length)];
-		const duration = type === 'bird' ? 8 : type === 'shooting-star' ? 1.5 : 45;
+		const duration = type === 'bird' ? MICRO_EVENTS.BIRD_DURATION
+			: type === 'shooting-star' ? MICRO_EVENTS.SHOOTING_STAR_DURATION
+			: MICRO_EVENTS.CONTRAIL_DURATION;
 		this.microEvent = { type, duration, elapsed: 0, x: 10 + Math.random() * 80, y: type === 'bird' ? 20 + Math.random() * 60 : 10 + Math.random() * 30 };
 	}
 

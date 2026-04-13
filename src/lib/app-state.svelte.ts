@@ -13,9 +13,10 @@
 import { setContext, getContext } from 'svelte';
 import { clamp, getSkyState } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
+import { QUALITY_MODES } from '$lib/types';
 import type { SkyState, LocationId, WeatherType, QualityMode, DisplayMode, SimulationContext } from '$lib/types';
 import { loadPersistedState, type PersistedState } from '$lib/persistence';
-import { isValidWeather } from '$lib/fleet/validation';
+import { isValidWeather } from '$lib/validation';
 import { pickNextLocation } from '$lib/simulation/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 import { FlightSimEngine } from '$lib/simulation/flight.svelte';
@@ -334,10 +335,9 @@ export class WindowModel {
 		if (this.#qualityCheckTimer < 5) return;
 		this.#qualityCheckTimer = 0;
 
-		const modes: QualityMode[] = ['performance', 'balanced', 'ultra'];
-		const idx = modes.indexOf(this.qualityMode);
-		if (this.measuredFps < 20 && idx > 0)               this.qualityMode = modes[idx - 1];
-		else if (this.measuredFps > 40 && idx < modes.length - 1) this.qualityMode = modes[idx + 1];
+		const idx = QUALITY_MODES.indexOf(this.qualityMode);
+		if (this.measuredFps < 20 && idx > 0)               this.qualityMode = QUALITY_MODES[idx - 1];
+		else if (this.measuredFps > 40 && idx < QUALITY_MODES.length - 1) this.qualityMode = QUALITY_MODES[idx + 1];
 	}
 
 	destroy(): void {

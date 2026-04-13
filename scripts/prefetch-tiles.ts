@@ -1,19 +1,23 @@
 #!/usr/bin/env bun
 
-import { LOCATIONS } from '../src/lib/shared/locations';
-import type { LocationId } from '../src/lib/shared/types';
+import { LOCATIONS } from '../src/lib/locations';
+import type { LocationId } from '../src/lib/types';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
 
 const TILE_SOURCES = {
 	esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+	sentinel2: 'https://roda.sentinel2.live/tiles/{z}/{x}/{y}/L2A/{date}.jpg',
+	landsat8: 'https://landsat2.storage.googleapis.com/tiles/{z}/{x}/{y}.jpg',
 } as const;
 
 type SourceId = keyof typeof TILE_SOURCES;
 
-const TARGET_ZOOMS = [10, 11, 12, 13, 14, 15, 16, 17, 18];
-const DEFAULT_RADIUS_DEGREES = 0.5;
+const DEFAULT_ZOOMS = [12, 13, 14, 15, 16];
+const DEFAULT_RADIUS = 0.3;
 const DELAY_MS = 50;
+
+const SENTINEL2_DATE = '2024-01-15';
 
 interface TileCoord {
 	z: number;
@@ -82,11 +86,23 @@ function getTileBounds(lat: number, lon: number, radiusDegrees: number, z: numbe
 }
 
 function getTileUrl(source: SourceId, tile: TileCoord): string {
-	if (source === 'esri') {
-		return TILE_SOURCES.esri
-			.replace('{z}', String(tile.z))
-			.replace('{y}', String(tile.y))
-			.replace('{x}', String(tile.x));
+	switch (source) {
+		case 'esri':
+			return TILE_SOURCES.esri
+				.replace('{z}', String(tile.z))
+				.replace('{y}', String(tile.y))
+				.replace('{x}', String(tile.x));
+		case 'sentinel2':
+			return TILE_SOURCES.sentinel2
+				.replace('{z}', String(tile.z))
+				.replace('{x}', String(tile.x))
+				.replace('{y}', String(tile.y))
+				.replace('{date}', SENTINEL2_DATE);
+		case 'landsat8':
+			return TILE_SOURCES.landsat8
+				.replace('{z}', String(tile.z))
+				.replace('{x}', String(tile.x))
+				.replace('{y}', String(tile.y));
 	}
 	throw new Error(`Unknown source: ${source}`);
 }
@@ -222,7 +238,7 @@ function generateManifest(tilesDir: string): Manifest {
 		const zoomLevels: Record<number, { tileCount: number; source: SourceId }> = {};
 		let totalTiles = 0;
 
-		for (const z of TARGET_ZOOMS) {
+		for (const z of DEFAULT_ZOOMS) {
 			const count = countExistingTiles(tilesDir, location.id, z);
 			if (count > 0) {
 				zoomLevels[z] = { tileCount: count, source: 'esri' };
@@ -240,8 +256,8 @@ function generateManifest(tilesDir: string): Manifest {
 async function main() {
 	const { locationIds, dryRun } = parseArgs();
 	const targets = locationIds || LOCATIONS.map((l) => l.id);
-	const zooms = TARGET_ZOOMS;
-	const radius = DEFAULT_RADIUS_DEGREES;
+	const zooms = DEFAULT_ZOOMS;
+	const radius = DEFAULT_RADIUS;
 	const tilesDir = join(process.cwd(), 'public', 'tiles');
 	const manifestPath = join(tilesDir, 'manifest.json');
 
