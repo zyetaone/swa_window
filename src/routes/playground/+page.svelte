@@ -24,28 +24,16 @@
 
 	const IMAGERY_SOURCES = [
 		{
+			id: 'stadia',
+			label: 'Stadia Satellite',
+			url: 'https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg',
+			note: 'Free, no auth, global coverage',
+		},
+		{
 			id: 'esri',
 			label: 'ESRI World Imagery',
 			url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-			note: 'No auth, no rate limit, global coverage',
-		},
-		{
-			id: 'mapbox',
-			label: 'Mapbox Satellite',
-			url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${import.meta.env.VITE_MAPBOX_TOKEN ?? ''}`,
-			note: 'Requires VITE_MAPBOX_TOKEN env var',
-		},
-		{
-			id: 'sentinel2',
-			label: 'Sentinel-2 (EOX via MapLibre)',
-			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
-			note: 'Free, global, no auth — works in MapLibre only',
-		},
-		{
-			id: 'mapbox',
-			label: 'Mapbox Satellite',
-			url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${import.meta.env.VITE_MAPBOX_TOKEN ?? ''}`,
-			note: 'Requires VITE_MAPBOX_TOKEN env var',
+			note: 'No auth, no rate limit',
 		},
 	] as const;
 
@@ -55,6 +43,12 @@
 			label: 'Sentinel-2 Cloudless (EOX)',
 			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
 			note: 'Free, global, no auth',
+		},
+		{
+			id: 'stadia',
+			label: 'Stadia Satellite',
+			url: 'https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg',
+			note: 'Free, no auth, global coverage',
 		},
 		{
 			id: 'esri',
@@ -151,12 +145,24 @@
 		}
 	});
 
-	// Fly to Dubai on MapLibre init — already handled by center prop on init
+	// Init/destroy Cesium when tab shows/hides it
+	$effect(() => {
+		if ((activeTab === 'cesium' || activeTab === 'compare') && viewerContainer && !cesiumViewer) {
+			initCesium();
+		}
+	});
+
+	// Destroy Cesium when switching away (free WebGL context)
+	$effect(() => {
+		if (activeTab === 'maplibre' && cesiumViewer) {
+			cesiumViewer.destroy();
+			cesiumViewer = null;
+			cesiumLoaded = false;
+		}
+	});
 
 	onMount(() => {
-		setTimeout(initCesium, 100);
 		return () => {
-			if (raf) cancelAnimationFrame(raf);
 			cesiumViewer?.destroy();
 		};
 	});

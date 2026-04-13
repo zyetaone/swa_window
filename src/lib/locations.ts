@@ -18,12 +18,6 @@ export const LOCATIONS: Location[] = [
 	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 18000, scene: CITY_SCENE },
 	{ id: 'denver', name: 'Denver', lat: 39.8561, lon: -104.6737, utcOffset: -7, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 24000, scene: CITY_SCENE },
 	{ id: 'chicago_midway', name: 'Chicago Midway', lat: 41.7868, lon: -87.7522, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'baltimore', name: 'Baltimore', lat: 39.1774, lon: -76.6684, utcOffset: -5, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 20000, scene: CITY_SCENE },
-	{ id: 'houston', name: 'Houston', lat: 29.6454, lon: -95.2789, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'nashville', name: 'Nashville', lat: 36.1245, lon: -86.6782, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'oakland', name: 'Oakland', lat: 37.7213, lon: -122.2208, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 20000, scene: CITY_SCENE },
-	{ id: 'austin', name: 'Austin', lat: 30.1975, lon: -97.6664, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'atlanta', name: 'Atlanta', lat: 33.6407, lon: -84.4277, utcOffset: -5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
 	// Nature / scenic
 	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, utcOffset: 5.75, hasBuildings: false, defaultAltitude: 38000, nightAltitude: 42000, scene: { fog: { dayDensity: 0.0002, nightDensity: 0.0001, dayBrightness: 0.55, nightBrightness: 0.005 }, clouds: { density: 0.3, speed: 0.3 }, terrain: { exaggeration: 1.5 } } },
 	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, utcOffset: -10, hasBuildings: false, defaultAltitude: 40000, nightAltitude: 45000, scene: { fog: { dayDensity: 0.0012, nightDensity: 0.0006, dayBrightness: 0.45, nightBrightness: 0.01 }, clouds: { density: 0.6, speed: 0.5 }, terrain: { exaggeration: 1.0 } } },

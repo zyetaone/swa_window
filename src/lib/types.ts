@@ -32,13 +32,7 @@ export type LocationId =
 	| 'phoenix'
 	| 'las_vegas'
 	| 'denver'
-	| 'chicago_midway'
-	| 'baltimore'
-	| 'houston'
-	| 'nashville'
-	| 'oakland'
-	| 'austin'
-	| 'atlanta';
+	| 'chicago_midway';
 
 export interface SceneDefaults {
 	fog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };

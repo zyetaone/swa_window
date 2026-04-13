@@ -9,6 +9,7 @@
 		pitch = -45,
 		bearing = 0,
 		imageryUrl = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
+		showAtmosphere = true,
 	}: {
 		lat?: number;
 		lon?: number;
@@ -16,6 +17,7 @@
 		pitch?: number;
 		bearing?: number;
 		imageryUrl?: string;
+		showAtmosphere?: boolean;
 	} = $props();
 
 	let container: HTMLDivElement;
@@ -58,22 +60,27 @@
 						id: 'Satellite',
 						type: 'raster',
 						source: 'satellite',
+						paint: {},
 					},
 				],
-				sky: {
-					'atmosphere-blend': [
-						'interpolate',
-						['linear'],
-						['zoom'],
-						0, 1,
-						5, 1,
-						7, 0,
-					],
-				},
-				light: {
-					anchor: 'map',
-					position: [1.5, 90, 80],
-				},
+				...(showAtmosphere
+					? {
+							sky: {
+								'atmosphere-blend': [
+									'interpolate',
+									['linear'],
+									['zoom'],
+									0, 1,
+									5, 1,
+									7, 0,
+								],
+							},
+							light: {
+								anchor: 'map',
+								position: [1.5, 90, 80],
+							},
+						}
+					: {}),
 			},
 			attributionControl: false,
 		});
@@ -84,6 +91,23 @@
 			map?.remove();
 			map = null;
 		};
+	});
+
+	// React to imagery source changes by swapping the raster tile URL
+	$effect(() => {
+		if (!map || !imageryUrl) return;
+		const source = map.getSource('satellite') as maplibregl.RasterTileSource | undefined;
+		if (source) {
+			// MapLibre doesn't support setTiles on RasterTileSource — recreate
+			map.removeLayer('Satellite');
+			map.removeSource('satellite');
+		}
+		map.addSource('satellite', {
+			type: 'raster',
+			tiles: [imageryUrl],
+			tileSize: 256,
+		});
+		map.addLayer({ id: 'Satellite', type: 'raster', source: 'satellite' });
 	});
 </script>
 
