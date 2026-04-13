@@ -44,5 +44,5 @@ export interface Location {
 	hasBuildings: boolean;
 	defaultAltitude: number;
 	nightAltitude: number;
-	scene?: SceneDefaults;
+	scene: SceneDefaults;
 }

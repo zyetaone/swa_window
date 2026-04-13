@@ -28,6 +28,10 @@ export interface SimulationContext {
 	userAdjustingAltitude: boolean;
 	userAdjustingTime: boolean;
 	userAdjustingAtmosphere: boolean;
+	/** Atmosphere parameters */
+	cloudDensity: number;
+	cloudSpeed: number;
+	haze: number;
 }
 
 /**

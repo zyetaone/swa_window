@@ -171,6 +171,7 @@
 	// BLIND LOGIC (Inlined from Blind.svelte)
 	// ========================================================================
 
+	let blindClipEl: HTMLDivElement | undefined = $state();
 	let isDraggingBlind = $state(false);
 	let blindContainerHeight = 0;
 	const BLIND_SNAP_THRESHOLD = 0.3;

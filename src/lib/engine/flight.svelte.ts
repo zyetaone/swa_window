@@ -35,8 +35,8 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor = $state(AIRCRAFT.ORBIT_MAJOR);
-	orbitRadiusMinor = $state(AIRCRAFT.ORBIT_MINOR);
+	orbitRadiusMajor = $state<number>(AIRCRAFT.ORBIT_MAJOR);
+	orbitRadiusMinor = $state<number>(AIRCRAFT.ORBIT_MINOR);
 	orbitBearing = $state(0);
 	orbitAngle = $state(0);
 
@@ -88,6 +88,16 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 	setAltitude(alt: number): void {
 		if (!Number.isFinite(alt)) return;
 		this.altitude = clamp(alt, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
+	}
+
+	pickNextLocation(timeOfDay: number, currentId: LocationId): LocationId {
+		const isNight = timeOfDay < 5 || timeOfDay >= 20;
+		const candidates = LOCATIONS.filter(l => l.id !== currentId);
+		if (isNight) {
+			const cities = candidates.filter(l => l.hasBuildings);
+			if (cities.length > 0) return cities[Math.floor(Math.random() * cities.length)].id;
+		}
+		return candidates[Math.floor(Math.random() * candidates.length)].id;
 	}
 
 	// ====================================================================

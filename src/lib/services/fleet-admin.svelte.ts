@@ -182,7 +182,7 @@ export class AdminStore extends BaseTransport {
 		});
 	}
 
-	destroy(): void {
+	override destroy(): void {
 		super.destroy();
 		if (this.#healthInterval) {
 			clearInterval(this.#healthInterval);

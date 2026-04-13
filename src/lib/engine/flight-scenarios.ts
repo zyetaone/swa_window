@@ -9,6 +9,7 @@
  */
 
 import type { LocationId, SkyState } from '$lib/shared/types';
+import { LOCATION_IDS } from '$lib/shared/locations';
 
 // ============================================================================
 // TYPES
@@ -453,7 +454,6 @@ export function pickScenario(locationId: LocationId, skyState: SkyState): Flight
 	const pool = SCENARIOS_BY_LOCATION.get(locationId);
 	if (!pool || pool.length === 0) return null;
 
-	// Score scenarios: exact time match = 3, 'any' = 1, mismatch = 0
 	const scored = pool.map(s => ({
 		scenario: s,
 		score: s.preferredTime === skyState ? 3
@@ -461,11 +461,9 @@ export function pickScenario(locationId: LocationId, skyState: SkyState): Flight
 			: 0,
 	}));
 
-	// Filter to only viable scenarios (score > 0)
 	const viable = scored.filter(s => s.score > 0);
 	const candidates = viable.length > 0 ? viable : scored;
 
-	// Weighted random pick (higher score = higher chance)
 	const totalWeight = candidates.reduce((sum, c) => sum + Math.max(c.score, 0.5), 0);
 	let roll = Math.random() * totalWeight;
 	for (const c of candidates) {
@@ -474,6 +472,43 @@ export function pickScenario(locationId: LocationId, skyState: SkyState): Flight
 	}
 
 	return candidates[candidates.length - 1].scenario;
+}
+
+/**
+ * Pick a random next location, excluding the current one.
+ * Weighted by skyState match (exact=3, any=1, mismatch=0).
+ */
+export function pickNextLocation(currentId: LocationId, timeOfDay: number): LocationId {
+	const skyState = getSkyState(timeOfDay);
+	const allLocations = [...LOCATION_IDS].filter(id => id !== currentId);
+	if (allLocations.length === 0) return currentId;
+
+	const allScenarios = SCENARIOS.filter(s => s.locationId !== currentId);
+
+	const scored = allLocations.map((id: LocationId) => {
+		const locScenarios = allScenarios.filter(s => s.locationId === id);
+		let score = 0;
+		for (const s of locScenarios) {
+			if (s.preferredTime === skyState) score += 3;
+			else if (s.preferredTime === 'any') score += 1;
+		}
+		return { id, score: Math.max(score, 0.5) };
+	});
+
+	const total = scored.reduce((sum: number, s: { score: number }) => sum + s.score, 0);
+	let roll = Math.random() * total;
+	for (const s of scored) {
+		roll -= s.score;
+		if (roll <= 0) return s.id;
+	}
+	return scored[scored.length - 1].id;
+}
+
+function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {
+	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
+	if (timeOfDay < 7) return 'dawn';
+	if (timeOfDay >= 18) return 'dusk';
+	return 'day';
 }
 
 /**

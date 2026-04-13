@@ -1,7 +1,7 @@
 import type * as CesiumType from 'cesium';
 import { CESIUM_QUALITY_PRESETS } from '$lib/shared/constants';
 import type { QualityMode } from '$lib/shared/constants';
-import { getIonToken, checkLocalTileServer } from '../config';
+import { getIonToken, checkLocalTileServer, TILE_SERVER_URL } from '../config';
 
 export class TerrainSystem {
 	private readonly viewer: CesiumType.Viewer;

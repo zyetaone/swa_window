@@ -141,8 +141,8 @@
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
-			<span class="connection-badge" class:online={store.connected}>
-				{store.connected ? store.transport.toUpperCase() : 'Disconnected'}
+			<span class="connection-badge" class:online={store.connectionState === 'connected'}>
+				{store.connectionState === 'connected' ? store.transportType.toUpperCase() : 'Disconnected'}
 			</span>
 			<span class="device-count">
 				{onlineCount}/{totalCount} online
@@ -327,7 +327,7 @@
 				<div class="empty-state">
 					<p class="empty-title">No devices registered</p>
 					<p class="empty-desc">
-						{store.connected
+						{store.connectionState === 'connected'
 							? 'Start a display instance — it will auto-register here.'
 							: 'Waiting for server connection...'}
 					</p>
