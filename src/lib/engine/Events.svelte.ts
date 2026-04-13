@@ -1,12 +1,11 @@
 /**
  * EventEngine — micro-events (shooting stars, birds, contrails).
  *
- * Moments of surprise for attentive viewers. Spawns occasional
- * visual events based on time of day (stars at night, birds/contrails by day).
+ * Moments of surprise for attentive viewers.
  */
 
 import { MICRO_EVENTS } from '$lib/shared/constants';
-import type { SkyState } from '$lib/shared/types';
+import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
 
 export interface MicroEvent {
 	type: 'shooting-star' | 'bird' | 'contrail';
@@ -16,17 +15,13 @@ export interface MicroEvent {
 	y: number;
 }
 
-export interface EventContext {
-	skyState: SkyState;
-}
-
-export class EventEngine {
+export class EventEngine implements ISimulationEngine<SimulationContext> {
 	microEvent = $state<MicroEvent | null>(null);
 
 	private timer = 0;
 	private nextEvent: number = MICRO_EVENTS.INITIAL_DELAY;
 
-	tick(delta: number, ctx: EventContext): void {
+	tick(delta: number, ctx: SimulationContext): void {
 		if (this.microEvent) {
 			this.microEvent.elapsed += delta;
 			if (this.microEvent.elapsed >= this.microEvent.duration) {

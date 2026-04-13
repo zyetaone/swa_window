@@ -48,9 +48,9 @@
 	// ========================================================================
 
 	function handleWindowClick() {
-		if (model.isTransitioning) return;
+		if (model.flight.isTransitioning) return;
 		const nextId = model.pickNextLocation();
-		model.flyTo(nextId);
+		model.flight.flyTo(nextId);
 	}
 
 	// ========================================================================
@@ -79,7 +79,7 @@
 
 	const frostAmount = $derived(
 		clamp(
-			(model.altitude - AIRCRAFT.FROST_START_ALTITUDE) / FROST_RANGE,
+			(model.flight.altitude - AIRCRAFT.FROST_START_ALTITUDE) / FROST_RANGE,
 			0,
 			1,
 		),
@@ -96,7 +96,7 @@
 		const hazeContrast = 1 - model.haze * 0.08;
 		const hazeSaturate = 1 - model.haze * 0.1;
 		const brightness = timeBrightness * fx.filterBrightness;
-		const w = model.warpFactor;
+		const w = model.flight.warpFactor;
 
 		// Return 'none' when all factors are identity — avoids creating a
 		// compositing layer that can break WebGL premultiplied alpha output
@@ -119,23 +119,23 @@
 
 	const rainOpacity = $derived(WEATHER_EFFECTS[model.weather].rainOpacity);
 	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);
-	const lightningOpacity = $derived(model.lightningIntensity * 0.3);
-	const lightningX = $derived(model.lightningX);
-	const lightningY = $derived(model.lightningY);
+	const lightningOpacity = $derived(model.atmosphere.lightningIntensity * 0.3);
+	const lightningX = $derived(model.atmosphere.lightningX);
+	const lightningY = $derived(model.atmosphere.lightningY);
 
 	// --- Motion (unified from 4 independent layers) ---
 
-	const turbulenceY = $derived(model.motionOffsetY * 0.3);
-	const turbulenceX = $derived(model.motionOffsetX * 0.3);
-	const turbulenceRotate = $derived(model.motionOffsetY * 0.02);
+	const turbulenceY = $derived(model.motion.motionOffsetY * 0.3);
+	const turbulenceX = $derived(model.motion.motionOffsetX * 0.3);
+	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
 	const breathingY = $derived(
-		model.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE,
+		model.motion.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE,
 	);
-	const bankDegrees = $derived(model.bankAngle);
+	const bankDegrees = $derived(model.motion.bankAngle);
 
 	const motionTransform = $derived.by(() => {
-		const x = turbulenceX + model.engineVibeX;
-		const y = turbulenceY + breathingY + model.engineVibeY;
+		const x = turbulenceX + model.motion.engineVibeX;
+		const y = turbulenceY + breathingY + model.motion.engineVibeY;
 		const rotate = turbulenceRotate + bankDegrees;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg)`;
 	});
@@ -144,12 +144,12 @@
 	// --- Wing silhouette (dark gradient at bottom-left, shifting with bank) ---
 
 	const wingTransform = $derived(
-		`rotate(${(-2 + model.bankAngle * 0.3).toFixed(2)}deg)`,
+		`rotate(${(-2 + model.motion.bankAngle * 0.3).toFixed(2)}deg)`,
 	);
 
 	// --- Micro-events ---
 
-	const microEvent = $derived(model.microEvent);
+	const microEvent = $derived(model.events.microEvent);
 
 	// --- Glass ---
 
@@ -160,7 +160,7 @@
 	// --- Timed click-hint (touch kiosks have no :hover) ---
 	let showHint = $state(false);
 	$effect(() => {
-		if (model.blindOpen && !model.isTransitioning) {
+		if (model.blindOpen && !model.flight.isTransitioning) {
 			const showTimer = setTimeout(() => { showHint = true; }, 3000);
 			const hideTimer = setTimeout(() => { showHint = false; }, 8000);
 			return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
@@ -194,7 +194,7 @@
 	);
 
 	function startBlindDrag(pointerY: number) {
-		if (model.isTransitioning) return;
+		if (model.flight.isTransitioning) return;
 		blindContainerHeight = blindClipEl?.offsetHeight ?? 1;
 		isDraggingBlind = true;
 		dragStartBlindY = blindDragY;
@@ -237,7 +237,7 @@
 		type="button"
 		aria-label="Fly to a new destination"
 		style:background={skyBackground}
-		disabled={model.isTransitioning}
+		disabled={model.flight.isTransitioning}
 	>
 		<!-- Scene content — shifts with turbulence/bank, clipped by the fixed viewport -->
 		<div
@@ -257,8 +257,8 @@
 					speed={cloudSpeed}
 					skyState={model.skyState}
 					time={elapsedTime}
-					heading={model.heading}
-					altitude={model.altitude}
+					heading={model.flight.heading}
+					altitude={model.flight.altitude}
 					windAngle={windAngle}
 				/>
 			</div>

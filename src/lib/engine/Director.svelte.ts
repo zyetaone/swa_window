@@ -1,25 +1,23 @@
 /**
  * DirectorEngine — auto-pilot location selection.
  *
- * "Loiter" for 2-5 minutes over the current city, then suggest a new
- * destination. Returns LocationId | null (intention, not side-effect).
- * The coordinator decides whether to execute the flyTo.
+ * Suggests a new destination after loitering.
  */
 
 import type { LocationId } from '$lib/shared/types';
+import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
 
-export interface DirectorContext {
-	userAdjusting: boolean;
+export interface DirectorContext extends SimulationContext {
 	pickNextLocation: () => LocationId;
 }
 
-export class DirectorEngine {
+export class DirectorEngine implements ISimulationEngine<DirectorContext, LocationId | null> {
 	private timer = 0;
 	private timeToNext = 120 + Math.random() * 180;
 
 	/** Returns a LocationId to fly to, or null if no action needed. */
 	tick(delta: number, ctx: DirectorContext): LocationId | null {
-		if (ctx.userAdjusting) {
+		if (ctx.userAdjustingAltitude || ctx.userAdjustingTime) {
 			this.timer = 0;
 			return null;
 		}

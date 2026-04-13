@@ -2,25 +2,21 @@
  * MotionEngine — turbulence, banking, breathing, engine vibration.
  *
  * Pure simulation: reads flight context, writes motion offsets.
- * No DOM, no Cesium, no Svelte components.
- *
- * Output fields are $state so consumers (Window.svelte, CesiumManager)
- * react automatically when values change.
  */
 
 import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/shared/constants';
-import type { WeatherType } from '$lib/shared/types';
+import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
 
-export interface MotionContext {
-	time: number;
-	heading: number;
-	altitude: number;
-	weather: WeatherType;
+/**
+ * MotionContext includes additional derived field: turbulenceLevel.
+ * This is provided by the coordinator (WindowModel).
+ */
+export interface MotionContext extends SimulationContext {
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
 }
 
-export class MotionEngine {
+export class MotionEngine implements ISimulationEngine<MotionContext> {
 	// ── Reactive outputs (read by Window.svelte, CesiumManager) ─────────────
 	motionOffsetX = $state(0);
 	motionOffsetY = $state(0);

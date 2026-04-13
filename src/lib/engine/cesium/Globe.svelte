@@ -12,6 +12,7 @@
 	import { useAppState } from '$lib/core';
 	import { CesiumManager } from './manager';
 	import { COLOR_GRADING_GLSL } from './shaders';
+	import { initCesiumGlobal } from '$lib/cesium/config';
 
 	const model = useAppState();
 
@@ -26,13 +27,7 @@
 	onMount(async () => {
 		try {
 			const CesiumModule = await import('cesium');
-			(globalThis as Record<string, unknown>).CESIUM_BASE_URL = '/cesiumStatic';
-
-			// Set Ion token so all Cesium ion assets (terrain, buildings, imagery) use it
-			const token = (import.meta as any).env?.VITE_CESIUM_ION_TOKEN;
-			if (token) {
-				CesiumModule.Ion.defaultAccessToken = token;
-			}
+			initCesiumGlobal(CesiumModule);
 
 			cesium = new CesiumManager(model, CesiumModule);
 			await cesium.start(viewerContainer, COLOR_GRADING_GLSL);

@@ -55,11 +55,11 @@ export const COLOR_GRADING_GLSL = `
 		rgb += lightColor * lum * 2.0 * u_nightFactor;
 
 		// --- Dark Void Crush ---
-		// Push non-city terrain to true black at night so city light islands pop.
-		// Rural areas and ocean become deep black; only lit areas survive.
-		// brightGuard exempts sun/sky highlights from being crushed to black.
+		// Tame the shadow crush — keep terrain visible at night.
+		// 0.3 instead of 0.7 means dim terrain loses ~30% brightness instead of 70%.
+		// Lit city areas survive fine; rural terrain stays legible.
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
-		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * 0.7 * (1.0 - brightGuard));
+		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * 0.3 * (1.0 - brightGuard));
 
 		// Light pollution glow (subtle warm haze — only near bright sources)
 		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;

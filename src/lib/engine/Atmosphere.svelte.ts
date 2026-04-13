@@ -3,15 +3,12 @@
  *
  * Lightning: random flashes during storm weather.
  * Randomization: slow-drifts cloud density, haze, speed, weather.
- *
- * tickRandomize returns a patch (intention) rather than mutating shared
- * state directly — the coordinator applies it. This prevents the engine
- * from conflicting with UI/fleet writes to the same fields.
  */
 
 import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, AMBIENT } from '$lib/shared/constants';
 import type { WeatherType } from '$lib/shared/types';
+import type { ISimulationEngine, SimulationContext } from './ISimulationEngine';
 
 export interface AtmospherePatch {
 	cloudDensity?: number;
@@ -20,7 +17,14 @@ export interface AtmospherePatch {
 	weather?: WeatherType;
 }
 
-export class AtmosphereEngine {
+export interface AtmosphereContext extends SimulationContext {
+	showLightning: boolean;
+	cloudDensity: number;
+	cloudSpeed: number;
+	haze: number;
+}
+
+export class AtmosphereEngine implements ISimulationEngine<AtmosphereContext, AtmospherePatch | null> {
 	// ── Lightning (reactive outputs) ────────────────────────────────────────────
 	lightningIntensity = $state(0);
 	lightningX = $state(50);
@@ -36,7 +40,12 @@ export class AtmosphereEngine {
 	private nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY
 		+ Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
 
-	tickLightning(delta: number, showLightning: boolean): void {
+	tick(delta: number, ctx: AtmosphereContext): AtmospherePatch | null {
+		this.tickLightning(delta, ctx.showLightning);
+		return this.tickRandomize(delta, ctx);
+	}
+
+	private tickLightning(delta: number, showLightning: boolean): void {
 		if (showLightning) {
 			this.lightningTimer += delta;
 			if (this.lightningIntensity > 0) {
@@ -58,16 +67,10 @@ export class AtmosphereEngine {
 		}
 	}
 
-	/** Returns a patch of ambient shifts, or null if no change this frame. */
-	tickRandomize(delta: number, ctx: {
-		userAdjusting: boolean;
-		cloudDensity: number;
-		cloudSpeed: number;
-		haze: number;
-	}): AtmospherePatch | null {
+	private tickRandomize(delta: number, ctx: AtmosphereContext): AtmospherePatch | null {
 		this.randomizeTimer += delta;
 		if (this.randomizeTimer < this.nextRandomizeTime) return null;
-		if (ctx.userAdjusting) return null;
+		if (ctx.userAdjustingAtmosphere) return null;
 
 		this.randomizeTimer = 0;
 		this.nextRandomizeTime = AMBIENT.SUBSEQUENT_MIN_DELAY

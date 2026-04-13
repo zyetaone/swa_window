@@ -1,30 +1,18 @@
 /**
  * WebSocket Client — connects display to fleet management server
- *
- * Auto-connects on boot, sends register + periodic status messages,
- * handles incoming commands (set_mode, set_scene, set_config).
- * Auto-reconnects with exponential backoff on disconnect.
- *
- * Uses $state.raw for the WebSocket instance — deep-proxying a WebSocket
- * wrecks performance and breaks internal reference checks (same lesson
- * as the Cesium.Viewer fix in PR #3, ea390cb).
  */
 
 import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
 import type { WindowModel } from '$lib/core/WindowModel.svelte';
-
-// ============================================================================
-// DEVICE IDENTITY
-// ============================================================================
+import { BaseTransport } from './BaseTransport';
 
 function getDeviceId(): string {
-	// Allow explicit device name from URL param (?device=aero-display-lobby)
-	const urlDeviceId = new URLSearchParams(window.location.search).get('device');
+	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+	const urlDeviceId = params.get('device');
 	if (urlDeviceId) {
 		localStorage.setItem('aero-device-id', urlDeviceId);
 		return urlDeviceId;
 	}
-
 	const key = 'aero-device-id';
 	let id = localStorage.getItem(key);
 	if (!id) {
@@ -35,6 +23,7 @@ function getDeviceId(): string {
 }
 
 function getDeviceCaps(): DeviceCaps {
+	if (typeof document === 'undefined') return {} as DeviceCaps;
 	const canvas = document.createElement('canvas');
 	const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
 	const renderer = gl
@@ -53,71 +42,47 @@ function getDeviceCaps(): DeviceCaps {
 	};
 }
 
-// ============================================================================
-// CLIENT
-// ============================================================================
-
-export class DisplayWsClient {
+export class DisplayWsClient extends BaseTransport {
 	private ws: WebSocket | null = $state.raw(null);
 	private model: WindowModel;
 	private deviceId: string;
 	private serverUrl: string;
-	private reconnectDelay = 1000;
-	private maxReconnectDelay = 30000;
 	private statusInterval: ReturnType<typeof setInterval> | null = null;
 	private bootTime = Date.now();
-	private destroyed = false;
 
 	constructor(model: WindowModel, serverUrl?: string) {
+		super();
 		this.model = model;
 		this.deviceId = getDeviceId();
-		this.serverUrl = serverUrl
-			|| `ws://${window.location.hostname}:3001/ws?role=display`;
-		console.info(`[ws-client] Connecting to ${this.serverUrl} (device: ${this.deviceId})`);
+		this.serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=display`;
 		this.connect();
 	}
 
-	private connect(): void {
+	connect(): void {
 		if (this.destroyed) return;
-
 		try {
 			this.ws = new WebSocket(this.serverUrl);
-
 			this.ws.onopen = () => {
-				console.info('[ws-client] Connected to fleet server');
-				this.reconnectDelay = 1000;
+				this.onConnected();
 				this.sendRegister();
 				this.startStatusUpdates();
 			};
-
-			this.ws.onmessage = (event) => {
-				this.handleMessage(event.data);
-			};
-
+			this.ws.onmessage = (e) => this.handleMessage(e.data);
 			this.ws.onclose = () => {
 				this.stopStatusUpdates();
-				// If we were using a non-localhost URL and it failed, try localhost
-				if (this.reconnectDelay > 4000 && !this.serverUrl.includes('localhost')) {
-					const fallback = `ws://localhost:3001/ws?role=display`;
-					console.info(`[ws-client] Trying fallback: ${fallback}`);
-					this.serverUrl = fallback;
-					this.reconnectDelay = 1000;
-				}
-				this.scheduleReconnect();
-			};
-
-			this.ws.onerror = () => {
-				// onclose will fire after onerror — no action needed here
+				this.onDisconnected();
 			};
 		} catch {
-			this.scheduleReconnect();
+			this.onDisconnected();
 		}
 	}
 
-	private scheduleReconnect(): void {
-		if (this.destroyed) return;
-		setTimeout(() => this.connect(), this.reconnectDelay);
-		this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
+	disconnect(): void {
+		this.stopStatusUpdates();
+		if (this.ws) {
+			this.ws.close();
+			this.ws = null;
+		}
 	}
 
 	private send(msg: DisplayMessage): void {
@@ -127,7 +92,8 @@ export class DisplayWsClient {
 	}
 
 	private sendRegister(): void {
-		const displayName = new URLSearchParams(window.location.search).get('display');
+		const params = new URLSearchParams(window.location.search);
+		const displayName = params.get('display');
 		this.send({
 			type: 'register',
 			deviceId: this.deviceId,
@@ -161,51 +127,18 @@ export class DisplayWsClient {
 		try { msg = JSON.parse(raw); } catch { return; }
 
 		switch (msg.type) {
-			case 'ping':
-				this.send({ type: 'pong' });
-				break;
-
+			case 'ping': this.send({ type: 'pong' }); break;
 			case 'set_scene':
-				this.model.flyTo(msg.location);
-				if (msg.weather) this.model.setWeather(msg.weather);
+				this.model.flight.flyTo(msg.location);
+				if (msg.weather) this.model.weather = msg.weather;
 				break;
-
-			case 'set_mode':
-				this.model.setDisplayMode(msg.mode, msg.payload);
-				break;
-
-		case 'set_config':
-			this.model.applyPatch(msg.patch);
-			break;
-
-		case 'set_quality':
-			this.model.qualityMode = msg.mode;
-			break;
-
-			case 'tile_update':
-				console.info(`[ws-client] Tile update available: ${msg.locationId} v${msg.version}`);
-				break;
-		}
-	}
-
-	destroy(): void {
-		this.destroyed = true;
-		this.stopStatusUpdates();
-		if (this.ws) {
-			this.ws.close();
-			this.ws = null;
+			case 'set_mode': this.model.setDisplayMode(msg.mode, msg.payload); break;
 		}
 	}
 }
 
-/**
- * Create and connect the display WS client.
- * Pass the server URL via ?server= query param, VITE_FLEET_SERVER env, or auto-detect.
- */
 export function createWsClient(model: WindowModel): DisplayWsClient {
-	const params = new URLSearchParams(window.location.search);
-	const serverUrl = params.get('server')
-		|| import.meta.env.VITE_FLEET_SERVER
-		|| undefined;
-	return new DisplayWsClient(model, serverUrl);
+	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+	const url = params.get('server') || (import.meta as any).env?.VITE_FLEET_SERVER;
+	return new DisplayWsClient(model, url);
 }

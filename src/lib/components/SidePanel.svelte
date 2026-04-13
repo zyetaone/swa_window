@@ -147,14 +147,14 @@
 				<div class="data-item">
 					<span class="data-label">ALT</span>
 					<span class="data-value"
-						>{(model.altitude / 1000).toFixed(1)}<small>k ft</small
+						>{(model.flight.altitude / 1000).toFixed(1)}<small>k ft</small
 						></span
 					>
 				</div>
 				<div class="data-item">
 					<span class="data-label">GS</span>
 					<span class="data-value"
-						>{model.flightSpeed.toFixed(1)}<small>x</small></span
+						>{model.flight.flightSpeed.toFixed(1)}<small>x</small></span
 					>
 				</div>
 				<div class="data-item">
@@ -168,14 +168,14 @@
 		</div>
 
 		<!-- Transition status -->
-		{#if model.isTransitioning && model.cruiseDestinationName}
+		{#if model.flight.isTransitioning && model.flight.cruiseDestinationName}
 			<div class="transition-status">
 				<div class="loader-wrapper">
 					<AirlineLoader />
 				</div>
 				<div class="status-text">
 					<span class="dest-label">DESTINATION</span>
-					<span class="dest-name">{model.cruiseDestinationName}</span>
+					<span class="dest-name">{model.flight.cruiseDestinationName}</span>
 				</div>
 			</div>
 		{/if}
@@ -248,7 +248,7 @@
 				min={0.1}
 				max={3.0}
 				step={0.1}
-				value={model.flightSpeed}
+				value={model.flight.flightSpeed}
 				formatValue={(v) => v.toFixed(1) + "x"}
 				oninput={(e) =>
 					model.applyPatch({
@@ -261,10 +261,10 @@
 				min={AIRCRAFT.MIN_ALTITUDE}
 				max={AIRCRAFT.MAX_ALTITUDE}
 				step={1000}
-				value={model.altitude}
+				value={model.flight.altitude}
 				formatValue={(v) => (v / 1000).toFixed(0) + "k ft"}
 				oninput={(e) =>
-					model.setAltitude(parseFloat(e.currentTarget.value))}
+					model.flight.setAltitude(parseFloat(e.currentTarget.value))}
 			/>
 
 			<div class="divider"></div>

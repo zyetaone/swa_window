@@ -14,16 +14,16 @@
 
 	// HUD derived values
 	const locationName = $derived(model.currentLocation.name);
-	const destName = $derived(model.cruiseDestinationName ?? "");
-	const isCruising = $derived(model.flightMode !== "orbit");
+	const destName = $derived(model.flight.cruiseDestinationName ?? "");
+	const isCruising = $derived(model.flight.flightMode !== "orbit");
 
 	// aria-live announcement for flight transitions
 	let prevTransitioning = false; // plain JS — not reactive, just previous-frame tracking
 	let liveAnnouncement = $state("");
 
 	$effect(() => {
-		const transitioning = model.isTransitioning;
-		const destination = model.cruiseDestinationName;
+		const transitioning = model.flight.isTransitioning;
+		const destination = model.flight.cruiseDestinationName;
 
 		if (transitioning && destination && !prevTransitioning) {
 			liveAnnouncement = `Flying to ${destination}`;
@@ -56,13 +56,13 @@
 					<div class="stat">
 						<span class="label">ALT</span>
 						<span class="value"
-							>{(model.altitude / 1000).toFixed(1)}<small>k ft</small></span
+							>{(model.flight.altitude / 1000).toFixed(1)}<small>k ft</small></span
 						>
 					</div>
 					<div class="stat">
 						<span class="label">GS</span>
 						<span class="value"
-							>{model.flightSpeed.toFixed(1)}<small>x</small></span
+							>{model.flight.flightSpeed.toFixed(1)}<small>x</small></span
 						>
 					</div>
 					<div class="stat">
