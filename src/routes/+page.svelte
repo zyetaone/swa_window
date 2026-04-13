@@ -12,6 +12,7 @@
 	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/core";
 	import type { LocationId } from "$lib/core";
 	import { savePersistedState } from "$lib/core/persistence";
+	import { createWsClient } from "$lib/core/ws-client.svelte";
 	import Window from "$lib/layers/Window.svelte";
 	import Controls from "$lib/layers/Controls.svelte";
 	import SidePanel from "$lib/layers/SidePanel.svelte";
@@ -38,6 +39,20 @@
 		const data = model.getPersistedSnapshot();
 		const timeout = setTimeout(() => savePersistedState(data), 2000);
 		return () => clearTimeout(timeout);
+	});
+
+	// Fleet server connection — receives admin push (location, weather, config).
+	// Only connects when a server URL is provided via ?server= param or VITE_FLEET_SERVER env.
+	// When null, the display runs standalone with no fleet transport.
+	$effect(() => {
+		if (typeof window === "undefined") return;
+		const serverUrl =
+			new URLSearchParams(window.location.search).get("server") ||
+			import.meta.env.VITE_FLEET_SERVER ||
+			null;
+		if (!serverUrl) return;
+		const client = createWsClient(model);
+		return () => client.destroy();
 	});
 
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)

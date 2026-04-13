@@ -15,6 +15,7 @@
 import { clamp, lerp, normalizeHeading } from './utils';
 import { AIRCRAFT, FLIGHT_FEEL, AMBIENT, MICRO_EVENTS } from './constants';
 import type { SkyState, LocationId, WeatherType } from './types';
+import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import { LOCATIONS, LOCATION_MAP } from './locations';
 import { loadPersistedState, safeNum, type PersistedState } from './persistence';
 import { WEATHER_EFFECTS } from './constants';
@@ -39,6 +40,7 @@ export interface PatchableState {
 	nightLightIntensity: number;
 	flightSpeed: number;
 	syncToRealTime: boolean;
+	showClouds: boolean;
 }
 
 // ============================================================================
@@ -88,6 +90,18 @@ export class WindowModel {
 	blindOpen = $state(true);
 	showBuildings = $state(true);
 	showClouds = $state(true);
+
+	// --- Display mode (fleet-managed) ---
+	displayMode = $state<DisplayMode>('flight');
+	videoUrl = $state('');
+	isFlightMode = $derived(this.displayMode === 'flight');
+	isScreensaverMode = $derived(this.displayMode === 'screensaver');
+	isVideoMode = $derived(this.displayMode === 'video');
+
+	// --- FPS tracking (for fleet health reporting) ---
+	private _frameCount = 0;
+	private _fpsLastTime = performance.now();
+	measuredFps = $state(0);
 
 	// --- Night rendering ---
 	// terrainDarkness=0: terrain stays bright at night, color grading shader
@@ -381,6 +395,41 @@ export class WindowModel {
 	toggleBuildings(): void { this.showBuildings = !this.showBuildings; }
 	toggleClouds(): void { this.showClouds = !this.showClouds; }
 
+	/** Called by RAF loop on each frame to compute measured FPS */
+	reportFrame(): void {
+		this._frameCount++;
+		const now = performance.now();
+		const elapsed = now - this._fpsLastTime;
+		if (elapsed >= 1000) {
+			this.measuredFps = Math.round((this._frameCount * 1000) / elapsed);
+			this._frameCount = 0;
+			this._fpsLastTime = now;
+		}
+	}
+
+	/** Switch display mode (flight / screensaver / video) */
+	setDisplayMode(mode: DisplayMode, payload?: string): void {
+		const prev = this.displayMode;
+		this.displayMode = mode;
+
+		if (mode === 'video' && payload) {
+			this.videoUrl = payload;
+		}
+
+		// Screensaver: slow dreamy orbit, sync to real time, ensure blind is open
+		if (mode === 'screensaver') {
+			this.flightSpeed = 0.3;
+			this.syncToRealTime = true;
+			this.blindOpen = true;
+		}
+
+		// Flight: restore normal speed from screensaver, ensure blind open
+		if (mode === 'flight' && prev === 'screensaver') {
+			this.flightSpeed = 1.0;
+			this.blindOpen = true;
+		}
+	}
+
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
 		if (type === 'altitude') this.userAdjustingAltitude = true;
 		else if (type === 'time') this.userAdjustingTime = true;
@@ -395,20 +444,30 @@ export class WindowModel {
 		}, 8000);
 	}
 
-	/** Validated batch update from UI controls */
-	applyPatch(patch: Partial<PatchableState>): void {
-		if (patch.altitude !== undefined) this.setAltitude(patch.altitude);
-		if (patch.timeOfDay !== undefined) this.setTime(patch.timeOfDay);
+	/** Validated batch update from UI controls or fleet commands */
+	applyPatch(patch: Partial<PatchableState> | DisplayConfig): void {
+		if (patch.altitude !== undefined) {
+			this.setAltitude(patch.altitude);
+			this.onUserInteraction('altitude');
+		}
+		if (patch.timeOfDay !== undefined) {
+			this.setTime(patch.timeOfDay);
+			this.onUserInteraction('time');
+		}
 		if (patch.heading !== undefined) this.setHeading(patch.heading);
-		if (patch.pitch !== undefined) this.setPitch(patch.pitch);
+		if ('pitch' in patch && patch.pitch !== undefined) this.setPitch(patch.pitch);
 		if (patch.weather !== undefined) this.setWeather(patch.weather);
-		if (patch.cloudDensity !== undefined) this.setCloudDensity(patch.cloudDensity);
-		if (patch.terrainDarkness !== undefined) this.setTerrainDarkness(patch.terrainDarkness);
-		if (patch.cloudSpeed !== undefined) this.cloudSpeed = clamp(patch.cloudSpeed, 0.1, 3);
-		if (patch.haze !== undefined) this.haze = clamp(patch.haze, 0, 0.15);
+		if (patch.cloudDensity !== undefined) {
+			this.setCloudDensity(patch.cloudDensity);
+			this.onUserInteraction('atmosphere');
+		}
+		if ('terrainDarkness' in patch && patch.terrainDarkness !== undefined) this.setTerrainDarkness(patch.terrainDarkness);
+		if ('cloudSpeed' in patch && patch.cloudSpeed !== undefined) this.cloudSpeed = clamp(patch.cloudSpeed, 0.1, 3);
+		if ('haze' in patch && patch.haze !== undefined) this.haze = clamp(patch.haze, 0, 0.15);
 		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
 		if (patch.flightSpeed !== undefined) this.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined) this.syncToRealTime = patch.syncToRealTime;
+		if (patch.showClouds !== undefined) this.showClouds = patch.showClouds;
 	}
 
 	destroy(): void {

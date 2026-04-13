@@ -41,6 +41,7 @@
 				const dt = Math.min((now - lastTime) / 1000, 0.1);
 				lastTime = now;
 				model.tick(dt);
+				model.reportFrame();
 				elapsedTime += dt;
 				consecutiveErrors = 0;
 			} catch {
