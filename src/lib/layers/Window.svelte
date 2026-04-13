@@ -313,9 +313,8 @@
 		handleEnd(e.clientY, e.clientX);
 	}
 
-	function onDoubleClick() {
-		model.toggleBlind();
-	}
+	// Double-click and long-press disabled for kiosk mode —
+	// only drag gesture controls the blind, preventing accidental triggers.
 
 	// --- Blind handle discoverability (plays once per session) ---
 	let hasAnimated = $state(false);
@@ -350,7 +349,6 @@
 	onmousedown={onMouseDown}
 	onmousemove={onMouseMove}
 	onmouseup={onMouseUp}
-	ondblclick={onDoubleClick}
 	onkeydown={(e) => {
 		if (e.key === "Enter" || e.key === " ") {
 			model.toggleBlind();
@@ -468,21 +466,22 @@
 
 	<!-- Blind -->
 	<div class="blind-clip">
-		<button
+		<div
 			class="blind-overlay"
 			class:discoverable={!model.blindOpen && !hasAnimated}
-			onclick={() => { model.blindOpen = true; }}
 			onanimationend={onHandleAnimationEnd}
-			type="button"
-			aria-label="Open window blind"
-			disabled={model.isTransitioning}
+			role="slider"
+			aria-label="Window blind — drag to open or close"
+			aria-valuenow={Math.round(Math.abs(blindDragY))}
+			aria-valuemin={0}
+			aria-valuemax={105}
 			style:transform={blindTransform}
 			style:transition={blindTransition}
 			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
 		>
 			<div class="blind-slats"></div>
 			<!-- Removing blind-label for cleaner, physical look -->
-		</button>
+		</div>
 	</div>
 </div>
 
