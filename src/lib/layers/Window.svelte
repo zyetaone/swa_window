@@ -24,6 +24,8 @@
 	import { subscribe } from "$lib/engine/loop.svelte";
 	import CesiumViewer from "./CesiumViewer.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
+	import Weather from '$lib/components/Weather.svelte';
+	import MicroEvent from '$lib/components/MicroEvent.svelte';
 	const model = useAppState();
 
 	// ========================================================================
@@ -151,9 +153,6 @@
 	// --- Micro-events ---
 
 	const microEvent = $derived(model.microEvent);
-	const microEventProgress = $derived(
-		microEvent ? microEvent.elapsed / microEvent.duration : 0,
-	);
 
 	// --- Glass ---
 
@@ -368,49 +367,11 @@
 				/>
 			</div>
 
-			<!-- z:2 — Rain streaks -->
-			{#if rainOpacity > 0}
-				<div
-					class="rain-layer"
-					style:z-index={2}
-					style:opacity={rainOpacity}
-					style:--angle="{windAngle}deg"
-				>
-					<div class="rain-near"></div>
-					<div class="rain-far"></div>
-				</div>
-			{/if}
-
-			<!-- z:2 — Positional lightning flash -->
-			{#if lightningOpacity > 0}
-				<div
-					class="lightning-flash"
-					style:z-index={2}
-					style:opacity={lightningOpacity}
-					style:--lx="{lightningX}%"
-					style:--ly="{lightningY}%"
-				></div>
-			{/if}
+			<!-- z:2 Rain + Lightning, z:5 Frost -->
+			<Weather {rainOpacity} {windAngle} {lightningOpacity} {lightningX} {lightningY} {frostAmount} />
 
 			<!-- z:3 — Micro-events (shooting stars, birds, contrails) -->
-			{#if microEvent}
-				<div
-					class="micro-event micro-event-{microEvent.type}"
-					style:z-index={3}
-					style:left="{microEvent.x}%"
-					style:top="{microEvent.y}%"
-					style:--progress={microEventProgress}
-				></div>
-			{/if}
-
-			<!-- z:5 — Frost at high altitude -->
-			{#if frostAmount > 0}
-				<div
-					class="frost-layer"
-					style:z-index={5}
-					style:opacity={frostAmount * 0.3}
-				></div>
-			{/if}
+			<MicroEvent event={microEvent} />
 
 			<!-- z:7 — Wing silhouette (bottom-left, shifts with bank) -->
 			<div
@@ -655,90 +616,6 @@
 
 	/* .blind-label telemetry badge removed for de-cluttered UI */
 
-	/* --- Weather: Rain (inlined from WeatherLayer) --- */
-
-	.rain-layer {
-		position: absolute;
-		inset: 0;
-		overflow: hidden;
-		pointer-events: none;
-		transition: opacity 1s ease;
-	}
-
-	.rain-near,
-	.rain-far {
-		position: absolute;
-		inset: -50%;
-		background: repeating-linear-gradient(
-			var(--angle),
-			transparent 0px,
-			transparent 4px,
-			rgba(180, 200, 255, 0.3) 4px,
-			rgba(180, 200, 255, 0.3) 5px
-		);
-	}
-
-	.rain-near {
-		background-size: 100% 80px;
-		animation: rain-fall 0.4s linear infinite;
-	}
-
-	.rain-far {
-		background-size: 100% 50px;
-		opacity: 0.5;
-		animation: rain-fall 0.6s linear infinite;
-	}
-
-	@keyframes rain-fall {
-		from {
-			transform: translate3d(0, -80px, 0);
-		}
-		to {
-			transform: translate3d(0, 0, 0);
-		}
-	}
-
-	/* --- Weather: Lightning --- */
-
-	.lightning-flash {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: radial-gradient(
-			ellipse 60% 50% at var(--lx) var(--ly),
-			rgba(200, 200, 255, 1) 0%,
-			rgba(180, 180, 255, 0.6) 30%,
-			rgba(150, 150, 230, 0.2) 60%,
-			transparent 85%
-		);
-		mix-blend-mode: screen;
-		transition: opacity 0.05s linear;
-	}
-
-	/* --- Effect overlays --- */
-
-	.frost-layer {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: radial-gradient(
-			ellipse 100% 100% at 50% 50%,
-			transparent 40%,
-			rgba(200, 220, 255, 0.4) 70%,
-			rgba(180, 200, 255, 0.6) 90%
-		);
-		animation: frost-breathe 8s ease-in-out infinite alternate;
-	}
-
-	@keyframes frost-breathe {
-		from {
-			opacity: 0.8;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
 	/* --- Glass vignette --- */
 
 	.glass-surface {
@@ -791,108 +668,6 @@
 			rgba(40, 40, 50, 0.25) 40%,
 			transparent 60%
 		);
-	}
-
-	/* --- Micro-events --- */
-
-	.micro-event {
-		position: absolute;
-		pointer-events: none;
-	}
-
-	.micro-event-shooting-star {
-		width: 2px;
-		height: 60px;
-		background: linear-gradient(
-			180deg,
-			rgba(255, 255, 255, 0.9) 0%,
-			rgba(200, 220, 255, 0.5) 40%,
-			transparent 100%
-		);
-		transform: rotate(-35deg);
-		opacity: calc(1 - var(--progress));
-		animation: shooting-star 1.5s linear forwards;
-	}
-
-	@keyframes shooting-star {
-		from {
-			transform: rotate(-35deg) translate(0, 0);
-		}
-		to {
-			transform: rotate(-35deg) translate(120px, 200px);
-		}
-	}
-
-	.micro-event-bird {
-		width: 12px;
-		height: 4px;
-		background: rgba(20, 20, 20, 0.6);
-		border-radius: 50%;
-		opacity: calc(1 - var(--progress) * var(--progress));
-		animation: bird-fly 8s linear forwards;
-	}
-
-	.micro-event-bird::before,
-	.micro-event-bird::after {
-		content: "";
-		position: absolute;
-		top: -2px;
-		width: 8px;
-		height: 3px;
-		background: rgba(20, 20, 20, 0.5);
-		border-radius: 50%;
-		animation: bird-flap 0.3s ease-in-out infinite alternate;
-	}
-
-	.micro-event-bird::before {
-		left: -6px;
-		transform-origin: right center;
-	}
-
-	.micro-event-bird::after {
-		right: -6px;
-		transform-origin: left center;
-	}
-
-	@keyframes bird-fly {
-		from {
-			transform: translate(0, 0);
-		}
-		to {
-			transform: translate(-200px, 30px);
-		}
-	}
-
-	@keyframes bird-flap {
-		from {
-			transform: rotate(-15deg);
-		}
-		to {
-			transform: rotate(15deg);
-		}
-	}
-
-	.micro-event-contrail {
-		width: 1px;
-		height: 1px;
-		opacity: calc(0.6 * (1 - var(--progress)));
-	}
-
-	.micro-event-contrail::after {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: calc(var(--progress) * 200px);
-		height: 2px;
-		background: linear-gradient(
-			90deg,
-			transparent 0%,
-			rgba(255, 255, 255, 0.4) 30%,
-			rgba(255, 255, 255, 0.6) 100%
-		);
-		filter: blur(1px);
-		transform: rotate(-5deg);
 	}
 
 	/* --- UI overlays --- */
