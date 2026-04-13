@@ -3,7 +3,9 @@
  */
 
 import type { DeviceInfo, LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-import { BaseTransport } from './base-transport';
+import { BaseTransport } from './base-transport.svelte';
+import { resolveFleetUrl } from './fleet-url';
+import { safeParse } from './fleet-validation';
 
 export type Transport = 'ws' | 'sse';
 
@@ -36,8 +38,9 @@ export class AdminStore extends BaseTransport {
 
 	constructor(serverUrl?: string, forceTransport?: Transport) {
 		super();
-		this.#wsUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=admin`;
-		this.apiBase = this.#wsUrl.replace(/^ws(s?):\/\//, 'http$1://').replace(/\/ws.*$/, '');
+		const endpoint = resolveFleetUrl('admin', serverUrl);
+		this.#wsUrl = endpoint.wsUrl;
+		this.apiBase = endpoint.apiBase;
 
 		if (forceTransport) {
 			this.transportType = forceTransport;
@@ -91,8 +94,8 @@ export class AdminStore extends BaseTransport {
 	}
 
 	#handleEvent(raw: string): void {
-		let msg: any;
-		try { msg = JSON.parse(raw); } catch { return; }
+		const msg = safeParse<any>(raw);
+		if (!msg) return;
 		switch (msg.type) {
 			case 'device_registered': this.#upsertDevice(msg.device); break;
 			case 'device_status': this.#updateDeviceStatus(msg.deviceId, msg); break;
@@ -139,72 +142,52 @@ export class AdminStore extends BaseTransport {
 		}
 	}
 
-	async #fetchDevices(): Promise<void> {
+	async #request<T = unknown>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T | null> {
 		try {
-			const res = await fetch(`${this.apiBase}/api/devices`);
-			if (res.ok) this.devices = await res.json();
-			else console.warn(`[FleetAdmin] #fetchDevices failed: ${res.status}`);
-		} catch (e) { console.warn(`[FleetAdmin] #fetchDevices network error:`, e); }
+			const res = await fetch(`${this.apiBase}${path}`, {
+				method,
+				...(body !== undefined && {
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body),
+				}),
+			});
+			if (!res.ok) { console.warn(`[FleetAdmin] ${method} ${path}: ${res.status}`); return null; }
+			return method === 'GET' ? await res.json() : null;
+		} catch (e) { console.warn(`[FleetAdmin] ${method} ${path} network error:`, e); return null; }
+	}
+
+	async #fetchDevices(): Promise<void> {
+		const data = await this.#request<DeviceInfo[]>('/api/devices');
+		if (data) this.devices = data;
 	}
 
 	#startHealthPolling(): void {
 		const poll = async () => {
-			try {
-				const res = await fetch(`${this.apiBase}/api/health`);
-				if (res.ok) {
-					const data = await res.json();
-					this.fleetHealth = data.fleet;
-					this.alerts = data.alerts;
-					this.serverUptime = data.serverUptime;
-				}
-			} catch {}
+			const data = await this.#request<{ fleet: FleetHealth; alerts: HealthAlert[]; serverUptime: number }>('/api/health');
+			if (data) {
+				this.fleetHealth = data.fleet;
+				this.alerts = data.alerts;
+				this.serverUptime = data.serverUptime;
+			}
 		};
 		poll();
 		this.#healthInterval = setInterval(poll, 10000);
 	}
 
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType) {
-		try {
-			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/scene`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ location, weather }),
-			});
-			if (!res.ok) console.warn(`[FleetAdmin] pushScene ${deviceId} failed: ${res.status}`);
-		} catch (e) { console.warn(`[FleetAdmin] pushScene ${deviceId} network error:`, e); }
+		await this.#request(`/api/devices/${deviceId}/scene`, 'POST', { location, weather });
 	}
 
 	async pushMode(deviceId: string, mode: DisplayMode, payload?: string) {
-		try {
-			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/mode`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ mode, payload }),
-			});
-			if (!res.ok) console.warn(`[FleetAdmin] pushMode ${deviceId} failed: ${res.status}`);
-		} catch (e) { console.warn(`[FleetAdmin] pushMode ${deviceId} network error:`, e); }
+		await this.#request(`/api/devices/${deviceId}/mode`, 'POST', { mode, payload });
 	}
 
 	async pushConfig(deviceId: string, config: DisplayConfig) {
-		try {
-			const res = await fetch(`${this.apiBase}/api/devices/${deviceId}/config`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(config),
-			});
-			if (!res.ok) console.warn(`[FleetAdmin] pushConfig ${deviceId} failed: ${res.status}`);
-		} catch (e) { console.warn(`[FleetAdmin] pushConfig ${deviceId} network error:`, e); }
+		await this.#request(`/api/devices/${deviceId}/config`, 'POST', config);
 	}
 
 	async broadcastScene(location: LocationId, weather?: WeatherType) {
-		try {
-			const res = await fetch(`${this.apiBase}/api/broadcast/scene`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ location, weather }),
-			});
-			if (!res.ok) console.warn(`[FleetAdmin] broadcastScene failed: ${res.status}`);
-		} catch (e) { console.warn(`[FleetAdmin] broadcastScene network error:`, e); }
+		await this.#request('/api/broadcast/scene', 'POST', { location, weather });
 	}
 
 	override destroy(): void {

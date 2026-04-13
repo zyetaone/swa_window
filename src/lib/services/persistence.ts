@@ -1,6 +1,7 @@
 import type { LocationId, WeatherType } from '$lib/shared/types';
 import { LOCATION_IDS } from '$lib/shared/locations';
 import { AIRCRAFT } from '$lib/shared/constants';
+import { isValidWeather } from './fleet-validation';
 
 const STORAGE_KEY = 'aero-window-v2';
 
@@ -47,9 +48,8 @@ export function loadPersistedState(): Partial<PersistedState> {
 				delete parsed.location;
 			}
 		}
-		const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
 		if (parsed.weather !== undefined) {
-			if (typeof parsed.weather !== 'string' || !VALID_WEATHER.includes(parsed.weather)) {
+			if (!isValidWeather(parsed.weather)) {
 				delete parsed.weather;
 			}
 		}

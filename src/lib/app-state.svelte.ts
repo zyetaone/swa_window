@@ -17,6 +17,7 @@ import type { QualityMode } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode } from '$lib/shared/protocol';
 import { loadPersistedState, type PersistedState } from '$lib/services/persistence';
+import { isValidWeather } from '$lib/services/fleet-validation';
 import { pickNextLocation } from '$lib/engine/flight-scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { FlightSimEngine } from '$lib/engine/flight-engine.svelte';
@@ -229,12 +230,19 @@ export class WindowModel {
 		if (payload && mode === 'video') this.videoUrl = payload;
 	}
 
-	applyPatch(patch: Partial<PatchableState>): void {
-		const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
+	applyScene(locationId: LocationId, weather?: WeatherType): void {
+		this.flight.flyTo(locationId);
+		if (weather) this.weather = weather;
+	}
 
+	setQualityMode(mode: QualityMode): void {
+		this.qualityMode = mode;
+	}
+
+	applyPatch(patch: Partial<PatchableState>): void {
 		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
-		if (patch.weather !== undefined && VALID_WEATHER.includes(patch.weather)) {
+		if (patch.weather !== undefined && isValidWeather(patch.weather)) {
 			this.weather = patch.weather;
 			this.onUserInteraction('atmosphere');
 		}

@@ -19,8 +19,10 @@ export interface FleetClientModel {
 	location: LocationId;
 	weather: WeatherType;
 	qualityMode: QualityMode;
-	flight: { flyTo(locationId: LocationId): void };
+	/** Navigate to a location, optionally setting weather. */
+	applyScene(location: LocationId, weather?: WeatherType): void;
 	setDisplayMode(mode: DisplayMode, payload?: string): void;
+	setQualityMode(mode: QualityMode): void;
 	applyPatch(patch: Partial<DisplayConfig>): void;
 }
 

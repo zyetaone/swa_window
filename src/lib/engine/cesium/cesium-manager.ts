@@ -141,7 +141,7 @@ export class CesiumManager {
 		const v = this.viewer;
 		if (v.scene.postProcessStages?.bloom) v.scene.postProcessStages.bloom.enabled = false;
 		try {
-			const existing = (v.scene.postProcessStages as any).find((s: any) => s.name === 'aero-color-grade');
+			const existing = (v.scene.postProcessStages as any).find?.((s: any) => s.name === 'aero-color-grade');
 			if (existing) { existing.enabled = true; return; }
 			const stage = new this.CesiumModule.PostProcessStage({
 				name: 'aero-color-grade',

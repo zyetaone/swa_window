@@ -2,9 +2,11 @@
  * WebSocket Client — connects display to fleet management server
  */
 
-import type { ServerMessage, DisplayMessage, DeviceCaps, DisplayMode, FleetClientModel } from '$lib/shared/protocol';
+import type { ServerMessage, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/shared/protocol';
 import { LOCATION_IDS } from '$lib/shared/locations';
-import { BaseTransport } from './base-transport';
+import { BaseTransport } from './base-transport.svelte';
+import { resolveFleetUrl } from './fleet-url';
+import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from './fleet-validation';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -54,7 +56,7 @@ export class DisplayWsClient extends BaseTransport {
 		super();
 		this.#model = model;
 		this.#deviceId = getDeviceId();
-		this.#serverUrl = serverUrl || `ws://${window.location.hostname}:3001/ws?role=display`;
+		this.#serverUrl = serverUrl || resolveFleetUrl('display').wsUrl;
 		this.connect();
 	}
 
@@ -123,27 +125,24 @@ export class DisplayWsClient extends BaseTransport {
 	}
 
 	#handleMessage(raw: string): void {
-		let msg: ServerMessage;
-		try { msg = JSON.parse(raw); } catch { return; }
-
-		const VALID_MODES: DisplayMode[] = ['flight', 'screensaver', 'video'];
-		const VALID_WEATHER = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
-		const VALID_QUALITY = ['performance', 'balanced', 'ultra'];
+		const msg = safeParse<ServerMessage>(raw);
+		if (!msg) return;
 
 		switch (msg.type) {
 			case 'ping': this.#send({ type: 'pong' }); break;
 			case 'set_scene':
-				if (LOCATION_IDS.has(msg.location)) this.#model.flight.flyTo(msg.location);
-				if (msg.weather && VALID_WEATHER.includes(msg.weather)) this.#model.weather = msg.weather;
+				if (LOCATION_IDS.has(msg.location)) {
+					this.#model.applyScene(msg.location, isValidWeather(msg.weather) ? msg.weather : undefined);
+				}
 				break;
 			case 'set_mode':
-				if (VALID_MODES.includes(msg.mode)) this.#model.setDisplayMode(msg.mode, msg.payload);
+				if (isValidDisplayMode(msg.mode)) this.#model.setDisplayMode(msg.mode, msg.payload);
 				break;
 			case 'set_config':
 				if (msg.patch && typeof msg.patch === 'object') this.#model.applyPatch(msg.patch);
 				break;
 			case 'set_quality':
-				if (VALID_QUALITY.includes(msg.mode)) this.#model.qualityMode = msg.mode;
+				if (isValidQualityMode(msg.mode)) this.#model.setQualityMode(msg.mode);
 				break;
 		}
 	}
@@ -151,6 +150,7 @@ export class DisplayWsClient extends BaseTransport {
 
 export function createWsClient(model: FleetClientModel): DisplayWsClient {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-	const url = params.get('server') || (import.meta as any).env?.VITE_FLEET_SERVER;
-	return new DisplayWsClient(model, url);
+	const override = params.get('server') || (import.meta as any).env?.VITE_FLEET_SERVER;
+	const { wsUrl } = resolveFleetUrl('display', override);
+	return new DisplayWsClient(model, wsUrl);
 }
