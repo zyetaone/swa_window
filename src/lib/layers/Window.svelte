@@ -22,7 +22,8 @@
 	} from "$lib/core";
 	import { clamp } from "$lib/core/utils";
 	import CesiumViewer from "./CesiumViewer.svelte";
-	import CloudCanvas from './CloudCanvas.svelte';
+	// import CloudCanvas from './CloudCanvas.svelte';
+	import CloudBlobs from './CloudBlobs.svelte';
 	const model = useAppState();
 
 	// ========================================================================
@@ -133,6 +134,9 @@
 	});
 
 	// --- Clouds (inlined from CloudLayer) ---
+
+	// Cloud perspective reserved for Option C evolution (layered cinema mode).
+	// Currently the horizon-band CloudBlobs handles altitude internally.
 
 	const cloudOpacity = $derived(model.effectiveCloudDensity);
 	const cloudSpeed = $derived(model.cloudSpeed);
@@ -297,18 +301,14 @@
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1 — Procedural clouds with camera-driven parallax -->
-			<div class="render-layer" style:z-index={1} style:opacity={cloudOpacity}>
-				<CloudCanvas
+			<!-- z:1 — Cloud deck along the horizon (viewed from above at cruise) -->
+			<div class="render-layer" style:z-index={1}>
+				<CloudBlobs
 					density={cloudOpacity}
-					cloudSpeed={cloudSpeed}
+					speed={cloudSpeed}
 					nightFactor={model.nightFactor}
 					dawnDuskFactor={model.dawnDuskFactor}
-					skyState={model.skyState}
 					time={elapsedTime}
-					heading={model.heading}
-					pitch={model.pitch}
-					altitude={model.altitude}
 				/>
 			</div>
 
