@@ -3,11 +3,11 @@
 	 * Window - Layer compositor + game loop
 	 *
 	 * Owns the RAF tick loop (single game clock).
-	 * Composes: Cesium (terrain) + Three.js clouds + CSS effect overlays.
+	 * Composes: Cesium (terrain) + CSS clouds + CSS effect overlays.
 	 *
 	 * Z-order:
 	 *   0: Cesium (terrain, buildings, NASA night lights, CartoDB roads)
-	 *   1: Clouds (Three.js camera-parallax FBM)
+	 *   1: Clouds (CSS-only feTurbulence + feDisplacementMap via CloudBlobs)
 	 *   2: Weather (CSS rain + lightning)
 	 *   5: Frost
 	 *   7: Wing silhouette
@@ -307,6 +307,9 @@
 					speed={cloudSpeed}
 					skyState={model.skyState}
 					time={elapsedTime}
+					heading={model.heading}
+					altitude={model.altitude}
+					windAngle={windAngle}
 				/>
 			</div>
 
