@@ -9,7 +9,7 @@
 	 */
 
 	import { useAppState } from "$lib/app-state.svelte";
-	import { formatTime } from "$lib/shared/utils";
+	import { formatTime } from "$lib/utils";
 	const model = useAppState();
 
 	// HUD derived values

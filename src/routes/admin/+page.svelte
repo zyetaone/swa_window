@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { AdminStore, type Transport } from '$lib/services/fleet-admin.svelte';
-	import type { LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-	import { LOCATIONS, type QualityMode } from '$lib/shared';
+	import { AdminStore, type Transport } from '$lib/fleet/admin.svelte';
+	import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
+	import type { DisplayConfig } from '$lib/fleet/protocol';
+	import { LOCATIONS } from '$lib/locations';
 	import { onDestroy } from 'svelte';
 
 	// Read config from URL params: ?server=ws://...&transport=sse

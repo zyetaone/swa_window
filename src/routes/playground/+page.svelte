@@ -9,7 +9,7 @@
 	 * Sliders control everything. No WindowModel — raw values only.
 	 */
 
-	import type { SkyState } from '$lib/shared/types';
+	import type { SkyState } from '$lib/types';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 
 	// Simulation state — all controlled by sliders

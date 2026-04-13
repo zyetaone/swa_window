@@ -11,11 +11,11 @@
 
 	import { onDestroy } from "svelte";
 	import { createAppState } from "$lib/app-state.svelte";
-	import { AIRCRAFT } from "$lib/shared/constants";
-	import { LOCATION_MAP } from "$lib/shared/locations";
-	import type { LocationId } from "$lib/shared/types";
-	import { savePersistedState } from "$lib/services/persistence";
-	import { createWsClient } from "$lib/services/fleet-client.svelte";
+	import { AIRCRAFT } from "$lib/constants";
+	import { LOCATION_MAP } from "$lib/locations";
+	import type { LocationId } from "$lib/types";
+	import { savePersistedState } from "$lib/persistence";
+	import { createWsClient } from "$lib/fleet/client.svelte";
 	import Window from "$lib/ui/Window.svelte";
 	import Controls from "$lib/ui/HUD.svelte";
 	import SidePanel from "$lib/ui/SidePanel.svelte";

@@ -11,19 +11,16 @@
  */
 
 import { setContext, getContext } from 'svelte';
-import { clamp } from '$lib/shared/utils';
-import { WEATHER_EFFECTS } from '$lib/shared/constants';
-import type { QualityMode } from '$lib/shared/constants';
-import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
-import type { DisplayMode } from '$lib/shared/protocol';
-import { loadPersistedState, type PersistedState } from '$lib/services/persistence';
-import { isValidWeather } from '$lib/services/fleet-validation';
-import { pickNextLocation } from '$lib/engine/flight-scenarios';
-import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
-import { FlightSimEngine } from '$lib/engine/flight-engine.svelte';
-import { MotionEngine } from '$lib/engine/motion-engine.svelte';
-import { WorldEngine, type WorldContext } from '$lib/engine/world-engine.svelte';
-import type { SimulationContext } from '$lib/engine/types';
+import { clamp, getSkyState } from '$lib/utils';
+import { WEATHER_EFFECTS } from '$lib/constants';
+import type { SkyState, LocationId, WeatherType, QualityMode, DisplayMode, SimulationContext } from '$lib/types';
+import { loadPersistedState, type PersistedState } from '$lib/persistence';
+import { isValidWeather } from '$lib/fleet/validation';
+import { pickNextLocation } from '$lib/simulation/scenarios';
+import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
+import { FlightSimEngine } from '$lib/simulation/flight.svelte';
+import { MotionEngine } from '$lib/simulation/motion.svelte';
+import { WorldEngine } from '$lib/simulation/world.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -117,13 +114,6 @@ export class WindowModel {
 	#qualityCheckTimer = 0;
 
 	// ── Derived ───────────────────────────────────────────────────────────────
-	#computeSkyState(t: number): SkyState {
-		if (t < 5 || t >= 20) return 'night';
-		if (t < 7) return 'dawn';
-		if (t >= 18) return 'dusk';
-		return 'day';
-	}
-
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
 	localTimeOfDay = $derived.by(() => {
 		const offset = this.currentLocation.utcOffset;
@@ -133,7 +123,7 @@ export class WindowModel {
 		return lt;
 	});
 
-	skyState = $derived<SkyState>(this.#computeSkyState(this.timeOfDay));
+	skyState = $derived<SkyState>(getSkyState(this.timeOfDay));
 
 	sceneFog = $derived(this.currentLocation.scene.fog);
 	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
@@ -294,12 +284,10 @@ export class WindowModel {
 
 		this.motion.tick(delta, ctx);
 
-		const wctx = this.#worldCtx;
-		Object.assign(wctx, ctx);
-		wctx.showLightning    = WEATHER_EFFECTS[this.weather].hasLightning;
-		wctx.isOrbitMode      = this.flight.flightMode === 'orbit';
-		wctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
-		const worldPatch = this.world.tick(delta, wctx);
+		ctx.showLightning    = WEATHER_EFFECTS[this.weather].hasLightning;
+		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
+		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
+		const worldPatch = this.world.tick(delta, ctx);
 
 		if (worldPatch.atmosphere) this.applyPatch(worldPatch.atmosphere);
 		if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
@@ -314,13 +302,6 @@ export class WindowModel {
 		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
-	};
-
-	#worldCtx: WorldContext = {
-		...this.#ctx,
-		showLightning: false,
-		isOrbitMode: true,
-		pickNextLocation: () => this.location,
 	};
 
 	#createContext(): SimulationContext {

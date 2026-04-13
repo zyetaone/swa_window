@@ -1,7 +1,7 @@
-import type { LocationId, WeatherType } from '$lib/shared/types';
-import { LOCATION_IDS } from '$lib/shared/locations';
-import { AIRCRAFT } from '$lib/shared/constants';
-import { isValidWeather } from './fleet-validation';
+import type { LocationId, WeatherType } from '$lib/types';
+import { LOCATION_IDS } from '$lib/locations';
+import { AIRCRAFT } from '$lib/constants';
+import { isValidWeather } from '$lib/fleet/validation';
 
 const STORAGE_KEY = 'aero-window-v2';
 

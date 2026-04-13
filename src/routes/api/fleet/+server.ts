@@ -10,7 +10,7 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { fleet } from '$lib/server/fleet-hub';
+import { fleet } from '$lib/fleet/hub';
 
 const CORS = {
 	'Access-Control-Allow-Origin': '*',

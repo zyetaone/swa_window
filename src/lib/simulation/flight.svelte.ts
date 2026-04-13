@@ -2,23 +2,13 @@
  * FlightSimEngine - Flight position, orbit, scenario, and cruise state machine.
  */
 
-import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
-import { AIRCRAFT } from '$lib/shared/constants';
-import type { LocationId, SkyState } from '$lib/shared/types';
-import { LOCATION_MAP } from '$lib/shared/locations';
-import { pickScenario, type FlightScenario } from '$lib/engine/flight-scenarios';
-import type { ISimulationEngine, SimulationContext } from './types';
+import { clamp, lerp, normalizeHeading } from '$lib/utils';
+import { AIRCRAFT } from '$lib/constants';
+import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
+import { LOCATION_MAP } from '$lib/locations';
+import { pickScenario } from '$lib/simulation/scenarios';
 
-export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
-
-/** Events emitted by FlightSimEngine each tick for WindowModel to apply. */
-export interface FlightPatch {
-	blindOpen?: boolean;
-	locationArrived?: LocationId;
-	resetDirector?: boolean;
-}
-
-export class FlightSimEngine implements ISimulationEngine<SimulationContext, FlightPatch> {
+export class FlightSimEngine {
 	// --- Position (reactive) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);

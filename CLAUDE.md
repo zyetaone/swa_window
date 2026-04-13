@@ -22,7 +22,9 @@ No test runner configured. No linter configured. Type checking is the primary va
 
 - **Framework**: SvelteKit 2 with Svelte 5 runes (`$state`, `$derived`, `$effect`)
 - **Terrain**: Cesium.js for real-world imagery, terrain, 3D buildings
+- **Imagery**: Mapbox Satellite (primary) → ESRI World Imagery (fallback, no auth needed)
 - **Clouds**: SVG feTurbulence + CSS animation (no WebGL shader)
+- **Trees**: Procedural CSS-only layer (no images, no WebGL)
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks
 - **State**: Context-based singleton (`setContext`/`getContext`) + composed engine classes
 - **Build**: Vite 7, adapter-node, bundleStrategy:'single', SSR disabled
@@ -83,10 +85,11 @@ Window.svelte (RAF loop via game-loop.svelte)
 +page.svelte (createAppState() sets context, owns side-effects)
 └── useAppState() → model
     ├── Window.svelte (RAF tick, layer compositor, blind drag)
-    │   ├── Globe.svelte (Cesium lifecycle — mounts CesiumManager)
-    │   ├── CloudBlobs.svelte
-    │   ├── Weather.svelte
-    │   └── MicroEvent.svelte
+    │   ├── Globe.svelte (Cesium terrain/buildings — CesiumManager lifecycle)
+    │   ├── CloudBlobs.svelte (SVG feTurbulence clouds)
+    │   ├── Weather.svelte (rain, lightning, frost — CSS)
+    │   ├── TreeLayer.svelte (procedural CSS trees, seeded per location)
+    │   └── MicroEvent.svelte (shooting star, bird, contrail — CSS)
     ├── HUD.svelte (telemetry overlay)
     └── SidePanel.svelte (settings)
 ```
@@ -109,12 +112,42 @@ z:0   Cesium globe (terrain, buildings, night lights)
 z:1   CloudBlobs (SVG feTurbulence + CSS drift)
 z:2   Weather (rain drops + lightning flash)
 z:3   Micro-events (shooting star, bird, contrail)
+z:4   TreeLayer (procedural CSS trees, city parks + nature spots)
 z:5   Frost (altitude-dependent)
 z:7   Wing silhouette
 z:9   Glass vignette
 z:10  Vignette
 z:11  Glass recess rim
 ```
+
+### Imagery Sources (in priority order)
+
+| Source | Auth | Storage | Notes |
+|--------|------|---------|-------|
+| **Local tile server** | `VITE_TILE_SERVER_URL` | ~2-8GB per Pi | Pre-fetched via `bun scripts/prefetch-tiles.ts` |
+| **Mapbox Satellite** | `VITE_MAPBOX_TOKEN` | N/A | 50k req/mo free — good for dev/quick setup |
+| **Sentinel-2 L2A** | `VITE_SENTINEL2=true` | N/A | Free global 10m multispectral — needs tiling proxy |
+| **ESRI World Imagery** | None | N/A | Fallback — reliable, no rate limit, no auth |
+
+### Pre-fetching Tiles for Pi (Always-On Display)
+
+For 24/7 always-on displays, pre-fetch tiles to local storage to eliminate per-tile API costs:
+
+```bash
+# Download all 18 locations (zoom 10-16, ~3-6K tiles/location)
+bun scripts/prefetch-tiles.ts
+
+# Download specific location only
+bun scripts/prefetch-tiles.ts dubai
+
+# Preview what would be downloaded (no network calls)
+bun scripts/prefetch-tiles.ts --dry-run
+```
+
+Tiles saved to `public/tiles/{source}/{locationId}/{z}/{x}/{y}.jpg`.
+Manifest at `public/tiles/manifest.json`.
+
+**Sentinel-2 note:** Uses non-standard path format (`tiles/{z}/{x}/{y}/L2A/{date}.jpg`). A tiling proxy (e.g. tileserver-gl) is needed for direct Cesium integration. The pre-fetch script handles reformatting.
 
 ### User Override Pattern
 
@@ -143,6 +176,15 @@ Singleton RAF loop with subscriber pattern. Auto-starts when first subscriber re
 
 Flat class handling all Cesium concerns: viewer lifecycle, terrain, buildings, imagery, atmosphere sync, post-processing, camera. Receives a `CesiumModelView` interface (not WindowModel directly) to stay decoupled.
 
+### TreeLayer (TreeLayer.svelte)
+
+Pure CSS procedural tree layer. No images, no WebGL, no Cesium dependency.
+- Trees generated from seeded pseudo-random function (stable per location)
+- City/nature spots get 30 trees, others get 8
+- Subtle sway animation via CSS keyframes (3-5s period, -2deg to +2deg)
+- Night dimming via CSS `brightness()` filter
+- Only renders when `showClouds && cloudDensity > 0.1`
+
 ## Routes
 
 - `/` — Main window display (production route for Pi kiosk)
@@ -156,7 +198,8 @@ Flat class handling all Cesium concerns: viewer lifecycle, terrain, buildings, i
 
 ```
 VITE_CESIUM_ION_TOKEN=...     # Required for terrain/imagery (Cesium Ion)
-VITE_TILE_SERVER_URL=...      # Optional, self-hosted tiles for offline
+VITE_MAPBOX_TOKEN=...         # Optional — enables Mapbox Satellite (50k/mo free)
+VITE_TILE_SERVER_URL=...      # Optional — self-hosted tiles for offline
 ```
 
 ## Build Configuration
@@ -164,7 +207,7 @@ VITE_TILE_SERVER_URL=...      # Optional, self-hosted tiles for offline
 - **Cesium assets**: copied via `vite-plugin-static-copy` to `/cesiumStatic`
 - **Bundle**: `bundleStrategy: 'single'` for Pi deployment (enables inlineDynamicImports)
 - **Adapter**: `adapter-node` (Bun serves the build)
-- **CSP**: configured for Cesium Ion, map tile providers, and fleet WS on any LAN host
+- **CSP**: configured for Cesium Ion, Mapbox, ESRI, and fleet WS on any LAN host
 - **SSR**: disabled (`export const ssr = false`)
 - **TypeScript**: strict mode
 

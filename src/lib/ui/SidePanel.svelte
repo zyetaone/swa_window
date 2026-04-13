@@ -6,10 +6,10 @@
 	 * Toggled via tab button on right edge of cabin wall.
 	 */
 	import { useAppState } from "$lib/app-state.svelte";
-	import { LOCATIONS } from "$lib/shared/locations";
-	import { AIRCRAFT } from "$lib/shared/constants";
-	import type { LocationId } from "$lib/shared/types";
-	import { formatTime } from "$lib/shared/utils";
+	import { LOCATIONS } from "$lib/locations";
+	import { AIRCRAFT } from "$lib/constants";
+	import type { LocationId } from "$lib/types";
+	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./Toggle.svelte";
 	import RangeSlider from "./RangeSlider.svelte";

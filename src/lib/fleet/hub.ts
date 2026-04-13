@@ -20,10 +20,9 @@ import type {
 	ServerMessage,
 	DisplayMessage,
 	DeviceInfo,
-	DisplayMode,
 	DisplayConfig,
-} from '$lib/shared/protocol';
-import type { LocationId, WeatherType } from '$lib/shared/types';
+} from '$lib/fleet/protocol';
+import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 
 interface WsLike {
 	send(data: string): void;

@@ -8,7 +8,7 @@
 	 * Z-order 3 (set by parent via inline style).
 	 */
 
-	import type { MicroEventData } from '$lib/engine/world-engine.svelte';
+	import type { MicroEventData } from '$lib/types';
 
 	interface Props {
 		event: MicroEventData | null;

@@ -5,7 +5,7 @@
  * Window.svelte binds `blind.clipEl` and wires the returned handlers directly.
  */
 
-import { clamp } from '$lib/shared/utils';
+import { clamp } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from WindowModel. */
 export interface BlindControl {

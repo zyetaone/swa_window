@@ -9,46 +9,13 @@
  * Returns a WorldPatch each tick so WindowModel can apply changes imperatively.
  */
 
-import { clamp } from '$lib/shared/utils';
-import { AIRCRAFT, AMBIENT } from '$lib/shared/constants';
-import type { WeatherType, LocationId } from '$lib/shared/types';
-import type { ISimulationEngine, SimulationContext } from './types';
-
-// ─── Patch types ─────────────────────────────────────────────────────────────
-
-export interface AtmospherePatch {
-	cloudDensity?: number;
-	cloudSpeed?: number;
-	haze?: number;
-	weather?: WeatherType;
-}
-
-export interface WorldPatch {
-	atmosphere?: AtmospherePatch;
-	nextLocation?: LocationId | null;
-}
-
-// ─── Context ─────────────────────────────────────────────────────────────────
-
-export interface WorldContext extends SimulationContext {
-	showLightning: boolean;
-	isOrbitMode: boolean;
-	pickNextLocation: () => LocationId;
-}
-
-// ─── Shared micro-event type (also imported by MicroEvent.svelte) ────────────
-
-export interface MicroEventData {
-	type: 'shooting-star' | 'bird' | 'contrail';
-	elapsed: number;
-	duration: number;
-	x: number;
-	y: number;
-}
+import { clamp } from '$lib/utils';
+import { AIRCRAFT, AMBIENT } from '$lib/constants';
+import type { WeatherType, LocationId, SimulationContext, AtmospherePatch, WorldPatch, MicroEventData } from '$lib/types';
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
 
-export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> {
+export class WorldEngine {
 	// ── Reactive outputs ──────────────────────────────────────────────────────
 	lightningIntensity = $state(0);
 	lightningX = $state(50);
@@ -70,8 +37,8 @@ export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> 
 
 	// ─────────────────────────────────────────────────────────────────────────
 
-	tick(delta: number, ctx: WorldContext): WorldPatch {
-		this.#tickLightning(delta, ctx.showLightning);
+	tick(delta: number, ctx: SimulationContext): WorldPatch {
+		this.#tickLightning(delta, ctx.showLightning ?? false);
 		this.#tickEvents(delta, ctx);
 
 		const patch: WorldPatch = {};
@@ -112,7 +79,7 @@ export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> 
 
 	// ─── Weather randomisation ────────────────────────────────────────────────
 
-	#tickRandomize(delta: number, ctx: WorldContext): AtmospherePatch | null {
+	#tickRandomize(delta: number, ctx: SimulationContext): AtmospherePatch | null {
 		this.#randomizeTimer += delta;
 		if (this.#randomizeTimer < this.#nextRandomizeTime) return null;
 		if (ctx.userAdjustingAtmosphere) return null;
@@ -135,7 +102,7 @@ export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> 
 
 	// ─── Micro-events ─────────────────────────────────────────────────────────
 
-	#tickEvents(delta: number, ctx: WorldContext): void {
+	#tickEvents(delta: number, ctx: SimulationContext): void {
 		if (this.microEvent) {
 			this.microEvent.elapsed += delta;
 			if (this.microEvent.elapsed >= this.microEvent.duration) {
@@ -164,13 +131,13 @@ export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> 
 
 	// ─── Auto-pilot director ──────────────────────────────────────────────────
 
-	#tickDirector(delta: number, ctx: WorldContext): LocationId | null {
+	#tickDirector(delta: number, ctx: SimulationContext): LocationId | null {
 		if (ctx.userAdjustingAltitude || ctx.userAdjustingTime) { this.#directorTimer = 0; return null; }
 
 		this.#directorTimer += delta;
 		if (this.#directorTimer > this.#timeToNextLocation) {
 			this.#directorTimer = 0;
-			return ctx.pickNextLocation();
+			return ctx.pickNextLocation!();
 		}
 		return null;
 	}

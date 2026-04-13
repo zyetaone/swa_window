@@ -7,7 +7,7 @@
 	 * Ref: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
 	 */
 
-	import type { SkyState } from '$lib/shared/types';
+	import type { SkyState } from '$lib/types';
 
 	interface Props {
 		density?: number;

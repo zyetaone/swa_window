@@ -6,7 +6,7 @@
  * tuning, and weather effects.
  */
 
-import type { WeatherType } from './types';
+import type { WeatherType, QualityMode } from './types';
 
 // =============================================================================
 // AIRCRAFT SYSTEMS
@@ -125,8 +125,6 @@ export const AMBIENT = {
 // =============================================================================
 // CESIUM LAYER THRESHOLDS & TUNING
 // =============================================================================
-
-export type QualityMode = 'performance' | 'balanced' | 'ultra';
 
 export interface CesiumQualityPreset {
 	maximumScreenSpaceError: number;

@@ -6,12 +6,12 @@
  * based on sky state (time of day).
  */
 
-import type { LocationId, SkyState } from '$lib/shared/types';
-import { LOCATION_IDS } from '$lib/shared/locations';
-import { getSkyState } from '$lib/shared/utils';
-import { SCENARIOS, type FlightScenario } from './scenario-data';
+import type { LocationId, SkyState, FlightScenario } from '$lib/types';
+import { LOCATION_IDS } from '$lib/locations';
+import { getSkyState } from '$lib/utils';
+import { SCENARIOS } from './scenario-data';
 
-export type { FlightScenario, Waypoint } from './scenario-data';
+export type { FlightScenario, Waypoint } from '$lib/types';
 
 // ============================================================================
 // LOOKUP

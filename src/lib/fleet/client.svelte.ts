@@ -2,11 +2,11 @@
  * WebSocket Client — connects display to fleet management server
  */
 
-import type { ServerMessage, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/shared/protocol';
-import { LOCATION_IDS } from '$lib/shared/locations';
-import { BaseTransport } from './base-transport.svelte';
-import { resolveFleetUrl } from './fleet-url';
-import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from './fleet-validation';
+import type { ServerMessage, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/fleet/protocol';
+import { LOCATION_IDS } from '$lib/locations';
+import { BaseTransport } from './transport.svelte';
+import { resolveFleetUrl } from './url';
+import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from './validation';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');

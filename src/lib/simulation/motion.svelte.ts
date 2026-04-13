@@ -2,11 +2,11 @@
  * MotionEngine — turbulence, banking, breathing, engine vibration.
  */
 
-import { clamp } from '$lib/shared/utils';
-import { AIRCRAFT, FLIGHT_FEEL } from '$lib/shared/constants';
-import type { ISimulationEngine, SimulationContext } from './types';
+import { clamp } from '$lib/utils';
+import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
+import type { SimulationContext } from '$lib/types';
 
-export class MotionEngine implements ISimulationEngine<SimulationContext> {
+export class MotionEngine {
 	// ── Reactive outputs ───────────────────────────────────────────────────────
 	motionOffsetX = $state(0);
 	motionOffsetY = $state(0);

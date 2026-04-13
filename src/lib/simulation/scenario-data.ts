@@ -8,28 +8,7 @@
  * Waypoint durations total 3-5 minutes per loop so terrain keeps changing.
  */
 
-import type { LocationId } from '$lib/shared/types';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-export interface Waypoint {
-	lat: number;
-	lon: number;
-	altitude: number;    // feet
-	heading: number;     // degrees (0=N, 90=E, 180=S, 270=W)
-	duration: number;    // seconds to reach this waypoint from previous
-}
-
-export interface FlightScenario {
-	id: string;
-	locationId: LocationId;
-	name: string;
-	waypoints: Waypoint[];
-	loop: boolean;
-	preferredTime: 'any' | 'day' | 'night' | 'dawn' | 'dusk';
-}
+import type { FlightScenario } from '$lib/types';
 
 // ============================================================================
 // SCENARIO DATA

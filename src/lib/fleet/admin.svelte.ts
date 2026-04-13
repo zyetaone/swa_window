@@ -2,10 +2,11 @@
  * Admin Store — dual-transport fleet management state
  */
 
-import type { DeviceInfo, LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-import { BaseTransport } from './base-transport.svelte';
-import { resolveFleetUrl } from './fleet-url';
-import { safeParse } from './fleet-validation';
+import type { DeviceInfo, DisplayConfig } from '$lib/fleet/protocol';
+import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
+import { BaseTransport } from './transport.svelte';
+import { resolveFleetUrl } from './url';
+import { safeParse } from './validation';
 
 export type Transport = 'ws' | 'sse';
 

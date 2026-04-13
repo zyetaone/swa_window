@@ -15,14 +15,15 @@
 	 *  10: Vignette
 	 */
 	import { useAppState } from "$lib/app-state.svelte";
-	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/shared/constants";
-	import { clamp } from "$lib/shared/utils";
-	import { subscribe } from "$lib/engine/game-loop";
+	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/constants";
+	import { clamp } from "$lib/utils";
+	import { subscribe } from "$lib/game-loop";
 	import { untrack } from "svelte";
 	import { useBlind } from "./use-blind.svelte";
 	import CesiumViewer from "./Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
+	import TreeLayer from './TreeLayer.svelte';
 	import MicroEvent from './MicroEvent.svelte';
 	const model = useAppState();
 	const blind = useBlind(model);
@@ -216,8 +217,12 @@
 				{/if}
 			</div>
 
-			<!-- z:2 Rain + Lightning, z:5 Frost -->
+			<!-- z:2 Rain + Lightning, z:4 Trees, z:5 Frost -->
 			<Weather {rainOpacity} {windAngle} {lightningOpacity} {lightningX} {lightningY} {frostAmount} />
+
+			{#if model.showClouds}
+				<TreeLayer locationId={model.location} nightFactor={model.nightFactor} cloudDensity={cloudOpacity} />
+			{/if}
 
 			<!-- z:3 — Micro-events (shooting stars, birds, contrails) -->
 			<MicroEvent event={microEvent} />

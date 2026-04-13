@@ -5,11 +5,11 @@
  * atmosphere sync, post-processing, and the per-frame render loop.
  */
 
-import { CESIUM, CESIUM_QUALITY_PRESETS, type QualityMode } from '$lib/shared/constants';
-import type { LocationId, WeatherType } from '$lib/shared/types';
-import { normalizeHeading, lerp } from '$lib/shared/utils';
+import { CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
+import type { LocationId, WeatherType, QualityMode } from '$lib/types';
+import { normalizeHeading, lerp } from '$lib/utils';
 import type * as CesiumType from 'cesium';
-import { getIonToken, checkLocalTileServer, TILE_SERVER_URL } from './config';
+import { getIonToken, checkLocalTileServer, TILE_SERVER_URL, getSatelliteImageryUrl } from './config';
 
 export interface CesiumModelView {
 	flight: {
@@ -170,7 +170,7 @@ export class CesiumManager {
 
 		const C = this.CesiumModule;
 		const provider = new C.UrlTemplateImageryProvider({
-			url: useLocal ? `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg` : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+			url: useLocal ? `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg` : getSatelliteImageryUrl(),
 			maximumLevel: useLocal ? 17 : 19,
 			minimumLevel: 0,
 		});

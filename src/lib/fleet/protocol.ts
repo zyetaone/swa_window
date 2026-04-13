@@ -6,8 +6,7 @@
  * - Displays send status → server aggregates for admin
  */
 
-import type { LocationId, WeatherType } from './types';
-import type { QualityMode } from './constants';
+import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
 
 // ============================================================================
 // FLEET CLIENT MODEL (narrow interface for display WS client)
@@ -25,12 +24,6 @@ export interface FleetClientModel {
 	setQualityMode(mode: QualityMode): void;
 	applyPatch(patch: Partial<DisplayConfig>): void;
 }
-
-// ============================================================================
-// DISPLAY MODES
-// ============================================================================
-
-export type DisplayMode = 'flight' | 'screensaver' | 'video';
 
 // ============================================================================
 // DEVICE CAPABILITIES (sent on registration)
