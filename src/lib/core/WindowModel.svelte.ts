@@ -13,7 +13,7 @@
  */
 
 import { clamp, lerp, normalizeHeading } from '$lib/shared/utils';
-import { AIRCRAFT, AMBIENT, WEATHER_EFFECTS } from '$lib/shared/constants';
+import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
@@ -23,6 +23,7 @@ import { pickScenario, type FlightScenario } from './flight-scenarios';
 import { MotionEngine } from '$lib/engine/Motion.svelte';
 import { EventEngine } from '$lib/engine/Events.svelte';
 import { DirectorEngine } from '$lib/engine/Director.svelte';
+import { AtmosphereEngine } from '$lib/engine/Atmosphere.svelte';
 
 export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
 
@@ -128,12 +129,11 @@ export class WindowModel {
 	private scenarioWaypointIndex = 0;
 	private scenarioProgress = 0; // 0-1 between current and next waypoint
 
-	// ── Weather animation ───────────────────────────────────────────────────────
-	lightningIntensity = $state(0);
-	lightningX = $state(50);    // % position for positional lightning
-	lightningY = $state(40);    // % position for positional lightning
-	private lightningTimer = 0;
-	private nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
+	// ── Atmosphere (delegated to AtmosphereEngine) ─────────────────────────────
+	private readonly atmosphere = new AtmosphereEngine();
+	get lightningIntensity() { return this.atmosphere.lightningIntensity; }
+	get lightningX() { return this.atmosphere.lightningX; }
+	get lightningY() { return this.atmosphere.lightningY; }
 
 	// ── Motion (delegated to MotionEngine) ──────────────────────────────────────
 	private readonly motion = new MotionEngine();
@@ -164,9 +164,7 @@ export class WindowModel {
 	// ── Director (delegated to DirectorEngine) ─────────────────────────────────
 	private readonly director = new DirectorEngine();
 
-	// ── Ambient randomization ────────────────────────────────────────────────────
-	private nextRandomizeTime = AMBIENT.INITIAL_MIN_DELAY + Math.random() * (AMBIENT.INITIAL_MAX_DELAY - AMBIENT.INITIAL_MIN_DELAY);
-	private randomizeTimer = 0;
+	// (Ambient randomization delegated to AtmosphereEngine)
 
 	// ── Animation clock (single source of time) ─────────────────────────────────
 	time = 0;
@@ -642,21 +640,7 @@ export class WindowModel {
 	// --- Weather ---
 
 	private tickLightning(delta: number): void {
-		if (this.showLightning) {
-			this.lightningTimer += delta;
-			if (this.lightningIntensity > 0) {
-				this.lightningIntensity = clamp(this.lightningIntensity - delta * AIRCRAFT.LIGHTNING_DECAY_RATE, 0, 1);
-			}
-			if (this.lightningIntensity < 0.01 && this.lightningTimer > this.nextLightning) {
-				this.lightningIntensity = 0.5 + Math.random() * 0.5;
-				this.lightningX = 20 + Math.random() * 60;
-				this.lightningY = 15 + Math.random() * 50;
-				this.lightningTimer = 0;
-				this.nextLightning = Math.random() * (AIRCRAFT.LIGHTNING_MAX_INTERVAL - AIRCRAFT.LIGHTNING_MIN_INTERVAL) + AIRCRAFT.LIGHTNING_MIN_INTERVAL;
-			}
-		} else {
-			this.lightningIntensity = 0;
-		}
+		this.atmosphere.tickLightning(delta, this.showLightning);
 	}
 
 	// --- Motion ---
@@ -685,25 +669,17 @@ export class WindowModel {
 	}
 
 	private tickRandomize(delta: number): void {
-		this.randomizeTimer += delta;
-		if (this.randomizeTimer < this.nextRandomizeTime) return;
-		if (this.userAdjustingAtmosphere) return;
-		this.randomizeTimer = 0;
-		this.nextRandomizeTime = AMBIENT.SUBSEQUENT_MIN_DELAY +
-			Math.random() * (AMBIENT.SUBSEQUENT_MAX_DELAY - AMBIENT.SUBSEQUENT_MIN_DELAY);
-
-		const cloudShift = (Math.random() - 0.5) * AMBIENT.CLOUD_DENSITY_SHIFT;
-		this.cloudDensity = clamp(this.cloudDensity + cloudShift, AMBIENT.CLOUD_DENSITY_MIN, AMBIENT.CLOUD_DENSITY_MAX);
-
-		const speedShift = (Math.random() - 0.5) * AMBIENT.CLOUD_SPEED_SHIFT;
-		this.cloudSpeed = clamp(this.cloudSpeed + speedShift, AMBIENT.CLOUD_SPEED_MIN, AMBIENT.CLOUD_SPEED_MAX);
-
-		const hazeShift = (Math.random() - 0.5) * AMBIENT.HAZE_SHIFT;
-		this.haze = clamp(this.haze + hazeShift, AMBIENT.HAZE_MIN, AMBIENT.HAZE_MAX);
-
-		if (Math.random() < AMBIENT.WEATHER_CHANGE_CHANCE) {
-			const weatherOptions: WeatherType[] = ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'];
-			this.weather = weatherOptions[Math.floor(Math.random() * weatherOptions.length)];
+		const patch = this.atmosphere.tickRandomize(delta, {
+			userAdjusting: this.userAdjustingAtmosphere,
+			cloudDensity: this.cloudDensity,
+			cloudSpeed: this.cloudSpeed,
+			haze: this.haze,
+		});
+		if (patch) {
+			if (patch.cloudDensity !== undefined) this.cloudDensity = patch.cloudDensity;
+			if (patch.cloudSpeed !== undefined) this.cloudSpeed = patch.cloudSpeed;
+			if (patch.haze !== undefined) this.haze = patch.haze;
+			if (patch.weather !== undefined) this.weather = patch.weather;
 		}
 	}
 }
