@@ -83,7 +83,7 @@ Window.svelte (RAF loop via game-loop.svelte)
 +page.svelte (createAppState() sets context, owns side-effects)
 └── useAppState() → model
     ├── Window.svelte (RAF tick, layer compositor, blind drag)
-    │   ├── Globe.svelte (Cesium terrain/buildings)
+    │   ├── Globe.svelte (Cesium lifecycle — mounts CesiumManager)
     │   ├── CloudBlobs.svelte
     │   ├── Weather.svelte
     │   └── MicroEvent.svelte
@@ -129,7 +129,7 @@ const model = createAppState();  // in +page.svelte only
 const model = useAppState();     // in any descendant
 ```
 
-All imports from `$lib/app-state.svelte` — it barrel-exports types, constants, and locations.
+Import `createAppState`/`useAppState` from `$lib/app-state.svelte`. Import types, constants, and locations directly from `$lib/shared/`.
 
 ### CRITICAL: Variable Naming with Svelte 5
 

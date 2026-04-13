@@ -5,12 +5,10 @@
 	 * Contains: location picker, settings, flight data.
 	 * Toggled via tab button on right edge of cabin wall.
 	 */
-	import {
-		useAppState,
-		LOCATIONS,
-		AIRCRAFT,
-		type LocationId,
-	} from "$lib/app-state.svelte";
+	import { useAppState } from "$lib/app-state.svelte";
+	import { LOCATIONS } from "$lib/shared/locations";
+	import { AIRCRAFT } from "$lib/shared/constants";
+	import type { LocationId } from "$lib/shared/types";
 	import { formatTime } from "$lib/shared/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 	import Toggle from "./Toggle.svelte";

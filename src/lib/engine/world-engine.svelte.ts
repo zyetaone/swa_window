@@ -12,7 +12,7 @@
 import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, AMBIENT } from '$lib/shared/constants';
 import type { WeatherType, LocationId } from '$lib/shared/types';
-import type { SimulationContext } from './types';
+import type { ISimulationEngine, SimulationContext } from './types';
 
 // ─── Patch types ─────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ export interface MicroEventData {
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
 
-export class WorldEngine {
+export class WorldEngine implements ISimulationEngine<WorldContext, WorldPatch> {
 	// ── Reactive outputs ──────────────────────────────────────────────────────
 	lightningIntensity = $state(0);
 	lightningX = $state(50);
@@ -138,7 +138,10 @@ export class WorldEngine {
 	#tickEvents(delta: number, ctx: WorldContext): void {
 		if (this.microEvent) {
 			this.microEvent.elapsed += delta;
-			if (this.microEvent.elapsed >= this.microEvent.duration) this.microEvent = null;
+			if (this.microEvent.elapsed >= this.microEvent.duration) {
+				this.#eventTimer = 0;
+				this.microEvent = null;
+			}
 			return;
 		}
 

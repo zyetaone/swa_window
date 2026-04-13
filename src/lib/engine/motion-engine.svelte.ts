@@ -6,11 +6,7 @@ import { clamp } from '$lib/shared/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/shared/constants';
 import type { ISimulationEngine, SimulationContext } from './types';
 
-export interface MotionContext extends SimulationContext {
-	turbulenceLevel: 'light' | 'moderate' | 'severe';
-}
-
-export class MotionEngine implements ISimulationEngine<MotionContext> {
+export class MotionEngine implements ISimulationEngine<SimulationContext> {
 	// ── Reactive outputs ───────────────────────────────────────────────────────
 	motionOffsetX = $state(0);
 	motionOffsetY = $state(0);
@@ -27,7 +23,7 @@ export class MotionEngine implements ISimulationEngine<MotionContext> {
 	#bumpElapsed = -1;
 	#bumpSign = 1;
 
-	tick(delta: number, ctx: MotionContext): void {
+	tick(delta: number, ctx: SimulationContext): void {
 		const { time: t, heading, altitude, turbulenceLevel } = ctx;
 		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[turbulenceLevel];
 

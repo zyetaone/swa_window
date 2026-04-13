@@ -32,6 +32,8 @@ export interface SimulationContext {
 	cloudDensity: number;
 	cloudSpeed: number;
 	haze: number;
+	/** Turbulence level from weather effects */
+	turbulenceLevel: 'light' | 'moderate' | 'severe';
 }
 
 /**

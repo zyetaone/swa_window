@@ -10,6 +10,7 @@
 
 import type { LocationId, SkyState } from '$lib/shared/types';
 import { LOCATION_IDS } from '$lib/shared/locations';
+import { getSkyState } from '$lib/shared/utils';
 
 // ============================================================================
 // TYPES
@@ -504,9 +505,3 @@ export function pickNextLocation(currentId: LocationId, timeOfDay: number): Loca
 	return scored[scored.length - 1].id;
 }
 
-function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {
-	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
-	if (timeOfDay < 7) return 'dawn';
-	if (timeOfDay >= 18) return 'dusk';
-	return 'day';
-}

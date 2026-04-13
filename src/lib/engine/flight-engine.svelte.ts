@@ -131,7 +131,8 @@ export class FlightSimEngine implements ISimulationEngine<SimulationContext> {
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
 		if (this.#cruiseElapsed > 2.0 && this.cruiseTargetId) {
-			this.#callbacks.onLocationChanged(this.cruiseTargetId);
+			const arrivedAt = this.cruiseTargetId;
+			this.#callbacks.onLocationChanged(arrivedAt);
 			this.cruiseTargetId = null;
 			this.flightMode = 'orbit';
 			this.#callbacks.setBlindOpen(true);

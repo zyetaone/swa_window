@@ -2,8 +2,9 @@
  * WebSocket Client — connects display to fleet management server
  */
 
-import type { ServerMessage, DisplayMessage, DeviceCaps } from '$lib/shared/protocol';
+import type { ServerMessage, DisplayMessage, DeviceCaps, DisplayMode } from '$lib/shared/protocol';
 import type { WindowModel } from '$lib/app-state.svelte';
+import { LOCATION_IDS } from '$lib/shared/locations';
 import { BaseTransport } from './base-transport';
 
 function getDeviceId(): string {
@@ -126,13 +127,25 @@ export class DisplayWsClient extends BaseTransport {
 		let msg: ServerMessage;
 		try { msg = JSON.parse(raw); } catch { return; }
 
+		const VALID_MODES: DisplayMode[] = ['flight', 'screensaver', 'video'];
+		const VALID_WEATHER = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
+		const VALID_QUALITY = ['performance', 'balanced', 'ultra'];
+
 		switch (msg.type) {
 			case 'ping': this.#send({ type: 'pong' }); break;
 			case 'set_scene':
-				this.#model.flight.flyTo(msg.location);
-				if (msg.weather) this.#model.weather = msg.weather;
+				if (LOCATION_IDS.has(msg.location)) this.#model.flight.flyTo(msg.location);
+				if (msg.weather && VALID_WEATHER.includes(msg.weather)) this.#model.weather = msg.weather;
 				break;
-			case 'set_mode': this.#model.setDisplayMode(msg.mode, msg.payload); break;
+			case 'set_mode':
+				if (VALID_MODES.includes(msg.mode)) this.#model.setDisplayMode(msg.mode, msg.payload);
+				break;
+			case 'set_config':
+				if (msg.patch && typeof msg.patch === 'object') this.#model.applyPatch(msg.patch);
+				break;
+			case 'set_quality':
+				if (VALID_QUALITY.includes(msg.mode)) this.#model.qualityMode = msg.mode;
+				break;
 		}
 	}
 }

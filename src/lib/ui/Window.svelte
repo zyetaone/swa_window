@@ -14,11 +14,12 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
-	import { useAppState, AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/app-state.svelte";
+	import { useAppState } from "$lib/app-state.svelte";
+	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/shared/constants";
 	import { clamp } from "$lib/shared/utils";
 	import { subscribe } from "$lib/engine/game-loop.svelte";
 	import { untrack } from "svelte";
-	import CesiumViewer from "$lib/engine/cesium/Globe.svelte";
+	import CesiumViewer from "./Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
 	import MicroEvent from './MicroEvent.svelte';
@@ -31,7 +32,7 @@
 	let elapsedTime = $state(0);
 
 	$effect(() => {
-		return subscribe((dt) => {
+		return subscribe((dt: number) => {
 			model.tick(dt);
 			model.reportFrame();
 			untrack(() => {

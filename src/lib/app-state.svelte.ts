@@ -11,7 +11,7 @@
  */
 
 import { setContext, getContext } from 'svelte';
-import { clamp } from '$lib/shared/utils';
+import { clamp, getSkyState } from '$lib/shared/utils';
 import { WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { QualityMode } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
@@ -21,17 +21,8 @@ import { pickNextLocation } from '$lib/engine/flight-scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { FlightSimEngine } from '$lib/engine/flight-engine.svelte';
 import { MotionEngine } from '$lib/engine/motion-engine.svelte';
-import { WorldEngine } from '$lib/engine/world-engine.svelte';
+import { WorldEngine, type WorldContext } from '$lib/engine/world-engine.svelte';
 import type { SimulationContext } from '$lib/engine/types';
-
-// ─── Re-exports (barrel — keeps all consumer imports pointing here) ───────────
-
-export { AIRCRAFT, CESIUM, FLIGHT_FEEL, WEATHER_EFFECTS, AMBIENT, MICRO_EVENTS, CESIUM_QUALITY_PRESETS } from '$lib/shared/constants';
-export type { WeatherEffect, QualityMode } from '$lib/shared/constants';
-export { LOCATIONS, LOCATION_IDS, LOCATION_MAP } from '$lib/shared/locations';
-export { clamp, lerp, normalizeHeading, formatTime } from '$lib/shared/utils';
-export type { SkyState, LocationId, WeatherType, Location } from '$lib/shared/types';
-export type { FlightMode } from '$lib/engine/flight-engine.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,15 +39,6 @@ export interface PatchableState {
 	syncToRealTime: boolean;
 	showClouds: boolean;
 	showBuildings: boolean;
-}
-
-// ─── Pure helper ─────────────────────────────────────────────────────────────
-
-function getSkyState(timeOfDay: number): SkyState {
-	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
-	if (timeOfDay < 7) return 'dawn';
-	if (timeOfDay >= 18) return 'dusk';
-	return 'day';
 }
 
 // ─── WindowModel ─────────────────────────────────────────────────────────────
@@ -108,7 +90,9 @@ export class WindowModel {
 	time = 0;
 
 	// Private timers
-	#userOverrideTimeout: ReturnType<typeof setTimeout> | null = null;
+	#altitudeTimeout: ReturnType<typeof setTimeout> | null = null;
+	#timeTimeout: ReturnType<typeof setTimeout> | null = null;
+	#atmosphereTimeout: ReturnType<typeof setTimeout> | null = null;
 	#frameCount    = 0;
 	#fpsLastTime   = 0;
 	#qualityCheckTimer = 0;
@@ -179,6 +163,10 @@ export class WindowModel {
 	setLocation(id: LocationId): void {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
+		// Apply per-location scene defaults
+		const scene = this.currentLocation.scene;
+		this.cloudDensity = scene.clouds.density;
+		this.cloudSpeed = scene.clouds.speed;
 	}
 
 	setAltitude(alt: number): void {
@@ -214,31 +202,38 @@ export class WindowModel {
 	}
 
 	applyPatch(patch: Partial<PatchableState>): void {
+		const VALID_WEATHER: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
+
 		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
-		if (patch.weather !== undefined)            this.weather = patch.weather;
+		if (patch.weather !== undefined && VALID_WEATHER.includes(patch.weather)) this.weather = patch.weather;
 		if (patch.cloudDensity !== undefined)       { this.cloudDensity = clamp(patch.cloudDensity, 0, 1); this.onUserInteraction('atmosphere'); }
 		if (patch.cloudSpeed !== undefined)         this.cloudSpeed = clamp(patch.cloudSpeed, 0, 2);
 		if (patch.haze !== undefined)               this.haze = clamp(patch.haze, 0, 0.2);
 		if (patch.terrainDarkness !== undefined)    this.terrainDarkness = clamp(patch.terrainDarkness, 0, 1);
 		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
 		if (patch.flightSpeed !== undefined)        this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
-		if (patch.syncToRealTime !== undefined)     this.syncToRealTime = patch.syncToRealTime;
-		if (patch.showClouds !== undefined)         this.showClouds = patch.showClouds;
-		if (patch.showBuildings !== undefined)      this.showBuildings = patch.showBuildings;
+		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') this.syncToRealTime = patch.syncToRealTime;
+		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') this.showClouds = patch.showClouds;
+		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.showBuildings = patch.showBuildings;
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
-		this.userAdjustingAltitude = type === 'altitude';
-		this.userAdjustingTime = type === 'time';
-		this.userAdjustingAtmosphere = type === 'atmosphere';
+		const OVERRIDE_DURATION = 8000;
 
-		if (this.#userOverrideTimeout) clearTimeout(this.#userOverrideTimeout);
-		this.#userOverrideTimeout = setTimeout(() => {
-			this.userAdjustingAltitude   = false;
-			this.userAdjustingTime       = false;
-			this.userAdjustingAtmosphere = false;
-		}, 8000);
+		if (type === 'altitude') {
+			this.userAdjustingAltitude = true;
+			if (this.#altitudeTimeout) clearTimeout(this.#altitudeTimeout);
+			this.#altitudeTimeout = setTimeout(() => { this.userAdjustingAltitude = false; }, OVERRIDE_DURATION);
+		} else if (type === 'time') {
+			this.userAdjustingTime = true;
+			if (this.#timeTimeout) clearTimeout(this.#timeTimeout);
+			this.#timeTimeout = setTimeout(() => { this.userAdjustingTime = false; }, OVERRIDE_DURATION);
+		} else {
+			this.userAdjustingAtmosphere = true;
+			if (this.#atmosphereTimeout) clearTimeout(this.#atmosphereTimeout);
+			this.#atmosphereTimeout = setTimeout(() => { this.userAdjustingAtmosphere = false; }, OVERRIDE_DURATION);
+		}
 	}
 
 	getPersistedSnapshot(): PersistedState {
@@ -269,14 +264,14 @@ export class WindowModel {
 		const ctx = this.#createContext();
 
 		this.flight.tick(delta, ctx);
-		this.motion.tick(delta, { ...ctx, turbulenceLevel: WEATHER_EFFECTS[this.weather].turbulence });
+		this.motion.tick(delta, ctx);
 
-		const worldPatch = this.world.tick(delta, {
-			...ctx,
-			showLightning:   WEATHER_EFFECTS[this.weather].hasLightning,
-			isOrbitMode:     this.flight.flightMode === 'orbit',
-			pickNextLocation: () => pickNextLocation(this.location, this.timeOfDay),
-		});
+		const wctx = this.#worldCtx;
+		Object.assign(wctx, ctx);
+		wctx.showLightning    = WEATHER_EFFECTS[this.weather].hasLightning;
+		wctx.isOrbitMode      = this.flight.flightMode === 'orbit';
+		wctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
+		const worldPatch = this.world.tick(delta, wctx);
 
 		if (worldPatch.atmosphere) this.applyPatch(worldPatch.atmosphere);
 		if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
@@ -290,6 +285,14 @@ export class WindowModel {
 		weather: 'cloudy', skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
 		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
+		turbulenceLevel: 'light',
+	};
+
+	#worldCtx: WorldContext = {
+		...this.#ctx,
+		showLightning: false,
+		isOrbitMode: true,
+		pickNextLocation: () => this.location,
 	};
 
 	#createContext(): SimulationContext {
@@ -312,6 +315,7 @@ export class WindowModel {
 		c.cloudDensity          = this.cloudDensity;
 		c.cloudSpeed            = this.cloudSpeed;
 		c.haze                  = this.haze;
+		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		return c;
 	}
 
@@ -328,7 +332,9 @@ export class WindowModel {
 	}
 
 	destroy(): void {
-		if (this.#userOverrideTimeout) clearTimeout(this.#userOverrideTimeout);
+		if (this.#altitudeTimeout) clearTimeout(this.#altitudeTimeout);
+		if (this.#timeTimeout) clearTimeout(this.#timeTimeout);
+		if (this.#atmosphereTimeout) clearTimeout(this.#atmosphereTimeout);
 	}
 }
 

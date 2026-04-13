@@ -67,10 +67,13 @@ export class CesiumManager {
 	private lastTimeOfDay = -1;
 	private lastNightAlpha = -1;
 	private lastRoadAlpha = -1;
+	private lastBuildingNightFactor = -1;
+
+	#viewerContainerEl: HTMLElement | null = null;
 
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
-		this.model = model;
 		this.CesiumModule = CesiumModule;
+		this.model = model;
 		this.viewer = new CesiumModule.Viewer(this.viewerContainer(), {
 			baseLayer: false as const,
 			animation: false,
@@ -93,11 +96,11 @@ export class CesiumManager {
 		});
 	}
 
-	private viewerContainer(): HTMLElement {
-		const el = document.createElement('div');
-		el.style.display = 'none';
-		document.body.appendChild(el);
-		return el;
+	viewerContainer(): HTMLElement {
+		this.#viewerContainerEl = document.createElement('div');
+		this.#viewerContainerEl.style.display = 'none';
+		document.body.appendChild(this.#viewerContainerEl);
+		return this.#viewerContainerEl;
 	}
 
 	async start(container: HTMLElement, COLOR_GRADING_GLSL: string): Promise<void> {
@@ -348,8 +351,8 @@ export class CesiumManager {
 		if (!this.tileset) return;
 		this.tileset.show = this.model.showBuildings;
 		const nf = this.model.nightFactor;
-		if (Math.abs(nf - this.lastNightFactor) < 0.01) return;
-		this.lastNightFactor = nf;
+		if (Math.abs(nf - this.lastBuildingNightFactor) < 0.01) return;
+		this.lastBuildingNightFactor = nf;
 		const r = Math.round(lerp(240, 80, nf));
 		const g = Math.round(lerp(220, 75, nf));
 		const b = Math.round(lerp(200, 60, nf));

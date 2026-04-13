@@ -25,6 +25,16 @@ export function normalizeHeading(heading: number): number {
 }
 
 /**
+ * Derive sky state from decimal time of day.
+ */
+export function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {
+	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
+	if (timeOfDay < 7) return 'dawn';
+	if (timeOfDay >= 18) return 'dusk';
+	return 'day';
+}
+
+/**
  * Format a decimal time (e.g. 14.5) as "2:30 PM".
  * Handles edge cases: 24 wraps to midnight, negative times normalized.
  */
