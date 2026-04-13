@@ -111,15 +111,11 @@
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
 
-	// --- Clouds (inlined from CloudLayer) ---
-
-	// Cloud perspective reserved for Option C evolution (layered cinema mode).
-	// Currently the horizon-band CloudBlobs handles altitude internally.
-
+	// --- Clouds ---
 	const cloudOpacity = $derived(model.effectiveCloudDensity);
 	const cloudSpeed = $derived(model.cloudSpeed);
 
-	// --- Weather (inlined from WeatherLayer) ---
+	// --- Weather ---
 
 	const rainOpacity = $derived(WEATHER_EFFECTS[model.weather].rainOpacity);
 	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);

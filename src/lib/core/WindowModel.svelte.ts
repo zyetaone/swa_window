@@ -17,8 +17,7 @@ import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/shared/constants';
 import type { SkyState, LocationId, WeatherType } from '$lib/shared/types';
 import type { DisplayMode, DisplayConfig } from '$lib/shared/protocol';
 import type { QualityMode } from '$lib/shared/constants';
-// re-export for consumers
-export type { QualityMode };
+export type { QualityMode } from '$lib/shared/constants';
 import { LOCATIONS, LOCATION_MAP } from '$lib/shared/locations';
 import { loadPersistedState, safeNum, type PersistedState } from '$lib/shared/persistence';
 import { FlightSimEngine } from '$lib/engine/FlightSim.svelte';
@@ -70,7 +69,7 @@ export class WindowModel {
 		setBlindOpen: (open) => { this.blindOpen = open; },
 		resetDirector: () => { this.director.reset(); },
 		onLocationChanged: (id) => { this.setLocation(id); },
-		resetBankAngle: () => { /* bankAngle owned by MotionEngine, resets naturally */ },
+		resetBankAngle: () => {},
 	});
 
 	// --- Position (proxy to flight engine) ---
@@ -329,16 +328,6 @@ export class WindowModel {
 	setTerrainDarkness(darkness: number): void {
 		if (!Number.isFinite(darkness)) return;
 		this.terrainDarkness = clamp(darkness, 0, 1);
-	}
-
-	setLat(lat: number): void {
-		if (!Number.isFinite(lat)) return;
-		this.lat = clamp(lat, -90, 90);
-	}
-
-	setLon(lon: number): void {
-		if (!Number.isFinite(lon)) return;
-		this.lon = clamp(lon, -180, 180);
 	}
 
 	/** Pick next location weighted by time of day (nature mornings, cities midday/night) */
