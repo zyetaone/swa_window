@@ -174,18 +174,11 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
 <div
 	class="window-container"
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
-	tabindex="0"
-	onkeydown={(e) => {
-		if (e.key === "Enter" || e.key === " ") {
-			model.toggleBlind();
-		}
-	}}
 >
 	<!-- The oval window -->
 	<button
