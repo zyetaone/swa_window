@@ -57,7 +57,17 @@
 		},
 		layers: [
 			{ id: 'bg', type: 'background', paint: { 'background-color': '#0a1228' } },
-			{ id: 'sat-imagery', type: 'raster', source: 'sat-imagery' },
+			{
+				id: 'sat-imagery',
+				type: 'raster',
+				source: 'sat-imagery',
+				paint: {
+					// LOD smoothing: no fade transitions, linear filter, full opacity
+					'raster-fade-duration': 0,
+					'raster-resampling': 'linear',
+					'raster-opacity': 1,
+				},
+			},
 		],
 		glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
 	} as maplibregl.StyleSpecification);
@@ -94,7 +104,9 @@
 	{bearing}
 	style={activeStyle}
 	attributionControl={false}
-	maxPitch={85}
+	maxPitch={75}
+	maxTileCacheSize={200}
+	fadeDuration={0}
 	autoloadGlobalCss={false}
 >
 	<Projection type="mercator" />
