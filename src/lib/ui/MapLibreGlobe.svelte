@@ -46,7 +46,20 @@
 
 	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
+	// Blank style — no basemap. Used when our own imagery layer is the only visual.
+	// Avoids POI/park markers from the Voyager basemap appearing as green dots
+	// when satellite imagery is overlaid.
+	const BLANK_STYLE = {
+		version: 8 as const,
+		sources: {},
+		layers: [{ id: 'background', type: 'background' as const, paint: { 'background-color': '#0a1228' } }],
+		glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+	};
+
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
+
+	const useBlankStyle = $derived(!!imageryUrl || !!pmtilesUrl);
+	const activeStyle = $derived(useBlankStyle ? BLANK_STYLE : VOYAGER_STYLE);
 
 	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
@@ -67,7 +80,7 @@
 	{zoom}
 	{pitch}
 	{bearing}
-	style={VOYAGER_STYLE}
+	style={activeStyle}
 	attributionControl={false}
 	maxPitch={85}
 	autoloadGlobalCss={false}
@@ -90,11 +103,11 @@
 
 	{#if pmtilesUrl}
 		<RasterTileSource id="imagery" tiles={[`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]} tileSize={256} attribution="PMTiles (cached)">
-			<RasterLayer />
+			<RasterLayer paint={{ 'raster-fade-duration': 0, 'raster-resampling': 'linear' }} />
 		</RasterTileSource>
 	{:else if imageryUrl}
-		<RasterTileSource id="imagery" tiles={[imageryUrl]} tileSize={256} maxzoom={20} attribution={imageryAttribution}>
-			<RasterLayer />
+		<RasterTileSource id="imagery" tiles={[imageryUrl]} tileSize={256} maxzoom={19} attribution={imageryAttribution}>
+			<RasterLayer paint={{ 'raster-fade-duration': 0, 'raster-resampling': 'linear' }} />
 		</RasterTileSource>
 	{/if}
 
@@ -104,7 +117,7 @@
 		</RasterDEMTileSource>
 	{/if}
 
-	{#if showBuildings}
+	{#if showBuildings && !useBlankStyle}
 		<FillExtrusionLayer
 			source="carto"
 			sourceLayer="building"
