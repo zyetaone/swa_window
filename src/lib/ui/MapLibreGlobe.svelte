@@ -46,9 +46,8 @@
 	// When a custom imagery URL is provided, embed it directly in the style.
 	const buildSatelliteStyle = (url: string, attribution: string): maplibregl.StyleSpecification => ({
 		version: 8,
-		projection: { type: 'globe' },
 		sources: {
-			satellite: {
+			'sat-imagery': {
 				type: 'raster',
 				tiles: [url],
 				tileSize: 256,
@@ -57,18 +56,10 @@
 			},
 		},
 		layers: [
-			{ id: 'background', type: 'background', paint: { 'background-color': '#0a1228' } },
-			{ id: 'satellite', type: 'raster', source: 'satellite', paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } },
+			{ id: 'bg', type: 'background', paint: { 'background-color': '#0a1228' } },
+			{ id: 'sat-imagery', type: 'raster', source: 'sat-imagery' },
 		],
 		glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-		sky: showAtmosphere ? {
-			'sky-color': '#001e3d',
-			'horizon-color': '#1a4a7a',
-			'fog-color': '#1a3a5c',
-			'sky-horizon-blend': 0.3,
-			'horizon-fog-blend': 0.5,
-			'atmosphere-blend': 0.4,
-		} : undefined,
 	} as maplibregl.StyleSpecification);
 
 	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
@@ -106,7 +97,7 @@
 	maxPitch={85}
 	autoloadGlobalCss={false}
 >
-	<Projection type="globe" />
+	<Projection type="mercator" />
 	<PMTilesProtocol />
 
 	{#if showAtmosphere}

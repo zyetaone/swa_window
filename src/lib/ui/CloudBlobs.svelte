@@ -55,21 +55,21 @@
 	}
 
 	const clouds: CloudConfig[] = [
-		// FAR (horizon) — wide, soft, slow morphing
-		{ id: 0,  seed: 42,   top: -100, left: -420, w: 500, h: 280, blur: 40, offset: 420, dur: 160, delay: -10, octaves: 5, freq: 0.008, displace: 120, opacityMul: 0.70, parallax: PARALLAX.far, smilDur: 80 },
-		{ id: 1,  seed: 137,  top: -110, left: -400, w: 480, h: 260, blur: 38, offset: 400, dur: 180, delay: -50, octaves: 5, freq: 0.009, displace: 115, opacityMul: 0.70, parallax: PARALLAX.far, smilDur: 95 },
-		{ id: 2,  seed: 271,  top: -95,  left: -430, w: 520, h: 300, blur: 42, offset: 430, dur: 150, delay: -80, octaves: 5, freq: 0.008, displace: 125, opacityMul: 0.70, parallax: PARALLAX.far, smilDur: 70 },
-		{ id: 3,  seed: 389,  top: -105, left: -415, w: 490, h: 270, blur: 39, offset: 415, dur: 170, delay: -30, octaves: 5, freq: 0.009, displace: 118, opacityMul: 0.70, parallax: PARALLAX.far, smilDur: 85 },
-		{ id: 4,  seed: 503,  top: -98,  left: -425, w: 510, h: 290, blur: 41, offset: 425, dur: 155, delay: -65, octaves: 5, freq: 0.008, displace: 122, opacityMul: 0.70, parallax: PARALLAX.far, smilDur: 90 },
-		// MID — medium, moderate
-		{ id: 5,  seed: 619,  top: -180, left: -380, w: 600, h: 350, blur: 28, offset: 380, dur: 100, delay: -15, octaves: 4, freq: 0.010, displace: 100, opacityMul: 0.40, parallax: PARALLAX.mid, smilDur: 65 },
-		{ id: 6,  seed: 743,  top: -175, left: -390, w: 580, h: 330, blur: 26, offset: 390, dur: 110, delay: -45, octaves: 4, freq: 0.011, displace: 98,  opacityMul: 0.40, parallax: PARALLAX.mid, smilDur: 55 },
-		{ id: 7,  seed: 857,  top: -185, left: -370, w: 620, h: 360, blur: 30, offset: 370, dur: 95,  delay: -70, octaves: 4, freq: 0.010, displace: 102, opacityMul: 0.40, parallax: PARALLAX.mid, smilDur: 75 },
-		{ id: 8,  seed: 967,  top: -170, left: -385, w: 590, h: 340, blur: 27, offset: 385, dur: 105, delay: -25, octaves: 4, freq: 0.011, displace: 99,  opacityMul: 0.40, parallax: PARALLAX.mid, smilDur: 60 },
-		// NEAR (foreground) — large, closer, faster
-		{ id: 9,  seed: 1087, top: -250, left: -350, w: 750, h: 450, blur: 18, offset: 350, dur: 65,  delay: -10, octaves: 3, freq: 0.012, displace: 85,  opacityMul: 0.14, parallax: PARALLAX.near, smilDur: 45 },
-		{ id: 10, seed: 1213, top: -260, left: -340, w: 720, h: 430, blur: 16, offset: 340, dur: 55,  delay: -35, octaves: 3, freq: 0.013, displace: 82,  opacityMul: 0.14, parallax: PARALLAX.near, smilDur: 50 },
-		{ id: 11, seed: 1337, top: -245, left: -355, w: 780, h: 470, blur: 19, offset: 355, dur: 70,  delay: -55, octaves: 3, freq: 0.012, displace: 88,  opacityMul: 0.14, parallax: PARALLAX.near, smilDur: 48 },
+		// FAR (horizon) — small, wispy, dense at back, slow drift
+		{ id: 0,  seed: 42,   top: -40,  left: -220, w: 100, h: 55,  blur: 12, offset: 130, dur: 200, delay: -10, octaves: 4, freq: 0.018, displace: 55, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 80  },
+		{ id: 1,  seed: 137,  top: -50,  left: -200, w: 90,  h: 50,  blur: 11, offset: 120, dur: 220, delay: -50, octaves: 4, freq: 0.020, displace: 50, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 95  },
+		{ id: 2,  seed: 271,  top: -35,  left: -240, w: 110, h: 60,  blur: 13, offset: 140, dur: 190, delay: -80, octaves: 4, freq: 0.018, displace: 58, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 70  },
+		{ id: 3,  seed: 389,  top: -45,  left: -210, w: 95,  h: 52,  blur: 11, offset: 125, dur: 210, delay: -30, octaves: 4, freq: 0.019, displace: 52, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 85  },
+		{ id: 4,  seed: 503,  top: -38,  left: -230, w: 105, h: 58,  blur: 12, offset: 135, dur: 195, delay: -65, octaves: 4, freq: 0.018, displace: 56, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 90  },
+		// MID — medium wisps, moderate density
+		{ id: 5,  seed: 619,  top: -80,  left: -180, w: 160, h: 90,  blur: 14, offset: 165, dur: 130, delay: -15, octaves: 4, freq: 0.016, displace: 70, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 65  },
+		{ id: 6,  seed: 743,  top: -90,  left: -160, w: 150, h: 85,  blur: 13, offset: 155, dur: 140, delay: -45, octaves: 4, freq: 0.017, displace: 68, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 55  },
+		{ id: 7,  seed: 857,  top: -75,  left: -190, w: 170, h: 95,  blur: 15, offset: 175, dur: 120, delay: -70, octaves: 4, freq: 0.016, displace: 72, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 75  },
+		{ id: 8,  seed: 967,  top: -85,  left: -170, w: 155, h: 88,  blur: 13, offset: 160, dur: 135, delay: -25, octaves: 4, freq: 0.017, displace: 69, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 60  },
+		// NEAR (foreground) — larger, closer, faster, lighter
+		{ id: 9,  seed: 1087, top: -120, left: -140, w: 220, h: 125, blur: 16, offset: 195, dur: 80,  delay: -10, octaves: 3, freq: 0.015, displace: 80, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 45  },
+		{ id: 10, seed: 1213, top: -130, left: -120, w: 200, h: 115, blur: 15, offset: 185, dur: 70,  delay: -35, octaves: 3, freq: 0.016, displace: 78, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 50  },
+		{ id: 11, seed: 1337, top: -115, left: -150, w: 240, h: 135, blur: 17, offset: 205, dur: 85,  delay: -55, octaves: 3, freq: 0.015, displace: 82, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 48  },
 	];
 
 	// Live seeds — periodically bumped for smooth shape morphing
@@ -112,8 +112,8 @@
 
 	const clampedSpeed = $derived(Math.max(speed, 0.2));
 
-	function freqLo(freq: number): number { return freq * 0.65; }
-	function freqHi(freq: number): number { return freq * 1.35; }
+	function freqLo(freq: number): number { return freq * 0.88; }
+	function freqHi(freq: number): number { return freq * 1.12; }
 </script>
 
 <svg width="0" height="0" aria-hidden="true" style="position:absolute">

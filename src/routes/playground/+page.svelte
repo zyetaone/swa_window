@@ -32,15 +32,9 @@
 		{ id: 'esri', label: 'ESRI World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'No auth, z19 max, global', attribution: '© ESRI' },
 	];
 
-	// MapLibre satellite sources — all no-auth, varying max-zoom + region coverage
+	// MapLibre satellite sources — CORS-enabled tile providers
+	// (ESRI/USGS lack CORS headers and won't render as WebGL textures)
 	const MAPLIBRE_SOURCES: Source[] = [
-		{
-			id: 'esri',
-			label: 'ESRI World Imagery',
-			url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-			note: 'No auth, z19 max, global — best general',
-			attribution: '© ESRI',
-		},
 		{
 			id: 'eox-s2',
 			label: 'Sentinel-2 Cloudless (EOX)',
@@ -49,17 +43,17 @@
 			attribution: '© EOX • Sentinel-2',
 		},
 		{
-			id: 'usgs',
-			label: 'USGS Imagery (USA)',
-			url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
-			note: 'USA only, z18 max, no auth',
-			attribution: '© USGS',
+			id: 'esri-proxied',
+			label: 'ESRI via Tile Proxy',
+			url: '/api/tiles/proxy/esri/{z}/{y}/{x}',
+			note: 'No CORS on ESRI direct — needs server proxy',
+			attribution: '© ESRI',
 		},
 		{
-			id: 'osm-de',
+			id: 'osm',
 			label: 'OSM Standard (no satellite)',
-			url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-			note: 'Map style for comparison',
+			url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+			note: 'Free map style for comparison',
 			attribution: '© OpenStreetMap',
 		},
 		{
@@ -77,7 +71,7 @@
 	let timeOfDay = $state(12);  // 0-24, drives skyState
 	let weather = $state<WeatherType>('clear');
 	let cesiumSource = $state<string>('esri');
-	let maplibreSource = $state<string>('esri');
+	let maplibreSource = $state<string>('eox-s2');
 
 	// Cloud sim
 	let density = $state(0.6);
