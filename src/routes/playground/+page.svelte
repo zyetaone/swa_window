@@ -12,7 +12,6 @@
 	import { randomBetween, getSkyState, formatTime, clamp } from '$lib/utils';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
-	import TreeLayer from '$lib/ui/TreeLayer.svelte';
 	import MapLibreGlobe from '$lib/ui/MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -80,14 +79,6 @@
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
 	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
 	const windAngle = $derived(weatherFx.windAngle);
-
-	const nightFactor = $derived.by(() => {
-		const t = timeOfDay;
-		if (t >= 7 && t <= 18) return 0;
-		if (t < 5 || t > 20) return 1;
-		if (t < 7) return 1 - (t - 5) / 2;
-		return (t - 18) / 2;
-	});
 
 	// Frost altitude-driven (matches Window.svelte logic)
 	const frostAmount = $derived(clamp((altitude - 25000) / 15000, 0, 1));
@@ -157,7 +148,20 @@
 			});
 			cesiumViewer.imageryLayers.removeAll();
 			applyCesiumSource();
+			Cesium.createWorldTerrainAsync().then(t => { if (cesiumViewer) cesiumViewer.terrainProvider = t; }).catch(() => {});
+			// Set initial camera position synchronously, then mark loaded
+			const altMeters = altitude * 0.3048;
+			cesiumViewer.camera.setView({
+				destination: Cesium.Cartesian3.fromDegrees(currentLocation.lon, currentLocation.lat, altMeters),
+				orientation: {
+					heading: Cesium.Math.toRadians(heading),
+					pitch: Cesium.Math.toRadians(-20),
+					roll: 0,
+				},
+			});
 			cesiumLoaded = true;
+			// Resize after layout settles
+			requestAnimationFrame(() => cesiumViewer?.resize());
 		} catch (e) { console.warn('[Playground] Cesium init failed:', e); }
 	}
 
@@ -166,16 +170,26 @@
 		try {
 			cesiumViewer.imageryLayers.removeAll();
 			cesiumViewer.imageryLayers.addImageryProvider(
-				new Cesium.UrlTemplateImageryProvider({ url: cesiumSrc.url })
+				new Cesium.UrlTemplateImageryProvider({
+					url: cesiumSrc.url,
+					maximumLevel: 19,
+					minimumLevel: 0,
+					tilingScheme: new Cesium.WebMercatorTilingScheme(),
+				})
 			);
 		} catch (e) { console.warn('[Playground] Cesium source swap failed:', e); }
 	}
 
-	function flyCesiumTo(loc: { lat: number; lon: number }, alt = 50000) {
+	function flyCesiumTo(loc: { lat: number; lon: number }) {
 		if (!cesiumViewer || !cesiumLoaded) return;
+		const altMeters = altitude * 0.3048;
 		cesiumViewer.camera.flyTo({
-			destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, alt),
-			orientation: { heading: 0, pitch: -Math.PI / 4, roll: 0 },
+			destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, altMeters),
+			orientation: {
+				heading: Cesium.Math.toRadians(heading),
+				pitch: Cesium.Math.toRadians(-20),
+				roll: 0,
+			},
 			duration: 1.5,
 		});
 	}
@@ -195,6 +209,8 @@
 	$effect(() => {
 		if ((activeTab === 'cesium' || activeTab === 'compare') && viewerContainer && !cesiumViewer) {
 			initCesium();
+		} else if (cesiumViewer && (activeTab === 'cesium' || activeTab === 'compare')) {
+			requestAnimationFrame(() => cesiumViewer?.resize());
 		}
 		if (activeTab === 'maplibre' && cesiumViewer) {
 			cesiumViewer.destroy();
@@ -203,7 +219,14 @@
 		}
 	});
 
-	onMount(() => () => cesiumViewer?.destroy());
+	onMount(() => {
+		const onResize = () => cesiumViewer?.resize();
+		window.addEventListener('resize', onResize);
+		return () => {
+			window.removeEventListener('resize', onResize);
+			cesiumViewer?.destroy();
+		};
+	});
 
 	// ─── Preset actions ──────────────────────────────────────────────────────
 	function randomize() {
@@ -247,7 +270,6 @@
 					lon={currentLocation.lon}
 					zoom={10}
 					pitch={-45}
-					imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 					pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
 				/>
 			</div>
@@ -263,8 +285,6 @@
 			{lightningY}
 			{frostAmount}
 		/>
-
-		<TreeLayer locationId={activeLocation} {nightFactor} cloudDensity={density} showTrees={true} />
 
 		{#if activeTab === 'compare'}
 			<div class="compare-divider" aria-hidden="true">
@@ -434,6 +454,13 @@
 	.cesium-viewer :global(.cesium-credit-textContainer),
 	.cesium-viewer :global(.cesium-credit-logoContainer) {
 		display: none !important;
+	}
+
+	.cesium-viewer :global(.cesium-viewer),
+	.cesium-viewer :global(.cesium-widget),
+	.cesium-viewer :global(.cesium-viewer-cesiumWidgetContainer) {
+		width: 100% !important;
+		height: 100% !important;
 	}
 
 	.cesium-viewer :global(canvas) {

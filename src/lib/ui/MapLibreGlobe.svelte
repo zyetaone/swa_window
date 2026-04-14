@@ -1,25 +1,16 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import maplibregl from 'maplibre-gl';
-	import { PMTiles } from 'pmtiles';
-
-	// Module-level PMTiles protocol — registered once, survives remounts
-	const archives = new Map<string, PMTiles>();
-	let protocolRegistered = false;
-
-	function ensurePmtilesProtocol() {
-		if (protocolRegistered) return;
-		maplibregl.addProtocol('pmtiles', async (params) => {
-			const match = params.url.match(/^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/);
-			if (!match) throw new Error('Invalid PMTiles URL');
-			const path = match[1];
-			if (!archives.has(path)) archives.set(path, new PMTiles(path));
-			const archive = archives.get(path)!;
-			const res = await archive.getZxy(+match[2], +match[3], +match[4]);
-			return res ? { data: res.data } : { data: null };
-		});
-		protocolRegistered = true;
-	}
+	import {
+		MapLibre,
+		GlobeControl,
+		Sky,
+		Light,
+		FillExtrusionLayer,
+		RasterDEMTileSource,
+		Terrain,
+		Projection,
+	} from 'svelte-maplibre-gl';
+	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
+	import type maplibregl from 'maplibre-gl';
 
 	let {
 		lat = 25.2,
@@ -27,168 +18,104 @@
 		zoom = 10,
 		pitch = -45,
 		bearing = 0,
-		imageryUrl = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
 		pmtilesUrl = '',
-		terrainUrl = '',
 		terrainPmtilesUrl = '',
+		showBuildings = false,
+		showTerrain = false,
 		showAtmosphere = true,
+		nightFactor = 0,
 	}: {
 		lat?: number;
 		lon?: number;
 		zoom?: number;
 		pitch?: number;
 		bearing?: number;
-		imageryUrl?: string;
 		pmtilesUrl?: string;
-		terrainUrl?: string;
 		terrainPmtilesUrl?: string;
+		showBuildings?: boolean;
+		showTerrain?: boolean;
 		showAtmosphere?: boolean;
+		nightFactor?: number;
 	} = $props();
 
-	let container: HTMLDivElement;
-	let map = $state.raw<maplibregl.Map | null>(null);
+	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
-	function buildSourceSpec() {
-		return {
-			type: 'raster' as const,
-			tiles: pmtilesUrl
-				? [`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]
-				: [imageryUrl],
-			tileSize: 256,
-			attribution: pmtilesUrl
-				? '© ESRI World Imagery (cached)'
-				: '© Sentinel-2 cloudless (EOX)',
-		};
-	}
+	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
-	function swapSource() {
-		if (!map || (!imageryUrl && !pmtilesUrl)) return;
-		try {
-			if (map.getLayer('Satellite')) map.removeLayer('Satellite');
-			if (map.getSource('satellite')) map.removeSource('satellite');
-			map.addSource('satellite', buildSourceSpec());
-			map.addLayer({ id: 'Satellite', type: 'raster', source: 'satellite' });
-		} catch (e) { console.warn('[MapLibreGlobe] source swap failed:', e); }
-	}
+	let styleUrl = $derived(pmtilesUrl || VOYAGER_STYLE);
 
-	$effect(() => {
-		void imageryUrl;
-		void pmtilesUrl;
-		if (!map) return;
-		if (!map.isStyleLoaded()) {
-			map.once('styledata', () => swapSource());
-			return;
-		}
-		swapSource();
-	});
+	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
-	onMount(() => {
-		ensurePmtilesProtocol();
-
-		const style: maplibregl.StyleSpecification = {
-			version: 8,
-			projection: { type: 'globe' as const },
-			sources: {
-				satellite: buildSourceSpec(),
-			},
-			layers: [
-				{
-					id: 'Satellite',
-					type: 'raster' as const,
-					source: 'satellite',
-				},
-			],
-			...(showAtmosphere
-				? {
-						sky: {
-							'atmosphere-blend': [
-								'interpolate',
-								['linear'],
-								['zoom'],
-								0, 1,
-								5, 1,
-								7, 0,
-							],
-						},
-						light: {
-							anchor: 'map' as const,
-							position: [1.5, 90, 80],
-						},
-					}
-				: {}),
-		};
-
-		if (terrainUrl || terrainPmtilesUrl) {
-			style.sources = {
-				...style.sources,
-				terrain: {
-					type: 'raster-dem' as const,
-					tiles: terrainPmtilesUrl
-						? [`pmtiles://${terrainPmtilesUrl}/{z}/{x}/{y}`]
-						: terrainUrl
-							? [terrainUrl]
-							: [],
-					encoding: 'mapbox' as const,
-					tileSize: 256,
-				},
-			};
-		}
-
-		map = new maplibregl.Map({
-			container,
-			zoom,
-			center: [lon, lat],
-			pitch,
-			bearing,
-			style,
-			attributionControl: false,
-			...((terrainUrl || terrainPmtilesUrl)
-				? { terrain: 'terrain', terrainSource: 'terrain' }
-				: {}),
+	export function flyTo(dst: { lat: number; lon: number; altitude?: number }, _duration = 2000) {
+		if (!mapRef) return;
+		mapRef.flyTo({
+			center: [dst.lon, dst.lat],
+			zoom: dst.altitude ? Math.max(8, 16 - Math.log2(dst.altitude / 30000)) : zoom,
+			duration: _duration,
 		});
-
-		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-
-		return () => {
-			map?.remove();
-			map = null;
-		};
-	});
+	}
 </script>
 
-<div bind:this={container} class="map-container"></div>
+<MapLibre
+	bind:map={mapRef}
+	class="map-container"
+	center={{ lng: lon, lat }}
+	{zoom}
+	{pitch}
+	{bearing}
+	style={styleUrl}
+	attributionControl={false}
+	maxPitch={85}
+	autoloadGlobalCss={false}
+>
+	<Projection type="globe" />
+
+	{#if showAtmosphere}
+		<GlobeControl />
+		<Light anchor="map" position={[1.5, 90, 80]} />
+		<Sky
+			sky-color="#001e3d"
+			horizon-color="#1a4a7a"
+			fog-color="#1a3a5c"
+			sky-horizon-blend={0.3}
+			horizon-fog-blend={0.5}
+			atmosphere-blend={0.4}
+		/>
+	{/if}
+
+	{#if terrainPmtilesUrl && showTerrain}
+		<PMTilesProtocol scheme="pmtiles" pmtiles={[]} />
+		<RasterDEMTileSource id="terrain" url={`pmtiles://${terrainPmtilesUrl}`}>
+			<Terrain exaggeration={1.5} />
+		</RasterDEMTileSource>
+	{/if}
+
+	{#if showBuildings}
+		<FillExtrusionLayer
+			source="carto"
+			sourceLayer="building"
+			minzoom={13}
+			filter={['!=', ['get', 'hide_3d'], true]}
+			paint={{
+				'fill-extrusion-color': [
+					'interpolate', ['linear'], ['get', 'render_height'],
+					0, `rgba(${Math.round(180 * nightBrightness)}, ${Math.round(175 * nightBrightness)}, ${Math.round(165 * nightBrightness)}, 0.85)`,
+					200, `rgba(${Math.round(210 * nightBrightness)}, ${Math.round(205 * nightBrightness)}, ${Math.round(195 * nightBrightness)}, 0.95)`,
+					400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
+				],
+				'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
+				'fill-extrusion-base': ['case', ['>=', ['get', 'zoom'], 14], ['get', 'render_min_height'], 0],
+				'fill-extrusion-opacity': 0.85,
+			}}
+		/>
+	{/if}
+</MapLibre>
 
 <style>
-	.map-container {
+	:global(.map-container) {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
-	}
-
-	.map-container :global(.maplibregl-ctrl-top-right) {
-		top: 8px;
-		right: 8px;
-	}
-
-	.map-container :global(.maplibregl-ctrl-group) {
-		background: rgba(20, 20, 20, 0.8);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 6px;
-		overflow: hidden;
-	}
-
-	.map-container :global(.maplibregl-ctrl-group button) {
-		background: transparent;
-		border: none;
-		color: rgba(255, 255, 255, 0.7);
-		width: 32px;
-		height: 32px;
-		cursor: pointer;
-	}
-
-	.map-container :global(.maplibregl-ctrl-group button:hover) {
-		background: rgba(255, 255, 255, 0.1);
-		color: #fff;
 	}
 </style>
