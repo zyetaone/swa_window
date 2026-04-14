@@ -66,7 +66,6 @@ src/lib/
     ├── Globe.svelte      # CesiumManager mount/destroy lifecycle
     ├── CloudBlobs.svelte # SVG feTurbulence 3-layer parallax
     ├── Weather.svelte    # Rain, lightning flash, frost (CSS)
-    ├── TreeLayer.svelte  # Procedural CSS trees (seeded per location)
     ├── MicroEvent.svelte # Shooting stars, birds, contrails (CSS)
     ├── HUD.svelte        # Telemetry controls overlay
     ├── SidePanel.svelte  # Location picker + settings
@@ -130,7 +129,6 @@ Window.svelte (RAF loop via game-loop.ts)
     │   ├── Globe.svelte (Cesium terrain/buildings — CesiumManager lifecycle)
     │   ├── CloudBlobs.svelte (SVG feTurbulence clouds)
     │   ├── Weather.svelte (rain, lightning, frost — CSS)
-    │   ├── TreeLayer.svelte (procedural CSS trees, seeded per location)
     │   └── MicroEvent.svelte (shooting star, bird, contrail — CSS)
     ├── HUD.svelte (telemetry overlay)
     └── SidePanel.svelte (settings)
@@ -150,7 +148,6 @@ z:0   Cesium globe (terrain, buildings, night lights)
 z:1   CloudBlobs (SVG feTurbulence + CSS drift)
 z:2   Weather (rain drops + lightning flash)
 z:3   Micro-events (shooting star, bird, contrail)
-z:4   TreeLayer (procedural CSS trees)
 z:5   Frost (altitude-dependent)
 z:7   Wing silhouette
 z:9   Glass vignette

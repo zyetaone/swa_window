@@ -23,7 +23,6 @@
 	import CesiumViewer from "./Globe.svelte";
 	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
-	import TreeLayer from './TreeLayer.svelte';
 	import MicroEvent from './MicroEvent.svelte';
 	const model = useAppState();
 	const blind = useBlind(model);
@@ -217,10 +216,8 @@
 				{/if}
 			</div>
 
-			<!-- z:2 Rain + Lightning, z:4 Trees, z:5 Frost -->
+			<!-- z:2 Rain + Lightning, z:5 Frost -->
 			<Weather {rainOpacity} {windAngle} {lightningOpacity} {lightningX} {lightningY} {frostAmount} />
-
-			<TreeLayer locationId={model.location} nightFactor={model.nightFactor} cloudDensity={cloudOpacity} showTrees={model.showClouds} />
 
 			<!-- z:3 — Micro-events (shooting stars, birds, contrails) -->
 			<MicroEvent event={microEvent} />
