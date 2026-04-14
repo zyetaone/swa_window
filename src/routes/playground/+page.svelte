@@ -60,6 +60,12 @@
 	let autoOrbit = $state(false);
 	let autoTime = $state(false);  // advance timeOfDay in real time
 
+	// MapLibre layer toggles (passes through to MapLibreGlobe)
+	let mlTerrain = $state(false);
+	let mlBuildings = $state(false);
+	let mlAtmosphere = $state(true);
+	const TERRAIN_PMTILES = '/pmtiles/terrain.pmtiles';
+
 	// Lightning preview (simplified — just pulses every 3-8s when enabled)
 	let lightningIntensity = $state(0);
 	let lightningX = $state(50);
@@ -77,6 +83,13 @@
 	const maplibreSrc = $derived(MAPLIBRE_SOURCES.find(s => s.id === maplibreSource) ?? MAPLIBRE_SOURCES[0]);
 	const cesiumSrc = $derived(CESIUM_SOURCES.find(s => s.id === cesiumSource) ?? CESIUM_SOURCES[0]);
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
+	const nightFactor = $derived.by(() => {
+		const t = timeOfDay;
+		if (t >= 7 && t <= 18) return 0;
+		if (t < 5 || t > 20) return 1;
+		if (t < 7) return 1 - (t - 5) / 2;
+		return (t - 18) / 2;
+	});
 	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
 	const windAngle = $derived(weatherFx.windAngle);
 
@@ -269,8 +282,14 @@
 					lat={currentLocation.lat}
 					lon={currentLocation.lon}
 					zoom={10}
-					pitch={-45}
+					pitch={70}
+					bearing={heading}
 					pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
+					terrainPmtilesUrl={TERRAIN_PMTILES}
+					showTerrain={mlTerrain}
+					showBuildings={mlBuildings}
+					showAtmosphere={mlAtmosphere}
+					{nightFactor}
 				/>
 			</div>
 		{/if}
@@ -378,6 +397,12 @@
 						<span class="source-note">{src.note}</span>
 					</label>
 				{/each}
+			</fieldset>
+			<fieldset>
+				<legend>MapLibre Layers</legend>
+				<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
+				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (PMTiles DEM)</label>
+				<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings</label>
 			</fieldset>
 		{/if}
 

@@ -4,6 +4,8 @@
 		GlobeControl,
 		Sky,
 		Light,
+		RasterTileSource,
+		RasterLayer,
 		FillExtrusionLayer,
 		RasterDEMTileSource,
 		Terrain,
@@ -16,7 +18,7 @@
 		lat = 25.2,
 		lon = 55.3,
 		zoom = 10,
-		pitch = -45,
+		pitch = 45,
 		bearing = 0,
 		pmtilesUrl = '',
 		terrainPmtilesUrl = '',
@@ -42,8 +44,6 @@
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
-	let styleUrl = $derived(pmtilesUrl || VOYAGER_STYLE);
-
 	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
 	export function flyTo(dst: { lat: number; lon: number; altitude?: number }, _duration = 2000) {
@@ -63,12 +63,13 @@
 	{zoom}
 	{pitch}
 	{bearing}
-	style={styleUrl}
+	style={VOYAGER_STYLE}
 	attributionControl={false}
 	maxPitch={85}
 	autoloadGlobalCss={false}
 >
 	<Projection type="globe" />
+	<PMTilesProtocol />
 
 	{#if showAtmosphere}
 		<GlobeControl />
@@ -83,8 +84,13 @@
 		/>
 	{/if}
 
+	{#if pmtilesUrl}
+		<RasterTileSource id="pmtiles-imagery" tiles={[`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]} tileSize={256} attribution="ESRI World Imagery (cached)">
+			<RasterLayer />
+		</RasterTileSource>
+	{/if}
+
 	{#if terrainPmtilesUrl && showTerrain}
-		<PMTilesProtocol scheme="pmtiles" pmtiles={[]} />
 		<RasterDEMTileSource id="terrain" url={`pmtiles://${terrainPmtilesUrl}`}>
 			<Terrain exaggeration={1.5} />
 		</RasterDEMTileSource>
@@ -104,7 +110,7 @@
 					400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
 				],
 				'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
-				'fill-extrusion-base': ['case', ['>=', ['get', 'zoom'], 14], ['get', 'render_min_height'], 0],
+				'fill-extrusion-base': ['case', ['>=', ['zoom'], 14], ['get', 'render_min_height'], 0],
 				'fill-extrusion-opacity': 0.85,
 			}}
 		/>
