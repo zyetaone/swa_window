@@ -145,8 +145,8 @@
 {#if density > 0.01}
 	<div
 		class="deck"
-		style:top="{12 + altitudeShift}%"
-		style:transform="perspective(700px) rotateX(38deg) skewY({windSkew}deg)"
+		style:top="{4 + altitudeShift}%"
+		style:transform="perspective(1100px) rotateX(48deg) skewY({windSkew}deg)"
 		style:transform-origin="50% 0%"
 	>
 	{#each clouds as c (c.id)}
@@ -171,14 +171,15 @@
 <style>
 	.deck {
 		position: absolute;
-		left: -15%;
-		right: -15%;
-		height: 52%;
+		left: -40%;
+		right: -40%;
+		height: 70%;
 		overflow: hidden;
 		pointer-events: none;
 		will-change: transform;
-		mask-image: linear-gradient(to bottom, transparent 2%, black 18%, black 58%, transparent 95%);
-		-webkit-mask-image: linear-gradient(to bottom, transparent 2%, black 18%, black 58%, transparent 95%);
+		/* Fade to horizon: clouds dense in middle, fully transparent at far edge */
+		mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 70%, transparent 100%);
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 70%, transparent 100%);
 	}
 
 	.cloud {

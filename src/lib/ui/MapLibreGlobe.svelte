@@ -4,8 +4,6 @@
 		GlobeControl,
 		Sky,
 		Light,
-		RasterTileSource,
-		RasterLayer,
 		FillExtrusionLayer,
 		RasterDEMTileSource,
 		Terrain,
@@ -44,22 +42,45 @@
 		nightFactor?: number;
 	} = $props();
 
-	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
-
-	// Blank style — no basemap. Used when our own imagery layer is the only visual.
-	// Avoids POI/park markers from the Voyager basemap appearing as green dots
-	// when satellite imagery is overlaid.
-	const BLANK_STYLE = {
-		version: 8 as const,
-		sources: {},
-		layers: [{ id: 'background', type: 'background' as const, paint: { 'background-color': '#0a1228' } }],
+	// Self-contained satellite style — no basemap POIs (avoids the green dots).
+	// When a custom imagery URL is provided, embed it directly in the style.
+	const buildSatelliteStyle = (url: string, attribution: string): maplibregl.StyleSpecification => ({
+		version: 8,
+		projection: { type: 'globe' },
+		sources: {
+			satellite: {
+				type: 'raster',
+				tiles: [url],
+				tileSize: 256,
+				maxzoom: 19,
+				attribution,
+			},
+		},
+		layers: [
+			{ id: 'background', type: 'background', paint: { 'background-color': '#0a1228' } },
+			{ id: 'satellite', type: 'raster', source: 'satellite', paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } },
+		],
 		glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-	};
+		sky: showAtmosphere ? {
+			'sky-color': '#001e3d',
+			'horizon-color': '#1a4a7a',
+			'fog-color': '#1a3a5c',
+			'sky-horizon-blend': 0.3,
+			'horizon-fog-blend': 0.5,
+			'atmosphere-blend': 0.4,
+		} : undefined,
+	} as maplibregl.StyleSpecification);
+
+	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
+	const activeStyle = $derived(
+		imageryUrl ? buildSatelliteStyle(imageryUrl, imageryAttribution) :
+		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)') :
+		VOYAGER_STYLE
+	);
 	const useBlankStyle = $derived(!!imageryUrl || !!pmtilesUrl);
-	const activeStyle = $derived(useBlankStyle ? BLANK_STYLE : VOYAGER_STYLE);
 
 	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
@@ -91,24 +112,16 @@
 	{#if showAtmosphere}
 		<GlobeControl />
 		<Light anchor="map" position={[1.5, 90, 80]} />
-		<Sky
-			sky-color="#001e3d"
-			horizon-color="#1a4a7a"
-			fog-color="#1a3a5c"
-			sky-horizon-blend={0.3}
-			horizon-fog-blend={0.5}
-			atmosphere-blend={0.4}
-		/>
-	{/if}
-
-	{#if pmtilesUrl}
-		<RasterTileSource id="imagery" tiles={[`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]} tileSize={256} attribution="PMTiles (cached)">
-			<RasterLayer paint={{ 'raster-fade-duration': 0, 'raster-resampling': 'linear' }} />
-		</RasterTileSource>
-	{:else if imageryUrl}
-		<RasterTileSource id="imagery" tiles={[imageryUrl]} tileSize={256} maxzoom={19} attribution={imageryAttribution}>
-			<RasterLayer paint={{ 'raster-fade-duration': 0, 'raster-resampling': 'linear' }} />
-		</RasterTileSource>
+		{#if !useBlankStyle}
+			<Sky
+				sky-color="#001e3d"
+				horizon-color="#1a4a7a"
+				fog-color="#1a3a5c"
+				sky-horizon-blend={0.3}
+				horizon-fog-blend={0.5}
+				atmosphere-blend={0.4}
+			/>
+		{/if}
 	{/if}
 
 	{#if terrainPmtilesUrl && showTerrain}
