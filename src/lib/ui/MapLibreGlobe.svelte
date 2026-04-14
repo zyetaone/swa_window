@@ -20,6 +20,8 @@
 		zoom = 10,
 		pitch = 45,
 		bearing = 0,
+		imageryUrl = '',
+		imageryAttribution = '',
 		pmtilesUrl = '',
 		terrainPmtilesUrl = '',
 		showBuildings = false,
@@ -32,6 +34,8 @@
 		zoom?: number;
 		pitch?: number;
 		bearing?: number;
+		imageryUrl?: string;
+		imageryAttribution?: string;
 		pmtilesUrl?: string;
 		terrainPmtilesUrl?: string;
 		showBuildings?: boolean;
@@ -85,7 +89,11 @@
 	{/if}
 
 	{#if pmtilesUrl}
-		<RasterTileSource id="pmtiles-imagery" tiles={[`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]} tileSize={256} attribution="ESRI World Imagery (cached)">
+		<RasterTileSource id="imagery" tiles={[`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`]} tileSize={256} attribution="PMTiles (cached)">
+			<RasterLayer />
+		</RasterTileSource>
+	{:else if imageryUrl}
+		<RasterTileSource id="imagery" tiles={[imageryUrl]} tileSize={256} maxzoom={20} attribution={imageryAttribution}>
 			<RasterLayer />
 		</RasterTileSource>
 	{/if}

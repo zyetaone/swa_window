@@ -18,24 +18,57 @@
 	import * as Cesium from 'cesium';
 
 	type Tab = 'cesium' | 'maplibre' | 'compare';
-	type SourceId = 'esri' | 'stadia' | 'eox' | 'pmtiles';
 
 	interface Source {
-		id: SourceId;
+		id: string;
 		label: string;
 		url: string;
 		note: string;
+		attribution?: string;
 		isPmtiles?: boolean;
 	}
 
 	const CESIUM_SOURCES: Source[] = [
-		{ id: 'esri', label: 'ESRI World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'No auth, global coverage' },
+		{ id: 'esri', label: 'ESRI World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'No auth, z19 max, global', attribution: '© ESRI' },
 	];
 
+	// MapLibre satellite sources — all no-auth, varying max-zoom + region coverage
 	const MAPLIBRE_SOURCES: Source[] = [
-		{ id: 'eox', label: 'Sentinel-2 Cloudless (EOX)', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg', note: 'Free, global, no auth' },
-		{ id: 'esri', label: 'ESRI World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'No auth, rate limit' },
-		{ id: 'pmtiles', label: 'ESRI PMTiles (local)', url: '/pmtiles/esri_dubai.pmtiles', note: 'Prefetched — run build-pmtiles first', isPmtiles: true },
+		{
+			id: 'esri',
+			label: 'ESRI World Imagery',
+			url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+			note: 'No auth, z19 max, global — best general',
+			attribution: '© ESRI',
+		},
+		{
+			id: 'eox-s2',
+			label: 'Sentinel-2 Cloudless (EOX)',
+			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
+			note: 'Free, z14 max, cloudless — natural look',
+			attribution: '© EOX • Sentinel-2',
+		},
+		{
+			id: 'usgs',
+			label: 'USGS Imagery (USA)',
+			url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+			note: 'USA only, z18 max, no auth',
+			attribution: '© USGS',
+		},
+		{
+			id: 'osm-de',
+			label: 'OSM Standard (no satellite)',
+			url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+			note: 'Map style for comparison',
+			attribution: '© OpenStreetMap',
+		},
+		{
+			id: 'pmtiles',
+			label: 'ESRI PMTiles (local)',
+			url: '/pmtiles/esri_dubai.pmtiles',
+			note: 'Prefetched offline — needs build-pmtiles',
+			isPmtiles: true,
+		},
 	];
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -43,8 +76,8 @@
 	let activeLocation = $state<LocationId>('dubai');
 	let timeOfDay = $state(12);  // 0-24, drives skyState
 	let weather = $state<WeatherType>('clear');
-	let cesiumSource = $state<SourceId>('esri');
-	let maplibreSource = $state<SourceId>('eox');
+	let cesiumSource = $state<string>('esri');
+	let maplibreSource = $state<string>('esri');
 
 	// Cloud sim
 	let density = $state(0.6);
@@ -284,6 +317,8 @@
 					zoom={10}
 					pitch={70}
 					bearing={heading}
+					imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
+					imageryAttribution={maplibreSrc.attribution ?? ''}
 					pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
 					terrainPmtilesUrl={TERRAIN_PMTILES}
 					showTerrain={mlTerrain}

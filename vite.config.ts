@@ -1,5 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { normalizePath } from 'vite';
 import path from 'node:path';
@@ -33,5 +33,10 @@ export default defineConfig({
 		// in svelte.config.js (which enables inlineDynamicImports).
 		// Single-bundle mode already handles Cesium bundling.
 		chunkSizeWarningLimit: 5000,
+	},
+	test: {
+		environment: 'happy-dom',
+		include: ['src/**/*.{test,spec}.{ts,svelte.ts}'],
+		globals: false,
 	},
 });
