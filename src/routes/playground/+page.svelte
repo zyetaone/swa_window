@@ -10,8 +10,10 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
-	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from './sources';
-	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
+	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './sources';
+	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/config';
+	import { FLIGHT_FEEL } from '$lib/constants';
+	import { MotionEngine } from '$lib/simulation/motion.svelte';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
@@ -42,6 +44,12 @@
 	let autoOrbit = $state(false);
 	let autoTime = $state(false);  // advance timeOfDay in real time
 
+	// Motion / turbulence
+	const motion = new MotionEngine();
+	let simTime = $state(0);  // elapsed seconds for motion engine
+	type TurbLevel = 'light' | 'moderate' | 'severe';
+	let turbulenceLevel = $state<TurbLevel>('light');
+
 	// MapLibre layer toggles (passes through to MapLibreGlobe)
 	let mlTerrain = $state(false);
 	let mlBuildings = $state(false);
@@ -54,7 +62,7 @@
 
 	// ─── Derived ─────────────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
-	const maplibreSrc = $derived(findSource(MAPLIBRE_SOURCES, maplibreSource));
+		const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, maplibreSource));
 	const cesiumSrc = $derived(findSource(CESIUM_SOURCES, cesiumSource));
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
 	const nf = $derived(nightFactor(timeOfDay));
@@ -80,13 +88,35 @@
 		const loop = (now: number) => {
 			const dt = (now - last) / 1000;
 			last = now;
-			if (autoOrbit) heading = (heading + dt * 5) % 360;
+			simTime += dt;
+			if (autoOrbit) heading = (heading + dt * 5 * planeSpeed) % 360;
 			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;  // 48s = full day
+
+			// Tick motion engine
+			motion.tick(dt, {
+				time: simTime,
+				heading,
+				altitude,
+				turbulenceLevel,
+				weather,
+			} as any);
 
 			raf = requestAnimationFrame(loop);
 		};
 		raf = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(raf);
+	});
+
+	// Motion transform for globe (matches Window.svelte motion feel)
+	const motionTransform = $derived.by(() => {
+		const turbY = motion.motionOffsetY * 0.08;
+		const turbX = motion.motionOffsetX * 0.08;
+		const turbRot = motion.motionOffsetY * 0.02;
+		const breathY = motion.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE;
+		const bank = motion.bankAngle;
+		const x = turbX + motion.engineVibeX;
+		const y = turbY + breathY + motion.engineVibeY;
+		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${(turbRot + bank).toFixed(3)}deg)`;
 	});
 
 	// ─── Cesium ──────────────────────────────────────────────────────────────
@@ -191,6 +221,7 @@
 		density = randomBetween(0.3, 0.9);
 		cloudSpeed = randomBetween(0.5, 2);
 		timeOfDay = randomBetween(0, 24);
+		turbulenceLevel = (['light', 'moderate', 'severe'] as TurbLevel[])[Math.floor(randomBetween(0, 3))];
 	}
 
 	function reset() {
@@ -203,6 +234,7 @@
 		weather = 'clear';
 		autoOrbit = false;
 		autoTime = false;
+		turbulenceLevel = 'light';
 	}
 </script>
 
@@ -210,7 +242,7 @@
 	<div class="viewport" style:background={bgGradient}>
 		<!-- Cesium -->
 		{#if activeTab === 'cesium' || activeTab === 'compare'}
-			<div class="globe-pane" class:half={activeTab === 'compare'} class:left={activeTab === 'compare'}>
+			<div class="globe-pane" class:half={activeTab === 'compare'} class:left={activeTab === 'compare'} style:transform={motionTransform}>
 				<div bind:this={viewerContainer} class="cesium-viewer"></div>
 				{#if !cesiumLoaded}
 					<div class="globe-loading">Loading Cesium…</div>
@@ -220,7 +252,7 @@
 
 		<!-- MapLibre -->
 		{#if activeTab === 'maplibre' || activeTab === 'compare'}
-			<div class="globe-pane" class:half={activeTab === 'compare'} class:right={activeTab === 'compare'}>
+			<div class="globe-pane" class:half={activeTab === 'compare'} class:right={activeTab === 'compare'} style:transform={motionTransform}>
 				<MapLibreGlobe
 					lat={currentLocation.lat}
 					lon={currentLocation.lon}
@@ -341,9 +373,20 @@
 				{/each}
 			</fieldset>
 			<fieldset>
+				<legend>🗄️ Cached (offline tiles)</legend>
+				<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
+				{#each CACHED_SOURCES as src (src.id)}
+					<label class="source-btn" class:active={maplibreSource === src.id}>
+						<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
+						<span class="source-name">{src.label}</span>
+						<span class="source-note">{src.note}</span>
+					</label>
+				{/each}
+			</fieldset>
+			<fieldset>
 				<legend>MapLibre Layers</legend>
 				<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
-				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (demotiles / JAXA)</label>
+				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (AWS/JAXA GLO-30)</label>
 				<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (CartoDB)</label>
 			</fieldset>
 		{/if}
@@ -370,6 +413,13 @@
 			</label>
 			<label>Altitude <span class="val">{(altitude / 1000).toFixed(0)}k ft</span>
 				<input type="range" bind:value={altitude} min="5000" max="45000" step="1000" />
+			</label>
+			<label>Turbulence <span class="val">{turbulenceLevel}</span>
+				<select bind:value={turbulenceLevel}>
+					<option value="light">Light</option>
+					<option value="moderate">Moderate</option>
+					<option value="severe">Severe</option>
+				</select>
 			</label>
 			<label class="check">
 				<input type="checkbox" bind:checked={autoOrbit} />

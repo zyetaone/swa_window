@@ -12,7 +12,7 @@
  * SSR is disabled (kiosk-only) there's no cross-request contamination risk.
  */
 
-import type { CesiumManager } from './manager';
+import type { CesiumManager } from './compose';
 
 class ActiveCesium {
 	manager = $state<CesiumManager | null>(null);

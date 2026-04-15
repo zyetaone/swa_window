@@ -6,8 +6,8 @@
  * preset. Every field is admin-push-mutable via `setPath(path, value)`.
  *
  * Values mirror the current `constants.ts` CESIUM block + existing WindowModel
- * fields. Phase 2 migrates `cesium/manager.ts` to read from here instead of
- * importing constants directly.
+ * fields. Phase 3+ migrates `world/compose.ts` (the Cesium adapter) to read
+ * from here instead of importing constants directly.
  */
 
 import type { QualityMode } from '$lib/types';

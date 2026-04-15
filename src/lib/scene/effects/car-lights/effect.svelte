@@ -9,7 +9,7 @@
 	 * Output: no DOM. All rendering happens inside the Cesium canvas.
 	 */
 	import { LOCATION_MAP } from '$lib/locations';
-	import { activeCesium } from '$lib/cesium/active.svelte';
+	import { activeCesium } from '$lib/world/active.svelte';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 

@@ -9,7 +9,7 @@
 	 *
 	 * No DOM output — all rendering inside the Cesium canvas.
 	 */
-	import { activeCesium } from '$lib/cesium/active.svelte';
+	import { activeCesium } from '$lib/world/active.svelte';
 	import type { EffectProps } from '../../types';
 	import type { SpriteParams } from './types';
 
