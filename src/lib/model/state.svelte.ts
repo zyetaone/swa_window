@@ -11,7 +11,7 @@ import { clamp, getSkyState, nightFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
 import { QUALITY_MODES } from '$lib/types';
 import type { SkyState, LocationId, WeatherType, QualityMode, DisplayMode, SimulationContext } from '$lib/types';
-import { loadPersistedState, type PersistedState } from '$lib/persistence';
+import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { isValidWeather } from '$lib/validation';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';

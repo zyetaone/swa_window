@@ -10,11 +10,11 @@
 	 */
 
 	import { onDestroy, onMount } from "svelte";
-	import { createAppState } from "$lib/app-state.svelte";
+	import { createAppState } from "$lib/model/state.svelte";
 	import { AIRCRAFT } from "$lib/constants";
 	import { LOCATION_MAP } from "$lib/locations";
 	import type { LocationId } from "$lib/types";
-	import { savePersistedState } from "$lib/persistence";
+	import { savePersistedState } from "$lib/model/persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
 	import { bundleStore } from "$lib/scene/bundle/store.svelte";

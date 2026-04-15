@@ -17,7 +17,7 @@
  */
 
 import type { Component } from 'svelte';
-import type { WindowModel } from '$lib/app-state.svelte';
+import type { WindowModel } from '$lib/model/state.svelte';
 
 /**
  * Conceptual layer the effect belongs to.

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadPersistedState, savePersistedState, STORAGE_KEY } from '$lib/persistence';
+import { loadPersistedState, savePersistedState, STORAGE_KEY } from '$lib/model/persistence';
 
 describe('loadPersistedState', () => {
 	beforeEach(() => {

@@ -6,7 +6,7 @@
  * Contract: no field = no constraint. AND across fields, OR within a field.
  */
 
-import type { WindowModel } from '$lib/app-state.svelte';
+import type { WindowModel } from '$lib/model/state.svelte';
 import type { WhenPredicate } from './types';
 
 /** Returns true when every specified constraint is satisfied by model's current state. */

@@ -5,7 +5,7 @@
 	 * Contains: location picker, settings, flight data.
 	 * Toggled via tab button on right edge of cabin wall.
 	 */
-	import { useAppState } from "$lib/app-state.svelte";
+	import { useAppState } from "$lib/model/state.svelte";
 	import { LOCATIONS } from "$lib/locations";
 	import { AIRCRAFT } from "$lib/constants";
 	import { WEATHER_TYPES } from "$lib/types";

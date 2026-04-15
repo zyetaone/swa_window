@@ -5,7 +5,7 @@
  * error tracking with emergency reload after 10 consecutive failures.
  */
 
-import { STORAGE_KEY } from '$lib/persistence';
+import { STORAGE_KEY } from '$lib/model/persistence';
 
 type Callback = (dt: number) => void;
 

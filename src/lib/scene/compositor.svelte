@@ -7,7 +7,7 @@
 	 * Effects that expose a `when` predicate are reactively mounted/unmounted —
 	 * Svelte's {#if} tracks the predicate and tears down state cleanly on exit.
 	 */
-	import { useAppState } from '$lib/app-state.svelte';
+	import { useAppState } from '$lib/model/state.svelte';
 	import { EFFECTS } from './registry';
 	import { bundleStore } from './bundle/store.svelte';
 

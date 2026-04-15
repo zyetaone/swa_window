@@ -6,7 +6,7 @@
 	 * hub and has no local WindowModel — remote telemetry polling is a
 	 * separate concern (Phase 5.7+).
 	 */
-	import { useAppState } from '$lib/app-state.svelte';
+	import { useAppState } from '$lib/model/state.svelte';
 
 	const model = useAppState();
 	const telemetry = model.telemetry;
