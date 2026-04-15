@@ -151,17 +151,21 @@ export class CesiumManager {
 	}
 
 	/**
-	 * Sync Cesium's internal clock to model.timeOfDay so the sun position
-	 * Cesium computes for sky atmosphere matches what the model thinks the
-	 * time is. Without this, Cesium uses wall-clock UTC — which produces
-	 * day/night mismatches: model says "Dubai 4 PM (day)" while Cesium
-	 * renders "Dubai dusk" because the user's wall-clock UTC moment puts
-	 * Dubai's longitude past sunset. Production version of this app had
-	 * the same method.
+	 * Sync Cesium's internal clock to the model's time-of-day, treating
+	 * timeOfDay as LOCAL solar time at the current view longitude.
+	 *
+	 * Cesium computes sun position from absolute UTC, so we have to
+	 * back-convert: UTC = localHour - longitude/15 (each 15° east shifts
+	 * solar noon one hour earlier in UTC). Without this, "Dubai 4 PM"
+	 * (timeOfDay=16) was being passed straight to UTC, putting the sun
+	 * over the Pacific and rendering Dubai as deep night with stars.
 	 */
 	private syncClock(): void {
 		const C = this.CesiumModule;
-		const utcHour = ((this.model.timeOfDay % 24) + 24) % 24;
+		const localHour = ((this.model.timeOfDay % 24) + 24) % 24;
+		const lon = this.model.flight.lon;
+		const utcRaw = localHour - lon / 15;
+		const utcHour = ((utcRaw % 24) + 24) % 24;
 		const hours = Math.floor(utcHour);
 		const minutes = Math.floor((utcHour % 1) * 60);
 		const now = new Date();
@@ -314,6 +318,12 @@ export class CesiumManager {
 			if (v.scene.sun) v.scene.sun.show = isSunVisible;
 			this.syncClock();
 		}
+
+		// Skybox stays on always — vite-plugin-static-copy serves the SkyBox
+		// star textures from /cesiumStatic/Assets/Textures/SkyBox/, so night
+		// gets a real starfield. (Earlier workaround disabled it because of
+		// a stale-build issue — fixed at the static-asset config layer now.)
+		if (v.scene.skyBox) v.scene.skyBox.show = true;
 
 		let r = lerp(140, 25, nf); let g = lerp(170, 25, nf); let b = lerp(200, 40, nf);
 		r = lerp(r, 100, dd * 0.3); g = lerp(g, 80, dd * 0.3); b = lerp(b, 70, dd * 0.3);

@@ -12,7 +12,7 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 export const SENTINEL2 = import.meta.env.VITE_SENTINEL2 === 'true' || false;
 
 /** CartoDB Dark basemap — dark vector tiles with crisp road + building edge detail. */
-export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
+export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
 
 /**
  * EOX Sentinel-2 Cloudless 2024 — natural-color cloudless composite from
