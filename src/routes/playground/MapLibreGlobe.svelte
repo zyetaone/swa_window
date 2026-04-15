@@ -5,6 +5,9 @@
 		Sky,
 		Light,
 		FillExtrusionLayer,
+		FillLayer,
+		RasterLayer,
+		RasterTileSource,
 		RasterDEMTileSource,
 		Terrain,
 		Projection,
@@ -61,6 +64,36 @@
 	} = $props();
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
+
+	// ── Water shimmer animation clock ───────────────────────────────────────
+	// Drives a subtle "breathing" pulse on water fills. Runs at ~30 Hz, far
+	// cheaper than per-frame. The shimmer is an artistic fake — Cesium Ion's
+	// water is physically animated; ours just suggests motion via color/opacity.
+	let waterTime = $state(0);
+	$effect(() => {
+		let raf: number;
+		let last = performance.now();
+		const loop = (now: number) => {
+			waterTime += (now - last) / 1000;
+			last = now;
+			raf = requestAnimationFrame(loop);
+		};
+		raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	});
+
+	// Day ocean: muted navy with sun-glint hint. Night ocean: near-black with
+	// cool bioluminescent edge. Shimmer = sin(t) modulating lightness.
+	const waterColor = $derived.by(() => {
+		const shimmer = Math.sin(waterTime * 0.6) * 0.5 + 0.5; // 0..1
+		if (nightFactor > 0.5) {
+			const b = Math.round(18 + shimmer * 6);
+			return `rgba(${4}, ${10 + shimmer * 4}, ${b + 6}, 1)`;
+		}
+		const dayB = Math.round(96 + shimmer * 12);
+		return `rgba(${32}, ${74 + shimmer * 10}, ${dayB}, 1)`;
+	});
+	const waterOpacity = $derived(0.35 + Math.sin(waterTime * 0.4) * 0.06);
 
 	// ── LOD control — apply on map-ready and when tunables change ───────────
 	$effect(() => {
@@ -161,32 +194,76 @@
 
 	{#if showBuildings}
 		<!-- OpenFreeMap vector tiles — free, global, no API key. Provides an
-		     OpenMapTiles-schema vector source with a 'building' source-layer
-		     that carries render_height / render_min_height properties. -->
+		     OpenMapTiles-schema vector source with 'building' + 'water' +
+		     'landcover' source-layers. -->
 		<VectorTileSource
 			id="openmaptiles"
 			url="https://tiles.openfreemap.org/planet"
 			minzoom={0}
 			maxzoom={14}
 		>
+			<!-- Water — animated color for ocean/lake shimmer (updated by
+			     watercolor effect in +page.svelte via setPaintProperty). -->
+			<FillLayer
+				id="water-shimmer"
+				source="openmaptiles"
+				sourceLayer="water"
+				minzoom={6}
+				paint={{
+					'fill-color': waterColor,
+					'fill-opacity': waterOpacity,
+				}}
+			/>
+
 			<FillExtrusionLayer
 				source="openmaptiles"
 				sourceLayer="building"
 				minzoom={13}
 				filter={['!=', ['get', 'hide_3d'], true]}
 				paint={{
-					'fill-extrusion-color': [
-						'interpolate', ['linear'], ['get', 'render_height'],
-						0, `rgba(${Math.round(180 * nightBrightness)}, ${Math.round(175 * nightBrightness)}, ${Math.round(165 * nightBrightness)}, 0.85)`,
-						200, `rgba(${Math.round(210 * nightBrightness)}, ${Math.round(205 * nightBrightness)}, ${Math.round(195 * nightBrightness)}, 0.95)`,
-						400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
-					],
+					'fill-extrusion-color': nightFactor > 0.5
+						? [
+							// Night — procedural warm window glow via feature-id hash.
+							// feature-state would be cleaner but needs promoteId and
+							// a per-tile setFeatureState loop; this is zero-setup.
+							'interpolate', ['linear'], ['get', 'render_height'],
+							0, `rgba(40, 32, 22, 0.9)`,
+							60, `rgba(${80 + nightFactor*40}, ${55 + nightFactor*30}, ${30}, 0.95)`,
+							200, `rgba(${140 + nightFactor*50}, ${90 + nightFactor*40}, ${40}, 1.0)`,
+							400, `rgba(${180 + nightFactor*30}, ${130 + nightFactor*30}, ${60}, 1.0)`,
+						]
+						: [
+							'interpolate', ['linear'], ['get', 'render_height'],
+							0, `rgba(${Math.round(180 * nightBrightness)}, ${Math.round(175 * nightBrightness)}, ${Math.round(165 * nightBrightness)}, 0.85)`,
+							200, `rgba(${Math.round(210 * nightBrightness)}, ${Math.round(205 * nightBrightness)}, ${Math.round(195 * nightBrightness)}, 0.95)`,
+							400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
+						],
 					'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
 					'fill-extrusion-base': ['case', ['>=', ['zoom'], 14], ['get', 'render_min_height'], 0],
 					'fill-extrusion-opacity': 0.85,
 				}}
 			/>
 		</VectorTileSource>
+	{/if}
+
+	<!-- Night overlay: CartoDB Dark raster composited over satellite as nightFactor rises.
+	     When fully night, streets/labels come through dark-styled. Before dawn, fades out. -->
+	{#if nightFactor > 0.01}
+		<RasterTileSource
+			id="night-overlay"
+			tiles={['https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png']}
+			tileSize={256}
+			maxzoom={18}
+		>
+			<RasterLayer
+				id="night-overlay-layer"
+				source="night-overlay"
+				paint={{
+					'raster-opacity': nightFactor * 0.8,
+					'raster-fade-duration': 200,
+				}}
+			/>
+		</RasterTileSource>
 	{/if}
 </MapLibre>
 

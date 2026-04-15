@@ -25,6 +25,7 @@
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
+	import NightOverlay from './NightOverlay.svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -274,6 +275,8 @@
 		</div>
 
 		<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
+
+		<NightOverlay nightFactor={nf} />
 
 		<Weather
 			rainOpacity={weatherFx.rainOpacity}
