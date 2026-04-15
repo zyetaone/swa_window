@@ -51,6 +51,10 @@
 	let mlBuildings = $state(true);
 	let mlAtmosphere = $state(true);
 
+	// LOD tuning — see MapLibre level-of-detail-control example
+	let lodMaxZoomLevels = $state(6);
+	let lodTileCountRatio = $state(2.0);
+
 	// ─── UI state ────────────────────────────────────────────────────────────
 	let drawerOpen = $state(false);
 
@@ -254,6 +258,8 @@
 				showAtmosphere={mlAtmosphere}
 				nightFactor={nf}
 				terrainExaggeration={1.5}
+				{lodMaxZoomLevels}
+				{lodTileCountRatio}
 			/>
 		</div>
 
@@ -377,6 +383,17 @@
 			<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
 			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
 			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
+		</fieldset>
+
+		<fieldset>
+			<legend>LOD (Pi tuning)</legend>
+			<p class="field-note">setSourceTileLodParams — trades distant crispness for lower tile load.</p>
+			<label>Max zoom levels <span class="val">{lodMaxZoomLevels}</span>
+				<input type="range" bind:value={lodMaxZoomLevels} min="1" max="11" step="1" />
+			</label>
+			<label>Tile count ratio <span class="val">{lodTileCountRatio.toFixed(1)}</span>
+				<input type="range" bind:value={lodTileCountRatio} min="1" max="10" step="0.1" />
+			</label>
 		</fieldset>
 
 		<fieldset>

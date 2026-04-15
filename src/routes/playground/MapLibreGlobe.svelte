@@ -29,6 +29,14 @@
 		showAtmosphere = true,
 		nightFactor = 0,
 		terrainExaggeration = 1.5,
+		/**
+		 * LOD tuning — `map.setSourceTileLodParams(max, ratio)`. Pi-tuned
+		 * defaults: trade a touch of far-distance crispness for ~40% less
+		 * tile load at cruise altitude (pitch 70°+).
+		 * See https://maplibre.org/maplibre-gl-js/docs/examples/level-of-detail-control/
+		 */
+		lodMaxZoomLevels = 6,
+		lodTileCountRatio = 2.0,
 	}: {
 		lat?: number;
 		lon?: number;
@@ -45,9 +53,28 @@
 		showAtmosphere?: boolean;
 		nightFactor?: number;
 		terrainExaggeration?: number;
+		lodMaxZoomLevels?: number;
+		lodTileCountRatio?: number;
 	} = $props();
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
+
+	// ── LOD control — apply on map-ready and when tunables change ───────────
+	// setSourceTileLodParams is a method on the map object (MapLibre 5.23+).
+	// It affects ALL sources attached to the map, so calling it once per
+	// tuning change is sufficient.
+	$effect(() => {
+		if (!mapRef) return;
+		const apply = () => {
+			try {
+				(mapRef as any).setSourceTileLodParams?.(lodMaxZoomLevels, lodTileCountRatio);
+			} catch (e) {
+				console.warn('[MapLibre] setSourceTileLodParams failed:', e);
+			}
+		};
+		if (mapRef.loaded()) apply();
+		else mapRef.once('load', apply);
+	});
 
 	const activeStyle = $derived(
 		imageryUrl ? buildSatelliteStyle(imageryUrl, imageryAttribution) :
