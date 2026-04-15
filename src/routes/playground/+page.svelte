@@ -27,6 +27,8 @@
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
+	import ThreeBillboards from './ThreeBillboards.svelte';
+	import type maplibregl from 'maplibre-gl';
 	import { PALETTE_ENTRIES, type PaletteName } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -45,6 +47,13 @@
 
 	let autoOrbit = $state(false);
 	let autoTime = $state(false);
+	let autoFly = $state(false);
+
+	let mapLat = $state(25.2);
+	let mapLon = $state(55.3);
+
+	// Track location changes to initiate jumps
+	let lastActiveLocation = $state<LocationId>('dubai');
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
@@ -59,6 +68,10 @@
 	let paletteName = $state<PaletteName>('auto');
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
+	let showThreeBillboards = $state(true);
+
+	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
+	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
 	// LOD tuning — see MapLibre level-of-detail-control example
 	let lodMaxZoomLevels = $state(6);
@@ -163,6 +176,19 @@
 
 	// ─── Derived ─────────────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
+
+	// Sync logic: change map center when user selects a new location
+	$effect(() => {
+		if (activeLocation !== lastActiveLocation) {
+			const loc = LOCATION_MAP.get(activeLocation);
+			if (loc) {
+				mapLat = loc.lat;
+				mapLon = loc.lon;
+			}
+			lastActiveLocation = activeLocation;
+		}
+	});
+
 	const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, maplibreSource));
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
 	const nf = $derived(nightFactor(timeOfDay));
@@ -180,6 +206,21 @@
 	});
 
 	// ─── RAF loop ────────────────────────────────────────────────────────────
+	function moveForward(lat: number, lon: number, headingDeg: number, distanceMeters: number) {
+		const R = 6371e3; // Earth radius in meters
+		const rad = Math.PI / 180;
+		const rHeading = headingDeg * rad;
+		const rLat1 = lat * rad;
+		const rLon1 = lon * rad;
+
+		const rLat2 = Math.asin(Math.sin(rLat1) * Math.cos(distanceMeters / R) +
+								Math.cos(rLat1) * Math.sin(distanceMeters / R) * Math.cos(rHeading));
+		const rLon2 = rLon1 + Math.atan2(Math.sin(rHeading) * Math.sin(distanceMeters / R) * Math.cos(rLat1),
+								Math.cos(distanceMeters / R) - Math.sin(rLat1) * Math.sin(rLat2));
+
+		return { lat: rLat2 / rad, lon: rLon2 / rad };
+	}
+
 	$effect(() => {
 		let raf: number;
 		let last = performance.now();
@@ -189,6 +230,15 @@
 			simTime += dt;
 			if (autoOrbit) heading = (heading + dt * 5 * planeSpeed) % 360;
 			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;
+
+			if (autoFly || isBoosting) {
+				// Cruise speed ~250m/s (roughly 900km/h) base. planeSpeed scales this.
+				const speedMps = 250 * planeSpeed;
+				const distanceMeters = speedMps * dt;
+				const nextCoords = moveForward(mapLat, mapLon, heading, distanceMeters);
+				mapLat = nextCoords.lat;
+				mapLon = nextCoords.lon;
+			}
 
 			motion.tick(dt, {
 				time: simTime,
@@ -244,6 +294,7 @@
 		weather = 'clear';
 		autoOrbit = false;
 		autoTime = false;
+		autoFly = false;
 		turbulenceLevel = 'light';
 	}
 </script>
@@ -262,8 +313,9 @@
 	>
 		<div class="globe-pane" style:transform={motionTransform}>
 			<MapLibreGlobe
-				lat={currentLocation.lat}
-				lon={currentLocation.lon}
+				bind:mapRef
+				lat={mapLat}
+				lon={mapLon}
 				{altitude}
 				pitch={55}
 				bearing={heading}
@@ -283,6 +335,15 @@
 				{lodMaxZoomLevels}
 				{lodTileCountRatio}
 			/>
+			{#if showThreeBillboards && mapRef}
+				<ThreeBillboards
+					map={mapRef}
+					lon={currentLocation.lon}
+					lat={currentLocation.lat}
+					altitude={500}
+					color="#ffd880"
+				/>
+			{/if}
 		</div>
 
 		<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
@@ -471,6 +532,10 @@
 			<label class="check">
 				<input type="checkbox" bind:checked={autoOrbit} />
 				Auto-orbit heading
+			</label>
+			<label class="check">
+				<input type="checkbox" bind:checked={autoFly} />
+				Auto-fly forward
 			</label>
 		</fieldset>
 
@@ -797,4 +862,47 @@
 		cursor: pointer;
 	}
 	.btn:hover { background: #3a5070; }
+
+	/* ─── Palette bar ────────────────────────────────────────────────────── */
+	.palette-bar {
+		position: absolute;
+		bottom: 16px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 10;
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		background: rgba(0, 0, 0, 0.5);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		padding: 6px 10px;
+		border-radius: 20px;
+		backdrop-filter: blur(8px);
+	}
+
+	.palette-swatch {
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		border: 1.5px solid rgba(255, 255, 255, 0.25);
+		cursor: pointer;
+		position: relative;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+		flex-shrink: 0;
+	}
+	.palette-swatch:hover {
+		transform: scale(1.2);
+		border-color: rgba(255, 255, 255, 0.5);
+	}
+	.palette-swatch.active {
+		border-color: #fff;
+		transform: scale(1.15);
+	}
+	.swatch-ring {
+		position: absolute;
+		inset: -4px;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.7);
+		pointer-events: none;
+	}
 </style>
