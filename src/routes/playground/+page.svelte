@@ -324,7 +324,7 @@
 				lat={mapLat}
 				lon={mapLon}
 				{altitude}
-				pitch={40}
+				pitch={70}
 				bearing={heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
