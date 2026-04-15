@@ -449,7 +449,17 @@
 		position: absolute;
 		inset: 0;
 		border-radius: var(--inner-radius);
-		background: rgba(240, 238, 235, 0.95);
+		/* Cabin-plastic gradient — slightly cooler at top where cabin lights
+		   hit, warmer at bottom. Gives the blind a subtle cylindrical sheen
+		   instead of reading as a flat beige sheet. */
+		background:
+			linear-gradient(
+				180deg,
+				#efece6 0%,
+				#e8e4dd 35%,
+				#e1ddd5 65%,
+				#d6d1c8 100%
+			);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -458,51 +468,72 @@
 		padding: 0;
 		pointer-events: auto;
 		touch-action: none;
+		box-shadow:
+			inset 0 2px 4px rgba(255, 255, 255, 0.6),
+			inset 0 -6px 12px rgba(0, 0, 0, 0.15);
 	}
 
 	.blind-slats {
 		position: absolute;
 		inset: 0;
+		/* Each slat: 2px highlight, 8px face, 1px cast shadow. Replaces flat
+		   6px/2px alternation so the blind reads as real louvers with depth. */
 		background: repeating-linear-gradient(
 			180deg,
-			rgba(230, 228, 225, 0.9) 0px,
-			rgba(230, 228, 225, 0.9) 6px,
-			rgba(210, 208, 205, 0.7) 6px,
-			rgba(210, 208, 205, 0.7) 8px
+			rgba(255, 255, 255, 0.12) 0px,
+			rgba(255, 255, 255, 0.12) 2px,
+			rgba(230, 227, 221, 0.55) 2px,
+			rgba(220, 217, 211, 0.55) 10px,
+			rgba(0, 0, 0, 0.12) 10px,
+			rgba(0, 0, 0, 0.12) 11px
 		);
-		box-shadow: inset 0 -20px 30px rgba(0, 0, 0, 0.1);
+		/* Vertical cylindrical shading via sideways gradient — darker edges
+		   imply blind curvature around the window's oval rim. */
+		mask-image: linear-gradient(
+			90deg,
+			rgba(0, 0, 0, 0.75) 0%,
+			rgba(0, 0, 0, 1) 20%,
+			rgba(0, 0, 0, 1) 80%,
+			rgba(0, 0, 0, 0.75) 100%
+		);
 	}
 
+	/* Pull-tab handle — recessed rectangle with grip ridges, subtle drop
+	   shadow so it reads as a raised tab. Centered horizontally, slightly
+	   above bottom so the user sees it within the window oval. */
 	.blind-overlay::after {
 		content: "";
 		position: absolute;
-		bottom: 8%;
-		left: 30%;
-		right: 30%;
-		height: 14px;
+		bottom: 10%;
+		left: 50%;
+		width: 56px;
+		height: 18px;
+		transform: translateX(-50%);
 		background:
 			repeating-linear-gradient(
 				180deg,
 				transparent 0px,
 				transparent 3px,
-				rgba(0, 0, 0, 0.15) 3px,
-				rgba(0, 0, 0, 0.15) 4px,
-				transparent 4px,
-				transparent 5px
+				rgba(0, 0, 0, 0.22) 3px,
+				rgba(0, 0, 0, 0.22) 4px
 			),
-			linear-gradient(180deg, var(--sw-silver) 0%, #908880 100%);
-		border-radius: 6px;
+			linear-gradient(180deg, #d8d4cc 0%, #a89f92 100%);
+		border-radius: 9px;
 		box-shadow:
-			0 2px 4px rgba(0, 0, 0, 0.3),
-			inset 0 1px 0 rgba(255, 255, 255, 0.4);
+			0 2px 5px rgba(0, 0, 0, 0.35),
+			inset 0 1px 0 rgba(255, 255, 255, 0.6),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.25);
 	}
 
+	/* Discover animation: the tab gently bobs down-and-up three times to
+	   signal "drag me" on first viewing. Down-motion (rather than up) hints
+	   the intended drag direction. */
 	@keyframes handle-breathe {
-		0%, 100% { transform: translateY(0); opacity: 0.9; }
-		50% { transform: translateY(-3px); opacity: 1; }
+		0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.9; }
+		50%      { transform: translateX(-50%) translateY(4px); opacity: 1; }
 	}
 
 	.blind-overlay.discoverable::after {
-		animation: handle-breathe 1s ease-in-out 3;
+		animation: handle-breathe 1.2s ease-in-out 3;
 	}
 </style>
