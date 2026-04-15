@@ -153,6 +153,22 @@
 	// ─── Derived ─────────────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
 
+	// Passenger-window camera bearing. Plane travels `pg.heading`; a passenger
+	// looks 90° LEFT of travel (out the right-side window). Ground scrolls
+	// laterally across the view, not rushing toward the camera.
+	// Plus a small turbulence-driven wobble (±3°) for organic motion feel.
+	const viewBearing = $derived(
+		(pg.heading - 90 + motion.motionOffsetX * 0.3 + 360) % 360,
+	);
+
+	// Camera pitch responds to turbulence bumps — gentle ±2° wobble on top of
+	// the base pitch (76°). Bank angle (rolling during turns) stays on the
+	// CSS transform (motionTransform) so it rolls the visual frame, not the
+	// MapLibre camera — more comfortable for passengers to watch.
+	const viewPitch = $derived(
+		Math.max(65, Math.min(84, 76 + motion.motionOffsetY * 0.4)),
+	);
+
 	// Sync logic: change map center when user selects a new location
 	$effect(() => {
 		if (pg.activeLocation !== lastActiveLocation) {
@@ -280,8 +296,8 @@
 				lat={mapLat}
 				lon={mapLon}
 				altitude={pg.altitude}
-				pitch={76}
-				bearing={pg.heading}
+				pitch={viewPitch}
+				bearing={viewBearing}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
 				imageryMaxZoom={maplibreSrc.maxZoom ?? 14}
