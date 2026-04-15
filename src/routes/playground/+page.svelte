@@ -324,7 +324,7 @@
 				lat={mapLat}
 				lon={mapLon}
 				{altitude}
-				pitch={76}
+				pitch={45}
 				bearing={heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
@@ -590,10 +590,11 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		top: 50%;
-		height: 3px;
-		background: linear-gradient(90deg, transparent 0%, rgba(200, 220, 255, 0.15) 20%, rgba(200, 220, 255, 0.2) 50%, rgba(200, 220, 255, 0.15) 80%, transparent 100%);
+		top: 52%;
+		height: 40px;
+		background: linear-gradient(180deg, transparent 0%, rgba(180, 210, 255, 0.08) 30%, rgba(160, 200, 240, 0.12) 60%, transparent 100%);
 		pointer-events: none;
+		z-index: 7;
 	}
 
 	/* ─── Blind overlay ──────────────────────────────────────────────────── */

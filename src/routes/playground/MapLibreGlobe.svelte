@@ -394,13 +394,39 @@
 		</VectorTileSource>
 	{/if}
 
-	<!-- Night glow-emission overlay.
-	     Rather than DARKENING the scene with CartoDB Dark (which hides the
-	     underlying satellite), we use CartoDB Dark as an EMISSION MAP: the
-	     dark background stays transparent-looking (brightness-min=0), while
-	     streets/buildings/labels (the lighter pixels) get boosted to 2× max
-	     brightness and hue-rotated toward warm amber. The result: streets
-	     GLOW as if city lights are emerging through the urban structure. -->
+	<!-- VIIRS Black Marble — NASA's global earth-at-night composite, the
+	     actual satellite observation of city lights. Rendered BELOW the
+	     CartoDB emission layer so bright city regions (Dubai, Dallas, etc.)
+	     light up based on real data; dark regions (ocean, desert) stay
+	     faithful to the dimmed satellite underneath.
+	     GIBS tile URL: https://nasa-gibs.github.io/gibs-api-docs/
+	     Fixed date 2016-01-01 gives a stable annual composite. -->
+	{#if nightFactor > 0.01}
+		<RasterTileSource
+			id="viirs-nightlights"
+			tiles={['https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png']}
+			tileSize={256}
+			maxzoom={8}
+		>
+			<RasterLayer
+				id="viirs-layer"
+				source="viirs-nightlights"
+				paint={{
+					'raster-opacity': nightFactor * 0.85,
+					'raster-fade-duration': 300,
+					// Boost the yellow/amber tint already in the VIIRS imagery
+					'raster-hue-rotate': 10,
+					'raster-saturation': 0.3,
+					'raster-brightness-max': 1.4 + nightFactor * 0.3,
+					'raster-contrast': 0.25,
+				}}
+			/>
+		</RasterTileSource>
+	{/if}
+
+	<!-- CartoDB as emission overlay — streets/buildings/labels glow warm.
+	     Sits ABOVE the VIIRS layer so the street network is visible as
+	     structure even over the bright VIIRS-lit city cores. -->
 	{#if nightFactor > 0.01}
 		<RasterTileSource
 			id="night-overlay"
