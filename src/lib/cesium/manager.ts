@@ -63,9 +63,13 @@ export class CesiumManager {
 	// Asset state
 	private tileset: CesiumType.Cesium3DTileset | null = null;
 	private lastNightFactor = -1;
-	// Imagery Layers — dual-layer night rendering
+	// Imagery Layers
+	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed as night falls
 	// nightLayer: NASA VIIRS City Lights (photographic warm glow)
 	// roadLightLayer: CartoDB Dark (vector road + building edge detail)
+	private baseLayer: CesiumType.ImageryLayer | null = null;
+	private baseDaySaturation = 1.0;
+	private baseDayContrast = 1.0;
 	private nightLayer: CesiumType.ImageryLayer | null = null;
 	private roadLightLayer: CesiumType.ImageryLayer | null = null;
 
@@ -193,13 +197,14 @@ export class CesiumManager {
 
 	// ─── Imagery Setup ───────────────────────────────────────────────────────
 	private async setupImagery(): Promise<void> {
-		const useLocal = await checkLocalTileServer();
 		const C = this.CesiumModule;
 
-		const cfg = useLocal
-			? { url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`, maxZoom: 17, webMercator: false, label: 'local' }
-			: getSatelliteImagery();
-
+		// Source decision lives entirely in getSatelliteImagery():
+		//   TILE_SERVER_URL set  → local-cached EOX (z3-z12, WebMercator)
+		//   MAPBOX_TOKEN set     → Mapbox satellite
+		//   default              → remote EOX Sentinel-2
+		//   VITE_SENTINEL2=false → ESRI World Imagery
+		const cfg = getSatelliteImagery();
 		console.info('[CesiumManager] base imagery:', cfg.label);
 
 		const provider = new C.UrlTemplateImageryProvider({
@@ -208,18 +213,29 @@ export class CesiumManager {
 			minimumLevel: 0,
 			...(cfg.webMercator ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
 		});
-		const baseLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+		this.baseLayer = this.viewer.imageryLayers.addImageryProvider(provider);
 		// EOX Sentinel-2 cloud-filtered composite is naturally muted at z6-z12.
 		// ESRI/Mapbox come pre-saturated. These per-source tweaks restore vivid
-		// terrain colors without crushing highlights.
-		if (baseLayer) {
-			baseLayer.saturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
-			baseLayer.contrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
-			baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
-			baseLayer.brightness = 1.0;
+		// terrain colors without crushing highlights. Remember the day values
+		// so syncImagery can lerp toward dim-night without losing the day look.
+		if (this.baseLayer) {
+			this.baseDaySaturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
+			this.baseDayContrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
+			this.baseLayer.saturation = this.baseDaySaturation;
+			this.baseLayer.contrast = this.baseDayContrast;
+			this.baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
+			this.baseLayer.brightness = 1.0;
 		}
 
-		if (useLocal) return;
+		// Night layer URLs — when TILE_SERVER_URL is set, fetch from local cache
+		// (matches tile-packager's storagePath). Otherwise hit the public origins.
+		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
+		const viirsUrl = tileBase
+			? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
+			: VIIRS_NIGHT_LIGHTS_URL;
+		const cartoUrl = tileBase
+			? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
+			: CARTODB_DARK_URL;
 
 		// Layer 1: NASA VIIRS City Lights — satellite-photo warm glow over urban areas.
 		// colorToAlpha: BLACK makes the dark space-around-cities transparent, so only
@@ -227,7 +243,12 @@ export class CesiumManager {
 		// Without this, the layer would just darken the whole globe at night.
 		try {
 			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({ url: VIIRS_NIGHT_LIGHTS_URL, maximumLevel: 8, minimumLevel: 0 }),
+				new C.UrlTemplateImageryProvider({
+					url: viirsUrl,
+					maximumLevel: 8,
+					minimumLevel: 0,
+					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
+				}),
 			);
 			if (this.nightLayer) {
 				this.nightLayer.alpha = 0;
@@ -243,7 +264,12 @@ export class CesiumManager {
 		// Same trick: dark base goes transparent, only the lit road grid bleeds through.
 		try {
 			this.roadLightLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({ url: CARTODB_DARK_URL, maximumLevel: 18, minimumLevel: 0 }),
+				new C.UrlTemplateImageryProvider({
+					url: cartoUrl,
+					maximumLevel: 18,
+					minimumLevel: 0,
+					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
+				}),
 			);
 			if (this.roadLightLayer) {
 				this.roadLightLayer.alpha = 0;
@@ -358,13 +384,22 @@ export class CesiumManager {
 	}
 
 	private syncImagery(): void {
-		if (!this.nightLayer && !this.roadLightLayer) return;
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
 
 		const show = nf > 0.01;
 		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
 		this.lastNightFactor = nf;
+
+		// Base layer: dim + desaturate as night falls so the daytime imagery
+		// doesn't show through fully bright at night. At full night the base is
+		// nearly black, letting the night layers (VIIRS glow, CartoDB roads)
+		// composite as the dominant color signal.
+		if (this.baseLayer) {
+			this.baseLayer.brightness = lerp(1.0, 0.18, nf);
+			this.baseLayer.saturation = lerp(this.baseDaySaturation, 0.35, nf);
+			this.baseLayer.contrast = lerp(this.baseDayContrast, 0.85, nf);
+		}
 
 		// VIIRS: photographic city glow — alpha+brightness ramp with night factor
 		if (this.nightLayer) {
