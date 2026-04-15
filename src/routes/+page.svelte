@@ -17,6 +17,13 @@
 	import { savePersistedState } from "$lib/persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
+	import { bundleStore } from "$lib/scene/bundle/store.svelte";
+	import {
+		startRemotePoll,
+		resolveDeviceId,
+		type ContentBundle,
+		type ConfigPatch,
+	} from "$lib/scene/bundle/remote";
 	import Window from "$lib/chrome/Window.svelte";
 	import Controls from "$lib/chrome/HUD.svelte";
 	import SidePanel from "$lib/chrome/SidePanel.svelte";
@@ -59,6 +66,29 @@
 	// endpoint is unreachable — stock effects always render regardless.
 	onMount(() => {
 		void hydrateFromServer();
+	});
+
+	// Phase 5.7 — Cloudflare Push Worker poll (over-the-internet bundle/config push).
+	// Opt-in via VITE_PUSH_WORKER_URL. Silent no-op if unset.
+	//   onBundles: install each into bundleStore — picked up reactively by the compositor.
+	//   onConfigs: feed each { path, value } through model.applyConfigPatch (RootConfig path-targeted).
+	$effect(() => {
+		if (typeof window === "undefined") return;
+		const url = import.meta.env.VITE_PUSH_WORKER_URL;
+		if (!url) return;
+		const handle = startRemotePoll({
+			deviceId: resolveDeviceId(),
+			pushWorkerUrl: url,
+			onBundles: (bundles: ContentBundle[]) => {
+				for (const bundle of bundles) bundleStore.install(bundle);
+			},
+			onConfigs: (patches: ConfigPatch[]) => {
+				for (const { path, value } of patches) {
+					model.applyConfigPatch(path, value);
+				}
+			},
+		});
+		return () => handle.stop();
 	});
 
 	// Clean up model timers on page teardown
