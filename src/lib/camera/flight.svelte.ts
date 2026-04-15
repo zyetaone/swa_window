@@ -69,8 +69,15 @@ export class FlightSimEngine {
 		this.lon = loc.lon;
 		this.orbitCenterLat = loc.lat;
 		this.orbitCenterLon = loc.lon;
-		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon);
-		this.orbitAngle = 0;
+		// Bearing jitter: deterministic hash gives a baseline per location,
+		// then ±0.3 rad random jitter so same city feels slightly different
+		// each visit. Keeps the orbit shape stable within a visit; only the
+		// *orientation* of the ellipse rotates a bit.
+		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon) + (Math.random() - 0.5) * 0.6;
+		// Start the orbit at a random angle so we don't always enter over
+		// the same compass point. Produces the "just arrived" variation the
+		// user asked for without changing the scenario or the dwell time.
+		this.orbitAngle = Math.random() * Math.PI * 2;
 		this.#initScenario(locationId, skyState);
 	}
 

@@ -51,6 +51,73 @@
 		model.flight.flyTo(nextId);
 	}
 
+	// ─── Long-press → speed boost ────────────────────────────────────────────
+	// Press + hold the window for >250ms to ramp speed 1.4x → 3.0x over 700ms.
+	// Release returns to baseline over 500ms. Short tap still fires
+	// handleWindowClick (fly-to next location).
+	const BASE_SPEED = 1.4;        // matches config.camera.cruise.defaultSpeed
+	const BOOST_SPEED = 3.0;
+	const LONG_PRESS_MS = 250;
+	const RAMP_UP_MS = 700;
+	const RAMP_DOWN_MS = 500;
+
+	let pressTimer = $state<number | null>(null);
+	let boostRampId = $state<number | null>(null);
+	let isBoosting = $state(false);
+
+	function cancelBoostRamp() {
+		if (boostRampId !== null) {
+			cancelAnimationFrame(boostRampId);
+			boostRampId = null;
+		}
+	}
+
+	function rampSpeed(from: number, to: number, durationMs: number) {
+		cancelBoostRamp();
+		const t0 = performance.now();
+		const step = (now: number) => {
+			const t = clamp((now - t0) / durationMs, 0, 1);
+			model.flight.flightSpeed = from + (to - from) * (t * t * (3 - 2 * t));
+			if (t < 1) boostRampId = requestAnimationFrame(step);
+			else boostRampId = null;
+		};
+		boostRampId = requestAnimationFrame(step);
+	}
+
+	function handlePointerDown() {
+		if (model.flight.isTransitioning) return;
+		pressTimer = window.setTimeout(() => {
+			pressTimer = null;
+			isBoosting = true;
+			rampSpeed(model.flight.flightSpeed, BOOST_SPEED, RAMP_UP_MS);
+		}, LONG_PRESS_MS);
+	}
+
+	function handlePointerUp() {
+		if (pressTimer !== null) {
+			// Short tap — fire the fly-to action, skip boost.
+			clearTimeout(pressTimer);
+			pressTimer = null;
+			handleWindowClick();
+			return;
+		}
+		if (isBoosting) {
+			isBoosting = false;
+			rampSpeed(model.flight.flightSpeed, BASE_SPEED, RAMP_DOWN_MS);
+		}
+	}
+
+	function handlePointerCancel() {
+		if (pressTimer !== null) {
+			clearTimeout(pressTimer);
+			pressTimer = null;
+		}
+		if (isBoosting) {
+			isBoosting = false;
+			rampSpeed(model.flight.flightSpeed, BASE_SPEED, RAMP_DOWN_MS);
+		}
+	}
+
 	// ========================================================================
 	// DERIVED — presentation values
 	// ========================================================================
@@ -171,12 +238,16 @@
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
 >
-	<!-- The oval window -->
+	<!-- The oval window. Click = fly somewhere new. Long-press = speed boost. -->
 	<button
 		class="window-viewport"
-		onclick={handleWindowClick}
+		class:boosting={isBoosting}
+		onpointerdown={handlePointerDown}
+		onpointerup={handlePointerUp}
+		onpointercancel={handlePointerCancel}
+		onpointerleave={handlePointerCancel}
 		type="button"
-		aria-label="Fly to a new destination"
+		aria-label="Tap to fly somewhere new. Hold to speed up."
 		style:background={skyBackground}
 		disabled={model.flight.isTransitioning}
 	>
@@ -250,6 +321,17 @@
 			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
 		>
 			<div class="blind-slats"></div>
+			<!-- From → To pull indicator. Three downward chevrons beneath the
+			     pull tab, animated as a cascading cascade that reads as "drag
+			     me this way". Only shown when blind is visible + not yet
+			     interacted with this session. -->
+			{#if !model.blindOpen && !blind.hasAnimated}
+				<div class="pull-hint" aria-hidden="true">
+					<span class="chev chev-1">▼</span>
+					<span class="chev chev-2">▼</span>
+					<span class="chev chev-3">▼</span>
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>
@@ -541,6 +623,44 @@
 
 	.blind-overlay.discoverable::after {
 		animation: handle-breathe 1.2s ease-in-out 3;
+	}
+
+	/* ─── Blind pull-hint — from→to drag indicator ────────────────────────── */
+	/* Subtle visual feedback during long-press boost — inner glow on the
+	   window rim, reads as "we're going faster now" without being loud. */
+	.window-viewport.boosting {
+		box-shadow:
+			inset 0 0 40px rgba(255, 210, 120, 0.25),
+			inset 0 0 80px rgba(255, 170, 80, 0.12);
+		transition: box-shadow 0.3s ease;
+	}
+
+	.pull-hint {
+		position: absolute;
+		bottom: 3%;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		pointer-events: none;
+		opacity: 0.55;
+	}
+	.chev {
+		font-size: 14px;
+		color: rgba(0, 0, 0, 0.35);
+		animation: chev-cascade 1.6s ease-in-out infinite;
+	}
+	/* Staggered delays so chevrons pulse one after another, reading as a
+	   downward flow — the "drag this way" metaphor. */
+	.chev-1 { animation-delay: 0.0s; }
+	.chev-2 { animation-delay: 0.2s; }
+	.chev-3 { animation-delay: 0.4s; }
+
+	@keyframes chev-cascade {
+		0%, 100% { opacity: 0.25; transform: translateY(0); }
+		50%      { opacity: 0.85; transform: translateY(3px); }
 	}
 
 	/* ─── Window frame on/off ────────────────────────────────────────────────

@@ -181,10 +181,17 @@ export class WindowModel {
 	setLocation(id: LocationId): void {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
-		// Apply per-location scene defaults
+		// Apply per-location scene defaults — then nudge each scalar a touch
+		// so the same city never looks identical twice. Small ±12% drift is
+		// imperceptible on the first view and cumulatively reads as "real
+		// world, always a bit different." Clamped so drift can't escape
+		// weather-pool bounds or the per-location look entirely.
 		const scene = this.currentLocation.scene;
-		this.cloudDensity = scene.clouds.density;
-		this.cloudSpeed = scene.clouds.speed;
+		const jitter = (base: number, amp: number, lo: number, hi: number) =>
+			clamp(base + (Math.random() - 0.5) * amp, lo, hi);
+		this.cloudDensity = jitter(scene.clouds.density, 0.24, 0.1, 1.0);
+		this.cloudSpeed   = jitter(scene.clouds.speed,   0.24, 0.2, 1.6);
+		this.haze         = jitter(this.haze,            0.03, 0,   0.18);
 	}
 
 	setAltitude(alt: number): void {

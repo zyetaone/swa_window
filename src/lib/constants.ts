@@ -126,9 +126,11 @@ export const AMBIENT = {
 	// Weighted pool for auto-cycle (storm excluded, cloudy doubled for probability)
 	WEATHER_POOL: ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'] as const,
 
-	// Director auto-pilot cycling (seconds)
-	DIRECTOR_MIN_INTERVAL: 120,
-	DIRECTOR_MAX_INTERVAL: 300,
+	// Director auto-pilot cycling (seconds) — target ~2 min average dwell
+	// per location, with some variance. User spec: "every place is there
+	// for 2 minutes right?"
+	DIRECTOR_MIN_INTERVAL: 100, // 1:40
+	DIRECTOR_MAX_INTERVAL: 160, // 2:40 — average ~2:10
 } as const;
 
 // =============================================================================
