@@ -199,6 +199,10 @@
 	const frostAmount = $derived(clamp((altitude - 25000) / 15000, 0, 1));
 
 	const bgGradient = $derived.by(() => {
+		if (paletteName !== 'auto' && PALETTES[paletteName]) {
+			const p = PALETTES[paletteName];
+			return `linear-gradient(180deg, ${p.sky} 0%, ${p.horizon} 60%, ${p.fog} 100%)`;
+		}
 		switch (skyState) {
 			case 'night': return 'linear-gradient(180deg, #05060f 0%, #0f1428 55%, #1a1f35 100%)';
 			case 'dawn': return 'linear-gradient(180deg, #1a1440 0%, #d96850 45%, #f0b070 70%, #d4a060 100%)';
@@ -283,7 +287,7 @@
 		density = randomBetween(0.3, 0.9);
 		cloudSpeed = randomBetween(0.5, 2);
 		timeOfDay = randomBetween(0, 24);
-		turbulenceLevel = (['light', 'moderate', 'severe'] as TurbLevel[])[Math.floor(randomBetween(0, 3))];
+		turbulenceLevel = (['light', 'moderate', 'severe'] as TurbLevel[])[Math.floor(randomBetween(0, 2.99))];
 	}
 
 	function reset() {
@@ -319,7 +323,7 @@
 				lat={mapLat}
 				lon={mapLon}
 				{altitude}
-				pitch={55}
+				pitch={40}
 				bearing={heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
@@ -576,7 +580,7 @@
 
 	.globe-pane {
 		position: absolute;
-		inset: -4px;
+		inset: 0;
 		will-change: transform;
 	}
 
@@ -584,9 +588,9 @@
 		position: absolute;
 		left: 0;
 		right: 0;
-		top: 55%;
-		height: 1px;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 50%, transparent);
+		top: 50%;
+		height: 3px;
+		background: linear-gradient(90deg, transparent 0%, rgba(200, 220, 255, 0.15) 20%, rgba(200, 220, 255, 0.2) 50%, rgba(200, 220, 255, 0.15) 80%, transparent 100%);
 		pointer-events: none;
 	}
 
@@ -659,14 +663,22 @@
 		gap: 10px;
 		flex-wrap: wrap;
 		font-size: 12px;
-		background: rgba(0, 0, 0, 0.55);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		color: #eee;
-		padding: 6px 10px;
-		border-radius: 8px;
-		backdrop-filter: blur(6px);
+		background: rgba(10, 10, 15, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		color: #f0f0f0;
+		padding: 8px 12px;
+		border-radius: 12px;
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 		pointer-events: none;
 		max-width: calc(100vw - 90px);
+		animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	}
+
+	@keyframes fadeUp {
+		from { opacity: 0; transform: translateY(10px); }
+		to { opacity: 1; transform: translateY(0); }
 	}
 
 	.hud span {
@@ -713,10 +725,17 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: transform 0.2s;
+		transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, border-color 0.2s;
 	}
-	.drawer-toggle:hover { transform: scale(1.05); }
-	.drawer-toggle.open { transform: rotate(90deg); }
+	.drawer-toggle:hover { 
+		transform: scale(1.1); 
+		background: rgba(255, 255, 255, 0.1); 
+		border-color: rgba(255, 255, 255, 0.3);
+	}
+	.drawer-toggle.open { 
+		transform: rotate(90deg) scale(0.9); 
+		background: rgba(0, 0, 0, 0.8);
+	}
 
 	.drawer {
 		position: absolute;
@@ -725,15 +744,26 @@
 		bottom: 0;
 		width: 340px;
 		z-index: 25;
-		background: rgba(17, 17, 21, 0.96);
-		border-left: 1px solid rgba(255, 255, 255, 0.08);
+		background: rgba(12, 12, 16, 0.85);
+		border-left: 1px solid rgba(255, 255, 255, 0.12);
 		padding: 64px 16px 16px;
 		overflow-y: auto;
 		transform: translateX(100%);
-		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		backdrop-filter: blur(10px);
+		transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+		backdrop-filter: blur(20px);
+		-webkit-backdrop-filter: blur(20px);
+		box-shadow: -10px 0 30px rgba(0, 0, 0, 0);
 	}
-	.drawer.open { transform: translateX(0); }
+	.drawer.open { 
+		transform: translateX(0); 
+		box-shadow: -10px 0 40px rgba(0, 0, 0, 0.3);
+	}
+
+	/* Sleek scrollbar for the drawer */
+	.drawer::-webkit-scrollbar { width: 6px; }
+	.drawer::-webkit-scrollbar-track { background: transparent; }
+	.drawer::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+	.drawer::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
 	.drawer header h2 {
 		font-size: 15px;
@@ -780,7 +810,38 @@
 		margin: 8px 0;
 	}
 
-	input[type="range"] { width: 100%; margin: 4px 0; }
+	input[type="range"] { 
+		width: 100%; 
+		margin: 8px 0; 
+		-webkit-appearance: none;
+		appearance: none;
+		background: transparent;
+	}
+	input[type="range"]:focus { outline: none; }
+	input[type="range"]::-webkit-slider-runnable-track {
+		width: 100%;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.15);
+		border-radius: 2px;
+		transition: background 0.2s;
+	}
+	input[type="range"]::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		height: 14px;
+		width: 14px;
+		border-radius: 50%;
+		background: #7faeff;
+		cursor: pointer;
+		margin-top: -5px;
+		box-shadow: 0 0 10px rgba(127, 174, 255, 0.4);
+		transition: transform 0.2s, box-shadow 0.2s;
+	}
+	input[type="range"]:hover::-webkit-slider-thumb {
+		transform: scale(1.2);
+		box-shadow: 0 0 14px rgba(127, 174, 255, 0.6);
+	}
+	input[type="range"]:disabled::-webkit-slider-thumb { background: #555; box-shadow: none; cursor: not-allowed; }
+	input[type="range"]:disabled::-webkit-slider-runnable-track { background: rgba(255, 255, 255, 0.05); }
 
 	.select,
 	select {
@@ -804,32 +865,43 @@
 		background: #1a1a20;
 		color: #aaa;
 		border: 1px solid #2a2a30;
-		border-radius: 4px;
-		padding: 4px 6px;
+		border-radius: 6px;
+		padding: 6px;
 		font-size: 11px;
 		text-transform: capitalize;
 		cursor: pointer;
+		transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.chip-row button:hover {
+		background: #2a2a3a;
+		transform: translateY(-1px);
+		border-color: #445;
 	}
 	.chip-row button.active {
-		background: #2a4060;
+		background: linear-gradient(180deg, #2a4060, #1c2b42);
 		color: #fff;
 		border-color: #4080c0;
+		box-shadow: 0 2px 8px rgba(64, 128, 192, 0.3);
 	}
 
 	.source-btn {
 		display: block;
 		cursor: pointer;
-		margin: 4px 0;
-		padding: 6px 8px;
+		margin: 6px 0;
+		padding: 8px 10px;
 		background: #1a1a20;
 		border: 1px solid #2a2a30;
-		border-radius: 4px;
-		transition: background 0.15s;
+		border-radius: 6px;
+		transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 	}
-	.source-btn:hover { background: #22232a; }
+	.source-btn:hover { 
+		background: #22232a; 
+		transform: translateX(2px);
+	}
 	.source-btn.active {
-		background: #2a4060;
+		background: linear-gradient(135deg, #1c2b42, #2a4060);
 		border-color: #4080c0;
+		box-shadow: 0 4px 12px rgba(64, 128, 192, 0.15);
 	}
 	.source-btn input[type="radio"] { margin-right: 6px; }
 

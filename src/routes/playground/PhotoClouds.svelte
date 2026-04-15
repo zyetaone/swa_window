@@ -65,42 +65,52 @@
 	);
 </script>
 
-<!-- Hidden SVG defs — zero-size container. -->
+<!-- Hidden SVG defs — zero-size container.
+     Filter chain per layer (adapted from Yannakopoulos + ccprog's variant):
+       pre-blur  →  softens the ellipse edge so displacement doesn't carve holes
+       turbulence →  fractal noise as the displacement source
+       displace   →  warp the soft ellipse into cloud silhouette
+       post-blur  →  final feathering for wispy edges
+       colorMatrix →  invert RGB so black seed becomes white cloud
+     Filter region x/y/width/height enlarged to 150% so distortion doesn't clip. -->
 <svg class="defs" aria-hidden="true">
 	<defs>
-		<filter id="cloud-back" x="0%" y="0%" width="100%" height="100%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="3" seed="1" result="noise">
+		<filter id="cloud-back" x="-25%" y="-25%" width="150%" height="150%">
+			<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="pre" />
+			<feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="1" result="noise">
 				{#if animate}
 					<animate attributeName="baseFrequency" dur="48s"
-						values="0.012;0.016;0.012" repeatCount="indefinite" />
+						values="0.011;0.015;0.011" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" in2="noise" scale="130" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="2" result="soft" />
+			<feDisplacementMap in="pre" in2="noise" scale="70" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="4" result="soft" />
 			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 
-		<filter id="cloud-mid" x="0%" y="0%" width="100%" height="100%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="2" seed="2" result="noise">
+		<filter id="cloud-mid" x="-25%" y="-25%" width="150%" height="150%">
+			<feGaussianBlur in="SourceGraphic" stdDeviation="5" result="pre" />
+			<feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="2" result="noise">
 				{#if animate}
 					<animate attributeName="baseFrequency" dur="32s"
-						values="0.016;0.020;0.016" repeatCount="indefinite" />
+						values="0.014;0.018;0.014" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" in2="noise" scale="100" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="1.5" result="soft" />
+			<feDisplacementMap in="pre" in2="noise" scale="55" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="3" result="soft" />
 			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 
-		<filter id="cloud-front" x="0%" y="0%" width="100%" height="100%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.020" numOctaves="2" seed="3" result="noise">
+		<filter id="cloud-front" x="-25%" y="-25%" width="150%" height="150%">
+			<feGaussianBlur in="SourceGraphic" stdDeviation="4" result="pre" />
+			<feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" result="noise">
 				{#if animate}
 					<animate attributeName="baseFrequency" dur="20s"
-						values="0.020;0.025;0.020" repeatCount="indefinite" />
+						values="0.017;0.022;0.017" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" in2="noise" scale="80" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="1.2" result="soft" />
+			<feDisplacementMap in="pre" in2="noise" scale="45" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="2.5" result="soft" />
 			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 	</defs>
