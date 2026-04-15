@@ -1,6 +1,9 @@
 /**
- * Central registry of satellite/map imagery sources.
- * Imported by both playground and production so there's a single source of truth.
+ * Imagery sources for the MapLibre scene lab.
+ *
+ * MapLibre requires CORS-enabled tile endpoints (WebGL texture use is tainted
+ * otherwise). Sources listed here all pass CORS, either directly or via the
+ * local /api/tiles proxy.
  */
 
 /** Generic identifier for an imagery tile source. */
@@ -22,23 +25,9 @@ export interface ImagerySource {
 }
 
 /**
- * Cesium accepts any XYZ tile URL via UrlTemplateImageryProvider.
- * ESRI works here because Cesium doesn't need CORS for texture use the same way MapLibre does.
- */
-export const CESIUM_SOURCES: readonly ImagerySource[] = [
-	{
-		id: 'esri',
-		label: 'ESRI World Imagery',
-		url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-		note: 'No auth, z19 max, global',
-		attribution: '© ESRI',
-		maxZoom: 19,
-	},
-] as const;
-
-/**
- * MapLibre requires CORS-enabled tile endpoints (WebGL texture use is tainted otherwise).
- * ESRI/USGS direct lack CORS headers — need a server proxy. Included here with proxied URL.
+ * Online MapLibre tile sources. All CORS-safe at time of commit.
+ * The /api/tiles/proxy/esri endpoint is a server-side pass-through
+ * because ESRI World Imagery lacks CORS headers directly.
  */
 export const MAPLIBRE_SOURCES: readonly ImagerySource[] = [
 	{
@@ -76,7 +65,7 @@ export const MAPLIBRE_SOURCES: readonly ImagerySource[] = [
 
 /**
  * Cached (offline) tile sources served from the local tile API.
- * These are pre-downloaded via `bun run tile-packager` for the 3 active locations
+ * Pre-downloaded via `bun run tile-packager` for the 3 active locations
  * (dubai, dallas, himalayas) and served from TILE_DIR at runtime.
  *
  * Available offline sources:

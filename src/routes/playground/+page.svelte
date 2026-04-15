@@ -1,8 +1,17 @@
 <script lang="ts">
 	/**
-	 * Playground — live rendering sandbox.
-	 * Compare Cesium vs MapLibre globes, test imagery sources,
-	 * preview sky states, and drive cloud parallax from simulated plane motion.
+	 * Playground — MapLibre scene lab.
+	 *
+	 * Scope: test MapLibre capabilities as a Cesium alternative.
+	 *   — globe projection + atmosphere + sky
+	 *   — 3D terrain (raster-dem) + 3D buildings (fill-extrusion)
+	 *   — satellite imagery (offline + online sources)
+	 *   — night rendering via data-driven material expressions
+	 *   — cloud sprites + weather overlays (reused from main app)
+	 *   — plane motion turbulence driving canvas transform
+	 *
+	 * Keep-alive pattern: production `/` is still Cesium. This route is
+	 * isolated — no production code imports from here.
 	 */
 
 	import type { SkyState, LocationId, WeatherType } from '$lib/types';
@@ -10,25 +19,18 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
-	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './sources';
-	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/cesium-setup';
+	import { MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
-	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import * as Cesium from 'cesium';
-
-	type Tab = 'cesium' | 'maplibre' | 'compare';
 
 	// ─── State ───────────────────────────────────────────────────────────────
-	let activeTab = $state<Tab>('cesium');
 	let activeLocation = $state<LocationId>('dubai');
-	let timeOfDay = $state(12);  // 0-24, drives skyState
+	let timeOfDay = $state(12);
 	let weather = $state<WeatherType>('clear');
-	let cesiumSource = $state<string>('esri');
 	let maplibreSource = $state<string>('eox-s2');
 
 	// Cloud sim
@@ -42,34 +44,26 @@
 
 	// Auto-orbit — gentle drift for demo
 	let autoOrbit = $state(false);
-	let autoTime = $state(false);  // advance timeOfDay in real time
+	let autoTime = $state(false);
 
 	// Motion / turbulence
 	const motion = new MotionEngine();
-	let simTime = $state(0);  // elapsed seconds for motion engine
+	let simTime = $state(0);
 	type TurbLevel = 'light' | 'moderate' | 'severe';
 	let turbulenceLevel = $state<TurbLevel>('light');
 
-	// MapLibre layer toggles (passes through to MapLibreGlobe)
+	// MapLibre layer toggles
 	let mlTerrain = $state(false);
 	let mlBuildings = $state(false);
 	let mlAtmosphere = $state(true);
 
-	// Cesium lifecycle
-	let viewerContainer = $state<HTMLDivElement | null>(null);
-	let cesiumViewer: Cesium.Viewer | null = null;
-	let cesiumLoaded = $state(false);
-
 	// ─── Derived ─────────────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
-		const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, maplibreSource));
-	const cesiumSrc = $derived(findSource(CESIUM_SOURCES, cesiumSource));
+	const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, maplibreSource));
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
 	const nf = $derived(nightFactor(timeOfDay));
 	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
 	const windAngle = $derived(weatherFx.windAngle);
-
-	// Frost altitude-driven (matches Window.svelte logic)
 	const frostAmount = $derived(clamp((altitude - 25000) / 15000, 0, 1));
 
 	const bgGradient = $derived.by(() => {
@@ -90,9 +84,8 @@
 			last = now;
 			simTime += dt;
 			if (autoOrbit) heading = (heading + dt * 5 * planeSpeed) % 360;
-			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;  // 48s = full day
+			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;
 
-			// Tick motion engine
 			motion.tick(dt, {
 				time: simTime,
 				heading,
@@ -107,7 +100,7 @@
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// Motion transform for globe (matches Window.svelte motion feel)
+	// Motion transform applied to the map pane (matches Window.svelte feel)
 	const motionTransform = $derived.by(() => {
 		const turbY = motion.motionOffsetY * 0.08;
 		const turbX = motion.motionOffsetX * 0.08;
@@ -117,103 +110,6 @@
 		const x = turbX + motion.engineVibeX;
 		const y = turbY + breathY + motion.engineVibeY;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${(turbRot + bank).toFixed(3)}deg)`;
-	});
-
-	// ─── Cesium ──────────────────────────────────────────────────────────────
-	function initCesium() {
-		if (!viewerContainer || cesiumViewer) return;
-		try {
-			initCesiumGlobal(Cesium);
-			// Playground wants gradient to show through — override webgl.alpha
-			cesiumViewer = new Cesium.Viewer(viewerContainer, {
-				...VIEWER_OPTIONS,
-				contextOptions: { webgl: { alpha: true, antialias: true } },
-			});
-			applyCesiumSource();
-			if (getIonToken()) {
-				Cesium.createWorldTerrainAsync()
-					.then(t => { if (cesiumViewer) cesiumViewer.terrainProvider = t; })
-					.catch(() => {});
-			}
-			// Set initial camera position synchronously, then mark loaded
-			const altMeters = altitude * 0.3048;
-			cesiumViewer.camera.setView({
-				destination: Cesium.Cartesian3.fromDegrees(currentLocation.lon, currentLocation.lat, altMeters),
-				orientation: {
-					heading: Cesium.Math.toRadians(heading),
-					pitch: Cesium.Math.toRadians(-20),
-					roll: 0,
-				},
-			});
-			cesiumLoaded = true;
-			// Resize after layout settles
-			requestAnimationFrame(() => cesiumViewer?.resize());
-		} catch (e) { console.warn('[Playground] Cesium init failed:', e); }
-	}
-
-	function applyCesiumSource() {
-		if (!cesiumViewer) return;
-		try {
-			cesiumViewer.imageryLayers.removeAll();
-			cesiumViewer.imageryLayers.addImageryProvider(
-				new Cesium.UrlTemplateImageryProvider({
-					url: cesiumSrc.url,
-					maximumLevel: cesiumSrc.maxZoom ?? 19,
-					minimumLevel: 0,
-					tilingScheme: new Cesium.WebMercatorTilingScheme(),
-				})
-			);
-		} catch (e) { console.warn('[Playground] Cesium source swap failed:', e); }
-	}
-
-	function flyCesiumTo(loc: { lat: number; lon: number }) {
-		if (!cesiumViewer || !cesiumLoaded) return;
-		const altMeters = altitude * 0.3048;
-		cesiumViewer.camera.flyTo({
-			destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, altMeters),
-			orientation: {
-				heading: Cesium.Math.toRadians(heading),
-				pitch: Cesium.Math.toRadians(-20),
-				roll: 0,
-			},
-			duration: 1.5,
-		});
-	}
-
-	// React to source changes
-	$effect(() => {
-		cesiumSource; // track
-		if (cesiumViewer && cesiumLoaded) applyCesiumSource();
-	});
-
-	// Fly to selected location whenever it changes
-	$effect(() => {
-		if (cesiumViewer && cesiumLoaded) flyCesiumTo(currentLocation);
-	});
-
-	// Init/destroy Cesium when tab shows/hides it
-	$effect(() => {
-		if ((activeTab === 'cesium' || activeTab === 'compare') && viewerContainer && !cesiumViewer) {
-			initCesium();
-		} else if (cesiumViewer && (activeTab === 'cesium' || activeTab === 'compare')) {
-			requestAnimationFrame(() => cesiumViewer?.resize());
-		}
-		if (activeTab === 'maplibre' && cesiumViewer) {
-			cesiumViewer.destroy();
-			cesiumViewer = null;
-			cesiumLoaded = false;
-		}
-	});
-
-	// Resize handler — attached via <svelte:window onresize> in the markup.
-	function handleResize() {
-		cesiumViewer?.resize();
-	}
-
-	onMount(() => {
-		return () => {
-			cesiumViewer?.destroy();
-		};
 	});
 
 	// ─── Preset actions ──────────────────────────────────────────────────────
@@ -240,40 +136,25 @@
 	}
 </script>
 
-<svelte:window onresize={handleResize} />
-
 <div class="playground">
 	<div class="viewport" style:background={bgGradient}>
-		<!-- Cesium -->
-		{#if activeTab === 'cesium' || activeTab === 'compare'}
-			<div class={['globe-pane', activeTab === 'compare' && 'half', activeTab === 'compare' && 'left']} style:transform={motionTransform}>
-				<div bind:this={viewerContainer} class="cesium-viewer"></div>
-				{#if !cesiumLoaded}
-					<div class="globe-loading">Loading Cesium…</div>
-				{/if}
-			</div>
-		{/if}
-
-		<!-- MapLibre -->
-		{#if activeTab === 'maplibre' || activeTab === 'compare'}
-			<div class={['globe-pane', activeTab === 'compare' && 'half', activeTab === 'compare' && 'right']} style:transform={motionTransform}>
-				<MapLibreGlobe
-					lat={currentLocation.lat}
-					lon={currentLocation.lon}
-					{altitude}
-					pitch={70}
-					bearing={heading}
-					imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
-					imageryAttribution={maplibreSrc.attribution ?? ''}
-					pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
-					showTerrain={mlTerrain}
-					showBuildings={mlBuildings}
-					showAtmosphere={mlAtmosphere}
-					nightFactor={nf}
-					terrainExaggeration={1.5}
-				/>
-			</div>
-		{/if}
+		<div class="globe-pane" style:transform={motionTransform}>
+			<MapLibreGlobe
+				lat={currentLocation.lat}
+				lon={currentLocation.lon}
+				{altitude}
+				pitch={70}
+				bearing={heading}
+				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
+				imageryAttribution={maplibreSrc.attribution ?? ''}
+				pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
+				showTerrain={mlTerrain}
+				showBuildings={mlBuildings}
+				showAtmosphere={mlAtmosphere}
+				nightFactor={nf}
+				terrainExaggeration={1.5}
+			/>
+		</div>
 
 		<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
 
@@ -282,13 +163,6 @@
 			{windAngle}
 			{frostAmount}
 		/>
-
-		{#if activeTab === 'compare'}
-			<div class="compare-divider" aria-hidden="true">
-				<span>CESIUM</span>
-				<span>MAPLIBRE</span>
-			</div>
-		{/if}
 
 		<div class="horizon-line" aria-hidden="true"></div>
 
@@ -305,20 +179,10 @@
 
 	<aside class="controls">
 		<header>
-			<h2>Globe Playground</h2>
-			<p class="hint">Compare renderers, tune clouds, drive plane motion.</p>
+			<h2>MapLibre Scene Lab</h2>
+			<p class="hint">Globe + atmosphere + terrain + buildings — all driven by GeoJSON + expressions.</p>
 		</header>
 
-		<!-- Tabs -->
-		<div class="tab-bar" role="tablist">
-			{#each ['cesium', 'maplibre', 'compare'] as const as t (t)}
-				<button role="tab" aria-selected={activeTab === t} class={[activeTab === t && 'active']} onclick={() => activeTab = t}>
-					{t === 'compare' ? 'Split' : t[0].toUpperCase() + t.slice(1)}
-				</button>
-			{/each}
-		</div>
-
-		<!-- Location -->
 		<fieldset>
 			<legend>Location</legend>
 			<select class="select" bind:value={activeLocation}>
@@ -328,7 +192,6 @@
 			</select>
 		</fieldset>
 
-		<!-- Time of day -->
 		<fieldset>
 			<legend>Time of day</legend>
 			<label>{formatTime(timeOfDay)} <span class="val sky-{skyState}">{skyState}</span>
@@ -340,7 +203,6 @@
 			</label>
 		</fieldset>
 
-		<!-- Weather -->
 		<fieldset>
 			<legend>Weather</legend>
 			<div class="chip-row weather-chips">
@@ -350,52 +212,36 @@
 			</div>
 		</fieldset>
 
-		<!-- Cesium imagery -->
-		{#if activeTab === 'cesium' || activeTab === 'compare'}
-			<fieldset>
-				<legend>Cesium Imagery</legend>
-				{#each CESIUM_SOURCES as src (src.id)}
-					<label class={['source-btn', cesiumSource === src.id && 'active']}>
-						<input type="radio" name="cesium-src" checked={cesiumSource === src.id} onchange={() => cesiumSource = src.id} />
-						<span class="source-name">{src.label}</span>
-						<span class="source-note">{src.note}</span>
-					</label>
-				{/each}
-			</fieldset>
-		{/if}
+		<fieldset>
+			<legend>Imagery</legend>
+			{#each MAPLIBRE_SOURCES as src (src.id)}
+				<label class={['source-btn', maplibreSource === src.id && 'active']}>
+					<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
+					<span class="source-name">{src.label}</span>
+					<span class="source-note">{src.note}</span>
+				</label>
+			{/each}
+		</fieldset>
 
-		<!-- MapLibre imagery -->
-		{#if activeTab === 'maplibre' || activeTab === 'compare'}
-			<fieldset>
-				<legend>MapLibre Imagery</legend>
-				{#each MAPLIBRE_SOURCES as src (src.id)}
-					<label class={['source-btn', maplibreSource === src.id && 'active']}>
-						<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
-						<span class="source-name">{src.label}</span>
-						<span class="source-note">{src.note}</span>
-					</label>
-				{/each}
-			</fieldset>
-			<fieldset>
-				<legend>🗄️ Cached (offline tiles)</legend>
-				<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
-				{#each CACHED_SOURCES as src (src.id)}
-					<label class={['source-btn', maplibreSource === src.id && 'active']}>
-						<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
-						<span class="source-name">{src.label}</span>
-						<span class="source-note">{src.note}</span>
-					</label>
-				{/each}
-			</fieldset>
-			<fieldset>
-				<legend>MapLibre Layers</legend>
-				<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
-				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (AWS/JAXA GLO-30)</label>
-				<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (CartoDB)</label>
-			</fieldset>
-		{/if}
+		<fieldset>
+			<legend>🗄️ Cached (offline)</legend>
+			<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
+			{#each CACHED_SOURCES as src (src.id)}
+				<label class={['source-btn', maplibreSource === src.id && 'active']}>
+					<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
+					<span class="source-name">{src.label}</span>
+					<span class="source-note">{src.note}</span>
+				</label>
+			{/each}
+		</fieldset>
 
-		<!-- Clouds -->
+		<fieldset>
+			<legend>Layers</legend>
+			<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
+			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
+			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
+		</fieldset>
+
 		<fieldset>
 			<legend>Clouds</legend>
 			<label>Density <span class="val">{(density * 100).toFixed(0)}%</span>
@@ -406,7 +252,6 @@
 			</label>
 		</fieldset>
 
-		<!-- Plane -->
 		<fieldset>
 			<legend>Plane</legend>
 			<label>Heading <span class="val">{heading.toFixed(0)}°</span>
@@ -456,175 +301,76 @@
 
 	.globe-pane {
 		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: 0;
-		right: 0;
-	}
-	.globe-pane.half { width: 50%; }
-	.globe-pane.half.left { left: 0; right: auto; }
-	.globe-pane.half.right { left: 50%; right: 0; }
-
-	.cesium-viewer {
-		position: absolute;
 		inset: 0;
-	}
-
-	.cesium-viewer :global(.cesium-viewer-bottom),
-	.cesium-viewer :global(.cesium-viewer-toolbar),
-	.cesium-viewer :global(.cesium-credit-textContainer),
-	.cesium-viewer :global(.cesium-credit-logoContainer) {
-		display: none !important;
-	}
-
-	.cesium-viewer :global(.cesium-viewer),
-	.cesium-viewer :global(.cesium-widget),
-	.cesium-viewer :global(.cesium-viewer-cesiumWidgetContainer) {
-		width: 100% !important;
-		height: 100% !important;
-	}
-
-	.cesium-viewer :global(canvas) {
-		width: 100% !important;
-		height: 100% !important;
-	}
-
-	.globe-loading {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		color: rgba(255, 255, 255, 0.5);
-		font: 11px/1 monospace;
-		pointer-events: none;
-	}
-
-	.compare-divider {
-		position: absolute;
-		top: 8px;
-		left: 50%;
-		transform: translateX(-50%);
-		display: flex;
-		gap: 12px;
-		font: 10px/1 monospace;
-		color: rgba(255, 255, 255, 0.35);
-		pointer-events: none;
-		z-index: 10;
-	}
-	.compare-divider::before {
-		content: '';
-		position: absolute;
-		top: 30px;
-		left: 50%;
-		width: 1px;
-		height: 100vh;
-		background: rgba(255, 255, 255, 0.1);
 	}
 
 	.horizon-line {
 		position: absolute;
-		top: 45%;
 		left: 0;
 		right: 0;
+		top: 55%;
 		height: 1px;
-		background: rgba(255, 255, 255, 0.12);
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1) 50%, transparent);
 		pointer-events: none;
 	}
 
 	.hud {
 		position: absolute;
-		top: 12px;
-		right: 12px;
+		bottom: 16px;
+		left: 16px;
 		display: flex;
-		gap: 14px;
-		align-items: center;
-		font: 11px/1 monospace;
-		color: rgba(255, 255, 255, 0.55);
-		padding: 6px 10px;
-		background: rgba(0, 0, 0, 0.3);
+		gap: 10px;
+		flex-wrap: wrap;
+		font-size: 12px;
+		background: rgba(0, 0, 0, 0.55);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 6px;
+		color: #eee;
+		padding: 6px 10px;
+		border-radius: 8px;
+		backdrop-filter: blur(6px);
 		pointer-events: none;
-		backdrop-filter: blur(8px);
 	}
-	.hud b { color: rgba(255, 255, 255, 0.9); font-weight: 600; }
 
-	.sky-tag, .wx-tag {
+	.hud span {
 		padding: 2px 6px;
-		border-radius: 3px;
-		font-weight: 600;
-		letter-spacing: 0.05em;
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 4px;
 	}
-	.wx-tag {
-		background: rgba(255, 255, 255, 0.08);
-		color: #ccc;
-	}
-	.sky-day    { background: rgba(100, 160, 230, 0.25); color: #9ec6f5; }
-	.sky-dawn   { background: rgba(230, 120, 80, 0.25);  color: #e09070; }
-	.sky-dusk   { background: rgba(200, 100, 70, 0.25);  color: #d68060; }
-	.sky-night  { background: rgba(60, 70, 110, 0.4);    color: #8090c0; }
+	.sky-tag.sky-night { background: #1a2040; color: #7faeff; }
+	.sky-tag.sky-dawn  { background: #402818; color: #ffb070; }
+	.sky-tag.sky-dusk  { background: #301838; color: #d080e0; }
+	.sky-tag.sky-day   { background: #204060; color: #a0d4ff; }
+	.wx-tag { background: #202028; color: #c0c4cc; }
 
-	.val.sky-day   { color: #9ec6f5; }
-	.val.sky-dawn  { color: #e09070; }
-	.val.sky-dusk  { color: #d68060; }
-	.val.sky-night { color: #8090c0; }
-
-	/* Controls panel */
 	.controls {
-		padding: 20px;
+		padding: 16px;
 		overflow-y: auto;
-		background: #141418;
+		background: #111115;
 		border-left: 1px solid #222;
 	}
-	.controls header h2 {
-		margin: 0 0 2px;
-		font-size: 17px;
-		font-weight: 600;
-	}
-	.hint {
-		margin: 0 0 18px;
-		font-size: 11px;
-		color: #666;
-	}
 
-	.tab-bar {
-		display: flex;
-		gap: 4px;
-		margin-bottom: 16px;
-		padding: 3px;
-		background: #0e0e12;
-		border: 1px solid #222;
-		border-radius: 7px;
+	.controls header h2 {
+		font-size: 15px;
+		margin: 0 0 4px 0;
 	}
-	.tab-bar button {
-		flex: 1;
-		padding: 6px 4px;
-		background: transparent;
-		border: 0;
-		border-radius: 4px;
-		color: #888;
-		font-size: 12px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-	.tab-bar button:hover { color: #ccc; }
-	.tab-bar button.active {
-		background: #335577;
-		color: #fff;
+	.controls header .hint {
+		margin: 0 0 14px 0;
+		font-size: 11px;
+		color: #999;
+		line-height: 1.4;
 	}
 
 	fieldset {
 		border: 1px solid #222;
-		border-radius: 7px;
-		padding: 10px 12px 12px;
-		margin: 0 0 12px;
-		background: #0e0e12;
+		border-radius: 6px;
+		margin: 0 0 12px 0;
+		padding: 10px 12px;
 	}
-	legend {
-		font-size: 10px;
+
+	fieldset legend {
+		font-size: 11px;
 		text-transform: uppercase;
-		letter-spacing: 0.12em;
+		letter-spacing: 0.8px;
 		color: #888;
 		padding: 0 6px;
 	}
@@ -632,106 +378,128 @@
 	label {
 		display: block;
 		font-size: 12px;
-		margin-bottom: 8px;
-		color: #bbb;
+		color: #ccc;
+		margin: 6px 0;
 	}
-	label:last-child { margin-bottom: 0; }
 
-	.val {
+	label .val {
 		float: right;
-		color: #4488cc;
-		font-family: monospace;
+		color: #7faeff;
+		font-family: ui-monospace, monospace;
 		font-size: 11px;
 	}
 
 	label.check {
 		display: flex;
-		gap: 8px;
 		align-items: center;
-		cursor: pointer;
+		gap: 6px;
+		margin: 8px 0;
 	}
-	label.check input { accent-color: #4488cc; margin: 0; }
 
 	input[type="range"] {
-		display: block;
 		width: 100%;
-		margin-top: 4px;
-		accent-color: #4488cc;
+		margin: 4px 0;
 	}
 
-	.select {
-		display: block;
+	.select,
+	select {
 		width: 100%;
-		padding: 6px 8px;
-		background: #1a1a1f;
-		border: 1px solid #333;
+		background: #1a1a20;
+		color: #eee;
+		border: 1px solid #2a2a30;
 		border-radius: 4px;
-		color: #ddd;
-		font-size: 13px;
+		padding: 6px 8px;
+		font-size: 12px;
 	}
 
 	.chip-row {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		display: flex;
+		flex-wrap: wrap;
 		gap: 4px;
 	}
-	.chip-row.weather-chips {
-		grid-template-columns: repeat(3, 1fr);
-	}
+
 	.chip-row button {
-		padding: 6px 4px;
-		background: #1a1a1f;
+		flex: 1;
+		min-width: 50px;
+		background: #1a1a20;
+		color: #aaa;
 		border: 1px solid #2a2a30;
 		border-radius: 4px;
-		color: #aaa;
+		padding: 4px 6px;
 		font-size: 11px;
 		text-transform: capitalize;
 		cursor: pointer;
-		transition: all 0.15s;
 	}
-	.chip-row button:hover { background: #22222a; color: #ccc; }
+
 	.chip-row button.active {
-		background: #335577;
-		border-color: #4488cc;
+		background: #2a4060;
 		color: #fff;
+		border-color: #4080c0;
 	}
 
 	.source-btn {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		padding: 7px 10px;
-		border: 1px solid #222;
-		border-radius: 5px;
-		margin-bottom: 5px;
+		display: block;
 		cursor: pointer;
-		transition: all 0.15s;
+		margin: 4px 0;
+		padding: 6px 8px;
+		background: #1a1a20;
+		border: 1px solid #2a2a30;
+		border-radius: 4px;
+		transition: background 0.15s;
 	}
-	.source-btn:last-child { margin-bottom: 0; }
-	.source-btn:hover { border-color: #444; background: #1a1a1f; }
+
+	.source-btn:hover {
+		background: #22232a;
+	}
+
 	.source-btn.active {
-		border-color: #4488cc;
-		background: rgba(68, 136, 204, 0.12);
+		background: #2a4060;
+		border-color: #4080c0;
 	}
-	.source-btn input { display: none; }
-	.source-name { font-size: 12px; font-weight: 500; color: #ddd; }
-	.source-note { font-size: 10px; color: #666; }
+
+	.source-btn input[type="radio"] {
+		margin-right: 6px;
+	}
+
+	.source-name {
+		font-size: 12px;
+		color: #eee;
+		font-weight: 500;
+	}
+
+	.source-note {
+		display: block;
+		font-size: 10px;
+		color: #888;
+		margin-top: 2px;
+		margin-left: 20px;
+	}
+
+	.field-note {
+		font-size: 10px;
+		color: #777;
+		margin: 0 0 6px 0;
+		line-height: 1.4;
+	}
 
 	.actions {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px;
+		display: flex;
+		gap: 8px;
+		margin-top: 12px;
 	}
+
 	.btn {
+		flex: 1;
 		padding: 8px;
-		background: #1a1a1f;
-		border: 1px solid #333;
-		border-radius: 5px;
-		color: #ccc;
+		background: #2a4060;
+		color: #fff;
+		border: 1px solid #4080c0;
+		border-radius: 4px;
 		font-size: 12px;
-		font-weight: 500;
 		cursor: pointer;
-		transition: all 0.15s;
 	}
-	.btn:hover { background: #22222a; color: #fff; border-color: #444; }
+
+	.btn:hover {
+		background: #3a5070;
+	}
 </style>
