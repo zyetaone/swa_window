@@ -2,6 +2,7 @@
  * FlightSimEngine - Flight position, orbit, scenario, and cruise state machine.
  */
 
+import { untrack } from 'svelte';
 import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import { AIRCRAFT } from '$lib/constants';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
@@ -83,18 +84,21 @@ export class FlightSimEngine {
 	// ====================================================================
 
 	tick(delta: number, ctx: SimulationContext): FlightPatch {
+		// Hot path — 60 Hz. Wrap in untrack() so any config/state reads inside
+		// the tick body don't create reactive dependencies that would re-trigger
+		// derived/effect evaluation elsewhere in the graph at frame rate.
 		const patch: FlightPatch = {};
-
-		if (this.flightMode === 'cruise_departure') {
-			this.#tickDeparture(delta, patch);
-			this.#tickFlightPath(delta, ctx);
-		} else if (this.flightMode === 'cruise_transit') {
-			this.#tickTransit(delta, patch);
-		} else {
-			this.#tickFlightPath(delta, ctx);
-		}
-		this.#tickAltitude(delta, ctx);
-
+		untrack(() => {
+			if (this.flightMode === 'cruise_departure') {
+				this.#tickDeparture(delta, patch);
+				this.#tickFlightPath(delta, ctx);
+			} else if (this.flightMode === 'cruise_transit') {
+				this.#tickTransit(delta, patch);
+			} else {
+				this.#tickFlightPath(delta, ctx);
+			}
+			this.#tickAltitude(delta, ctx);
+		});
 		return patch;
 	}
 

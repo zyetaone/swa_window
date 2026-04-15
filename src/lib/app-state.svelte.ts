@@ -18,6 +18,7 @@ import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 import { FlightSimEngine } from '$lib/simulation/flight.svelte';
 import { MotionEngine } from '$lib/simulation/motion.svelte';
 import { WorldEngine } from '$lib/simulation/world.svelte';
+import { RootConfig } from '$lib/model/config';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,13 @@ export class WindowModel {
 	readonly flight = new FlightSimEngine();
 	readonly motion = new MotionEngine();
 	readonly world  = new WorldEngine();
+
+	// ── Config tree (Phase 1) ─────────────────────────────────────────────────
+	// Admin-tunable $state classes for every layer. Built alongside the flat
+	// fields below; Phases 2-5 migrate consumers to read from here instead,
+	// then the flat fields get removed in a final pass. Fleet v2 config_patch
+	// messages route through `this.config.applyPatch(path, value)`.
+	readonly config = new RootConfig();
 
 	// ── Core state ────────────────────────────────────────────────────────────
 	location     = $state<LocationId>('dubai');

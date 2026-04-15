@@ -2,6 +2,7 @@
  * MotionEngine — turbulence, banking, breathing, engine vibration.
  */
 
+import { untrack } from 'svelte';
 import { clamp, shortestAngleDelta, randomBetween } from '$lib/utils';
 import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
 import type { SimulationContext } from '$lib/types';
@@ -23,6 +24,11 @@ export class MotionEngine {
 	#bumpSign = 1;
 
 	tick(delta: number, ctx: SimulationContext): void {
+		// Hot path — wrap in untrack() so config reads don't build 60 Hz deps.
+		untrack(() => this.#tickInternal(delta, ctx));
+	}
+
+	#tickInternal(delta: number, ctx: SimulationContext): void {
 		const { time: t, heading, altitude, turbulenceLevel } = ctx;
 		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[turbulenceLevel];
 

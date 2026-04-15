@@ -6,6 +6,7 @@
  * subscribes to the game-loop independently.
  */
 
+import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
 import { AMBIENT } from '$lib/constants';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
@@ -24,15 +25,15 @@ export class WorldEngine {
 
 	tick(_delta: number, ctx: SimulationContext): WorldPatch {
 		const patch: WorldPatch = {};
+		untrack(() => {
+			const atmospherePatch = this.#tickRandomize(_delta, ctx);
+			if (atmospherePatch) patch.atmosphere = atmospherePatch;
 
-		const atmospherePatch = this.#tickRandomize(_delta, ctx);
-		if (atmospherePatch) patch.atmosphere = atmospherePatch;
-
-		if (ctx.isOrbitMode) {
-			const nextLoc = this.#tickDirector(_delta, ctx);
-			if (nextLoc) patch.nextLocation = nextLoc;
-		}
-
+			if (ctx.isOrbitMode) {
+				const nextLoc = this.#tickDirector(_delta, ctx);
+				if (nextLoc) patch.nextLocation = nextLoc;
+			}
+		});
 		return patch;
 	}
 
