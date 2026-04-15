@@ -1,7 +1,13 @@
 import type { LocationId, WeatherType } from '$lib/types';
 import { LOCATION_IDS } from '$lib/locations';
-import { AIRCRAFT } from '$lib/constants';
 import { isValidWeather } from '$lib/validation';
+
+// Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
+// Hardcoded here (one-time startup concern) to keep persistence.ts free of
+// app-state dependencies.
+const ALT_MIN = 10_000;
+const ALT_DEFAULT = 35_000;
+const ALT_MAX = 65_000;
 
 export const STORAGE_KEY = 'aero-window-v2';
 
@@ -38,7 +44,7 @@ export function loadPersistedState(): Partial<PersistedState> {
 		}
 
 		if (parsed.altitude !== undefined) {
-			parsed.altitude = safeNum(parsed.altitude, AIRCRAFT.DEFAULT_ALTITUDE, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
+			parsed.altitude = safeNum(parsed.altitude, ALT_DEFAULT, ALT_MIN, ALT_MAX);
 		}
 		if (parsed.cloudDensity !== undefined) {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.7, 0, 1);

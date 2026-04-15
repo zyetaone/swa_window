@@ -11,17 +11,17 @@
  * deferred until every reader has been repointed at the config tree.
  */
 
-export { WorldConfig } from './world';
-export { AtmosphereConfig } from './atmosphere';
-export { CameraConfig, type DeviceRole } from './camera';
-export { DirectorConfig } from './director';
-export { ChromeConfig } from './chrome';
+export { WorldConfig } from './world.svelte';
+export { AtmosphereConfig } from './atmosphere.svelte';
+export { CameraConfig, type DeviceRole } from './camera.svelte';
+export { DirectorConfig } from './director.svelte';
+export { ChromeConfig } from './chrome.svelte';
 
-import { WorldConfig } from './world';
-import { AtmosphereConfig } from './atmosphere';
-import { CameraConfig } from './camera';
-import { DirectorConfig } from './director';
-import { ChromeConfig } from './chrome';
+import { WorldConfig } from './world.svelte';
+import { AtmosphereConfig } from './atmosphere.svelte';
+import { CameraConfig } from './camera.svelte';
+import { DirectorConfig } from './director.svelte';
+import { ChromeConfig } from './chrome.svelte';
 
 export class RootConfig {
 	world      = new WorldConfig();

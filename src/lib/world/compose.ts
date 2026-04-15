@@ -5,10 +5,10 @@
  * atmosphere sync, post-processing, and the per-frame render loop.
  */
 
-import { AIRCRAFT, CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
-import type { LocationId, WeatherType, QualityMode } from '$lib/types';
-import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import type * as CesiumType from 'cesium';
+import type { LocationId, WeatherType, QualityMode } from '$lib/types';
+import type { WorldConfig } from '$lib/model/config/world.svelte';
+import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -34,6 +34,7 @@ export interface CesiumModelView {
 		camera: {
 			effectiveHeading(baseHeading: number): number;
 		};
+		world: WorldConfig;
 	};
 	timeOfDay: number;
 	nightFactor: number;
@@ -56,7 +57,7 @@ export class CesiumManager {
 	// Camera lerp state
 	private camLat = 0;
 	private camLon = 0;
-	private camAlt: number = AIRCRAFT.DEFAULT_ALTITUDE;
+	private camAlt: number = 35_000;
 	private camHeading = 45;
 	private camPitch = 75;
 	private camBank = 0;
@@ -203,9 +204,10 @@ export class CesiumManager {
 			const allowBloom = this.model.qualityMode !== 'performance';
 			bloom.enabled = allowBloom;
 			if (allowBloom) {
-				bloom.uniforms.contrast = CESIUM.BLOOM_CONTRAST;
-				bloom.uniforms.brightness = CESIUM.BLOOM_BRIGHTNESS;
-				bloom.uniforms.sigma = CESIUM.BLOOM_SIGMA;
+				const w = this.model.config.world;
+				bloom.uniforms.contrast = w.bloomContrast;
+				bloom.uniforms.brightness = w.bloomBrightness;
+				bloom.uniforms.sigma = w.bloomSigma;
 				bloom.uniforms.delta = 1.0;
 				bloom.uniforms.stepSize = 1.0;
 				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
@@ -418,19 +420,20 @@ export class CesiumManager {
 		// step the shader's additive-light pass (lightMask 0.12–0.5) catches
 		// faint terrain pixels and amber-boosts them, making night look like
 		// an orange haze rather than actual darkness.
+		const w = this.model.config.world;
 		if (this.baseLayer) {
-			this.baseLayer.brightness = lerp(1.0, CESIUM.BASE_NIGHT_BRIGHTNESS, nf);
-			this.baseLayer.saturation = lerp(this.baseDaySaturation, CESIUM.BASE_NIGHT_SATURATION, nf);
+			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, nf);
+			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, nf);
 		}
 
 		if (!this.nightLayer) return;
 		this.nightLayer.show = show || firstNight;
-		const alpha = lerp(0, CESIUM.NIGHT_ALPHA, nf) * scale;
+		const alpha = lerp(0, w.nightAlpha, nf) * scale;
 		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
 			this.lastNightAlpha = alpha;
 			this.nightLayer.alpha = alpha;
-			this.nightLayer.brightness = lerp(1, CESIUM.NIGHT_BRIGHTNESS, nf) * scale;
-			this.nightLayer.contrast = lerp(1, CESIUM.NIGHT_CONTRAST, nf);
+			this.nightLayer.brightness = lerp(1, w.nightBrightness, nf) * scale;
+			this.nightLayer.contrast = lerp(1, w.nightContrast, nf);
 		}
 	}
 
@@ -466,8 +469,8 @@ export class CesiumManager {
 			this.tileset = await this.CesiumModule.createOsmBuildingsAsync();
 			if (this.tileset) {
 				this.tileset.show = this.model.showBuildings;
-				const p = CESIUM_QUALITY_PRESETS[this.model.qualityMode];
-				this.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
+				const w = this.model.config.world;
+				this.tileset.maximumScreenSpaceError = w.msse;
 				// Cast + receive shadows — buildings drop long shadows across
 				// the terrain at low-sun times, grounding them in the scene.
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
@@ -489,16 +492,15 @@ export class CesiumManager {
 	}
 
 	applyQualityMode(mode: QualityMode): void {
-		// Terrain
+		const w = this.model.config.world;
+		w.syncFromMode(mode);
 		const globe = this.viewer.scene.globe;
-		const p = CESIUM_QUALITY_PRESETS[mode];
-		globe.maximumScreenSpaceError = p.maximumScreenSpaceError;
-		globe.tileCacheSize = p.tileCacheSize;
-		globe.preloadSiblings = p.preloadSiblings;
-		globe.preloadAncestors = p.preloadAncestors;
-		globe.loadingDescendantLimit = p.loadingDescendantLimit;
-		// Buildings
-		if (this.tileset) this.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
+		globe.maximumScreenSpaceError = w.msse;
+		globe.tileCacheSize = w.tileCache;
+		globe.preloadSiblings = w.preloadSiblings;
+		globe.preloadAncestors = w.preloadAncestors;
+		globe.loadingDescendantLimit = w.loadingDescendantLimit;
+		if (this.tileset) this.tileset.maximumScreenSpaceError = w.msse;
 	}
 
 	destroy(): void {

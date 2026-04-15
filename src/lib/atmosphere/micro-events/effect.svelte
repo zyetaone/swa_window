@@ -3,8 +3,9 @@
 	 * Micro-events — bird, shooting star, contrail.
 	 * Schedules transient events based on conditions (altitude, sky, weather).
 	 * Self-contained timer + event state; uses existing MicroEvent.svelte for visuals.
+	 *
+	 * Phase 5 migration: MICRO_EVENTS constants → model.config.atmosphere.microEvents.*.
 	 */
-	import { MICRO_EVENTS } from '$lib/constants';
 	import { randomBetween, pickRandom } from '$lib/utils';
 	import { subscribe } from '$lib/game-loop';
 	import type { MicroEventData } from '$lib/types';
@@ -15,13 +16,16 @@
 
 	let event = $state<MicroEventData | null>(null);
 
-	// Private timers
 	let timer = 0;
-	let timeToNext = randomBetween(MICRO_EVENTS.MIN_INTERVAL, MICRO_EVENTS.MAX_INTERVAL);
+	let timeToNext = 100;
+
+	$effect(() => {
+		const me = model.config.atmosphere.microEvents;
+		timeToNext = randomBetween(me.minInterval, me.maxInterval);
+	});
 
 	$effect(() =>
 		subscribe((delta: number) => {
-			// Advance active event
 			if (event) {
 				const elapsed = event.elapsed + delta;
 				if (elapsed >= event.duration) {
@@ -33,11 +37,12 @@
 				return;
 			}
 
-			// Schedule next event
+			const me = model.config.atmosphere.microEvents;
+
 			timer += delta;
 			if (timer < timeToNext) return;
 			timer = 0;
-			timeToNext = randomBetween(MICRO_EVENTS.MIN_INTERVAL, MICRO_EVENTS.MAX_INTERVAL);
+			timeToNext = randomBetween(me.minInterval, me.maxInterval);
 
 			const types: Array<'bird' | 'shooting-star' | 'contrail'> = [];
 			const altitude = model.flight.altitude;
@@ -58,9 +63,9 @@
 
 			const type = pickRandom(types);
 			const duration =
-				type === 'bird' ? MICRO_EVENTS.BIRD_DURATION
-				: type === 'shooting-star' ? MICRO_EVENTS.SHOOTING_STAR_DURATION
-				: MICRO_EVENTS.CONTRAIL_DURATION;
+				type === 'bird' ? me.birdDuration
+				: type === 'shooting-star' ? me.shootingStarDuration
+				: me.contrailDuration;
 
 			event = {
 				type,

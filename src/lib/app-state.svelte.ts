@@ -175,6 +175,7 @@ export class WindowModel {
 	// ── Constructor ───────────────────────────────────────────────────────────
 	constructor() {
 		this.#applyPersisted(loadPersistedState());
+		this.#syncWeatherConfig();
 
 		if (typeof window !== 'undefined') {
 			this.#fpsLastTime = performance.now();
@@ -183,10 +184,16 @@ export class WindowModel {
 		}
 	}
 
+	/** Sync AtmosphereConfig.weather fields from WEATHER_EFFECTS on weather change. */
+	#syncWeatherConfig(): void {
+		const fx = WEATHER_EFFECTS[this.weather];
+		this.config.atmosphere.weather.syncFromEffects(fx);
+	}
+
 	#applyPersisted(saved: Partial<PersistedState>): void {
 		if (saved.location)            this.setLocation(saved.location);
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
-		if (saved.weather)             this.weather = saved.weather;
+		if (saved.weather)             { this.weather = saved.weather; this.#syncWeatherConfig(); }
 		if (saved.cloudDensity !== undefined) this.cloudDensity = saved.cloudDensity;
 		this.showBuildings = saved.showBuildings ?? true;
 		this.showClouds    = saved.showClouds    ?? true;
@@ -245,11 +252,12 @@ export class WindowModel {
 
 	applyScene(locationId: LocationId, weather?: WeatherType): void {
 		this.flight.flyTo(locationId);
-		if (weather) this.weather = weather;
+		if (weather) { this.weather = weather; this.#syncWeatherConfig(); }
 	}
 
 	setQualityMode(mode: QualityMode): void {
 		this.qualityMode = mode;
+		this.config.world.syncFromMode(mode);
 	}
 
 	/**
@@ -267,6 +275,7 @@ export class WindowModel {
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
 		if (patch.weather !== undefined && isValidWeather(patch.weather)) {
 			this.weather = patch.weather;
+			this.#syncWeatherConfig();
 			this.onUserInteraction('atmosphere');
 		}
 		if (patch.cloudDensity !== undefined)       { this.cloudDensity = clamp(patch.cloudDensity, 0, 1); this.onUserInteraction('atmosphere'); }

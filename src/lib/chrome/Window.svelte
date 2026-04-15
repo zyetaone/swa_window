@@ -15,7 +15,7 @@
 	 *  10: Vignette
 	 */
 	import { useAppState } from "$lib/app-state.svelte";
-	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/constants";
+	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
 	import { useBlind } from "./use-blind.svelte";
@@ -157,27 +157,19 @@
 				: model.skyState === "dawn" || model.skyState === "dusk"
 					? 0.95
 					: 1.0;
-		const fx = WEATHER_EFFECTS[model.weather];
 		const hazeContrast = 1 - model.haze * 0.08;
 		const hazeSaturate = 1 - model.haze * 0.1;
-		const brightness = timeBrightness * fx.filterBrightness;
+		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
 		const w = model.flight.warpFactor;
-
-		// Constant 0.35px blur — kills the pixel aliasing visible over large
-		// flat ocean areas where Sentinel-2 tiles are low-res at cruise zoom.
-		// Subtle enough that terrain detail still reads as crisp; no perceived
-		// "soft focus" at normal viewing distance.
 		const baseBlur = 0.35;
-
 		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)}) blur(${baseBlur}px)`;
 		if (w < 0.01) return base;
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
 
 	// --- Weather ---
-
-	const rainOpacity = $derived(WEATHER_EFFECTS[model.weather].rainOpacity);
-	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);
+	const rainOpacity = $derived(model.config.atmosphere.weather.rainOpacity);
+	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 
 	// --- Motion (unified from 4 independent layers) ---
 

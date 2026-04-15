@@ -4,26 +4,26 @@
 	 *
 	 * Subscribes directly to the game-loop. Timer, position, and decay live
 	 * in local $state — no coupling to WindowModel beyond reading weather.
+	 *
+	 * Phase 5 migration: lightning timing reads from model.config.atmosphere.weather.*.
 	 */
-	import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/constants';
 	import { clamp, randomBetween } from '$lib/utils';
 	import { subscribe } from '$lib/game-loop';
 	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
 
-	// Reactive outputs — rendered below
 	let intensity = $state(0);
 	let x = $state(50);
 	let y = $state(40);
 
-	// Private timers — not reactive (read/written inside the game-loop callback only)
 	let timer = 0;
-	let nextStrike = randomBetween(AIRCRAFT.LIGHTNING_MIN_INTERVAL, AIRCRAFT.LIGHTNING_MAX_INTERVAL);
+	let nextStrike = 10; // initial sentinel — first strike fires quickly
 
 	$effect(() =>
 		subscribe((delta: number) => {
-			const hasLightning = WEATHER_EFFECTS[model.weather].hasLightning;
+			const wcfg = model.config.atmosphere.weather;
+			const hasLightning = wcfg.hasLightning;
 			if (!hasLightning) {
 				intensity = 0;
 				return;
@@ -31,17 +31,14 @@
 
 			timer += delta;
 			if (intensity > 0) {
-				intensity = clamp(intensity - delta * AIRCRAFT.LIGHTNING_DECAY_RATE, 0, 1);
+				intensity = clamp(intensity - delta * wcfg.lightningDecayRate, 0, 1);
 			}
 			if (intensity < 0.01 && timer > nextStrike) {
 				intensity = randomBetween(0.5, 1);
 				x = randomBetween(20, 80);
 				y = randomBetween(15, 65);
 				timer = 0;
-				nextStrike = randomBetween(
-					AIRCRAFT.LIGHTNING_MIN_INTERVAL,
-					AIRCRAFT.LIGHTNING_MAX_INTERVAL,
-				);
+				nextStrike = randomBetween(wcfg.lightningMinInterval, wcfg.lightningMaxInterval);
 			}
 		}),
 	);

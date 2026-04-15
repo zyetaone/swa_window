@@ -1,15 +1,14 @@
 <script lang="ts">
 	/**
 	 * Clouds — SVG feTurbulence parallax deck along the horizon.
-	 * Density and speed come from model; wind angle is derived from current weather.
+	 * Density and speed come from model; wind angle from weather config.
 	 */
 	import CloudBlobs from './CloudBlobs.svelte';
-	import { WEATHER_EFFECTS } from '$lib/constants';
 	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
 
-	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);
+	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 </script>
 
 <CloudBlobs
