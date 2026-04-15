@@ -170,16 +170,13 @@ export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = 
 };
 
 export const CESIUM = {
-	// Dual-layer night rendering — photographic glow + vector road detail composited.
-	// Layer 1: NASA VIIRS City Lights (satellite photo, warm blotchy glow)
-	VIIRS_NIGHT_ALPHA: 0.85,
-	VIIRS_NIGHT_BRIGHTNESS: 1.6,
-	VIIRS_CONTRAST: 1.1,
-	// Layer 2: CartoDB Dark (vector roads/buildings, crisp edges)
-	ROAD_LIGHT_NIGHT_ALPHA: 0.55,
-	ROAD_LIGHT_NIGHT_BRIGHTNESS: 1.8,
-	ROAD_LIGHT_CONTRAST: 1.3,
-	ROAD_LIGHT_SATURATION: 0.0,
+	// Night city glow overlay — CartoDB Dark basemap composited over the day
+	// imagery at nightFactor=1. The tile's natural darkness covers the bright
+	// base (producing the dark night feel), and its lit road grid punches
+	// through as warm city light after the shader's additive pass.
+	NIGHT_ALPHA: 0.75,
+	NIGHT_BRIGHTNESS: 2.5,
+	NIGHT_CONTRAST: 1.8,
 } as const;
 
 // =============================================================================

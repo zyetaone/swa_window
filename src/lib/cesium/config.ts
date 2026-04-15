@@ -11,14 +11,6 @@ export const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || null;
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 export const SENTINEL2 = import.meta.env.VITE_SENTINEL2 === 'true' || false;
 
-/**
- * NASA VIIRS City Lights (Earth at Night, 2012 composite).
- * Free, public, no auth — served via NASA's GIBS tile server.
- * Provides photographic city-glow appearance — complements CartoDB Dark's vector road detail.
- */
-export const VIIRS_NIGHT_LIGHTS_URL =
-	'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
-
 /** CartoDB Dark basemap — dark vector tiles with crisp road + building edge detail. */
 export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 
