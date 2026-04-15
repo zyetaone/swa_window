@@ -582,7 +582,11 @@
 
 	.globe-pane {
 		position: absolute;
-		inset: 0;
+		/* Oversize: motion.tick rotates us up to ±6° via bank-angle. At the
+		   typical 1500×800 viewport, a 6° rotation exposes up to ~80px at
+		   the corners. -100px inset ensures the map always covers viewport
+		   even at extreme turbulence. */
+		inset: -100px;
 		will-change: transform;
 	}
 

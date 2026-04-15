@@ -331,9 +331,12 @@
 				id="hillshade-layer"
 				source="hillshade"
 				paint={{
-					'hillshade-shadow-color': nightFactor > 0.5 ? '#1a1f35' : '#473B24',
-					'hillshade-highlight-color': nightFactor > 0.5 ? '#4a5a7a' : '#ffe8c0',
-					'hillshade-accent-color': nightFactor > 0.5 ? '#2a3048' : '#8a6040',
+					// Night: near-black shadows, near-black highlights — terrain
+					// recedes into darkness, letting VIIRS glow dominate.
+					// Day: warm amber shadows + cream highlights for sunlit relief.
+					'hillshade-shadow-color': nightFactor > 0.5 ? '#050810' : '#473B24',
+					'hillshade-highlight-color': nightFactor > 0.5 ? '#0a0f20' : '#ffe8c0',
+					'hillshade-accent-color': nightFactor > 0.5 ? '#08101a' : '#8a6040',
 					'hillshade-exaggeration': 0.5,
 				}}
 			/>
@@ -406,14 +409,15 @@
 				paint={{
 					'fill-extrusion-color': nightFactor > 0.5
 						? [
-							// Night — procedural warm window glow via feature-id hash.
-							// feature-state would be cleaner but needs promoteId and
-							// a per-tile setFeatureState loop; this is zero-setup.
+							// Night — buildings as warm amber lanterns. Taller = brighter
+							// (more lit windows). Base stays dim (ground shadow).
 							'interpolate', ['linear'], ['get', 'render_height'],
-							0, `rgba(40, 32, 22, 0.9)`,
-							60, `rgba(${80 + nightFactor*40}, ${55 + nightFactor*30}, ${30}, 0.95)`,
-							200, `rgba(${140 + nightFactor*50}, ${90 + nightFactor*40}, ${40}, 1.0)`,
-							400, `rgba(${180 + nightFactor*30}, ${130 + nightFactor*30}, ${60}, 1.0)`,
+							0,   `rgba(25, 22, 18, 0.95)`,
+							30,  `rgba(90, 65, 40, 1.0)`,
+							80,  `rgba(180, 130, 70, 1.0)`,
+							150, `rgba(230, 170, 90, 1.0)`,
+							250, `rgba(255, 195, 110, 1.0)`,
+							400, `rgba(255, 220, 140, 1.0)`,
 						]
 						: [
 							'interpolate', ['linear'], ['get', 'render_height'],
@@ -424,7 +428,10 @@
 					'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
 					// MapLibre expr spec: 'zoom' must be input to a top-level step / interpolate
 					'fill-extrusion-base': ['step', ['zoom'], 0, 14, ['get', 'render_min_height']],
-					'fill-extrusion-opacity': 0.85,
+					'fill-extrusion-opacity': nightFactor > 0.5 ? 1.0 : 0.85,
+					// Vertical gradient: taller buildings have a warm gradient bottom→top
+					// at night (lit floors + dark ground floor).
+					'fill-extrusion-vertical-gradient': nightFactor < 0.5,
 				}}
 			/>
 		</VectorTileSource>
