@@ -13,7 +13,7 @@ import {
 	getIonToken,
 	checkLocalTileServer,
 	TILE_SERVER_URL,
-	getSatelliteImageryUrl,
+	getSatelliteImagery,
 	VIEWER_OPTIONS,
 	VIIRS_NIGHT_LIGHTS_URL,
 	CARTODB_DARK_URL,
@@ -80,13 +80,21 @@ export class CesiumManager {
 	private lastBuildingNightFactor = -1;
 	private lastTerrainExaggeration = -1;
 
-	#viewerContainerEl: HTMLElement | null = null;
 	#boundTick: (() => void) | null = null;
 
-	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
+	/**
+	 * Construct the Cesium.Viewer directly into the visible `container`.
+	 *
+	 * Earlier versions used a hidden display:none div, then reparented the
+	 * widget into the visible container in start(). That left Cesium's first
+	 * frame measuring a 0×0 viewport and locking the camera at "space view"
+	 * until a user interaction triggered a re-evaluation. Constructing into
+	 * the live container side-steps that entirely.
+	 */
+	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 		this.CesiumModule = CesiumModule;
 		this.model = model;
-		this.viewer = new CesiumModule.Viewer(this.viewerContainer(), VIEWER_OPTIONS);
+		this.viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
 	}
 
 	/** Live Cesium.Viewer — exposed so scene effects can attach primitives/data sources. */
@@ -95,26 +103,19 @@ export class CesiumManager {
 	/** Bound Cesium module — exposed so scene effects can construct Cesium types. */
 	getCesium(): typeof CesiumType { return this.CesiumModule; }
 
-	private viewerContainer(): HTMLElement {
-		this.#viewerContainerEl = document.createElement('div');
-		this.#viewerContainerEl.style.display = 'none';
-		document.body.appendChild(this.#viewerContainerEl);
-		return this.#viewerContainerEl;
-	}
-
-	async start(container: HTMLElement, COLOR_GRADING_GLSL: string): Promise<void> {
+	async start(COLOR_GRADING_GLSL: string): Promise<void> {
 		const C = this.CesiumModule;
 		const v = this.viewer;
-
-		const widgetEl = (v as any).cesiumWidget?.container;
-		if (widgetEl?.parentElement !== container) {
-			container.appendChild(widgetEl);
-		}
 
 		v.scene.logarithmicDepthBuffer = true;
 		v.scene.highDynamicRange = true;
 		v.scene.postProcessStages.fxaa.enabled = true;
 		v.scene.globe.enableLighting = false;
+		// Continuous render — our model state changes every RAF tick, and tick()
+		// is hooked to postRender. Without this, Cesium would only re-render
+		// when its OWN scene reports a change, missing model-driven updates and
+		// trapping the camera at its initial state.
+		v.scene.requestRenderMode = false;
 		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
@@ -129,7 +130,44 @@ export class CesiumManager {
 		await this.setupTerrain();
 		await this.setupImagery();
 		await this.setupBuildings();
+
+		// Set Cesium clock to model time on first frame so sun position is
+		// right from the start (otherwise we render with wall-clock UTC
+		// briefly until the next timeOfDay change).
+		this.syncClock();
+
+		// Force resize + render — Cesium widget was attached to the visible
+		// container during start(), but its canvas may still report 0×0 from
+		// the hidden parent. Without an explicit resize+render, the first frame
+		// can lock the camera at 'space view' and tile requests for the model
+		// position never fire. This kick wakes Cesium up.
+		v.resize();
+		v.scene.requestRender();
 	}
+
+	/**
+	 * Sync Cesium's internal clock to model.timeOfDay so the sun position
+	 * Cesium computes for sky atmosphere matches what the model thinks the
+	 * time is. Without this, Cesium uses wall-clock UTC — which produces
+	 * day/night mismatches: model says "Dubai 4 PM (day)" while Cesium
+	 * renders "Dubai dusk" because the user's wall-clock UTC moment puts
+	 * Dubai's longitude past sunset. Production version of this app had
+	 * the same method.
+	 */
+	private syncClock(): void {
+		const C = this.CesiumModule;
+		const utcHour = ((this.model.timeOfDay % 24) + 24) % 24;
+		const hours = Math.floor(utcHour);
+		const minutes = Math.floor((utcHour % 1) * 60);
+		const now = new Date();
+		this.viewer.clock.currentTime = C.JulianDate.fromDate(
+			new Date(Date.UTC(
+				now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+				hours, minutes,
+			)),
+		);
+	}
+
 
 	// ─── Post Process Setup ──────────────────────────────────────────────────
 	private setupPostProcess(glsl: string): void {
@@ -156,33 +194,54 @@ export class CesiumManager {
 	// ─── Imagery Setup ───────────────────────────────────────────────────────
 	private async setupImagery(): Promise<void> {
 		const useLocal = await checkLocalTileServer();
-
 		const C = this.CesiumModule;
+
+		const cfg = useLocal
+			? { url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`, maxZoom: 17, webMercator: false, label: 'local' }
+			: getSatelliteImagery();
+
+		console.info('[CesiumManager] base imagery:', cfg.label);
+
 		const provider = new C.UrlTemplateImageryProvider({
-			url: useLocal ? `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg` : getSatelliteImageryUrl(),
-			maximumLevel: useLocal ? 17 : 19,
+			url: cfg.url,
+			maximumLevel: cfg.maxZoom,
 			minimumLevel: 0,
+			...(cfg.webMercator ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
 		});
 		this.viewer.imageryLayers.addImageryProvider(provider);
 
 		if (useLocal) return;
 
-		// Layer 1: NASA VIIRS City Lights — satellite-photo warm glow over urban areas
+		// Layer 1: NASA VIIRS City Lights — satellite-photo warm glow over urban areas.
+		// colorToAlpha: BLACK makes the dark space-around-cities transparent, so only
+		// the actual lit-up urban pixels composite on top of the base imagery.
+		// Without this, the layer would just darken the whole globe at night.
 		try {
 			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({ url: VIIRS_NIGHT_LIGHTS_URL, maximumLevel: 8, minimumLevel: 0 })
+				new C.UrlTemplateImageryProvider({ url: VIIRS_NIGHT_LIGHTS_URL, maximumLevel: 8, minimumLevel: 0 }),
 			);
-			if (this.nightLayer) { this.nightLayer.alpha = 0; this.nightLayer.show = false; }
+			if (this.nightLayer) {
+				this.nightLayer.alpha = 0;
+				this.nightLayer.show = false;
+				this.nightLayer.colorToAlpha = C.Color.BLACK;
+				this.nightLayer.colorToAlphaThreshold = 0.18;
+			}
 		} catch (e) {
 			console.warn('[CesiumManager] VIIRS night layer failed:', e);
 		}
 
-		// Layer 2: CartoDB Dark — vector road + building outlines for crisp edge detail
+		// Layer 2: CartoDB Dark — vector road + building outlines for crisp edge detail.
+		// Same trick: dark base goes transparent, only the lit road grid bleeds through.
 		try {
 			this.roadLightLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({ url: CARTODB_DARK_URL, maximumLevel: 18, minimumLevel: 0 })
+				new C.UrlTemplateImageryProvider({ url: CARTODB_DARK_URL, maximumLevel: 18, minimumLevel: 0 }),
 			);
-			if (this.roadLightLayer) { this.roadLightLayer.alpha = 0; this.roadLightLayer.show = false; }
+			if (this.roadLightLayer) {
+				this.roadLightLayer.alpha = 0;
+				this.roadLightLayer.show = false;
+				this.roadLightLayer.colorToAlpha = C.Color.BLACK;
+				this.roadLightLayer.colorToAlphaThreshold = 0.20;
+			}
 		} catch (e) {
 			console.warn('[CesiumManager] Road light layer failed:', e);
 		}
@@ -242,6 +301,7 @@ export class CesiumManager {
 		if (this.lastTimeOfDay !== m.timeOfDay) {
 			this.lastTimeOfDay = m.timeOfDay;
 			if (v.scene.sun) v.scene.sun.show = isSunVisible;
+			this.syncClock();
 		}
 
 		let r = lerp(140, 25, nf); let g = lerp(170, 25, nf); let b = lerp(200, 40, nf);
@@ -391,7 +451,5 @@ export class CesiumManager {
 			}
 			this.viewer.destroy();
 		}
-		this.#viewerContainerEl?.remove();
-		this.#viewerContainerEl = null;
 	}
 }

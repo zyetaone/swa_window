@@ -142,25 +142,30 @@ export interface CesiumQualityPreset {
 
 export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
 	performance: {
-		maximumScreenSpaceError: 6,    // Lower detail — fewer tiles, less GPU work
-		tileCacheSize: 20,             // Tight memory budget
-		preloadSiblings: false,       // No extra tile loads
-		preloadAncestors: true,
-		loadingDescendantLimit: 4,
-	},
-	balanced: {
-		maximumScreenSpaceError: 4,    // Default quality
-		tileCacheSize: 50,            // Moderate memory budget
+		maximumScreenSpaceError: 8,    // Bigger tiles, fewer LOD changes (low-end Pi)
+		tileCacheSize: 50,             // Was 20 — keep more loaded to avoid reload churn
 		preloadSiblings: false,
 		preloadAncestors: true,
 		loadingDescendantLimit: 4,
 	},
-	ultra: {
-		maximumScreenSpaceError: 2,   // High detail — sharper edges
-		tileCacheSize: 100,           // Generous memory budget
-		preloadSiblings: true,        // Pre-load neighboring tiles
+	balanced: {
+		// MSSE 4 = aggressive subdivision → many small tiles → adjacent tiles end up at
+		// different LODs producing visible seams at perspective angles. Slight bump to 5
+		// keeps detail high but reduces per-tile LOD divergence.
+		maximumScreenSpaceError: 5,
+		tileCacheSize: 100,            // Was 50 — keep more in memory, stop reload churn
+		// Was false. Without sibling preload, each tile flips its LOD independently as the
+		// camera moves, leaving visible boundary lines. Preloading neighbors eliminates this.
+		preloadSiblings: true,
 		preloadAncestors: true,
-		loadingDescendantLimit: 6,
+		loadingDescendantLimit: 6,     // Was 4 — slightly more aggressive subdivision when needed
+	},
+	ultra: {
+		maximumScreenSpaceError: 2,    // High detail — sharper edges
+		tileCacheSize: 200,            // Was 100 — generous for desktop dev
+		preloadSiblings: true,
+		preloadAncestors: true,
+		loadingDescendantLimit: 8,     // Was 6
 	},
 };
 

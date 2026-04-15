@@ -3,6 +3,8 @@
  * display, admin, and any future package. SSOT.
  */
 
+import type { SkyState } from './types';
+
 /**
  * Clamp a value between min and max.
  */
@@ -51,11 +53,22 @@ export function shortestAngleDelta(from: number, to: number): number {
 /**
  * Derive sky state from decimal time of day.
  */
-export function getSkyState(timeOfDay: number): 'day' | 'night' | 'dawn' | 'dusk' {
+export function getSkyState(timeOfDay: number): SkyState {
 	if (timeOfDay < 5 || timeOfDay >= 20) return 'night';
 	if (timeOfDay < 7) return 'dawn';
 	if (timeOfDay >= 18) return 'dusk';
 	return 'day';
+}
+
+/**
+ * Night factor 0..1 from decimal time of day.
+ * 0 = full day, 1 = full night.
+ */
+export function nightFactor(timeOfDay: number): number {
+	if (timeOfDay >= 7 && timeOfDay <= 18) return 0;
+	if (timeOfDay < 5 || timeOfDay > 20) return 1;
+	if (timeOfDay < 7) return 1 - (timeOfDay - 5) / 2;
+	return (timeOfDay - 18) / 2;
 }
 
 /**

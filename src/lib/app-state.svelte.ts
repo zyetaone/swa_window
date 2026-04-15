@@ -7,7 +7,7 @@
  */
 
 import { setContext, getContext } from 'svelte';
-import { clamp, getSkyState } from '$lib/utils';
+import { clamp, getSkyState, nightFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
 import { QUALITY_MODES } from '$lib/types';
 import type { SkyState, LocationId, WeatherType, QualityMode, DisplayMode, SimulationContext } from '$lib/types';
@@ -125,13 +125,7 @@ export class WindowModel {
 	sceneFog = $derived(this.currentLocation.scene.fog);
 	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
 
-	nightFactor = $derived.by(() => {
-		const t = this.timeOfDay;
-		if (t >= 7 && t <= 18) return 0;
-		if (t < 5 || t > 20) return 1;
-		if (t < 7) return 1 - (t - 5) / 2;
-		return (t - 18) / 2;
-	});
+	nightFactor = $derived(nightFactor(this.timeOfDay));
 
 	dawnDuskFactor = $derived.by(() => {
 		const t = this.timeOfDay;

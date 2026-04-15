@@ -9,7 +9,7 @@
 	import { WEATHER_TYPES } from '$lib/types';
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
-	import { randomBetween, getSkyState, formatTime, clamp } from '$lib/utils';
+	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
 	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from '$lib/globe/sources';
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
@@ -58,13 +58,7 @@
 	const maplibreSrc = $derived(findSource(MAPLIBRE_SOURCES, maplibreSource));
 	const cesiumSrc = $derived(findSource(CESIUM_SOURCES, cesiumSource));
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
-	const nightFactor = $derived.by(() => {
-		const t = timeOfDay;
-		if (t >= 7 && t <= 18) return 0;
-		if (t < 5 || t > 20) return 1;
-		if (t < 7) return 1 - (t - 5) / 2;
-		return (t - 18) / 2;
-	});
+	const nf = $derived(nightFactor(timeOfDay));
 	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
 	const windAngle = $derived(weatherFx.windAngle);
 
@@ -241,7 +235,7 @@
 					showTerrain={mlTerrain}
 					showBuildings={mlBuildings}
 					showAtmosphere={mlAtmosphere}
-					{nightFactor}
+					nightFactor={nf}
 					terrainExaggeration={1.5}
 				/>
 			</div>

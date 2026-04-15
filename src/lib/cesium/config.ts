@@ -23,6 +23,19 @@ export const VIIRS_NIGHT_LIGHTS_URL =
 export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 
 /**
+ * EOX Sentinel-2 Cloudless 2024 — natural-color cloudless composite from
+ * Sentinel-2 satellite imagery. Beautiful, free, no auth.
+ *
+ * Caveats vs ESRI:
+ *   - Max zoom 14 (vs ESRI 19) — fine at cruise altitude (z14 ≈ 10m/pixel)
+ *   - WebMercator (3857) tiling scheme — must construct provider with
+ *     `tilingScheme: new Cesium.WebMercatorTilingScheme()`
+ *   - URL uses {z}/{y}/{x} order (y before x) — natural for WMTS
+ */
+export const SENTINEL2_EOX_URL =
+	'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg';
+
+/**
  * Sentinel-2 L2A via RODA/Sentinel-Hub public bucket.
  * Band L2A = natural color RGB composite.
  * Path format: tiles/{z}/{x}/{y}/L2A/{date}.jpg
@@ -88,17 +101,49 @@ export const VIEWER_OPTIONS = {
 } as const;
 
 /**
- * Get the primary satellite imagery URL.
- * Priority: Mapbox (if token) → Sentinel-2 (if enabled, requires tiling proxy) → ESRI World Imagery (fallback, no auth)
- *
- * NOTE: Sentinel-2 via RODA uses non-standard z/x/y path structure (tiles/{z}/{x}/{y}/L2A/{date}.jpg).
- * A tiling proxy (e.g., tileserver-gl) is required for direct Cesium integration.
+ * Imagery source configuration — captures everything CesiumManager needs to
+ * construct a UrlTemplateImageryProvider (URL + max zoom + tiling scheme hint).
  */
-export function getSatelliteImageryUrl(): string {
-	if (TILE_SERVER_URL) return `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`;
-	if (MAPBOX_TOKEN) return `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`;
-	if (SENTINEL2) return getSentinel2TileUrl(0, 0, 0); // NOTE: requires tiling proxy for standard z/x/y
-	return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+export interface ImageryConfig {
+	url: string;
+	maxZoom: number;
+	/** Set true for sources that use WebMercator tiling (e.g. EOX, Mapbox). */
+	webMercator: boolean;
+	/** Human-readable label for logs/credits. */
+	label: string;
+}
+
+/**
+ * Get primary satellite imagery configuration.
+ * Priority: Local tile server → Mapbox → EOX Sentinel-2 Cloudless → ESRI World Imagery
+ *
+ * EOX Sentinel-2 is the default (no Mapbox token needed) — natural cloudless
+ * composite, gorgeous at cruise altitude. ESRI is the last-resort fallback
+ * if you explicitly disable Sentinel-2 via VITE_SENTINEL2=false.
+ */
+export function getSatelliteImagery(): ImageryConfig {
+	if (TILE_SERVER_URL) {
+		return { url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`, maxZoom: 17, webMercator: false, label: 'local-tile-server' };
+	}
+	if (MAPBOX_TOKEN) {
+		return {
+			url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`,
+			maxZoom: 19,
+			webMercator: true,
+			label: 'mapbox-satellite',
+		};
+	}
+	// Default: EOX Sentinel-2 Cloudless. Set VITE_SENTINEL2=false to opt out.
+	const useSentinel = import.meta.env.VITE_SENTINEL2 !== 'false';
+	if (useSentinel) {
+		return { url: SENTINEL2_EOX_URL, maxZoom: 14, webMercator: true, label: 'eox-sentinel2' };
+	}
+	return {
+		url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+		maxZoom: 19,
+		webMercator: false,
+		label: 'esri-world-imagery',
+	};
 }
 
 /**

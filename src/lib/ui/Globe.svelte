@@ -31,8 +31,8 @@
 			const CesiumModule = await import('cesium');
 			initCesiumGlobal(CesiumModule);
 
-			cesium = new CesiumManager(model, CesiumModule);
-			await cesium.start(viewerContainer, COLOR_GRADING_GLSL);
+			cesium = new CesiumManager(model, CesiumModule, viewerContainer);
+			await cesium.start(COLOR_GRADING_GLSL);
 			activeCesium.manager = cesium;
 
 			fadingOut = true;
@@ -118,6 +118,18 @@
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
+	}
+
+	/* Cesium creates its own nested .cesium-viewer / .cesium-widget divs inside
+	   our container. We don't ship widgets.css, so we have to size them ourselves
+	   or they collapse to 0×0 and the canvas renders nothing visible. */
+	.cesium-viewer :global(.cesium-viewer),
+	.cesium-viewer :global(.cesium-viewer-cesiumWidgetContainer),
+	.cesium-viewer :global(.cesium-widget) {
+		width: 100% !important;
+		height: 100% !important;
+		position: absolute !important;
+		inset: 0 !important;
 	}
 
 	.cesium-viewer :global(canvas) {

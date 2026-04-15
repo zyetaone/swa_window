@@ -54,22 +54,26 @@
 		smilDur: number;
 	}
 
+	// Per-CSS-Tricks: lower baseFrequency = rounder/fuzzier clouds; more octaves =
+	// richer detail. The article's displacement (100-180) and blur (50-60) values
+	// are calibrated for 500-px source clouds — we scale proportionally to our
+	// 100-240 px sources (~5x smaller → use ~1/5 of those values).
 	const clouds: CloudConfig[] = [
 		// FAR (horizon) — small, wispy, dense at back, slow drift
-		{ id: 0,  seed: 42,   top: -40,  left: -220, w: 100, h: 55,  blur: 12, offset: 130, dur: 200, delay: -10, octaves: 4, freq: 0.018, displace: 55, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 80  },
-		{ id: 1,  seed: 137,  top: -50,  left: -200, w: 90,  h: 50,  blur: 11, offset: 120, dur: 220, delay: -50, octaves: 4, freq: 0.020, displace: 50, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 95  },
-		{ id: 2,  seed: 271,  top: -35,  left: -240, w: 110, h: 60,  blur: 13, offset: 140, dur: 190, delay: -80, octaves: 4, freq: 0.018, displace: 58, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 70  },
-		{ id: 3,  seed: 389,  top: -45,  left: -210, w: 95,  h: 52,  blur: 11, offset: 125, dur: 210, delay: -30, octaves: 4, freq: 0.019, displace: 52, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 85  },
-		{ id: 4,  seed: 503,  top: -38,  left: -230, w: 105, h: 58,  blur: 12, offset: 135, dur: 195, delay: -65, octaves: 4, freq: 0.018, displace: 56, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 90  },
+		{ id: 0,  seed: 42,   top: -40,  left: -220, w: 100, h: 55,  blur: 13, offset: 130, dur: 200, delay: -10, octaves: 5, freq: 0.014, displace: 60, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 80  },
+		{ id: 1,  seed: 137,  top: -50,  left: -200, w: 90,  h: 50,  blur: 12, offset: 120, dur: 220, delay: -50, octaves: 5, freq: 0.015, displace: 56, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 95  },
+		{ id: 2,  seed: 271,  top: -35,  left: -240, w: 110, h: 60,  blur: 14, offset: 140, dur: 190, delay: -80, octaves: 5, freq: 0.014, displace: 64, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 70  },
+		{ id: 3,  seed: 389,  top: -45,  left: -210, w: 95,  h: 52,  blur: 12, offset: 125, dur: 210, delay: -30, octaves: 5, freq: 0.015, displace: 58, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 85  },
+		{ id: 4,  seed: 503,  top: -38,  left: -230, w: 105, h: 58,  blur: 13, offset: 135, dur: 195, delay: -65, octaves: 5, freq: 0.014, displace: 62, opacityMul: 0.80, parallax: PARALLAX.far,  smilDur: 90  },
 		// MID — medium wisps, moderate density
-		{ id: 5,  seed: 619,  top: -80,  left: -180, w: 160, h: 90,  blur: 14, offset: 165, dur: 130, delay: -15, octaves: 4, freq: 0.016, displace: 70, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 65  },
-		{ id: 6,  seed: 743,  top: -90,  left: -160, w: 150, h: 85,  blur: 13, offset: 155, dur: 140, delay: -45, octaves: 4, freq: 0.017, displace: 68, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 55  },
-		{ id: 7,  seed: 857,  top: -75,  left: -190, w: 170, h: 95,  blur: 15, offset: 175, dur: 120, delay: -70, octaves: 4, freq: 0.016, displace: 72, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 75  },
-		{ id: 8,  seed: 967,  top: -85,  left: -170, w: 155, h: 88,  blur: 13, offset: 160, dur: 135, delay: -25, octaves: 4, freq: 0.017, displace: 69, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 60  },
+		{ id: 5,  seed: 619,  top: -80,  left: -180, w: 160, h: 90,  blur: 15, offset: 165, dur: 130, delay: -15, octaves: 5, freq: 0.013, displace: 78, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 65  },
+		{ id: 6,  seed: 743,  top: -90,  left: -160, w: 150, h: 85,  blur: 14, offset: 155, dur: 140, delay: -45, octaves: 5, freq: 0.014, displace: 75, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 55  },
+		{ id: 7,  seed: 857,  top: -75,  left: -190, w: 170, h: 95,  blur: 16, offset: 175, dur: 120, delay: -70, octaves: 5, freq: 0.013, displace: 82, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 75  },
+		{ id: 8,  seed: 967,  top: -85,  left: -170, w: 155, h: 88,  blur: 14, offset: 160, dur: 135, delay: -25, octaves: 5, freq: 0.014, displace: 76, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 60  },
 		// NEAR (foreground) — larger, closer, faster, lighter
-		{ id: 9,  seed: 1087, top: -120, left: -140, w: 220, h: 125, blur: 16, offset: 195, dur: 80,  delay: -10, octaves: 3, freq: 0.015, displace: 80, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 45  },
-		{ id: 10, seed: 1213, top: -130, left: -120, w: 200, h: 115, blur: 15, offset: 185, dur: 70,  delay: -35, octaves: 3, freq: 0.016, displace: 78, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 50  },
-		{ id: 11, seed: 1337, top: -115, left: -150, w: 240, h: 135, blur: 17, offset: 205, dur: 85,  delay: -55, octaves: 3, freq: 0.015, displace: 82, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 48  },
+		{ id: 9,  seed: 1087, top: -120, left: -140, w: 220, h: 125, blur: 18, offset: 200, dur: 80,  delay: -10, octaves: 4, freq: 0.013, displace: 92, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 45  },
+		{ id: 10, seed: 1213, top: -130, left: -120, w: 200, h: 115, blur: 17, offset: 190, dur: 70,  delay: -35, octaves: 4, freq: 0.014, displace: 88, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 50  },
+		{ id: 11, seed: 1337, top: -115, left: -150, w: 240, h: 135, blur: 19, offset: 210, dur: 85,  delay: -55, octaves: 4, freq: 0.012, displace: 96, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 48  },
 	];
 
 	// Live seeds — periodically bumped for smooth shape morphing
@@ -143,10 +147,14 @@
 </svg>
 
 {#if density > 0.01}
+	<!-- perspective(1100px) rotateX(50deg) — slight bump from 48° for more airplane-window
+	     depth without flattening the deck into opaque bands. The deck extends outward + down
+	     from just below the camera; near clouds keep their 3D shape, far clouds compress
+	     toward the horizon line. -->
 	<div
 		class="deck"
 		style:top="{4 + altitudeShift}%"
-		style:transform="perspective(1100px) rotateX(48deg) skewY({windSkew}deg)"
+		style:transform="perspective(1100px) rotateX(50deg) skewY({windSkew}deg)"
 		style:transform-origin="50% 0%"
 	>
 	{#each clouds as c (c.id)}

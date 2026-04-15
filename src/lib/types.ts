@@ -38,6 +38,13 @@ export interface SceneDefaults {
 	fog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
 	clouds: { density: number; speed: number };
 	terrain: { exaggeration: number };
+	/**
+	 * Multiplier for the screen-vertical atmospheric-haze effect.
+	 * - 1.0  = baseline (city default)
+	 * - <1.0 = clearer air (mountains, dry desert)
+	 * - >1.0 = thicker air (humid coast, sea moisture)
+	 */
+	haze: { intensity: number };
 }
 
 export interface Location {
