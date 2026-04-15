@@ -197,7 +197,10 @@ export const CESIUM = {
 	// controls the Gaussian spread — the "inkling" quality.
 	BLOOM_CONTRAST: 128,
 	BLOOM_BRIGHTNESS: -0.3,
-	BLOOM_SIGMA: 3.5,
+	// Narrower Gaussian — wider (3.5) was smearing palette colors onto
+	// ocean/terrain. 2.2 keeps halos soft + merging at road-intersection
+	// scale without contamination.
+	BLOOM_SIGMA: 2.2,
 } as const;
 
 // =============================================================================
