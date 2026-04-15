@@ -54,6 +54,9 @@
 		 */
 		lodMaxZoomLevels = 6,
 		lodTileCountRatio = 2.0,
+		/** Bindable — exposes the underlying maplibregl.Map to parents (used
+		    by ThreeBillboards + other custom overlays). */
+		mapRef = $bindable<maplibregl.Map | undefined>(undefined),
 	}: {
 		lat?: number;
 		lon?: number;
@@ -77,6 +80,7 @@
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
+		mapRef?: maplibregl.Map | undefined;
 	} = $props();
 
 	// ── Ambient light + sky palette — driven by timeOfDay ───────────────────
@@ -117,8 +121,6 @@
 		// Night (22-5)
 		return { sky: '#050510', horizon: '#0a1028', fog: '#0a0f20', light: '#a8b4d0', intensity: 0.2, water: { r: 4, g: 14, b: 24 } };
 	});
-
-	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
 	// ── Water shimmer animation clock ───────────────────────────────────────
 	// Drives a subtle "breathing" pulse on water fills. Runs at ~30 Hz, far

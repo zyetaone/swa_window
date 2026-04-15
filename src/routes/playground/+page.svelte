@@ -27,7 +27,7 @@
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
-	import { PALETTE_NAMES, type PaletteName } from './palettes';
+	import { PALETTE_ENTRIES, type PaletteName } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -332,6 +332,25 @@
 		{#if isBoosting}<span class="boost-tag">⚡ BOOST</span>{/if}
 	</div>
 
+	<!-- Palette bar — tap a swatch to lock the sky mood -->
+	<div class="palette-bar" role="group" aria-label="Sky mood">
+		{#each PALETTE_ENTRIES as entry (entry.name)}
+			<button
+				class="palette-swatch"
+				class:active={paletteName === entry.name}
+				style:background={entry.swatchColor}
+				title={entry.label}
+				aria-label={entry.label}
+				aria-pressed={paletteName === entry.name}
+				onclick={() => paletteName = entry.name}
+			>
+				{#if paletteName === entry.name}
+					<span class="swatch-ring"></span>
+				{/if}
+			</button>
+		{/each}
+	</div>
+
 	<!-- Drawer toggle — top-right -->
 	<button
 		class="drawer-toggle"
@@ -408,22 +427,6 @@
 			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
 			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
 			<label class="check"><input type="checkbox" bind:checked={showCityLights} /> City-light glow (night)</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Creative palette</legend>
-			<p class="field-note">Locks sky + light + water to a named mood. 'auto' tracks timeOfDay.</p>
-			<select class="select" bind:value={paletteName}>
-				{#each PALETTE_NAMES as p (p)}
-					<option value={p}>{p}</option>
-				{/each}
-			</select>
-		</fieldset>
-
-		<fieldset>
-			<legend>Camera</legend>
-			<label class="check"><input type="checkbox" bind:checked={freeCam} /> Free-cam (drag to explore)</label>
-			<p class="field-note">Disables auto-centering on the selected location. Drag, scroll, right-drag to pitch.</p>
 		</fieldset>
 
 		<fieldset>
