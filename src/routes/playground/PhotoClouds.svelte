@@ -127,17 +127,29 @@
 	     sparser + larger clouds as we descend toward the viewer. This
 	     matches what you see from a cruise window above a cloud deck. -->
 	{#if showBack}
-		<!-- Distant cloud carpet — lots of small clouds packed near horizon -->
+		<!-- Distant cloud carpet — DENSE band of tiny clouds near horizon.
+		     Stagger rows slightly so the carpet doesn't read as a line. -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<div class="seed tiny" style:top="3%"  style:left="6%"></div>
-			<div class="seed tiny" style:top="5%"  style:left="22%"></div>
-			<div class="seed tiny" style:top="2%"  style:left="38%"></div>
-			<div class="seed tiny" style:top="7%"  style:left="52%"></div>
-			<div class="seed tiny" style:top="4%"  style:left="68%"></div>
-			<div class="seed tiny" style:top="6%"  style:left="84%"></div>
-			<div class="seed small" style:top="12%" style:left="15%"></div>
-			<div class="seed small" style:top="14%" style:left="45%"></div>
-			<div class="seed small" style:top="11%" style:left="75%"></div>
+			<!-- Row 1 — very top (far-far distance, atmospheric haze) -->
+			<div class="seed tiny" style:top="2%"  style:left="3%"></div>
+			<div class="seed tiny" style:top="4%"  style:left="12%"></div>
+			<div class="seed tiny" style:top="2%"  style:left="20%"></div>
+			<div class="seed tiny" style:top="3%"  style:left="29%"></div>
+			<div class="seed tiny" style:top="5%"  style:left="37%"></div>
+			<div class="seed tiny" style:top="2%"  style:left="46%"></div>
+			<div class="seed tiny" style:top="4%"  style:left="55%"></div>
+			<div class="seed tiny" style:top="3%"  style:left="64%"></div>
+			<div class="seed tiny" style:top="5%"  style:left="73%"></div>
+			<div class="seed tiny" style:top="2%"  style:left="82%"></div>
+			<div class="seed tiny" style:top="4%"  style:left="91%"></div>
+			<!-- Row 2 — slightly closer (still far) -->
+			<div class="seed small" style:top="8%"  style:left="8%"></div>
+			<div class="seed small" style:top="10%" style:left="22%"></div>
+			<div class="seed small" style:top="9%"  style:left="36%"></div>
+			<div class="seed small" style:top="11%" style:left="50%"></div>
+			<div class="seed small" style:top="9%"  style:left="63%"></div>
+			<div class="seed small" style:top="10%" style:left="77%"></div>
+			<div class="seed small" style:top="8%"  style:left="88%"></div>
 		</div>
 	{/if}
 	{#if showMid}
