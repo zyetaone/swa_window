@@ -187,6 +187,7 @@
 		overflow: hidden;
 		pointer-events: none;
 		will-change: transform;
+		z-index: 9;
 		/* Fade to horizon: clouds dense in middle, fully transparent at far edge */
 		mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 70%, transparent 100%);
 		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 70%, transparent 100%);

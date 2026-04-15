@@ -16,7 +16,6 @@
 	 *   https://maplibre.org/maplibre-gl-js/docs/API/classes/CustomLayerInterface/
 	 */
 
-	import { onDestroy } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import * as THREE from 'three';
 
@@ -105,7 +104,7 @@
 					setTimeout(tryAdd, 200);
 					return;
 				}
-				map.addLayer(customLayer);
+				map.addLayer(customLayer as any);
 				console.log('[ThreeBillboards] layer added');
 			} catch (e) {
 				console.warn('[ThreeBillboards] addLayer failed:', e);

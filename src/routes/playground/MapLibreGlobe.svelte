@@ -206,15 +206,25 @@
 	const baseSaturation = $derived(1.0 - (nightFactor * 0.75)); // Down to 0.25 at full night
 	
 	$effect(() => {
-		if (!mapRef || !mapRef.loaded()) return;
-		try {
-			// Apply these filters directly to the satellite layer to avoid entire style re-renders
-			if (mapRef.getLayer('sat-imagery')) {
-				mapRef.setPaintProperty('sat-imagery', 'raster-brightness-max', baseBrightness);
-				mapRef.setPaintProperty('sat-imagery', 'raster-saturation', baseSaturation - 1); // mapbox/maplibre uses -1 to 1 where -1 is grayscale
+		if (!mapRef) return;
+		const m = mapRef;  // capture for closure — TS narrow
+
+		const applyFilters = () => {
+			try {
+				// Apply these filters directly to the satellite layer to avoid entire style re-renders
+				if (m.getLayer('sat-imagery')) {
+					m.setPaintProperty('sat-imagery', 'raster-brightness-max', baseBrightness);
+					m.setPaintProperty('sat-imagery', 'raster-saturation', baseSaturation - 1); // mapbox/maplibre uses -1 to 1 where -1 is grayscale
+				}
+			} catch(e) {
+				console.warn('Failed to apply night filters to base layer', e);
 			}
-		} catch(e) {
-			console.warn('Failed to apply night filters to base layer', e);
+		};
+
+		if (mapRef.loaded() && mapRef.isStyleLoaded()) applyFilters();
+		else {
+			mapRef.once('load', applyFilters);
+			mapRef.once('styledata', applyFilters);
 		}
 	});
 

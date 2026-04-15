@@ -30,7 +30,7 @@
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import PhotoClouds from './PhotoClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
-	import { PALETTE_ENTRIES, type PaletteName } from './palettes';
+	import { PALETTE_ENTRIES, PALETTES, type PaletteName } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
 	let showThreeBillboards = $state(true);
-	let useRealisticClouds = $state(false);  // default off until positioning is dialed in
+	let useRealisticClouds = $state(true);
 
 	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);

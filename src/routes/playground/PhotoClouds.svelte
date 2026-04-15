@@ -1,21 +1,20 @@
 <script lang="ts">
 	/**
-	 * PhotoClouds — Yannakopoulos SVG-cloud technique adapted to the playground.
+	 * PhotoClouds — realistic SVG clouds via feTurbulence + feDisplacementMap +
+	 * feColorMatrix inversion. No offscreen-seed tricks — the filter chain
+	 * itself turns a dark ellipse into a soft white cloud in place.
 	 *
-	 * Core trick: a DARK ellipse is the "seed" shape. feTurbulence +
-	 * feDisplacementMap warp its edges into organic cloud silhouettes.
-	 * The VISIBLE cloud is the big white box-shadow offset from the dark
-	 * source — we never see the black ellipse itself (positioned offscreen).
+	 * Pipeline per layer:
+	 *   feTurbulence (fractal noise, animated baseFrequency)
+	 *   → feDisplacementMap (warps the black ellipse into cloud silhouette)
+	 *   → feGaussianBlur (softens edges)
+	 *   → feColorMatrix (inverts RGB → black becomes white, keeps alpha)
+	 *   → feComposite (clamp alpha to the distorted shape)
 	 *
-	 * Ref: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
+	 * Three parallax depth layers at different displacement scales + octaves.
 	 *
-	 * Three parallax depth layers (back/mid/front), each with its own filter
-	 * at a different displacement scale for depth variety. Drift speed varies
-	 * per layer so closer clouds move faster (parallax).
-	 *
-	 * Wind angle and heading drive the drift direction reactively.
-	 * Density maps to opacity + per-layer visibility.
-	 * nightFactor darkens + cools the box-shadow color for moonlit clouds.
+	 * Inspired by: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
+	 * (adapted with feColorMatrix so we don't need the box-shadow trick).
 	 */
 
 	let {
@@ -35,70 +34,74 @@
 		animate?: boolean;
 	} = $props();
 
-	// Wind vector — clouds drift opposite to plane heading, modulated by wind.
+	// Drift angle — clouds push opposite to plane heading, offset by wind
 	const driftAngle = $derived((heading + windAngle + 180) % 360);
 	const driftRad = $derived((driftAngle * Math.PI) / 180);
+	const driftX = $derived(Math.cos(driftRad));
+	const driftY = $derived(Math.sin(driftRad) * 0.35);
 
-	// Cloud "sun" color — warm cream by day, cool pale blue by night. This
-	// becomes the box-shadow color (the actual visible cloud tint).
-	const cloudColor = $derived.by(() => {
-		if (nightFactor > 0.5) {
-			const r = Math.round(160 - nightFactor * 20);
-			const g = Math.round(170 - nightFactor * 15);
-			const b = Math.round(200 + nightFactor * 10);
-			return `rgba(${r}, ${g}, ${b}, ${0.85 - nightFactor * 0.25})`;
-		}
-		return `rgba(${245 + 5}, ${240 + 5}, ${235 + 8}, 0.92)`;
-	});
-
-	// Per-layer drift — closer layers (front) move faster for parallax.
-	// Drift expressed as a CSS animation duration; lower = faster.
-	const backDuration = $derived(`${80 / Math.max(speed, 0.01)}s`);
-	const midDuration  = $derived(`${50 / Math.max(speed, 0.01)}s`);
+	// Per-layer drift durations (closer = faster)
+	const backDuration = $derived(`${90 / Math.max(speed, 0.01)}s`);
+	const midDuration = $derived(`${55 / Math.max(speed, 0.01)}s`);
 	const frontDuration = $derived(`${30 / Math.max(speed, 0.01)}s`);
 
-	// Density thresholds — thinner skies drop farther layers
-	const showBack = $derived(density > 0.15);
-	const showMid   = $derived(density > 0.3);
-	const showFront = $derived(density > 0.5);
-	const layerOpacity = $derived(Math.min(1, density * 1.2));
+	// Density thresholds
+	const showBack = $derived(density > 0.1);
+	const showMid = $derived(density > 0.3);
+	const showFront = $derived(density > 0.55);
+	const layerOpacity = $derived(Math.min(1, density * 1.1));
 
-	// Transform for cloud-layer motion. Drift vector → CSS translate.
-	const driftX = $derived(Math.cos(driftRad));
-	const driftY = $derived(Math.sin(driftRad) * 0.4);  // flatten vertical
+	// Cloud tint via feColorMatrix: day=warm white, night=cool pale blue.
+	// Output channel bias: R, G, B offsets added after inversion.
+	const rOffset = $derived(nightFactor > 0.5 ? 0.68 : 0.98);
+	const gOffset = $derived(nightFactor > 0.5 ? 0.72 : 0.95);
+	const bOffset = $derived(nightFactor > 0.5 ? 0.82 : 0.92);
+	const alphaOffset = $derived(nightFactor > 0.5 ? -0.15 : 0);
+
+	// Build dynamic colorMatrix string. Inverts RGB (-1 diagonal) then adds
+	// our tint offsets. Alpha passes through with optional dim at night.
+	const colorMatrix = $derived(
+		`-1 0 0 0 ${rOffset}  0 -1 0 0 ${gOffset}  0 0 -1 0 ${bOffset}  0 0 0 1 ${alphaOffset}`,
+	);
 </script>
 
-<!-- Hidden SVG defs. Zero-size so it adds no layout. -->
+<!-- Hidden SVG defs — zero-size container. -->
 <svg class="defs" aria-hidden="true">
 	<defs>
-		<filter id="cloud-back" x="-50%" y="-50%" width="200%" height="200%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.010" numOctaves="3" seed="1">
+		<filter id="cloud-back" x="0%" y="0%" width="100%" height="100%">
+			<feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="3" seed="1" result="noise">
 				{#if animate}
-					<animate attributeName="baseFrequency" dur="44s"
-						values="0.010;0.014;0.010" repeatCount="indefinite" />
+					<animate attributeName="baseFrequency" dur="48s"
+						values="0.012;0.016;0.012" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" scale="170" />
+			<feDisplacementMap in="SourceGraphic" in2="noise" scale="130" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="2" result="soft" />
+			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 
-		<filter id="cloud-mid" x="-50%" y="-50%" width="200%" height="200%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="2">
+		<filter id="cloud-mid" x="0%" y="0%" width="100%" height="100%">
+			<feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="2" seed="2" result="noise">
 				{#if animate}
-					<animate attributeName="baseFrequency" dur="28s"
-						values="0.014;0.018;0.014" repeatCount="indefinite" />
+					<animate attributeName="baseFrequency" dur="32s"
+						values="0.016;0.020;0.016" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" scale="140" />
+			<feDisplacementMap in="SourceGraphic" in2="noise" scale="100" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="1.5" result="soft" />
+			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 
-		<filter id="cloud-front" x="-50%" y="-50%" width="200%" height="200%">
-			<feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3">
+		<filter id="cloud-front" x="0%" y="0%" width="100%" height="100%">
+			<feTurbulence type="fractalNoise" baseFrequency="0.020" numOctaves="2" seed="3" result="noise">
 				{#if animate}
-					<animate attributeName="baseFrequency" dur="18s"
-						values="0.018;0.022;0.018" repeatCount="indefinite" />
+					<animate attributeName="baseFrequency" dur="20s"
+						values="0.020;0.025;0.020" repeatCount="indefinite" />
 				{/if}
 			</feTurbulence>
-			<feDisplacementMap in="SourceGraphic" scale="110" />
+			<feDisplacementMap in="SourceGraphic" in2="noise" scale="80" result="disp" />
+			<feGaussianBlur in="disp" stdDeviation="1.2" result="soft" />
+			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 		</filter>
 	</defs>
 </svg>
@@ -106,26 +109,25 @@
 <div
 	class="photo-clouds"
 	style:opacity={layerOpacity}
-	style:--cloud-color={cloudColor}
 	style:--drift-x={driftX}
 	style:--drift-y={driftY}
 	aria-hidden="true"
 >
 	{#if showBack}
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<div class="seed" style:filter="url(#cloud-back)"></div>
-			<div class="seed" style:filter="url(#cloud-back)" style:--offset="35%"></div>
+			<div class="seed" style:top="18%" style:left="10%"></div>
+			<div class="seed" style:top="12%" style:left="55%"></div>
 		</div>
 	{/if}
 	{#if showMid}
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed" style:filter="url(#cloud-mid)" style:--offset="12%"></div>
-			<div class="seed" style:filter="url(#cloud-mid)" style:--offset="60%"></div>
+			<div class="seed" style:top="8%" style:left="28%"></div>
+			<div class="seed" style:top="25%" style:left="72%"></div>
 		</div>
 	{/if}
 	{#if showFront}
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed" style:filter="url(#cloud-front)" style:--offset="28%"></div>
+			<div class="seed" style:top="14%" style:left="42%"></div>
 		</div>
 	{/if}
 </div>
@@ -151,48 +153,36 @@
 	.cloud-layer {
 		position: absolute;
 		inset: 0;
-		overflow: hidden;  /* clip the dark seed — only box-shadow reaches visible */
 		animation-name: cloud-drift;
 		animation-timing-function: linear;
 		animation-iteration-count: infinite;
 	}
 
-	/* Each `.seed` = dark ellipse + filter, positioned OFFSCREEN top-left.
-	   Big positive box-shadow offset paints the visible cloud WITHIN the
-	   container. The dark ellipse itself is clipped by overflow:hidden. */
 	.seed {
 		position: absolute;
-		top: -600px;
-		left: -600px;
-		width: 500px;
-		height: 280px;
+		width: 22%;       /* smaller clouds — was 60% */
+		aspect-ratio: 2 / 1;
 		background: #000;
 		border-radius: 50%;
-		/* The box-shadow offset brings the filtered silhouette ON-SCREEN as a
-		   soft white cloud. Dark seed stays at -600,-600 (clipped). Adjust
-		   `--offset` per seed instance for layout variety. */
-		--target-x: calc(900px + var(--dx, 0px));
-		--target-y: calc(calc(600px + var(--dy, 0px)) + var(--offset, 0px));
-		box-shadow: var(--target-x) var(--target-y) 90px 30px var(--cloud-color, rgba(245, 240, 235, 0.9));
-		filter: url(#cloud-back);
+		opacity: 0.9;
 	}
 
 	.cloud-layer.back .seed {
-		--dx: -200px;
-		transform: scale(0.7);
+		filter: url(#cloud-back);
+		transform: scale(0.85);
 	}
 	.cloud-layer.mid .seed {
-		--dx: 0px;
-		transform: scale(0.9);
+		filter: url(#cloud-mid);
+		transform: scale(1.0);
 	}
 	.cloud-layer.front .seed {
-		--dx: 200px;
+		filter: url(#cloud-front);
 		transform: scale(1.15);
 	}
 
 	@keyframes cloud-drift {
-		from { transform: translate(0, 0); }
-		to   { transform: translate(calc(var(--drift-x) * 100%), calc(var(--drift-y) * 100%)); }
+		from { transform: translate(-15%, -8%); }
+		to   { transform: translate(calc(var(--drift-x) * 40%), calc(var(--drift-y) * 20%)); }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
