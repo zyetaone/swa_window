@@ -115,7 +115,11 @@ export class CesiumManager {
 		v.scene.logarithmicDepthBuffer = true;
 		v.scene.highDynamicRange = true;
 		v.scene.postProcessStages.fxaa.enabled = true;
-		v.scene.globe.enableLighting = false;
+		// Globe lighting ON — terminator (day/night boundary) now renders on
+		// the globe, and terrain/buildings cast real shadows when the sun is
+		// low. Sun position is driven by syncClock (local-at-longitude UTC).
+		v.scene.globe.enableLighting = true;
+		if (v.shadowMap) v.shadowMap.enabled = true;
 		// Continuous render — our model state changes every RAF tick, and tick()
 		// is hooked to postRender. Without this, Cesium would only re-render
 		// when its OWN scene reports a change, missing model-driven updates and
@@ -432,6 +436,9 @@ export class CesiumManager {
 				this.tileset.show = this.model.showBuildings;
 				const p = CESIUM_QUALITY_PRESETS[this.model.qualityMode];
 				this.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
+				// Cast + receive shadows — buildings drop long shadows across
+				// the terrain at low-sun times, grounding them in the scene.
+				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
 				this.viewer.scene.primitives.add(this.tileset);
 			}
 		} catch (e) { console.warn('[CesiumBuildings] OSM buildings unavailable:', (e as Error).message); }

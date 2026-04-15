@@ -85,7 +85,10 @@ export const VIEWER_OPTIONS = {
 	timeline: false,
 	navigationHelpButton: false,
 	navigationInstructionsInitiallyVisible: false,
-	shadows: false,
+	// Enable shadow map so OSM Buildings + terrain cast real shadows at
+	// dawn/dusk. Sun position is synced from model.timeOfDay in syncClock,
+	// so shadow direction lines up with the in-scene lighting.
+	shadows: true,
 	useBrowserRecommendedResolution: false,
 	contextOptions: {
 		webgl: { alpha: false, antialias: true, preserveDrawingBuffer: true },

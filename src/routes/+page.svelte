@@ -257,11 +257,17 @@
 		outline-offset: 2px;
 	}
 
-	/* Accessibility: reduced motion */
+	/* Accessibility: reduce motion for DECORATIVE hint animations only.
+	   Scene animations (cloud drift, warp, breathing) are the product, not
+	   chrome, so they keep running regardless of this preference. The old
+	   blanket :global(*) rule silently froze the cloud deck on any OS with
+	   reduce-motion enabled. */
 	@media (prefers-reduced-motion: reduce) {
-		:global(*) {
-			animation-duration: 0.01ms !important;
-			animation-iteration-count: 1 !important;
+		:global(.click-hint),
+		:global(.blind-overlay.discoverable::after) {
+			animation: none !important;
+		}
+		:global(.blind-overlay) {
 			transition-duration: 0.01ms !important;
 		}
 	}
