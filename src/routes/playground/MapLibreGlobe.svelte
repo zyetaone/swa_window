@@ -300,10 +300,10 @@
 			sky-color={skyPalette.sky}
 			horizon-color={skyPalette.horizon}
 			fog-color={skyPalette.fog}
-			sky-horizon-blend={0.3}
-			horizon-fog-blend={0.5}
-			fog-ground-blend={0.1}
-			atmosphere-blend={['interpolate', ['linear'], ['zoom'], 0, 1, 8, 0.6, 14, 0.2]}
+			sky-horizon-blend={0.8}
+			horizon-fog-blend={0.9}
+			fog-ground-blend={0.5}
+			atmosphere-blend={['interpolate', ['linear'], ['zoom'], 0, 1.0, 8, 0.8, 14, 0.4]}
 		/>
 	{/if}
 
@@ -394,7 +394,13 @@
 		</VectorTileSource>
 	{/if}
 
-	<!-- Night overlay: CartoDB Dark raster composited over satellite as nightFactor rises. -->
+	<!-- Night glow-emission overlay.
+	     Rather than DARKENING the scene with CartoDB Dark (which hides the
+	     underlying satellite), we use CartoDB Dark as an EMISSION MAP: the
+	     dark background stays transparent-looking (brightness-min=0), while
+	     streets/buildings/labels (the lighter pixels) get boosted to 2× max
+	     brightness and hue-rotated toward warm amber. The result: streets
+	     GLOW as if city lights are emerging through the urban structure. -->
 	{#if nightFactor > 0.01}
 		<RasterTileSource
 			id="night-overlay"
@@ -406,11 +412,42 @@
 				id="night-overlay-layer"
 				source="night-overlay"
 				paint={{
-					'raster-opacity': nightFactor * 0.8, // Slightly lower base opacity to balance boost
+					'raster-opacity': nightFactor * 0.9,
 					'raster-fade-duration': 300,
-					'raster-contrast': 0.1 + (nightFactor * 0.4), // Punchy city lights
+					// Crank contrast so dark bg stays dark, lighter streets pop
+					'raster-contrast': 0.3 + (nightFactor * 0.4),
+					// Let the lighter pixels (streets/buildings/labels) blow out —
+					// they become the bright glow highlights
 					'raster-brightness-min': 0,
-					'raster-brightness-max': 1.0 + (nightFactor * 0.6), // Boost brightness mimicking additive pass
+					'raster-brightness-max': 1.0 + (nightFactor * 1.0),
+					// Rotate the cool gray/blue of CartoDB toward warm amber (~+40°)
+					'raster-hue-rotate': nightFactor * 40,
+					// And inject some saturation so the hue rotation actually shows
+					'raster-saturation': -0.2 + nightFactor * 0.5,
+				}}
+			/>
+		</RasterTileSource>
+
+		<!-- Labeled variant on TOP (gives us labels glowing too) at low opacity.
+		     The dark_all style includes street/POI labels — they become lit
+		     signs at night through the same brightness-max boost. -->
+		<RasterTileSource
+			id="night-labels"
+			tiles={['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png']}
+			tileSize={256}
+			maxzoom={19}
+		>
+			<RasterLayer
+				id="night-labels-layer"
+				source="night-labels"
+				paint={{
+					'raster-opacity': nightFactor * 0.35,
+					'raster-fade-duration': 300,
+					'raster-brightness-min': 0.1,
+					'raster-brightness-max': 1.8 + nightFactor * 0.6,
+					'raster-hue-rotate': 30,
+					'raster-saturation': 0.4,
+					'raster-contrast': 0.35,
 				}}
 			/>
 		</RasterTileSource>
