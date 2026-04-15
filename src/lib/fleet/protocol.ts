@@ -7,7 +7,7 @@
  */
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
-import type { DeviceRole } from '$lib/model/config';
+import type { DeviceRole } from '$lib/model/config/v2.svelte';
 import type { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ============================================================================
@@ -152,14 +152,14 @@ export type ServerAdminMessage =
 //            older admin tools.
 
 /** Which config layer a patch targets (the first path segment). */
-export type ConfigLayer = 'world' | 'atmosphere' | 'camera' | 'director' | 'chrome';
+export type ConfigLayer = 'world' | 'atmosphere' | 'camera' | 'director' | 'shell';
 
 /** Server → Display, v2. Path-targeted + parallax-aware. */
 export type ServerMessageV2 =
 	/**
 	 * Path-keyed mutation of a RootConfig field. Dispatched through
 	 * WindowModel.config.applyPatch(path, value). Paths look like
-	 * 'atmosphere.clouds.density' or 'chrome.windowFrame'.
+	 * 'atmosphere.clouds.density' or 'shell.windowFrame'.
 	 */
 	| { v: 2; type: 'config_patch'; path: string; value: unknown }
 	/**
@@ -219,7 +219,7 @@ export type DisplayMessageV2 =
 				atmosphere: Record<string, unknown>;
 				camera: Record<string, unknown>;
 				director: Record<string, unknown>;
-				chrome: Record<string, unknown>;
+				shell: Record<string, unknown>;
 			};
 	  };
 

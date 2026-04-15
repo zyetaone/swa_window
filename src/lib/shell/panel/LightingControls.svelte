@@ -27,5 +27,5 @@
 		checked={model.showBuildings}
 		onchange={() => model.toggleBuildings()}
 	/>
-	<Toggle label="Window Frame" bind:checked={model.config.chrome.windowFrame} />
+	<Toggle label="Window Frame" bind:checked={model.config.shell.windowFrame} />
 </section>

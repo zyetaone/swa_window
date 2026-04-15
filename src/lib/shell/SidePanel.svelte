@@ -7,7 +7,7 @@
 	 * cruise-transition status).
 	 *
 	 * Inner content is composed at the page level via the `children` snippet.
-	 * The usual composition lives in chrome/panel/ — LocationPicker,
+	 * The usual composition lives in shell/panel/ — LocationPicker,
 	 * TimeControl, FlightControls, AtmosphereControls, LightingControls,
 	 * WeatherPicker. Pages can re-order, subset, or add their own sections
 	 * without touching this shell.
@@ -176,7 +176,7 @@
 		<div class="divider"></div>
 
 		<!-- Composed sections — page supplies via <SidePanel>…</SidePanel>.
-		     See chrome/panel/ for the stock components. -->
+		     See shell/panel/ for the stock components. -->
 		<div class="settings">
 			{@render children?.()}
 		</div>

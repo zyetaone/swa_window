@@ -69,13 +69,7 @@ export const atmosphere = $state({
 export function syncAtmosphereWeather(
 	fx: { turbulence: 'light' | 'moderate' | 'severe'; hasLightning: boolean; rainOpacity: number; windAngle: number; cloudDensityRange: [number, number]; nightCloudFloor: number; filterBrightness: number },
 ): void {
-	atmosphere.weather.turbulence = fx.turbulence;
-	atmosphere.weather.hasLightning = fx.hasLightning;
-	atmosphere.weather.rainOpacity = fx.rainOpacity;
-	atmosphere.weather.windAngle = fx.windAngle;
-	atmosphere.weather.cloudDensityRange = fx.cloudDensityRange;
-	atmosphere.weather.nightCloudFloor = fx.nightCloudFloor;
-	atmosphere.weather.filterBrightness = fx.filterBrightness;
+	Object.assign(atmosphere.weather, fx);
 }
 
 export function setAtmospherePath(path: string, value: unknown): boolean {
@@ -86,7 +80,53 @@ export function setAtmospherePath(path: string, value: unknown): boolean {
 
 export type DeviceRole = 'solo' | 'left' | 'center' | 'right';
 
-const _camera = {
+interface CameraShape {
+	orbit: {
+		driftRate: number;
+		major: number;
+		minor: number;
+		majorMin: number;
+		majorMax: number;
+		breathePeriod: number;
+	};
+	cruise: {
+		departureDurationSec: number;
+		transitDurationSec: number;
+		defaultSpeed: number;
+		minSpeed: number;
+		maxSpeed: number;
+	};
+	motion: {
+		bankAngleMax: number;
+		bankSmoothing: number;
+		breathingPeriod: number;
+		breathingAmplitude: number;
+		engineVibeFreqX: number;
+		engineVibeFreqY: number;
+		engineVibeAmp: number;
+		bumpMinInterval: number;
+		bumpMaxInterval: number;
+		bumpDecay: number;
+		bumpRingFreq: number;
+		bumpAmplitude: number;
+		turbulenceMultipliers: { severe: number; moderate: number; light: number };
+		turbulenceOffsetY: number;
+	};
+	altitude: {
+		default: number;
+		min: number;
+		max: number;
+	};
+	parallax: {
+		role: DeviceRole;
+		headingOffsetDeg: number;
+		fovDeg: number;
+		panoramaArcDeg: number;
+	};
+	effectiveHeading(this: CameraShape, baseHeading: number): number;
+}
+
+const _camera: CameraShape = {
 	orbit: {
 		driftRate: AIRCRAFT.DRIFT_RATE as number,
 		major: AIRCRAFT.ORBIT_MAJOR as number,
@@ -129,9 +169,8 @@ const _camera = {
 		fovDeg: 60,
 		panoramaArcDeg: 44,
 	},
-	setRole(role: DeviceRole) { setParallaxRole(role); },
-	effectiveHeading(baseHeading: number): number {
-		return (baseHeading + _camera.parallax.headingOffsetDeg + 360) % 360;
+	effectiveHeading(this: typeof _camera, baseHeading: number): number {
+		return (baseHeading + this.parallax.headingOffsetDeg + 360) % 360;
 	},
 };
 
@@ -148,10 +187,6 @@ export function setParallaxRole(role: DeviceRole): void {
 	} else {
 		camera.parallax.headingOffsetDeg = camera.parallax.panoramaArcDeg / 2 - camera.parallax.panoramaArcDeg / 6;
 	}
-}
-
-export function effectiveHeading(baseHeading: number): number {
-	return (baseHeading + camera.parallax.headingOffsetDeg + 360) % 360;
 }
 
 export function setCameraPath(path: string, value: unknown): boolean {
@@ -236,9 +271,9 @@ export function setWorldPath(path: string, value: unknown): boolean {
 	return setByPath(world as unknown as Record<string, unknown>, path, value);
 }
 
-// ─── Chrome ──────────────────────────────────────────────────────────────────
+// ─── Shell ───────────────────────────────────────────────────────────────────
 
-export const chrome = $state({
+export const shell = $state({
 	windowFrame: true,
 	blindOpen: true,
 	hudVisible: true,
@@ -246,13 +281,13 @@ export const chrome = $state({
 	showWing: true,
 });
 
-export function setChromePath(path: string, value: unknown): boolean {
-	return setByPath(chrome as unknown as Record<string, unknown>, path, value);
+export function setShellPath(path: string, value: unknown): boolean {
+	return setByPath(shell as unknown as Record<string, unknown>, path, value);
 }
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
-export const config = $state({ atmosphere, camera, director, world, chrome });
+export const config = $state({ atmosphere, camera, director, world, shell });
 
 /**
  * Dispatch a path-targeted patch to the right namespace.
@@ -268,33 +303,34 @@ export function applyConfigPatch(path: string, value: unknown): boolean {
 		case 'camera':     return setCameraPath(rest, value);
 		case 'director':   return setDirectorPath(rest, value);
 		case 'world':      return setWorldPath(rest, value);
-		case 'chrome':     return setChromePath(rest, value);
+		case 'shell':      return setShellPath(rest, value);
 	}
 	return false;
 }
 
+function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(obj)) {
+		if (v === null || v === undefined) {
+			out[k] = v;
+		} else if (Array.isArray(v)) {
+			out[k] = [...v];
+		} else if (typeof v === 'object') {
+			out[k] = deepSnapshot(v as Record<string, unknown>);
+		} else {
+			out[k] = v;
+		}
+	}
+	return out;
+}
+
 export function configSnapshot() {
 	return {
-		atmosphere: {
-			clouds:      { ...atmosphere.clouds },
-			haze:        { ...atmosphere.haze },
-			weather:     { ...atmosphere.weather, cloudDensityRange: [...atmosphere.weather.cloudDensityRange] },
-			microEvents: { ...atmosphere.microEvents },
-		},
-		camera: {
-			orbit:    { ...camera.orbit },
-			cruise:   { ...camera.cruise },
-			motion:   { ...camera.motion, turbulenceMultipliers: { ...camera.motion.turbulenceMultipliers } },
-			altitude: { ...camera.altitude },
-			parallax: { ...camera.parallax },
-		},
-		director: {
-			daylight:  { ...director.daylight },
-			autopilot: { ...director.autopilot, weatherPool: [...director.autopilot.weatherPool] },
-			ambient:   { ...director.ambient },
-		},
-		world: { ...world },
-		chrome: { ...chrome },
+		atmosphere: deepSnapshot(atmosphere as unknown as Record<string, unknown>),
+		camera:    deepSnapshot(camera as unknown as Record<string, unknown>),
+		director:  deepSnapshot(director as unknown as Record<string, unknown>),
+		world:     deepSnapshot(world as unknown as Record<string, unknown>),
+		shell:     deepSnapshot(shell as unknown as Record<string, unknown>),
 	};
 }
 

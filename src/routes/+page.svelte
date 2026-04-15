@@ -24,18 +24,18 @@
 		type ContentBundle,
 		type ConfigPatch,
 	} from "$lib/scene/bundle/remote";
-	import Window from "$lib/chrome/Window.svelte";
-	import Controls from "$lib/chrome/HUD.svelte";
-	import SidePanel from "$lib/chrome/SidePanel.svelte";
-	import TelemetryPanel from "$lib/chrome/TelemetryPanel.svelte";
+	import Window from "$lib/shell/Window.svelte";
+	import Controls from "$lib/shell/HUD.svelte";
+	import SidePanel from "$lib/shell/SidePanel.svelte";
+	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
 	import { setParallaxRole } from "$lib/model/config/v2.svelte";
 	// Composed panel sections — page picks the set + order it wants.
-	import LocationPicker from "$lib/chrome/panel/LocationPicker.svelte";
-	import TimeControl from "$lib/chrome/panel/TimeControl.svelte";
-	import FlightControls from "$lib/chrome/panel/FlightControls.svelte";
-	import AtmosphereControls from "$lib/chrome/panel/AtmosphereControls.svelte";
-	import LightingControls from "$lib/chrome/panel/LightingControls.svelte";
-	import WeatherPicker from "$lib/chrome/panel/WeatherPicker.svelte";
+	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
+	import TimeControl from "$lib/shell/panel/TimeControl.svelte";
+	import FlightControls from "$lib/shell/panel/FlightControls.svelte";
+	import AtmosphereControls from "$lib/shell/panel/AtmosphereControls.svelte";
+	import LightingControls from "$lib/shell/panel/LightingControls.svelte";
+	import WeatherPicker from "$lib/shell/panel/WeatherPicker.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel
@@ -120,7 +120,7 @@
 		if (e.key !== "f" && e.key !== "F") return;
 		const t = e.target as HTMLElement;
 		if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
-		model.config.chrome.windowFrame = !model.config.chrome.windowFrame;
+		model.config.shell.windowFrame = !model.config.shell.windowFrame;
 	}
 
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
@@ -165,7 +165,7 @@
 
 		if (chosenRole !== "solo") {
 			setParallaxRole(chosenRole);
-			model.config.chrome.windowFrame = false;
+			model.config.shell.windowFrame = false;
 		}
 		if (fromUrl) {
 			localStorage.setItem(ROLE_KEY, fromUrl);
@@ -189,7 +189,7 @@
 
 <svelte:window onkeydown={handleKey} />
 
-<main class={["app", !model.config.chrome.windowFrame && "no-frame"]}>
+<main class={["app", !model.config.shell.windowFrame && "no-frame"]}>
 	<!-- Cabin wall with texture -->
 	<div class="cabin-wall">
 		<!-- Panel lines texture -->
@@ -360,7 +360,7 @@
 
 	/* Accessibility: reduce motion for DECORATIVE hint animations only.
 	   Scene animations (cloud drift, warp, breathing) are the product, not
-	   chrome, so they keep running regardless of this preference. The old
+	   shell, so they keep running regardless of this preference. The old
 	   blanket :global(*) rule silently froze the cloud deck on any OS with
 	   reduce-motion enabled. */
 	@media (prefers-reduced-motion: reduce) {
@@ -374,9 +374,9 @@
 	}
 
 	/* Window-frame on/off (Phase 5b).
-	   When toggled off via config.chrome.windowFrame=false, the cabin wall,
+	   When toggled off via config.shell.windowFrame=false, the cabin wall,
 	   texture, and rivets disappear so the Cesium canvas reads edge-to-edge.
-	   Window.svelte handles its own inner chrome in the .no-frame scope. */
+	   Window.svelte handles its own inner shell in the .no-frame scope. */
 	.app.no-frame .cabin-wall {
 		background: #000;
 		box-shadow: none;

@@ -24,7 +24,7 @@ bun x vitest run     # Run unit/integration tests (104 tests currently)
 - **Imagery**: EOX Sentinel-2 Cloudless (default, no auth) → Mapbox Satellite (token-gated) → ESRI World Imagery (fallback).
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
-- **State**: Class-based `$state` with `setContext`/`getContext` DI. Five admin-tunable `Config` classes live under `model/config/`. Fleet v2 protocol routes path-targeted patches through `model.config.applyPatch(path, value)`.
+- **State**: Flat reactive `$state` objects in `src/lib/model/config/v2.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
 - **Build**: Vite 7, adapter-node, `bundleStrategy:'single'`, SSR disabled.
 - **Remote push**: Cloudflare Worker (`tools/aero-push-worker/`) for firmware-like OTA bundle + config delivery.
 
@@ -53,7 +53,7 @@ src/lib/
 │   ├── autopilot.svelte.ts  DirectorEngine — weather randomiser + location cycler
 │   └── scenarios.ts         Flight path waypoint data + weighted picker
 │
-├── chrome/             UI shell
+├── shell/              UI surround (window frame, HUD, SidePanel, Blind, Glass)
 │   ├── Window.svelte       Layer compositor + RAF tick + long-press boost + window-frame toggle
 │   ├── HUD.svelte          Telemetry overlay (location, altitude, speed, time, cruise badge)
 │   ├── SidePanel.svelte    Location picker + all settings (binds directly to config.*)
@@ -64,15 +64,11 @@ src/lib/
 │   └── use-blind.svelte.ts  Composable — blind drag/snap controller
 │
 ├── model/              STATE graph + admin-tunable config tree
-│   ├── state.ts             (reserved — WindowModel still lives at lib root for now)
+│   ├── state.svelte.ts     createAppState() / useAppState() — WindowModel root
 │   ├── telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
-│   └── config/                    Phase 1 — $state classes, admin-tunable
-│       ├── world.svelte.ts        14 fields (imagery dim, bloom, terrain, buildings, lights)
-│       ├── atmosphere.svelte.ts   4 sub-configs (clouds, haze, weather, microEvents)
-│       ├── camera.svelte.ts       5 sub-configs — inc. parallax (role, headingOffsetDeg, fovDeg)
-│       ├── director.svelte.ts     3 sub-configs (daylight, autopilot, ambient drift)
-│       ├── chrome.svelte.ts       windowFrame, blindOpen, hudVisible, sidePanelOpen, showWing
-│       └── index.ts               RootConfig aggregator + applyPatch(path, value) dispatcher
+│   └── config/
+│       ├── index.ts           Re-exports from v2.svelte.ts
+│       └── v2.svelte.ts       Flat $state config — atmosphere / camera / director / world / shell
 │
 ├── scene/              Scene composition system
 │   ├── types.ts             Effect<TParams> contract + LayerKind
@@ -100,7 +96,7 @@ src/lib/
 │   ├── hub.ts               Server-side WS hub + SSE broadcast
 │   └── url.ts               Fleet endpoint resolver
 │
-├── app-state.svelte.ts  WindowModel root — composes engines + config + telemetry; owns tick
+├── app-state.svelte.ts  (does not exist — use model/state.svelte.ts)
 ├── types.ts, utils.ts, locations.ts, validation.ts, persistence.ts, constants.ts, game-loop.ts
 
 src/routes/
@@ -162,11 +158,11 @@ model.config.camera.parallax.*          // role, headingOffsetDeg, fovDeg, panor
 model.config.director.daylight.*        // syncToRealTime, manualTimeOfDay, syncIntervalMs
 model.config.director.autopilot.*       // intervals, weather pool, director cycle
 model.config.director.ambient.*         // drift magnitudes per randomisation cycle
-model.config.chrome.windowFrame         // master on/off for oval mask + rivets + glass
-model.config.chrome.blindOpen           // live blind drag position (up=open)
-model.config.chrome.hudVisible
-model.config.chrome.sidePanelOpen
-model.config.chrome.showWing
+model.config.shell.windowFrame         // master on/off for oval mask + rivets + glass
+model.config.shell.blindOpen           // live blind drag position (up=open)
+model.config.shell.hudVisible
+model.config.shell.sidePanelOpen
+model.config.shell.showWing
 
 // Observability
 model.telemetry                         // Phase 5.6 — recordFrame / recordEvent / toJSON
@@ -309,13 +305,15 @@ const model = createAppState();  // only in +page.svelte
 const model = useAppState();     // in any descendant
 ```
 
-### `$state` classes with `$bindable()`
+### `$state` flat config via `v2.svelte.ts`
 
 ```typescript
-// In any Config class
-class ChromeConfig {
-  windowFrame = $state(true);   // consumer: <Toggle bind:checked={config.chrome.windowFrame} />
-}
+// src/lib/model/config/v2.svelte.ts — one $state per namespace
+export const atmosphere = $state({ clouds: { density: 0.4, speed: 0.6, layerCount: 3 }, ... });
+export const camera = $state({ orbit: { driftRate: 0.01, major: 10, ... }, parallax: { role: 'solo', ... }, ... });
+
+// Consumer binds directly
+<RangeSlider bind:value={config.atmosphere.clouds.density} />
 ```
 
 ### CRITICAL: Variable naming
@@ -413,7 +411,7 @@ ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /co
 | 3 camera/director | `simulation/` split; `WorldEngine` → `DirectorEngine` | `ca8d3ec` |
 | 3.5 consumers | Engines read tuning from `ctx.camera.*` / `ctx.director.*` | `02ffa41` |
 | 4 atmosphere | Scene effects + UI overlays → `atmosphere/` | `f60a550` |
-| 5 chrome | `ui/` → `chrome/` + window on/off toggle | `dc00117` |
+| 5 shell | `ui/` → `chrome/` → `shell/` + window on/off toggle | `dc00117` |
 | 5.5 polish | Blind hint, route jitter, long-press boost, atmo drift | `333077d` |
 | 6 fleet v2 | Additive protocol v2 — `config_patch`, `role_assign`, etc. | `1aba65e` |
 | 5.7 push | Cloudflare Worker firmware-like OTA | `909ab7c` |

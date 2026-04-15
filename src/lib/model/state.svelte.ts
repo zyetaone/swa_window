@@ -80,11 +80,9 @@ export class WindowModel {
 	readonly motion = new MotionEngine();
 	readonly director = new DirectorEngine();
 
-	// ── Config tree (Phase 1) ─────────────────────────────────────────────────
-	// Admin-tunable $state classes for every layer. Built alongside the flat
-	// fields below; Phases 2-5 migrate consumers to read from here instead,
-	// then the flat fields get removed in a final pass. Fleet v2 config_patch
-	// messages route through `this.config.applyPatch(path, value)`.
+	// ── Config tree ──────────────────────────────────────────────────────────
+	// Flat reactive config — v2 single-file state with generic path dispatcher.
+	// Fleet v2 config_patch messages route through applyConfigPatch(path, value).
 	readonly config = v2config;
 
 	// ── Observability (Phase 5.6) ────────────────────────────────────────────

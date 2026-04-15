@@ -28,7 +28,7 @@
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
 	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
 	// simply disappear when false.
-	const frameVisible = $derived(model.config.chrome.windowFrame);
+	const frameVisible = $derived(model.config.shell.windowFrame);
 
 	// ========================================================================
 	// GAME LOOP — single RAF driving model.tick()
@@ -173,7 +173,7 @@
 
 	// --- Motion (unified from 4 independent layers) ---
 
-	// Turbulence shakes the window (chrome/frame) — but the translation is
+	// Turbulence shakes the window (shell/frame) — but the translation is
 	// kept light on the scene-content so it doesn't briefly cancel the
 	// Cesium camera's forward motion and make the plane "appear to stop"
 	// during bumps. Bank rotation and breathing still carry full effect.
@@ -267,7 +267,7 @@
 		</div>
 
 		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
-		     vignette + recess rim, z:9–11. See chrome/window/Glass.svelte. -->
+		     vignette + recess rim, z:9–11. See shell/window/Glass.svelte. -->
 		<Glass {glassVignetteOpacity} />
 
 		<!-- UI overlays — timed reveal (no :hover on touch kiosks) -->
@@ -434,7 +434,7 @@
 	}
 
 	/* ─── Window frame on/off ────────────────────────────────────────────────
-	   When config.chrome.windowFrame = false, all cabin-style chrome
+	   When config.shell.windowFrame = false, all cabin-style chrome
 	   disappears and the oval clip becomes a full rectangle — edge-to-edge
 	   Cesium render. The blind still works (its clip rect goes square too)
 	   so the user can still pull it down across the whole viewport. Mode

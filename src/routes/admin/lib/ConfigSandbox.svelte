@@ -1,13 +1,11 @@
 <script lang="ts">
 	/**
-	 * ConfigSandbox — interactive sanity check for the Svelte 5 $state config
-	 * pattern. Binds directly to the live RootConfig classes so this panel is
+	 * ConfigSandbox — interactive sanity check for the flat $state config
+	 * pattern. Binds directly to the live v2 config so this panel is
 	 * a local-preview of what admin-push will actually mutate on fleet devices.
 	 */
 
-	import { RootConfig } from '$lib/model/config';
-
-	const config = new RootConfig();
+	import { config, applyConfigPatch, configSnapshot as snapshot } from '$lib/model/config/v2.svelte';
 
 	const cloudsSummary = $derived(
 		`${(config.atmosphere.clouds.density * 100).toFixed(0)}% @ ${config.atmosphere.clouds.speed.toFixed(1)}x, ${config.atmosphere.clouds.layerCount} layers`,
@@ -16,7 +14,7 @@
 	let patchLog = $state<string[]>([]);
 
 	function applyPatch(path: string, value: unknown) {
-		config.applyPatch(path, value);
+		applyConfigPatch(path, value);
 		patchLog = [...patchLog, `${new Date().toLocaleTimeString()} → ${path} = ${JSON.stringify(value)}`];
 	}
 </script>
@@ -50,16 +48,16 @@
 		<fieldset>
 			<legend>2. <code>bind:checked</code> on <code>$state</code> booleans</legend>
 			<label class="check">
-				<input type="checkbox" bind:checked={config.chrome.windowFrame} />
+				<input type="checkbox" bind:checked={config.shell.windowFrame} />
 				Window frame visible
 			</label>
 			<label class="check">
-				<input type="checkbox" bind:checked={config.chrome.blindOpen} />
+				<input type="checkbox" bind:checked={config.shell.blindOpen} />
 				Blind open
 			</label>
 			<p class="derived">
-				windowFrame: <strong>{config.chrome.windowFrame}</strong> ·
-				blindOpen: <strong>{config.chrome.blindOpen}</strong>
+				windowFrame: <strong>{config.shell.windowFrame}</strong> ·
+				blindOpen: <strong>{config.shell.blindOpen}</strong>
 			</p>
 		</fieldset>
 	</div>
@@ -70,8 +68,8 @@
 			<button type="button" onclick={() => applyPatch('atmosphere.clouds.density', 0.9)}>density = 0.9</button>
 			<button type="button" onclick={() => applyPatch('atmosphere.clouds.density', 0.1)}>density = 0.1</button>
 			<button type="button" onclick={() => applyPatch('atmosphere.haze.amount', 0.15)}>haze = 0.15</button>
-			<button type="button" onclick={() => applyPatch('chrome.windowFrame', false)}>hide frame</button>
-			<button type="button" onclick={() => applyPatch('chrome.windowFrame', true)}>show frame</button>
+			<button type="button" onclick={() => applyPatch('shell.windowFrame', false)}>hide frame</button>
+			<button type="button" onclick={() => applyPatch('shell.windowFrame', true)}>show frame</button>
 		</div>
 
 		{#if patchLog.length > 0}
@@ -85,7 +83,7 @@
 
 	<fieldset>
 		<legend>4. Live JSON snapshot</legend>
-		<pre>{JSON.stringify(config.toJSON(), null, 2)}</pre>
+		<pre>{JSON.stringify(snapshot(), null, 2)}</pre>
 	</fieldset>
 </div>
 
