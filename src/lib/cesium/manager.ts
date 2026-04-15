@@ -208,7 +208,16 @@ export class CesiumManager {
 			minimumLevel: 0,
 			...(cfg.webMercator ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
 		});
-		this.viewer.imageryLayers.addImageryProvider(provider);
+		const baseLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+		// EOX Sentinel-2 cloud-filtered composite is naturally muted at z6-z12.
+		// ESRI/Mapbox come pre-saturated. These per-source tweaks restore vivid
+		// terrain colors without crushing highlights.
+		if (baseLayer) {
+			baseLayer.saturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
+			baseLayer.contrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
+			baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
+			baseLayer.brightness = 1.0;
+		}
 
 		if (useLocal) return;
 

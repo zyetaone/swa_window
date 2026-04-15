@@ -123,7 +123,16 @@ export interface ImageryConfig {
  */
 export function getSatelliteImagery(): ImageryConfig {
 	if (TILE_SERVER_URL) {
-		return { url: `${TILE_SERVER_URL}/imagery/{z}/{x}/{y}.jpg`, maxZoom: 17, webMercator: false, label: 'local-tile-server' };
+		// Local cache populated by tools/tile-packager. Sentinel-2 path layout
+		// matches the packager's storagePath: `eox-sentinel2/{z}/{y}/{x}.jpg`.
+		// When the cache misses, the device just shows the base color for that
+		// tile until the next user-initiated load fills it.
+		return {
+			url: `${TILE_SERVER_URL}/eox-sentinel2/{z}/{y}/{x}.jpg`,
+			maxZoom: 12,
+			webMercator: true,
+			label: 'local-eox-sentinel2',
+		};
 	}
 	if (MAPBOX_TOKEN) {
 		return {

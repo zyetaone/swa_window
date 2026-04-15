@@ -135,11 +135,6 @@
 		overflow: hidden;
 		background: #000;
 
-		/* Kiosk: hide the mouse cursor everywhere on the main display route.
-		   Paired with the `unclutter` daemon on the Pi which catches any cursor
-		   that escapes this CSS (e.g. before the page hydrates). */
-		cursor: none;
-
 		/* SouthWest Airlines Branding */
 		--sw-blue: #304cb2;
 		--sw-red: #d5152e;
@@ -247,9 +242,12 @@
 		right: 20%;
 	}
 
-	/* Kiosk: every descendant inherits no-cursor (overrides per-element :hover { cursor: pointer; } too). */
-	:global(*),
-	:global(*:hover) {
+	/* Kiosk-only: hide cursor everywhere when html has the .kiosk class
+	   (set by app.html based on hostname=localhost). Dev/admin reaching the
+	   Pi via its LAN hostname or IP keeps a normal pointer for interaction. */
+	:global(html.kiosk),
+	:global(html.kiosk *),
+	:global(html.kiosk *:hover) {
 		cursor: none !important;
 	}
 

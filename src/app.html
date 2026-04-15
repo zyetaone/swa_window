@@ -4,6 +4,17 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<script>
+			// Mark <html class="kiosk"> when served from localhost — i.e. the on-device
+			// Chromium kiosk. Dev/admin browsers reaching the Pi via aero-display-XX.local
+			// or LAN IP keep a normal cursor for interaction.
+			(function () {
+				var h = window.location.hostname;
+				if (h === 'localhost' || h === '127.0.0.1' || h === '::1') {
+					document.documentElement.classList.add('kiosk');
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
