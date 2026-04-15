@@ -7,7 +7,7 @@ import { isV2 } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
 import { BaseTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
-import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/validation';
+import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');

@@ -21,12 +21,27 @@ export type { CameraConfig, DirectorConfig };
 
 export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const;
 export type WeatherType = typeof WEATHER_TYPES[number];
+export function isValidWeather(v: unknown): v is WeatherType {
+	return typeof v === 'string' && (WEATHER_TYPES as readonly string[]).includes(v);
+}
 
 export const DISPLAY_MODES = ['flight', 'screensaver', 'video'] as const;
 export type DisplayMode = typeof DISPLAY_MODES[number];
+export function isValidDisplayMode(v: unknown): v is DisplayMode {
+	return typeof v === 'string' && (DISPLAY_MODES as readonly string[]).includes(v);
+}
 
 export const QUALITY_MODES = ['performance', 'balanced', 'ultra'] as const;
 export type QualityMode = typeof QUALITY_MODES[number];
+export function isValidQualityMode(v: unknown): v is QualityMode {
+	return typeof v === 'string' && (QUALITY_MODES as readonly string[]).includes(v);
+}
+
+/** Safe JSON parse — returns null on failure instead of throwing. */
+export function safeParse<T = unknown>(raw: string): T | null {
+	try { return JSON.parse(raw); }
+	catch { return null; }
+}
 
 // ─── Core domain types ───────────────────────────────────────────────────────
 

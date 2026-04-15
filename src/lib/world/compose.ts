@@ -17,7 +17,7 @@ import {
 	getSatelliteImagery,
 	VIEWER_OPTIONS,
 	CARTODB_DARK_URL,
-} from './config';
+} from './cesium-setup';
 
 export interface CesiumModelView {
 	flight: {

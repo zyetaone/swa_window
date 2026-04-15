@@ -11,7 +11,7 @@
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
 	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './sources';
-	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/config';
+	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/cesium-setup';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
