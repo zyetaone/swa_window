@@ -4,6 +4,7 @@
 	import type { DisplayConfig } from '$lib/fleet/protocol';
 	import { LOCATIONS } from '$lib/locations';
 	import { onDestroy } from 'svelte';
+	import ConfigSandbox from './lib/ConfigSandbox.svelte';
 
 	// Read config from URL params: ?server=ws://...&transport=sse
 	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -324,6 +325,11 @@
 						? 'Deselect All'
 						: 'Select All'}
 				</button>
+			</section>
+
+			<section class="control-section">
+				<h3>Config Sandbox</h3>
+				<ConfigSandbox />
 			</section>
 		</aside>
 
