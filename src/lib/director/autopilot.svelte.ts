@@ -26,6 +26,13 @@ export class DirectorEngine {
 	tick(_delta: number, ctx: SimulationContext): WorldPatch {
 		const patch: WorldPatch = {};
 		untrack(() => {
+			// Phase 7 — followers in a multi-Pi panorama do not run the
+			// randomiser or the flight director locally. The leader (solo or
+			// center) broadcasts director_decision messages that followers
+			// apply via the fleet client. Without this gate, three Pis would
+			// each pick a different random scenario.
+			if (!ctx.isLeader) return;
+
 			const atmospherePatch = this.#tickRandomize(_delta, ctx);
 			if (atmospherePatch) patch.atmosphere = atmospherePatch;
 

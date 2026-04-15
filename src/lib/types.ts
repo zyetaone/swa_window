@@ -62,6 +62,10 @@ export interface SimulationContext {
 	/** DirectorEngine-specific (populated only for director.tick) */
 	isOrbitMode?: boolean;
 	pickNextLocation?: () => LocationId;
+	/** Phase 7 — true when this device should run autopilot decisions.
+	 *  Solo and center roles are leaders; left/right are followers that
+	 *  receive director_decision messages over the fleet. */
+	isLeader?: boolean;
 }
 
 // ─── Engine patch types ──────────────────────────────────────────────────────

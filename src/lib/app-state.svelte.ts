@@ -76,6 +76,16 @@ export class WindowModel {
 	// messages route through `this.config.applyPatch(path, value)`.
 	readonly config = new RootConfig();
 
+	// Phase 7 — leader broadcast hook. Set by the fleet client on connect
+	// (see setFleetBroadcast). When this device is a panorama leader, the
+	// director calls this hook to notify followers of scenario changes so
+	// all three Pis flip to the same location at the same wall-clock
+	// instant (via the transitionAtMs schedule on the receiver side).
+	#fleetBroadcast: ((msg: { v: 2; type: string; [k: string]: unknown }) => void) | null = null;
+	setFleetBroadcast(fn: ((msg: { v: 2; type: string; [k: string]: unknown }) => void) | null): void {
+		this.#fleetBroadcast = fn;
+	}
+
 	// ── Core state ────────────────────────────────────────────────────────────
 	location     = $state<LocationId>('dubai');
 	timeOfDay    = $state(12);
@@ -301,10 +311,33 @@ export class WindowModel {
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
 		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
+		// Phase 7 — solo + center are leaders (run autopilot). left + right
+		// are followers (wait for director_decision from leader).
+		const role = this.config.camera.parallax.role;
+		ctx.isLeader = role === 'solo' || role === 'center';
 		const directorPatch = this.director.tick(delta, ctx);
 
 		if (directorPatch.atmosphere) this.applyPatch(directorPatch.atmosphere);
-		if (directorPatch.nextLocation) this.flight.flyTo(directorPatch.nextLocation);
+		if (directorPatch.nextLocation) {
+			// Phase 7 — if we're a panorama leader with connected followers,
+			// broadcast the decision BEFORE flying locally. transitionAtMs is
+			// 2.5s in the future so all three Pis can lock to the same wall-
+			// clock instant and start cruise_departure simultaneously,
+			// absorbing NTP drift (up to ±200ms is safe).
+			if (ctx.isLeader && this.#fleetBroadcast) {
+				const now = Date.now();
+				this.#fleetBroadcast({
+					v: 2,
+					type: 'director_decision',
+					scenarioId: 'autopilot',
+					locationId: directorPatch.nextLocation,
+					weather: this.weather,
+					decidedAtMs: now,
+					transitionAtMs: now + 2500,
+				});
+			}
+			this.flight.flyTo(directorPatch.nextLocation);
+		}
 
 		if (this.autoQuality) this.#tickAutoQuality(delta);
 	}

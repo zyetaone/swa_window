@@ -59,7 +59,15 @@
 	$effect(() => {
 		if (typeof window === "undefined") return;
 		const client = createWsClient(model);
-		return () => client.destroy();
+		// Phase 7 — register the leader-broadcast hook so the director can
+		// emit director_decision messages when this device is a panorama
+		// leader. Solo devices set the hook too; it's harmless (nobody
+		// receives the emits unless a group is configured server-side).
+		model.setFleetBroadcast((msg) => client.publishV2(msg));
+		return () => {
+			model.setFleetBroadcast(null);
+			client.destroy();
+		};
 	});
 
 	// Pull any bundles the server has persisted to disk. Silent-fail if the
@@ -130,6 +138,31 @@
 			) {
 				model.setAltitude(alt);
 			}
+		}
+
+		// Phase 7 — multi-Pi parallax role. URL wins over localStorage wins
+		// over 'solo' default. When URL param is set, persist it so the role
+		// survives reload without the query string. Non-solo roles also auto-
+		// hide the window frame since three oval frames tile poorly.
+		const ROLE_KEY = "aero.device.role";
+		const roleParam = params.get("role")?.toLowerCase();
+		const VALID_ROLES = ["solo", "left", "center", "right"] as const;
+		type Role = (typeof VALID_ROLES)[number];
+		const validRole = (r: string | null | undefined): r is Role =>
+			typeof r === "string" && (VALID_ROLES as readonly string[]).includes(r);
+
+		const fromUrl = validRole(roleParam) ? roleParam : null;
+		const fromStorage = validRole(localStorage.getItem(ROLE_KEY))
+			? (localStorage.getItem(ROLE_KEY) as Role)
+			: null;
+		const chosenRole: Role = fromUrl ?? fromStorage ?? "solo";
+
+		if (chosenRole !== "solo") {
+			model.config.camera.setRole(chosenRole);
+			model.config.chrome.windowFrame = false;
+		}
+		if (fromUrl) {
+			localStorage.setItem(ROLE_KEY, fromUrl);
 		}
 	}
 </script>

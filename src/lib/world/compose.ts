@@ -29,6 +29,12 @@ export interface CesiumModelView {
 	motion: {
 		bankAngle: number;
 	};
+	/** Phase 7 — used by compose.ts for camera.effectiveHeading() parallax offset. */
+	config: {
+		camera: {
+			effectiveHeading(baseHeading: number): number;
+		};
+	};
 	timeOfDay: number;
 	nightFactor: number;
 	dawnDuskFactor: number;
@@ -319,10 +325,16 @@ export class CesiumManager {
 		this.camPitch += (f.pitch - this.camPitch) * k;
 		this.camBank += (mot.bankAngle - this.camBank) * k;
 
+		// Phase 7 — multi-Pi parallax. For solo role (default), parallax
+		// offset is 0 and this is a no-op. For left/center/right in a
+		// panorama, the per-device yaw shifts the view so three Pis tile
+		// into a continuous horizon band from the same shared flight state.
+		const parallaxHeading = this.model.config.camera.effectiveHeading(this.camHeading);
+
 		this.viewer.camera.setView({
 			destination: this.CesiumModule.Cartesian3.fromDegrees(this.camLon, this.camLat, this.camAlt * 0.3048),
 			orientation: {
-				heading: this.CesiumModule.Math.toRadians((this.camHeading + 90) % 360),
+				heading: this.CesiumModule.Math.toRadians((parallaxHeading + 90) % 360),
 				pitch: this.CesiumModule.Math.toRadians(this.camPitch - 90),
 				roll: this.CesiumModule.Math.toRadians(-this.camBank),
 			},

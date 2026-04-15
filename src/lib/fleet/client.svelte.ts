@@ -88,10 +88,19 @@ export class DisplayWsClient extends BaseTransport {
 		}
 	}
 
-	#send(msg: DisplayMessage): void {
+	#send(msg: DisplayMessage | { v: 2; type: string; [k: string]: unknown }): void {
 		if (this.#ws?.readyState === WebSocket.OPEN) {
 			this.#ws.send(JSON.stringify(msg));
 		}
+	}
+
+	/**
+	 * Phase 7 — publish a v2 message from display to server. Used by
+	 * WindowModel.#fleetBroadcast so the panorama leader can emit
+	 * `director_decision` frames the server fans out to followers.
+	 */
+	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {
+		this.#send(msg);
 	}
 
 	#sendRegister(): void {
@@ -183,18 +192,28 @@ export class DisplayWsClient extends BaseTransport {
 					this.#model.applyConfigPatch?.('camera.parallax.fovDeg', msg.fovDeg);
 				}
 				break;
-			case 'director_decision':
-				// Phase 7 wiring target — buffer the decision until transitionAtMs
-				// and trigger the cruise FSM then. For now, apply immediately so
-				// the message round-trips end-to-end; the schedule-until logic
-				// lands with the multi-Pi phase.
-				if (LOCATION_IDS.has(msg.locationId)) {
-					this.#model.applyScene(
-						msg.locationId,
-						isValidWeather(msg.weather) ? msg.weather : undefined,
+			case 'director_decision': {
+				// Phase 7 — schedule the flyTo at transitionAtMs wall-clock so
+				// all three Pis in a panorama flip simultaneously even with
+				// ~50-200ms NTP drift between devices. If the message arrived
+				// late (transitionAtMs already past), apply immediately and log.
+				if (!LOCATION_IDS.has(msg.locationId)) break;
+				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
+				const now = Date.now();
+				const delay = msg.transitionAtMs - now;
+				if (delay < -50) {
+					console.warn(
+						`[fleet v2] director_decision arrived ${-delay}ms late; applying immediately`,
+					);
+					this.#model.applyScene(msg.locationId, weather);
+				} else {
+					setTimeout(
+						() => this.#model.applyScene(msg.locationId, weather),
+						Math.max(0, delay),
 					);
 				}
 				break;
+			}
 		}
 	}
 }
