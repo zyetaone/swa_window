@@ -16,22 +16,26 @@
 	 *   https://maplibre.org/maplibre-gl-js/docs/API/classes/CustomLayerInterface/
 	 */
 
-	import { onMount, onDestroy } from 'svelte';
-	import type maplibregl from 'maplibre-gl';
+	import { onDestroy } from 'svelte';
+	import maplibregl from 'maplibre-gl';
 	import * as THREE from 'three';
 
-	let { map, lon = 55.3, lat = 25.2, altitude = 500, color = '#ffd880' }: {
+	let { map, lon = 55.3, lat = 25.2, altitude = 8000, radius = 12000, color = '#ffd880' }: {
 		map: maplibregl.Map | undefined;
 		lon?: number;
 		lat?: number;
 		altitude?: number;
+		/** Sphere radius in meters. 12km is big but visible at cruise zoom. */
+		radius?: number;
 		color?: string;
 	} = $props();
 
 	let customLayer: any = null;
+	let attached = $state(false);
 
-	onMount(() => {
-		if (!map) return;
+	$effect(() => {
+		if (!map || attached) return;
+		console.log('[ThreeBillboards] mapRef available, preparing layer...');
 
 		customLayer = {
 			id: 'three-billboards',
@@ -64,17 +68,14 @@
 				this.mesh = new THREE.Mesh(geo, mat);
 				this.scene.add(this.mesh);
 
-				// Mercator-coordinate-space model transform. This is the standard
-				// recipe for sharing GL state between MapLibre and Three.js.
-				// Dynamic import: svelte-maplibre-gl doesn't globally expose maplibregl.
-				import('maplibre-gl').then(ml => {
-					this.modelOrigin = ml.MercatorCoordinate.fromLngLat([lon, lat], altitude);
-					const scale = this.modelOrigin.meterInMercatorCoordinateUnits();
-					// 5000m sphere — visible at cruise altitude, not obtrusive
-					const radius = 5000 * scale;
-					this.mesh!.scale.setScalar(radius);
-					this.mesh!.position.set(this.modelOrigin.x, this.modelOrigin.y, this.modelOrigin.z);
-				});
+				// Mercator-coordinate-space model transform. Synchronous import
+				// at top ensures the sphere is positioned BEFORE first render().
+				this.modelOrigin = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], altitude);
+				const scale = this.modelOrigin.meterInMercatorCoordinateUnits();
+				const r = radius * scale;
+				this.mesh!.scale.setScalar(r);
+				this.mesh!.position.set(this.modelOrigin.x, this.modelOrigin.y, this.modelOrigin.z);
+				console.log('[ThreeBillboards] sphere at', { x: this.modelOrigin.x, y: this.modelOrigin.y, z: this.modelOrigin.z, r });
 
 				// Attach Three.js renderer to the SAME canvas + context
 				this.renderer = new THREE.WebGLRenderer({
@@ -104,15 +105,22 @@
 		};
 
 		const tryAdd = () => {
+			if (!map) return;
 			try {
-				if (map!.getLayer('three-billboards')) return;
-				map!.addLayer(customLayer);
+				if (map.getLayer('three-billboards')) { attached = true; return; }
+				if (!map.isStyleLoaded()) {
+					setTimeout(tryAdd, 200);
+					return;
+				}
+				map.addLayer(customLayer);
+				attached = true;
+				console.log('[ThreeBillboards] layer added');
 			} catch (e) {
 				console.warn('[ThreeBillboards] addLayer failed:', e);
+				setTimeout(tryAdd, 400);
 			}
 		};
-		if (map.isStyleLoaded()) tryAdd();
-		else map.once('load', tryAdd);
+		tryAdd();
 	});
 
 	onDestroy(() => {

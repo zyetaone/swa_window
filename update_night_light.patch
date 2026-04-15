@@ -1,0 +1,41 @@
+--- src/routes/playground/MapLibreGlobe.svelte
++++ src/routes/playground/MapLibreGlobe.svelte
+@@ -190,7 +190,21 @@
+ 		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)', imageryMaxZoom) :
+ 		VOYAGER_STYLE
+ 	);
+-	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
++
++	// Base layer dimming + desaturation at night (mimics Cesium's BASE_NIGHT_BRIGHTNESS)
++	const baseBrightness = $derived(1.0 - (nightFactor * 0.85)); // Down to 0.15 at full night
++	const baseSaturation = $derived(1.0 - (nightFactor * 0.75)); // Down to 0.25 at full night
++	
++	// Apply to maplibre style via imperative setPaintProperty since we can't easily reactively update
++	// nested style JSON without heavy diffs. We do it manually when loaded.
++	$effect(() => {
++		if (!mapRef || !mapRef.loaded()) return;
++		try {
++			// Try to apply these filters to the primary satellite layer
++			if (mapRef.getLayer('sat-imagery')) {
++				mapRef.setPaintProperty('sat-imagery', 'raster-brightness-max', baseBrightness);
++				mapRef.setPaintProperty('sat-imagery', 'raster-saturation', baseSaturation - 1); // maplibre uses -1 to 1 for saturation where -1 is grayscale
++			}
++		} catch(e) {}
++	});
++
++	let nightBrightness = $derived(Math.max(0.15, 1 - nightFactor * 1.5));
+ 
+ 	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
+ 
+@@ -321,8 +335,10 @@
+ 				id="night-overlay-layer"
+ 				source="night-overlay"
+ 				paint={{
+-					'raster-opacity': nightFactor * 0.85,
++					'raster-opacity': nightFactor * 0.8, // Slightly lower base opacity
+ 					'raster-fade-duration': 300,
++					'raster-contrast': 0.2 + (nightFactor * 0.3), // Punchy city lights
++					'raster-brightness-min': 0,
++					'raster-brightness-max': 1.0 + (nightFactor * 0.6), // Boost brightness like Cesium NIGHT_BRIGHTNESS: 1.6
+ 				}}
+ 			/>

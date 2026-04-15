@@ -200,7 +200,25 @@
 		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)', imageryMaxZoom) :
 		VOYAGER_STYLE
 	);
-	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
+
+	// Sync imagery base layer: dim + desaturate as night falls (mimics Cesium BASE_NIGHT_BRIGHTNESS)
+	const baseBrightness = $derived(1.0 - (nightFactor * 0.85)); // Down to 0.15 at full night
+	const baseSaturation = $derived(1.0 - (nightFactor * 0.75)); // Down to 0.25 at full night
+	
+	$effect(() => {
+		if (!mapRef || !mapRef.loaded()) return;
+		try {
+			// Apply these filters directly to the satellite layer to avoid entire style re-renders
+			if (mapRef.getLayer('sat-imagery')) {
+				mapRef.setPaintProperty('sat-imagery', 'raster-brightness-max', baseBrightness);
+				mapRef.setPaintProperty('sat-imagery', 'raster-saturation', baseSaturation - 1); // mapbox/maplibre uses -1 to 1 where -1 is grayscale
+			}
+		} catch(e) {
+			console.warn('Failed to apply night filters to base layer', e);
+		}
+	});
+
+	let nightBrightness = $derived(Math.max(0.15, 1 - nightFactor * 1.5));
 
 	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
 
@@ -312,7 +330,8 @@
 							400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
 						],
 					'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
-					'fill-extrusion-base': ['case', ['>=', ['zoom'], 14], ['get', 'render_min_height'], 0],
+					// MapLibre expr spec: 'zoom' must be input to a top-level step / interpolate
+					'fill-extrusion-base': ['step', ['zoom'], 0, 14, ['get', 'render_min_height']],
 					'fill-extrusion-opacity': 0.85,
 				}}
 			/>
@@ -331,8 +350,11 @@
 				id="night-overlay-layer"
 				source="night-overlay"
 				paint={{
-					'raster-opacity': nightFactor * 0.85,
+					'raster-opacity': nightFactor * 0.8, // Slightly lower base opacity to balance boost
 					'raster-fade-duration': 300,
+					'raster-contrast': 0.1 + (nightFactor * 0.4), // Punchy city lights
+					'raster-brightness-min': 0,
+					'raster-brightness-max': 1.0 + (nightFactor * 0.6), // Boost brightness mimicking additive pass
 				}}
 			/>
 		</RasterTileSource>
