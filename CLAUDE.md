@@ -32,14 +32,15 @@ bun x vitest run     # Run unit/integration tests (104 tests currently)
 
 ```
 src/lib/
-├── world/              WHAT we see — the map underneath
-│   ├── compose.ts      CesiumManager — THE ONE file that imports cesium
-│   ├── config.ts       Ion token, imagery URLs, VIEWER_OPTIONS
+├── world/              WHAT we see — the map underneath (Cesium confined here)
+│   ├── compose.ts      CesiumManager — imports cesium as type
+│   ├── config.ts       Ion token, imagery URLs, VIEWER_OPTIONS (imports cesium as type)
 │   ├── shaders.ts      GLSL color grading (emissive city lights)
 │   ├── active.svelte.ts  Reactive holder — geo-effects consume here
 │   └── CesiumViewer.svelte  dynamic import('cesium') happens here
 │
 ├── atmosphere/         BETWEEN the camera and the world
+│                        (each folder exports an Effect registered in scene/registry.ts)
 │   ├── clouds/         CloudBlobs (SVG turbulence 3-layer parallax) + effect wrapper
 │   ├── weather/        Weather.svelte (rain+frost) + Lightning.svelte + lightning.ts registry
 │   ├── micro-events/   MicroEvent (stars/birds/contrails) + effect wrapper
@@ -66,9 +67,8 @@ src/lib/
 ├── model/              STATE graph + admin-tunable config tree
 │   ├── state.svelte.ts     createAppState() / useAppState() — WindowModel root
 │   ├── telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
-│   └── config/
-│       ├── index.ts           Re-exports from v2.svelte.ts
-│       └── v2.svelte.ts       Flat $state config — atmosphere / camera / director / world / shell
+│   └── config.svelte.ts    Flat $state config — atmosphere / camera / director / world / shell
+│                            + applyConfigPatch(path, value) dispatcher
 │
 ├── scene/              Scene composition system
 │   ├── types.ts             Effect<TParams> contract + LayerKind
@@ -125,7 +125,7 @@ docs/
 These are the three rules the whole reorg was designed to preserve. If a future change seems to violate one, flag it.
 
 ### 1. Cesium isolation
-**Only `src/lib/world/compose.ts` may import `cesium`** (as a type) and **only `src/lib/world/CesiumViewer.svelte`** does the actual `import('cesium')` at runtime. Every other module (engines, scene effects, config classes, fleet) is framework-free and unit-testable. Verify with `rg "from 'cesium'" src/lib/`.
+**Cesium is confined to `src/lib/world/`.** Only `world/compose.ts` and `world/config.ts` import `cesium` (as a type), and only `world/CesiumViewer.svelte` does the actual `import('cesium')` at runtime. Every other module (engines, scene effects, config, fleet, shell) is framework-free and unit-testable. Verify with `rg "from 'cesium'" src/lib/` — expect exactly 2 hits, both in `world/`.
 
 ### 2. Flat DTO boundary
 `model.applyPatch(patch)` and the v1 fleet protocol are flat DTOs that cross the wire and `localStorage`. Phase 6 added v2 path-targeted patches (`config_patch { path, value }`) additively — v1 never changes shape. Persistence and fleet back-compat depend on this. Don't nest v1.
