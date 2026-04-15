@@ -128,8 +128,7 @@
 </svelte:head>
 
 <main
-	class="page"
-	class:dragging
+	class={['page', dragging && 'dragging']}
 	ondrop={onDrop}
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}

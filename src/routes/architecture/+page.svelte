@@ -405,8 +405,7 @@
 		<div class="layer-stack">
 			{#each layers as layer}
 				<button
-					class="layer-bar"
-					class:expanded={expandedLayer === layer.id}
+					class={['layer-bar', expandedLayer === layer.id && 'expanded']}
 					onclick={() => toggleLayer(layer.id)}
 					type="button"
 				>
@@ -464,7 +463,7 @@
 							</div>
 						{/if}
 					</div>
-					<span class="layer-chevron" class:open={expandedLayer === layer.id}>▸</span>
+					<span class={['layer-chevron', expandedLayer === layer.id && 'open']}>▸</span>
 				</button>
 			{/each}
 		</div>

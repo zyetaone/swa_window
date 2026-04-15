@@ -224,16 +224,14 @@
 </script>
 
 <div
-	class="window-container"
-	class:no-frame={!frameVisible}
+	class={['window-container', !frameVisible && 'no-frame']}
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
 >
 	<!-- The oval window. Click = fly somewhere new. Long-press = speed boost. -->
 	<button
-		class="window-viewport"
-		class:boosting={isBoosting}
+		class={['window-viewport', isBoosting && 'boosting']}
 		onpointerdown={handlePointerDown}
 		onpointerup={handlePointerUp}
 		onpointercancel={handlePointerCancel}
@@ -295,8 +293,7 @@
 	<!-- Blind (useBlind composable) -->
 	<div class="blind-clip" bind:this={blind.clipEl}>
 		<div
-			class="blind-overlay"
-			class:discoverable={!model.blindOpen && !blind.hasAnimated}
+			class={['blind-overlay', !model.blindOpen && !blind.hasAnimated && 'discoverable']}
 			onanimationend={() => { blind.hasAnimated = true; }}
 			onpointerdown={blind.onPointerDown}
 			onpointermove={blind.onPointerMove}

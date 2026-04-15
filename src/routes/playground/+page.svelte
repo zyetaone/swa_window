@@ -246,7 +246,7 @@
 	<div class="viewport" style:background={bgGradient}>
 		<!-- Cesium -->
 		{#if activeTab === 'cesium' || activeTab === 'compare'}
-			<div class="globe-pane" class:half={activeTab === 'compare'} class:left={activeTab === 'compare'} style:transform={motionTransform}>
+			<div class={['globe-pane', activeTab === 'compare' && 'half', activeTab === 'compare' && 'left']} style:transform={motionTransform}>
 				<div bind:this={viewerContainer} class="cesium-viewer"></div>
 				{#if !cesiumLoaded}
 					<div class="globe-loading">Loading Cesium…</div>
@@ -256,7 +256,7 @@
 
 		<!-- MapLibre -->
 		{#if activeTab === 'maplibre' || activeTab === 'compare'}
-			<div class="globe-pane" class:half={activeTab === 'compare'} class:right={activeTab === 'compare'} style:transform={motionTransform}>
+			<div class={['globe-pane', activeTab === 'compare' && 'half', activeTab === 'compare' && 'right']} style:transform={motionTransform}>
 				<MapLibreGlobe
 					lat={currentLocation.lat}
 					lon={currentLocation.lon}
@@ -312,7 +312,7 @@
 		<!-- Tabs -->
 		<div class="tab-bar" role="tablist">
 			{#each ['cesium', 'maplibre', 'compare'] as const as t (t)}
-				<button role="tab" aria-selected={activeTab === t} class:active={activeTab === t} onclick={() => activeTab = t}>
+				<button role="tab" aria-selected={activeTab === t} class={[activeTab === t && 'active']} onclick={() => activeTab = t}>
 					{t === 'compare' ? 'Split' : t[0].toUpperCase() + t.slice(1)}
 				</button>
 			{/each}
@@ -345,7 +345,7 @@
 			<legend>Weather</legend>
 			<div class="chip-row weather-chips">
 				{#each WEATHER_TYPES as w (w)}
-					<button class:active={weather === w} onclick={() => weather = w}>{w}</button>
+					<button class={[weather === w && 'active']} onclick={() => weather = w}>{w}</button>
 				{/each}
 			</div>
 		</fieldset>
@@ -355,7 +355,7 @@
 			<fieldset>
 				<legend>Cesium Imagery</legend>
 				{#each CESIUM_SOURCES as src (src.id)}
-					<label class="source-btn" class:active={cesiumSource === src.id}>
+					<label class={['source-btn', cesiumSource === src.id && 'active']}>
 						<input type="radio" name="cesium-src" checked={cesiumSource === src.id} onchange={() => cesiumSource = src.id} />
 						<span class="source-name">{src.label}</span>
 						<span class="source-note">{src.note}</span>
@@ -369,7 +369,7 @@
 			<fieldset>
 				<legend>MapLibre Imagery</legend>
 				{#each MAPLIBRE_SOURCES as src (src.id)}
-					<label class="source-btn" class:active={maplibreSource === src.id}>
+					<label class={['source-btn', maplibreSource === src.id && 'active']}>
 						<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
 						<span class="source-name">{src.label}</span>
 						<span class="source-note">{src.note}</span>
@@ -380,7 +380,7 @@
 				<legend>🗄️ Cached (offline tiles)</legend>
 				<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
 				{#each CACHED_SOURCES as src (src.id)}
-					<label class="source-btn" class:active={maplibreSource === src.id}>
+					<label class={['source-btn', maplibreSource === src.id && 'active']}>
 						<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
 						<span class="source-name">{src.label}</span>
 						<span class="source-note">{src.note}</span>

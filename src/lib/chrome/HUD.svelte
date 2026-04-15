@@ -47,7 +47,7 @@
 			<div class="status-group">
 				<div class="primary-stat">
 					<span class="hud-location">{isCruising ? destName : locationName}</span>
-					<span class="mode-badge" class:cruising={isCruising}>
+					<span class={['mode-badge', isCruising && 'cruising']}>
 						{isCruising ? "CRUISE" : "ORBIT"}
 					</span>
 				</div>

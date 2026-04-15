@@ -66,8 +66,7 @@
 
 	{#if loading}
 		<div
-			class="loading-overlay"
-			class:fade-out={fadingOut}
+			class={['loading-overlay', fadingOut && 'fade-out']}
 			ontransitionend={() => {
 				loading = false;
 				fadingOut = false;

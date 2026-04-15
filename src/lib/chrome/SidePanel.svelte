@@ -89,8 +89,7 @@
 <!-- Tab button (always visible on right edge) -->
 <button
 	bind:this={tabButtonEl}
-	class="panel-tab"
-	class:open={panelOpen && !closing}
+	class={['panel-tab', panelOpen && !closing && 'open']}
 	onclick={togglePanel}
 	type="button"
 	aria-label={panelOpen ? "Close settings" : "Open settings"}
@@ -113,8 +112,7 @@
 <!-- Slide-out panel -->
 {#if panelOpen}
 	<button
-		class="backdrop"
-		class:closing
+		class={['backdrop', closing && 'closing']}
 		onclick={closePanel}
 		type="button"
 		aria-label="Close settings panel"
@@ -124,8 +122,7 @@
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
 		bind:this={panelEl}
-		class="panel"
-		class:closing
+		class={['panel', closing && 'closing']}
 		role="dialog"
 		aria-label="Settings panel"
 		tabindex="-1"
@@ -182,8 +179,7 @@
 			<div class="location-grid">
 				{#each cities as loc (loc.id)}
 					<button
-						class="loc-btn"
-						class:active={model.location === loc.id}
+						class={['loc-btn', model.location === loc.id && 'active']}
 						onclick={() => model.flyTo(loc.id)}
 					>
 						{loc.name}
@@ -197,8 +193,7 @@
 			<div class="location-grid">
 				{#each nature as loc (loc.id)}
 					<button
-						class="loc-btn"
-						class:active={model.location === loc.id}
+						class={['loc-btn', model.location === loc.id && 'active']}
 						onclick={() => model.flyTo(loc.id)}
 					>
 						{loc.name}
@@ -337,8 +332,7 @@
 			<div class="weather-grid">
 				{#each WEATHER_TYPES as w (w)}
 					<button
-						class="weather-btn"
-						class:active={model.weather === w}
+						class={['weather-btn', model.weather === w && 'active']}
 						onclick={() => model.applyPatch({ weather: w })}
 					>{w[0].toUpperCase() + w.slice(1)}</button>
 				{/each}

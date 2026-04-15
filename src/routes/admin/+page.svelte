@@ -148,7 +148,7 @@
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
-			<span class="connection-badge" class:online={store.connectionState === 'connected'}>
+			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
 				{store.connectionState === 'connected' ? store.transportType.toUpperCase() : 'Disconnected'}
 			</span>
 			<span class="device-count">
@@ -181,7 +181,7 @@
 			{#if store.alerts.length > 0}
 				<div class="alerts">
 					{#each store.alerts as alert (alert.device + '|' + alert.message)}
-						<span class="alert-badge" class:error={alert.level === 'error'} class:warning={alert.level === 'warning'}>
+						<span class={['alert-badge', alert.level === 'error' && 'error', alert.level === 'warning' && 'warning']}>
 							{alert.message}
 						</span>
 					{/each}
@@ -221,8 +221,7 @@
 				<div class="mode-buttons">
 					{#each MODE_OPTIONS as opt (opt.value)}
 						<button
-							class="btn btn-mode"
-							class:active={pushMode === opt.value}
+							class={['btn', 'btn-mode', pushMode === opt.value && 'active']}
 							onclick={() => pushMode = opt.value}
 						>
 							{opt.label}
@@ -349,14 +348,11 @@
 					{#each store.devices as device (device.deviceId)}
 						{@const selected = selectedDevices.has(device.deviceId)}
 						<button
-							class="device-card"
-							class:online={device.online}
-							class:offline={!device.online}
-							class:selected
+							class={['device-card', device.online ? 'online' : 'offline', selected && 'selected']}
 							onclick={() => toggleDevice(device.deviceId)}
 						>
 							<div class="card-header">
-								<span class="status-dot" class:online={device.online}></span>
+								<span class={['status-dot', device.online && 'online']}></span>
 								<span class="hostname">{device.hostname || device.deviceId.slice(0, 8)}</span>
 							</div>
 
@@ -372,7 +368,7 @@
 								<div class="stat-row">
 									<div class="stat">
 										<span class="stat-label">FPS</span>
-										<span class="stat-value" class:fps-warn={device.fps < 30} class:fps-good={device.fps >= 30}>
+										<span class={['stat-value', device.fps < 30 ? 'fps-warn' : 'fps-good']}>
 											{device.fps > 0 ? device.fps.toFixed(0) : '—'}
 										</span>
 									</div>
