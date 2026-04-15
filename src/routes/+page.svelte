@@ -135,6 +135,11 @@
 		overflow: hidden;
 		background: #000;
 
+		/* Kiosk: hide the mouse cursor everywhere on the main display route.
+		   Paired with the `unclutter` daemon on the Pi which catches any cursor
+		   that escapes this CSS (e.g. before the page hydrates). */
+		cursor: none;
+
 		/* SouthWest Airlines Branding */
 		--sw-blue: #304cb2;
 		--sw-red: #d5152e;
@@ -240,6 +245,12 @@
 	.rivet-br {
 		bottom: 15%;
 		right: 20%;
+	}
+
+	/* Kiosk: every descendant inherits no-cursor (overrides per-element :hover { cursor: pointer; } too). */
+	:global(*),
+	:global(*:hover) {
+		cursor: none !important;
 	}
 
 	/* Accessibility: focus indicators */

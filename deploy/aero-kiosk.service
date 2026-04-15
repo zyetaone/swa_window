@@ -1,0 +1,19 @@
+[Unit]
+Description=Aero Window Chromium Kiosk
+After=aero-app.service
+Requires=aero-app.service
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+ExecStartPre=/bin/sleep 3
+# `-nocursor` is the X server arg telling X to never show its own cursor.
+# Combined with unclutter (in kiosk-session.sh) and CSS `cursor: none` in the
+# app, the cursor is invisible across all three layers.
+ExecStart=/usr/bin/xinit /home/pi/aero-window/deploy/kiosk-session.sh -- :0 vt1 -nocursor
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
