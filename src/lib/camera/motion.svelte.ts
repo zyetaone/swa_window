@@ -1,10 +1,13 @@
 /**
  * MotionEngine — turbulence, banking, breathing, engine vibration.
+ *
+ * All feel parameters are read from `ctx.camera.motion` (CameraConfig.MotionConfig).
+ * This engine is the first Phase 5 migration off constants.ts — FLIGHT_FEEL and
+ * AIRCRAFT.TURBULENCE_* are no longer imported here.
  */
 
 import { untrack } from 'svelte';
 import { clamp, shortestAngleDelta, randomBetween } from '$lib/utils';
-import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
 import type { SimulationContext } from '$lib/types';
 
 export class MotionEngine {
@@ -19,18 +22,22 @@ export class MotionEngine {
 	// ── Internal state ─────────────────────────────────────────────────────────
 	#prevHeading = 0;
 	#bumpTimer = 0;
-	#nextBump = randomBetween(FLIGHT_FEEL.BUMP_MIN_INTERVAL, FLIGHT_FEEL.BUMP_MAX_INTERVAL);
+	#nextBump: number;
 	#bumpElapsed = -1;
 	#bumpSign = 1;
 
+	constructor() {
+		this.#nextBump = randomBetween(30, 120);
+	}
+
 	tick(delta: number, ctx: SimulationContext): void {
-		// Hot path — wrap in untrack() so config reads don't build 60 Hz deps.
 		untrack(() => this.#tickInternal(delta, ctx));
 	}
 
 	#tickInternal(delta: number, ctx: SimulationContext): void {
-		const { time: t, heading, altitude, turbulenceLevel } = ctx;
-		const turbMult = AIRCRAFT.TURBULENCE_MULTIPLIERS[turbulenceLevel];
+		const { time: t, heading, altitude, turbulenceLevel, camera } = ctx;
+		const m = camera.motion;
+		const turbMult = m.turbulenceMultipliers[turbulenceLevel];
 
 		const altFactor = altitude > 40000
 			? clamp(1 - (altitude - 40000) / 10000, 0.05, 1)
@@ -49,29 +56,29 @@ export class MotionEngine {
 
 		if (this.#bumpElapsed >= 0) {
 			this.#bumpElapsed += delta;
-			bumpValue = this.#bumpSign * FLIGHT_FEEL.BUMP_AMPLITUDE * turbMult
-				* Math.exp(-FLIGHT_FEEL.BUMP_DECAY * this.#bumpElapsed)
-				* Math.sin(FLIGHT_FEEL.BUMP_RING_FREQ * this.#bumpElapsed);
+			bumpValue = this.#bumpSign * m.bumpAmplitude * turbMult
+				* Math.exp(-m.bumpDecay * this.#bumpElapsed)
+				* Math.sin(m.bumpRingFreq * this.#bumpElapsed);
 			if (this.#bumpElapsed > 1.5) this.#bumpElapsed = -1;
 		} else if (this.#bumpTimer > this.#nextBump) {
 			this.#bumpTimer = 0;
 			this.#bumpElapsed = 0;
 			this.#bumpSign = Math.random() > 0.5 ? 1 : -1;
-			this.#nextBump = randomBetween(FLIGHT_FEEL.BUMP_MIN_INTERVAL, FLIGHT_FEEL.BUMP_MAX_INTERVAL) / turbMult;
+			this.#nextBump = randomBetween(m.bumpMinInterval, m.bumpMaxInterval) / turbMult;
 		}
 
-		this.motionOffsetY = (baseTurbY * AIRCRAFT.TURBULENCE_OFFSET_Y + chatterY + bumpValue) * altFactor;
-		this.motionOffsetX = (baseTurbX * AIRCRAFT.TURBULENCE_OFFSET_Y * 0.3 + chatterX) * altFactor;
+		this.motionOffsetY = (baseTurbY * m.turbulenceOffsetY + chatterY + bumpValue) * altFactor;
+		this.motionOffsetX = (baseTurbX * m.turbulenceOffsetY * 0.3 + chatterX) * altFactor;
 
 		const hDelta = shortestAngleDelta(this.#prevHeading, heading);
 		const turnRate = delta > 0 ? hDelta / delta : 0;
-		const targetBank = clamp(turnRate * 0.3, -FLIGHT_FEEL.BANK_ANGLE_MAX, FLIGHT_FEEL.BANK_ANGLE_MAX);
-		this.bankAngle += (targetBank - this.bankAngle) * Math.min(FLIGHT_FEEL.BANK_SMOOTHING * delta, 1);
+		const targetBank = clamp(turnRate * 0.3, -m.bankAngleMax, m.bankAngleMax);
+		this.bankAngle += (targetBank - this.bankAngle) * Math.min(m.bankSmoothing * delta, 1);
 		this.#prevHeading = heading;
 
-		this.breathingOffset = Math.sin(t * (2 * Math.PI / FLIGHT_FEEL.BREATHING_PERIOD));
+		this.breathingOffset = Math.sin(t * (2 * Math.PI / m.breathingPeriod));
 
-		this.engineVibeX = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_X) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
-		this.engineVibeY = Math.sin(t * FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y) * FLIGHT_FEEL.ENGINE_VIBE_AMP;
+		this.engineVibeX = Math.sin(t * m.engineVibeFreqX) * m.engineVibeAmp;
+		this.engineVibeY = Math.sin(t * m.engineVibeFreqY) * m.engineVibeAmp;
 	}
 }

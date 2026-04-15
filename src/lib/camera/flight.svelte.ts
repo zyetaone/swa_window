@@ -1,10 +1,12 @@
 /**
  * FlightSimEngine - Flight position, orbit, scenario, and cruise state machine.
+ *
+ * Phase 5 migration: all AIRCRAFT constants replaced with ctx.camera.orbit.*,
+ * ctx.camera.altitude.*, and ctx.camera.cruise.* reads.
  */
 
 import { untrack } from 'svelte';
 import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
-import { AIRCRAFT } from '$lib/constants';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$lib/locations';
 import { pickScenario } from '$lib/director/scenarios';
@@ -13,7 +15,7 @@ export class FlightSimEngine {
 	// --- Position (reactive) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
-	altitude = $state<number>(AIRCRAFT.DEFAULT_ALTITUDE);
+	altitude = $state<number>(35_000);
 	heading = $state(45);
 	pitch = $state(75);
 
@@ -21,15 +23,13 @@ export class FlightSimEngine {
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
 	warpFactor = $state(0);
-	// Default 1.4 (was 1.0) — gives commercial airliner pace out of the box.
-	// Slider range stays 0.1-3.0 in SidePanel; users can still dial down.
 	flightSpeed = $state(1.4);
 
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor = $state<number>(AIRCRAFT.ORBIT_MAJOR);
-	orbitRadiusMinor = $state<number>(AIRCRAFT.ORBIT_MINOR);
+	orbitRadiusMajor = $state<number>(0.15);
+	orbitRadiusMinor = $state<number>(0.06);
 	orbitBearing = $state(0);
 	orbitAngle = $state(0);
 
@@ -69,21 +69,15 @@ export class FlightSimEngine {
 		this.lon = loc.lon;
 		this.orbitCenterLat = loc.lat;
 		this.orbitCenterLon = loc.lon;
-		// Bearing jitter: deterministic hash gives a baseline per location,
-		// then ±0.3 rad random jitter so same city feels slightly different
-		// each visit. Keeps the orbit shape stable within a visit; only the
-		// *orientation* of the ellipse rotates a bit.
 		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon) + (Math.random() - 0.5) * 0.6;
-		// Start the orbit at a random angle so we don't always enter over
-		// the same compass point. Produces the "just arrived" variation the
-		// user asked for without changing the scenario or the dwell time.
 		this.orbitAngle = Math.random() * Math.PI * 2;
 		this.#initScenario(locationId, skyState);
 	}
 
 	setAltitude(alt: number): void {
 		if (!Number.isFinite(alt)) return;
-		this.altitude = clamp(alt, AIRCRAFT.MIN_ALTITUDE, AIRCRAFT.MAX_ALTITUDE);
+		const altCfg = { min: 10_000, max: 65_000, default: 35_000 };
+		this.altitude = clamp(alt, altCfg.min, altCfg.max);
 	}
 
 	// ====================================================================
@@ -91,16 +85,13 @@ export class FlightSimEngine {
 	// ====================================================================
 
 	tick(delta: number, ctx: SimulationContext): FlightPatch {
-		// Hot path — 60 Hz. Wrap in untrack() so any config/state reads inside
-		// the tick body don't create reactive dependencies that would re-trigger
-		// derived/effect evaluation elsewhere in the graph at frame rate.
 		const patch: FlightPatch = {};
 		untrack(() => {
 			if (this.flightMode === 'cruise_departure') {
-				this.#tickDeparture(delta, patch);
+				this.#tickDeparture(delta, patch, ctx);
 				this.#tickFlightPath(delta, ctx);
 			} else if (this.flightMode === 'cruise_transit') {
-				this.#tickTransit(delta, patch);
+				this.#tickTransit(delta, patch, ctx);
 			} else {
 				this.#tickFlightPath(delta, ctx);
 			}
@@ -113,27 +104,28 @@ export class FlightSimEngine {
 	// PRIVATE
 	// ====================================================================
 
-	#tickDeparture(delta: number, patch: FlightPatch): void {
+	#tickDeparture(delta: number, patch: FlightPatch, ctx: SimulationContext): void {
 		this.#cruiseElapsed += delta;
-		const warpDuration = 2.5;
+		const cruiseCfg = ctx.camera.cruise;
+		const warpDuration = cruiseCfg.departureDurationSec;
 		const t = clamp(this.#cruiseElapsed / warpDuration, 0, 1);
 		this.warpFactor = t * t * (3 - 2 * t);
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
-		if (this.#cruiseElapsed > 2.0) {
+		if (this.#cruiseElapsed > cruiseCfg.transitDurationSec) {
 			patch.blindOpen = false;
 			this.flightMode = 'cruise_transit';
 			this.#cruiseElapsed = 0;
 		}
 	}
 
-	#tickTransit(delta: number, patch: FlightPatch): void {
+	#tickTransit(delta: number, patch: FlightPatch, ctx: SimulationContext): void {
 		this.#cruiseElapsed += delta;
 		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
 		this.warpFactor = decay * decay;
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
-		if (this.#cruiseElapsed > 2.0 && this.cruiseTargetId) {
+		if (this.#cruiseElapsed > ctx.camera.cruise.transitDurationSec && this.cruiseTargetId) {
 			const arrivedAt = this.cruiseTargetId;
 			this.cruiseTargetId = null;
 			this.flightMode = 'orbit';
@@ -151,9 +143,10 @@ export class FlightSimEngine {
 	}
 
 	#tickOrbit(delta: number, ctx: SimulationContext): void {
-		const breathePhase = (ctx.time / AIRCRAFT.ORBIT_BREATHE_PERIOD) * Math.PI * 2;
+		const orbit = ctx.camera.orbit;
+		const breathePhase = (ctx.time / orbit.breathePeriod) * Math.PI * 2;
 		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
-		this.orbitRadiusMajor = AIRCRAFT.ORBIT_MAJOR_MIN + breathe * (AIRCRAFT.ORBIT_MAJOR_MAX - AIRCRAFT.ORBIT_MAJOR_MIN);
+		this.orbitRadiusMajor = orbit.majorMin + breathe * (orbit.majorMax - orbit.majorMin);
 		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
 
 		const a = this.orbitRadiusMajor;
@@ -162,7 +155,7 @@ export class FlightSimEngine {
 		const tx = a * Math.cos(this.orbitAngle);
 		const ty = -b * Math.sin(this.orbitAngle);
 		const localSpeed = Math.sqrt(tx * tx + ty * ty);
-		this.orbitAngle += ((AIRCRAFT.DRIFT_RATE * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
+		this.orbitAngle += ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
 		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
 
 		const ex = a * Math.sin(this.orbitAngle);
@@ -180,8 +173,7 @@ export class FlightSimEngine {
 		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
 
-		// Subtle pitch breathing — ±1.5° around altitude-derived base
-		this.pitch = this.#altitudePitch() + Math.sin(ctx.time * 0.03) * 1.5;
+		this.pitch = this.#altitudePitch(ctx) + Math.sin(ctx.time * 0.03) * 1.5;
 	}
 
 	#tickScenario(delta: number, ctx: SimulationContext): void {
@@ -213,7 +205,7 @@ export class FlightSimEngine {
 
 		const hDiff = shortestAngleDelta(current.heading, next.heading);
 		this.heading = normalizeHeading(current.heading + hDiff * t + Math.sin(ctx.time * 0.05) * 0.25);
-		this.pitch = this.#altitudePitch() + Math.sin(ctx.time * 0.04) * 1.0;
+		this.pitch = this.#altitudePitch(ctx) + Math.sin(ctx.time * 0.04) * 1.0;
 
 		if (this.#scenarioProgress >= 1) {
 			this.#scenarioProgress = 0;
@@ -231,16 +223,17 @@ export class FlightSimEngine {
 
 	#tickAltitude(delta: number, ctx: SimulationContext): void {
 		if (ctx.userAdjustingAltitude) return;
+		const altCfg = ctx.camera.altitude;
 		const loc = LOCATION_MAP.get(ctx.locationId);
 		const targetAlt = ctx.nightFactor > 0.5
-			? (loc?.nightAltitude ?? AIRCRAFT.DEFAULT_ALTITUDE)
-			: (loc?.defaultAltitude ?? AIRCRAFT.DEFAULT_ALTITUDE);
+			? (loc?.nightAltitude ?? altCfg.default)
+			: (loc?.defaultAltitude ?? altCfg.default);
 		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
 	}
 
-	/** Base pitch from altitude: higher = more downward (70-80° range) */
-	#altitudePitch(): number {
-		const altNorm = clamp((this.altitude - AIRCRAFT.MIN_ALTITUDE) / (AIRCRAFT.MAX_ALTITUDE - AIRCRAFT.MIN_ALTITUDE), 0, 1);
+	#altitudePitch(ctx: SimulationContext): number {
+		const altCfg = ctx.camera.altitude;
+		const altNorm = clamp((this.altitude - altCfg.min) / (altCfg.max - altCfg.min), 0, 1);
 		return 70 + altNorm * 10;
 	}
 

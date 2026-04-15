@@ -295,7 +295,7 @@ export class WindowModel {
 		const flightPatch = this.flight.tick(delta, ctx);
 		if (flightPatch.blindOpen !== undefined) this.blindOpen = flightPatch.blindOpen;
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
-		if (flightPatch.resetDirector)           this.director.resetDirector();
+		if (flightPatch.resetDirector)           this.director.resetDirector(ctx);
 
 		this.motion.tick(delta, ctx);
 
@@ -317,6 +317,7 @@ export class WindowModel {
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
 		camera: this.config.camera,
+		director: this.config.director,
 	};
 
 	#createContext(): SimulationContext {
@@ -341,6 +342,7 @@ export class WindowModel {
 		c.haze                  = this.haze;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		c.camera                = this.config.camera;
+		c.director              = this.config.director;
 		return c;
 	}
 

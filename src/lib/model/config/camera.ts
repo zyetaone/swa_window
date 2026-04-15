@@ -53,6 +53,9 @@ export class MotionConfig {
 
 	/** Turbulence multipliers per severity level. */
 	turbulenceMultipliers = $state({ severe: 3, moderate: 1.5, light: 1 });
+
+	/** Vertical motion scaling multiplier applied to turbulence base signal. */
+	turbulenceOffsetY = $state(0.05);
 }
 
 export class AltitudeConfig {
@@ -134,6 +137,9 @@ export class CameraConfig {
 					case 'turbulenceMultipliers':
 						this.motion.turbulenceMultipliers = value as typeof this.motion.turbulenceMultipliers;
 						return true;
+					case 'turbulenceOffsetY':
+						this.motion.turbulenceOffsetY = value as number;
+						return true;
 				}
 				return false;
 			case 'altitude':
@@ -193,6 +199,7 @@ export class CameraConfig {
 				bumpRingFreq: this.motion.bumpRingFreq,
 				bumpAmplitude: this.motion.bumpAmplitude,
 				turbulenceMultipliers: { ...this.motion.turbulenceMultipliers },
+				turbulenceOffsetY: this.motion.turbulenceOffsetY,
 			},
 			altitude: {
 				default: this.altitude.default,
