@@ -1,9 +1,11 @@
 /**
- * WorldEngine — ambient world simulation (weather randomization + auto-pilot director).
+ * DirectorEngine — autopilot: weather randomisation + scheduled location changes.
  *
- * Returns a WorldPatch each tick so WindowModel can apply changes imperatively.
- * Effect state (lightning, micro-events) lives in scene/effects/ — each effect
- * subscribes to the game-loop independently.
+ * Renamed from `WorldEngine` in Phase 3 because "world" is the map layer
+ * (src/lib/world/), not this engine. Returns a WorldPatch each tick so
+ * WindowModel can apply changes imperatively. Effect state (lightning,
+ * micro-events) lives in scene/effects/ — each effect subscribes to the
+ * game-loop independently.
  */
 
 import { untrack } from 'svelte';
@@ -13,7 +15,7 @@ import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from 
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
 
-export class WorldEngine {
+export class DirectorEngine {
 	// ── Private timers ────────────────────────────────────────────────────────
 	#randomizeTimer = 0;
 	#nextRandomizeTime = randomBetween(AMBIENT.INITIAL_MIN_DELAY, AMBIENT.INITIAL_MAX_DELAY);

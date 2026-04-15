@@ -52,7 +52,7 @@ export interface SimulationContext {
 	cloudSpeed: number;
 	haze: number;
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
-	/** WorldEngine-specific (populated only for world.tick) */
+	/** DirectorEngine-specific (populated only for director.tick) */
 	isOrbitMode?: boolean;
 	pickNextLocation?: () => LocationId;
 }

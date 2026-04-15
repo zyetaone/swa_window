@@ -7,7 +7,7 @@ import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import { AIRCRAFT } from '$lib/constants';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$lib/locations';
-import { pickScenario } from '$lib/simulation/scenarios';
+import { pickScenario } from '$lib/director/scenarios';
 
 export class FlightSimEngine {
 	// --- Position (reactive) ---

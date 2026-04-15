@@ -13,11 +13,11 @@ import { QUALITY_MODES } from '$lib/types';
 import type { SkyState, LocationId, WeatherType, QualityMode, DisplayMode, SimulationContext } from '$lib/types';
 import { loadPersistedState, type PersistedState } from '$lib/persistence';
 import { isValidWeather } from '$lib/validation';
-import { pickNextLocation } from '$lib/simulation/scenarios';
+import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
-import { FlightSimEngine } from '$lib/simulation/flight.svelte';
-import { MotionEngine } from '$lib/simulation/motion.svelte';
-import { WorldEngine } from '$lib/simulation/world.svelte';
+import { FlightSimEngine } from '$lib/camera/flight.svelte';
+import { MotionEngine } from '$lib/camera/motion.svelte';
+import { DirectorEngine } from '$lib/director/autopilot.svelte';
 import { RootConfig } from '$lib/model/config';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ export class WindowModel {
 	// ── Engines ───────────────────────────────────────────────────────────────
 	readonly flight = new FlightSimEngine();
 	readonly motion = new MotionEngine();
-	readonly world  = new WorldEngine();
+	readonly director = new DirectorEngine();
 
 	// ── Config tree (Phase 1) ─────────────────────────────────────────────────
 	// Admin-tunable $state classes for every layer. Built alongside the flat
@@ -279,16 +279,16 @@ export class WindowModel {
 		const flightPatch = this.flight.tick(delta, ctx);
 		if (flightPatch.blindOpen !== undefined) this.blindOpen = flightPatch.blindOpen;
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
-		if (flightPatch.resetDirector)           this.world.resetDirector();
+		if (flightPatch.resetDirector)           this.director.resetDirector();
 
 		this.motion.tick(delta, ctx);
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
 		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
-		const worldPatch = this.world.tick(delta, ctx);
+		const directorPatch = this.director.tick(delta, ctx);
 
-		if (worldPatch.atmosphere) this.applyPatch(worldPatch.atmosphere);
-		if (worldPatch.nextLocation) this.flight.flyTo(worldPatch.nextLocation);
+		if (directorPatch.atmosphere) this.applyPatch(directorPatch.atmosphere);
+		if (directorPatch.nextLocation) this.flight.flyTo(directorPatch.nextLocation);
 
 		if (this.autoQuality) this.#tickAutoQuality(delta);
 	}

@@ -13,7 +13,7 @@
 	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './sources';
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/config';
 	import { FLIGHT_FEEL } from '$lib/constants';
-	import { MotionEngine } from '$lib/simulation/motion.svelte';
+	import { MotionEngine } from '$lib/camera/motion.svelte';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
