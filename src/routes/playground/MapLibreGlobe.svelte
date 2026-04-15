@@ -311,21 +311,20 @@
 		<!-- Mapterhorn terrain via tilejson (self-describing — encoding,
 		     zoom range, attribution come from the URL). Matches the MapLibre
 		     hybrid-satellite-with-terrain example. -->
+		<!-- Tilesize per Mapterhorn's tilejson response (512). Omitting the
+		     prop lets MapLibre read it from the tilejson metadata. -->
 		<RasterDEMTileSource
 			id="terrain"
 			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/tilejson.json'}
-			tileSize={256}
 		>
 			<Terrain exaggeration={terrainExaggeration} />
 		</RasterDEMTileSource>
 
 		<!-- Hillshade — second raster-dem reference renders a shaded-relief
-		     pass that gives terrain real directional shadows. Matches MapLibre
-		     sky-fog-terrain example. -->
+		     pass that gives terrain real directional shadows. -->
 		<RasterDEMTileSource
 			id="hillshade"
 			url="https://tiles.mapterhorn.com/tilejson.json"
-			tileSize={256}
 		>
 			<HillshadeLayer
 				id="hillshade-layer"
