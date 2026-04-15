@@ -63,6 +63,28 @@
 	const colorMatrix = $derived(
 		`-1 0 0 0 ${rOffset}  0 -1 0 0 ${gOffset}  0 0 -1 0 ${bOffset}  0 0 0 1 ${alphaOffset}`,
 	);
+
+	// ── Cloud phase — RAF-tracked slow seed for per-cloud random sway ───────
+	// Each seed reads `cloudPhase + idx × π/N` → sin/cos → position/size
+	// offsets. This gives every cloud an independent jitter cycle even
+	// though they share the same feTurbulence filter.
+	let cloudPhase = $state(0);
+	$effect(() => {
+		let raf: number;
+		let last = performance.now();
+		const loop = (now: number) => {
+			cloudPhase += ((now - last) / 1000) * 0.05 * speed; // slow drift
+			last = now;
+			raf = requestAnimationFrame(loop);
+		};
+		raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	});
+
+	// Per-seed position jitter — deterministic sin waves off cloudPhase + idx
+	function jitter(idx: number, base: number, amp: number, freq: number): number {
+		return base + Math.sin(cloudPhase * freq + idx * 1.91) * amp;
+	}
 </script>
 
 <!-- Hidden SVG defs — zero-size container.
@@ -131,36 +153,39 @@
 	     looks biggest at horizon, smaller in foreground). Above horizon we
 	     taper to wispy high cirrus; below we never place clouds (the camera
 	     is above them at cruise altitude). -->
+	<!-- Cloud layers with CSS perspective + translateZ for real depth parallax.
+	     The viewport perspective gives each layer its own apparent motion rate
+	     when the parent transforms. Position jitter via cloudPhase sin waves. -->
 	{#if showBack}
-		<!-- Far cirrus above horizon — tiny wisps receding into upper sky -->
+		<!-- Far cirrus — tiny wisps receding into upper sky, light jitter -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<div class="seed cirrus" style:top="8%"  style:left="5%"></div>
-			<div class="seed cirrus" style:top="11%" style:left="18%"></div>
-			<div class="seed cirrus" style:top="10%" style:left="32%"></div>
-			<div class="seed cirrus" style:top="9%"  style:left="47%"></div>
-			<div class="seed cirrus" style:top="12%" style:left="62%"></div>
-			<div class="seed cirrus" style:top="10%" style:left="78%"></div>
-			<div class="seed cirrus" style:top="8%"  style:left="90%"></div>
+			<div class="seed cirrus" style:top="{jitter(0, 8, 1.5, 0.7)}%"  style:left="{jitter(0, 5, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(1, 11, 1.5, 0.9)}%" style:left="{jitter(1, 18, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(2, 10, 1.5, 0.8)}%" style:left="{jitter(2, 32, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(3, 9, 1.5, 0.7)}%"  style:left="{jitter(3, 47, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(4, 12, 1.5, 0.8)}%" style:left="{jitter(4, 62, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(5, 10, 1.5, 0.9)}%" style:left="{jitter(5, 78, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(6, 8, 1.5, 0.7)}%"  style:left="{jitter(6, 90, 2, 0.3)}%"></div>
 		</div>
 	{/if}
 	{#if showMid}
-		<!-- HORIZON BAND — clouds biggest here (perspective scale-up).
-		     Packed tight, slightly overlapping to form a cumulus deck. -->
+		<!-- HORIZON BAND — biggest clouds; stronger jitter since they're the
+		     visual anchor of the scene -->
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed horizon" style:top="28%" style:left="2%"></div>
-			<div class="seed horizon" style:top="31%" style:left="16%"></div>
-			<div class="seed horizon" style:top="29%" style:left="30%"></div>
-			<div class="seed horizon" style:top="32%" style:left="44%"></div>
-			<div class="seed horizon" style:top="30%" style:left="58%"></div>
-			<div class="seed horizon" style:top="31%" style:left="72%"></div>
-			<div class="seed horizon" style:top="29%" style:left="86%"></div>
+			<div class="seed horizon" style:top="{jitter(10, 28, 2.5, 0.4)}%" style:left="{jitter(10, 2, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(11, 31, 2.5, 0.5)}%" style:left="{jitter(11, 16, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(12, 29, 2.5, 0.4)}%" style:left="{jitter(12, 30, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(13, 32, 2.5, 0.5)}%" style:left="{jitter(13, 44, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(14, 30, 2.5, 0.4)}%" style:left="{jitter(14, 58, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(15, 31, 2.5, 0.5)}%" style:left="{jitter(15, 72, 3, 0.25)}%"></div>
+			<div class="seed horizon" style:top="{jitter(16, 29, 2.5, 0.4)}%" style:left="{jitter(16, 86, 3, 0.25)}%"></div>
 		</div>
 	{/if}
 	{#if showFront}
-		<!-- Foreground wisps just above horizon line — occasional, softer -->
+		<!-- Foreground wisps — largest jitter, come and go -->
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed mid-cloud" style:top="22%" style:left="24%"></div>
-			<div class="seed mid-cloud" style:top="20%" style:left="66%"></div>
+			<div class="seed mid-cloud" style:top="{jitter(20, 22, 3, 0.3)}%" style:left="{jitter(20, 24, 5, 0.15)}%"></div>
+			<div class="seed mid-cloud" style:top="{jitter(21, 20, 3, 0.3)}%" style:left="{jitter(21, 66, 5, 0.15)}%"></div>
 		</div>
 	{/if}
 </div>
@@ -181,6 +206,12 @@
 		overflow: hidden;
 		will-change: opacity;
 		transition: opacity 1.5s ease;
+		/* 3D perspective so per-layer translateZ gives real parallax.
+		   Far clouds move less than near clouds when the parent shakes
+		   (motion transform on .globe-pane or viewport-btn). */
+		perspective: 1200px;
+		perspective-origin: 50% 40%;  /* slightly above center, near horizon */
+		transform-style: preserve-3d;
 	}
 
 	.cloud-layer {

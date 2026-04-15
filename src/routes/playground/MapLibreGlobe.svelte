@@ -136,16 +136,18 @@
 		return { sky: '#050510', horizon: '#0a1028', fog: '#0a0f20', light: '#a8b4d0', intensity: 0.2, water: { r: 4, g: 14, b: 24 } };
 	});
 
-	// ── Water shimmer animation clock ───────────────────────────────────────
-	// Drives a subtle "breathing" pulse on water fills. Runs at ~30 Hz, far
-	// cheaper than per-frame. The shimmer is an artistic fake — Cesium Ion's
-	// water is physically animated; ours just suggests motion via color/opacity.
+	// ── Water shimmer + city light flicker clock ─────────────────────────────
+	// Runs at ~30 Hz. Water shimmer is artistic. City flicker simulates the
+	// random micro-variations of real urban lighting (transmission lag, HVAC
+	// cycling, neon signs, etc.) without per-dot physics.
 	let waterTime = $state(0);
+	let cityFlickerTime = $state(0);
 	$effect(() => {
 		let raf: number;
 		let last = performance.now();
 		const loop = (now: number) => {
 			waterTime += (now - last) / 1000;
+			cityFlickerTime += (now - last) / 1000;
 			last = now;
 			raf = requestAnimationFrame(loop);
 		};
@@ -252,6 +254,39 @@
 	});
 
 	let nightBrightness = $derived(Math.max(0.15, 1 - nightFactor * 1.5));
+
+	// City-light flicker — multi-frequency sine composite simulates real urban
+	// lighting variation (transmission lag, HVAC cycling, neon signs, etc.).
+	// Reads cityFlickerTime from the shared RAF loop; only applies when the
+	// city-glow CircleLayer is present on the style.
+	$effect(() => {
+		if (!mapRef) return;
+		let raf: number;
+		let last = performance.now();
+		const m = mapRef;
+		const loop = (now: number) => {
+			const t = cityFlickerTime; // reactive read — effect re-runs when it changes
+			try {
+				if (m.getLayer?.('city-glow')) {
+					// Blend of three frequencies — fast micro-flicker (13 Hz), medium
+					// (~2.3 Hz), and slow swell (~0.4 Hz) layered for organic feel.
+					const flicker = (
+						Math.sin(t * 82) * 0.08 +
+						Math.sin(t * 14.5) * 0.06 +
+						Math.sin(t * 2.5) * 0.04
+					);
+					const baseOpacity = nightFactor * 0.75;
+					m.setPaintProperty('city-glow', 'circle-opacity',
+						Math.max(0.05, Math.min(1, baseOpacity + flicker))
+					);
+				}
+			} catch {}
+			last = now;
+			raf = requestAnimationFrame(loop);
+		};
+		raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	});
 
 	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
 

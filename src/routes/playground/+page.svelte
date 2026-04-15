@@ -213,7 +213,9 @@
 
 			if (pg.autoFly || isBoosting) {
 				// Cruise speed ~250m/s (roughly 900km/h) base. pg.planeSpeed scales this.
-				const speedMps = 250 * pg.planeSpeed;
+				// Artistic speed: 4× realistic cruise so ground motion is actually
+				// visible at cruise zoom (z=10). 1000 m/s × speed multiplier.
+				const speedMps = 1000 * pg.planeSpeed;
 				const distanceMeters = speedMps * dt;
 				const nextCoords = moveForward(mapLat, mapLon, pg.heading, distanceMeters);
 				mapLat = nextCoords.lat;
@@ -292,6 +294,8 @@
 				paletteName={pg.paletteName}
 				freeCam={pg.freeCam}
 				showCityLights={pg.showCityLights}
+				showLandmarks={pg.showLandmarks}
+				locationId={pg.activeLocation}
 				terrainExaggeration={1.5}
 				lodMaxZoomLevels={pg.lodMaxZoomLevels}
 				lodTileCountRatio={pg.lodTileCountRatio}
