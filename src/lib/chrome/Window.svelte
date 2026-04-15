@@ -18,12 +18,12 @@
 	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
-	import { useBlind } from "./use-blind.svelte";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
+	import Glass from "./window/Glass.svelte";
+	import Blind from "./window/Blind.svelte";
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	const model = useAppState();
-	const blind = useBlind(model);
 
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
 	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
@@ -266,21 +266,9 @@
 			></div>
 		</div>
 
-		<!-- Fixed to glass (not affected by turbulence) -->
-
-		<!-- z:9 — Glass vignette -->
-		<div class="glass-surface" style:z-index={9}>
-			<div
-				class="glass-vignette"
-				style:opacity={glassVignetteOpacity}
-			></div>
-		</div>
-
-		<!-- z:10 — Vignette -->
-		<div class="vignette" style:z-index={10}></div>
-
-		<!-- z:11 — Glass recess rim shadow (depth illusion) -->
-		<div class="glass-recess" style:z-index={11}></div>
+		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
+		     vignette + recess rim, z:9–11. See chrome/window/Glass.svelte. -->
+		<Glass {glassVignetteOpacity} />
 
 		<!-- UI overlays — timed reveal (no :hover on touch kiosks) -->
 		{#if showHint}
@@ -290,39 +278,9 @@
 		{/if}
 	</button>
 
-	<!-- Blind (useBlind composable) -->
-	<div class="blind-clip" bind:this={blind.clipEl}>
-		<div
-			class={['blind-overlay', !model.blindOpen && !blind.hasAnimated && 'discoverable']}
-			onanimationend={() => { blind.hasAnimated = true; }}
-			onpointerdown={blind.onPointerDown}
-			onpointermove={blind.onPointerMove}
-			onpointerup={blind.onPointerUp}
-			onkeydown={blind.onKeyDown}
-			role="slider"
-			tabindex={0}
-			aria-label="Window blind — drag to open or close"
-			aria-valuenow={Math.round(Math.abs(blind.dragY))}
-			aria-valuemin={0}
-			aria-valuemax={105}
-			style:transform={blind.transform}
-			style:transition={blind.transition}
-			style:pointer-events={model.blindOpen ? 'none' : 'auto'}
-		>
-			<div class="blind-slats"></div>
-			<!-- From → To pull indicator. Three downward chevrons beneath the
-			     pull tab, animated as a cascading cascade that reads as "drag
-			     me this way". Only shown when blind is visible + not yet
-			     interacted with this session. -->
-			{#if !model.blindOpen && !blind.hasAnimated}
-				<div class="pull-hint" aria-hidden="true">
-					<span class="chev chev-1">▼</span>
-					<span class="chev chev-2">▼</span>
-					<span class="chev chev-3">▼</span>
-				</div>
-			{/if}
-		</div>
-	</div>
+	<!-- Blind — pull-down shade with slats + pull-tab + from→to chevrons.
+	     Uses useBlind() composable internally; styles own their CSS. -->
+	<Blind />
 </div>
 
 <style>
@@ -418,52 +376,6 @@
 	}
 
 	/* Glass recess rim — on TOP of everything, creates the depth illusion */
-	.glass-recess {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		border-radius: inherit;
-		box-shadow:
-			/* Gentle recess where glass meets the metallic rim */
-			inset 0 0 10px 4px rgba(0, 0, 0, 0.25),
-			inset 2px 2px 6px rgba(0, 0, 0, 0.15);
-	}
-
-	/* --- Glass vignette --- */
-
-	.glass-surface {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		border-radius: inherit;
-		overflow: hidden;
-	}
-
-	.glass-vignette {
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(
-			circle at center,
-			transparent 50%,
-			rgba(0, 0, 0, 0.6) 100%
-		);
-		transition: opacity 2s;
-	}
-
-	/* --- Vignette --- */
-
-	.vignette {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: radial-gradient(
-			ellipse 75% 65% at 50% 50%,
-			transparent 55%,
-			rgba(0, 0, 0, 0.08) 80%,
-			rgba(0, 0, 0, 0.3) 100%
-		);
-	}
-
 	/* --- Wing silhouette --- */
 
 	.wing-silhouette {
@@ -511,112 +423,9 @@
 		border: 1px solid rgba(255, 255, 255, 0.2);
 	}
 
-	/* --- Blind --- */
+	/* Blind styles live inside window/Blind.svelte. */
 
-	.blind-clip {
-		position: absolute;
-		inset: var(--frame-width);
-		border-radius: var(--inner-radius);
-		overflow: hidden;
-		z-index: 5;
-		pointer-events: none;
-	}
-
-	.blind-overlay {
-		position: absolute;
-		inset: 0;
-		border-radius: var(--inner-radius);
-		/* Cabin-plastic gradient — slightly cooler at top where cabin lights
-		   hit, warmer at bottom. Gives the blind a subtle cylindrical sheen
-		   instead of reading as a flat beige sheet. */
-		background:
-			linear-gradient(
-				180deg,
-				#efece6 0%,
-				#e8e4dd 35%,
-				#e1ddd5 65%,
-				#d6d1c8 100%
-			);
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border: none;
-		padding: 0;
-		pointer-events: auto;
-		touch-action: none;
-		box-shadow:
-			inset 0 2px 4px rgba(255, 255, 255, 0.6),
-			inset 0 -6px 12px rgba(0, 0, 0, 0.15);
-	}
-
-	.blind-slats {
-		position: absolute;
-		inset: 0;
-		/* Each slat: 2px highlight, 8px face, 1px cast shadow. Replaces flat
-		   6px/2px alternation so the blind reads as real louvers with depth. */
-		background: repeating-linear-gradient(
-			180deg,
-			rgba(255, 255, 255, 0.12) 0px,
-			rgba(255, 255, 255, 0.12) 2px,
-			rgba(230, 227, 221, 0.55) 2px,
-			rgba(220, 217, 211, 0.55) 10px,
-			rgba(0, 0, 0, 0.12) 10px,
-			rgba(0, 0, 0, 0.12) 11px
-		);
-		/* Vertical cylindrical shading via sideways gradient — darker edges
-		   imply blind curvature around the window's oval rim. */
-		mask-image: linear-gradient(
-			90deg,
-			rgba(0, 0, 0, 0.75) 0%,
-			rgba(0, 0, 0, 1) 20%,
-			rgba(0, 0, 0, 1) 80%,
-			rgba(0, 0, 0, 0.75) 100%
-		);
-	}
-
-	/* Pull-tab handle — recessed rectangle with grip ridges, subtle drop
-	   shadow so it reads as a raised tab. Centered horizontally, slightly
-	   above bottom so the user sees it within the window oval. */
-	.blind-overlay::after {
-		content: "";
-		position: absolute;
-		bottom: 10%;
-		left: 50%;
-		width: 56px;
-		height: 18px;
-		transform: translateX(-50%);
-		background:
-			repeating-linear-gradient(
-				180deg,
-				transparent 0px,
-				transparent 3px,
-				rgba(0, 0, 0, 0.22) 3px,
-				rgba(0, 0, 0, 0.22) 4px
-			),
-			linear-gradient(180deg, #d8d4cc 0%, #a89f92 100%);
-		border-radius: 9px;
-		box-shadow:
-			0 2px 5px rgba(0, 0, 0, 0.35),
-			inset 0 1px 0 rgba(255, 255, 255, 0.6),
-			inset 0 -1px 0 rgba(0, 0, 0, 0.25);
-	}
-
-	/* Discover animation: the tab gently bobs down-and-up three times to
-	   signal "drag me" on first viewing. Down-motion (rather than up) hints
-	   the intended drag direction. */
-	@keyframes handle-breathe {
-		0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.9; }
-		50%      { transform: translateX(-50%) translateY(4px); opacity: 1; }
-	}
-
-	.blind-overlay.discoverable::after {
-		animation: handle-breathe 1.2s ease-in-out 3;
-	}
-
-	/* ─── Blind pull-hint — from→to drag indicator ────────────────────────── */
-	/* Subtle visual feedback during long-press boost — inner glow on the
-	   window rim, reads as "we're going faster now" without being loud. */
+	/* Subtle inner-glow during long-press boost — reads as "going faster". */
 	.window-viewport.boosting {
 		box-shadow:
 			inset 0 0 40px rgba(255, 210, 120, 0.25),
@@ -624,43 +433,19 @@
 		transition: box-shadow 0.3s ease;
 	}
 
-	.pull-hint {
-		position: absolute;
-		bottom: 3%;
-		left: 50%;
-		transform: translateX(-50%);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 4px;
-		pointer-events: none;
-		opacity: 0.55;
-	}
-	.chev {
-		font-size: 14px;
-		color: rgba(0, 0, 0, 0.35);
-		animation: chev-cascade 1.6s ease-in-out infinite;
-	}
-	/* Staggered delays so chevrons pulse one after another, reading as a
-	   downward flow — the "drag this way" metaphor. */
-	.chev-1 { animation-delay: 0.0s; }
-	.chev-2 { animation-delay: 0.2s; }
-	.chev-3 { animation-delay: 0.4s; }
-
-	@keyframes chev-cascade {
-		0%, 100% { opacity: 0.25; transform: translateY(0); }
-		50%      { opacity: 0.85; transform: translateY(3px); }
-	}
-
 	/* ─── Window frame on/off ────────────────────────────────────────────────
-	   When config.chrome.windowFrame = false, all cabin-style chrome disappears
-	   and the oval clip becomes a full rectangle, yielding an edge-to-edge
-	   Cesium render. The blind still works — its clip rect also goes square so
-	   it can still be pulled down across the whole viewport. This is the mode
-	   used for the 3-Pi panorama where the oval would break the seam. */
-	.window-container.no-frame .glass-surface,
-	.window-container.no-frame .vignette,
-	.window-container.no-frame .glass-recess,
+	   When config.chrome.windowFrame = false, all cabin-style chrome
+	   disappears and the oval clip becomes a full rectangle — edge-to-edge
+	   Cesium render. The blind still works (its clip rect goes square too)
+	   so the user can still pull it down across the whole viewport. Mode
+	   used for the 3-Pi panorama where the oval would break the seam.
+
+	   Glass.svelte + Blind.svelte elements are in child-component scope, so
+	   we reach into them via :global(). Wing silhouette stays inside
+	   scene-content and is local to this file. */
+	.window-container.no-frame :global(.glass-surface),
+	.window-container.no-frame :global(.vignette),
+	.window-container.no-frame :global(.glass-recess),
 	.window-container.no-frame .wing-silhouette {
 		visibility: hidden;
 	}
@@ -668,8 +453,8 @@
 		border-radius: 0 !important;
 		box-shadow: none !important;
 	}
-	.window-container.no-frame .blind-clip,
-	.window-container.no-frame .blind-overlay {
+	.window-container.no-frame :global(.blind-clip),
+	.window-container.no-frame :global(.blind-overlay) {
 		border-radius: 0;
 	}
 </style>

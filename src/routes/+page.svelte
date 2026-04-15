@@ -28,6 +28,7 @@
 	import Controls from "$lib/chrome/HUD.svelte";
 	import SidePanel from "$lib/chrome/SidePanel.svelte";
 	import TelemetryPanel from "$lib/chrome/TelemetryPanel.svelte";
+	import { setParallaxRole } from "$lib/model/config/v2.svelte";
 	// Composed panel sections — page picks the set + order it wants.
 	import LocationPicker from "$lib/chrome/panel/LocationPicker.svelte";
 	import TimeControl from "$lib/chrome/panel/TimeControl.svelte";
@@ -163,7 +164,7 @@
 		const chosenRole: Role = fromUrl ?? fromStorage ?? "solo";
 
 		if (chosenRole !== "solo") {
-			model.config.camera.setRole(chosenRole);
+			setParallaxRole(chosenRole);
 			model.config.chrome.windowFrame = false;
 		}
 		if (fromUrl) {

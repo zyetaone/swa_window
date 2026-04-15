@@ -14,8 +14,8 @@
 import type { LocationId } from './locations';
 export type { LocationId, Location, SceneDefaults } from './locations';
 
-import type { CameraConfig } from './model/config/camera.svelte';
-import type { DirectorConfig } from './model/config/director.svelte';
+import type { CameraConfig, DirectorConfig } from './model/config/v2.svelte';
+export type { CameraConfig, DirectorConfig };
 
 // ─── Const-array-derived unions (runtime + compile-time SSOT) ────────────────
 

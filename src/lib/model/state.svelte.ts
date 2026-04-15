@@ -18,7 +18,17 @@ import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { MotionEngine } from '$lib/camera/motion.svelte';
 import { DirectorEngine } from '$lib/director/autopilot.svelte';
-import { RootConfig } from '$lib/model/config';
+import {
+	config as v2config,
+	syncAtmosphereWeather,
+	syncWorldQuality,
+	applyConfigPatch as v2applyConfigPatch,
+} from '$lib/model/config/v2.svelte';
+// v2 migration — helpers imported here for future wiring. Silence
+// unused-import until the full swap lands; see in-progress ctx assignments
+// that already use v2config below.
+void syncAtmosphereWeather;
+void syncWorldQuality;
 import { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -75,7 +85,7 @@ export class WindowModel {
 	// fields below; Phases 2-5 migrate consumers to read from here instead,
 	// then the flat fields get removed in a final pass. Fleet v2 config_patch
 	// messages route through `this.config.applyPatch(path, value)`.
-	readonly config = new RootConfig();
+	readonly config = v2config;
 
 	// ── Observability (Phase 5.6) ────────────────────────────────────────────
 	// Ring-buffer telemetry — per-frame durations (p50/p95), lifecycle events,
@@ -187,7 +197,7 @@ export class WindowModel {
 	/** Sync AtmosphereConfig.weather fields from WEATHER_EFFECTS on weather change. */
 	#syncWeatherConfig(): void {
 		const fx = WEATHER_EFFECTS[this.weather];
-		this.config.atmosphere.weather.syncFromEffects(fx);
+		syncAtmosphereWeather(fx);
 	}
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
@@ -257,7 +267,7 @@ export class WindowModel {
 
 	setQualityMode(mode: QualityMode): void {
 		this.qualityMode = mode;
-		this.config.world.syncFromMode(mode);
+		syncWorldQuality(mode);
 	}
 
 	/**
@@ -267,7 +277,7 @@ export class WindowModel {
 	 */
 	applyConfigPatch(path: string, value: unknown): boolean {
 		this.telemetry.recordEvent('config_patch', { path, value });
-		return this.config.applyPatch(path, value);
+		return v2applyConfigPatch(path, value);
 	}
 
 	applyPatch(patch: Partial<PatchableState>): void {
@@ -369,8 +379,8 @@ export class WindowModel {
 		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
-		camera: this.config.camera,
-		director: this.config.director,
+		camera: v2config.camera,
+		director: v2config.director,
 	};
 
 	#createContext(): SimulationContext {
@@ -394,8 +404,8 @@ export class WindowModel {
 		c.cloudSpeed            = this.cloudSpeed;
 		c.haze                  = this.haze;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
-		c.camera                = this.config.camera;
-		c.director              = this.config.director;
+		c.camera                = v2config.camera;
+		c.director              = v2config.director;
 		return c;
 	}
 
