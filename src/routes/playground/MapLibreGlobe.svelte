@@ -22,6 +22,7 @@
 		bearing = 0,
 		imageryUrl = '',
 		imageryAttribution = '',
+		imageryMaxZoom = 14,
 		pmtilesUrl = '',
 		terrainPmtilesUrl = '',
 		showBuildings = false,
@@ -46,6 +47,7 @@
 		bearing?: number;
 		imageryUrl?: string;
 		imageryAttribution?: string;
+		imageryMaxZoom?: number;
 		pmtilesUrl?: string;
 		terrainPmtilesUrl?: string;
 		showBuildings?: boolean;
@@ -60,9 +62,6 @@
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
 	// ── LOD control — apply on map-ready and when tunables change ───────────
-	// setSourceTileLodParams is a method on the map object (MapLibre 5.23+).
-	// It affects ALL sources attached to the map, so calling it once per
-	// tuning change is sufficient.
 	$effect(() => {
 		if (!mapRef) return;
 		const apply = () => {
@@ -76,9 +75,29 @@
 		else mapRef.once('load', apply);
 	});
 
+	// ── Camera sync — keep map in sync with reactive props ──────────────────
+	// Snapshot reactive values up front (otherwise the effect's tracked reads
+	// inside the load callback would be empty on first run).
+	let cameraInit = $state(false);
+	$effect(() => {
+		if (!mapRef) return;
+		(window as any).__map = mapRef; // dev debug hook
+
+		const target = { center: [lon, lat] as [number, number], zoom: effectiveZoom, pitch, bearing };
+
+		if (!cameraInit) {
+			// First run — force initial camera via jumpTo once the map is ready.
+			const apply = () => { mapRef!.jumpTo(target); cameraInit = true; };
+			if (mapRef.loaded()) apply();
+			else mapRef.once('load', apply);
+		} else {
+			mapRef.easeTo({ ...target, duration: 200 });
+		}
+	});
+
 	const activeStyle = $derived(
-		imageryUrl ? buildSatelliteStyle(imageryUrl, imageryAttribution) :
-		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)') :
+		imageryUrl ? buildSatelliteStyle(imageryUrl, imageryAttribution, imageryMaxZoom) :
+		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)', imageryMaxZoom) :
 		VOYAGER_STYLE
 	);
 	const useBlankStyle = $derived(!!imageryUrl || !!pmtilesUrl);
@@ -118,22 +137,24 @@
 	{#if showAtmosphere}
 		<GlobeControl />
 		<Light anchor="map" position={[1.5, 90, 80]} />
-		{#if !useBlankStyle}
-			<Sky
-				sky-color="#001e3d"
-				horizon-color="#1a4a7a"
-				fog-color="#1a3a5c"
-				sky-horizon-blend={0.3}
-				horizon-fog-blend={0.5}
-				atmosphere-blend={0.4}
-			/>
-		{/if}
+		<!-- Sky uses map.setSky() via svelte-maplibre-gl — works with any style. -->
+		<Sky
+			sky-color={nightFactor > 0.5 ? '#050510' : '#001e3d'}
+			horizon-color={nightFactor > 0.5 ? '#0a1028' : '#1a4a7a'}
+			fog-color={nightFactor > 0.5 ? '#0a0f20' : '#1a3a5c'}
+			sky-horizon-blend={0.3}
+			horizon-fog-blend={0.5}
+			atmosphere-blend={0.4}
+		/>
 	{/if}
 
  	{#if showTerrain}
 		<RasterDEMTileSource
 			id="terrain"
-			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'}
+			tiles={[terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp']}
+			tileSize={256}
+			encoding="mapbox"
+			maxzoom={13}
 		>
 			<Terrain exaggeration={terrainExaggeration} />
 		</RasterDEMTileSource>

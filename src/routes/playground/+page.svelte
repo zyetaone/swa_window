@@ -21,6 +21,7 @@
 	import { MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
+	import { camera as cameraConfig, director as directorConfig } from '$lib/model/config.svelte';
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
@@ -30,7 +31,7 @@
 	let activeLocation = $state<LocationId>('dubai');
 	let timeOfDay = $state(12);
 	let weather = $state<WeatherType>('clear');
-	let maplibreSource = $state<string>('cached-eox');
+	let maplibreSource = $state<string>('eox-s2');  // online EOX — global coverage (cached sources only cover dubai/dallas/himalayas bboxes)
 
 	let density = $state(0.6);
 	let cloudSpeed = $state(1.0);
@@ -47,8 +48,8 @@
 	type TurbLevel = 'light' | 'moderate' | 'severe';
 	let turbulenceLevel = $state<TurbLevel>('light');
 
-	let mlTerrain = $state(true);
-	let mlBuildings = $state(true);
+	let mlTerrain = $state(false);  // default off — high exaggeration + high pitch clips camera under terrain mesh
+	let mlBuildings = $state(false);
 	let mlAtmosphere = $state(true);
 
 	// LOD tuning — see MapLibre level-of-detail-control example
@@ -187,7 +188,15 @@
 				altitude,
 				turbulenceLevel,
 				weather,
-			} as any);
+				camera: cameraConfig,
+				director: directorConfig,
+				// unused fields required by SimulationContext
+				lat: 0, lon: 0, pitch: 0, bankAngle: 0,
+				skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
+				locationId: activeLocation,
+				userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
+				cloudDensity: 0, cloudSpeed: 0, haze: 0,
+			});
 
 			raf = requestAnimationFrame(loop);
 		};
@@ -248,10 +257,11 @@
 				lat={currentLocation.lat}
 				lon={currentLocation.lon}
 				{altitude}
-				pitch={70}
+				pitch={55}
 				bearing={heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
+				imageryMaxZoom={maplibreSrc.maxZoom ?? 14}
 				pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
 				showTerrain={mlTerrain}
 				showBuildings={mlBuildings}

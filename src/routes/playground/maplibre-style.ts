@@ -15,7 +15,7 @@ export const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/
  * - `raster-fade-duration: 0` — no LOD crossfade artifacts on tilted view
  * - `raster-resampling: linear` — soft tile boundaries
  */
-export function buildSatelliteStyle(url: string, attribution = ''): maplibregl.StyleSpecification {
+export function buildSatelliteStyle(url: string, attribution = '', maxzoom = 14): maplibregl.StyleSpecification {
 	return {
 		version: 8,
 		sources: {
@@ -23,7 +23,7 @@ export function buildSatelliteStyle(url: string, attribution = ''): maplibregl.S
 				type: 'raster',
 				tiles: [url],
 				tileSize: 256,
-				maxzoom: 19,
+				maxzoom,
 				attribution,
 			},
 		},
@@ -46,8 +46,14 @@ export function buildSatelliteStyle(url: string, attribution = ''): maplibregl.S
 
 /**
  * Convert altitude (feet) to a MapLibre zoom level.
- * Hand-tuned curve: 5000 ft → ~13, 30000 ft → ~10, 45000 ft → ~8.5
+ *
+ * Prior formula (16 - log2(alt/30000)) gave z=16 at cruise — EOX max is 14,
+ * so tiles at z=17+ all 404'd and the globe rendered black.
+ *
+ * Tuned curve now: 5000 ft → ~13, 30000 ft → ~10.4, 45000 ft → ~9.8.
+ * At high camera pitch (70°+) MapLibre fetches a range around this value,
+ * and setSourceTileLodParams caps how many LOD tiers load.
  */
 export function altitudeToZoom(altitudeFt: number): number {
-	return 16 - Math.log2(altitudeFt / 30000);
+	return 13 - Math.log2(altitudeFt / 5000);
 }

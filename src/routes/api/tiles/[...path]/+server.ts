@@ -22,9 +22,16 @@ import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
 
-// Resolve TILE_DIR from project root (five levels up from this route file)
+// Resolve TILE_DIR from project root (five levels up from this route file).
+// Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
-const TILE_DIR = resolve(PROJECT_ROOT, (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '')) + '/';
+function resolveTileDir(): string {
+	if (process.env.TILE_DIR) return resolve(PROJECT_ROOT, process.env.TILE_DIR);
+	const piPath = '/opt/zyeta-aero/tiles';
+	if (existsSync(piPath)) return piPath;
+	return resolve(PROJECT_ROOT, 'data/tiles');
+}
+const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 
 const CORS = {
 	'Access-Control-Allow-Origin': '*',
