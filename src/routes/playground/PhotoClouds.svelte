@@ -123,21 +123,34 @@
 	style:--drift-y={driftY}
 	aria-hidden="true"
 >
+	<!-- Density rule: dense carpet of SMALL far clouds near the horizon,
+	     sparser + larger clouds as we descend toward the viewer. This
+	     matches what you see from a cruise window above a cloud deck. -->
 	{#if showBack}
+		<!-- Distant cloud carpet — lots of small clouds packed near horizon -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<div class="seed" style:top="18%" style:left="10%"></div>
-			<div class="seed" style:top="12%" style:left="55%"></div>
+			<div class="seed tiny" style:top="3%"  style:left="6%"></div>
+			<div class="seed tiny" style:top="5%"  style:left="22%"></div>
+			<div class="seed tiny" style:top="2%"  style:left="38%"></div>
+			<div class="seed tiny" style:top="7%"  style:left="52%"></div>
+			<div class="seed tiny" style:top="4%"  style:left="68%"></div>
+			<div class="seed tiny" style:top="6%"  style:left="84%"></div>
+			<div class="seed small" style:top="12%" style:left="15%"></div>
+			<div class="seed small" style:top="14%" style:left="45%"></div>
+			<div class="seed small" style:top="11%" style:left="75%"></div>
 		</div>
 	{/if}
 	{#if showMid}
+		<!-- Middle distance — moderate count, medium size -->
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed" style:top="8%" style:left="28%"></div>
-			<div class="seed" style:top="25%" style:left="72%"></div>
+			<div class="seed" style:top="20%" style:left="18%"></div>
+			<div class="seed" style:top="22%" style:left="62%"></div>
 		</div>
 	{/if}
 	{#if showFront}
+		<!-- Foreground — rare, large, wispy -->
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed" style:top="14%" style:left="42%"></div>
+			<div class="seed large" style:top="32%" style:left="38%"></div>
 		</div>
 	{/if}
 </div>
@@ -170,12 +183,17 @@
 
 	.seed {
 		position: absolute;
-		width: 22%;       /* smaller clouds — was 60% */
+		width: 18%;
 		aspect-ratio: 2 / 1;
 		background: #000;
 		border-radius: 50%;
 		opacity: 0.9;
 	}
+
+	/* Size variants — tiny/small on horizon (distance), large close-up */
+	.seed.tiny  { width: 9%;  aspect-ratio: 2.2 / 1; opacity: 0.72; }
+	.seed.small { width: 13%; aspect-ratio: 2.1 / 1; opacity: 0.82; }
+	.seed.large { width: 26%; aspect-ratio: 2.5 / 1; opacity: 0.95; }
 
 	.cloud-layer.back .seed {
 		filter: url(#cloud-back);
