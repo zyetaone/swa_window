@@ -14,7 +14,7 @@
 	 * Color matches the current sky state so the gradient blends seamlessly into
 	 * the horizon — looks like real airborne haze, not a tinted overlay.
 	 */
-	import type { EffectProps } from '../../types';
+	import type { EffectProps } from '$lib/scene/types';
 	import { clamp } from '$lib/utils';
 
 	let { model }: EffectProps = $props();

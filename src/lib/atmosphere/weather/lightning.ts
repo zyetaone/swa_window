@@ -1,6 +1,6 @@
-import type { Effect } from '../../types';
+import type { Effect } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$lib/constants';
-import Component from './effect.svelte';
+import Component from './Lightning.svelte';
 
 const lightning: Effect = {
 	id: 'lightning',

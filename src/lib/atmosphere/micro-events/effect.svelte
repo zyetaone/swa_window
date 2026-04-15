@@ -8,8 +8,8 @@
 	import { randomBetween, pickRandom } from '$lib/utils';
 	import { subscribe } from '$lib/game-loop';
 	import type { MicroEventData } from '$lib/types';
-	import MicroEvent from '$lib/ui/MicroEvent.svelte';
-	import type { EffectProps } from '../../types';
+	import MicroEvent from './MicroEvent.svelte';
+	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
 

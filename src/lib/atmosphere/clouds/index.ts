@@ -1,4 +1,4 @@
-import type { Effect } from '../../types';
+import type { Effect } from '$lib/scene/types';
 import Component from './effect.svelte';
 
 const clouds: Effect = {

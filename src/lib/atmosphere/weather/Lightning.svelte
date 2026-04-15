@@ -8,7 +8,7 @@
 	import { AIRCRAFT, WEATHER_EFFECTS } from '$lib/constants';
 	import { clamp, randomBetween } from '$lib/utils';
 	import { subscribe } from '$lib/game-loop';
-	import type { EffectProps } from '../../types';
+	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
 

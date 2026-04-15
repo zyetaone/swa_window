@@ -20,7 +20,7 @@
 	import { subscribe } from "$lib/game-loop";
 	import { useBlind } from "./use-blind.svelte";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
-	import Weather from './Weather.svelte';
+	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	const model = useAppState();
 	const blind = useBlind(model);

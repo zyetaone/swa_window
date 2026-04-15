@@ -3,9 +3,9 @@
 	 * Clouds — SVG feTurbulence parallax deck along the horizon.
 	 * Density and speed come from model; wind angle is derived from current weather.
 	 */
-	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
+	import CloudBlobs from './CloudBlobs.svelte';
 	import { WEATHER_EFFECTS } from '$lib/constants';
-	import type { EffectProps } from '../../types';
+	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
 

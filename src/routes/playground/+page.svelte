@@ -14,8 +14,8 @@
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/world/config';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
-	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
-	import Weather from '$lib/ui/Weather.svelte';
+	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
+	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
