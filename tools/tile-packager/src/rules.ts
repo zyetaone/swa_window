@@ -56,9 +56,21 @@ export const TILE_AVG_BYTES = {
 	'esri-world-imagery': 18_000,
 	'cartodb-dark': 1_500,
 	'viirs-night-lights': 11_000,
+	// Cesium Ion quantized-mesh terrain — tiles contain only the mesh
+	// fragment for that square; lossy compressed. Small at low zoom.
+	'cesium-terrain': 8_000,
+	// AWS Terrarium PNG heightmap — RGB-encoded elevations, fixed size per tile.
+	'terrarium': 60_000,
 } as const;
 
 export type TileSource = keyof typeof TILE_AVG_BYTES;
+
+/** Non-tile sources (per-location GeoJSON, not XYZ tiles). */
+export const NON_TILE_SOURCES = ['osm-buildings'] as const;
+export type NonTileSource = (typeof NON_TILE_SOURCES)[number];
+
+/** All packager source types (tiled + per-location). */
+export type PackagerSource = TileSource | NonTileSource;
 
 /** Estimate storage cost for a tile set at a given source. */
 export function estimateBytes(tileCount: number, source: TileSource): number {
