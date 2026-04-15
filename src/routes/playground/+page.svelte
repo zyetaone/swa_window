@@ -349,7 +349,7 @@
 	<PlaygroundHud {isBoosting} />
 
 	<!-- Palette bar — tap a swatch to lock the sky mood -->
-	<div class="palette-bar" role="group" aria-label="Sky mood">
+	<div class="palette-bar" role="group" aria-label="Ambient environment">
 		{#each PALETTE_ENTRIES as entry (entry.name)}
 			<button
 				class="palette-swatch"
