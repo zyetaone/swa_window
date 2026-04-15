@@ -2,7 +2,8 @@
  * WebSocket Client — connects display to fleet management server
  */
 
-import type { ServerMessage, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/fleet/protocol';
+import type { ServerMessage, ServerMessageV2, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/fleet/protocol';
+import { isV2 } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
 import { BaseTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
@@ -125,9 +126,17 @@ export class DisplayWsClient extends BaseTransport {
 	}
 
 	#handleMessage(raw: string): void {
-		const msg = safeParse<ServerMessage>(raw);
-		if (!msg) return;
+		const parsed = safeParse<ServerMessage | ServerMessageV2>(raw);
+		if (!parsed) return;
 
+		// v2 dispatcher — additive. v2 carries an explicit `v: 2` discriminator;
+		// v1 messages never do, so the routing is unambiguous.
+		if (isV2(parsed)) {
+			this.#handleV2(parsed as ServerMessageV2);
+			return;
+		}
+
+		const msg = parsed as ServerMessage;
 		switch (msg.type) {
 			case 'ping': this.#send({ type: 'pong' }); break;
 			case 'set_scene':
@@ -143,6 +152,48 @@ export class DisplayWsClient extends BaseTransport {
 				break;
 			case 'set_quality':
 				if (isValidQualityMode(msg.mode)) this.#model.setQualityMode(msg.mode);
+				break;
+		}
+	}
+
+	/** v2 handler — path patches + parallax role + director decisions. */
+	#handleV2(msg: ServerMessageV2): void {
+		switch (msg.type) {
+			case 'config_patch':
+				if (typeof msg.path === 'string') {
+					this.#model.applyConfigPatch?.(msg.path, msg.value);
+				}
+				break;
+			case 'config_replace':
+				// Apply every leaf of the snapshot as a targeted patch.
+				// Keeps one code path (applyConfigPatch) authoritative.
+				if (msg.snapshot && typeof msg.snapshot === 'object') {
+					for (const [key, value] of Object.entries(msg.snapshot)) {
+						this.#model.applyConfigPatch?.(`${msg.layer}.${key}`, value);
+					}
+				}
+				break;
+			case 'role_assign':
+				// Applied via path patches so all routing converges.
+				this.#model.applyConfigPatch?.('camera.parallax.role', msg.role);
+				if (msg.headingOffsetDeg !== undefined) {
+					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);
+				}
+				if (msg.fovDeg !== undefined) {
+					this.#model.applyConfigPatch?.('camera.parallax.fovDeg', msg.fovDeg);
+				}
+				break;
+			case 'director_decision':
+				// Phase 7 wiring target — buffer the decision until transitionAtMs
+				// and trigger the cruise FSM then. For now, apply immediately so
+				// the message round-trips end-to-end; the schedule-until logic
+				// lands with the multi-Pi phase.
+				if (LOCATION_IDS.has(msg.locationId)) {
+					this.#model.applyScene(
+						msg.locationId,
+						isValidWeather(msg.weather) ? msg.weather : undefined,
+					);
+				}
 				break;
 		}
 	}

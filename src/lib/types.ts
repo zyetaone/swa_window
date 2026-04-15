@@ -14,6 +14,8 @@
 import type { LocationId } from './locations';
 export type { LocationId, Location, SceneDefaults } from './locations';
 
+import type { CameraConfig } from './model/config/camera';
+
 // ─── Const-array-derived unions (runtime + compile-time SSOT) ────────────────
 
 export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const;
@@ -52,6 +54,8 @@ export interface SimulationContext {
 	cloudSpeed: number;
 	haze: number;
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
+	/** Populated by WindowModel so engines can read CameraConfig.motion without importing it. */
+	camera: CameraConfig;
 	/** DirectorEngine-specific (populated only for director.tick) */
 	isOrbitMode?: boolean;
 	pickNextLocation?: () => LocationId;

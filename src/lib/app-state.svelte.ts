@@ -235,6 +235,15 @@ export class WindowModel {
 		this.qualityMode = mode;
 	}
 
+	/**
+	 * v2 path-targeted config patch. Routes into the RootConfig tree.
+	 * Returns true if the path was recognised. Implements the FleetClientModel
+	 * interface addition introduced in Phase 6.
+	 */
+	applyConfigPatch(path: string, value: unknown): boolean {
+		return this.config.applyPatch(path, value);
+	}
+
 	applyPatch(patch: Partial<PatchableState>): void {
 		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
@@ -307,6 +316,7 @@ export class WindowModel {
 		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
+		camera: this.config.camera,
 	};
 
 	#createContext(): SimulationContext {
@@ -330,6 +340,7 @@ export class WindowModel {
 		c.cloudSpeed            = this.cloudSpeed;
 		c.haze                  = this.haze;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
+		c.camera                = this.config.camera;
 		return c;
 	}
 
