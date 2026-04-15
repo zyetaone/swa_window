@@ -21,7 +21,8 @@
 	import { MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
-	import { camera as cameraConfig, director as directorConfig } from '$lib/model/config.svelte';
+	// Local playground config — no coupling to main-app's reactive config tree.
+	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
