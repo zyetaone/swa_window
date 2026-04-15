@@ -28,6 +28,7 @@
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
 	import ThreeBillboards from './ThreeBillboards.svelte';
+	import PhotoClouds from './PhotoClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTE_ENTRIES, type PaletteName } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -52,8 +53,8 @@
 	let mapLat = $state(25.2);
 	let mapLon = $state(55.3);
 
-	// Track location changes to initiate jumps
-	let lastActiveLocation = $state<LocationId>('dubai');
+	// Tracking variables for effect (no $state needed since they just track previous value without driving UI)
+	let lastActiveLocation: LocationId = 'dubai';
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
@@ -69,6 +70,7 @@
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
 	let showThreeBillboards = $state(true);
+	let useRealisticClouds = $state(true);
 
 	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
@@ -346,7 +348,11 @@
 			{/if}
 		</div>
 
-		<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
+		{#if useRealisticClouds}
+			<PhotoClouds {density} speed={cloudSpeed} {heading} {windAngle} nightFactor={nf} />
+		{:else}
+			<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
+		{/if}
 
 		<NightOverlay nightFactor={nf} />
 
@@ -503,6 +509,7 @@
 
 		<fieldset>
 			<legend>Clouds</legend>
+			<label class="check"><input type="checkbox" bind:checked={useRealisticClouds} /> Photo clouds (SVG feDisplacement)</label>
 			<label>Density <span class="val">{(density * 100).toFixed(0)}%</span>
 				<input type="range" bind:value={density} min="0" max="1" step="0.01" />
 			</label>

@@ -168,8 +168,8 @@
 	// ── Camera sync — keep map in sync with reactive props ──────────────────
 	// When freeCam is enabled, the prop-driven sync stops after the initial
 	// jumpTo so the user can drag/zoom/pitch freely without being overridden.
-	let cameraInit = $state(false);
-	let prevTarget = $state({ lat: 0, lon: 0 });
+	let cameraInit = false;
+	let prevTarget = { lat: 0, lon: 0 };
 	$effect(() => {
 		if (!mapRef) return;
 		(window as any).__map = mapRef; // dev debug hook
