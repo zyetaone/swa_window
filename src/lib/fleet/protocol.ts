@@ -98,9 +98,7 @@ export type ServerMessage =
 	| { type: 'set_mode'; mode: DisplayMode; payload?: string }
 	| { type: 'set_scene'; location: LocationId; weather?: WeatherType }
 	| { type: 'set_config'; patch: DisplayConfig }
-	| { type: 'tile_update'; locationId: LocationId; version: string; url: string }
-	| { type: 'ping' }
-	| { type: 'set_quality'; mode: QualityMode };
+	| { type: 'ping' };
 
 // ============================================================================
 // DISPLAY → SERVER MESSAGES
@@ -109,7 +107,6 @@ export type ServerMessage =
 export type DisplayMessage =
 	| { type: 'register'; deviceId: string; hostname: string; capabilities: DeviceCaps }
 	| { type: 'status'; fps: number; mode: DisplayMode; location: string; uptime: number }
-	| { type: 'tile_status'; cachedLocations: LocationId[]; diskUsageBytes: number }
 	| { type: 'pong' };
 
 // ============================================================================

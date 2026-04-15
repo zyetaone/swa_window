@@ -9,8 +9,7 @@
 import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
-import { QUALITY_MODES } from '$lib/types';
-import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
+import { QUALITY_MODES, isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
@@ -23,8 +22,6 @@ import {
 	syncWorldQuality,
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config.svelte';
-void syncAtmosphereWeather;
-void syncWorldQuality;
 import { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────

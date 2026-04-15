@@ -7,7 +7,7 @@ import { isV2 } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
 import { BaseTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
-import { safeParse, isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
+import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -164,9 +164,6 @@ export class DisplayWsClient extends BaseTransport {
 				break;
 			case 'set_config':
 				if (msg.patch && typeof msg.patch === 'object') this.#model.applyPatch(msg.patch);
-				break;
-			case 'set_quality':
-				if (isValidQualityMode(msg.mode)) this.#model.setQualityMode(msg.mode);
 				break;
 		}
 	}
