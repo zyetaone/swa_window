@@ -13,12 +13,11 @@
 	 * Production `/` still runs Cesium. This route is isolated.
 	 */
 
-	import type { SkyState, LocationId, WeatherType } from '$lib/types';
-	import { WEATHER_TYPES } from '$lib/types';
+	import type { SkyState, LocationId } from '$lib/types';
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
-	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
-	import { MAPLIBRE_SOURCES, CACHED_SOURCES, ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
+	import { getSkyState, nightFactor, clamp } from '$lib/utils';
+	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	// Local playground config — no coupling to main-app's reactive config tree.
@@ -30,25 +29,13 @@
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import PhotoClouds from './PhotoClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
-	import { PALETTE_ENTRIES, PALETTES, type PaletteName } from './palettes';
+	import { PALETTE_ENTRIES, PALETTES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { pg } from './lib/playground-state.svelte';
+	import PlaygroundHud from './components/PlaygroundHud.svelte';
+	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
-	// ─── State ───────────────────────────────────────────────────────────────
-	let activeLocation = $state<LocationId>('dubai');
-	let timeOfDay = $state(12);
-	let weather = $state<WeatherType>('clear');
-	let maplibreSource = $state<string>('eox-s2');  // online EOX — global coverage (cached sources only cover dubai/dallas/himalayas bboxes)
-
-	let density = $state(0.6);
-	let cloudSpeed = $state(1.0);
-
-	let heading = $state(90);
-	let planeSpeed = $state(1.0);
-	let altitude = $state(30000);
-
-	let autoOrbit = $state(false);
-	let autoTime = $state(false);
-	let autoFly = $state(false);
+	// ─── State ───────────────────────────────────────────────────────────────  // online EOX — global coverage (cached sources only cover dubai/dallas/himalayas bboxes)
 
 	let mapLat = $state(25.2);
 	let mapLon = $state(55.3);
@@ -58,27 +45,13 @@
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
-	type TurbLevel = 'light' | 'moderate' | 'severe';
-	let turbulenceLevel = $state<TurbLevel>('light');
 
-	let mlTerrain = $state(true);
-	let mlBuildings = $state(true);
-	let mlAtmosphere = $state(true);
-
-	// Creative controls
-	let paletteName = $state<PaletteName>('auto');
-	let freeCam = $state(false);
-	let showCityLights = $state(true);
-	let showLandmarks = $state(true);
-	let showThreeBillboards = $state(false);  // PoC sphere — ground-anchored, looks like a moon stuck on the map
-	let useRealisticClouds = $state(true);
+	// Creative controls  // PoC sphere — ground-anchored, looks like a moon stuck on the map
 
 	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
 	// LOD tuning — see MapLibre level-of-detail-control example
-	let lodMaxZoomLevels = $state(6);
-	let lodTileCountRatio = $state(2.0);
 
 	// ─── UI state ────────────────────────────────────────────────────────────
 	let drawerOpen = $state(false);
@@ -106,7 +79,7 @@
 		const t0 = performance.now();
 		const step = (now: number) => {
 			const t = clamp((now - t0) / durationMs, 0, 1);
-			planeSpeed = from + (to - from) * (t * t * (3 - 2 * t));
+			pg.planeSpeed = from + (to - from) * (t * t * (3 - 2 * t));
 			if (t < 1) boostRampId = requestAnimationFrame(step);
 			else boostRampId = null;
 		};
@@ -117,15 +90,15 @@
 		pressTimer = window.setTimeout(() => {
 			pressTimer = null;
 			isBoosting = true;
-			rampSpeed(planeSpeed, BOOST_SPEED, RAMP_UP_MS);
+			rampSpeed(pg.planeSpeed, BOOST_SPEED, RAMP_UP_MS);
 		}, LONG_PRESS_MS);
 	}
 
 	function handleMapTap() {
 		// Short tap — cycle to next location
 		const ids = LOCATIONS.map(l => l.id);
-		const idx = ids.indexOf(activeLocation);
-		activeLocation = ids[(idx + 1) % ids.length];
+		const idx = ids.indexOf(pg.activeLocation);
+		pg.activeLocation = ids[(idx + 1) % ids.length];
 	}
 
 	function handlePointerUp() {
@@ -137,7 +110,7 @@
 		}
 		if (isBoosting) {
 			isBoosting = false;
-			rampSpeed(planeSpeed, BASE_SPEED, RAMP_DOWN_MS);
+			rampSpeed(pg.planeSpeed, BASE_SPEED, RAMP_DOWN_MS);
 		}
 	}
 
@@ -148,7 +121,7 @@
 		}
 		if (isBoosting) {
 			isBoosting = false;
-			rampSpeed(planeSpeed, BASE_SPEED, RAMP_DOWN_MS);
+			rampSpeed(pg.planeSpeed, BASE_SPEED, RAMP_DOWN_MS);
 		}
 	}
 
@@ -178,30 +151,30 @@
 	}
 
 	// ─── Derived ─────────────────────────────────────────────────────────────
-	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
+	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
 
 	// Sync logic: change map center when user selects a new location
 	$effect(() => {
-		if (activeLocation !== lastActiveLocation) {
-			const loc = LOCATION_MAP.get(activeLocation);
+		if (pg.activeLocation !== lastActiveLocation) {
+			const loc = LOCATION_MAP.get(pg.activeLocation);
 			if (loc) {
 				mapLat = loc.lat;
 				mapLon = loc.lon;
 			}
-			lastActiveLocation = activeLocation;
+			lastActiveLocation = pg.activeLocation;
 		}
 	});
 
-	const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, maplibreSource));
-	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
-	const nf = $derived(nightFactor(timeOfDay));
-	const weatherFx = $derived(WEATHER_EFFECTS[weather]);
+	const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, pg.maplibreSource));
+	const skyState = $derived<SkyState>(getSkyState(pg.timeOfDay));
+	const nf = $derived(nightFactor(pg.timeOfDay));
+	const weatherFx = $derived(WEATHER_EFFECTS[pg.weather]);
 	const windAngle = $derived(weatherFx.windAngle);
-	const frostAmount = $derived(clamp((altitude - 25000) / 15000, 0, 1));
+	const frostAmount = $derived(clamp((pg.altitude - 25000) / 15000, 0, 1));
 
 	const bgGradient = $derived.by(() => {
-		if (paletteName !== 'auto' && PALETTES[paletteName]) {
-			const p = PALETTES[paletteName];
+		if (pg.paletteName !== 'auto' && PALETTES[pg.paletteName]) {
+			const p = PALETTES[pg.paletteName];
 			return `linear-gradient(180deg, ${p.sky} 0%, ${p.horizon} 60%, ${p.fog} 100%)`;
 		}
 		switch (skyState) {
@@ -235,30 +208,30 @@
 			const dt = (now - last) / 1000;
 			last = now;
 			simTime += dt;
-			if (autoOrbit) heading = (heading + dt * 5 * planeSpeed) % 360;
-			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;
+			if (pg.autoOrbit) pg.heading = (pg.heading + dt * 5 * pg.planeSpeed) % 360;
+			if (pg.autoTime) pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
 
-			if (autoFly || isBoosting) {
-				// Cruise speed ~250m/s (roughly 900km/h) base. planeSpeed scales this.
-				const speedMps = 250 * planeSpeed;
+			if (pg.autoFly || isBoosting) {
+				// Cruise speed ~250m/s (roughly 900km/h) base. pg.planeSpeed scales this.
+				const speedMps = 250 * pg.planeSpeed;
 				const distanceMeters = speedMps * dt;
-				const nextCoords = moveForward(mapLat, mapLon, heading, distanceMeters);
+				const nextCoords = moveForward(mapLat, mapLon, pg.heading, distanceMeters);
 				mapLat = nextCoords.lat;
 				mapLon = nextCoords.lon;
 			}
 
 			motion.tick(dt, {
 				time: simTime,
-				heading,
-				altitude,
-				turbulenceLevel,
-				weather,
+				heading: pg.heading,
+				altitude: pg.altitude,
+				turbulenceLevel: pg.turbulenceLevel,
+				weather: pg.weather,
 				camera: cameraConfig,
 				director: directorConfig,
 				// unused fields required by SimulationContext
 				lat: 0, lon: 0, pitch: 0, bankAngle: 0,
 				skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
-				locationId: activeLocation,
+				locationId: pg.activeLocation,
 				userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
 				cloudDensity: 0, cloudSpeed: 0, haze: 0,
 			});
@@ -282,28 +255,9 @@
 	});
 
 	// ─── Preset actions ──────────────────────────────────────────────────────
-	function randomize() {
-		heading = Math.floor(randomBetween(0, 360));
-		altitude = Math.floor(randomBetween(15000, 45000));
-		density = randomBetween(0.3, 0.9);
-		cloudSpeed = randomBetween(0.5, 2);
-		timeOfDay = randomBetween(0, 24);
-		turbulenceLevel = (['light', 'moderate', 'severe'] as TurbLevel[])[Math.floor(randomBetween(0, 2.99))];
-	}
+	
 
-	function reset() {
-		heading = 90;
-		altitude = 30000;
-		planeSpeed = 1.0;
-		density = 0.6;
-		cloudSpeed = 1.0;
-		timeOfDay = 12;
-		weather = 'clear';
-		autoOrbit = false;
-		autoTime = false;
-		autoFly = false;
-		turbulenceLevel = 'light';
-	}
+	
 </script>
 
 <div class="playground" class:boosting={isBoosting}>
@@ -323,26 +277,26 @@
 				bind:mapRef
 				lat={mapLat}
 				lon={mapLon}
-				{altitude}
+				altitude={pg.altitude}
 				pitch={76}
-				bearing={heading}
+				bearing={pg.heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
 				imageryMaxZoom={maplibreSrc.maxZoom ?? 14}
 				pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
-				showTerrain={mlTerrain}
-				showBuildings={mlBuildings}
-				showAtmosphere={mlAtmosphere}
+				showTerrain={pg.mlTerrain}
+				showBuildings={pg.mlBuildings}
+				showAtmosphere={pg.mlAtmosphere}
 				nightFactor={nf}
-				{timeOfDay}
-				{paletteName}
-				{freeCam}
-				{showCityLights}
+				timeOfDay={pg.timeOfDay}
+				paletteName={pg.paletteName}
+				freeCam={pg.freeCam}
+				showCityLights={pg.showCityLights}
 				terrainExaggeration={1.5}
-				{lodMaxZoomLevels}
-				{lodTileCountRatio}
+				lodMaxZoomLevels={pg.lodMaxZoomLevels}
+				lodTileCountRatio={pg.lodTileCountRatio}
 			/>
-			{#if showThreeBillboards && mapRef}
+			{#if pg.showThreeBillboards && mapRef}
 				<ThreeBillboards
 					map={mapRef}
 					lon={currentLocation.lon}
@@ -353,13 +307,13 @@
 			{/if}
 		</div>
 
-		{#if useRealisticClouds}
-			<PhotoClouds {density} speed={cloudSpeed} {heading} {windAngle} nightFactor={nf} />
+		{#if pg.useRealisticClouds}
+			<PhotoClouds density={pg.density} speed={pg.cloudSpeed} heading={pg.heading} {windAngle} nightFactor={nf} />
 		{:else}
-			<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
+			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
 		{/if}
 
-		<NightOverlay nightFactor={nf} />
+		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} />
 
 		<Weather
 			rainOpacity={weatherFx.rainOpacity}
@@ -392,171 +346,28 @@
 		</button>
 	</div>
 
-	<!-- HUD chips — bottom-left -->
-	<div class="hud">
-		<span><b>{currentLocation.name}</b></span>
-		<span>HDG {heading.toFixed(0)}°</span>
-		<span>ALT {(altitude / 1000).toFixed(0)}k</span>
-		<span>SPD {planeSpeed.toFixed(1)}×</span>
-		<span>{formatTime(timeOfDay)}</span>
-		<span class="sky-tag sky-{skyState}">{skyState.toUpperCase()}</span>
-		<span class="wx-tag">{weather.toUpperCase()}</span>
-		{#if isBoosting}<span class="boost-tag">⚡ BOOST</span>{/if}
-	</div>
+	<PlaygroundHud {isBoosting} />
 
 	<!-- Palette bar — tap a swatch to lock the sky mood -->
 	<div class="palette-bar" role="group" aria-label="Sky mood">
 		{#each PALETTE_ENTRIES as entry (entry.name)}
 			<button
 				class="palette-swatch"
-				class:active={paletteName === entry.name}
+				class:active={pg.paletteName === entry.name}
 				style:background={entry.swatchColor}
 				title={entry.label}
 				aria-label={entry.label}
-				aria-pressed={paletteName === entry.name}
-				onclick={() => paletteName = entry.name}
+				aria-pressed={pg.paletteName === entry.name}
+				onclick={() => pg.paletteName = entry.name}
 			>
-				{#if paletteName === entry.name}
+				{#if pg.paletteName === entry.name}
 					<span class="swatch-ring"></span>
 				{/if}
 			</button>
 		{/each}
 	</div>
 
-	<!-- Drawer toggle — top-right -->
-	<button
-		class="drawer-toggle"
-		class:open={drawerOpen}
-		onclick={() => drawerOpen = !drawerOpen}
-		aria-label="Toggle settings drawer"
-		aria-expanded={drawerOpen}
-	>
-		{drawerOpen ? '✕' : '⚙'}
-	</button>
-
-	<!-- Settings drawer — slides in from right -->
-	<aside class="drawer" class:open={drawerOpen} aria-hidden={!drawerOpen}>
-		<header>
-			<h2>Scene Lab</h2>
-			<p class="hint">MapLibre globe + atmosphere + terrain + buildings. GeoJSON-driven styling.</p>
-		</header>
-
-		<fieldset>
-			<legend>Location</legend>
-			<select class="select" bind:value={activeLocation}>
-				{#each LOCATIONS as loc (loc.id)}
-					<option value={loc.id}>{loc.name}</option>
-				{/each}
-			</select>
-		</fieldset>
-
-		<fieldset>
-			<legend>Time of day</legend>
-			<label>{formatTime(timeOfDay)} <span class="val sky-{skyState}">{skyState}</span>
-				<input type="range" bind:value={timeOfDay} min="0" max="24" step="0.1" disabled={autoTime} />
-			</label>
-			<label class="check">
-				<input type="checkbox" bind:checked={autoTime} />
-				Auto-advance (48s = full day)
-			</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Weather</legend>
-			<div class="chip-row weather-chips">
-				{#each WEATHER_TYPES as w (w)}
-					<button class={[weather === w && 'active']} onclick={() => weather = w}>{w}</button>
-				{/each}
-			</div>
-		</fieldset>
-
-		<fieldset>
-			<legend>Imagery</legend>
-			{#each MAPLIBRE_SOURCES as src (src.id)}
-				<label class={['source-btn', maplibreSource === src.id && 'active']}>
-					<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
-					<span class="source-name">{src.label}</span>
-					<span class="source-note">{src.note}</span>
-				</label>
-			{/each}
-		</fieldset>
-
-		<fieldset>
-			<legend>🗄️ Cached (offline)</legend>
-			<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
-			{#each CACHED_SOURCES as src (src.id)}
-				<label class={['source-btn', maplibreSource === src.id && 'active']}>
-					<input type="radio" name="maplibre-src" checked={maplibreSource === src.id} onchange={() => maplibreSource = src.id} />
-					<span class="source-name">{src.label}</span>
-					<span class="source-note">{src.note}</span>
-				</label>
-			{/each}
-		</fieldset>
-
-		<fieldset>
-			<legend>Layers</legend>
-			<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
-			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
-			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
-			<label class="check"><input type="checkbox" bind:checked={showCityLights} /> City-light glow (night)</label>
-			<label class="check"><input type="checkbox" bind:checked={showLandmarks} /> Curated landmarks</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>LOD (Pi tuning)</legend>
-			<p class="field-note">setSourceTileLodParams — trades distant crispness for lower tile load.</p>
-			<label>Max zoom levels <span class="val">{lodMaxZoomLevels}</span>
-				<input type="range" bind:value={lodMaxZoomLevels} min="1" max="11" step="1" />
-			</label>
-			<label>Tile count ratio <span class="val">{lodTileCountRatio.toFixed(1)}</span>
-				<input type="range" bind:value={lodTileCountRatio} min="1" max="10" step="0.1" />
-			</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Clouds</legend>
-			<label class="check"><input type="checkbox" bind:checked={useRealisticClouds} /> Photo clouds (SVG feDisplacement)</label>
-			<label>Density <span class="val">{(density * 100).toFixed(0)}%</span>
-				<input type="range" bind:value={density} min="0" max="1" step="0.01" />
-			</label>
-			<label>Drift speed <span class="val">{cloudSpeed.toFixed(1)}×</span>
-				<input type="range" bind:value={cloudSpeed} min="0.1" max="3" step="0.1" />
-			</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Plane</legend>
-			<label>Heading <span class="val">{heading.toFixed(0)}°</span>
-				<input type="range" bind:value={heading} min="0" max="360" step="1" disabled={autoOrbit} />
-			</label>
-			<label>Speed <span class="val">{planeSpeed.toFixed(1)}×</span>
-				<input type="range" bind:value={planeSpeed} min="0.1" max="5" step="0.1" />
-			</label>
-			<label>Altitude <span class="val">{(altitude / 1000).toFixed(0)}k ft</span>
-				<input type="range" bind:value={altitude} min="5000" max="45000" step="1000" />
-			</label>
-			<label>Turbulence <span class="val">{turbulenceLevel}</span>
-				<select bind:value={turbulenceLevel}>
-					<option value="light">Light</option>
-					<option value="moderate">Moderate</option>
-					<option value="severe">Severe</option>
-				</select>
-			</label>
-			<label class="check">
-				<input type="checkbox" bind:checked={autoOrbit} />
-				Auto-orbit heading
-			</label>
-			<label class="check">
-				<input type="checkbox" bind:checked={autoFly} />
-				Auto-fly forward
-			</label>
-		</fieldset>
-
-		<div class="actions">
-			<button class="btn" onclick={randomize}>Randomize</button>
-			<button class="btn" onclick={reset}>Reset</button>
-		</div>
-	</aside>
+	<PlaygroundDrawer bind:drawerOpen />
 </div>
 
 <style>

@@ -3,37 +3,92 @@
 	 * NightOverlay — artistic atmospheric embellishments for the scene.
 	 *
 	 * Layers (z-order, bottom-up):
-	 *   stars      — CSS star-field above horizon; visible only at night
-	 *   shimmer    — full-viewport SVG feTurbulence applied as a subtle
-	 *                displacement filter; reads as heat-haze / air-motion
-	 *   moon       — DOM element at a calculated sky position
+	 *   stars         — CSS star-field above horizon; visible only at night
+	 *   shooting-star — occasional random streak; fades after each
+	 *   shimmer       — full-viewport SVG feTurbulence; heat-haze / air-motion
+	 *   moon          — DOM element; position tracks sun azimuth; phase cycles
 	 *
-	 * All driven by `nightFactor` (0 = day, 1 = night). Shimmer runs at all
-	 * hours but is more visible at dusk/dawn where warm/cool color gradients
-	 * bend. Moon appears past nightFactor > 0.3.
+	 * All driven by `nightFactor` (0 = day, 1 = night) and `timeOfDay`.
 	 */
 
-	let { nightFactor = 0 }: { nightFactor?: number } = $props();
+	let { nightFactor = 0, timeOfDay = 0 }: { nightFactor?: number; timeOfDay?: number } = $props();
 
 	const starsOpacity = $derived(Math.max(0, nightFactor - 0.1));
 	const moonOpacity = $derived(Math.max(0, (nightFactor - 0.3) * 1.5));
 	// Shimmer peaks at dawn/dusk, fades at noon and midnight
 	const shimmerStrength = $derived(1 - Math.abs(nightFactor - 0.5) * 2);
+
+	// ─── Moon phase ─────────────────────────────────────────────────────────
+	// Lunar cycle ~29.5 days. timeOfDay 0-24 → fraction of current "moon day".
+	// phaseAngle 0=full, 0.5=new. Derived from a continuous value so it morphs.
+	const moonPhaseAngle = $derived((timeOfDay / 24) * 29.5 * Math.PI * 2);
+	// Normalised phase 0=full, 0.5=new (waxing fills left→right)
+	const moonPhaseNorm = $derived(Math.abs(Math.sin(moonPhaseAngle)));
+
+	// ─── Stars drift — subtle Earth rotation simulation ───────────────────
+	const starsAngle = $derived((timeOfDay * 15) % 360);
+
+	// ─── Shooting stars ────────────────────────────────────────────────────
+	// Random chance every 4s to fire; visible for 600ms.
+	let shootingStar = $state<{ x: number; y: number; angle: number } | null>(null);
+	let shootTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function scheduleShoot() {
+		if (shootTimer) clearTimeout(shootTimer);
+		shootTimer = setTimeout(() => {
+			if (nightFactor > 0.15) {
+				shootingStar = {
+					x: Math.random() * 60 + 10,
+					y: Math.random() * 35 + 5,
+					angle: -(Math.random() * 30 + 20),
+				};
+				setTimeout(() => { shootingStar = null; scheduleShoot(); }, 600);
+			} else {
+				scheduleShoot();
+			}
+		}, 3000 + Math.random() * 5000);
+	}
+
+	$effect(() => {
+		if (nightFactor > 0.15) scheduleShoot();
+		else { shootingStar = null; if (shootTimer) clearTimeout(shootTimer); }
+		return () => { if (shootTimer) clearTimeout(shootTimer); };
+	});
 </script>
 
 <!-- Stars — clipped to upper 55% (sky area above horizon). Fades out at
      the bottom edge via mask-image so it doesn't pop-cut at the horizon. -->
-<div class="stars" style:opacity={starsOpacity} aria-hidden="true">
+<div class="stars" style:opacity={starsOpacity} style:transform="rotate({starsAngle}deg)" aria-hidden="true">
 	<div class="star-layer star-layer-1"></div>
 	<div class="star-layer star-layer-2"></div>
 	<div class="star-layer star-layer-3"></div>
 </div>
 
-<!-- Moon — small disc positioned upper-right with halo glow. -->
-<div class="moon-container" style:opacity={moonOpacity} aria-hidden="true">
+<!-- Moon — position tracks sun azimuth (upper-right at midnight). -->
+<!-- Crescent via clip-path ellipse: phase 0=full (circle), 0.5=new (thin crescent). -->
+	<div
+	class="moon-container"
+	style:opacity={moonOpacity}
+	style:right={12 + (1 - moonPhaseNorm) * 8 + '%'}
+	aria-hidden="true"
+>
 	<div class="moon-halo"></div>
-	<div class="moon-disc"></div>
+	<!-- Crescent: box-shadow inset creates shadow side. norm=0 (full) → 0% shadow, norm=1 (new) → 45% shadow. -->
+	<div
+		class="moon-disc"
+		style:box-shadow="inset {moonPhaseNorm * 45}% 0 {moonPhaseNorm * 25}% -2px rgba(10,8,5,0.85)"
+	></div>
 </div>
+
+<!-- Shooting stars — trigger randomly, show for ~0.6s then reset -->
+{#if shootingStar}
+	<div
+		class="shooting-star"
+		style:left="{shootingStar.x}%"
+		style:top="{shootingStar.y}%"
+		style:--angle="{shootingStar.angle}deg"
+	></div>
+{/if}
 
 <!-- Atmospheric shimmer — subtle feTurbulence animated on baseFrequency.
      Masked to lower half of viewport (where haze over ground/water lives).
@@ -126,10 +181,10 @@
 
 	.moon-container {
 		position: absolute;
-		top: 12%;
-		right: 15%;
-		width: 90px;
-		height: 90px;
+		top: 4%;
+		right: 18%;
+		width: 72px;
+		height: 72px;
 		pointer-events: none;
 		z-index: 8;
 		transition: opacity 1.5s ease;
