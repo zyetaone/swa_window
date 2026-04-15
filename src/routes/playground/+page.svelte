@@ -14,7 +14,7 @@
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
-	import MapLibreGlobe from '$lib/ui/MapLibreGlobe.svelte';
+	import MapLibreGlobe from '$lib/maplibre/Globe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import * as Cesium from 'cesium';

@@ -15,6 +15,7 @@
 	 * the horizon — looks like real airborne haze, not a tinted overlay.
 	 */
 	import type { EffectProps } from '../../types';
+	import { clamp } from '$lib/utils';
 
 	let { model }: EffectProps = $props();
 
@@ -27,11 +28,12 @@
 		}
 	});
 
-	// Per-location archetype multiplier (mountain=0.55, ocean=1.3, desert=0.5, …)
-	// times altitude factor — more visible atmospheric depth from cruise.
+	// Composite haze: global scalar (model.haze, 0–0.15) × per-location multiplier × altitude depth.
+	// Normalized so max global haze (0.15) × max location multiplier (1.3) × max altitude (1.1) = 1.0.
+	const MAX_HAZE = 0.15 * 1.3 * 1.1; // ≈ 0.215
 	const altitudeScale = $derived(0.8 + Math.min(model.flight.altitude / 50000, 1) * 0.3);
 	const intensity = $derived(
-		(model.currentLocation.scene.haze?.intensity ?? 1.0) * altitudeScale,
+		clamp(model.haze * (model.currentLocation.scene.haze?.intensity ?? 1.0) * altitudeScale / MAX_HAZE, 0, 1),
 	);
 </script>
 

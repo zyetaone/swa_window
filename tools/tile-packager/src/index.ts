@@ -1,110 +1,154 @@
 #!/usr/bin/env bun
 /**
- * Tile Packager CLI
+ * Aero Window — Offline Tile Packager
  *
- * Downloads map tiles for offline Pi 5 kiosk deployment.
+ * Pre-downloads tiles for every location in src/lib/locations.ts so the Pi
+ * can serve them via /api/tiles/[...path] without internet access.
  *
  * Usage:
- *   bun run tile-packager/src/index.ts --locations dubai,dallas --output ./tiles
- *   bun run tile-packager/src/index.ts --locations all --output ./tiles
- *   bun run tile-packager/src/index.ts --locations all --estimate  (dry run, show storage estimate)
+ *   bun run start                          # download all sources, all locations
+ *   bun run start -- --estimate            # dry-run: show storage estimate only
+ *   bun run start -- --output ./data/tiles # custom output dir
+ *   bun run start -- --locations dubai,himalayas  # subset
+ *   bun run start -- --sources eox-sentinel2,viirs-night-lights  # subset
  */
 
-import { LOCATIONS } from '../../src/lib/shared/locations';
-import type { LocationId } from '../../src/lib/shared/types';
-import { generateTileSpecs, estimateStorage } from './rules';
-import { packageTiles } from './actions/package';
+import { mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { LOCATIONS } from '../../../src/lib/locations';
+import type { LocationId } from '../../../src/lib/locations';
+import { enumerateTiles, estimateBytes, formatBytes, type TileSource } from './rules';
+import { SOURCES, tileFilePath } from './sources';
 
-// ============================================================================
-// CLI ARGUMENT PARSING
-// ============================================================================
+// ─── CLI ────────────────────────────────────────────────────────────────────
 
-function parseArgs(): { locations: LocationId[] | 'all'; output: string; estimate: boolean } {
-	const args = process.argv.slice(2);
-	let locations: LocationId[] | 'all' = 'all';
-	let output = './tiles';
-	let estimate = false;
+interface Args {
+	output: string;
+	estimate: boolean;
+	locations: LocationId[] | 'all';
+	sources: TileSource[] | 'all';
+	concurrency: number;
+}
 
-	for (let i = 0; i < args.length; i++) {
-		if (args[i] === '--locations' && args[i + 1]) {
-			const val = args[i + 1];
-			locations = val === 'all' ? 'all' : val.split(',') as LocationId[];
-			i++;
-		} else if (args[i] === '--output' && args[i + 1]) {
-			output = args[i + 1];
-			i++;
-		} else if (args[i] === '--estimate') {
-			estimate = true;
-		} else if (args[i] === '--help' || args[i] === '-h') {
-			console.log(`
-Tile Packager — Download map tiles for offline Pi 5 kiosk deployment
-
-Usage:
-  bun run tile-packager/src/index.ts [options]
-
-Options:
-  --locations <ids>   Comma-separated location IDs, or "all" (default: all)
-  --output <dir>      Output directory (default: ./tiles)
-  --estimate          Dry run: show storage estimates without downloading
-  --help              Show this help
-
-Available locations:
-  ${LOCATIONS.map(l => `${l.id} (${l.name})`).join('\n  ')}
+function parseArgs(): Args {
+	const a = process.argv.slice(2);
+	const out: Args = { output: './data/tiles', estimate: false, locations: 'all', sources: 'all', concurrency: 6 };
+	for (let i = 0; i < a.length; i++) {
+		switch (a[i]) {
+			case '--output':      out.output = a[++i]; break;
+			case '--estimate':    out.estimate = true; break;
+			case '--locations':   out.locations = a[++i].split(',') as LocationId[]; break;
+			case '--sources':     out.sources = a[++i].split(',') as TileSource[]; break;
+			case '--concurrency': out.concurrency = Number(a[++i]) || 6; break;
+			case '-h':
+			case '--help':
+				console.log(`Usage:
+  bun run start                                Download all sources, all locations
+  bun run start -- --estimate                  Dry-run: storage estimate only
+  bun run start -- --output ./data/tiles       Custom output directory
+  bun run start -- --locations dubai,himalayas Subset of locations
+  bun run start -- --sources eox-sentinel2     Subset of sources (default: all)
+  bun run start -- --concurrency 6             Parallel downloads (default 6)
 `);
-			process.exit(0);
+				process.exit(0);
+		}
+	}
+	return out;
+}
+
+// ─── Main ───────────────────────────────────────────────────────────────────
+
+async function main() {
+	const args = parseArgs();
+	const locations = args.locations === 'all'
+		? LOCATIONS
+		: LOCATIONS.filter((l) => (args.locations as LocationId[]).includes(l.id));
+
+	const sources = args.sources === 'all'
+		? Object.values(SOURCES)
+		: Object.values(SOURCES).filter((s) => (args.sources as TileSource[]).includes(s.source));
+
+	console.log(`📍 Locations:  ${locations.length} (${locations.map((l) => l.id).join(', ')})`);
+	console.log(`🗺  Sources:    ${sources.length} (${sources.map((s) => s.source).join(', ')})`);
+	console.log(`📂 Output:     ${args.output}`);
+	console.log();
+
+	// Plan: enumerate all (source, location, tile) triples upfront for accurate total.
+	type Job = { url: string; path: string; bytes: number };
+	const allJobs: Job[] = [];
+	for (const loc of locations) {
+		for (const cfg of sources) {
+			const tiles = enumerateTiles(loc.lat, loc.lon, 0.5, cfg.zoomRange[0], cfg.zoomRange[1]);
+			for (const t of tiles) {
+				allJobs.push({
+					url: cfg.urlForTile(t),
+					path: join(args.output, tileFilePath(cfg, t)),
+					bytes: estimateBytes(1, cfg.source),
+				});
+			}
 		}
 	}
 
-	return { locations, output, estimate };
-}
+	const totalEstimate = allJobs.reduce((sum, j) => sum + j.bytes, 0);
+	console.log(`📊 ${allJobs.length} tiles ≈ ${formatBytes(totalEstimate)} estimated`);
 
-// ============================================================================
-// MAIN
-// ============================================================================
-
-async function main(): Promise<void> {
-	const { locations, output, estimate } = parseArgs();
-
-	const locationIds = locations === 'all'
-		? undefined
-		: locations;
-
-	const specs = generateTileSpecs(locationIds);
-
-	if (specs.length === 0) {
-		console.error('No valid locations found.');
-		process.exit(1);
-	}
-
-	console.log(`\n=== Tile Packager ===`);
-	console.log(`Locations: ${specs.map(s => s.name).join(', ')}`);
-	console.log(`Output:    ${output}`);
-	console.log('');
-
-	// Storage estimate
-	const est = estimateStorage(specs);
-	console.log('Storage Estimate:');
-	for (const [locId, stats] of est.perLocation) {
-		console.log(`  ${locId}: ${stats.tiles.toLocaleString()} tiles, ~${(stats.bytes / 1024 / 1024).toFixed(0)} MB`);
-	}
-	if (est.global.tiles > 0) {
-		console.log(`  [global]: ${est.global.tiles.toLocaleString()} tiles, ~${(est.global.bytes / 1024 / 1024).toFixed(0)} MB`);
-	}
-	console.log(`  TOTAL: ${est.total.tiles.toLocaleString()} tiles, ~${(est.total.bytes / 1024 / 1024).toFixed(0)} MB`);
-
-	if (estimate) {
-		console.log('\n(Dry run — no tiles downloaded)');
+	if (args.estimate) {
+		console.log('(--estimate set, exiting before download)');
 		return;
 	}
 
-	// Download
-	const startTime = Date.now();
-	await packageTiles(specs, output);
-	const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-	console.log(`\nCompleted in ${elapsed} minutes.`);
+	console.log(`⬇️  Downloading with concurrency ${args.concurrency}...\n`);
+
+	// Skip already-downloaded tiles + parallel-fetch the rest.
+	let done = 0;
+	let downloaded = 0;
+	let skipped = 0;
+	let failed = 0;
+	const startMs = Date.now();
+
+	const queue = allJobs.slice();
+	const workers = Array.from({ length: args.concurrency }, async () => {
+		while (queue.length) {
+			const job = queue.shift();
+			if (!job) break;
+			done++;
+			if (existsSync(job.path)) {
+				skipped++;
+				continue;
+			}
+			try {
+				await mkdir(dirname(job.path), { recursive: true });
+				const res = await fetch(job.url);
+				if (!res.ok) {
+					failed++;
+					continue;
+				}
+				const buf = new Uint8Array(await res.arrayBuffer());
+				await Bun.write(job.path, buf);
+				downloaded++;
+			} catch {
+				failed++;
+			}
+			if (done % 50 === 0) {
+				const pct = ((done / allJobs.length) * 100).toFixed(1);
+				const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+				process.stdout.write(`\r  ${done}/${allJobs.length} (${pct}%) — downloaded ${downloaded} skipped ${skipped} failed ${failed} — ${elapsed}s   `);
+			}
+		}
+	});
+	await Promise.all(workers);
+
+	console.log('\n');
+	console.log(`✅ Done: ${downloaded} downloaded, ${skipped} skipped (cached), ${failed} failed`);
+	console.log(`⏱  ${((Date.now() - startMs) / 1000).toFixed(1)}s total`);
+	console.log();
+	console.log(`Next: set TILE_DIR=${args.output} on the Pi and add to .env:`);
+	console.log(`  VITE_TILE_SERVER_URL=http://localhost:5173/api/tiles`);
+	console.log('Then rebuild + restart aero-app. Cesium will fetch from local disk.');
 }
 
-main().catch(err => {
-	console.error('Fatal error:', err);
+main().catch((e) => {
+	console.error('FATAL:', e);
 	process.exit(1);
 });

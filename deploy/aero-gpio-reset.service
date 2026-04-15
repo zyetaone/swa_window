@@ -1,0 +1,14 @@
+[Unit]
+Description=Aero Window GPIO WiFi-reset Button Watcher
+After=aero-app.service
+Requires=aero-app.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/pi/aero-window/deploy/aero-gpio-reset.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

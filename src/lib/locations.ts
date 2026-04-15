@@ -1,9 +1,42 @@
-import type { Location, LocationId } from './types';
-
 /**
- * Location registry — SSOT. Includes SWA hub cities, international
- * destinations, and scenic/nature locations.
+ * Location registry — SSOT for locations, scene archetypes, and the LocationId
+ * union type.
+ *
+ * Adding a location here automatically widens LocationId — no need to update
+ * types.ts separately.
  */
+
+// ─── Scene shape ─────────────────────────────────────────────────────────────
+
+export interface SceneDefaults {
+	fog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
+	clouds: { density: number; speed: number };
+	terrain: { exaggeration: number };
+	/**
+	 * Multiplier for the screen-vertical atmospheric-haze effect.
+	 * - 1.0  = baseline (city default)
+	 * - <1.0 = clearer air (mountains, dry desert)
+	 * - >1.0 = thicker air (humid coast, sea moisture)
+	 */
+	haze: { intensity: number };
+}
+
+export interface Location {
+	id: LocationId;
+	name: string;
+	lat: number;
+	lon: number;
+	utcOffset: number;
+	hasBuildings: boolean;
+	defaultAltitude: number;
+	nightAltitude: number;
+	scene: SceneDefaults;
+}
+
+// Shape used to validate LOCATIONS_DATA (id kept as string so satisfies can check
+// everything else without creating a circular reference through LocationId).
+type LocationShape = { id: string; name: string; lat: number; lon: number; utcOffset: number; hasBuildings: boolean; defaultAltitude: number; nightAltitude: number; scene: SceneDefaults };
+
 
 // ─── Scene archetypes ────────────────────────────────────────────────────────
 // Per-terrain defaults bundled by character. Fog density + atmospheric haze
@@ -53,7 +86,9 @@ const CLOUDS_SCENE = {
 
 // ─── Locations ───────────────────────────────────────────────────────────────
 
-export const LOCATIONS: Location[] = [
+// `as const` preserves string literal types on each `id` for LocationId derivation.
+// `satisfies` validates every entry has the required shape without widening.
+const LOCATIONS_DATA = [
 	// International destinations
 	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 15000, scene: CITY_SCENE },
 	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
@@ -69,7 +104,15 @@ export const LOCATIONS: Location[] = [
 	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, utcOffset: -10, hasBuildings: false, defaultAltitude: 40000, nightAltitude: 45000, scene: OCEAN_SCENE },
 	{ id: 'desert', name: 'Sahara Desert', lat: 23.4241, lon: 25.6628, utcOffset: 2, hasBuildings: false, defaultAltitude: 35000, nightAltitude: 42000, scene: DESERT_SCENE },
 	{ id: 'clouds', name: 'Above Clouds', lat: 35.6762, lon: 139.6503, utcOffset: 9, hasBuildings: false, defaultAltitude: 45000, nightAltitude: 48000, scene: CLOUDS_SCENE },
-];
+] as const satisfies ReadonlyArray<LocationShape>;
 
-export const LOCATION_IDS = new Set<LocationId>(LOCATIONS.map((l) => l.id));
-export const LOCATION_MAP = new Map<LocationId, Location>(LOCATIONS.map((l) => [l.id, l]));
+/**
+ * Derived union of all registered location IDs.
+ * Widens automatically when you add an entry to LOCATIONS_DATA — no manual
+ * edit of types.ts required.
+ */
+export type LocationId = (typeof LOCATIONS_DATA)[number]['id'];
+
+export const LOCATIONS = LOCATIONS_DATA as ReadonlyArray<Location>;
+export const LOCATION_IDS = new Set<LocationId>(LOCATIONS_DATA.map((l) => l.id));
+export const LOCATION_MAP = new Map<LocationId, Location>(LOCATIONS_DATA.map((l) => [l.id, l as Location]));

@@ -3,7 +3,16 @@
  *
  * All domain types for display, admin, fleet, and simulation live here.
  * Runtime validation arrays derive from const arrays (DRY: type + validator in one place).
+ *
+ * Location-specific types (LocationId, Location, SceneDefaults) live in
+ * locations.ts — re-exported here for convenience.
  */
+
+// Re-export location types — LocationId is derived from the LOCATIONS array
+// so adding a location never requires a manual update here. Imported locally
+// because re-exports don't bring symbols into this file's scope.
+import type { LocationId } from './locations';
+export type { LocationId, Location, SceneDefaults } from './locations';
 
 // ─── Const-array-derived unions (runtime + compile-time SSOT) ────────────────
 
@@ -19,45 +28,6 @@ export type QualityMode = typeof QUALITY_MODES[number];
 // ─── Core domain types ───────────────────────────────────────────────────────
 
 export type SkyState = 'day' | 'night' | 'dawn' | 'dusk';
-
-export type LocationId =
-	| 'dubai'
-	| 'himalayas'
-	| 'mumbai'
-	| 'ocean'
-	| 'desert'
-	| 'clouds'
-	| 'hyderabad'
-	| 'dallas'
-	| 'phoenix'
-	| 'las_vegas'
-	| 'denver'
-	| 'chicago_midway';
-
-export interface SceneDefaults {
-	fog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
-	clouds: { density: number; speed: number };
-	terrain: { exaggeration: number };
-	/**
-	 * Multiplier for the screen-vertical atmospheric-haze effect.
-	 * - 1.0  = baseline (city default)
-	 * - <1.0 = clearer air (mountains, dry desert)
-	 * - >1.0 = thicker air (humid coast, sea moisture)
-	 */
-	haze: { intensity: number };
-}
-
-export interface Location {
-	id: LocationId;
-	name: string;
-	lat: number;
-	lon: number;
-	utcOffset: number;
-	hasBuildings: boolean;
-	defaultAltitude: number;
-	nightAltitude: number;
-	scene: SceneDefaults;
-}
 
 // ─── Simulation types ────────────────────────────────────────────────────────
 
