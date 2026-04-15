@@ -36,7 +36,7 @@ export class PlaygroundState {
 	// Automations
 	autoOrbit = $state(false);
 	autoTime = $state(false);
-	autoFly = $state(false);
+	autoFly = $state(true);  // default ON — scene feels alive on first load
 	
 	// Creative
 	paletteName = $state<PaletteName>('auto');
@@ -56,7 +56,7 @@ export class PlaygroundState {
 		this.weather = 'clear';
 		this.autoOrbit = false;
 		this.autoTime = false;
-		this.autoFly = false;
+		this.autoFly = true;
 		this.turbulenceLevel = 'light';
 	}
 
