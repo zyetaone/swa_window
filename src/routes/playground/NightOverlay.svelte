@@ -90,6 +90,14 @@
 	></div>
 {/if}
 
+<!-- City horizon glow — warm orange haze rising from the terrain-city edge.
+     Appears only at night, pulses with a slow flicker. -->
+<div
+	class="city-glow-haze"
+	style:opacity={Math.max(0, (nightFactor - 0.3) * 1.2)}
+	aria-hidden="true"
+></div>
+
 <!-- Atmospheric shimmer — subtle feTurbulence animated on baseFrequency.
      Masked to lower half of viewport (where haze over ground/water lives).
      Amplitude scaled by shimmerStrength so it peaks at golden hour. -->
@@ -180,19 +188,22 @@
 	}
 
 	.moon-container {
+		/* Moon far away — tiny disc near top of sky (upper 8% of viewport),
+		   small enough to read as 'distant celestial body' not '3000ft object'.
+		   Was 72×72 at 4% top right 18% — made it read as close+low. */
 		position: absolute;
-		top: 4%;
-		right: 18%;
-		width: 72px;
-		height: 72px;
+		top: 6%;
+		right: 12%;
+		width: 44px;
+		height: 44px;
 		pointer-events: none;
 		z-index: 8;
 		transition: opacity 1.5s ease;
 	}
 	.moon-halo {
 		position: absolute;
-		inset: -40px;
-		background: radial-gradient(circle, rgba(244, 241, 229, 0.22) 0%, rgba(244, 241, 229, 0.05) 40%, transparent 65%);
+		inset: -28px;
+		background: radial-gradient(circle, rgba(244, 241, 229, 0.18) 0%, rgba(244, 241, 229, 0.04) 40%, transparent 65%);
 		border-radius: 50%;
 	}
 	.moon-disc {
@@ -208,5 +219,42 @@
 	.shimmer {
 		width: 100%;
 		height: 100%;
+	}
+
+	/* Shooting star — a white streak that crosses the sky diagonally */
+	.shooting-star {
+		position: absolute;
+		width: 80px;
+		height: 1.5px;
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9) 30%, rgba(200, 230, 255, 1) 100%);
+		border-radius: 1px;
+		transform: rotate(var(--angle, -30deg));
+		transform-origin: left center;
+		pointer-events: none;
+		z-index: 9;
+		animation: shoot 0.6s ease-out forwards;
+	}
+
+	@keyframes shoot {
+		from { opacity: 1; width: 0; }
+		to   { opacity: 0; width: 80px; }
+	}
+
+	/* Warm city-horizon glow — orange haze rising from the terrain edge */
+	.city-glow-haze {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 30%;
+		background: radial-gradient(ellipse 100% 60% at 50% 100%, rgba(255, 120, 40, 0.18) 0%, rgba(255, 80, 20, 0.08) 40%, transparent 70%);
+		pointer-events: none;
+		z-index: 7;
+		animation: city-pulse 4s ease-in-out infinite alternate;
+	}
+
+	@keyframes city-pulse {
+		from { opacity: 0.7; }
+		to   { opacity: 1.0; }
 	}
 </style>

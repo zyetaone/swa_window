@@ -126,43 +126,41 @@
 	<!-- Density rule: dense carpet of SMALL far clouds near the horizon,
 	     sparser + larger clouds as we descend toward the viewer. This
 	     matches what you see from a cruise window above a cloud deck. -->
+	<!-- At pitch 76° the horizon sits ~35% from viewport top. Clouds should
+	     cluster AT that band (distance scaled up per perspective — cumulus
+	     looks biggest at horizon, smaller in foreground). Above horizon we
+	     taper to wispy high cirrus; below we never place clouds (the camera
+	     is above them at cruise altitude). -->
 	{#if showBack}
-		<!-- Distant cloud carpet — DENSE band of tiny clouds near horizon.
-		     Stagger rows slightly so the carpet doesn't read as a line. -->
+		<!-- Far cirrus above horizon — tiny wisps receding into upper sky -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<!-- Row 1 — very top (far-far distance, atmospheric haze) -->
-			<div class="seed tiny" style:top="2%"  style:left="3%"></div>
-			<div class="seed tiny" style:top="4%"  style:left="12%"></div>
-			<div class="seed tiny" style:top="2%"  style:left="20%"></div>
-			<div class="seed tiny" style:top="3%"  style:left="29%"></div>
-			<div class="seed tiny" style:top="5%"  style:left="37%"></div>
-			<div class="seed tiny" style:top="2%"  style:left="46%"></div>
-			<div class="seed tiny" style:top="4%"  style:left="55%"></div>
-			<div class="seed tiny" style:top="3%"  style:left="64%"></div>
-			<div class="seed tiny" style:top="5%"  style:left="73%"></div>
-			<div class="seed tiny" style:top="2%"  style:left="82%"></div>
-			<div class="seed tiny" style:top="4%"  style:left="91%"></div>
-			<!-- Row 2 — slightly closer (still far) -->
-			<div class="seed small" style:top="8%"  style:left="8%"></div>
-			<div class="seed small" style:top="10%" style:left="22%"></div>
-			<div class="seed small" style:top="9%"  style:left="36%"></div>
-			<div class="seed small" style:top="11%" style:left="50%"></div>
-			<div class="seed small" style:top="9%"  style:left="63%"></div>
-			<div class="seed small" style:top="10%" style:left="77%"></div>
-			<div class="seed small" style:top="8%"  style:left="88%"></div>
+			<div class="seed cirrus" style:top="8%"  style:left="5%"></div>
+			<div class="seed cirrus" style:top="11%" style:left="18%"></div>
+			<div class="seed cirrus" style:top="10%" style:left="32%"></div>
+			<div class="seed cirrus" style:top="9%"  style:left="47%"></div>
+			<div class="seed cirrus" style:top="12%" style:left="62%"></div>
+			<div class="seed cirrus" style:top="10%" style:left="78%"></div>
+			<div class="seed cirrus" style:top="8%"  style:left="90%"></div>
 		</div>
 	{/if}
 	{#if showMid}
-		<!-- Middle distance — moderate count, medium size -->
+		<!-- HORIZON BAND — clouds biggest here (perspective scale-up).
+		     Packed tight, slightly overlapping to form a cumulus deck. -->
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed" style:top="20%" style:left="18%"></div>
-			<div class="seed" style:top="22%" style:left="62%"></div>
+			<div class="seed horizon" style:top="28%" style:left="2%"></div>
+			<div class="seed horizon" style:top="31%" style:left="16%"></div>
+			<div class="seed horizon" style:top="29%" style:left="30%"></div>
+			<div class="seed horizon" style:top="32%" style:left="44%"></div>
+			<div class="seed horizon" style:top="30%" style:left="58%"></div>
+			<div class="seed horizon" style:top="31%" style:left="72%"></div>
+			<div class="seed horizon" style:top="29%" style:left="86%"></div>
 		</div>
 	{/if}
 	{#if showFront}
-		<!-- Foreground — rare, large, wispy -->
+		<!-- Foreground wisps just above horizon line — occasional, softer -->
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed large" style:top="32%" style:left="38%"></div>
+			<div class="seed mid-cloud" style:top="22%" style:left="24%"></div>
+			<div class="seed mid-cloud" style:top="20%" style:left="66%"></div>
 		</div>
 	{/if}
 </div>
@@ -202,10 +200,21 @@
 		opacity: 0.9;
 	}
 
-	/* Size variants — tiny/small on horizon (distance), large close-up */
-	.seed.tiny  { width: 9%;  aspect-ratio: 2.2 / 1; opacity: 0.72; }
-	.seed.small { width: 13%; aspect-ratio: 2.1 / 1; opacity: 0.82; }
-	.seed.large { width: 26%; aspect-ratio: 2.5 / 1; opacity: 0.95; }
+	/* Size variants per perspective */
+	.seed.cirrus    { width: 8%;  aspect-ratio: 3.5 / 1; opacity: 0.55; }
+	.seed.horizon   { width: 22%; aspect-ratio: 2.4 / 1; opacity: 0.88; }
+	.seed.mid-cloud { width: 14%; aspect-ratio: 2.6 / 1; opacity: 0.7; }
+
+	/* Per-seed shape variance — same filter, but pre-displacement rotation
+	   + non-uniform scale break the 'copied shape' pattern. Seven unique
+	   profiles cycled across siblings via :nth-of-type. */
+	.cloud-layer .seed:nth-of-type(7n+1) { transform: scale(1.0, 0.9) rotate(-6deg); }
+	.cloud-layer .seed:nth-of-type(7n+2) { transform: scale(0.85, 1.1) rotate(10deg); }
+	.cloud-layer .seed:nth-of-type(7n+3) { transform: scale(1.15, 0.8) rotate(-3deg); }
+	.cloud-layer .seed:nth-of-type(7n+4) { transform: scale(0.9, 1.05) rotate(14deg); }
+	.cloud-layer .seed:nth-of-type(7n+5) { transform: scale(1.05, 0.95) rotate(-11deg); }
+	.cloud-layer .seed:nth-of-type(7n+6) { transform: scale(0.95, 1.15) rotate(4deg); }
+	.cloud-layer .seed:nth-of-type(7n+7) { transform: scale(1.1, 0.85) rotate(-8deg); }
 
 	.cloud-layer.back .seed {
 		filter: url(#cloud-back);
