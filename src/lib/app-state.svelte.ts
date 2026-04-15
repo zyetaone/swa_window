@@ -75,9 +75,9 @@ export class WindowModel {
 
 	// Environment
 	weather             = $state<WeatherType>('cloudy');
-	cloudDensity        = $state(0.7);
-	cloudSpeed          = $state(0.4);
-	haze                = $state(0.025);
+	cloudDensity        = $state(0.85);
+	cloudSpeed          = $state(0.6);
+	haze                = $state(0.07);
 	nightLightIntensity = $state(0.6);
 
 	// View

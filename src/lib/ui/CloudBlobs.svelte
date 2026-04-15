@@ -70,10 +70,12 @@
 		{ id: 6,  seed: 743,  top: -90,  left: -160, w: 150, h: 85,  blur: 14, offset: 155, dur: 140, delay: -45, octaves: 5, freq: 0.014, displace: 75, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 55  },
 		{ id: 7,  seed: 857,  top: -75,  left: -190, w: 170, h: 95,  blur: 16, offset: 175, dur: 120, delay: -70, octaves: 5, freq: 0.013, displace: 82, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 75  },
 		{ id: 8,  seed: 967,  top: -85,  left: -170, w: 155, h: 88,  blur: 14, offset: 160, dur: 135, delay: -25, octaves: 5, freq: 0.014, displace: 76, opacityMul: 0.45, parallax: PARALLAX.mid, smilDur: 60  },
-		// NEAR (foreground) — larger, closer, faster, lighter
-		{ id: 9,  seed: 1087, top: -120, left: -140, w: 220, h: 125, blur: 18, offset: 200, dur: 80,  delay: -10, octaves: 4, freq: 0.013, displace: 92, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 45  },
-		{ id: 10, seed: 1213, top: -130, left: -120, w: 200, h: 115, blur: 17, offset: 190, dur: 70,  delay: -35, octaves: 4, freq: 0.014, displace: 88, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 50  },
-		{ id: 11, seed: 1337, top: -115, left: -150, w: 240, h: 135, blur: 19, offset: 210, dur: 85,  delay: -55, octaves: 4, freq: 0.012, displace: 96, opacityMul: 0.18, parallax: PARALLAX.near, smilDur: 48  },
+		// NEAR (foreground) — larger, closer, faster drift, more visible so
+		// they actually read as passing clouds (was nearly invisible at 0.18).
+		{ id: 9,  seed: 1087, top: -120, left: -140, w: 220, h: 125, blur: 18, offset: 200, dur: 45,  delay: -10, octaves: 4, freq: 0.013, displace: 92, opacityMul: 0.32, parallax: PARALLAX.near, smilDur: 30  },
+		{ id: 10, seed: 1213, top: -130, left: -120, w: 200, h: 115, blur: 17, offset: 190, dur: 40,  delay: -35, octaves: 4, freq: 0.014, displace: 88, opacityMul: 0.30, parallax: PARALLAX.near, smilDur: 35  },
+		{ id: 11, seed: 1337, top: -115, left: -150, w: 240, h: 135, blur: 19, offset: 210, dur: 50,  delay: -55, octaves: 4, freq: 0.012, displace: 96, opacityMul: 0.34, parallax: PARALLAX.near, smilDur: 32  },
+		{ id: 12, seed: 1453, top: -125, left: -130, w: 210, h: 120, blur: 18, offset: 200, dur: 42,  delay: -80, octaves: 4, freq: 0.013, displace: 90, opacityMul: 0.28, parallax: PARALLAX.near, smilDur: 38  },
 	];
 
 	// Live seeds — periodically bumped for smooth shape morphing

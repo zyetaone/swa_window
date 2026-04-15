@@ -63,11 +63,15 @@ export class CesiumManager {
 	private tileset: CesiumType.Cesium3DTileset | null = null;
 	private lastNightFactor = -1;
 	// Imagery Layers
-	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — day surface
+	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
+	//   as night falls. The vivid day EOX boost is kept via baseDay* caches so
+	//   we can lerp between day-vivid and night-dark.
 	// nightLayer: CartoDB Dark — composited over base at night. Its dark
-	//   background naturally darkens the scene; its lit road grid punches
-	//   through as warm city light after the GLSL shader's additive pass.
+	//   background darkens; its lit road grid punches through as warm city
+	//   light after the GLSL shader's additive pass.
 	private baseLayer: CesiumType.ImageryLayer | null = null;
+	private baseDaySaturation = 1.0;
+	private baseDayContrast = 1.0;
 	private nightLayer: CesiumType.ImageryLayer | null = null;
 
 	// Effect sync caches
@@ -213,10 +217,13 @@ export class CesiumManager {
 		this.baseLayer = this.viewer.imageryLayers.addImageryProvider(provider);
 		// EOX Sentinel-2 cloud-filtered composite is naturally muted at z6-z12.
 		// ESRI/Mapbox come pre-saturated. These per-source tweaks restore vivid
-		// terrain colors without crushing highlights.
+		// terrain colors without crushing highlights. baseDay* values are the
+		// DAY target — syncImagery lerps toward dark/muted at night.
 		if (this.baseLayer) {
-			this.baseLayer.saturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
-			this.baseLayer.contrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
+			this.baseDaySaturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
+			this.baseDayContrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
+			this.baseLayer.saturation = this.baseDaySaturation;
+			this.baseLayer.contrast = this.baseDayContrast;
 			this.baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
 			this.baseLayer.brightness = 1.0;
 		}
@@ -353,7 +360,6 @@ export class CesiumManager {
 	}
 
 	private syncImagery(): void {
-		if (!this.nightLayer) return;
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
 
@@ -361,6 +367,17 @@ export class CesiumManager {
 		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
 		this.lastNightFactor = nf;
 
+		// Base layer: dim + desaturate as night falls so the EOX day vibrance
+		// doesn't leak through the CartoDB overlay's alpha gap. Without this
+		// step the shader's additive-light pass (lightMask 0.12–0.5) catches
+		// faint terrain pixels and amber-boosts them, making night look like
+		// an orange haze rather than actual darkness.
+		if (this.baseLayer) {
+			this.baseLayer.brightness = lerp(1.0, CESIUM.BASE_NIGHT_BRIGHTNESS, nf);
+			this.baseLayer.saturation = lerp(this.baseDaySaturation, CESIUM.BASE_NIGHT_SATURATION, nf);
+		}
+
+		if (!this.nightLayer) return;
 		this.nightLayer.show = show || firstNight;
 		const alpha = lerp(0, CESIUM.NIGHT_ALPHA, nf) * scale;
 		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {

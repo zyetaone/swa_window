@@ -19,7 +19,10 @@ export const AIRCRAFT = {
 	LIGHTNING_DECAY_RATE: 8,
 
 	// Flight drift (degrees per second at speed=1.0)
-	DRIFT_RATE: 0.006,
+	// Bumped from 0.006 → 0.01 so orbit motion reads as commercial-cruise
+	// pace rather than barely drifting. At speed=1.4 default this gives
+	// ~2.3× the previous apparent forward motion across the viewport.
+	DRIFT_RATE: 0.01,
 
 	// Orbit path shape (fallback ellipse when no waypoint scenario exists)
 	ORBIT_MAJOR: 0.15, // degrees (~17km) — long axis
@@ -170,13 +173,20 @@ export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = 
 };
 
 export const CESIUM = {
-	// Night city glow overlay — CartoDB Dark basemap composited over the day
-	// imagery at nightFactor=1. The tile's natural darkness covers the bright
-	// base (producing the dark night feel), and its lit road grid punches
-	// through as warm city light after the shader's additive pass.
-	NIGHT_ALPHA: 0.75,
-	NIGHT_BRIGHTNESS: 2.5,
-	NIGHT_CONTRAST: 1.8,
+	// Base imagery dim at full night — EOX/Mapbox/ESRI day imagery multiplied
+	// by these factors when nightFactor=1. Keeps night actually dark so the
+	// shader's lightMask doesn't misread faint terrain as city lights.
+	BASE_NIGHT_BRIGHTNESS: 0.15, // 15% of day brightness (nearly black terrain)
+	BASE_NIGHT_SATURATION: 0.25, // mostly desaturated — avoids vivid leakage
+
+	// Night city glow overlay — CartoDB Dark basemap composited over the
+	// dimmed base at nightFactor=1. The tile's dark background locks in the
+	// dark night; its lit road grid punches through to carry city light.
+	// Brightness lowered from 2.5 → 1.6 so roads don't blow to pure white
+	// (which was fueling the shader's amber amplification).
+	NIGHT_ALPHA: 0.8,
+	NIGHT_BRIGHTNESS: 1.6,
+	NIGHT_CONTRAST: 1.6,
 } as const;
 
 // =============================================================================
@@ -206,7 +216,7 @@ export const WEATHER_EFFECTS: Record<WeatherType, WeatherEffect> = {
 	cloudy: {
 		turbulence: 'light',
 		hasLightning: false,
-		cloudDensityRange: [0.4, 1],
+		cloudDensityRange: [0.7, 1],
 		nightCloudFloor: 0,
 		rainOpacity: 0,
 		windAngle: 87,
@@ -215,7 +225,7 @@ export const WEATHER_EFFECTS: Record<WeatherType, WeatherEffect> = {
 	rain: {
 		turbulence: 'moderate',
 		hasLightning: false,
-		cloudDensityRange: [0.5, 0.9],
+		cloudDensityRange: [0.8, 1],
 		nightCloudFloor: 0.3,
 		rainOpacity: 0.25,
 		windAngle: 86,
@@ -224,19 +234,19 @@ export const WEATHER_EFFECTS: Record<WeatherType, WeatherEffect> = {
 	overcast: {
 		turbulence: 'moderate',
 		hasLightning: false,
-		cloudDensityRange: [0.7, 1],
+		cloudDensityRange: [0.92, 1],
 		nightCloudFloor: 0.5,
 		rainOpacity: 0.18,
 		windAngle: 86,
-		filterBrightness: 0.95,
+		filterBrightness: 0.9,
 	},
 	storm: {
 		turbulence: 'severe',
 		hasLightning: true,
-		cloudDensityRange: [0.85, 1],
-		nightCloudFloor: 0.65,
+		cloudDensityRange: [0.98, 1],
+		nightCloudFloor: 0.7,
 		rainOpacity: 0.35,
 		windAngle: 84,
-		filterBrightness: 0.9,
+		filterBrightness: 0.85,
 	},
 };

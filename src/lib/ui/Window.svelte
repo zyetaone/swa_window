@@ -19,7 +19,7 @@
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
 	import { useBlind } from "./use-blind.svelte";
-	import CesiumViewer from "$lib/cesium/Globe.svelte";
+	import CesiumViewer from "$lib/cesium/CesiumViewer.svelte";
 	import Weather from './Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	const model = useAppState();
@@ -91,15 +91,13 @@
 		const brightness = timeBrightness * fx.filterBrightness;
 		const w = model.flight.warpFactor;
 
-		// Return 'none' when all factors are identity — avoids creating a
-		// compositing layer that can break WebGL premultiplied alpha output
-		const isIdentity = Math.abs(brightness - 1) < 0.005
-			&& Math.abs(hazeContrast - 1) < 0.005
-			&& Math.abs(hazeSaturate - 1) < 0.005
-			&& w < 0.01;
-		if (isIdentity) return 'none';
+		// Constant 0.35px blur — kills the pixel aliasing visible over large
+		// flat ocean areas where Sentinel-2 tiles are low-res at cruise zoom.
+		// Subtle enough that terrain detail still reads as crisp; no perceived
+		// "soft focus" at normal viewing distance.
+		const baseBlur = 0.35;
 
-		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)})`;
+		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)}) blur(${baseBlur}px)`;
 		if (w < 0.01) return base;
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
@@ -111,8 +109,12 @@
 
 	// --- Motion (unified from 4 independent layers) ---
 
-	const turbulenceY = $derived(model.motion.motionOffsetY * 0.3);
-	const turbulenceX = $derived(model.motion.motionOffsetX * 0.3);
+	// Turbulence shakes the window (chrome/frame) — but the translation is
+	// kept light on the scene-content so it doesn't briefly cancel the
+	// Cesium camera's forward motion and make the plane "appear to stop"
+	// during bumps. Bank rotation and breathing still carry full effect.
+	const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
+	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
 	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
 	const breathingY = $derived(
 		model.motion.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE,

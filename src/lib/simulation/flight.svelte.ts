@@ -20,7 +20,9 @@ export class FlightSimEngine {
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
 	warpFactor = $state(0);
-	flightSpeed = $state(1.0);
+	// Default 1.4 (was 1.0) — gives commercial airliner pace out of the box.
+	// Slider range stays 0.1-3.0 in SidePanel; users can still dial down.
+	flightSpeed = $state(1.4);
 
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);
