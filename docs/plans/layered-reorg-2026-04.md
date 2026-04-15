@@ -1,8 +1,9 @@
 # Layered Reorg Plan — April 2026
 
-**Status:** In progress (Phase 0b shipped)
+**Status:** ✅ **Complete — all phases 0 through 7 shipped.**
 **Source:** council + architect + designer + researcher agents, 2026-04-15
 **Owner:** Rick
+**Completed:** 2026-04-15
 
 ## Fundamental mental model (accepted)
 
@@ -86,24 +87,29 @@ src/lib/
 2. **Flat DTO boundary preserved at fleet + persistence.** The config classes live inside `WindowModel` as nested instances (`model.config.atmosphere.clouds.density`), but fleet patches and `localStorage` snapshots still serialize through a flat-key interface for back-compat with v1 protocol. Protocol v2 adds path-targeted patches additively; v1 is never broken.
 3. **`tick()` bodies read config via `untrack()`** so 60 Hz reads don't build reactivity dependencies that trigger graph re-evaluation and tank FPS.
 
-## Phase order
+## Phase order — all shipped
 
-Phases 0 and 0b are shipped. Phase order is designed so each ships visible progress without blocking next; code can be committed and PR'd one phase at a time.
+Each phase shipped with type-check + tests passing. Actual delivery ended up faster than estimated because several phases landed via parallel agent teams.
 
-| Phase | Deliverable | Files touched | Effort | Status |
-|---|---|---|---|---|
-| 0a | Svelte 5 `bind:` spike in `/playground` | 1 new file | 30 min | Next |
-| 0b | Night-light emissive + bloom | `cesium/shaders.ts`, `cesium/manager.ts`, `constants.ts` | 2 hr | ✅ shipped `e4a9525` |
-| 0c | Tile-packager: Ion + Terrarium terrain, Overpass buildings | `tools/tile-packager/src/{sources,index}.ts`, `src/routes/api/buildings/[city]/+server.ts` | 1 day | Pending |
-| 1 | `model/config/` skeleton + `$state` classes + `untrack()` wrap in tick bodies | 6 new config files, all engine tick() bodies | 1 day | Pending |
-| 2 | `cesium/` → `world/` split with pure-data extraction | 5 files split, ~20 imports updated | 0.5 day | Pending |
-| 3 | `simulation/` → `camera/` + `director/` | 5 files moved, class rename | 0.5 day | Pending |
-| 4 | Scene effects → `atmosphere/` | 12 files consolidated into 4 folders | 0.5 day | Pending |
-| 5 | Chrome extraction + window on/off toggle | `chrome/Frame.svelte` + `chrome/Blind.svelte` new, Window.svelte slimmed | 0.5 day | Pending |
-| 6 | Fleet protocol v2 (additive) | `fleet/protocol.ts`, `fleet/client.svelte.ts`, server hub | 1 day | Pending |
-| 7 | Multi-Pi parallax (role assignment + lockstep cruise) | `model/config/camera.ts` extension, `director/autopilot.ts` leader election | 1-2 days | Pending |
+| Phase | Deliverable | Commit |
+|---|---|---|
+| 0 | Globe lighting + shadows + reduce-motion scope | `ab61f08` |
+| 0a | Svelte 5 `bind:` spike — validated + folded into admin ConfigSandbox | `76e13bd` |
+| 0b | Night-light emissive + bloom | `e4a9525` |
+| 0c | Tile-packager: Ion + Terrarium terrain, Overpass buildings, `/api/buildings/:city` | `3c603ae` |
+| 1 | `model/config/` skeleton — 6 `$state` config classes + `untrack()` wrap | `3d99df8` |
+| 2 | `cesium/` → `world/` rename (isolation seam preserved) | `5198544` |
+| 3 | `simulation/` → `camera/` + `director/`; `WorldEngine` → `DirectorEngine` | `ca8d3ec` |
+| 3.5 | Engines migrated to consume config via `SimulationContext` | `02ffa41` |
+| 4 | Scene effects + UI overlays → `atmosphere/` | `f60a550` |
+| 5 | `ui/` → `chrome/` + window on/off toggle (CSS visibility approach) | `dc00117` |
+| 5.5 | Blind pull hint + route jitter + long-press boost + atmo drift | `333077d` |
+| 6 | Fleet protocol v2 (additive) — `config_patch`, `role_assign`, `director_decision` | `1aba65e` |
+| 5.7 | Cloudflare Worker firmware-like OTA push | `909ab7c` |
+| 7 | Multi-Pi parallax — yaw offset + leader/follower director + `transitionAtMs` | `fea557f` |
+| 5.6 | Ring-buffer telemetry + in-window TelemetryPanel (Shift+T) | `5d1dd16` |
 
-**Total after Phase 0: ~5 days.**
+**Shipped: 2026-04-15.** 104/104 tests pass, 0 type errors. Config classes renamed to `.svelte.ts` post-ship to match the Svelte 5 rune-module convention.
 
 ## Ship-by-ship safety notes
 
