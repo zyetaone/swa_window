@@ -10,11 +10,11 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
-	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from './lib/globe/sources';
+	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from './sources';
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
-	import MapLibreGlobe from './lib/maplibre/MapLibreGlobe.svelte';
+	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import * as Cesium from 'cesium';

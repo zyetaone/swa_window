@@ -99,9 +99,12 @@ src/lib/
     ├── SidePanel.svelte  # Location picker + settings
     └── use-blind.svelte.ts # Composable — blind drag/snap controller
 
-src/routes/playground/lib/  # Playground-only code (not in shared $lib)
-├── globe/sources.ts       # Cesium + MapLibre imagery source catalog
-└── maplibre/              # MapLibreGlobe.svelte + style.ts
+src/routes/playground/   # Playground-only code sits beside +page.svelte
+├── +page.svelte         # Route entry
+├── +page.ts             # Load guard (browser-only)
+├── sources.ts           # Cesium + MapLibre imagery source catalog
+├── MapLibreGlobe.svelte # MapLibre wrapper component
+└── maplibre-style.ts    # MapLibre style helpers
 ```
 
 **Test layout:** Tests live in `tests/` at repo root, mirroring `src/` paths
