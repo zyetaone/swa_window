@@ -150,40 +150,44 @@
 
 	.cloud-layer {
 		position: absolute;
-		inset: -10% -30%;  /* oversize so drifting doesn't expose edges */
+		inset: 0;
+		overflow: hidden;  /* clip the dark seed — only box-shadow reaches visible */
 		animation-name: cloud-drift;
 		animation-timing-function: linear;
 		animation-iteration-count: infinite;
 	}
 
-	/* Each `.seed` = dark ellipse + filter. Visible cloud = offset box-shadow. */
+	/* Each `.seed` = dark ellipse + filter, positioned OFFSCREEN top-left.
+	   Big positive box-shadow offset paints the visible cloud WITHIN the
+	   container. The dark ellipse itself is clipped by overflow:hidden. */
 	.seed {
 		position: absolute;
-		top: var(--offset, 0%);
-		left: -35%;
-		width: 60%;
-		height: 50%;
+		top: -600px;
+		left: -600px;
+		width: 500px;
+		height: 280px;
 		background: #000;
 		border-radius: 50%;
-		/* The box-shadow IS the visible cloud. Huge spread + offset so the
-		   dark seed stays offscreen while its distorted halo paints clouds. */
-		box-shadow:
-			60vw 45vh 80px 20px var(--cloud-color, rgba(245, 240, 235, 0.9)),
-			55vw 25vh 70px 10px var(--cloud-color, rgba(245, 240, 235, 0.8));
+		/* The box-shadow offset brings the filtered silhouette ON-SCREEN as a
+		   soft white cloud. Dark seed stays at -600,-600 (clipped). Adjust
+		   `--offset` per seed instance for layout variety. */
+		--target-x: calc(900px + var(--dx, 0px));
+		--target-y: calc(calc(600px + var(--dy, 0px)) + var(--offset, 0px));
+		box-shadow: var(--target-x) var(--target-y) 90px 30px var(--cloud-color, rgba(245, 240, 235, 0.9));
 		filter: url(#cloud-back);
 	}
 
 	.cloud-layer.back .seed {
+		--dx: -200px;
 		transform: scale(0.7);
-		opacity: 0.85;
 	}
 	.cloud-layer.mid .seed {
+		--dx: 0px;
 		transform: scale(0.9);
-		opacity: 0.92;
 	}
 	.cloud-layer.front .seed {
+		--dx: 200px;
 		transform: scale(1.15);
-		opacity: 0.95;
 	}
 
 	@keyframes cloud-drift {

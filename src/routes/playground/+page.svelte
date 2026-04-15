@@ -70,7 +70,7 @@
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
 	let showThreeBillboards = $state(true);
-	let useRealisticClouds = $state(true);
+	let useRealisticClouds = $state(false);  // default off until positioning is dialed in
 
 	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
