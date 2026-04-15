@@ -25,32 +25,7 @@ export async function hydrateFromServer(): Promise<void> {
 	}
 }
 
-/** POST /api/content — install server-side + reactive install on success. */
-export async function pushBundle(bundle: ContentBundle): Promise<boolean> {
-	try {
-		const res = await fetch('/api/content', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(bundle),
-		});
-		if (!res.ok) return false;
-		bundleStore.install(bundle);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/** DELETE /api/content/[id] — remove server-side + reactive remove. */
-export async function removeBundle(id: string): Promise<boolean> {
-	try {
-		const res = await fetch(`/api/content/${encodeURIComponent(id)}`, {
-			method: 'DELETE',
-		});
-		if (!res.ok) return false;
-		bundleStore.remove(id);
-		return true;
-	} catch {
-		return false;
-	}
-}
+// Note: `pushBundle()` and `removeBundle()` helpers were removed after knip
+// sweep flagged them as dead — the /content drag-drop route uses its own
+// inline fetch calls directly. If a second consumer appears, re-introduce
+// them here rather than duplicating the try/fetch/store.install dance.

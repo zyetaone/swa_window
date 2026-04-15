@@ -6,40 +6,26 @@
 
 import type * as CesiumType from 'cesium';
 
-// Environment markers
+// Environment markers — exported ones are imported elsewhere; others are
+// private to this module's getSatelliteImagery().
 export const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || null;
-export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
-export const SENTINEL2 = import.meta.env.VITE_SENTINEL2 === 'true' || false;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 
 /** CartoDB Dark basemap — dark vector tiles with crisp road + building edge detail. */
 export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
 
 /**
  * EOX Sentinel-2 Cloudless 2024 — natural-color cloudless composite from
- * Sentinel-2 satellite imagery. Beautiful, free, no auth.
+ * Sentinel-2 satellite imagery. Free, no auth.
  *
  * Caveats vs ESRI:
- *   - Max zoom 14 (vs ESRI 19) — fine at cruise altitude (z14 ≈ 10m/pixel)
- *   - WebMercator (3857) tiling scheme — must construct provider with
+ *   - Max zoom 14 (vs ESRI 19) — fine at cruise altitude (z14 ≈ 10 m/pixel)
+ *   - WebMercator (3857) tiling scheme — construct provider with
  *     `tilingScheme: new Cesium.WebMercatorTilingScheme()`
  *   - URL uses {z}/{y}/{x} order (y before x) — natural for WMTS
  */
-export const SENTINEL2_EOX_URL =
+const SENTINEL2_EOX_URL =
 	'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg';
-
-/**
- * Sentinel-2 L2A via RODA/Sentinel-Hub public bucket.
- * Band L2A = natural color RGB composite.
- * Path format: tiles/{z}/{x}/{y}/L2A/{date}.jpg
- *
- * NOTE: Sentinel-2 uses a non-standard z/x/y path structure.
- * For Cesium integration, a tiling proxy (e.g., tileserver-gl) is required
- * to convert Sentinel-2's format to standard z/x/y.
- */
-export function getSentinel2TileUrl(z: number, x: number, y: number): string {
-	const date = '2023-07-15';
-	return `https://roda.sentinel-hub.com/sentinel-s2-l2a/tiles/${z}/${x}/${y}/L2A/${date}.jpg`;
-}
 
 /**
  * Access the Cesium Ion token from environment variables.
