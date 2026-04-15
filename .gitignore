@@ -36,3 +36,6 @@ _project
 # Tile packages (downloaded, not source)
 tile-packager/*.lock
 tile-server/*.lock
+
+# Runtime content (pushed bundles + uploaded assets)
+data/

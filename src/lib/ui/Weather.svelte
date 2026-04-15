@@ -1,30 +1,21 @@
 <script lang="ts">
 	/**
-	 * Weather - Pure presentational layer for rain, lightning, and frost effects.
+	 * Weather - Rain streaks + frost overlay.
+	 *
+	 * Lightning moved to scene/effects/lightning/ (self-contained effect).
 	 *
 	 * Z-order (inline styles, set by parent):
 	 *   2: Rain streaks
-	 *   2: Lightning flash
 	 *   5: Frost overlay
 	 */
 
 	interface Props {
 		rainOpacity: number;
 		windAngle: number;
-		lightningOpacity: number;
-		lightningX: number;
-		lightningY: number;
 		frostAmount: number;
 	}
 
-	let {
-		rainOpacity,
-		windAngle,
-		lightningOpacity,
-		lightningX,
-		lightningY,
-		frostAmount,
-	}: Props = $props();
+	let { rainOpacity, windAngle, frostAmount }: Props = $props();
 </script>
 
 <!-- Rain streaks -->
@@ -38,17 +29,6 @@
 		<div class="rain-near"></div>
 		<div class="rain-far"></div>
 	</div>
-{/if}
-
-<!-- Positional lightning flash -->
-{#if lightningOpacity > 0}
-	<div
-		class="lightning-flash"
-		style:z-index={2}
-		style:opacity={lightningOpacity}
-		style:--lx="{lightningX}%"
-		style:--ly="{lightningY}%"
-	></div>
 {/if}
 
 <!-- Frost at high altitude -->
@@ -102,23 +82,6 @@
 		to {
 			transform: translate3d(0, 0, 0);
 		}
-	}
-
-	/* --- Weather: Lightning --- */
-
-	.lightning-flash {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: radial-gradient(
-			ellipse 60% 50% at var(--lx) var(--ly),
-			rgba(200, 200, 255, 1) 0%,
-			rgba(180, 180, 255, 0.6) 30%,
-			rgba(150, 150, 230, 0.2) 60%,
-			transparent 85%
-		);
-		mix-blend-mode: screen;
-		transition: opacity 0.05s linear;
 	}
 
 	/* --- Effect: Frost --- */

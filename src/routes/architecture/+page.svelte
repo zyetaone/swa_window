@@ -100,41 +100,75 @@
 			category: 'css',
 			previewType: 'css',
 			details: [
-				'Rendered by: Window.svelte .micro-event-*',
+				'Owned by: scene/effects/micro-events/ (self-contained — own state + game-loop subscription)',
+				'Visuals: ui/MicroEvent.svelte (CSS animations)',
 				'Timing: MIN_INTERVAL=1200s, MAX_INTERVAL=2400s, INITIAL_DELAY=300s',
 				'Shooting star: 1.5s duration, night only, diagonal streak',
 				'Bird: 8s duration, day only (40% chance), flapping wings',
 				'Contrail: 12s duration, day only (60% chance), expanding white line',
-				'Tick: tickMicroEvents(delta) in WindowModel',
+			],
+		},
+		{
+			id: 'lightning',
+			name: 'Lightning',
+			z: 'z:2',
+			condition: 'WEATHER_EFFECTS[weather].hasLightning',
+			description: 'Positional radial flash — strike timer + decay',
+			category: 'css',
+			previewType: 'css',
+			details: [
+				'Owned by: scene/effects/lightning/ (self-contained — strike timer + decay + visual)',
+				'Effect mounts only when weather has lightning (storm, rain w/ thunder)',
+				'Strike: random (20%–80%, 15%–65%) screen position',
+				'Visual: radial-gradient blue-white at (lightningX%, lightningY%)',
+				'Timing: 5–30s between strikes, decay rate 8',
+				'Subscribes to game-loop directly inside the component $effect',
 			],
 		},
 		{
 			id: 'weather',
-			name: 'Weather',
-			z: 'z:2',
-			condition: 'weather dependent',
-			description: 'Rain (2 parallax layers) · Lightning (radial flash)',
+			name: 'Weather (Rain + Frost)',
+			z: 'z:2 (rain), z:5 (frost)',
+			condition: 'weather dependent / altitude',
+			description: 'Rain (2 parallax layers) · Frost overlay',
 			category: 'css',
 			previewType: 'css',
 			details: [
-				'Rendered by: Window.svelte .rain-layer, .lightning-flash',
+				'Rendered by: ui/Weather.svelte .rain-layer, .frost-layer',
 				'Rain: near (0.4s cycle, 80px) + far (0.6s, 50px, 50% opacity)',
 				'Wind angle: clear=88°, cloudy=87°, rain=86°, storm=84°',
-				'Lightning: radial-gradient at (lightningX%, lightningY%)',
-				'Lightning timing: 5–30s interval, decay rate 8',
-				'Tick: tickLightning(delta) in WindowModel',
+				'Frost: altitude-driven, kicks in above FROST_START_ALTITUDE',
+				'Lightning is a separate scene/effects/lightning/ effect (was here pre-Phase-1)',
+			],
+		},
+		{
+			id: 'car-lights',
+			name: 'Car Lights (geo)',
+			z: 'inside Cesium',
+			condition: 'hasBuildings && nightFactor > 0.15',
+			description: 'Procedural dot cluster — white headlights, red taillights, blue flicker',
+			category: 'imagery',
+			previewType: 'imagery',
+			details: [
+				'Owned by: scene/effects/car-lights/ — first geo-positioned scene effect',
+				'Renders as: Cesium CustomDataSource with 350 Point entities clamped to ground',
+				'Seeding: rules.ts seedDots — quadratic-biased radial cluster around location',
+				'Classes: 70% warm white, 25% red, 5% blue (rules.ts lightClass)',
+				'Visibility gate: hasBuildings flag on Location + nightFactor > 0.15',
+				'Scaling: NearFarScalar(2000, 2.5, 80000, 0.4) — bigger near, smaller far',
+				'Pattern: subscribes to activeCesium.manager via $effect — mounts/unmounts cleanly',
 			],
 		},
 		{
 			id: 'clouds',
 			name: 'Clouds',
 			z: 'z:1',
-			condition: 'cloudOpacity > 0',
+			condition: 'showClouds',
 			description: 'CSS-only — SVG feTurbulence + box-shadow drift (CSS-Tricks technique)',
 			category: 'css',
 			previewType: 'cloud',
 			details: [
-				'Rendered by: CloudBlobs.svelte → SVG feTurbulence + feDisplacementMap',
+				'Owned by: scene/effects/clouds/ → wraps ui/CloudBlobs.svelte',
 				'Technique: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/',
 				'Container: perspective(600px) rotateX(35deg) — horizon compresses, foreground widens',
 				'Cloud layer: 10 blurred ellipses. Far=small/hazy/slow, near=large/sharp/fast',
@@ -565,17 +599,13 @@
 			<div class="pipeline-sub">
 				<div class="sub-label">model.tick(dt) dispatches to:</div>
 				<div class="sub-grid">
-					<span class="sub-fn">tickFlightPath</span>
-					<span class="sub-fn">tickScenario</span>
-					<span class="sub-fn">tickOrbit</span>
-					<span class="sub-fn">tickDeparture</span>
-					<span class="sub-fn">tickTransit</span>
-					<span class="sub-fn">tickDirector</span>
-					<span class="sub-fn">tickLightning</span>
-					<span class="sub-fn">tickMotion</span>
-					<span class="sub-fn">tickAltitude</span>
-					<span class="sub-fn">tickMicroEvents</span>
-					<span class="sub-fn">tickRandomize</span>
+					<span class="sub-fn">flight.tick</span>
+					<span class="sub-fn">motion.tick</span>
+					<span class="sub-fn">world.tick</span>
+					<span class="sub-fn">→ #tickRandomize</span>
+					<span class="sub-fn">→ #tickDirector</span>
+					<span class="sub-fn">scene/effects/* subscribe</span>
+					<span class="sub-fn">to game-loop directly</span>
 				</div>
 			</div>
 		</div>

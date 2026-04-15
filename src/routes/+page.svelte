@@ -9,13 +9,14 @@
 	 * - Cabin interior context
 	 */
 
-	import { onDestroy } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import { createAppState } from "$lib/app-state.svelte";
 	import { AIRCRAFT } from "$lib/constants";
 	import { LOCATION_MAP } from "$lib/locations";
 	import type { LocationId } from "$lib/types";
 	import { savePersistedState } from "$lib/persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
+	import { hydrateFromServer } from "$lib/scene/bundle/client";
 	import Window from "$lib/ui/Window.svelte";
 	import Controls from "$lib/ui/HUD.svelte";
 	import SidePanel from "$lib/ui/SidePanel.svelte";
@@ -52,6 +53,12 @@
 		if (typeof window === "undefined") return;
 		const client = createWsClient(model);
 		return () => client.destroy();
+	});
+
+	// Pull any bundles the server has persisted to disk. Silent-fail if the
+	// endpoint is unreachable — stock effects always render regardless.
+	onMount(() => {
+		void hydrateFromServer();
 	});
 
 	// Clean up model timers on page teardown

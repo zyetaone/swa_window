@@ -281,7 +281,6 @@ export class WindowModel {
 
 		this.motion.tick(delta, ctx);
 
-		ctx.showLightning    = WEATHER_EFFECTS[this.weather].hasLightning;
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
 		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
 		const worldPatch = this.world.tick(delta, ctx);

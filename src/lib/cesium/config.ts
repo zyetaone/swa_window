@@ -12,6 +12,17 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 export const SENTINEL2 = import.meta.env.VITE_SENTINEL2 === 'true' || false;
 
 /**
+ * NASA VIIRS City Lights (Earth at Night, 2012 composite).
+ * Free, public, no auth — served via NASA's GIBS tile server.
+ * Provides photographic city-glow appearance — complements CartoDB Dark's vector road detail.
+ */
+export const VIIRS_NIGHT_LIGHTS_URL =
+	'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+
+/** CartoDB Dark basemap — dark vector tiles with crisp road + building edge detail. */
+export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
+
+/**
  * Sentinel-2 L2A via RODA/Sentinel-Hub public bucket.
  * Band L2A = natural color RGB composite.
  * Path format: tiles/{z}/{x}/{y}/L2A/{date}.jpg
@@ -47,6 +58,34 @@ export function initCesiumGlobal(C: typeof CesiumType): void {
 	// Set base URL for static assets (workers, etc.)
 	(globalThis as any).CESIUM_BASE_URL = '/cesiumStatic';
 }
+
+/**
+ * Shared Cesium.Viewer constructor options — strips all built-in widgets
+ * (toolbar, geocoder, animation, etc.) so the canvas is purely a render surface.
+ *
+ * `webgl` defaults to alpha=false (opaque); pass `webgl: { alpha: true }`
+ * via override when the page wants a CSS gradient to show through.
+ */
+export const VIEWER_OPTIONS = {
+	baseLayer: false as const,
+	animation: false,
+	baseLayerPicker: false,
+	fullscreenButton: false,
+	vrButton: false,
+	geocoder: false,
+	homeButton: false,
+	infoBox: false,
+	sceneModePicker: false,
+	selectionIndicator: false,
+	timeline: false,
+	navigationHelpButton: false,
+	navigationInstructionsInitiallyVisible: false,
+	shadows: false,
+	useBrowserRecommendedResolution: false,
+	contextOptions: {
+		webgl: { alpha: false, antialias: true, preserveDrawingBuffer: true },
+	},
+} as const;
 
 /**
  * Get the primary satellite imagery URL.

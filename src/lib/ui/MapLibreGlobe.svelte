@@ -11,11 +11,13 @@
 	} from 'svelte-maplibre-gl';
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type maplibregl from 'maplibre-gl';
+	import { buildSatelliteStyle, VOYAGER_STYLE, altitudeToZoom } from '$lib/maplibre/style';
 
 	let {
 		lat = 25.2,
 		lon = 55.3,
-		zoom = 10,
+		altitude = 30000,
+		zoom,
 		pitch = 45,
 		bearing = 0,
 		imageryUrl = '',
@@ -26,9 +28,11 @@
 		showTerrain = false,
 		showAtmosphere = true,
 		nightFactor = 0,
+		terrainExaggeration = 1.5,
 	}: {
 		lat?: number;
 		lon?: number;
+		altitude?: number;
 		zoom?: number;
 		pitch?: number;
 		bearing?: number;
@@ -40,39 +44,8 @@
 		showTerrain?: boolean;
 		showAtmosphere?: boolean;
 		nightFactor?: number;
+		terrainExaggeration?: number;
 	} = $props();
-
-	// Self-contained satellite style — no basemap POIs (avoids the green dots).
-	// When a custom imagery URL is provided, embed it directly in the style.
-	const buildSatelliteStyle = (url: string, attribution: string): maplibregl.StyleSpecification => ({
-		version: 8,
-		sources: {
-			'sat-imagery': {
-				type: 'raster',
-				tiles: [url],
-				tileSize: 256,
-				maxzoom: 19,
-				attribution,
-			},
-		},
-		layers: [
-			{ id: 'bg', type: 'background', paint: { 'background-color': '#0a1228' } },
-			{
-				id: 'sat-imagery',
-				type: 'raster',
-				source: 'sat-imagery',
-				paint: {
-					// LOD smoothing: no fade transitions, linear filter, full opacity
-					'raster-fade-duration': 0,
-					'raster-resampling': 'linear',
-					'raster-opacity': 1,
-				},
-			},
-		],
-		glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-	} as maplibregl.StyleSpecification);
-
-	const VOYAGER_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
@@ -85,11 +58,14 @@
 
 	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
+	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
+
 	export function flyTo(dst: { lat: number; lon: number; altitude?: number }, _duration = 2000) {
 		if (!mapRef) return;
+		const z = dst.altitude ? Math.max(8, altitudeToZoom(dst.altitude)) : effectiveZoom;
 		mapRef.flyTo({
 			center: [dst.lon, dst.lat],
-			zoom: dst.altitude ? Math.max(8, 16 - Math.log2(dst.altitude / 30000)) : zoom,
+			zoom: z,
 			duration: _duration,
 		});
 	}
@@ -99,7 +75,7 @@
 	bind:map={mapRef}
 	class="map-container"
 	center={{ lng: lon, lat }}
-	{zoom}
+	zoom={effectiveZoom}
 	{pitch}
 	{bearing}
 	style={activeStyle}
@@ -109,7 +85,7 @@
 	fadeDuration={0}
 	autoloadGlobalCss={false}
 >
-	<Projection type="mercator" />
+		<Projection type="globe" />
 	<PMTilesProtocol />
 
 	{#if showAtmosphere}
@@ -127,9 +103,12 @@
 		{/if}
 	{/if}
 
-	{#if terrainPmtilesUrl && showTerrain}
-		<RasterDEMTileSource id="terrain" url={`pmtiles://${terrainPmtilesUrl}`}>
-			<Terrain exaggeration={1.5} />
+	{#if showTerrain}
+		<RasterDEMTileSource
+			id="terrain"
+			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png'}
+		>
+			<Terrain exaggeration={terrainExaggeration} />
 		</RasterDEMTileSource>
 	{/if}
 

@@ -165,10 +165,16 @@ export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = 
 };
 
 export const CESIUM = {
-	// Night city glow overlay (CartoDB dark basemap — shows roads + urban areas)
-	NIGHT_ALPHA: 0.7,
-	NIGHT_BRIGHTNESS: 2.5,
-	NIGHT_CONTRAST: 1.8,
+	// Dual-layer night rendering — photographic glow + vector road detail composited.
+	// Layer 1: NASA VIIRS City Lights (satellite photo, warm blotchy glow)
+	VIIRS_NIGHT_ALPHA: 0.85,
+	VIIRS_NIGHT_BRIGHTNESS: 1.6,
+	VIIRS_CONTRAST: 1.1,
+	// Layer 2: CartoDB Dark (vector roads/buildings, crisp edges)
+	ROAD_LIGHT_NIGHT_ALPHA: 0.55,
+	ROAD_LIGHT_NIGHT_BRIGHTNESS: 1.8,
+	ROAD_LIGHT_CONTRAST: 1.3,
+	ROAD_LIGHT_SATURATION: 0.0,
 } as const;
 
 // =============================================================================

@@ -13,6 +13,7 @@
 	import { CesiumManager } from '$lib/cesium/manager';
 	import { COLOR_GRADING_GLSL } from '$lib/cesium/shaders';
 	import { initCesiumGlobal } from '$lib/cesium/config';
+	import { activeCesium } from '$lib/cesium/active.svelte';
 
 	const model = useAppState();
 
@@ -32,6 +33,7 @@
 
 			cesium = new CesiumManager(model, CesiumModule);
 			await cesium.start(viewerContainer, COLOR_GRADING_GLSL);
+			activeCesium.manager = cesium;
 
 			fadingOut = true;
 			loadTimeout = setTimeout(() => {
@@ -46,6 +48,7 @@
 
 	onDestroy(() => {
 		if (loadTimeout) clearTimeout(loadTimeout);
+		activeCesium.manager = null;
 		cesium?.destroy();
 		cesium = null;
 	});

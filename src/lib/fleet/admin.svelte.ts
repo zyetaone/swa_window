@@ -2,7 +2,7 @@
  * Admin Store — dual-transport fleet management state
  */
 
-import type { DeviceInfo, DisplayConfig } from '$lib/fleet/protocol';
+import type { DeviceInfo, DisplayConfig, ServerAdminMessage } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 import { BaseTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
@@ -95,7 +95,7 @@ export class AdminStore extends BaseTransport {
 	}
 
 	#handleEvent(raw: string): void {
-		const msg = safeParse<any>(raw);
+		const msg = safeParse<ServerAdminMessage>(raw);
 		if (!msg) return;
 		switch (msg.type) {
 			case 'device_registered': this.#upsertDevice(msg.device); break;

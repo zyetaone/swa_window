@@ -76,7 +76,6 @@ export interface SimulationContext {
 	haze: number;
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
 	/** WorldEngine-specific (populated only for world.tick) */
-	showLightning?: boolean;
 	isOrbitMode?: boolean;
 	pickNextLocation?: () => LocationId;
 }

@@ -9,7 +9,15 @@ import { AIRCRAFT, CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import type * as CesiumType from 'cesium';
-import { getIonToken, checkLocalTileServer, TILE_SERVER_URL, getSatelliteImageryUrl } from './config';
+import {
+	getIonToken,
+	checkLocalTileServer,
+	TILE_SERVER_URL,
+	getSatelliteImageryUrl,
+	VIEWER_OPTIONS,
+	VIIRS_NIGHT_LIGHTS_URL,
+	CARTODB_DARK_URL,
+} from './config';
 
 export interface CesiumModelView {
 	flight: {
@@ -55,8 +63,11 @@ export class CesiumManager {
 	// Asset state
 	private tileset: CesiumType.Cesium3DTileset | null = null;
 	private lastNightFactor = -1;
-	// Imagery Layers
+	// Imagery Layers — dual-layer night rendering
+	// nightLayer: NASA VIIRS City Lights (photographic warm glow)
+	// roadLightLayer: CartoDB Dark (vector road + building edge detail)
 	private nightLayer: CesiumType.ImageryLayer | null = null;
+	private roadLightLayer: CesiumType.ImageryLayer | null = null;
 
 	// Effect sync caches
 	private lastGlobeColor = '';
@@ -75,27 +86,14 @@ export class CesiumManager {
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType) {
 		this.CesiumModule = CesiumModule;
 		this.model = model;
-		this.viewer = new CesiumModule.Viewer(this.viewerContainer(), {
-			baseLayer: false as const,
-			animation: false,
-			baseLayerPicker: false,
-			fullscreenButton: false,
-			vrButton: false,
-			geocoder: false,
-			homeButton: false,
-			infoBox: false,
-			sceneModePicker: false,
-			selectionIndicator: false,
-			timeline: false,
-			navigationHelpButton: false,
-			navigationInstructionsInitiallyVisible: false,
-			shadows: false,
-			useBrowserRecommendedResolution: false,
-			contextOptions: {
-				webgl: { alpha: false, antialias: true, preserveDrawingBuffer: true },
-			},
-		});
+		this.viewer = new CesiumModule.Viewer(this.viewerContainer(), VIEWER_OPTIONS);
 	}
+
+	/** Live Cesium.Viewer — exposed so scene effects can attach primitives/data sources. */
+	getViewer(): CesiumType.Viewer { return this.viewer; }
+
+	/** Bound Cesium module — exposed so scene effects can construct Cesium types. */
+	getCesium(): typeof CesiumType { return this.CesiumModule; }
 
 	private viewerContainer(): HTMLElement {
 		this.#viewerContainerEl = document.createElement('div');
@@ -167,16 +165,26 @@ export class CesiumManager {
 		});
 		this.viewer.imageryLayers.addImageryProvider(provider);
 
-		if (!useLocal) {
-			try {
-				// Single CartoDB dark basemap layer for both city glow + road lights at night
-				this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
-					new C.UrlTemplateImageryProvider({ url: 'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png', maximumLevel: 18, minimumLevel: 0 })
-				);
-				if (this.nightLayer) { this.nightLayer.alpha = 0; this.nightLayer.show = false; }
-			} catch (e) {
-				console.warn('[CesiumManager] Night layer failed:', e);
-			}
+		if (useLocal) return;
+
+		// Layer 1: NASA VIIRS City Lights — satellite-photo warm glow over urban areas
+		try {
+			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
+				new C.UrlTemplateImageryProvider({ url: VIIRS_NIGHT_LIGHTS_URL, maximumLevel: 8, minimumLevel: 0 })
+			);
+			if (this.nightLayer) { this.nightLayer.alpha = 0; this.nightLayer.show = false; }
+		} catch (e) {
+			console.warn('[CesiumManager] VIIRS night layer failed:', e);
+		}
+
+		// Layer 2: CartoDB Dark — vector road + building outlines for crisp edge detail
+		try {
+			this.roadLightLayer = this.viewer.imageryLayers.addImageryProvider(
+				new C.UrlTemplateImageryProvider({ url: CARTODB_DARK_URL, maximumLevel: 18, minimumLevel: 0 })
+			);
+			if (this.roadLightLayer) { this.roadLightLayer.alpha = 0; this.roadLightLayer.show = false; }
+		} catch (e) {
+			console.warn('[CesiumManager] Road light layer failed:', e);
 		}
 	}
 
@@ -281,7 +289,7 @@ export class CesiumManager {
 	}
 
 	private syncImagery(): void {
-		if (!this.nightLayer) return;
+		if (!this.nightLayer && !this.roadLightLayer) return;
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
 
@@ -289,13 +297,26 @@ export class CesiumManager {
 		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
 		this.lastNightFactor = nf;
 
-		this.nightLayer.show = show || firstNight;
-		const alpha = lerp(0, CESIUM.NIGHT_ALPHA, nf) * scale;
-		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
-			this.lastNightAlpha = alpha;
-			this.nightLayer.alpha = alpha;
-			this.nightLayer.brightness = lerp(1, CESIUM.NIGHT_BRIGHTNESS, nf) * scale;
-			this.nightLayer.contrast = lerp(1, CESIUM.NIGHT_CONTRAST, nf);
+		// VIIRS: photographic city glow — alpha+brightness ramp with night factor
+		if (this.nightLayer) {
+			this.nightLayer.show = show || firstNight;
+			const alpha = nf * CESIUM.VIIRS_NIGHT_ALPHA * scale;
+			if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
+				this.lastNightAlpha = alpha;
+				this.nightLayer.alpha = alpha;
+				this.nightLayer.brightness = lerp(1, CESIUM.VIIRS_NIGHT_BRIGHTNESS, nf) * scale;
+				this.nightLayer.contrast = CESIUM.VIIRS_CONTRAST;
+				this.nightLayer.saturation = 0.0;
+			}
+		}
+
+		// CartoDB Dark: road/building outlines — independent tuning
+		if (this.roadLightLayer) {
+			this.roadLightLayer.show = show || firstNight;
+			this.roadLightLayer.alpha = nf * CESIUM.ROAD_LIGHT_NIGHT_ALPHA * scale;
+			this.roadLightLayer.brightness = lerp(1, CESIUM.ROAD_LIGHT_NIGHT_BRIGHTNESS, nf) * scale;
+			this.roadLightLayer.contrast = CESIUM.ROAD_LIGHT_CONTRAST;
+			this.roadLightLayer.saturation = CESIUM.ROAD_LIGHT_SATURATION;
 		}
 	}
 

@@ -10,6 +10,8 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, formatTime, clamp } from '$lib/utils';
+	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from '$lib/globe/sources';
+	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
 	import MapLibreGlobe from '$lib/ui/MapLibreGlobe.svelte';
@@ -18,52 +20,6 @@
 	import * as Cesium from 'cesium';
 
 	type Tab = 'cesium' | 'maplibre' | 'compare';
-
-	interface Source {
-		id: string;
-		label: string;
-		url: string;
-		note: string;
-		attribution?: string;
-		isPmtiles?: boolean;
-	}
-
-	const CESIUM_SOURCES: Source[] = [
-		{ id: 'esri', label: 'ESRI World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'No auth, z19 max, global', attribution: '© ESRI' },
-	];
-
-	// MapLibre satellite sources — CORS-enabled tile providers
-	// (ESRI/USGS lack CORS headers and won't render as WebGL textures)
-	const MAPLIBRE_SOURCES: Source[] = [
-		{
-			id: 'eox-s2',
-			label: 'Sentinel-2 Cloudless (EOX)',
-			url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
-			note: 'Free, z14 max, cloudless — natural look',
-			attribution: '© EOX • Sentinel-2',
-		},
-		{
-			id: 'esri-proxied',
-			label: 'ESRI via Tile Proxy',
-			url: '/api/tiles/proxy/esri/{z}/{y}/{x}',
-			note: 'No CORS on ESRI direct — needs server proxy',
-			attribution: '© ESRI',
-		},
-		{
-			id: 'osm',
-			label: 'OSM Standard (no satellite)',
-			url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-			note: 'Free map style for comparison',
-			attribution: '© OpenStreetMap',
-		},
-		{
-			id: 'pmtiles',
-			label: 'ESRI PMTiles (local)',
-			url: '/pmtiles/esri_dubai.pmtiles',
-			note: 'Prefetched offline — needs build-pmtiles',
-			isPmtiles: true,
-		},
-	];
 
 	// ─── State ───────────────────────────────────────────────────────────────
 	let activeTab = $state<Tab>('cesium');
@@ -91,14 +47,6 @@
 	let mlTerrain = $state(false);
 	let mlBuildings = $state(false);
 	let mlAtmosphere = $state(true);
-	const TERRAIN_PMTILES = '/pmtiles/terrain.pmtiles';
-
-	// Lightning preview (simplified — just pulses every 3-8s when enabled)
-	let lightningIntensity = $state(0);
-	let lightningX = $state(50);
-	let lightningY = $state(30);
-	let lightningTimer = 0;
-	let nextLightning = randomBetween(3, 8);
 
 	// Cesium lifecycle
 	let viewerContainer = $state<HTMLDivElement | null>(null);
@@ -107,8 +55,8 @@
 
 	// ─── Derived ─────────────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(activeLocation) ?? LOCATIONS[0]);
-	const maplibreSrc = $derived(MAPLIBRE_SOURCES.find(s => s.id === maplibreSource) ?? MAPLIBRE_SOURCES[0]);
-	const cesiumSrc = $derived(CESIUM_SOURCES.find(s => s.id === cesiumSource) ?? CESIUM_SOURCES[0]);
+	const maplibreSrc = $derived(findSource(MAPLIBRE_SOURCES, maplibreSource));
+	const cesiumSrc = $derived(findSource(CESIUM_SOURCES, cesiumSource));
 	const skyState = $derived<SkyState>(getSkyState(timeOfDay));
 	const nightFactor = $derived.by(() => {
 		const t = timeOfDay;
@@ -143,21 +91,6 @@
 			if (autoOrbit) heading = (heading + dt * 5) % 360;
 			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;  // 48s = full day
 
-			// Lightning decay + trigger
-			if (weatherFx.hasLightning) {
-				lightningTimer += dt;
-				if (lightningIntensity > 0) lightningIntensity = Math.max(0, lightningIntensity - dt * 8);
-				if (lightningIntensity < 0.01 && lightningTimer > nextLightning) {
-					lightningIntensity = randomBetween(0.5, 1);
-					lightningX = randomBetween(20, 80);
-					lightningY = randomBetween(15, 65);
-					lightningTimer = 0;
-					nextLightning = randomBetween(3, 8);
-				}
-			} else if (lightningIntensity > 0) {
-				lightningIntensity = 0;
-			}
-
 			raf = requestAnimationFrame(loop);
 		};
 		raf = requestAnimationFrame(loop);
@@ -168,27 +101,18 @@
 	function initCesium() {
 		if (!viewerContainer || cesiumViewer) return;
 		try {
-			Cesium.Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? '';
+			initCesiumGlobal(Cesium);
+			// Playground wants gradient to show through — override webgl.alpha
 			cesiumViewer = new Cesium.Viewer(viewerContainer, {
-				baseLayer: false,
-				animation: false,
-				baseLayerPicker: false,
-				fullscreenButton: false,
-				vrButton: false,
-				geocoder: false,
-				homeButton: false,
-				infoBox: false,
-				sceneModePicker: false,
-				selectionIndicator: false,
-				timeline: false,
-				navigationHelpButton: false,
-				navigationInstructionsInitiallyVisible: false,
-				shadows: false,
+				...VIEWER_OPTIONS,
 				contextOptions: { webgl: { alpha: true, antialias: true } },
 			});
-			cesiumViewer.imageryLayers.removeAll();
 			applyCesiumSource();
-			Cesium.createWorldTerrainAsync().then(t => { if (cesiumViewer) cesiumViewer.terrainProvider = t; }).catch(() => {});
+			if (getIonToken()) {
+				Cesium.createWorldTerrainAsync()
+					.then(t => { if (cesiumViewer) cesiumViewer.terrainProvider = t; })
+					.catch(() => {});
+			}
 			// Set initial camera position synchronously, then mark loaded
 			const altMeters = altitude * 0.3048;
 			cesiumViewer.camera.setView({
@@ -212,7 +136,7 @@
 			cesiumViewer.imageryLayers.addImageryProvider(
 				new Cesium.UrlTemplateImageryProvider({
 					url: cesiumSrc.url,
-					maximumLevel: 19,
+					maximumLevel: cesiumSrc.maxZoom ?? 19,
 					minimumLevel: 0,
 					tilingScheme: new Cesium.WebMercatorTilingScheme(),
 				})
@@ -308,29 +232,26 @@
 				<MapLibreGlobe
 					lat={currentLocation.lat}
 					lon={currentLocation.lon}
-					zoom={10}
+					{altitude}
 					pitch={70}
 					bearing={heading}
 					imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 					imageryAttribution={maplibreSrc.attribution ?? ''}
 					pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
-					terrainPmtilesUrl={TERRAIN_PMTILES}
 					showTerrain={mlTerrain}
 					showBuildings={mlBuildings}
 					showAtmosphere={mlAtmosphere}
 					{nightFactor}
+					terrainExaggeration={1.5}
 				/>
 			</div>
 		{/if}
 
-		<CloudBlobs {density} speed={cloudSpeed} {skyState} {time} {heading} {altitude} {windAngle} />
+		<CloudBlobs {density} speed={cloudSpeed} {skyState} {heading} {altitude} {windAngle} />
 
 		<Weather
 			rainOpacity={weatherFx.rainOpacity}
 			{windAngle}
-			lightningOpacity={lightningIntensity * 0.3}
-			{lightningX}
-			{lightningY}
 			{frostAmount}
 		/>
 
@@ -430,8 +351,8 @@
 			<fieldset>
 				<legend>MapLibre Layers</legend>
 				<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
-				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (PMTiles DEM)</label>
-				<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings</label>
+				<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (demotiles / JAXA)</label>
+				<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (CartoDB)</label>
 			</fieldset>
 		{/if}
 

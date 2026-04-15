@@ -18,12 +18,10 @@
 	import { AIRCRAFT, FLIGHT_FEEL, WEATHER_EFFECTS } from "$lib/constants";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
-	import { untrack } from "svelte";
 	import { useBlind } from "./use-blind.svelte";
 	import CesiumViewer from "./Globe.svelte";
-	import CloudBlobs from './CloudBlobs.svelte';
 	import Weather from './Weather.svelte';
-	import MicroEvent from './MicroEvent.svelte';
+	import Compositor from '$lib/scene/compositor.svelte';
 	const model = useAppState();
 	const blind = useBlind(model);
 
@@ -31,17 +29,12 @@
 	// GAME LOOP — single RAF driving model.tick()
 	// ========================================================================
 
-	let elapsedTime = $state(0);
-
-	$effect(() => {
-		return subscribe((dt: number) => {
+	$effect(() =>
+		subscribe((dt: number) => {
 			model.tick(dt);
 			model.reportFrame();
-			untrack(() => {
-				elapsedTime += dt;
-			});
-		});
-	});
+		}),
+	);
 
 	// ========================================================================
 	// ACTIONS
@@ -111,17 +104,10 @@
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
 
-	// --- Clouds ---
-	const cloudOpacity = $derived(model.effectiveCloudDensity);
-	const cloudSpeed = $derived(model.cloudSpeed);
-
 	// --- Weather ---
 
 	const rainOpacity = $derived(WEATHER_EFFECTS[model.weather].rainOpacity);
 	const windAngle = $derived(WEATHER_EFFECTS[model.weather].windAngle);
-	const lightningOpacity = $derived(model.world.lightningIntensity * 0.3);
-	const lightningX = $derived(model.world.lightningX);
-	const lightningY = $derived(model.world.lightningY);
 
 	// --- Motion (unified from 4 independent layers) ---
 
@@ -146,10 +132,6 @@
 	const wingTransform = $derived(
 		`rotate(${(-2 + model.motion.bankAngle * 0.3).toFixed(2)}deg)`,
 	);
-
-	// --- Micro-events ---
-
-	const microEvent = $derived(model.world.microEvent);
 
 	// --- Glass ---
 
@@ -201,26 +183,11 @@
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1 — Cloud deck along the horizon (viewed from above at cruise) -->
-			<div class="render-layer" style:z-index={1}>
-				{#if model.showClouds}
-				<CloudBlobs
-					density={cloudOpacity}
-					speed={cloudSpeed}
-					skyState={model.skyState}
-					time={elapsedTime}
-					heading={model.flight.heading}
-					altitude={model.flight.altitude}
-					windAngle={windAngle}
-				/>
-				{/if}
-			</div>
+			<!-- z:1-3 — Scene effects (clouds, lightning, micro-events) -->
+			<Compositor />
 
-			<!-- z:2 Rain + Lightning, z:5 Frost -->
-			<Weather {rainOpacity} {windAngle} {lightningOpacity} {lightningX} {lightningY} {frostAmount} />
-
-			<!-- z:3 — Micro-events (shooting stars, birds, contrails) -->
-			<MicroEvent event={microEvent} />
+			<!-- z:2 rain, z:5 frost -->
+			<Weather {rainOpacity} {windAngle} {frostAmount} />
 
 			<!-- z:7 — Wing silhouette (bottom-left, shifts with bank) -->
 			<div
