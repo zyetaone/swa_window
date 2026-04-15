@@ -262,13 +262,12 @@
 	$effect(() => {
 		if (!mapRef) return;
 		let raf: number;
-		let last = performance.now();
 		const m = mapRef;
-		const loop = (now: number) => {
+		const loop = () => {
 			const t = cityFlickerTime; // reactive read — effect re-runs when it changes
 			try {
 				if (m.getLayer?.('city-glow')) {
-					// Blend of three frequencies — fast micro-flicker (13 Hz), medium
+					// Blend of three frequencies — fast micro-flicker (~13 Hz), medium
 					// (~2.3 Hz), and slow swell (~0.4 Hz) layered for organic feel.
 					const flicker = (
 						Math.sin(t * 82) * 0.08 +
@@ -281,7 +280,6 @@
 					);
 				}
 			} catch {}
-			last = now;
 			raf = requestAnimationFrame(loop);
 		};
 		raf = requestAnimationFrame(loop);
