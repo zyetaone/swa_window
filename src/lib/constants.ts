@@ -187,6 +187,15 @@ export const CESIUM = {
 	NIGHT_ALPHA: 0.8,
 	NIGHT_BRIGHTNESS: 1.6,
 	NIGHT_CONTRAST: 1.6,
+
+	// Bloom post-process stage — enabled at balanced/ultra quality so bright
+	// city-light fragments bleed into soft halos that merge between adjacent
+	// intersections. High contrast + negative brightness means only the top
+	// of the luminance range blooms (bright roads, not dim terrain). Sigma
+	// controls the Gaussian spread — the "inkling" quality.
+	BLOOM_CONTRAST: 128,
+	BLOOM_BRIGHTNESS: -0.3,
+	BLOOM_SIGMA: 3.5,
 } as const;
 
 // =============================================================================

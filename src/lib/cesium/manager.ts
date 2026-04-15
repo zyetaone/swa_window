@@ -185,7 +185,27 @@ export class CesiumManager {
 	// ─── Post Process Setup ──────────────────────────────────────────────────
 	private setupPostProcess(glsl: string): void {
 		const v = this.viewer;
-		if (v.scene.postProcessStages?.bloom) v.scene.postProcessStages.bloom.enabled = false;
+
+		// Bloom: enabled at non-performance quality modes so bright city-light
+		// pixels bleed into soft halos that merge between adjacent intersections.
+		// contrast=128 + brightness=-0.3 restricts contribution to genuinely
+		// bright fragments (no bloom on dim terrain). sigma=3.5 widens Gaussian
+		// enough that adjacent road-intersection halos merge into pooled glow.
+		// Performance preset disables — Pi 5 GPU headroom is too tight there.
+		const bloom = v.scene.postProcessStages?.bloom;
+		if (bloom) {
+			const allowBloom = this.model.qualityMode !== 'performance';
+			bloom.enabled = allowBloom;
+			if (allowBloom) {
+				bloom.uniforms.contrast = CESIUM.BLOOM_CONTRAST;
+				bloom.uniforms.brightness = CESIUM.BLOOM_BRIGHTNESS;
+				bloom.uniforms.sigma = CESIUM.BLOOM_SIGMA;
+				bloom.uniforms.delta = 1.0;
+				bloom.uniforms.stepSize = 1.0;
+				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
+			}
+		}
+
 		try {
 			const existing = (v.scene.postProcessStages as any).find?.((s: any) => s.name === 'aero-color-grade');
 			if (existing) { existing.enabled = true; return; }
