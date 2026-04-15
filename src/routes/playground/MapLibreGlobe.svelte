@@ -8,6 +8,7 @@
 		FillExtrusionLayer,
 		FillLayer,
 		GeoJSONSource,
+		HillshadeLayer,
 		RasterLayer,
 		RasterTileSource,
 		RasterDEMTileSource,
@@ -178,8 +179,10 @@
 	});
 
 	// ── Camera sync — keep map in sync with reactive props ──────────────────
-	// When freeCam is enabled, the prop-driven sync stops after the initial
-	// jumpTo so the user can drag/zoom/pitch freely without being overridden.
+	// Always enforce tilted cruise-view (pitch) on load — svelte-maplibre-gl's
+	// initial pitch prop can be overridden by map reinitialization, leaving
+	// us stuck top-down. Listen for 'idle' (fired after style + sources settle)
+	// to explicitly setPitch + setBearing + setZoom after initial render.
 	let cameraInit = false;
 	let prevTarget = { lat: 0, lon: 0 };
 	$effect(() => {
@@ -189,9 +192,16 @@
 		const target = { center: [lon, lat] as [number, number], zoom: effectiveZoom, pitch, bearing };
 
 		if (!cameraInit) {
-			const apply = () => { mapRef!.jumpTo(target); cameraInit = true; };
-			if (mapRef.loaded()) apply();
-			else mapRef.once('load', apply);
+			const apply = () => {
+				mapRef!.jumpTo(target);
+				// Belt-and-braces — force pitch/bearing even if jumpTo was racy
+				mapRef!.setPitch(pitch);
+				mapRef!.setBearing(bearing);
+				cameraInit = true;
+			};
+			// 'idle' fires after style + all sources settle; more reliable than 'load'
+			if (mapRef.isStyleLoaded()) apply();
+			else mapRef.once('idle', apply);
 			prevTarget = { lat, lon };
 			return;
 		}
@@ -264,7 +274,7 @@
 	{bearing}
 	style={activeStyle}
 	attributionControl={false}
-	maxPitch={75}
+	maxPitch={85}
 	maxTileCacheSize={200}
 	fadeDuration={0}
 	autoloadGlobalCss={false}
@@ -282,26 +292,51 @@
 			color={skyPalette.light}
 			intensity={skyPalette.intensity}
 		/>
-		<!-- Sky uses map.setSky() — palette driven by timeOfDay (5 bands). -->
+		<!-- Sky — all atmosphere properties per MapLibre sky spec.
+		     atmosphere-blend is zoom-interpolated: strong atmosphere scattering
+		     at low zoom (globe view), fading as we descend closer to terrain.
+		     Matches hybrid-satellite + sky-fog-terrain examples. -->
 		<Sky
 			sky-color={skyPalette.sky}
 			horizon-color={skyPalette.horizon}
 			fog-color={skyPalette.fog}
 			sky-horizon-blend={0.3}
 			horizon-fog-blend={0.5}
-			atmosphere-blend={0.4}
+			fog-ground-blend={0.1}
+			atmosphere-blend={['interpolate', ['linear'], ['zoom'], 0, 1, 8, 0.6, 14, 0.2]}
 		/>
 	{/if}
 
  	{#if showTerrain}
+		<!-- Mapterhorn terrain via tilejson (self-describing — encoding,
+		     zoom range, attribution come from the URL). Matches the MapLibre
+		     hybrid-satellite-with-terrain example. -->
 		<RasterDEMTileSource
 			id="terrain"
-			tiles={[terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.webp']}
+			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/tilejson.json'}
 			tileSize={256}
-			encoding="terrarium"
-			maxzoom={13}
 		>
 			<Terrain exaggeration={terrainExaggeration} />
+		</RasterDEMTileSource>
+
+		<!-- Hillshade — second raster-dem reference renders a shaded-relief
+		     pass that gives terrain real directional shadows. Matches MapLibre
+		     sky-fog-terrain example. -->
+		<RasterDEMTileSource
+			id="hillshade"
+			url="https://tiles.mapterhorn.com/tilejson.json"
+			tileSize={256}
+		>
+			<HillshadeLayer
+				id="hillshade-layer"
+				source="hillshade"
+				paint={{
+					'hillshade-shadow-color': nightFactor > 0.5 ? '#1a1f35' : '#473B24',
+					'hillshade-highlight-color': nightFactor > 0.5 ? '#4a5a7a' : '#ffe8c0',
+					'hillshade-accent-color': nightFactor > 0.5 ? '#2a3048' : '#8a6040',
+					'hillshade-exaggeration': 0.5,
+				}}
+			/>
 		</RasterDEMTileSource>
 	{/if}
 
