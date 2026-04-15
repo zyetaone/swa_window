@@ -7,7 +7,7 @@
  */
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
-import type { DeviceRole } from '$lib/model/config/v2.svelte';
+import type { DeviceRole } from '$lib/model/config.svelte';
 import type { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ============================================================================

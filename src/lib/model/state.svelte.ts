@@ -19,14 +19,11 @@ import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { MotionEngine } from '$lib/camera/motion.svelte';
 import { DirectorEngine } from '$lib/director/autopilot.svelte';
 import {
-	config as v2config,
+	config as _config,
 	syncAtmosphereWeather,
 	syncWorldQuality,
-	applyConfigPatch as v2applyConfigPatch,
-} from '$lib/model/config/v2.svelte';
-// v2 migration — helpers imported here for future wiring. Silence
-// unused-import until the full swap lands; see in-progress ctx assignments
-// that already use v2config below.
+	applyConfigPatch as _applyConfigPatch,
+} from '$lib/model/config.svelte';
 void syncAtmosphereWeather;
 void syncWorldQuality;
 import { Telemetry } from '$lib/model/telemetry.svelte';
@@ -81,9 +78,9 @@ export class WindowModel {
 	readonly director = new DirectorEngine();
 
 	// ── Config tree ──────────────────────────────────────────────────────────
-	// Flat reactive config — v2 single-file state with generic path dispatcher.
+	// Flat reactive config — single-file state with generic path dispatcher.
 	// Fleet v2 config_patch messages route through applyConfigPatch(path, value).
-	readonly config = v2config;
+	readonly config = _config;
 
 	// ── Observability (Phase 5.6) ────────────────────────────────────────────
 	// Ring-buffer telemetry — per-frame durations (p50/p95), lifecycle events,
@@ -269,13 +266,13 @@ export class WindowModel {
 	}
 
 	/**
-	 * v2 path-targeted config patch. Routes into the RootConfig tree.
-	 * Returns true if the path was recognised. Implements the FleetClientModel
-	 * interface addition introduced in Phase 6.
+	 * Path-targeted config patch. Routes into the flat config tree via
+	 * the generic dispatcher. Returns true if the path was recognised.
+	 * Called by the fleet v2 `config_patch` message handler.
 	 */
 	applyConfigPatch(path: string, value: unknown): boolean {
 		this.telemetry.recordEvent('config_patch', { path, value });
-		return v2applyConfigPatch(path, value);
+		return _applyConfigPatch(path, value);
 	}
 
 	applyPatch(patch: Partial<PatchableState>): void {
@@ -377,8 +374,8 @@ export class WindowModel {
 		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
-		camera: v2config.camera,
-		director: v2config.director,
+		camera: _config.camera,
+		director: _config.director,
 	};
 
 	#createContext(): SimulationContext {
@@ -402,8 +399,8 @@ export class WindowModel {
 		c.cloudSpeed            = this.cloudSpeed;
 		c.haze                  = this.haze;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
-		c.camera                = v2config.camera;
-		c.director              = v2config.director;
+		c.camera                = _config.camera;
+		c.director              = _config.director;
 		return c;
 	}
 

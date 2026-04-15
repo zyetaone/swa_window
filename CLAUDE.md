@@ -24,7 +24,7 @@ bun x vitest run     # Run unit/integration tests (104 tests currently)
 - **Imagery**: EOX Sentinel-2 Cloudless (default, no auth) → Mapbox Satellite (token-gated) → ESRI World Imagery (fallback).
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
-- **State**: Flat reactive `$state` objects in `src/lib/model/config/v2.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
+- **State**: Flat reactive `$state` objects in `src/lib/model/config.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
 - **Build**: Vite 7, adapter-node, `bundleStrategy:'single'`, SSR disabled.
 - **Remote push**: Cloudflare Worker (`tools/aero-push-worker/`) for firmware-like OTA bundle + config delivery.
 
@@ -305,10 +305,10 @@ const model = createAppState();  // only in +page.svelte
 const model = useAppState();     // in any descendant
 ```
 
-### `$state` flat config via `v2.svelte.ts`
+### `$state` flat config via `config.svelte.ts`
 
 ```typescript
-// src/lib/model/config/v2.svelte.ts — one $state per namespace
+// src/lib/model/config.svelte.ts — one $state per namespace
 export const atmosphere = $state({ clouds: { density: 0.4, speed: 0.6, layerCount: 3 }, ... });
 export const camera = $state({ orbit: { driftRate: 0.01, major: 10, ... }, parallax: { role: 'solo', ... }, ... });
 

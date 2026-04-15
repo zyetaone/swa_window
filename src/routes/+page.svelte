@@ -28,7 +28,7 @@
 	import Controls from "$lib/shell/HUD.svelte";
 	import SidePanel from "$lib/shell/SidePanel.svelte";
 	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
-	import { setParallaxRole } from "$lib/model/config/v2.svelte";
+	import { setParallaxRole } from "$lib/model/config.svelte";
 	// Composed panel sections — page picks the set + order it wants.
 	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
 	import TimeControl from "$lib/shell/panel/TimeControl.svelte";

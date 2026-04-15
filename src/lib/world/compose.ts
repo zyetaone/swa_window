@@ -7,8 +7,8 @@
 
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
-import { syncWorldQuality, world as v2world } from '$lib/model/config/v2.svelte';
-type WorldConfig = typeof v2world;
+import { syncWorldQuality, world } from '$lib/model/config.svelte';
+type WorldConfig = typeof world;
 import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
 import {
 	getIonToken,

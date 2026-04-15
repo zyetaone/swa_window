@@ -5,7 +5,7 @@
 	 * a local-preview of what admin-push will actually mutate on fleet devices.
 	 */
 
-	import { config, applyConfigPatch, configSnapshot as snapshot } from '$lib/model/config/v2.svelte';
+	import { config, applyConfigPatch, configSnapshot as snapshot } from '$lib/model/config.svelte';
 
 	const cloudsSummary = $derived(
 		`${(config.atmosphere.clouds.density * 100).toFixed(0)}% @ ${config.atmosphere.clouds.speed.toFixed(1)}x, ${config.atmosphere.clouds.layerCount} layers`,
@@ -21,8 +21,8 @@
 
 <div class="sandbox">
 	<p class="hint">
-		Live <code>RootConfig</code> instance — edits here flow through the same
-		<code>applyPatch</code> path dispatch that fleet v2 config messages use.
+		Live v2 flat config — edits here flow through the same
+		<code>applyConfigPatch</code> path dispatch that fleet v2 config messages use.
 	</p>
 
 	<div class="grid">
