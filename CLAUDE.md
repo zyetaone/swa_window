@@ -32,6 +32,14 @@ Vitest is available for unit tests. No linter is configured. Type checking remai
 ## Directory Structure
 
 ```
+src/
+├── lib/                 # Shared library — importable via $lib/* alias
+├── routes/              # SvelteKit routes (+ route-colocated lib)
+└── app.html
+
+tests/                   # All unit/integration tests — mirrors src/ paths
+└── lib/…                # e.g. tests/lib/utils.test.ts → src/lib/utils.ts
+
 src/lib/
 ├── types.ts              # SSOT — all domain types, const-array-derived unions
 ├── constants.ts          # Tuning: AIRCRAFT, FLIGHT_FEEL, AMBIENT, WEATHER_EFFECTS, CESIUM
@@ -84,14 +92,22 @@ src/lib/
 │
 └── ui/                   # Svelte presentation components (chrome only)
     ├── Window.svelte     # Layer compositor — RAF tick, blind drag, mounts <Compositor/>
-    ├── Globe.svelte      # CesiumManager mount/destroy + activeCesium publish
     ├── CloudBlobs.svelte # SVG feTurbulence 3-layer parallax (used by clouds effect)
     ├── Weather.svelte    # Rain + frost only (lightning moved into scene/effects/)
     ├── MicroEvent.svelte # Shooting stars/birds/contrails CSS (used by micro-events effect)
     ├── HUD.svelte        # Telemetry controls overlay
     ├── SidePanel.svelte  # Location picker + settings
     └── use-blind.svelte.ts # Composable — blind drag/snap controller
+
+src/routes/playground/lib/  # Playground-only code (not in shared $lib)
+├── globe/sources.ts       # Cesium + MapLibre imagery source catalog
+└── maplibre/              # MapLibreGlobe.svelte + style.ts
 ```
+
+**Test layout:** Tests live in `tests/` at repo root, mirroring `src/` paths
+(e.g. `tests/lib/utils.test.ts` exercises `src/lib/utils.ts`). Import from
+`$lib/*` — the alias resolves from any file. `vitest.config.ts`
+`test.include` is `tests/**/*.{test,spec}.{ts,svelte.ts}`.
 
 ## Architecture
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createEffectFromBundle, isContentBundle } from './loader';
-import type { VideoBgBundle, SpriteBundle } from './types';
+import { createEffectFromBundle, isContentBundle } from '$lib/scene/bundle/loader';
+import type { VideoBgBundle, SpriteBundle } from '$lib/scene/bundle/types';
 
 describe('isContentBundle', () => {
 	it('accepts a well-formed bundle', () => {

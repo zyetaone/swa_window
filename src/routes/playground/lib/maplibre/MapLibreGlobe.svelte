@@ -11,7 +11,7 @@
 	} from 'svelte-maplibre-gl';
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type maplibregl from 'maplibre-gl';
-	import { buildSatelliteStyle, VOYAGER_STYLE, altitudeToZoom } from '$lib/maplibre/style';
+	import { buildSatelliteStyle, VOYAGER_STYLE, altitudeToZoom } from './style';
 
 	let {
 		lat = 25.2,

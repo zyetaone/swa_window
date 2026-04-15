@@ -10,11 +10,11 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { randomBetween, getSkyState, nightFactor, formatTime, clamp } from '$lib/utils';
-	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from '$lib/globe/sources';
+	import { CESIUM_SOURCES, MAPLIBRE_SOURCES, findSource } from './lib/globe/sources';
 	import { getIonToken, initCesiumGlobal, VIEWER_OPTIONS } from '$lib/cesium/config';
 	import CloudBlobs from '$lib/ui/CloudBlobs.svelte';
 	import Weather from '$lib/ui/Weather.svelte';
-	import MapLibreGlobe from '$lib/maplibre/Globe.svelte';
+	import MapLibreGlobe from './lib/maplibre/MapLibreGlobe.svelte';
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import * as Cesium from 'cesium';
@@ -32,7 +32,6 @@
 	// Cloud sim
 	let density = $state(0.6);
 	let cloudSpeed = $state(1.0);
-	let time = $state(0);
 
 	// Plane motion
 	let heading = $state(90);
@@ -81,7 +80,6 @@
 		const loop = (now: number) => {
 			const dt = (now - last) / 1000;
 			last = now;
-			time += dt * planeSpeed;
 			if (autoOrbit) heading = (heading + dt * 5) % 360;
 			if (autoTime) timeOfDay = (timeOfDay + dt * 0.5) % 24;  // 48s = full day
 

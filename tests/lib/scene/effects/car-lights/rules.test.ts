@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seedDots, lightClass, lightColorBytes } from './rules';
+import { seedDots, lightClass, lightColorBytes } from '$lib/scene/effects/car-lights/rules';
 
 describe('seedDots', () => {
 	it('returns the requested number of seeds', () => {

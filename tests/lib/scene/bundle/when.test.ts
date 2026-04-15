@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { evalWhen } from './when';
-import type { WhenPredicate } from './types';
+import { evalWhen } from '$lib/scene/bundle/when';
+import type { WhenPredicate } from '$lib/scene/bundle/types';
 import type { WindowModel } from '$lib/app-state.svelte';
 
 /** Minimal fake model for predicate evaluation — only the fields evalWhen reads. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidWeather, isValidDisplayMode, isValidQualityMode, safeParse } from './validation';
+import { isValidWeather, isValidDisplayMode, isValidQualityMode, safeParse } from '$lib/validation';
 
 describe('isValidWeather', () => {
 	it('accepts known weather types', () => {

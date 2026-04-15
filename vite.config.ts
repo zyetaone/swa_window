@@ -36,7 +36,7 @@ export default defineConfig({
 	},
 	test: {
 		environment: 'happy-dom',
-		include: ['src/**/*.{test,spec}.{ts,svelte.ts}'],
+		include: ['tests/**/*.{test,spec}.{ts,svelte.ts}'],
 		globals: false,
 	},
 });

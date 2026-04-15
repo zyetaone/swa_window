@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, formatTime } from './utils';
+import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, formatTime } from '$lib/utils';
 
 describe('clamp', () => {
 	it('returns value within range', () => {
