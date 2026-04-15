@@ -70,7 +70,7 @@
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
 	let showLandmarks = $state(true);
-	let showThreeBillboards = $state(true);
+	let showThreeBillboards = $state(false);  // PoC sphere — ground-anchored, looks like a moon stuck on the map
 	let useRealisticClouds = $state(true);
 
 	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
@@ -324,7 +324,7 @@
 				lat={mapLat}
 				lon={mapLon}
 				{altitude}
-				pitch={70}
+				pitch={76}
 				bearing={heading}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
