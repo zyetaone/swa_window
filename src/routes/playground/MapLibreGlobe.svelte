@@ -9,6 +9,7 @@
 		FillLayer,
 		GeoJSONSource,
 		HillshadeLayer,
+		LineLayer,
 		RasterLayer,
 		RasterTileSource,
 		RasterDEMTileSource,
@@ -361,6 +362,41 @@
 					'fill-opacity': waterOpacity,
 				}}
 			/>
+
+			<!-- Roads — vector line layer from OpenFreeMap's 'transportation'
+			     source-layer. Per-class styling via `match` expression: highways
+			     get brightest + widest, main arterials next, side streets dim.
+			     At night, the line-color shifts to warm amber + opacity rises,
+			     so the road network GLOWS through the city. Layer gates on
+			     nightFactor to stay out of the way during day. -->
+			{#if nightFactor > 0.1}
+				<LineLayer
+					id="road-glow"
+					source="openmaptiles"
+					sourceLayer="transportation"
+					minzoom={6}
+					filter={['!=', ['get', 'brunnel'], 'tunnel']}
+					paint={{
+						'line-color': [
+							'match', ['get', 'class'],
+							'motorway', `rgba(255, 200, 120, ${0.8 * nightFactor})`,
+							'trunk',    `rgba(255, 180, 100, ${0.7 * nightFactor})`,
+							'primary',  `rgba(255, 170, 90,  ${0.6 * nightFactor})`,
+							'secondary',`rgba(230, 155, 80,  ${0.5 * nightFactor})`,
+							'tertiary', `rgba(200, 140, 70,  ${0.4 * nightFactor})`,
+							/* default */ `rgba(160, 110, 60,  ${0.25 * nightFactor})`,
+						],
+						'line-width': [
+							'interpolate', ['linear'], ['zoom'],
+							6,  ['match', ['get', 'class'], 'motorway', 1.2, 'trunk', 0.9, 'primary', 0.6, 0.3],
+							10, ['match', ['get', 'class'], 'motorway', 2.5, 'trunk', 2,   'primary', 1.4, 0.8],
+							14, ['match', ['get', 'class'], 'motorway', 5,   'trunk', 4,   'primary', 3,   1.8],
+						],
+						'line-blur': 0.6,
+						'line-opacity': 0.85,
+					}}
+				/>
+			{/if}
 
 			<FillExtrusionLayer
 				source="openmaptiles"
