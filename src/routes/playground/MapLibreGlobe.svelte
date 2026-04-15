@@ -4,6 +4,7 @@
 		GlobeControl,
 		Sky,
 		Light,
+		CircleLayer,
 		FillExtrusionLayer,
 		FillLayer,
 		RasterLayer,
@@ -16,6 +17,7 @@
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type maplibregl from 'maplibre-gl';
 	import { buildSatelliteStyle, VOYAGER_STYLE, altitudeToZoom } from './maplibre-style';
+	import { PALETTES, type PaletteName } from './palettes';
 
 	let {
 		lat = 25.2,
@@ -35,6 +37,14 @@
 		nightFactor = 0,
 		/** Time of day 0–24 (drives ambient light position + sky palette). */
 		timeOfDay = 12,
+		/** Creative palette override. 'auto' uses time-driven 5-band palette. */
+		paletteName = 'auto' as PaletteName,
+		/** When true, user can drag/zoom/pitch the map freely; prop-driven
+		    camera sync is disabled after the first frame. */
+		freeCam = false,
+		/** Show procedural city-light glow at night (driven by OpenMapTiles
+		    `place` source-layer points). Free, no external data. */
+		showCityLights = true,
 		terrainExaggeration = 1.5,
 		/**
 		 * LOD tuning — `map.setSourceTileLodParams(max, ratio)`. Pi-tuned
@@ -61,6 +71,9 @@
 		showAtmosphere?: boolean;
 		nightFactor?: number;
 		timeOfDay?: number;
+		paletteName?: PaletteName;
+		freeCam?: boolean;
+		showCityLights?: boolean;
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
@@ -83,22 +96,26 @@
 	});
 
 	// 5-band palette: dawn / morning / noon / dusk / night
+	// If paletteName is a named preset (not 'auto'), it locks the mood.
 	const skyPalette = $derived.by(() => {
+		if (paletteName !== 'auto' && PALETTES[paletteName]) {
+			return PALETTES[paletteName];
+		}
 		const h = timeOfDay;
 		// Dawn (5-7)
-		if (h >= 5 && h < 7)  return { sky: '#2a1f4a', horizon: '#e8805a', fog: '#e0a880', light: '#ffd4b8', intensity: 0.55 };
+		if (h >= 5 && h < 7)  return { sky: '#2a1f4a', horizon: '#e8805a', fog: '#e0a880', light: '#ffd4b8', intensity: 0.55, water: { r: 70, g: 50, b: 90 } };
 		// Morning (7-10)
-		if (h >= 7 && h < 10) return { sky: '#4a7ab5', horizon: '#a0c8e8', fog: '#b8d4ea', light: '#fff1d6', intensity: 0.7 };
+		if (h >= 7 && h < 10) return { sky: '#4a7ab5', horizon: '#a0c8e8', fog: '#b8d4ea', light: '#fff1d6', intensity: 0.7,  water: { r: 50, g: 92, b: 130 } };
 		// Day (10-16)
-		if (h >= 10 && h < 16) return { sky: '#001e3d', horizon: '#1a4a7a', fog: '#1a3a5c', light: '#fffef2', intensity: 0.8 };
+		if (h >= 10 && h < 16) return { sky: '#001e3d', horizon: '#1a4a7a', fog: '#1a3a5c', light: '#fffef2', intensity: 0.8,  water: { r: 32, g: 74, b: 96 } };
 		// Afternoon→Dusk (16-18)
-		if (h >= 16 && h < 18) return { sky: '#2c3e75', horizon: '#d4895a', fog: '#c68860', light: '#ffc080', intensity: 0.65 };
+		if (h >= 16 && h < 18) return { sky: '#2c3e75', horizon: '#d4895a', fog: '#c68860', light: '#ffc080', intensity: 0.65, water: { r: 100, g: 90, b: 90 } };
 		// Dusk / golden hour (18-20)
-		if (h >= 18 && h < 20) return { sky: '#1e1a40', horizon: '#c05f40', fog: '#8a4a40', light: '#ff9050', intensity: 0.5 };
+		if (h >= 18 && h < 20) return { sky: '#1e1a40', horizon: '#c05f40', fog: '#8a4a40', light: '#ff9050', intensity: 0.5,  water: { r: 130, g: 75, b: 50 } };
 		// Twilight (20-22)
-		if (h >= 20 && h < 22) return { sky: '#0a0f28', horizon: '#301838', fog: '#1a1432', light: '#7a88d0', intensity: 0.28 };
+		if (h >= 20 && h < 22) return { sky: '#0a0f28', horizon: '#301838', fog: '#1a1432', light: '#7a88d0', intensity: 0.28, water: { r: 10, g: 18, b: 35 } };
 		// Night (22-5)
-		return { sky: '#050510', horizon: '#0a1028', fog: '#0a0f20', light: '#a8b4d0', intensity: 0.2 };
+		return { sky: '#050510', horizon: '#0a1028', fog: '#0a0f20', light: '#a8b4d0', intensity: 0.2, water: { r: 4, g: 14, b: 24 } };
 	});
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
@@ -120,30 +137,15 @@
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// Time-of-day-aware water: noon navy, golden hour amber, night near-black.
-	// Shimmer = sin(t) modulating lightness. Reads as subtle breath over the ocean.
+	// Water color derives from the active palette's water band with a shimmer
+	// modulation. Named palette locks water; auto tracks time-of-day.
 	const waterColor = $derived.by(() => {
 		const shimmer = Math.sin(waterTime * 0.6) * 0.5 + 0.5; // 0..1
-		const h = timeOfDay;
-		// Golden hour (17-19): amber reflection
-		if (h >= 17 && h < 19) {
-			const r = Math.round(140 + shimmer * 30);
-			const g = Math.round(80 + shimmer * 20);
-			const b = Math.round(50 + shimmer * 15);
-			return `rgba(${r}, ${g}, ${b}, 1)`;
-		}
-		// Dawn (5-7): rose-blue
-		if (h >= 5 && h < 7) {
-			return `rgba(${70 + shimmer * 10}, ${50 + shimmer * 10}, ${90 + shimmer * 10}, 1)`;
-		}
-		// Night (20-5): near-black with cool edge
-		if (h >= 20 || h < 5) {
-			const b = Math.round(18 + shimmer * 6);
-			return `rgba(${4}, ${10 + shimmer * 4}, ${b + 6}, 1)`;
-		}
-		// Day: muted navy
-		const dayB = Math.round(96 + shimmer * 12);
-		return `rgba(${32}, ${74 + shimmer * 10}, ${dayB}, 1)`;
+		const w = skyPalette.water;
+		const r = Math.round(w.r + shimmer * 10);
+		const g = Math.round(w.g + shimmer * 10);
+		const b = Math.round(w.b + shimmer * 12);
+		return `rgba(${r}, ${g}, ${b}, 1)`;
 	});
 	const waterOpacity = $derived(0.35 + Math.sin(waterTime * 0.4) * 0.06);
 
@@ -162,8 +164,8 @@
 	});
 
 	// ── Camera sync — keep map in sync with reactive props ──────────────────
-	// Snapshot reactive values up front (otherwise the effect's tracked reads
-	// inside the load callback would be empty on first run).
+	// When freeCam is enabled, the prop-driven sync stops after the initial
+	// jumpTo so the user can drag/zoom/pitch freely without being overridden.
 	let cameraInit = $state(false);
 	$effect(() => {
 		if (!mapRef) return;
@@ -172,13 +174,13 @@
 		const target = { center: [lon, lat] as [number, number], zoom: effectiveZoom, pitch, bearing };
 
 		if (!cameraInit) {
-			// First run — force initial camera via jumpTo once the map is ready.
 			const apply = () => { mapRef!.jumpTo(target); cameraInit = true; };
 			if (mapRef.loaded()) apply();
 			else mapRef.once('load', apply);
-		} else {
-			mapRef.easeTo({ ...target, duration: 200 });
+			return;
 		}
+		if (freeCam) return;       // user-controlled: don't override
+		mapRef.easeTo({ ...target, duration: 200 });
 	});
 
 	const activeStyle = $derived(
@@ -242,8 +244,8 @@
  	{#if showTerrain}
 		<RasterDEMTileSource
 			id="terrain"
-			tiles={[terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp']}
-			tileSize={512}
+			tiles={[terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.webp']}
+			tileSize={256}
 			encoding="terrarium"
 			maxzoom={13}
 		>
@@ -305,10 +307,7 @@
 		</VectorTileSource>
 	{/if}
 
-	<!-- Night overlay: CartoDB Dark raster composited over satellite as nightFactor rises.
-	     When fully night, streets/labels come through dark-styled. Before dawn, fades out.
-	     Using the non-@2x URL → tileSize 256 lines up with MapLibre defaults and avoids
-	     LOD stripe artifacts visible when @2x (512) is declared as 256. -->
+	<!-- Night overlay: CartoDB Dark raster composited over satellite as nightFactor rises. -->
 	{#if nightFactor > 0.01}
 		<RasterTileSource
 			id="night-overlay"
@@ -325,6 +324,32 @@
 				}}
 			/>
 		</RasterTileSource>
+	{/if}
+
+	<!-- Procedural city-light glow: CircleLayer on OpenMapTiles 'place' source-
+	     layer. Every city/town/village is a POINT feature with a `rank` attribute
+	     (1 = world-class city, higher = smaller). Render as a warm blurred disc
+	     sized by rank, opacity driven by nightFactor. Zero cost — lives on the
+	     existing openmaptiles vector source (added for buildings). -->
+	{#if showBuildings && showCityLights && nightFactor > 0.15}
+		<CircleLayer
+			id="city-glow"
+			source="openmaptiles"
+			sourceLayer="place"
+			minzoom={4}
+			filter={['in', ['get', 'class'], ['literal', ['city', 'town', 'suburb', 'village']]]}
+			paint={{
+				'circle-color': '#ffd480',
+				'circle-radius': [
+					'interpolate', ['linear'], ['zoom'],
+					4, ['case', ['<=', ['get', 'rank'], 3], 4, ['<=', ['get', 'rank'], 6], 2, 1],
+					10, ['case', ['<=', ['get', 'rank'], 3], 14, ['<=', ['get', 'rank'], 6], 8, 4],
+					14, ['case', ['<=', ['get', 'rank'], 3], 28, ['<=', ['get', 'rank'], 6], 18, 10],
+				],
+				'circle-blur': 1.2,
+				'circle-opacity': nightFactor * 0.75,
+			}}
+		/>
 	{/if}
 </MapLibre>
 

@@ -26,6 +26,7 @@
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
+	import { PALETTE_NAMES, type PaletteName } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -52,6 +53,11 @@
 	let mlTerrain = $state(true);
 	let mlBuildings = $state(true);
 	let mlAtmosphere = $state(true);
+
+	// Creative controls
+	let paletteName = $state<PaletteName>('auto');
+	let freeCam = $state(false);
+	let showCityLights = $state(true);
 
 	// LOD tuning — see MapLibre level-of-detail-control example
 	let lodMaxZoomLevels = $state(6);
@@ -269,6 +275,9 @@
 				showAtmosphere={mlAtmosphere}
 				nightFactor={nf}
 				{timeOfDay}
+				{paletteName}
+				{freeCam}
+				{showCityLights}
 				terrainExaggeration={1.5}
 				{lodMaxZoomLevels}
 				{lodTileCountRatio}
@@ -397,6 +406,23 @@
 			<label class="check"><input type="checkbox" bind:checked={mlAtmosphere} /> Atmosphere + Sky</label>
 			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
 			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
+			<label class="check"><input type="checkbox" bind:checked={showCityLights} /> City-light glow (night)</label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Creative palette</legend>
+			<p class="field-note">Locks sky + light + water to a named mood. 'auto' tracks timeOfDay.</p>
+			<select class="select" bind:value={paletteName}>
+				{#each PALETTE_NAMES as p (p)}
+					<option value={p}>{p}</option>
+				{/each}
+			</select>
+		</fieldset>
+
+		<fieldset>
+			<legend>Camera</legend>
+			<label class="check"><input type="checkbox" bind:checked={freeCam} /> Free-cam (drag to explore)</label>
+			<p class="field-note">Disables auto-centering on the selected location. Drag, scroll, right-drag to pitch.</p>
 		</fieldset>
 
 		<fieldset>
