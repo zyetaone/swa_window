@@ -1,46 +1,39 @@
 /**
  * DirectorConfig — when things change.
  *
- * Covers: daylight progression (manual vs real-time sync), autopilot
- * randomizer (weather / location cycling), and scenario picker settings.
+ * SSOT: defaults pull from AMBIENT + AIRCRAFT in constants.ts.
+ * `$state` wraps them so admin push can mutate at runtime.
  */
 
 import type { WeatherType } from '$lib/types';
+import { AIRCRAFT, AMBIENT } from '$lib/constants';
 
 export class DaylightConfig {
-	/** If true, timeOfDay tracks wall clock; if false, user/admin drives it. */
-	syncToRealTime = $state(true);
-	/** Manual time-of-day 0-24 (only used when syncToRealTime=false). */
+	syncToRealTime  = $state(true);
 	manualTimeOfDay = $state(12);
-	/** Real-time sync tick interval (ms). */
-	syncIntervalMs = $state(60_000);
+	syncIntervalMs: number  = $state(AIRCRAFT.REAL_TIME_SYNC_INTERVAL);
 }
 
 export class AutopilotConfig {
-	enabled = $state(true);
-	/** Intervals for the "next change" scheduler (seconds). */
-	initialMinDelay    = $state(120);
-	initialMaxDelay    = $state(300);
-	subsequentMinDelay = $state(180);
-	subsequentMaxDelay = $state(480);
-	/** Weather transition chance per cycle. */
-	weatherChangeChance = $state(0.2);
-	/** Weighted weather pool (cloudy doubled, storm excluded). */
-	weatherPool = $state<readonly WeatherType[]>(['clear', 'cloudy', 'cloudy', 'rain', 'overcast']);
-	/** Flight director auto-cycling interval (seconds). */
-	directorMinInterval = $state(120);
-	directorMaxInterval = $state(300);
+	enabled             = $state(true);
+	initialMinDelay: number     = $state(AMBIENT.INITIAL_MIN_DELAY);
+	initialMaxDelay: number     = $state(AMBIENT.INITIAL_MAX_DELAY);
+	subsequentMinDelay: number  = $state(AMBIENT.SUBSEQUENT_MIN_DELAY);
+	subsequentMaxDelay: number  = $state(AMBIENT.SUBSEQUENT_MAX_DELAY);
+	weatherChangeChance: number = $state(AMBIENT.WEATHER_CHANGE_CHANCE);
+	weatherPool         = $state<readonly WeatherType[]>([...AMBIENT.WEATHER_POOL]);
+	directorMinInterval: number = $state(AMBIENT.DIRECTOR_MIN_INTERVAL);
+	directorMaxInterval: number = $state(AMBIENT.DIRECTOR_MAX_INTERVAL);
 }
 
 export class AmbientDriftConfig {
-	/** Drift magnitudes applied per randomization cycle. */
-	cloudDensityShift = $state(0.3);
-	cloudDensityMin   = $state(0.2);
-	cloudDensityMax   = $state(1.0);
-	cloudSpeedShift   = $state(0.4);
-	cloudSpeedMin     = $state(0.2);
-	cloudSpeedMax     = $state(1.5);
-	hazeShift         = $state(0.04);
+	cloudDensityShift: number = $state(AMBIENT.CLOUD_DENSITY_SHIFT);
+	cloudDensityMin: number   = $state(AMBIENT.CLOUD_DENSITY_MIN);
+	cloudDensityMax: number   = $state(AMBIENT.CLOUD_DENSITY_MAX);
+	cloudSpeedShift: number   = $state(AMBIENT.CLOUD_SPEED_SHIFT);
+	cloudSpeedMin: number     = $state(AMBIENT.CLOUD_SPEED_MIN);
+	cloudSpeedMax: number     = $state(AMBIENT.CLOUD_SPEED_MAX);
+	hazeShift: number         = $state(AMBIENT.HAZE_SHIFT);
 }
 
 export class DirectorConfig {

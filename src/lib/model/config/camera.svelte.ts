@@ -1,67 +1,57 @@
 /**
  * CameraConfig — how we look at the map.
  *
- * Covers: orbit geometry, cruise transition timing, motion/turbulence feel,
- * and the multi-Pi parallax role (Phase 7). Every field is admin-push-mutable.
+ * SSOT: default values come from `constants.ts` (AIRCRAFT + FLIGHT_FEEL).
+ * `$state` wraps them so admin push can mutate at runtime.
  */
+
+import { AIRCRAFT, FLIGHT_FEEL } from '$lib/constants';
 
 export type DeviceRole = 'solo' | 'left' | 'center' | 'right';
 
 export class OrbitConfig {
-	/** Flight drift (degrees per second at speed=1.0). */
-	driftRate = $state(0.01);
-	/** Ellipse long/short axes (degrees). */
-	major = $state(0.15);
-	minor = $state(0.06);
-	/** Dynamic breathing bounds + period. */
-	majorMin = $state(0.08);
-	majorMax = $state(0.25);
-	breathePeriod = $state(180);
+	driftRate: number     = $state(AIRCRAFT.DRIFT_RATE);
+	major: number         = $state(AIRCRAFT.ORBIT_MAJOR);
+	minor: number         = $state(AIRCRAFT.ORBIT_MINOR);
+	majorMin: number      = $state(AIRCRAFT.ORBIT_MAJOR_MIN);
+	majorMax: number      = $state(AIRCRAFT.ORBIT_MAJOR_MAX);
+	breathePeriod: number = $state(AIRCRAFT.ORBIT_BREATHE_PERIOD);
 }
 
 export class CruiseConfig {
-	/** Warp ramp-up duration (seconds). */
+	/** Warp ramp-up duration (seconds). Local default — no constant yet. */
 	departureDurationSec = $state(2.0);
-	/** Transit duration before arrival (seconds). */
-	transitDurationSec = $state(2.0);
-	/** Default flight speed multiplier. */
-	defaultSpeed = $state(1.4);
-	minSpeed = $state(0.1);
-	maxSpeed = $state(3.0);
+	transitDurationSec   = $state(2.0);
+	defaultSpeed         = $state(1.4);
+	minSpeed             = $state(0.1);
+	maxSpeed             = $state(3.0);
 }
 
 export class MotionConfig {
-	/** Banking tilt during orbit turns. */
-	bankAngleMax  = $state(6.0);
-	bankSmoothing = $state(2.5);
+	bankAngleMax: number       = $state(FLIGHT_FEEL.BANK_ANGLE_MAX);
+	bankSmoothing: number      = $state(FLIGHT_FEEL.BANK_SMOOTHING);
 
-	/** Breathing oscillation. */
-	breathingPeriod    = $state(22);
-	breathingAmplitude = $state(1.5);
+	breathingPeriod: number    = $state(FLIGHT_FEEL.BREATHING_PERIOD);
+	breathingAmplitude: number = $state(FLIGHT_FEEL.BREATHING_AMPLITUDE);
 
-	/** Engine micro-vibration. */
-	engineVibeFreqX = $state(7);
-	engineVibeFreqY = $state(11);
-	engineVibeAmp   = $state(0.35);
+	engineVibeFreqX: number = $state(FLIGHT_FEEL.ENGINE_VIBE_FREQ_X);
+	engineVibeFreqY: number = $state(FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y);
+	engineVibeAmp: number   = $state(FLIGHT_FEEL.ENGINE_VIBE_AMP);
 
-	/** Turbulence bumps. */
-	bumpMinInterval = $state(30);
-	bumpMaxInterval = $state(120);
-	bumpDecay       = $state(8);
-	bumpRingFreq    = $state(15);
-	bumpAmplitude   = $state(3);
+	bumpMinInterval: number = $state(FLIGHT_FEEL.BUMP_MIN_INTERVAL);
+	bumpMaxInterval: number = $state(FLIGHT_FEEL.BUMP_MAX_INTERVAL);
+	bumpDecay: number       = $state(FLIGHT_FEEL.BUMP_DECAY);
+	bumpRingFreq: number    = $state(FLIGHT_FEEL.BUMP_RING_FREQ);
+	bumpAmplitude: number   = $state(FLIGHT_FEEL.BUMP_AMPLITUDE);
 
-	/** Turbulence multipliers per severity level. */
-	turbulenceMultipliers = $state({ severe: 3, moderate: 1.5, light: 1 });
-
-	/** Vertical motion scaling multiplier applied to turbulence base signal. */
-	turbulenceOffsetY = $state(0.05);
+	turbulenceMultipliers = $state({ ...AIRCRAFT.TURBULENCE_MULTIPLIERS });
+	turbulenceOffsetY: number     = $state(AIRCRAFT.TURBULENCE_OFFSET_Y);
 }
 
 export class AltitudeConfig {
-	default = $state(35_000);
-	min     = $state(10_000);
-	max     = $state(65_000);
+	default: number = $state(AIRCRAFT.DEFAULT_ALTITUDE);
+	min: number     = $state(AIRCRAFT.MIN_ALTITUDE);
+	max: number     = $state(AIRCRAFT.MAX_ALTITUDE);
 }
 
 /**

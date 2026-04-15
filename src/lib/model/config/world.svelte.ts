@@ -1,63 +1,53 @@
 /**
  * WorldConfig — tunable parameters for the map underneath.
  *
- * Covers: base imagery night-dim, CartoDB night overlay, bloom post-process,
- * terrain exaggeration + fog, 3D buildings, night-light intensity, quality
- * preset. Every field is admin-push-mutable via `setPath(path, value)`.
- *
- * Values mirror the current `constants.ts` CESIUM block + existing WindowModel
- * fields. Phase 3+ migrates `world/compose.ts` (the Cesium adapter) to read
- * from here instead of importing constants directly.
+ * SSOT: default values come from `constants.ts` CESIUM + CESIUM_QUALITY_PRESETS.
+ * `$state` wraps them so admin push can mutate at runtime. If you tune a
+ * value, touch constants.ts only — class defaults will pick it up.
  */
 
 import type { QualityMode } from '$lib/types';
+import { CESIUM, CESIUM_QUALITY_PRESETS } from '$lib/constants';
 
 export class WorldConfig {
-	baseNightBrightness = $state(0.15);
-	baseNightSaturation = $state(0.25);
-	nightAlpha      = $state(0.8);
-	nightBrightness = $state(1.6);
-	nightContrast   = $state(1.6);
-	bloomContrast   = $state(128);
-	bloomBrightness = $state(-0.3);
-	// Narrowed from 3.5 — the wider Gaussian was smearing palette colors
-	// onto surrounding terrain/ocean, producing visible purple/red bleeds.
-	// 2.2 keeps halos soft + merging at road-intersection scale without the
-	// contamination.
-	bloomSigma      = $state(2.2);
-	defaultExaggeration = $state(1.0);
-	fogDensityScale     = $state(1.0);
-	buildingsEnabled    = $state(true);
-	overpassRadiusMeters = $state(3500);
-	nightLightIntensity = $state(0.6);
-	qualityMode = $state<QualityMode>('balanced');
+	// ── Night-time imagery composition ───────────────────────────────────────
+	baseNightBrightness: number = $state(CESIUM.BASE_NIGHT_BRIGHTNESS);
+	baseNightSaturation: number = $state(CESIUM.BASE_NIGHT_SATURATION);
+	nightAlpha: number          = $state(CESIUM.NIGHT_ALPHA);
+	nightBrightness: number     = $state(CESIUM.NIGHT_BRIGHTNESS);
+	nightContrast: number       = $state(CESIUM.NIGHT_CONTRAST);
 
-	/** Cesium terrain quality parameters — one set per QualityMode. */
-	msse      = $state(5);
-	tileCache = $state(100);
-	preloadSiblings   = $state(true);
-	preloadAncestors   = $state(true);
-	loadingDescendantLimit = $state(6);
+	// ── Bloom post-process ───────────────────────────────────────────────────
+	bloomContrast: number   = $state(CESIUM.BLOOM_CONTRAST);
+	bloomBrightness: number = $state(CESIUM.BLOOM_BRIGHTNESS);
+	bloomSigma: number      = $state(CESIUM.BLOOM_SIGMA);
+
+	// ── Terrain + buildings ──────────────────────────────────────────────────
+	defaultExaggeration  = $state(1.0);
+	fogDensityScale      = $state(1.0);
+	buildingsEnabled     = $state(true);
+	overpassRadiusMeters = $state(3500);
+	nightLightIntensity  = $state(0.6);
+
+	// ── Quality preset — default 'balanced' and its per-field expansion ──────
+	qualityMode = $state<QualityMode>('balanced');
+	msse: number                   = $state(CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError);
+	tileCache: number              = $state(CESIUM_QUALITY_PRESETS.balanced.tileCacheSize);
+	preloadSiblings: boolean       = $state(CESIUM_QUALITY_PRESETS.balanced.preloadSiblings);
+	preloadAncestors: boolean      = $state(CESIUM_QUALITY_PRESETS.balanced.preloadAncestors);
+	loadingDescendantLimit: number = $state(CESIUM_QUALITY_PRESETS.balanced.loadingDescendantLimit);
 
 	/**
-	 * Populate terrain quality fields from a QualityMode label.
-	 * Mirrors CESIUM_QUALITY_PRESETS. Call this when qualityMode changes.
+	 * Expand a QualityMode label into the preset fields.
+	 * Reads straight from CESIUM_QUALITY_PRESETS — single source of truth.
 	 */
 	syncFromMode(mode: QualityMode): void {
-		switch (mode) {
-			case 'performance':
-				this.msse = 8; this.tileCache = 50;
-				this.preloadSiblings = false; this.preloadAncestors = true; this.loadingDescendantLimit = 4;
-				break;
-			case 'balanced':
-				this.msse = 5; this.tileCache = 100;
-				this.preloadSiblings = true; this.preloadAncestors = true; this.loadingDescendantLimit = 6;
-				break;
-			case 'ultra':
-				this.msse = 2; this.tileCache = 200;
-				this.preloadSiblings = true; this.preloadAncestors = true; this.loadingDescendantLimit = 8;
-				break;
-		}
+		const p = CESIUM_QUALITY_PRESETS[mode];
+		this.msse                   = p.maximumScreenSpaceError;
+		this.tileCache              = p.tileCacheSize;
+		this.preloadSiblings        = p.preloadSiblings;
+		this.preloadAncestors       = p.preloadAncestors;
+		this.loadingDescendantLimit = p.loadingDescendantLimit;
 	}
 
 	/** Path-targeted mutation — for fleet v2 config_patch messages. */

@@ -1,42 +1,44 @@
 /**
  * AtmosphereConfig — what sits between the camera and the world.
  *
- * Covers: clouds (density/speed/layer geometry), haze, weather effects,
- * micro-event scheduling. Everything that visually overlays the map.
+ * SSOT: defaults pull from AMBIENT + MICRO_EVENTS + AIRCRAFT (lightning) in
+ * constants.ts. `$state` wraps them so admin push can mutate at runtime.
  */
 
 import type { WeatherType } from '$lib/types';
+import { AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
 
 export class CloudsConfig {
-	density = $state(0.85);
-	speed   = $state(0.6);
-	/** Number of parallax decks (far / mid / near) — currently 3 in CloudBlobs. */
+	density    = $state(AMBIENT.CLOUD_DENSITY_MAX * 0.85);
+	speed      = $state(AMBIENT.CLOUD_SPEED_MIN + 0.4);
 	layerCount = $state(3);
 }
 
 export class HazeConfig {
-	/** Global haze scalar 0-0.2 — multiplies per-location intensity + altitude. */
-	amount = $state(0.07);
-	min    = $state(0);
-	max    = $state(0.15);
+	amount = $state(AMBIENT.HAZE_MIN + 0.07);
+	min: number    = $state(AMBIENT.HAZE_MIN);
+	max: number    = $state(AMBIENT.HAZE_MAX);
 }
 
 export class WeatherConfig {
+	// Default weather matches WEATHER_EFFECTS default key we expect on boot.
 	current = $state<WeatherType>('cloudy');
 
-	turbulence = $state<'light' | 'moderate' | 'severe'>('light');
-	hasLightning = $state(false);
-	rainOpacity = $state(0);
-	windAngle = $state(87);
-	cloudDensityRange = $state<[number, number]>([0.7, 1]);
-	nightCloudFloor = $state(0);
-	filterBrightness = $state(1.0);
+	// Per-weather tuning — syncFromEffects(WEATHER_EFFECTS[current]) populates.
+	// Defaults mirror WEATHER_EFFECTS.cloudy so initial render doesn't flicker.
+	turbulence        = $state<'light' | 'moderate' | 'severe'>(WEATHER_EFFECTS.cloudy.turbulence);
+	hasLightning      = $state(WEATHER_EFFECTS.cloudy.hasLightning);
+	rainOpacity       = $state(WEATHER_EFFECTS.cloudy.rainOpacity);
+	windAngle         = $state(WEATHER_EFFECTS.cloudy.windAngle);
+	cloudDensityRange = $state<[number, number]>([...WEATHER_EFFECTS.cloudy.cloudDensityRange]);
+	nightCloudFloor   = $state(WEATHER_EFFECTS.cloudy.nightCloudFloor);
+	filterBrightness  = $state(WEATHER_EFFECTS.cloudy.filterBrightness);
 
-	frostStartAltitude = $state(25_000);
-	frostMaxAltitude   = $state(40_000);
-	lightningMinInterval = $state(5);
-	lightningMaxInterval = $state(30);
-	lightningDecayRate   = $state(8);
+	frostStartAltitude: number   = $state(AIRCRAFT.FROST_START_ALTITUDE);
+	frostMaxAltitude: number     = $state(AIRCRAFT.FROST_MAX_ALTITUDE);
+	lightningMinInterval: number = $state(AIRCRAFT.LIGHTNING_MIN_INTERVAL);
+	lightningMaxInterval: number = $state(AIRCRAFT.LIGHTNING_MAX_INTERVAL);
+	lightningDecayRate: number   = $state(AIRCRAFT.LIGHTNING_DECAY_RATE);
 
 	/**
 	 * Populate per-weather metadata from WEATHER_EFFECTS when weather changes.
@@ -54,13 +56,11 @@ export class WeatherConfig {
 }
 
 export class MicroEventsConfig {
-	/** Seconds between micro-event spawns. */
-	minInterval = $state(100);
-	maxInterval = $state(300);
-	/** Per-event durations (seconds). */
-	shootingStarDuration = $state(1.5);
-	birdDuration         = $state(8);
-	contrailDuration     = $state(12);
+	minInterval: number          = $state(MICRO_EVENTS.MIN_INTERVAL);
+	maxInterval: number          = $state(MICRO_EVENTS.MAX_INTERVAL);
+	shootingStarDuration: number = $state(MICRO_EVENTS.SHOOTING_STAR_DURATION);
+	birdDuration: number         = $state(MICRO_EVENTS.BIRD_DURATION);
+	contrailDuration: number     = $state(MICRO_EVENTS.CONTRAIL_DURATION);
 }
 
 export class AtmosphereConfig {
