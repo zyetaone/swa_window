@@ -92,18 +92,22 @@
 	} = $props();
 
 	// ── Ambient light + sky palette — driven by timeOfDay ───────────────────
-	// Artistic model, not astronomically accurate. Goal: "feel" of the hour.
-	// Sun follows east-to-west arc 6am→6pm; moon implicit (opposite side) at night.
+	// MapLibre Light spec:
+	//   position: [radial, azimuthal°, polar°]
+	//   azimuth 0=N, 90=E, 180=S, 270=W  (compass-like, clockwise from north)
+	//   polar   0=zenith (directly above), 90=horizon, 180=below
+	//   radial  distance from center; docs default 1.15.
+	//   https://maplibre.org/maplibre-style-spec/light/
+	//
+	// Artistic sun-path model: east-to-south-to-west arc across the day.
 	const sunParams = $derived.by(() => {
-		// hourAngle: -180° at midnight, 0° at noon, 180° at next midnight
+		// Azimuth: 0h=N, 6h=E(90°), 12h=S(180°), 18h=W(270°), 24h=N
+		const sunAzimuth = (timeOfDay * 15) % 360;
+		// Polar: cos-based elevation gives 30° at noon (steep light from up/south)
+		// to 150° at midnight (below horizon — not rendered, but drives intensity).
 		const hourAngle = (timeOfDay - 12) * 15;
-		const rad = hourAngle * Math.PI / 180;
-		// Elevation: cos() → 1 at noon, -1 at midnight. Map to polar 0..180.
-		const elevation = Math.cos(rad);                                // -1..1
-		const sunPolar = 90 - elevation * 60;                           // 30 (noon) .. 150 (midnight)
-		// Azimuth: 90 (east) at 6am → 180 (south) at noon → 270 (west) at 6pm → 0 (north) at midnight
-		const azimuthFrac = ((timeOfDay + 6) / 24) % 1;                 // 0 at 6am → 1 at next 6am
-		const sunAzimuth = azimuthFrac * 360;
+		const elevation = Math.cos(hourAngle * Math.PI / 180);           // -1..1
+		const sunPolar = 90 - elevation * 60;                            // 30..150
 		return { polar: sunPolar, azimuth: sunAzimuth, elevation };
 	});
 
@@ -274,7 +278,7 @@
 		     match the hour. Shades terrain + extruded buildings realistically. -->
 		<Light
 			anchor="map"
-			position={[1.5, sunParams.azimuth, sunParams.polar]}
+			position={[1.15, sunParams.azimuth, sunParams.polar]}
 			color={skyPalette.light}
 			intensity={skyPalette.intensity}
 		/>
