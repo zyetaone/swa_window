@@ -17,9 +17,9 @@
 	import { savePersistedState } from "$lib/persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
-	import Window from "$lib/ui/Window.svelte";
-	import Controls from "$lib/ui/HUD.svelte";
-	import SidePanel from "$lib/ui/SidePanel.svelte";
+	import Window from "$lib/chrome/Window.svelte";
+	import Controls from "$lib/chrome/HUD.svelte";
+	import SidePanel from "$lib/chrome/SidePanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel
@@ -64,6 +64,21 @@
 	// Clean up model timers on page teardown
 	onDestroy(() => model.destroy());
 
+	// "F" keyboard toggle for window frame (designer spec — Phase 5b).
+	// Only captures when no other text-entry element has focus so we don't
+	// fight the time slider / weather dropdown / SidePanel inputs.
+	$effect(() => {
+		if (typeof window === "undefined") return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key !== "f" && e.key !== "F") return;
+			const t = e.target as HTMLElement;
+			if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+			model.config.chrome.windowFrame = !model.config.chrome.windowFrame;
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
+
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
 	if (typeof window !== "undefined") {
 		const params = new URLSearchParams(window.location.search);
@@ -103,7 +118,7 @@
 	/>
 </svelte:head>
 
-<main class="app">
+<main class="app" class:no-frame={!model.config.chrome.windowFrame}>
 	<!-- Cabin wall with texture -->
 	<div class="cabin-wall">
 		<!-- Panel lines texture -->
@@ -270,5 +285,18 @@
 		:global(.blind-overlay) {
 			transition-duration: 0.01ms !important;
 		}
+	}
+
+	/* Window-frame on/off (Phase 5b).
+	   When toggled off via config.chrome.windowFrame=false, the cabin wall,
+	   texture, and rivets disappear so the Cesium canvas reads edge-to-edge.
+	   Window.svelte handles its own inner chrome in the .no-frame scope. */
+	.app.no-frame .cabin-wall {
+		background: #000;
+		box-shadow: none;
+	}
+	.app.no-frame :global(.cabin-texture),
+	.app.no-frame :global(.cabin-details) {
+		visibility: hidden;
 	}
 </style>

@@ -1,16 +1,26 @@
 <script lang="ts">
+    /**
+     * Toggle — bindable checkbox pill.
+     *
+     * Supports both idioms so consumers can pick:
+     *   <Toggle label="..." bind:checked={config.field} />
+     *   <Toggle label="..." checked={flag} onchange={e => ...} />
+     *
+     * `checked` is $bindable so direct bind against a $state field Just Works,
+     * which is how the Phase-1 config classes expose their booleans.
+     */
     interface Props {
         label: string;
         checked: boolean;
-        onchange: (e: Event & { currentTarget: HTMLInputElement }) => void;
+        onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void;
     }
 
-    let { label, checked, onchange }: Props = $props();
+    let { label, checked = $bindable(), onchange }: Props = $props();
 </script>
 
 <label class="toggle-container">
     <div class="toggle-switch">
-        <input type="checkbox" {checked} {onchange} />
+        <input type="checkbox" bind:checked {onchange} />
         <span class="slider"></span>
     </div>
     <span class="label-text">{label}</span>

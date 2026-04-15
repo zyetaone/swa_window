@@ -25,6 +25,11 @@
 	const model = useAppState();
 	const blind = useBlind(model);
 
+	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
+	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
+	// simply disappear when false.
+	const frameVisible = $derived(model.config.chrome.windowFrame);
+
 	// ========================================================================
 	// GAME LOOP — single RAF driving model.tick()
 	// ========================================================================
@@ -161,6 +166,7 @@
 
 <div
 	class="window-container"
+	class:no-frame={!frameVisible}
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
@@ -535,5 +541,26 @@
 
 	.blind-overlay.discoverable::after {
 		animation: handle-breathe 1.2s ease-in-out 3;
+	}
+
+	/* ─── Window frame on/off ────────────────────────────────────────────────
+	   When config.chrome.windowFrame = false, all cabin-style chrome disappears
+	   and the oval clip becomes a full rectangle, yielding an edge-to-edge
+	   Cesium render. The blind still works — its clip rect also goes square so
+	   it can still be pulled down across the whole viewport. This is the mode
+	   used for the 3-Pi panorama where the oval would break the seam. */
+	.window-container.no-frame .glass-surface,
+	.window-container.no-frame .vignette,
+	.window-container.no-frame .glass-recess,
+	.window-container.no-frame .wing-silhouette {
+		visibility: hidden;
+	}
+	.window-container.no-frame .window-viewport {
+		border-radius: 0 !important;
+		box-shadow: none !important;
+	}
+	.window-container.no-frame .blind-clip,
+	.window-container.no-frame .blind-overlay {
+		border-radius: 0;
 	}
 </style>
