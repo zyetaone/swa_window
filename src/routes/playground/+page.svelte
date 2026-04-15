@@ -69,6 +69,7 @@
 	let paletteName = $state<PaletteName>('auto');
 	let freeCam = $state(false);
 	let showCityLights = $state(true);
+	let showLandmarks = $state(true);
 	let showThreeBillboards = $state(true);
 	let useRealisticClouds = $state(true);
 
@@ -498,6 +499,7 @@
 			<label class="check"><input type="checkbox" bind:checked={mlTerrain} /> 3D Terrain (raster-dem)</label>
 			<label class="check"><input type="checkbox" bind:checked={mlBuildings} /> 3D Buildings (fill-extrusion)</label>
 			<label class="check"><input type="checkbox" bind:checked={showCityLights} /> City-light glow (night)</label>
+			<label class="check"><input type="checkbox" bind:checked={showLandmarks} /> Curated landmarks</label>
 		</fieldset>
 
 		<fieldset>

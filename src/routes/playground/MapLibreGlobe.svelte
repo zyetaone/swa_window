@@ -7,6 +7,7 @@
 		CircleLayer,
 		FillExtrusionLayer,
 		FillLayer,
+		GeoJSONSource,
 		RasterLayer,
 		RasterTileSource,
 		RasterDEMTileSource,
@@ -18,6 +19,7 @@
 	import type maplibregl from 'maplibre-gl';
 	import { buildSatelliteStyle, VOYAGER_STYLE, altitudeToZoom } from './maplibre-style';
 	import { PALETTES, type PaletteName } from './palettes';
+	import { landmarksFor } from './lib/landmarks';
 
 	let {
 		lat = 25.2,
@@ -45,6 +47,10 @@
 		/** Show procedural city-light glow at night (driven by OpenMapTiles
 		    `place` source-layer points). Free, no external data. */
 		showCityLights = true,
+		/** Show curated landmarks for the current location. GeoJSON-driven. */
+		showLandmarks = true,
+		/** Current location id — used to filter the curated landmarks layer. */
+		locationId = 'dubai',
 		terrainExaggeration = 1.5,
 		/**
 		 * LOD tuning — `map.setSourceTileLodParams(max, ratio)`. Pi-tuned
@@ -77,6 +83,8 @@
 		paletteName?: PaletteName;
 		freeCam?: boolean;
 		showCityLights?: boolean;
+		showLandmarks?: boolean;
+		locationId?: string;
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
@@ -394,6 +402,46 @@
 				'circle-opacity': nightFactor * 0.75,
 			}}
 		/>
+	{/if}
+
+	<!-- Curated landmarks — GeoJSON POIs per location, glowing warmly at night.
+	     Each feature has `rank` (1=hero..3=secondary) driving radius + opacity.
+	     Two stacked circle layers per point: outer soft halo + inner hot core. -->
+	{#if showLandmarks}
+		<GeoJSONSource id="landmarks" data={landmarksFor(locationId)}>
+			<CircleLayer
+				id="landmark-halo"
+				source="landmarks"
+				minzoom={5}
+				paint={{
+					'circle-color': nightFactor > 0.3 ? '#ffc878' : '#f0e4c8',
+					'circle-radius': [
+						'interpolate', ['linear'], ['zoom'],
+						5,  ['match', ['get', 'rank'], 1, 6,  2, 4,  3, 2, 2],
+						10, ['match', ['get', 'rank'], 1, 26, 2, 18, 3, 10, 10],
+						14, ['match', ['get', 'rank'], 1, 60, 2, 40, 3, 22, 22],
+					],
+					'circle-blur': 1.6,
+					'circle-opacity': 0.35 + nightFactor * 0.45,
+				}}
+			/>
+			<CircleLayer
+				id="landmark-core"
+				source="landmarks"
+				minzoom={5}
+				paint={{
+					'circle-color': nightFactor > 0.3 ? '#fff2c4' : '#ffffff',
+					'circle-radius': [
+						'interpolate', ['linear'], ['zoom'],
+						5,  ['match', ['get', 'rank'], 1, 2,  2, 1.5,  3, 1, 1],
+						10, ['match', ['get', 'rank'], 1, 7,  2, 5,    3, 3, 3],
+						14, ['match', ['get', 'rank'], 1, 16, 2, 12,   3, 7, 7],
+					],
+					'circle-blur': 0.3,
+					'circle-opacity': 0.9,
+				}}
+			/>
+		</GeoJSONSource>
 	{/if}
 </MapLibre>
 
