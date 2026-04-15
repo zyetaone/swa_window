@@ -28,6 +28,13 @@
 	import Controls from "$lib/chrome/HUD.svelte";
 	import SidePanel from "$lib/chrome/SidePanel.svelte";
 	import TelemetryPanel from "$lib/chrome/TelemetryPanel.svelte";
+	// Composed panel sections — page picks the set + order it wants.
+	import LocationPicker from "$lib/chrome/panel/LocationPicker.svelte";
+	import TimeControl from "$lib/chrome/panel/TimeControl.svelte";
+	import FlightControls from "$lib/chrome/panel/FlightControls.svelte";
+	import AtmosphereControls from "$lib/chrome/panel/AtmosphereControls.svelte";
+	import LightingControls from "$lib/chrome/panel/LightingControls.svelte";
+	import WeatherPicker from "$lib/chrome/panel/WeatherPicker.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel
@@ -203,7 +210,19 @@
 	<Controls />
 
 	<!-- Side panel (location picker + settings) -->
-	<SidePanel />
+	<SidePanel>
+		<LocationPicker />
+		<div class="divider"></div>
+		<TimeControl />
+		<div class="divider"></div>
+		<FlightControls />
+		<div class="divider"></div>
+		<AtmosphereControls />
+		<div class="divider"></div>
+		<LightingControls />
+		<div class="divider"></div>
+		<WeatherPicker />
+	</SidePanel>
 
 	<!-- Observability viewer (Shift+T to toggle) -->
 	<TelemetryPanel />

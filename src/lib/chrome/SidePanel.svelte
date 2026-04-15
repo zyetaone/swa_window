@@ -1,18 +1,23 @@
 <script lang="ts">
 	/**
-	 * SidePanel - Right-side slide-out panel
+	 * SidePanel — right-side slide-out shell.
 	 *
-	 * Contains: location picker, settings, flight data.
-	 * Toggled via tab button on right edge of cabin wall.
+	 * The shell owns: open/close state + animation, tab button, backdrop,
+	 * focus trap, and the fixed header (app title + flight-data readout +
+	 * cruise-transition status).
+	 *
+	 * Inner content is composed at the page level via the `children` snippet.
+	 * The usual composition lives in chrome/panel/ — LocationPicker,
+	 * TimeControl, FlightControls, AtmosphereControls, LightingControls,
+	 * WeatherPicker. Pages can re-order, subset, or add their own sections
+	 * without touching this shell.
 	 */
+	import type { Snippet } from 'svelte';
 	import { useAppState } from "$lib/model/state.svelte";
-	import { LOCATIONS } from "$lib/locations";
-	import { AIRCRAFT } from "$lib/constants";
-	import { WEATHER_TYPES } from "$lib/types";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
-	import Toggle from "./Toggle.svelte";
-	import RangeSlider from "./RangeSlider.svelte";
+
+	let { children }: { children?: Snippet } = $props();
 
 	const model = useAppState();
 
@@ -21,9 +26,6 @@
 
 	let panelEl: HTMLDivElement | undefined = $state();
 	let tabButtonEl: HTMLButtonElement | undefined = $state();
-
-	const cities = LOCATIONS.filter((l) => l.hasBuildings);
-	const nature = LOCATIONS.filter((l) => !l.hasBuildings);
 
 	function openPanel() {
 		panelOpen = true;
@@ -173,171 +175,11 @@
 
 		<div class="divider"></div>
 
-		<!-- Location Grid -->
-		<section>
-			<h4>Cities</h4>
-			<div class="location-grid">
-				{#each cities as loc (loc.id)}
-					<button
-						class={['loc-btn', model.location === loc.id && 'active']}
-						onclick={() => model.flyTo(loc.id)}
-					>
-						{loc.name}
-					</button>
-				{/each}
-			</div>
-		</section>
-
-		<section>
-			<h4>Nature</h4>
-			<div class="location-grid">
-				{#each nature as loc (loc.id)}
-					<button
-						class={['loc-btn', model.location === loc.id && 'active']}
-						onclick={() => model.flyTo(loc.id)}
-					>
-						{loc.name}
-					</button>
-				{/each}
-			</div>
-		</section>
-
-		<div class="divider"></div>
-
-		<!-- Settings -->
-		<section class="settings">
-			<h4>Time</h4>
-			<Toggle
-				label="Real Time"
-				checked={model.syncToRealTime}
-				onchange={() =>
-					model.applyPatch({ syncToRealTime: !model.syncToRealTime })}
-			/>
-
-			{#if !model.syncToRealTime}
-				<RangeSlider
-					id="time"
-					label="Time of Day"
-					min={0}
-					max={24}
-					step={0.25}
-					value={model.localTimeOfDay}
-					formatValue={(v) => formatTime(v)}
-					oninput={(e) =>
-						model.setTime(parseFloat(e.currentTarget.value))}
-				/>
-			{/if}
-
-			<div class="divider"></div>
-
-			<h4>Flight</h4>
-			<RangeSlider
-				id="speed"
-				label="Cruising Speed"
-				min={0.1}
-				max={3.0}
-				step={0.1}
-				value={model.flight.flightSpeed}
-				formatValue={(v) => v.toFixed(1) + "x"}
-				oninput={(e) =>
-					model.applyPatch({
-						flightSpeed: parseFloat(e.currentTarget.value),
-					})}
-			/>
-			<RangeSlider
-				id="altitude"
-				label="Altitude"
-				min={AIRCRAFT.MIN_ALTITUDE}
-				max={AIRCRAFT.MAX_ALTITUDE}
-				step={1000}
-				value={model.flight.altitude}
-				formatValue={(v) => (v / 1000).toFixed(0) + "k ft"}
-				oninput={(e) =>
-					model.flight.setAltitude(parseFloat(e.currentTarget.value))}
-			/>
-
-			<div class="divider"></div>
-
-			<h4>Atmosphere</h4>
-			<RangeSlider
-				id="clouds"
-				label="Cloud Cover"
-				min={0}
-				max={1.0}
-				step={0.05}
-				value={model.cloudDensity}
-				formatValue={(v) => Math.round(v * 100) + "%"}
-				oninput={(e) =>
-					model.applyPatch({
-						cloudDensity: parseFloat(e.currentTarget.value),
-					})}
-			/>
-			<RangeSlider
-				id="cloudSpeed"
-				label="Cloud Speed"
-				min={0.1}
-				max={2.0}
-				step={0.1}
-				value={model.cloudSpeed}
-				formatValue={(v) => v.toFixed(1) + "x"}
-				oninput={(e) =>
-					model.applyPatch({
-						cloudSpeed: parseFloat(e.currentTarget.value),
-					})}
-			/>
-			<RangeSlider
-				id="haze"
-				label="Haze"
-				min={0}
-				max={0.15}
-				step={0.005}
-				value={model.haze}
-				formatValue={(v) => Math.round(v * 100) + "%"}
-				oninput={(e) =>
-					model.applyPatch({
-						haze: parseFloat(e.currentTarget.value),
-					})}
-			/>
-			<div class="divider"></div>
-
-			<h4>Lighting</h4>
-			<RangeSlider
-				id="nightLight"
-				label="Night Lights"
-				min={0}
-				max={5.0}
-				step={0.1}
-				value={model.nightLightIntensity}
-				formatValue={(v) => v.toFixed(1)}
-				oninput={(e) =>
-					model.applyPatch({
-						nightLightIntensity: parseFloat(
-							e.currentTarget.value,
-						),
-					})}
-			/>
-			<Toggle
-				label="3D Buildings"
-				checked={model.showBuildings}
-				onchange={() => model.toggleBuildings()}
-			/>
-			<Toggle
-				label="Window Frame"
-				bind:checked={model.config.chrome.windowFrame}
-			/>
-
-			<div class="divider"></div>
-
-			<h4>Weather</h4>
-			<div class="weather-grid">
-				{#each WEATHER_TYPES as w (w)}
-					<button
-						class={['weather-btn', model.weather === w && 'active']}
-						onclick={() => model.applyPatch({ weather: w })}
-					>{w[0].toUpperCase() + w.slice(1)}</button>
-				{/each}
-			</div>
-		</section>
+		<!-- Composed sections — page supplies via <SidePanel>…</SidePanel>.
+		     See chrome/panel/ for the stock components. -->
+		<div class="settings">
+			{@render children?.()}
+		</div>
 
 	</div>
 {/if}
@@ -572,13 +414,16 @@
 		);
 	}
 
-	/* --- Location Grid --- */
-
-	section {
+	/* Child panel sections live in their own components and use scoped
+	   section + h4 + .divider markup. Since Svelte's style scoping is
+	   per-file, we reach across via :global on these shared structural
+	   elements only — individual widget styling stays local to its
+	   section component. */
+	.panel :global(section) {
 		margin-bottom: 0.2rem;
 	}
 
-	h4 {
+	.panel :global(h4) {
 		margin: 0 0 0.4rem 0;
 		font-size: 0.7rem;
 		text-transform: uppercase;
@@ -587,78 +432,23 @@
 		font-weight: 500;
 	}
 
-	.location-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem;
+	.panel :global(.divider) {
+		height: 1px;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			rgba(255, 255, 255, 0.2),
+			transparent
+		);
+		margin: 0.4rem 0;
 	}
 
-	.loc-btn {
-		padding: 0.45rem 0.75rem;
-		font-size: 0.75rem;
-		min-height: 44px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(255, 255, 255, 0.08);
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 5px;
-		color: white;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.loc-btn:hover {
-		background: rgba(255, 255, 255, 0.15);
-		border-color: rgba(255, 255, 255, 0.25);
-	}
-
-	.loc-btn.active {
-		background: rgba(48, 76, 178, 0.4);
-		border-color: var(--sw-blue);
-		box-shadow: 0 0 8px rgba(48, 76, 178, 0.4);
-	}
-
-	/* --- Settings --- */
+	/* --- Settings wrapper spacing --- */
 
 	.settings {
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
-	}
-
-	.weather-grid {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
-	}
-
-	.weather-btn {
-		padding: 0.45rem 0.75rem;
-		font-size: 0.75rem;
-		min-height: 44px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 5px;
-		color: rgba(255, 255, 255, 0.7);
-		cursor: pointer;
-		text-align: center;
-		transition: all 0.2s;
-	}
-
-	.weather-btn:hover {
-		background: rgba(255, 255, 255, 0.1);
-		color: white;
-	}
-
-	.weather-btn.active {
-		background: rgba(48, 76, 178, 0.5);
-		border-color: var(--sw-blue);
-		color: white;
-		font-weight: 500;
 	}
 
 	:global(.panel .control input[type="range"]) {
