@@ -268,6 +268,7 @@
 				showBuildings={mlBuildings}
 				showAtmosphere={mlAtmosphere}
 				nightFactor={nf}
+				{timeOfDay}
 				terrainExaggeration={1.5}
 				{lodMaxZoomLevels}
 				{lodTileCountRatio}

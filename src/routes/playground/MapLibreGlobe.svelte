@@ -33,6 +33,8 @@
 		showTerrain = false,
 		showAtmosphere = true,
 		nightFactor = 0,
+		/** Time of day 0–24 (drives ambient light position + sky palette). */
+		timeOfDay = 12,
 		terrainExaggeration = 1.5,
 		/**
 		 * LOD tuning — `map.setSourceTileLodParams(max, ratio)`. Pi-tuned
@@ -58,10 +60,46 @@
 		showTerrain?: boolean;
 		showAtmosphere?: boolean;
 		nightFactor?: number;
+		timeOfDay?: number;
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
 	} = $props();
+
+	// ── Ambient light + sky palette — driven by timeOfDay ───────────────────
+	// Artistic model, not astronomically accurate. Goal: "feel" of the hour.
+	// Sun follows east-to-west arc 6am→6pm; moon implicit (opposite side) at night.
+	const sunParams = $derived.by(() => {
+		// hourAngle: -180° at midnight, 0° at noon, 180° at next midnight
+		const hourAngle = (timeOfDay - 12) * 15;
+		const rad = hourAngle * Math.PI / 180;
+		// Elevation: cos() → 1 at noon, -1 at midnight. Map to polar 0..180.
+		const elevation = Math.cos(rad);                                // -1..1
+		const sunPolar = 90 - elevation * 60;                           // 30 (noon) .. 150 (midnight)
+		// Azimuth: 90 (east) at 6am → 180 (south) at noon → 270 (west) at 6pm → 0 (north) at midnight
+		const azimuthFrac = ((timeOfDay + 6) / 24) % 1;                 // 0 at 6am → 1 at next 6am
+		const sunAzimuth = azimuthFrac * 360;
+		return { polar: sunPolar, azimuth: sunAzimuth, elevation };
+	});
+
+	// 5-band palette: dawn / morning / noon / dusk / night
+	const skyPalette = $derived.by(() => {
+		const h = timeOfDay;
+		// Dawn (5-7)
+		if (h >= 5 && h < 7)  return { sky: '#2a1f4a', horizon: '#e8805a', fog: '#e0a880', light: '#ffd4b8', intensity: 0.55 };
+		// Morning (7-10)
+		if (h >= 7 && h < 10) return { sky: '#4a7ab5', horizon: '#a0c8e8', fog: '#b8d4ea', light: '#fff1d6', intensity: 0.7 };
+		// Day (10-16)
+		if (h >= 10 && h < 16) return { sky: '#001e3d', horizon: '#1a4a7a', fog: '#1a3a5c', light: '#fffef2', intensity: 0.8 };
+		// Afternoon→Dusk (16-18)
+		if (h >= 16 && h < 18) return { sky: '#2c3e75', horizon: '#d4895a', fog: '#c68860', light: '#ffc080', intensity: 0.65 };
+		// Dusk / golden hour (18-20)
+		if (h >= 18 && h < 20) return { sky: '#1e1a40', horizon: '#c05f40', fog: '#8a4a40', light: '#ff9050', intensity: 0.5 };
+		// Twilight (20-22)
+		if (h >= 20 && h < 22) return { sky: '#0a0f28', horizon: '#301838', fog: '#1a1432', light: '#7a88d0', intensity: 0.28 };
+		// Night (22-5)
+		return { sky: '#050510', horizon: '#0a1028', fog: '#0a0f20', light: '#a8b4d0', intensity: 0.2 };
+	});
 
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
@@ -82,14 +120,28 @@
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// Day ocean: muted navy with sun-glint hint. Night ocean: near-black with
-	// cool bioluminescent edge. Shimmer = sin(t) modulating lightness.
+	// Time-of-day-aware water: noon navy, golden hour amber, night near-black.
+	// Shimmer = sin(t) modulating lightness. Reads as subtle breath over the ocean.
 	const waterColor = $derived.by(() => {
 		const shimmer = Math.sin(waterTime * 0.6) * 0.5 + 0.5; // 0..1
-		if (nightFactor > 0.5) {
+		const h = timeOfDay;
+		// Golden hour (17-19): amber reflection
+		if (h >= 17 && h < 19) {
+			const r = Math.round(140 + shimmer * 30);
+			const g = Math.round(80 + shimmer * 20);
+			const b = Math.round(50 + shimmer * 15);
+			return `rgba(${r}, ${g}, ${b}, 1)`;
+		}
+		// Dawn (5-7): rose-blue
+		if (h >= 5 && h < 7) {
+			return `rgba(${70 + shimmer * 10}, ${50 + shimmer * 10}, ${90 + shimmer * 10}, 1)`;
+		}
+		// Night (20-5): near-black with cool edge
+		if (h >= 20 || h < 5) {
 			const b = Math.round(18 + shimmer * 6);
 			return `rgba(${4}, ${10 + shimmer * 4}, ${b + 6}, 1)`;
 		}
+		// Day: muted navy
 		const dayB = Math.round(96 + shimmer * 12);
 		return `rgba(${32}, ${74 + shimmer * 10}, ${dayB}, 1)`;
 	});
@@ -168,12 +220,19 @@
 
 	{#if showAtmosphere}
 		<GlobeControl />
-		<Light anchor="map" position={[1.5, 90, 80]} />
-		<!-- Sky uses map.setSky() via svelte-maplibre-gl — works with any style. -->
+		<!-- Ambient light: position follows sun through the sky, color + intensity
+		     match the hour. Shades terrain + extruded buildings realistically. -->
+		<Light
+			anchor="map"
+			position={[1.5, sunParams.azimuth, sunParams.polar]}
+			color={skyPalette.light}
+			intensity={skyPalette.intensity}
+		/>
+		<!-- Sky uses map.setSky() — palette driven by timeOfDay (5 bands). -->
 		<Sky
-			sky-color={nightFactor > 0.5 ? '#050510' : '#001e3d'}
-			horizon-color={nightFactor > 0.5 ? '#0a1028' : '#1a4a7a'}
-			fog-color={nightFactor > 0.5 ? '#0a0f20' : '#1a3a5c'}
+			sky-color={skyPalette.sky}
+			horizon-color={skyPalette.horizon}
+			fog-color={skyPalette.fog}
 			sky-horizon-blend={0.3}
 			horizon-fog-blend={0.5}
 			atmosphere-blend={0.4}
