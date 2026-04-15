@@ -247,20 +247,22 @@
 	{/if}
 
 	<!-- Night overlay: CartoDB Dark raster composited over satellite as nightFactor rises.
-	     When fully night, streets/labels come through dark-styled. Before dawn, fades out. -->
+	     When fully night, streets/labels come through dark-styled. Before dawn, fades out.
+	     Using the non-@2x URL → tileSize 256 lines up with MapLibre defaults and avoids
+	     LOD stripe artifacts visible when @2x (512) is declared as 256. -->
 	{#if nightFactor > 0.01}
 		<RasterTileSource
 			id="night-overlay"
-			tiles={['https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png']}
+			tiles={['https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png']}
 			tileSize={256}
-			maxzoom={18}
+			maxzoom={19}
 		>
 			<RasterLayer
 				id="night-overlay-layer"
 				source="night-overlay"
 				paint={{
-					'raster-opacity': nightFactor * 0.8,
-					'raster-fade-duration': 200,
+					'raster-opacity': nightFactor * 0.85,
+					'raster-fade-duration': 300,
 				}}
 			/>
 		</RasterTileSource>

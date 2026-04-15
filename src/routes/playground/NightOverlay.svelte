@@ -21,8 +21,8 @@
 	const shimmerStrength = $derived(1 - Math.abs(nightFactor - 0.5) * 2);
 </script>
 
-<!-- Stars — sits above the MapLibre canvas. Absolute positioned; covers
-     upper 55% of viewport (below horizon we see terrain). -->
+<!-- Stars — clipped to upper 55% (sky area above horizon). Fades out at
+     the bottom edge via mask-image so it doesn't pop-cut at the horizon. -->
 <div class="stars" style:opacity={starsOpacity} aria-hidden="true">
 	<div class="star-layer star-layer-1"></div>
 	<div class="star-layer star-layer-2"></div>
@@ -77,7 +77,13 @@
 		transition: opacity 1.5s ease;
 	}
 
-	.stars { overflow: hidden; }
+	.stars {
+		overflow: hidden;
+		/* Clip to upper ~55% of viewport (sky region) with soft fade to the
+		   horizon so stars don't hard-cut. */
+		-webkit-mask-image: linear-gradient(180deg, black 0%, black 40%, transparent 58%);
+		mask-image: linear-gradient(180deg, black 0%, black 40%, transparent 58%);
+	}
 
 	/* Three overlapping star layers with different sizes — parallax feel */
 	.star-layer {
