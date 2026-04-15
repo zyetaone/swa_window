@@ -9,9 +9,7 @@ import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
 
-// Haze min/max are hardcoded bounds — not exposed in AmbientDriftConfig.
-const HAZE_MIN = 0;
-const HAZE_MAX = 0.2;
+// Haze min/max now live in AmbientDriftConfig (hazeMin / hazeMax).
 
 export class DirectorEngine {
 	// ── Private timers ────────────────────────────────────────────────────────
@@ -74,7 +72,7 @@ export class DirectorEngine {
 		);
 		patch.haze = clamp(
 			ctx.haze + (Math.random() - 0.5) * am.hazeShift,
-			HAZE_MIN, HAZE_MAX
+			am.hazeMin, am.hazeMax
 		);
 
 		if (Math.random() < ap.weatherChangeChance) {

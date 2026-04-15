@@ -205,11 +205,13 @@
 		}
 	});
 
+	// Resize handler — attached via <svelte:window onresize> in the markup.
+	function handleResize() {
+		cesiumViewer?.resize();
+	}
+
 	onMount(() => {
-		const onResize = () => cesiumViewer?.resize();
-		window.addEventListener('resize', onResize);
 		return () => {
-			window.removeEventListener('resize', onResize);
 			cesiumViewer?.destroy();
 		};
 	});
@@ -237,6 +239,8 @@
 		turbulenceLevel = 'light';
 	}
 </script>
+
+<svelte:window onresize={handleResize} />
 
 <div class="playground">
 	<div class="viewport" style:background={bgGradient}>

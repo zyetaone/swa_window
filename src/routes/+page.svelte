@@ -106,17 +106,14 @@
 	// "F" keyboard toggle for window frame (designer spec — Phase 5b).
 	// Only captures when no other text-entry element has focus so we don't
 	// fight the time slider / weather dropdown / SidePanel inputs.
-	$effect(() => {
-		if (typeof window === "undefined") return;
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key !== "f" && e.key !== "F") return;
-			const t = e.target as HTMLElement;
-			if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
-			model.config.chrome.windowFrame = !model.config.chrome.windowFrame;
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	});
+	// Handler used by <svelte:window onkeydown> below — idiomatic over
+	// addEventListener inside $effect per Svelte 5 best practices.
+	function handleKey(e: KeyboardEvent) {
+		if (e.key !== "f" && e.key !== "F") return;
+		const t = e.target as HTMLElement;
+		if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+		model.config.chrome.windowFrame = !model.config.chrome.windowFrame;
+	}
 
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
 	if (typeof window !== "undefined") {
@@ -182,7 +179,9 @@
 	/>
 </svelte:head>
 
-<main class="app" class:no-frame={!model.config.chrome.windowFrame}>
+<svelte:window onkeydown={handleKey} />
+
+<main class={["app", !model.config.chrome.windowFrame && "no-frame"]}>
 	<!-- Cabin wall with texture -->
 	<div class="cabin-wall">
 		<!-- Panel lines texture -->

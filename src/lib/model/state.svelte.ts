@@ -6,7 +6,7 @@
  *   Child components: const model = useAppState()
  */
 
-import { setContext, getContext } from 'svelte';
+import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
 import { QUALITY_MODES } from '$lib/types';
@@ -416,17 +416,20 @@ export class WindowModel {
 }
 
 // ─── Context DI ──────────────────────────────────────────────────────────────
-
-const APP_STATE_KEY = Symbol('APP_STATE');
+//
+// createContext (Svelte 5.40+) provides type-safe get/set without a manual
+// Symbol key or cast. The returned tuple's set/get names stay private inside
+// this module; public API is still createAppState() / useAppState().
+const [getAppContext, setAppContext] = createContext<WindowModel>();
 
 export function createAppState(): WindowModel {
 	const model = new WindowModel();
-	setContext(APP_STATE_KEY, model);
+	setAppContext(model);
 	return model;
 }
 
 export function useAppState(): WindowModel {
-	const model = getContext<WindowModel>(APP_STATE_KEY);
+	const model = getAppContext();
 	if (!model) throw new Error('useAppState() called outside component tree');
 	return model;
 }

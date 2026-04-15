@@ -5,7 +5,6 @@
  * constants.ts. `$state` wraps them so admin push can mutate at runtime.
  */
 
-import type { WeatherType } from '$lib/types';
 import { AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
 
 export class CloudsConfig {
@@ -21,9 +20,6 @@ export class HazeConfig {
 }
 
 export class WeatherConfig {
-	// Default weather matches WEATHER_EFFECTS default key we expect on boot.
-	current = $state<WeatherType>('cloudy');
-
 	// Per-weather tuning — syncFromEffects(WEATHER_EFFECTS[current]) populates.
 	// Defaults mirror WEATHER_EFFECTS.cloudy so initial render doesn't flicker.
 	turbulence        = $state<'light' | 'moderate' | 'severe'>(WEATHER_EFFECTS.cloudy.turbulence);
@@ -88,7 +84,6 @@ export class AtmosphereConfig {
 				return false;
 			case 'weather':
 				switch (rest.join('.')) {
-					case 'current':              this.weather.current              = value as WeatherType; return true;
 					case 'turbulence':          this.weather.turbulence           = value as 'light' | 'moderate' | 'severe'; return true;
 					case 'hasLightning':         this.weather.hasLightning         = value as boolean; return true;
 					case 'rainOpacity':         this.weather.rainOpacity          = value as number; return true;
@@ -120,7 +115,6 @@ export class AtmosphereConfig {
 			clouds:      { density: this.clouds.density, speed: this.clouds.speed, layerCount: this.clouds.layerCount },
 			haze:        { amount: this.haze.amount, min: this.haze.min, max: this.haze.max },
 			weather:     {
-				current: this.weather.current,
 				turbulence: this.weather.turbulence,
 				hasLightning: this.weather.hasLightning,
 				rainOpacity: this.weather.rainOpacity,

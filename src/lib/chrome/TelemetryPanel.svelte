@@ -13,20 +13,17 @@
 
 	let visible = $state(false);
 
-	$effect(() => {
-		if (typeof window === 'undefined') return;
-		const onKey = (e: KeyboardEvent) => {
-			if (!e.shiftKey) return;
-			if (e.key !== 'T' && e.key !== 't') return;
-			// Respect focus in text-entry elements — same rule as the 'F' toggle.
-			const t = e.target as HTMLElement | null;
-			if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
-			e.preventDefault();
-			visible = !visible;
-		};
-		window.addEventListener('keydown', onKey);
-		return () => window.removeEventListener('keydown', onKey);
-	});
+	// Shift+T toggles visibility. Listener attached via <svelte:window> below
+	// per Svelte 5 best practices (preferred over addEventListener in $effect).
+	function handleKey(e: KeyboardEvent) {
+		if (!e.shiftKey) return;
+		if (e.key !== 'T' && e.key !== 't') return;
+		// Respect focus in text-entry elements — same rule as the 'F' toggle.
+		const t = e.target as HTMLElement | null;
+		if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+		e.preventDefault();
+		visible = !visible;
+	}
 
 	const p50 = $derived(telemetry.p50);
 	const p95 = $derived(telemetry.p95);
@@ -69,6 +66,8 @@
 		telemetry.clear();
 	}
 </script>
+
+<svelte:window onkeydown={handleKey} />
 
 {#if visible}
 	<div class="panel" role="dialog" aria-label="Telemetry">

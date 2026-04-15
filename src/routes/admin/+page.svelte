@@ -180,7 +180,7 @@
 			</div>
 			{#if store.alerts.length > 0}
 				<div class="alerts">
-					{#each store.alerts as alert}
+					{#each store.alerts as alert (alert.device + '|' + alert.message)}
 						<span class="alert-badge" class:error={alert.level === 'error'} class:warning={alert.level === 'warning'}>
 							{alert.message}
 						</span>

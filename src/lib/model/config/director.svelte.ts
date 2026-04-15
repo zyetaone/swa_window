@@ -34,6 +34,8 @@ export class AmbientDriftConfig {
 	cloudSpeedMin: number     = $state(AMBIENT.CLOUD_SPEED_MIN);
 	cloudSpeedMax: number     = $state(AMBIENT.CLOUD_SPEED_MAX);
 	hazeShift: number         = $state(AMBIENT.HAZE_SHIFT);
+	hazeMin: number           = $state(AMBIENT.HAZE_MIN);
+	hazeMax: number           = $state(AMBIENT.HAZE_MAX);
 }
 
 export class DirectorConfig {
@@ -73,6 +75,8 @@ export class DirectorConfig {
 					case 'cloudSpeedMin':     this.ambient.cloudSpeedMin     = value as number; return true;
 					case 'cloudSpeedMax':     this.ambient.cloudSpeedMax     = value as number; return true;
 					case 'hazeShift':         this.ambient.hazeShift         = value as number; return true;
+					case 'hazeMin':           this.ambient.hazeMin           = value as number; return true;
+					case 'hazeMax':           this.ambient.hazeMax           = value as number; return true;
 				}
 				return false;
 		}
@@ -105,6 +109,8 @@ export class DirectorConfig {
 				cloudSpeedMin: this.ambient.cloudSpeedMin,
 				cloudSpeedMax: this.ambient.cloudSpeedMax,
 				hazeShift: this.ambient.hazeShift,
+				hazeMin: this.ambient.hazeMin,
+				hazeMax: this.ambient.hazeMax,
 			},
 		};
 	}

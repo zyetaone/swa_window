@@ -88,8 +88,7 @@ export class CameraConfig {
 	}
 
 	setPath(path: string, value: unknown): boolean {
-		const [head, sub, ...rest] = path.split('.');
-		const joinRest = rest.join('.');
+		const [head, sub] = path.split('.');
 		switch (head) {
 			case 'orbit':
 				switch (sub) {
@@ -153,8 +152,6 @@ export class CameraConfig {
 				}
 				return false;
 		}
-		// Unused — reserved for future deep paths.
-		void joinRest;
 		return false;
 	}
 
