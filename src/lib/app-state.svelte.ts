@@ -19,6 +19,7 @@ import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { MotionEngine } from '$lib/camera/motion.svelte';
 import { DirectorEngine } from '$lib/director/autopilot.svelte';
 import { RootConfig } from '$lib/model/config';
+import { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,12 @@ export class WindowModel {
 	// then the flat fields get removed in a final pass. Fleet v2 config_patch
 	// messages route through `this.config.applyPatch(path, value)`.
 	readonly config = new RootConfig();
+
+	// ── Observability (Phase 5.6) ────────────────────────────────────────────
+	// Ring-buffer telemetry — per-frame durations (p50/p95), lifecycle events,
+	// counters. Instrumentation batches so the 60 Hz tick path only touches a
+	// plain non-reactive buffer. Surfaced to UI via TelemetryPanel (Shift+T).
+	readonly telemetry = new Telemetry();
 
 	// Phase 7 — leader broadcast hook. Set by the fleet client on connect
 	// (see setFleetBroadcast). When this device is a panorama leader, the
@@ -251,6 +258,7 @@ export class WindowModel {
 	 * interface addition introduced in Phase 6.
 	 */
 	applyConfigPatch(path: string, value: unknown): boolean {
+		this.telemetry.recordEvent('config_patch', { path, value });
 		return this.config.applyPatch(path, value);
 	}
 
@@ -298,6 +306,7 @@ export class WindowModel {
 
 	tick(delta: number): void {
 		if (!Number.isFinite(delta) || delta <= 0 || delta > 0.1) return;
+		const frameStart = performance.now();
 		this.time = (this.time + delta) % 3600;
 
 		const ctx = this.#createContext();
@@ -340,6 +349,8 @@ export class WindowModel {
 		}
 
 		if (this.autoQuality) this.#tickAutoQuality(delta);
+
+		this.telemetry.recordFrame(performance.now() - frameStart);
 	}
 
 	// Reuse a single context object each frame — avoids per-frame GC pressure

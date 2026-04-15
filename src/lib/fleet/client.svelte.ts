@@ -89,6 +89,7 @@ export class DisplayWsClient extends BaseTransport {
 	}
 
 	#send(msg: DisplayMessage | { v: 2; type: string; [k: string]: unknown }): void {
+		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
 		if (this.#ws?.readyState === WebSocket.OPEN) {
 			this.#ws.send(JSON.stringify(msg));
 		}
@@ -137,6 +138,11 @@ export class DisplayWsClient extends BaseTransport {
 	#handleMessage(raw: string): void {
 		const parsed = safeParse<ServerMessage | ServerMessageV2>(raw);
 		if (!parsed) return;
+
+		this.#model.telemetry?.recordEvent('fleet_in', {
+			type: (parsed as { type?: string }).type,
+			v: (parsed as { v?: number }).v ?? 1,
+		});
 
 		// v2 dispatcher — additive. v2 carries an explicit `v: 2` discriminator;
 		// v1 messages never do, so the routing is unambiguous.

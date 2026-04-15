@@ -1,5 +1,7 @@
 # ADR-001: Offline Tile Architecture for Pi 5 Fleet Deployment
 
+> Implementation note: this ADR captures the intended standalone tile architecture. The current `main` branch only retains the script-based helpers in `scripts/prefetch-tiles.ts` and `scripts/build-pmtiles.ts`; the standalone packager workspace described below is not part of the current tree, and historical names like `tile-packager/` or `aero-tiles.service` are preserved here for context only.
+
 ## Context
 
 Aero Dynamic Window runs on Pi 5 kiosks in offline/intermittent-network environments.

@@ -2,16 +2,29 @@
  * Tile Server — SvelteKit route replacing standalone tile-server/.
  *
  * Serves pre-downloaded tiles from TILE_DIR for offline Cesium operation.
- * GET /api/tiles/health          → status
- * GET /api/tiles/{layer}/{z}/{x}/{y}.ext → tile file
- * GET /api/tiles/terrain/layer.json      → terrain metadata
+ *
+ * Two path conventions are supported:
+ *
+ *   1. WMTS layout  — stored as {layer}/{z}/{y}/{x}.ext  (tile-packager default)
+ *      Request:      /api/tiles/{layer}/{z}/{y}/{x}.ext
+ *      Maps to:      TILE_DIR/{layer}/{z}/{y}/{x}.ext
+ *
+ *   2. XYZ layout   — standard web mercator {z}/{x}/{y} convention used by MapLibre
+ *      Request:      /api/tiles/xyz/{layer}/{z}/{x}/{y}.ext
+ *      Maps to:      TILE_DIR/{layer}/{z}/{y}/{x}.ext  (swaps x/y)
+ *
+ * GET /api/tiles/health                   → status
  */
 
-import { resolve } from 'node:path';
+import { createReadStream, statSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { existsSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
 
-const TILE_DIR = (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '') + '/';
+// Resolve TILE_DIR from project root (five levels up from this route file)
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+const TILE_DIR = resolve(PROJECT_ROOT, (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '')) + '/';
 
 const CORS = {
 	'Access-Control-Allow-Origin': '*',
@@ -27,6 +40,32 @@ export const OPTIONS: RequestHandler = async () => {
 	return new Response(null, { status: 204, headers: CORS });
 };
 
+function safeResolve(subPath: string): { filePath: string; notFound: boolean; forbidden: boolean } {
+	const filePath = resolve(TILE_DIR, subPath);
+	if (!filePath.startsWith(TILE_DIR)) return { filePath, notFound: false, forbidden: true };
+	if (!existsSync(filePath)) return { filePath, notFound: true, forbidden: false };
+	try {
+		const real = realpathSync(filePath);
+		if (!real.startsWith(TILE_DIR)) return { filePath, notFound: false, forbidden: true };
+	} catch { return { filePath, notFound: true, forbidden: false }; }
+	return { filePath, notFound: false, forbidden: false };
+}
+
+function serveTile(filePath: string): Response {
+	const ext = filePath.substring(filePath.lastIndexOf('.'));
+	const contentType = MIME[ext] ?? 'application/octet-stream';
+	const { size } = statSync(filePath);
+	const stream = createReadStream(filePath);
+	return new Response(stream as any, {
+		headers: {
+			...CORS,
+			'Content-Type': contentType,
+			'Content-Length': String(size),
+			'Cache-Control': 'public, max-age=31536000, immutable',
+		},
+	});
+}
+
 export const GET: RequestHandler = async ({ params }) => {
 	const path = params.path ?? '';
 
@@ -36,32 +75,21 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 	}
 
-	const filePath = resolve(TILE_DIR, path);
-
-	// Prevent path traversal (trailing-slash guard + symlink resolution)
-	if (!filePath.startsWith(TILE_DIR)) {
-		return new Response('Forbidden', { status: 403 });
+	// XYZ proxy: /api/tiles/xyz/{layer}/{z}/{x}/{y}.ext
+	// Remaps to TILE_DIR/{layer}/{z}/{y}/{x}.ext
+	const xyzMatch = path.match(/^xyz\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.(.+)$/);
+	if (xyzMatch) {
+		const [, layer, z, x, y, ext] = xyzMatch;
+		const remapped = `${layer}/${z}/${y}/${x}.${ext}`;
+		const { filePath, notFound, forbidden } = safeResolve(remapped);
+		if (forbidden) return new Response('Forbidden', { status: 403 });
+		if (notFound) return new Response('Not found', { status: 404, headers: CORS });
+		return serveTile(filePath);
 	}
 
-	if (!existsSync(filePath)) {
-		return new Response('Not found', { status: 404, headers: CORS });
-	}
-
-	// Resolve symlinks and re-check containment
-	try {
-		const real = realpathSync(filePath);
-		if (!real.startsWith(TILE_DIR)) return new Response('Forbidden', { status: 403 });
-	} catch { return new Response('Not found', { status: 404, headers: CORS }); }
-
-	const ext = filePath.substring(filePath.lastIndexOf('.'));
-	const contentType = MIME[ext] ?? 'application/octet-stream';
-
-	const file = Bun.file(filePath);
-	return new Response(file, {
-		headers: {
-			...CORS,
-			'Content-Type': contentType,
-			'Cache-Control': 'public, max-age=31536000, immutable',
-		},
-	});
+	// Direct WMTS path: /api/tiles/{layer}/{z}/{y}/{x}.ext
+	const { filePath, notFound, forbidden } = safeResolve(path);
+	if (forbidden) return new Response('Forbidden', { status: 403 });
+	if (notFound) return new Response('Not found', { status: 404, headers: CORS });
+	return serveTile(filePath);
 };

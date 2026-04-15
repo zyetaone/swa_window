@@ -103,10 +103,10 @@
 		{/if}
 	{/if}
 
-	{#if showTerrain}
+ 	{#if showTerrain}
 		<RasterDEMTileSource
 			id="terrain"
-			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://demotiles.maplibre.org/terrain-tiles/{z}/{x}/{y}.png'}
+			url={terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'}
 		>
 			<Terrain exaggeration={terrainExaggeration} />
 		</RasterDEMTileSource>

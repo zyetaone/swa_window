@@ -74,7 +74,59 @@ export const MAPLIBRE_SOURCES: readonly ImagerySource[] = [
 	},
 ] as const;
 
+/**
+ * Cached (offline) tile sources served from the local tile API.
+ * These are pre-downloaded via `bun run tile-packager` for the 3 active locations
+ * (dubai, dallas, himalayas) and served from TILE_DIR at runtime.
+ *
+ * Available offline sources:
+ *   eox-sentinel2      — satellite, z4-12, ~50MB per location
+ *   esri-world-imagery — satellite, z4-14, ~60MB per location
+ *   cartodb-dark       — dark vector tiles, z4-12, ~30MB per location
+ *   viirs-night-lights — night lights, z3-8, ~5MB per location
+ */
+export const CACHED_SOURCES: readonly ImagerySource[] = [
+	{
+		id: 'cached-eox',
+		label: '🗄️ Cached — Sentinel-2',
+		url: '/api/tiles/xyz/eox-sentinel2/{z}/{x}/{y}.jpg',
+		note: 'Offline • dubai/dallas/himalayas • z4-12',
+		attribution: '© EOX • Sentinel-2',
+		maxZoom: 12,
+	},
+	{
+		id: 'cached-esri',
+		label: '🗄️ Cached — ESRI Satellite',
+		url: '/api/tiles/xyz/esri-world-imagery/{z}/{x}/{y}.jpg',
+		note: 'Offline • dubai/dallas/himalayas • z4-14',
+		attribution: '© ESRI',
+		maxZoom: 14,
+	},
+	{
+		id: 'cached-cartodb',
+		label: '🗄️ Cached — CartoDB Dark',
+		url: '/api/tiles/xyz/cartodb-dark/{z}/{x}/{y}@2x.png',
+		note: 'Offline • dubai/dallas/himalayas • z4-12',
+		attribution: '© CartoDB',
+		maxZoom: 12,
+	},
+	{
+		id: 'cached-viirs',
+		label: '🗄️ Cached — VIIRS Night Lights',
+		url: '/api/tiles/xyz/viirs-night-lights/{z}/{x}/{y}.jpg',
+		note: 'Offline • dubai/dallas/himalayas • z3-8',
+		attribution: '© NASA VIIRS',
+		maxZoom: 8,
+	},
+] as const;
+
 /** Look up a source by id in any list, returning a fallback if not found. */
 export function findSource(list: readonly ImagerySource[], id: string): ImagerySource {
 	return list.find(s => s.id === id) ?? list[0];
 }
+
+/** All MapLibre sources including cached offline tiles. */
+export const ALL_MAPLIBRE_SOURCES: readonly ImagerySource[] = [
+	...MAPLIBRE_SOURCES,
+	...CACHED_SOURCES,
+];

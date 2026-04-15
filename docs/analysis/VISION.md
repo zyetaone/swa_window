@@ -1,5 +1,7 @@
 # Aero Dynamic Window - True Vision
 
+> Early concept document. It captures the intended visual direction, not the exact current implementation.
+
 ## What You See From Seat 12A at 35,000 Feet
 
 ### The View

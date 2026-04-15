@@ -19,10 +19,9 @@
  * Weather map (weather-map.png) — 256x256 grayscale:
  *   AI-generated if available, otherwise procedural large-scale blobs.
  *
- * Usage: npx tsx scripts/generate-textures.ts [--fallback-only]
+ * Usage: bun run scripts/generate-textures.ts [--fallback-only]
  */
 
-import { GoogleGenAI } from '@google/genai';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
@@ -331,6 +330,13 @@ async function generateWeatherMapAI(): Promise<Buffer | null> {
 		return null;
 	}
 
+	const genAiModule = await import('@google/genai').catch(() => null);
+	if (!genAiModule?.GoogleGenAI) {
+		console.warn('  [AI] @google/genai is not installed, skipping');
+		return null;
+	}
+
+	const { GoogleGenAI } = genAiModule;
 	const ai = new GoogleGenAI({ apiKey });
 	const prompt =
 		'seamless tileable abstract cloud coverage map, grayscale, large soft blobs and clear patches, satellite weather view style, abstract noise texture, no text, no borders';

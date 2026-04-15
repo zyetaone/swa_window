@@ -8,6 +8,7 @@
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
 import type { DeviceRole } from '$lib/model/config';
+import type { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ============================================================================
 // FLEET CLIENT MODEL (narrow interface for display WS client)
@@ -30,6 +31,11 @@ export interface FleetClientModel {
 	 * that haven't yet adopted v2; the fleet client feature-tests.
 	 */
 	applyConfigPatch?(path: string, value: unknown): boolean;
+	/**
+	 * Observability sink — optional so test stubs and older models remain
+	 * valid. The fleet client feature-tests with `?.` before recording.
+	 */
+	telemetry?: Telemetry;
 }
 
 // ============================================================================

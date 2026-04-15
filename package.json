@@ -14,7 +14,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:ui": "vitest --ui",
-		"generate-textures": "npx tsx --env-file=.env scripts/generate-textures.ts",
+		"generate-textures": "bun run scripts/generate-textures.ts",
+		"prefetch-tiles": "bun run scripts/prefetch-tiles.ts",
+		"build-pmtiles": "bun run scripts/build-pmtiles.ts",
 		"serve": "bun run server.ts",
 		"start": "bun run build && bun run server.ts"
 	},

@@ -66,9 +66,9 @@ export function getSkyState(timeOfDay: number): SkyState {
  */
 export function nightFactor(timeOfDay: number): number {
 	if (timeOfDay >= 7 && timeOfDay <= 18) return 0;
-	if (timeOfDay < 5 || timeOfDay > 20) return 1;
+	if (timeOfDay < 5 || timeOfDay > 22) return 1;
 	if (timeOfDay < 7) return 1 - (timeOfDay - 5) / 2;
-	return (timeOfDay - 18) / 2;
+	return (timeOfDay - 18) / 4;
 }
 
 /**

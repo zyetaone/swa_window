@@ -1,5 +1,7 @@
 # Aero Dynamic Window — Project Document
 
+> Historical analysis snapshot. Useful for context, but parts of the file map and deployment notes have drifted from the current implementation.
+
 > A circadian-aware digital airplane window display for office wellbeing.
 > Built for Southwest Airlines Hyderabad by Zyeta / Studio ArcX.
 
@@ -171,7 +173,7 @@ Hostname:   aero-display-00.local
 IP:         192.168.31.129 (LAN)
 SSH:        pi@aero-display-00.local (key auth)
 Remote:     Pi Connect enabled (connect.raspberrypi.com)
-Services:   aero-app (:5173), aero-fleet (:3001), aero-kiosk (Chromium)
+Services:   aero-xserver, aero-app (:5173), aero-kiosk (Chromium)
 Auto-start: Yes — survives power cycle
 WiFi:       Current network + rick-hotspot (arcx12345)
 GPU:        VideoCore VII, CMA 512MB, turbo commented (needs fan)
@@ -221,7 +223,7 @@ server/src/                        # Fleet server (Bun)
 ├── index.ts                       # HTTP + WebSocket
 └── ws.ts                          # WS message handling
 
-tile-packager/                     # Offline tile caching tool
+scripts/                           # Offline tile caching helpers
 tile-server/                       # Self-hosted tile server
 deploy/                            # Pi provisioning scripts
 ```

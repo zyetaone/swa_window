@@ -17,6 +17,7 @@ REPO_DIR="${INSTALL_DIR}/app"
 LOG_FILE="/var/log/aero-updater.log"
 BRANCH="${AERO_BRANCH:-main}"
 FLEET_SERVER="${AERO_FLEET_SERVER:-}"
+BUN_BIN="${AERO_BUN_BIN:-/home/kiosk/.bun/bin/bun}"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}"; }
 
@@ -33,6 +34,11 @@ if [[ ! -d "${REPO_DIR}/.git" ]]; then
 fi
 
 cd "${REPO_DIR}"
+
+if [[ ! -x "${BUN_BIN}" ]]; then
+    log "ERROR: Bun runtime not found at ${BUN_BIN}"
+    exit 1
+fi
 
 # Fetch without merging
 git fetch origin "${BRANCH}" --quiet 2>&1 | tee -a "${LOG_FILE}" || {
@@ -64,12 +70,10 @@ log "Updated to $(git rev-parse --short HEAD): $(git log -1 --format='%s')"
 # ─── 3. Install dependencies ─────────────────────────────────────────────
 
 log "Installing dependencies..."
-if command -v bun &>/dev/null; then
-    bun install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || {
-        log "WARN: bun install failed — trying without frozen lockfile"
-        bun install 2>&1 | tee -a "${LOG_FILE}"
-    }
-fi
+"${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || {
+    log "WARN: bun install failed — trying without frozen lockfile"
+    "${BUN_BIN}" install 2>&1 | tee -a "${LOG_FILE}"
+}
 
 # ─── 4. Build ────────────────────────────────────────────────────────────
 # Ported 2026-04-09 from feat/offline-tiles (monorepo) to main (flat).
@@ -80,7 +84,7 @@ fi
 
 if [[ -f "package.json" ]] && command grep -q '"build"' package.json; then
     log "Building app..."
-    bun run build 2>&1 | tee -a "${LOG_FILE}" || {
+    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" || {
         log "ERROR: Build failed — rolling back"
         git reset --hard "${LOCAL}" 2>&1 | tee -a "${LOG_FILE}"
         exit 1
@@ -90,8 +94,8 @@ fi
 # ─── 5. Restart services ─────────────────────────────────────────────────
 
 log "Restarting services..."
-systemctl restart aero-tiles.service 2>/dev/null || true
-systemctl restart aero-display.service 2>/dev/null || true
+systemctl restart aero-app.service 2>/dev/null || true
+systemctl restart aero-kiosk.service 2>/dev/null || true
 
 log "=== Update complete ==="
 

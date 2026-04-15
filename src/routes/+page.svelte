@@ -27,6 +27,7 @@
 	import Window from "$lib/chrome/Window.svelte";
 	import Controls from "$lib/chrome/HUD.svelte";
 	import SidePanel from "$lib/chrome/SidePanel.svelte";
+	import TelemetryPanel from "$lib/chrome/TelemetryPanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in WindowModel
@@ -204,6 +205,9 @@
 
 	<!-- Side panel (location picker + settings) -->
 	<SidePanel />
+
+	<!-- Observability viewer (Shift+T to toggle) -->
+	<TelemetryPanel />
 </main>
 
 <style>

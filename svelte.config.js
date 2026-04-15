@@ -29,6 +29,7 @@ const config = {
 					'https://*.cartocdn.com',
 					'https://*.tile.openstreetmap.org',
 					'https://gibs.earthdata.nasa.gov',
+					'https://tiles.maps.eox.at',
 				],
 				'connect-src': [
 					'self',
@@ -40,6 +41,7 @@ const config = {
 					'https://*.cartocdn.com',
 					'https://*.tile.openstreetmap.org',
 					'https://gibs.earthdata.nasa.gov',
+					'https://tiles.maps.eox.at',
 				],
 				'worker-src': ['self', 'blob:'],              // Cesium web workers
 				'child-src': ['blob:'],

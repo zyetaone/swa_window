@@ -1,5 +1,7 @@
 # State API Reference
 
+> Historical reference. Verify current imports and APIs against `src/lib/app-state.svelte.ts` and `src/lib/simulation/` before treating this as canonical.
+
 Quick reference for the state architecture using Svelte 5 runes.
 
 ## Import
