@@ -8,6 +8,7 @@
 		RasterDEMTileSource,
 		Terrain,
 		Projection,
+		VectorTileSource,
 	} from 'svelte-maplibre-gl';
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type maplibregl from 'maplibre-gl';
@@ -100,8 +101,6 @@
 		pmtilesUrl ? buildSatelliteStyle(`pmtiles://${pmtilesUrl}/{z}/{x}/{y}`, 'PMTiles (cached)', imageryMaxZoom) :
 		VOYAGER_STYLE
 	);
-	const useBlankStyle = $derived(!!imageryUrl || !!pmtilesUrl);
-
 	let nightBrightness = $derived(Math.max(0.2, 1 - nightFactor * 1.3));
 
 	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
@@ -160,24 +159,34 @@
 		</RasterDEMTileSource>
 	{/if}
 
-	{#if showBuildings && !useBlankStyle}
-		<FillExtrusionLayer
-			source="carto"
-			sourceLayer="building"
-			minzoom={13}
-			filter={['!=', ['get', 'hide_3d'], true]}
-			paint={{
-				'fill-extrusion-color': [
-					'interpolate', ['linear'], ['get', 'render_height'],
-					0, `rgba(${Math.round(180 * nightBrightness)}, ${Math.round(175 * nightBrightness)}, ${Math.round(165 * nightBrightness)}, 0.85)`,
-					200, `rgba(${Math.round(210 * nightBrightness)}, ${Math.round(205 * nightBrightness)}, ${Math.round(195 * nightBrightness)}, 0.95)`,
-					400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
-				],
-				'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
-				'fill-extrusion-base': ['case', ['>=', ['zoom'], 14], ['get', 'render_min_height'], 0],
-				'fill-extrusion-opacity': 0.85,
-			}}
-		/>
+	{#if showBuildings}
+		<!-- OpenFreeMap vector tiles — free, global, no API key. Provides an
+		     OpenMapTiles-schema vector source with a 'building' source-layer
+		     that carries render_height / render_min_height properties. -->
+		<VectorTileSource
+			id="openmaptiles"
+			url="https://tiles.openfreemap.org/planet"
+			minzoom={0}
+			maxzoom={14}
+		>
+			<FillExtrusionLayer
+				source="openmaptiles"
+				sourceLayer="building"
+				minzoom={13}
+				filter={['!=', ['get', 'hide_3d'], true]}
+				paint={{
+					'fill-extrusion-color': [
+						'interpolate', ['linear'], ['get', 'render_height'],
+						0, `rgba(${Math.round(180 * nightBrightness)}, ${Math.round(175 * nightBrightness)}, ${Math.round(165 * nightBrightness)}, 0.85)`,
+						200, `rgba(${Math.round(210 * nightBrightness)}, ${Math.round(205 * nightBrightness)}, ${Math.round(195 * nightBrightness)}, 0.95)`,
+						400, `rgba(${Math.round(225 * nightBrightness)}, ${Math.round(220 * nightBrightness)}, ${Math.round(210 * nightBrightness)}, 1.0)`,
+					],
+					'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, ['get', 'render_height']],
+					'fill-extrusion-base': ['case', ['>=', ['zoom'], 14], ['get', 'render_min_height'], 0],
+					'fill-extrusion-opacity': 0.85,
+				}}
+			/>
+		</VectorTileSource>
 	{/if}
 </MapLibre>
 

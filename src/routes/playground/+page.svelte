@@ -48,8 +48,8 @@
 	type TurbLevel = 'light' | 'moderate' | 'severe';
 	let turbulenceLevel = $state<TurbLevel>('light');
 
-	let mlTerrain = $state(false);  // default off — high exaggeration + high pitch clips camera under terrain mesh
-	let mlBuildings = $state(false);
+	let mlTerrain = $state(true);
+	let mlBuildings = $state(true);
 	let mlAtmosphere = $state(true);
 
 	// LOD tuning — see MapLibre level-of-detail-control example
