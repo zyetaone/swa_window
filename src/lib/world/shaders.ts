@@ -43,7 +43,10 @@ export const COLOR_GRADING_GLSL = `
 		// palette buckets even if they share luminance. Breaks the flat-amber
 		// look of the previous version.
 		float hash = fract(sin(dot(v_textureCoordinates * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
-		float paletteLum = clamp(lum + (hash - 0.5) * 0.30, 0.0, 1.0);
+		// Tightened from 0.30 → 0.16 so palette buckets don't swing wildly.
+		// Wide swings + bloom sigma were spreading purple/blue onto ocean +
+		// terrain. Narrower range keeps variance subtle but visible.
+		float paletteLum = clamp(lum + (hash - 0.5) * 0.16, 0.0, 1.0);
 
 		// City Light Palette (mixed lighting types)
 		vec3 sodium   = vec3(1.0, 0.6, 0.2);     // Deep Orange (sodium vapor)
@@ -60,9 +63,12 @@ export const COLOR_GRADING_GLSL = `
 		lightColor = mix(lightColor, coolWht, smoothstep(0.65, 0.85, paletteLum));
 		lightColor = mix(lightColor, blueWht, smoothstep(0.85, 1.0, paletteLum));
 
-		// Sparse red-spark layer — ~3% of lit pixels become traffic/beacon red.
-		float redSpark = step(0.97, fract(hash * 7.3));
-		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
+		// Sparse red-spark layer — ~2% of lit pixels mix toward traffic red.
+		// Reduced from step(0.97, …) and amplitude 0.8 → 0.3 because combined
+		// with bloom sigma it was creating visible RED BLOBS on bright ocean /
+		// coastline (Palm Jumeirah). Accent-only intent, not a feature.
+		float redSpark = step(0.98, fract(hash * 7.3));
+		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.3);
 
 		// Additive blending — multiplier raised from 1.0 → 1.6 for emissive feel.
 		// Clamp to 2.0 so downstream pow() shadow crush doesn't turn blown-out
