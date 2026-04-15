@@ -152,8 +152,8 @@
 		<RasterDEMTileSource
 			id="terrain"
 			tiles={[terrainPmtilesUrl ? `pmtiles://${terrainPmtilesUrl}` : 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp']}
-			tileSize={256}
-			encoding="mapbox"
+			tileSize={512}
+			encoding="terrarium"
 			maxzoom={13}
 		>
 			<Terrain exaggeration={terrainExaggeration} />
