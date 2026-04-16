@@ -235,7 +235,10 @@
 		if (freeCam) return;
 
 		const distSq = Math.pow(lat - prevTarget.lat, 2) + Math.pow(lon - prevTarget.lon, 2);
+		// Threshold detects location teleports (>0.001) vs smooth orbital drift.
+		// Orbital RAF updates are tiny increments → jumpTo. Location changes → cinematic easeTo.
 		if (distSq > 0.001) {
+			mapRef.stop();
 			mapRef.easeTo({ ...target, duration: 2500 });
 		} else {
 			mapRef.jumpTo(target);

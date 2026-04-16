@@ -30,7 +30,6 @@
 
 {#if showAtmosphere}
 	<GlobeControl />
-
 	<!-- Ambient light: position follows sun, color + intensity match the hour. -->
 	<Light
 		anchor="map"
