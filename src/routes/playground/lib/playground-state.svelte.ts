@@ -159,14 +159,15 @@ export class PlaygroundState {
 		const idx = ids.indexOf(this.activeLocation);
 		this.activeLocation = ids[(idx + 1) % ids.length];
 
-		// New segment profile — randomize orbit shape + direction
+		// New segment profile — orbit shape varies per location, but direction
+		// is locked at init (flight path pre-decided on start).
 		this.#altTarget = 22_000 + Math.floor(Math.random() * 18_000);
 		this.#altCooldown = 0;
 		this.pitchBias = (Math.random() - 0.5) * 12;
-		this.orbitDirection = Math.random() > 0.5 ? 1 : -1;  // CW or CCW
-		this.orbitMajor = 0.06 + Math.random() * 0.06;       // 0.06-0.12 deg
-		this.orbitMinor = 0.03 + Math.random() * 0.04;       // 0.03-0.07 deg
-		this.orbitTilt = Math.random() * Math.PI;             // random ellipse rotation
+		// orbitDirection stays fixed from init — no re-randomize per cycle
+		this.orbitMajor = 0.06 + Math.random() * 0.06;
+		this.orbitMinor = 0.03 + Math.random() * 0.04;
+		this.orbitTilt = Math.random() * Math.PI;
 		const turbs: ('light' | 'moderate' | 'severe')[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
 		this.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
 
