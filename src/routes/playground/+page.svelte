@@ -54,6 +54,17 @@
 	let orbitAngle = Math.random() * Math.PI * 2;  // start at random angle
 	const orbitAngularSpeed = 0.07;
 
+	// Auto-cycle through locations every 2-4 minutes (120-240s). Each tick
+	// picks the next location in LOCATIONS; landing on same keeps that city
+	// visible for its full duration before rotating away.
+	let nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
+	function cycleLocation() {
+		const ids = LOCATIONS.map(l => l.id);
+		const idx = ids.indexOf(pg.activeLocation);
+		pg.activeLocation = ids[(idx + 1) % ids.length];
+		nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
+	}
+
 	const motion = new MotionEngine();
 	let simTime = $state(0);
 
@@ -223,6 +234,9 @@
 			if (pg.autoTime) pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
 
 			if (pg.autoFly || isBoosting) {
+				// Auto-cycle through locations every 2-4 minutes
+				if (now > nextLocationChange) cycleLocation();
+
 				// ORBITAL autoFly — plane circles the current city instead of
 				// flying off into empty desert. Keeps the kiosk framed on its
 				// subject while the view constantly rotates, giving the city
