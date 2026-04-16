@@ -43,6 +43,14 @@
 	// Tracking variables for effect (no $state needed since they just track previous value without driving UI)
 	let lastActiveLocation: LocationId = 'dubai';
 
+	// Randomize initial heading so each session starts with a different view
+	// direction. Subsequent slow drift + occasional 'course correction' keeps
+	// the passenger view alive without jarring the user.
+	if (typeof window !== 'undefined') {
+		pg.heading = Math.floor(Math.random() * 360);
+	}
+	let nextCourseChange = performance.now() + 25_000 + Math.random() * 40_000;
+
 	const motion = new MotionEngine();
 	let simTime = $state(0);
 
@@ -228,14 +236,21 @@
 			if (pg.autoTime) pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
 
 			if (pg.autoFly || isBoosting) {
-				// Cruise speed ~250m/s (roughly 900km/h) base. pg.planeSpeed scales this.
-				// Artistic speed: 4× realistic cruise so ground motion is actually
-				// visible at cruise zoom (z=10). 1000 m/s × speed multiplier.
+				// Artistic speed: 4× realistic cruise so ground motion is visible
+				// at cruise zoom (z=10). 1000 m/s × speed multiplier.
 				const speedMps = 1000 * pg.planeSpeed;
 				const distanceMeters = speedMps * dt;
 				const nextCoords = moveForward(mapLat, mapLon, pg.heading, distanceMeters);
 				mapLat = nextCoords.lat;
 				mapLon = nextCoords.lon;
+
+				// Slow heading drift — plane makes gentle course adjustments
+				// (±0.2°/s) plus occasional bigger turns every 25-65 seconds.
+				pg.heading = (pg.heading + dt * 0.2) % 360;
+				if (now > nextCourseChange) {
+					pg.heading = (pg.heading + (Math.random() - 0.5) * 60 + 360) % 360;
+					nextCourseChange = now + 25_000 + Math.random() * 40_000;
+				}
 			}
 
 			motion.tick(dt, {

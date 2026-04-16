@@ -157,15 +157,30 @@
 	     The viewport perspective gives each layer its own apparent motion rate
 	     when the parent transforms. Position jitter via cloudPhase sin waves. -->
 	{#if showBack}
-		<!-- Far cirrus — tiny wisps receding into upper sky, light jitter -->
+		<!-- Far cirrus deck — DENSE band of small wisps packed across the
+		     horizon receding into atmospheric haze. Scales with density
+		     (denser sky → more of these). -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<div class="seed cirrus" style:top="{jitter(0, 8, 1.5, 0.7)}%"  style:left="{jitter(0, 5, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(1, 11, 1.5, 0.9)}%" style:left="{jitter(1, 18, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(2, 10, 1.5, 0.8)}%" style:left="{jitter(2, 32, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(3, 9, 1.5, 0.7)}%"  style:left="{jitter(3, 47, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(4, 12, 1.5, 0.8)}%" style:left="{jitter(4, 62, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(5, 10, 1.5, 0.9)}%" style:left="{jitter(5, 78, 2, 0.3)}%"></div>
-			<div class="seed cirrus" style:top="{jitter(6, 8, 1.5, 0.7)}%"  style:left="{jitter(6, 90, 2, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(0, 6, 1.2, 0.7)}%"  style:left="{jitter(0, 2, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(1, 8, 1.2, 0.9)}%"  style:left="{jitter(1, 9, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(2, 7, 1.2, 0.8)}%"  style:left="{jitter(2, 16, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(3, 9, 1.2, 0.7)}%"  style:left="{jitter(3, 23, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(4, 6, 1.2, 0.8)}%"  style:left="{jitter(4, 30, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(5, 8, 1.2, 0.9)}%"  style:left="{jitter(5, 37, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(6, 7, 1.2, 0.7)}%"  style:left="{jitter(6, 44, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(7, 9, 1.2, 0.8)}%"  style:left="{jitter(7, 51, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(8, 6, 1.2, 0.9)}%"  style:left="{jitter(8, 58, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(9, 8, 1.2, 0.7)}%"  style:left="{jitter(9, 65, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(30, 7, 1.2, 0.8)}%" style:left="{jitter(30, 72, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(31, 9, 1.2, 0.9)}%" style:left="{jitter(31, 79, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(32, 6, 1.2, 0.7)}%" style:left="{jitter(32, 86, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus" style:top="{jitter(33, 8, 1.2, 0.8)}%" style:left="{jitter(33, 93, 1.5, 0.3)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(40, 4, 0.8, 0.9)}%" style:left="{jitter(40, 6, 1, 0.25)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(41, 5, 0.8, 0.7)}%" style:left="{jitter(41, 25, 1, 0.25)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(42, 4, 0.8, 0.8)}%" style:left="{jitter(42, 42, 1, 0.25)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(43, 5, 0.8, 0.9)}%" style:left="{jitter(43, 60, 1, 0.25)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(44, 4, 0.8, 0.7)}%" style:left="{jitter(44, 78, 1, 0.25)}%"></div>
+			<div class="seed cirrus tinier" style:top="{jitter(45, 5, 0.8, 0.8)}%" style:left="{jitter(45, 95, 1, 0.25)}%"></div>
 		</div>
 	{/if}
 	{#if showMid}
@@ -231,10 +246,12 @@
 		opacity: 0.9;
 	}
 
-	/* Size variants per perspective */
-	.seed.cirrus    { width: 8%;  aspect-ratio: 3.5 / 1; opacity: 0.55; }
-	.seed.horizon   { width: 22%; aspect-ratio: 2.4 / 1; opacity: 0.88; }
-	.seed.mid-cloud { width: 14%; aspect-ratio: 2.6 / 1; opacity: 0.7; }
+	/* Size variants per perspective. Smaller + more opaque-stacked at horizon
+	   reads as atmospheric haze accumulation. */
+	.seed.cirrus        { width: 6%;  aspect-ratio: 3.5 / 1; opacity: 0.5; }
+	.seed.cirrus.tinier { width: 4%;  aspect-ratio: 4 / 1;   opacity: 0.35; }
+	.seed.horizon       { width: 22%; aspect-ratio: 2.4 / 1; opacity: 0.88; }
+	.seed.mid-cloud     { width: 14%; aspect-ratio: 2.6 / 1; opacity: 0.7; }
 
 	/* Per-seed shape variance — same filter, but pre-displacement rotation
 	   + non-uniform scale break the 'copied shape' pattern. Seven unique
