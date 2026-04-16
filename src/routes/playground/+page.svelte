@@ -8,12 +8,12 @@
 	 * clean by default.
 	 */
 
-	import type { SkyState, LocationId } from '$lib/types';
+	import { untrack } from 'svelte';
+	import type { SkyState } from '$lib/types';
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
-	import { WEATHER_EFFECTS } from '$lib/constants';
+	import { WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
 	import { getSkyState, nightFactor, clamp } from '$lib/utils';
 	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
-	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	// Local playground config
 	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
@@ -24,7 +24,7 @@
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import PhotoClouds from './PhotoClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
-	import { PALETTES } from './palettes';
+	import { PALETTES, PALETTE_ENTRIES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { pg } from './lib/playground-state.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
@@ -33,9 +33,6 @@
 	// ─── State ───────────────────────────────────────────────────────────────
 	let mapLat = $state(25.2);
 	let mapLon = $state(55.3);
-
-	// Tracking variables for effect
-	let lastActiveLocation: LocationId = 'dubai';
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
@@ -143,15 +140,12 @@
 	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 0.3 + 360) % 360);
 	const viewPitch = $derived(Math.max(62, Math.min(84, 76 + pg.pitchBias + motion.motionOffsetY * 0.6)));
 
-	// Map center sync
+	// Snap map center when location changes (orbital drift takes over after)
 	$effect(() => {
-		if (pg.activeLocation !== lastActiveLocation) {
-			const loc = LOCATION_MAP.get(pg.activeLocation);
-			if (loc) {
-				mapLat = loc.lat;
-				mapLon = loc.lon;
-			}
-			lastActiveLocation = pg.activeLocation;
+		const loc = LOCATION_MAP.get(pg.activeLocation);
+		if (loc) {
+			mapLat = loc.lat;
+			mapLon = loc.lon;
 		}
 	});
 
@@ -161,6 +155,17 @@
 	const weatherFx = $derived(WEATHER_EFFECTS[pg.weather]);
 	const windAngle = $derived(weatherFx.windAngle);
 	const frostAmount = $derived(clamp((pg.altitude - 25000) / 15000, 0, 1));
+
+	// Lens Flare Alignment
+	// When the camera pan naturally aligns with the sun azimuth we trigger an optical flare
+	const sunAzimuth = $derived((pg.timeOfDay * 15) % 360);
+	const sunAlignment = $derived.by(() => {
+		if (skyState === 'night') return 0;
+		let diff = Math.abs((viewBearing - sunAzimuth) % 360);
+		if (diff > 180) diff = 360 - diff;
+		// Ramp up as diff shrinks from 40 degrees to 0 degrees
+		return clamp(1 - diff / 40, 0, 1);
+	});
 
 	const bgGradient = $derived.by(() => {
 		if (pg.paletteName !== 'auto' && PALETTES[pg.paletteName]) {
@@ -175,39 +180,53 @@
 		}
 	});
 
+	// Atmospheric haze — screen-blended gradient that color-grades the entire
+	// scene. Matches prod atmosphere/haze/effect.svelte per skyState.
+	const hazeGradient = $derived.by(() => {
+		switch (skyState) {
+			case 'night': return 'linear-gradient(180deg, rgba(20,28,50,0.55) 0%, rgba(10,16,35,0.4) 40%, rgba(5,8,18,0.3) 100%)';
+			case 'dawn':  return 'linear-gradient(180deg, rgba(220,150,110,0.35) 0%, rgba(240,180,120,0.25) 45%, rgba(200,160,100,0.15) 100%)';
+			case 'dusk':  return 'linear-gradient(180deg, rgba(200,110,90,0.4) 0%, rgba(180,90,70,0.3) 40%, rgba(100,60,50,0.2) 100%)';
+			default:      return 'linear-gradient(180deg, rgba(170,195,220,0.3) 0%, rgba(190,210,230,0.2) 50%, rgba(160,180,160,0.1) 100%)';
+		}
+	});
+
+	// Main RAF loop — invariant #3: untrack() wraps the entire tick body so
+	// 60 Hz reactive reads don't build graph dependencies.
 	$effect(() => {
 		let raf: number;
 		let last = performance.now();
 		const loop = (now: number) => {
-			const dt = (now - last) / 1000;
+			const dt = Math.min((now - last) / 1000, 0.1); // cap to avoid teleport on tab-switch
 			last = now;
-			simTime += dt;
 
-			// Centralized state update
-			pg.tick(dt, now);
+			untrack(() => {
+				simTime += dt;
 
-			if (pg.autoFly || isBoosting) {
-				// Orbital update - uses pg.orbitAngle and radial dist
-				const loc = currentLocation;
-				const radiusDeg = 0.075;
-				const latRad = loc.lat * Math.PI / 180;
-				mapLat = loc.lat + radiusDeg * Math.sin(pg.orbitAngle);
-				mapLon = loc.lon + radiusDeg * Math.cos(pg.orbitAngle) / Math.max(Math.cos(latRad), 0.2);
-			}
+				pg.tick(dt, now, isBoosting);
 
-			motion.tick(dt, {
-				time: simTime,
-				heading: pg.heading,
-				altitude: pg.altitude,
-				turbulenceLevel: pg.turbulenceLevel,
-				weather: pg.weather,
-				camera: cameraConfig,
-				director: directorConfig,
-				lat: 0, lon: 0, pitch: 0, bankAngle: 0,
-				skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
-				locationId: pg.activeLocation,
-				userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
-				cloudDensity: 0, cloudSpeed: 0, haze: 0,
+				if (pg.autoFly || isBoosting) {
+					const loc = currentLocation;
+					const radiusDeg = 0.075;
+					const latRad = loc.lat * Math.PI / 180;
+					mapLat = loc.lat + radiusDeg * Math.sin(pg.orbitAngle);
+					mapLon = loc.lon + radiusDeg * Math.cos(pg.orbitAngle) / Math.max(Math.cos(latRad), 0.2);
+				}
+
+				motion.tick(dt, {
+					time: simTime,
+					heading: pg.heading,
+					altitude: pg.altitude,
+					turbulenceLevel: pg.turbulenceLevel,
+					weather: pg.weather,
+					camera: cameraConfig,
+					director: directorConfig,
+					lat: 0, lon: 0, pitch: 0, bankAngle: 0,
+					skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
+					locationId: pg.activeLocation,
+					userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
+					cloudDensity: 0, cloudSpeed: 0, haze: 0,
+				});
 			});
 
 			raf = requestAnimationFrame(loop);
@@ -284,14 +303,39 @@
 		</div>
 
 		{#if pg.useRealisticClouds}
-			<PhotoClouds density={pg.density} speed={pg.cloudSpeed} heading={pg.heading} {windAngle} nightFactor={nf} weather={pg.weather} />
+			<PhotoClouds
+				density={pg.density}
+				speed={pg.cloudSpeed}
+				heading={pg.heading}
+				altitude={pg.altitude}
+				{windAngle}
+				nightFactor={nf}
+				weather={pg.weather}
+				cloudScale={pg.cloudScale ?? 1.0}
+				cloudSpread={pg.cloudSpread ?? 1.0}
+				pitchOffset={motion.motionOffsetY}
+				bankAngle={motion.bankAngle}
+			/>
 		{:else}
 			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
 		{/if}
 
 		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} />
 		<Weather rainOpacity={weatherFx.rainOpacity} {windAngle} {frostAmount} />
+
+		<!-- Atmospheric haze — screen-blended gradient tints the whole scene.
+		     Matches prod atmosphere/haze/effect.svelte: dawn=warm amber, night=deep navy,
+		     day=cool atmospheric blue. Softens LOD seams + unifies color grade. -->
+		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
 		<div class="horizon-line" aria-hidden="true"></div>
+
+		{#if sunAlignment > 0.01}
+			<div class="lens-flare" style="opacity: {sunAlignment * (skyState === 'day' ? 0.85 : 0.6)}">
+				<div class="flare-core"></div>
+				<div class="flare-ring"></div>
+				<div class="flare-streak"></div>
+			</div>
+		{/if}
 	</button>
 
 	<div class="blind" class:dragging={blindDragging} style:transform={`translateY(${blindY - 100}%)`}>
@@ -371,6 +415,53 @@
 		height: 3px;
 		background: linear-gradient(90deg, transparent 0%, rgba(200, 220, 255, 0.15) 20%, rgba(200, 220, 255, 0.2) 50%, rgba(200, 220, 255, 0.15) 80%, transparent 100%);
 		pointer-events: none;
+	}
+
+	/* ─── Lens Flare ─────────────────────────────────────────────────────── */
+	.lens-flare {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		mix-blend-mode: screen;
+		transition: opacity 0.2s ease-out;
+		z-index: 10;
+	}
+	.flare-core {
+		position: absolute;
+		width: 15vw;
+		height: 15vw;
+		border-radius: 50%;
+		background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,230,180,0.5) 20%, rgba(255,180,100,0) 60%);
+		filter: blur(10px);
+	}
+	.flare-ring {
+		position: absolute;
+		width: 45vw;
+		height: 45vw;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 180, 100, 0.15);
+		background: radial-gradient(circle, rgba(255,180,100,0.05) 0%, rgba(255,180,100,0) 70%);
+	}
+	.flare-streak {
+		position: absolute;
+		width: 120vw;
+		height: 4px;
+		background: linear-gradient(90deg, rgba(255,200,100,0) 0%, rgba(255,220,150,0.6) 50%, rgba(255,200,100,0) 100%);
+		filter: blur(2px);
+		transform: rotate(5deg);
+	}
+
+	/* ─── Atmospheric haze — composite color grading overlay ─────────── */
+	.atmo-haze {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 4;
+		mix-blend-mode: screen;
+		transition: background 2s ease;
 	}
 
 	/* ─── Blind overlay ──────────────────────────────────────────────────── */

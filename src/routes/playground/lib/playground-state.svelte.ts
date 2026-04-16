@@ -27,6 +27,8 @@ export class PlaygroundState {
 	// Cloud mechanics
 	density = $state(0.6);
 	cloudSpeed = $state(1.0);
+	cloudScale = $state(1.0);   // global cloud size multiplier (panel tunable)
+	cloudSpread = $state(1.0);  // vertical spread multiplier (1.0 = default, 2.0 = full sky)
 
 	// Flight mechanics
 	heading = $state(90);
@@ -61,12 +63,12 @@ export class PlaygroundState {
 		}
 	}
 
-	tick(dt: number, now: number) {
+	tick(dt: number, now: number, isBoosting = false) {
 		if (this.autoTime) {
 			this.timeOfDay = (this.timeOfDay + dt * 0.5) % 24;
 		}
 
-		if (this.autoFly) {
+		if (this.autoFly || isBoosting) {
 			// Kiosk auto-rotation
 			if (this.kioskMode && now > this.nextLocationChange) {
 				this.cycleLocation(now);

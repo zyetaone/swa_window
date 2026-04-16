@@ -1,195 +1,345 @@
 <script lang="ts">
-	/**
-	 * PhotoClouds — realistic SVG clouds via feTurbulence + feDisplacementMap +
-	 * feColorMatrix inversion. No offscreen-seed tricks — the filter chain
-	 * itself turns a dark ellipse into a soft white cloud in place.
-	 *
-	 * Pipeline per layer:
-	 *   feTurbulence (fractal noise, animated baseFrequency)
-	 *   → feDisplacementMap (warps the black ellipse into cloud silhouette)
-	 *   → feGaussianBlur (softens edges)
-	 *   → feColorMatrix (inverts RGB → black becomes white, keeps alpha)
-	 *   → feComposite (clamp alpha to the distorted shape)
-	 *
-	 * Four parallax depth layers: cirrus → back → mid → front.
-	 *
-	 * Weather morphology: rain/storm drives darker base, denser mass,
-	 * heavier displacement. Clear sky = crisp small wisps, fast drift.
-	 *
-	 * Inspired by: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
-	 * (adapted with feColorMatrix so we don't need the box-shadow trick).
-	 */
+/**
+ * PhotoClouds — Dynamic cloud particle pool with SVG feTurbulence rendering.
+ *
+ * JS-driven RAF positions replace CSS @keyframes. Each cloud respawns at the
+ * viewport edge with new random properties (filter seed variant, size, position,
+ * rotation) — no visible loop repeat, truly dynamic cloudscape.
+ *
+ * Rendering pipeline per cloud:
+ *   feTurbulence (fractal noise, animated baseFrequency for slow morph)
+ *   → feDisplacementMap (warps the black ellipse into cloud silhouette)
+ *   → feGaussianBlur (softens edges)
+ *   → feColorMatrix (inverts RGB so black becomes white, keeps alpha)
+ *
+ * Four depth layers: cirrus (z:-1800) → back (z:-1500) → mid (z:-400) → front (z:0)
+ * Container perspective makes far layers parallax-shift less with camera shake.
+ *
+ * Seed is free: different feTurbulence seed = different shape at zero GPU cost.
+ * On respawn, clouds cycle to a new filter variant → new seed → new shape.
+ *
+ * Technique: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
+ */
 
-	import type { WeatherType } from '$lib/types';
+import { untrack } from 'svelte';
+import type { WeatherType } from '$lib/types';
 
-	let {
-		density = 0.6,
-		speed = 1.0,
-		heading = 90,
-		windAngle = 0,
-		nightFactor = 0,
-		/** Drives cloud morphology: dark base for storm, heavy浑浊 for rain, crisp for clear. */
-		weather = 'clear' as WeatherType,
-		/** Enable animated turbulence (baseFrequency animation). Slight CPU cost. */
-		animate = true,
-	}: {
-		density?: number;
-		speed?: number;
-		heading?: number;
-		windAngle?: number;
-		nightFactor?: number;
-		weather?: WeatherType;
-		animate?: boolean;
-	} = $props();
+let {
+	density = 0.6,
+	speed = 1.0,
+	heading = 90,
+	windAngle = 0,
+	nightFactor = 0,
+	altitude = 30000,
+	weather = 'clear' as WeatherType,
+	animate = true,
+	cloudScale = 1.0,
+	cloudSpread = 1.0,
+	pitchOffset = 0,
+	bankAngle = 0,
+}: {
+	density?: number;
+	speed?: number;
+	heading?: number;
+	windAngle?: number;
+	nightFactor?: number;
+	altitude?: number;
+	weather?: WeatherType;
+	animate?: boolean;
+	cloudScale?: number;
+	cloudSpread?: number;
+	pitchOffset?: number;
+	bankAngle?: number;
+} = $props();
 
-	// ── Weather morphology ─────────────────────────────────────────────────
-	// Storm = dark, slow, heavy displacement. Clear = bright, fast, wispy.
-	const wx = $derived.by(() => {
-		switch (weather) {
-			case 'storm':
-				return {
-					baseFreqMul:   0.65,  // slower turbulence → bigger lumps
-					displaceMul:   1.45,  // heavier warping → storm churn
-					blurMul:       1.35,  // softer edges
-					opacityMul:    1.15,  // denser mass
-					darkR: 0.38, darkG: 0.42, darkB: 0.50,  // dark blue-gray
-					morphDurMul:   1.6,   // slow morph cycle
-				};
-			case 'rain':
-				return {
-					baseFreqMul:   0.82,
-					displaceMul:   1.2,
-					blurMul:       1.15,
-					opacityMul:    1.05,
-					darkR: 0.52, darkG: 0.55, darkB: 0.62,
-					morphDurMul:   1.2,
-				};
-			case 'overcast':
-				return {
-					baseFreqMul:   0.92,
-					displaceMul:   1.05,
-					blurMul:       1.0,
-					opacityMul:    1.0,
-					darkR: 0.68, darkG: 0.70, darkB: 0.75,
-					morphDurMul:   1.0,
-				};
-			case 'cloudy':
-				return {
-					baseFreqMul:   1.1,
-					displaceMul:   0.95,
-					blurMul:       0.9,
-					opacityMul:    0.9,
-					darkR: 0.78, darkG: 0.80, darkB: 0.85,
-					morphDurMul:   0.85,
-				};
-			default: /* clear */
-				return {
-					baseFreqMul:   1.3,   // faster turbulence → smaller wisps
-					displaceMul:   0.75,  // lighter warping → clean shapes
-					blurMul:       0.72,
-					opacityMul:    0.75,
-					darkR: 0.88, darkG: 0.90, darkB: 0.93,
-					morphDurMul:   0.6,
-				};
-		}
-	});
-
-	// Drift angle — clouds push opposite to plane heading, offset by wind
-	const driftAngle = $derived((heading + windAngle + 180) % 360);
-	const driftRad = $derived((driftAngle * Math.PI) / 180);
-	const driftX = $derived(Math.cos(driftRad));
-	const driftY = $derived(Math.sin(driftRad) * 0.35);
-
-	// Per-layer drift durations (closer = faster, far = slowest).
-	// Stretched durations × ~5-8× from earlier values so the CSS loop period
-	// exceeds typical viewing time — the 'repeat snap' the user noticed becomes
-	// invisible in practice (nobody watches clouds for 5 minutes straight to
-	// catch the wrap). Combined with baseFrequency animate on feTurbulence,
-	// clouds morph continuously even when positions loop.
-	const cirrusDuration = $derived(`${420 / Math.max(speed, 0.01)}s`);  // 7 min cycle
-	const backDuration   = $derived(`${280 / Math.max(speed, 0.01)}s`);  // 4.5 min
-	const midDuration    = $derived(`${95 / Math.max(speed, 0.01)}s`);   // ~1.5 min
-	const frontDuration  = $derived(`${40 / Math.max(speed, 0.01)}s`);   // ~40s
-
-	// Density thresholds
-	const showCirrus = $derived(density > 0.05);
-	const showBack   = $derived(density > 0.1);
-	const showMid    = $derived(density > 0.3);
-	const showFront  = $derived(density > 0.55);
-	const layerOpacity = $derived(Math.min(1, density * 1.1));
-
-	// Night + weather cloud tint via feColorMatrix.
-	// Output channel bias: R, G, B offsets added after RGB inversion (-1 diagonal).
-	// Storm/rain nights shift toward deep blue-gray; clear nights shift cool pale blue.
-	const rOffset = $derived(
-		nightFactor > 0.5
-			? (weather === 'storm' ? 0.30 : weather === 'rain' ? 0.48 : weather === 'overcast' ? 0.58 : 0.68)
-			: 0.98 * wx.darkR
-	);
-	const gOffset = $derived(
-		nightFactor > 0.5
-			? (weather === 'storm' ? 0.34 : weather === 'rain' ? 0.50 : weather === 'overcast' ? 0.60 : 0.72)
-			: 0.95 * wx.darkG
-	);
-	const bOffset = $derived(
-		nightFactor > 0.5
-			? (weather === 'storm' ? 0.45 : weather === 'rain' ? 0.58 : weather === 'overcast' ? 0.70 : 0.82)
-			: 0.92 * wx.darkB
-	);
-	const alphaOffset = $derived(nightFactor > 0.5 ? -0.15 : 0);
-
-	// Build dynamic colorMatrix string. Inverts RGB (-1 diagonal) then adds
-	// our tint offsets. Alpha passes through with optional dim at night.
-	const colorMatrix = $derived(
-		`-1 0 0 0 ${rOffset}  0 -1 0 0 ${gOffset}  0 0 -1 0 ${bOffset}  0 0 0 1 ${alphaOffset}`,
-	);
-
-	// ── Cloud phase — RAF-tracked slow seed for per-cloud random sway ───────
-	// Each seed reads `cloudPhase + idx × π/N` → sin/cos → position/size
-	// offsets. This gives every cloud an independent jitter cycle.
-	// First-frame delta is suppressed by re-arming `last` after the first tick.
-	let cloudPhase = $state(0);
-	$effect(() => {
-		let raf: number;
-		let last = performance.now();
-		let first = true;
-		const loop = (now: number) => {
-			if (first) { last = now; first = false; }
-			else {
-				cloudPhase += ((now - last) / 1000) * 0.05 * speed;
-				last = now;
-			}
-			raf = requestAnimationFrame(loop);
-		};
-		raf = requestAnimationFrame(loop);
-		return () => cancelAnimationFrame(raf);
-	});
-
-	// Per-seed position jitter — deterministic sin waves off cloudPhase + idx.
-	// phaseStep ensures each cloud (even at same position) has a unique sway cycle.
-	function jitter(idx: number, base: number, amp: number, freq: number, phaseStep = 0): number {
-		return base + Math.sin(cloudPhase * freq + idx * 1.91 + phaseStep) * amp;
+// ── Weather morphology ─────────────────────────────────────────────────
+// Storm = dark, slow, heavy displacement. Clear = bright, fast, wispy.
+const wx = $derived.by(() => {
+	switch (weather) {
+		case 'storm':    return { baseFreqMul: 0.65, displaceMul: 1.45, blurMul: 1.35, darkR: 0.38, darkG: 0.42, darkB: 0.50, morphDurMul: 1.6 };
+		case 'rain':     return { baseFreqMul: 0.82, displaceMul: 1.2,  blurMul: 1.15, darkR: 0.52, darkG: 0.55, darkB: 0.62, morphDurMul: 1.2 };
+		case 'overcast': return { baseFreqMul: 0.92, displaceMul: 1.05, blurMul: 1.0,  darkR: 0.68, darkG: 0.70, darkB: 0.75, morphDurMul: 1.0 };
+		case 'cloudy':   return { baseFreqMul: 1.1,  displaceMul: 0.95, blurMul: 0.9,  darkR: 0.78, darkG: 0.80, darkB: 0.85, morphDurMul: 0.85 };
+		default:         return { baseFreqMul: 1.3,  displaceMul: 0.75, blurMul: 0.72, darkR: 0.88, darkG: 0.90, darkB: 0.93, morphDurMul: 0.6 };
 	}
+});
 
-	// Cirrus wisps — very thin horizontal streaks at top of sky.
-	// 4 wisps, 12% opacity, animate independently.
-	const cirrusData = Array(4).fill(0).map((_, i) => ({
-		top:  1 + i * 2.2,
-		left: i * 28 + Math.sin(i * 2.3) * 5,
-		width: 30 + i * 8,
-	}));
+// Drift direction — clouds move opposite to plane heading + wind
+const driftRad = $derived(((heading + windAngle + 180) % 360) * Math.PI / 180);
+const driftX = $derived(Math.cos(driftRad));
+
+// feColorMatrix: inverts black ellipse to WHITE cloud. The offsets control
+// how bright/white the result is. 1.0 = pure white, lower = gray.
+// Day: push toward pure white (0.95-1.0). Night: cool blue-gray.
+// Storm/rain: darker undersides.
+// Push offsets near 1.0 for daytime → pure white clouds.
+// Night → cool blue-gray. Storm → dark undersides.
+const rOffset = $derived(
+	nightFactor > 0.5
+		? (weather === 'storm' ? 0.35 : weather === 'rain' ? 0.55 : 0.75)
+		: (weather === 'storm' ? 0.78 : weather === 'rain' ? 0.88 : 1.0)
+);
+const gOffset = $derived(
+	nightFactor > 0.5
+		? (weather === 'storm' ? 0.38 : weather === 'rain' ? 0.58 : 0.78)
+		: (weather === 'storm' ? 0.80 : weather === 'rain' ? 0.90 : 1.0)
+);
+const bOffset = $derived(
+	nightFactor > 0.5
+		? (weather === 'storm' ? 0.50 : weather === 'rain' ? 0.65 : 0.88)
+		: (weather === 'storm' ? 0.82 : weather === 'rain' ? 0.92 : 1.0)
+);
+const alphaOffset = $derived(nightFactor > 0.5 ? -0.08 : 0);
+const colorMatrix = $derived(`-1 0 0 0 ${rOffset}  0 -1 0 0 ${gOffset}  0 0 -1 0 ${bOffset}  0 0 0 1 ${alphaOffset}`);
+
+// ── Environment-colored rim glow ────────────────────────────────────
+// CSS drop-shadow chained AFTER the SVG filter paints the cloud white.
+// The shadow picks up the ambient sky color → clouds feel integrated
+// with the lighting rather than pasted on.
+const edgeShadow = $derived.by(() => {
+	if (nightFactor > 0.7) {
+		// Night: cool moonlit blue rim
+		return 'drop-shadow(0 2px 12px rgba(80, 110, 180, 0.3))';
+	}
+	if (nightFactor > 0.3) {
+		// Dusk/dawn: warm golden rim
+		return 'drop-shadow(0 2px 14px rgba(255, 170, 80, 0.35))';
+	}
+	if (weather === 'storm' || weather === 'rain') {
+		// Storm: dark blueish rim
+		return 'drop-shadow(0 3px 10px rgba(60, 70, 100, 0.4))';
+	}
+	if (weather === 'overcast') {
+		return 'drop-shadow(0 2px 10px rgba(140, 150, 170, 0.25))';
+	}
+	// Clear day: subtle warm atmospheric scatter
+	return 'drop-shadow(0 2px 16px rgba(200, 210, 240, 0.2))';
+});
+
+// Altitude-aware cloud deck — at 30k ft you're IN the cloud layer.
+// Below 18k ft: looking up at clouds (they rise above you).
+// Above 38k ft: looking down at cloud tops (they sink below).
+// Between: mixed — some above, some below. This shifts the yRanges.
+const altitudeShift = $derived(() => {
+	if (altitude < 18000) return -15;     // clouds pushed up (you're below them)
+	if (altitude > 38000) return 20;      // clouds pushed down (you're above them)
+	return (altitude - 28000) / 1000;     // gradual shift
+});
+
+// Density gates
+const showCirrus = $derived(density > 0.05);
+const showBack   = $derived(density > 0.1);
+const showMid    = $derived(density > 0.3);
+const showFront  = $derived(density > 0.55);
+const layerOpacity = $derived(Math.min(1, density * 1.1));
+
+// ── Production-matched deck transforms (from CloudBlobs.svelte) ──────
+
+// Wind skew — entire cloud deck leans with wind direction
+const windSkew = $derived((90 - windAngle) * 0.4);
+
+// Altitude-coupled deck position — lower altitude = clouds lower on screen
+const deckY = $derived(15 * Math.max(0, Math.min(1, (altitude - 15000) / 30000)));
+
+// Per-layer heading parallax — far layers shift less than near.
+// Prod uses far=0.15, mid=0.4, near=0.9. We scale per layer in the template.
+const PARALLAX = { cirrus: 0.08, back: 0.15, mid: 0.4, front: 0.85 } as const;
+
+// ── Cloud Particle System ────────────────────────────────────────────
+
+interface Particle {
+	x: number;         // horizontal position (%)
+	y: number;         // final vertical position (% — includes oscillation)
+	yBase: number;     // base vertical position (set at spawn)
+	z: number;         // final translateZ (px — includes oscillation)
+	zBase: number;     // base z-depth (set at spawn)
+	vx: number;        // horizontal speed (%/s, always positive)
+	vyPhase: number;   // vertical oscillation phase (radians)
+	vyAmp: number;     // vertical oscillation amplitude (%)
+	width: number;     // element width (%)
+	aspect: number;    // width / height ratio
+	opacity: number;
+	filterIdx: number; // which SVG filter variant (0..filterCount-1)
+	rotation: number;  // degrees
+	scaleX: number;
+	scaleY: number;
+}
+
+interface LayerSpec {
+	count: number;
+	yRange: [number, number];
+	yBias: number;        // pow() exponent — >1 clusters toward yRange[0] (top)
+	zBase: number;
+	zVar: number;
+	zOsc: number;         // z-axis breathing amplitude (px)
+	speedBase: number;    // %/s base
+	speedVar: number;     // ± variance
+	widthRange: [number, number];
+	aspectRange: [number, number];
+	opacityRange: [number, number];
+	filterPrefix: string;
+	filterCount: number;
+}
+
+// translateZ scaled to fit WITHIN parent perspective (2500px).
+// yRanges define the vertical band for each layer (% from top of viewport).
+// From a passenger window: horizon ≈ top third, ground below, sky above.
+// cloudSpread multiplier widens/narrows these bands dynamically.
+// Real airplane window cloud reference:
+// - At 30k ft you look DOWN through clouds at terrain
+// - Far horizon: dense bright haze, no individual clouds
+// - Mid: broken cumulus tops, billowy, extremely soft edges
+// - Near/below: individual forms, gaps show terrain, wispy trailing edges
+// - Colors: bright white tops, gray-blue undersides, golden at sunset
+// - Edges: ALWAYS soft, feathered, dissolve into atmosphere — never hard
+// - Coverage: 30-60% broken, gaps throughout
+const SPECS: Record<string, LayerSpec> = {
+	cirrus: {
+		count: 4, yRange: [0, 14], yBias: 1.0,
+		zBase: -700, zVar: 80, zOsc: 10,
+		speedBase: 2.0, speedVar: 0.6,
+		widthRange: [45, 80], aspectRange: [8, 14],   // very wide thin streaks
+		opacityRange: [0.05, 0.12],
+		filterPrefix: 'cloud-cirrus', filterCount: 4,
+	},
+	back: {
+		count: 8, yRange: [10, 40], yBias: 1.2,      // fewer, wider → cloud banks not blobs
+		zBase: -500, zVar: 100, zOsc: 15,
+		speedBase: 3.5, speedVar: 0.7,
+		widthRange: [30, 55], aspectRange: [3.5, 6],  // WIDE cloud masses
+		opacityRange: [0.35, 0.6],                    // translucent so terrain shows through
+		filterPrefix: 'cloud-back', filterCount: 5,
+	},
+	mid: {
+		count: 4, yRange: [38, 62], yBias: 1.0,
+		zBase: -200, zVar: 60, zOsc: 20,
+		speedBase: 10, speedVar: 3,
+		widthRange: [25, 45], aspectRange: [3, 5],    // wide mid-level banks
+		opacityRange: [0.2, 0.45],
+		filterPrefix: 'cloud-mid', filterCount: 5,
+	},
+	front: {
+		count: 2, yRange: [60, 85], yBias: 1.0,
+		zBase: 0, zVar: 30, zOsc: 25,
+		speedBase: 25, speedVar: 8,
+		widthRange: [35, 60], aspectRange: [3, 5],    // large fast-passing banks
+		opacityRange: [0.15, 0.35],                   // very transparent
+		filterPrefix: 'cloud-front', filterCount: 5,
+	},
+};
+
+function rand(min: number, max: number): number {
+	return min + Math.random() * (max - min);
+}
+
+function biasedY(spec: LayerSpec): number {
+	// cloudSpread widens the yRange around its center.
+	// spread=1 → default, spread=2 → double range, spread=0.5 → half.
+	const spread = untrack(() => cloudSpread);
+	const center = (spec.yRange[0] + spec.yRange[1]) / 2;
+	const halfRange = ((spec.yRange[1] - spec.yRange[0]) / 2) * spread;
+	const lo = Math.max(0, center - halfRange);
+	const hi = Math.min(98, center + halfRange);
+	return lo + Math.pow(Math.random(), spec.yBias) * (hi - lo);
+}
+
+function createParticle(spec: LayerSpec, idx: number): Particle {
+	const yBase = biasedY(spec);
+	const zBase = spec.zBase + rand(-spec.zVar, spec.zVar);
+	return {
+		x: rand(-25, 115),   // distribute across full viewport
+		y: yBase, yBase,
+		z: zBase, zBase,
+		vx: spec.speedBase + rand(-spec.speedVar, spec.speedVar),
+		vyPhase: rand(0, Math.PI * 2),
+		vyAmp: rand(0.3, 1.2),
+		width: rand(spec.widthRange[0], spec.widthRange[1]),
+		aspect: rand(spec.aspectRange[0], spec.aspectRange[1]),
+		opacity: rand(spec.opacityRange[0], spec.opacityRange[1]),
+		filterIdx: idx % spec.filterCount,
+		// Real clouds: flat bottom, billowy top → no rotation, wide horizontal stretch
+		rotation: 0,
+		scaleX: rand(1.0, 1.6),           // stretch wide (cloud banks, not balls)
+		scaleY: rand(0.6, 0.9),           // compress vertically (flat base)
+	};
+}
+
+/** Respawn a cloud at the incoming edge with completely new random properties. */
+function respawnParticle(c: Particle, spec: LayerSpec, enterFromLeft: boolean): void {
+	c.x = enterFromLeft ? rand(-35, -18) : rand(115, 135);
+	c.yBase = biasedY(spec);
+	c.zBase = spec.zBase + rand(-spec.zVar, spec.zVar);
+	c.vx = spec.speedBase + rand(-spec.speedVar, spec.speedVar);
+	c.vyPhase = rand(0, Math.PI * 2);
+	c.vyAmp = rand(0.3, 1.2);
+	c.width = rand(spec.widthRange[0], spec.widthRange[1]);
+	c.aspect = rand(spec.aspectRange[0], spec.aspectRange[1]);
+	c.opacity = rand(spec.opacityRange[0], spec.opacityRange[1]);
+	c.filterIdx = (c.filterIdx + 1 + Math.floor(Math.random() * Math.max(1, spec.filterCount - 1))) % spec.filterCount;
+	c.rotation = 0;
+	c.scaleX = rand(1.0, 1.6);
+	c.scaleY = rand(0.6, 0.9);
+}
+
+function tickPool(pool: Particle[], spec: LayerSpec, dt: number): void {
+	// untrack(): invariant #3 — 60 Hz reads must not build reactive dependencies
+	const drift = untrack(() => driftX);
+	const spd = untrack(() => speed);
+	// Minimum drift prevents stalling when heading is perpendicular to view
+	const dir = Math.abs(drift) > 0.15 ? drift : (drift >= 0 ? 0.2 : -0.2);
+
+	for (const c of pool) {
+		// Horizontal drift (mutates in place — perf exception for 37×60fps hot path)
+		c.x += c.vx * dt * spd * dir;
+
+		// Vertical + depth oscillation (independent per cloud via vyPhase)
+		c.vyPhase += dt * 0.25;
+		c.y = c.yBase + Math.sin(c.vyPhase) * c.vyAmp;
+		c.z = c.zBase + Math.sin(c.vyPhase * 0.7) * spec.zOsc;
+
+		// Wrap detection — position alone determines exit edge (handles drift flips)
+		if (c.x > 135) respawnParticle(c, spec, true);
+		else if (c.x < -35) respawnParticle(c, spec, false);
+	}
+}
+
+// $state (deep proxy) — each c.x, c.y mutation triggers granular DOM update
+// on the specific style binding that reads it. $state.raw doesn't work here
+// because {#each} caches on array reference which never changes with mutation.
+let cirrusPool = $state(Array.from({ length: SPECS.cirrus.count }, (_, i) => createParticle(SPECS.cirrus, i)));
+let backPool   = $state(Array.from({ length: SPECS.back.count },   (_, i) => createParticle(SPECS.back, i)));
+let midPool    = $state(Array.from({ length: SPECS.mid.count },    (_, i) => createParticle(SPECS.mid, i)));
+let frontPool  = $state(Array.from({ length: SPECS.front.count },  (_, i) => createParticle(SPECS.front, i)));
+
+// Animation loop — ticks all four pools each frame.
+// Runs inside $effect for setup/teardown; pool mutations + renderTick++
+// happen in the RAF callback (async context, not tracked by the $effect).
+$effect(() => {
+	let raf: number;
+	let last = performance.now();
+
+	const loop = (now: number) => {
+		const dt = Math.min((now - last) / 1000, 0.1); // cap to avoid teleport on tab-switch
+		last = now;
+
+		tickPool(cirrusPool, SPECS.cirrus, dt);
+		tickPool(backPool, SPECS.back, dt);
+		tickPool(midPool, SPECS.mid, dt);
+		tickPool(frontPool, SPECS.front, dt);
+
+		raf = requestAnimationFrame(loop);
+	};
+	raf = requestAnimationFrame(loop);
+	return () => cancelAnimationFrame(raf);
+});
 </script>
 
-<!-- Five seed variants per layer so sibling clouds get different shapes.
-     Share the same filter chain template but vary feTurbulence `seed` +
-     slight baseFrequency drift so no two clouds look identical.
-
-     Weather morphology: all filter parameters scale with wx.* multipliers so
-     storm = heavy dark lumps, clear = light crisp wisps. -->
+<!-- SVG filter definitions — 5 seed variants per main layer + 4 cirrus.
+     Weather morphology: all filter params scale with wx.* multipliers.
+     Animated baseFrequency causes continuous shape morphing independent of drift. -->
 <svg class="defs" aria-hidden="true">
 	<defs>
-		<!-- Cirrus wisps — ultra-thin, very high, minimal displacement -->
-		{#each [2, 11, 23, 37] as seedNum, i}
+		{#each [2, 11, 23, 37] as seedNum, i (seedNum)}
 			<filter id="cloud-cirrus-{i}" x="-100%" y="-100%" width="300%" height="300%">
 				<feGaussianBlur in="SourceGraphic" stdDeviation={2 * wx.blurMul} result="pre" />
 				<feTurbulence type="fractalNoise" baseFrequency={0.030 * wx.baseFreqMul + i * 0.004} numOctaves="2" seed={seedNum} result="noise">
@@ -207,11 +357,23 @@
 		{/each}
 
 		{#each [1, 7, 13, 19, 31] as seedNum, i (seedNum)}
-			<!-- Back / ceiling clouds — wider baseFrequency animation range so
-			     shapes MORPH visibly over each cycle, not just subtly drift. -->
-			<filter id="cloud-back-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation={6 * wx.blurMul} result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={(0.010 + i * 0.002) * wx.baseFreqMul} numOctaves="3" seed={seedNum} result="noise">
+			<!--
+				Double-turbulence pipeline (CSS-Tricks article, comment #5):
+				1. feTurbulence #1 — primary noise field (displaces SourceGraphic)
+				2. feGaussianBlur — softens the displacement field
+				3. feTurbulence #2 — secondary noise at half frequency (adds low-freq depth)
+				4. feBlend (screen) — combines both turbulence fields
+				5. feDisplacementMap — uses the blended field to warp the pre-blurred source
+				6. feColorMatrix — RGB invert (black→white) + weather/night tint
+				Result: richer Perlin layering = more natural cloud texture variation.
+			-->
+			<filter id="cloud-back-{i}" x="-40%" y="-40%" width="180%" height="180%">
+				<!-- feTurbulence #1 — primary displacement field -->
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.008 + i * 0.002) * wx.baseFreqMul}
+					numOctaves="5"
+					seed={seedNum}
+					result="noise1">
 					{#if animate}
 						<animate attributeName="baseFrequency"
 							dur="{(42 + i * 3) * wx.morphDurMul}s"
@@ -219,14 +381,31 @@
 							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={(65 + i * 5) * wx.displaceMul} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation={4 * wx.blurMul} result="soft" />
+				<!-- feTurbulence #2 — half-frequency second field for low-freq depth -->
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.005 + i * 0.001) * wx.baseFreqMul}
+					numOctaves="3"
+					seed={seedNum + 500}
+					result="noise2" />
+				<!-- feGaussianBlur softens noise1 before displacement -->
+				<feGaussianBlur in="noise1" stdDeviation={3 * wx.blurMul} result="noise1b" />
+				<!-- Blend both turbulence fields — 'screen' preserves bright lobes of each -->
+				<feBlend in="noise1b" in2="noise2" mode="screen" result="blended" />
+				<!-- Pre-blur the SourceGraphic ellipse so displacement gives wispy edges (CSS-Tricks technique) -->
+				<feGaussianBlur in="SourceGraphic" stdDeviation={8 * wx.blurMul} result="pre" />
+				<!-- Heavy displacement → organic billowy shapes, not round blobs -->
+				<feDisplacementMap in="pre" in2="blended" scale={(95 + i * 8) * wx.displaceMul} xChannelSelector="R" yChannelSelector="G" result="disp" />
+				<!-- Strong final softening → feathered edges that dissolve into atmosphere -->
+				<feGaussianBlur in="disp" stdDeviation={6 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 
-			<filter id="cloud-mid-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation={5 * wx.blurMul} result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={(0.014 + i * 0.002) * wx.baseFreqMul} numOctaves="2" seed={seedNum + 100} result="noise">
+			<filter id="cloud-mid-{i}" x="-35%" y="-35%" width="170%" height="170%">
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.014 + i * 0.002) * wx.baseFreqMul}
+					numOctaves="4"
+					seed={seedNum + 100}
+					result="noise1">
 					{#if animate}
 						<animate attributeName="baseFrequency"
 							dur="{(28 + i * 2) * wx.morphDurMul}s"
@@ -234,14 +413,25 @@
 							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={(50 + i * 4) * wx.displaceMul} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation={3 * wx.blurMul} result="soft" />
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.007 + i * 0.001) * wx.baseFreqMul}
+					numOctaves="3"
+					seed={seedNum + 600}
+					result="noise2" />
+				<feGaussianBlur in="noise1" stdDeviation={2.5 * wx.blurMul} result="noise1b" />
+				<feBlend in="noise1b" in2="noise2" mode="screen" result="blended" />
+				<feGaussianBlur in="SourceGraphic" stdDeviation={7 * wx.blurMul} result="pre" />
+				<feDisplacementMap in="pre" in2="blended" scale={(75 + i * 6) * wx.displaceMul} xChannelSelector="R" yChannelSelector="G" result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={5 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 
-			<filter id="cloud-front-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation={4 * wx.blurMul} result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={(0.017 + i * 0.002) * wx.baseFreqMul} numOctaves="2" seed={seedNum + 200} result="noise">
+			<filter id="cloud-front-{i}" x="-35%" y="-35%" width="170%" height="170%">
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.017 + i * 0.002) * wx.baseFreqMul}
+					numOctaves="4"
+					seed={seedNum + 200}
+					result="noise1">
 					{#if animate}
 						<animate attributeName="baseFrequency"
 							dur="{(18 + i) * wx.morphDurMul}s"
@@ -249,86 +439,95 @@
 							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={(40 + i * 3) * wx.displaceMul} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation={2.5 * wx.blurMul} result="soft" />
+				<feTurbulence type="fractalNoise"
+					baseFrequency={(0.008 + i * 0.001) * wx.baseFreqMul}
+					numOctaves="3"
+					seed={seedNum + 700}
+					result="noise2" />
+				<feGaussianBlur in="noise1" stdDeviation={2 * wx.blurMul} result="noise1b" />
+				<feBlend in="noise1b" in2="noise2" mode="screen" result="blended" />
+				<feGaussianBlur in="SourceGraphic" stdDeviation={6 * wx.blurMul} result="pre" />
+				<feDisplacementMap in="pre" in2="blended" scale={(70 + i * 5) * wx.displaceMul} xChannelSelector="R" yChannelSelector="G" result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={4 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 		{/each}
 	</defs>
 </svg>
 
-<div
-	class="photo-clouds"
-	style:opacity={layerOpacity}
-	style:--drift-x={driftX}
-	style:--drift-y={driftY}
-	aria-hidden="true"
->
-	<!--
-	  Layer stack (top → bottom in viewport, back → front in z):
-	    CIRRUS  (0-8%)   — ultra-thin high wisps, slowest drift
-	    BACK    (0-28%)  — dense connected cloud ceiling, overlaps cirrus base
-	    MID     (30-50%) — sparse wisps between ceiling and viewer
-	    FRONT   (60-80%) — rare thin strands, fastest drift
-	  Vertical drift (Y oscillation) is composited on top of the horizontal
-	  drift via a separate animation-name so both run simultaneously.
-	 -->
+<div class="photo-clouds" style:opacity={layerOpacity} aria-hidden="true">
+	<!-- Cloud deck — wind skew + altitude coupling.
+	     altitudeShift moves the whole deck vertically based on flight level:
+	     below 18k = clouds above you, above 38k = clouds below you. -->
+	<div
+		class="cloud-deck"
+		style:transform="skewY({windSkew}deg) translateY({altitudeShift()}%) translateY({pitchOffset * 1.5}px) rotate({bankAngle * 0.3}deg)"
+		style:bottom="{deckY}%"
+	>
+		{#if showCirrus}
+			<div class="layer" style:transform="translateX({heading * PARALLAX.cirrus}px)">
+				{#each cirrusPool as c, i (i)}
+					<div class="seed"
+						style:left="{c.x}%"
+						style:top="{c.y}%"
+						style:width="{c.width * cloudScale}%"
+						style:aspect-ratio="{c.aspect}"
+						style:opacity={c.opacity}
+						style:filter="url(#cloud-cirrus-{c.filterIdx}) {edgeShadow}"
+						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+					></div>
+				{/each}
+			</div>
+		{/if}
 
-	{#if showCirrus}
-		<!-- CIRRUS — thin streaks at the very top of the sky, nearly invisible
-		     wisps that give height + depth to the cloud ceiling above. -->
-		<div class="cloud-layer cirrus" style:animation-duration={cirrusDuration}>
-			{#each cirrusData as c, i}
-				<div class="seed cirrus-wisp"
-					style:top="{c.top}%"
-					style:left="{c.left}%"
-					style:width="{c.width}%"
-					style:--phase-drift="{i * 2.1}">
-				</div>
-			{/each}
-		</div>
-	{/if}
+		{#if showBack}
+			<div class="layer" style:transform="translateX({heading * PARALLAX.back}px)">
+				{#each backPool as c, i (i)}
+					<div class="seed"
+						style:left="{c.x}%"
+						style:top="{c.y}%"
+						style:width="{c.width * cloudScale}%"
+						style:aspect-ratio="{c.aspect}"
+						style:opacity={c.opacity}
+						style:filter="url(#cloud-back-{c.filterIdx}) {edgeShadow}"
+						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+					></div>
+				{/each}
+			</div>
+		{/if}
 
-	{#if showBack}
-		<!-- TOP CEILING: dense connected cloud mass at the top of frame -->
-		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<!-- Row 1 — very top, widest, most connected. phaseStep = 0 for row. -->
-			{#each Array(9) as _, i}
-				<div class="seed ceiling"
-					style:top="{jitter(i, 2, 1, 0.4, 0)}%"
-					style:left="{jitter(i, -3 + i * 13, 1.5, 0.2, 0.3)}%"></div>
-			{/each}
-			<!-- Row 2 — slightly lower, overlaps row 1 for connected look. phaseStep = π/4 -->
-			{#each Array(8) as _, i}
-				<div class="seed ceiling"
-					style:top="{jitter(i + 9, 10, 1, 0.5, 0.8)}%"
-					style:left="{jitter(i + 9, 5 + i * 13, 1.5, 0.2, 0.6)}%"></div>
-			{/each}
-			<!-- Row 3 — approaches horizon, slightly smaller. phaseStep = π/2 -->
-			{#each Array(7) as _, i}
-				<div class="seed ceiling-thin"
-					style:top="{jitter(i + 17, 20, 1, 0.4, 1.2)}%"
-					style:left="{jitter(i + 17, -2 + i * 15, 1.5, 0.2, 0.9)}%"></div>
-			{/each}
-		</div>
-	{/if}
-	{#if showMid}
-		<!-- Mid wisps — 3 SMALL thin clouds between horizon and viewer.
-		     Sparse because the ceiling above dominates the scene. phaseStep = π -->
-		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed wisp" style:top="{jitter(30, 35, 1.5, 0.3, 1.4)}%" style:left="{jitter(30, 18, 4, 0.2, 1.1)}%"></div>
-			<div class="seed wisp" style:top="{jitter(31, 40, 1.5, 0.35, 1.6)}%" style:left="{jitter(31, 55, 4, 0.2, 1.3)}%"></div>
-			<div class="seed wisp" style:top="{jitter(32, 44, 1.5, 0.3, 1.8)}%" style:left="{jitter(32, 82, 4, 0.2, 1.5)}%"></div>
-		</div>
-	{/if}
-	{#if showFront}
-		<!-- FOREGROUND — rare thin strand drifting fast through lower frame.
-		     PhaseStep = 2π so these are maximally desynchronized from others. -->
-		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed near-wisp" style:top="{jitter(40, 62, 2, 0.25, 3.1)}%" style:left="{jitter(40, 30, 5, 0.15, 2.5)}%"></div>
-			<div class="seed near-wisp" style:top="{jitter(41, 70, 2, 0.2, 3.3)}%"  style:left="{jitter(41, 75, 5, 0.12, 2.8)}%"></div>
-		</div>
-	{/if}
+		{#if showMid}
+			<div class="layer" style:transform="translateX({heading * PARALLAX.mid}px)">
+				{#each midPool as c, i (i)}
+					<div class="seed"
+						style:left="{c.x}%"
+						style:top="{c.y}%"
+						style:width="{c.width * cloudScale}%"
+						style:aspect-ratio="{c.aspect}"
+						style:opacity={c.opacity}
+						style:filter="url(#cloud-mid-{c.filterIdx}) {edgeShadow}"
+						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+					></div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if showFront}
+			<div class="layer" style:transform="translateX({heading * PARALLAX.front}px)">
+				{#each frontPool as c, i (i)}
+					<div class="seed"
+						style:left="{c.x}%"
+						style:top="{c.y}%"
+						style:width="{c.width * cloudScale}%"
+						style:aspect-ratio="{c.aspect}"
+						style:opacity={c.opacity}
+						style:filter="url(#cloud-front-{c.filterIdx}) {edgeShadow}"
+						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+					></div>
+				{/each}
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -347,124 +546,44 @@
 		overflow: hidden;
 		will-change: opacity;
 		transition: opacity 1.5s ease;
-		/* 3D perspective so per-layer translateZ gives real parallax.
-		   Far clouds move less than near clouds when the parent shakes
-		   (motion transform on .globe-pane or viewport-btn). */
-		perspective: 1200px;
-		perspective-origin: 50% 40%;  /* slightly above center, near horizon */
-		transform-style: preserve-3d;
+		/* Shared vanishing point for all child translateZ values.
+		   2500px = safe for z values down to -700px (back clouds). */
+		perspective: 2500px;
+		perspective-origin: 50% 42%;
+		/* Gradient mask — dense clouds in middle, transparent at horizon + bottom.
+		   Matches prod CloudBlobs for natural fade into sky/ground. */
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 85%, transparent 100%);
+		mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 85%, transparent 100%);
 	}
 
-	.cloud-layer {
+	/* Cloud deck — perspective + rotateX compresses far-z clouds toward horizon,
+	   giving the airplane-window depth illusion. Wind skew + altitude coupling
+	   applied via inline style. */
+	.cloud-deck {
 		position: absolute;
 		inset: 0;
-		animation-name: cloud-drift;
-		animation-timing-function: linear;
-		animation-iteration-count: infinite;
+		transform-style: preserve-3d;
+		transform-origin: 50% 45%;
+	}
+
+	.layer {
+		position: absolute;
+		inset: 0;
+		transform-style: preserve-3d;
 	}
 
 	.seed {
 		position: absolute;
-		width: 18%;
-		aspect-ratio: 2 / 1;
-		background: #000;
-		border-radius: 50%;
-		opacity: 0.9;
-	}
-
-	/* Dense CEILING at top (far), sparse WISP/near-wisp near (close).
-	   - ceiling:      wide + overlapping for connected mass, opaque
-	   - ceiling-thin: same width but thinner aspect for third row
-	   - wisp:         thin elongated strands between ceiling and viewer
-	   - near-wisp:    closer thin wisps, slightly taller */
-	/* Ceiling (far/top): smaller height (taller aspect), more opaque, packed
-	   dense at top. Drift slowest (handled via .cloud-layer.back duration). */
-	.seed.ceiling       { width: 12%; aspect-ratio: 3 / 1;   opacity: 0.85; }
-	.seed.ceiling-thin  { width: 11%; aspect-ratio: 4 / 1;   opacity: 0.75; }
-	.seed.wisp          { width: 10%; aspect-ratio: 4 / 1;   opacity: 0.5; }
-	.seed.near-wisp     { width: 14%; aspect-ratio: 3.2 / 1; opacity: 0.6; }
-	.seed.cirrus-wisp   { width: 32%; aspect-ratio: 8 / 1;   opacity: 0.22; filter: url(#cloud-cirrus-0); animation-name: cirrus-drift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
-
-	/* Per-seed shape variance — same filter, but pre-displacement rotation
-	   + non-uniform scale break the 'copied shape' pattern. Seven unique
-	   profiles cycled across siblings via :nth-of-type. */
-	.cloud-layer .seed:nth-of-type(7n+1) { transform: scale(1.0, 0.9) rotate(-6deg); }
-	.cloud-layer .seed:nth-of-type(7n+2) { transform: scale(0.85, 1.1) rotate(10deg); }
-	.cloud-layer .seed:nth-of-type(7n+3) { transform: scale(1.15, 0.8) rotate(-3deg); }
-	.cloud-layer .seed:nth-of-type(7n+4) { transform: scale(0.9, 1.05) rotate(14deg); }
-	.cloud-layer .seed:nth-of-type(7n+5) { transform: scale(1.05, 0.95) rotate(-11deg); }
-	.cloud-layer .seed:nth-of-type(7n+6) { transform: scale(0.95, 1.15) rotate(4deg); }
-	.cloud-layer .seed:nth-of-type(7n+7) { transform: scale(1.1, 0.85) rotate(-8deg); }
-
-	/* Cycle through 5 seed variants via nth-of-type. Each variant is a
-	   distinct feTurbulence seed so sibling clouds have unique shapes
-	   instead of reading as a single connected blob. */
-	.cloud-layer.back  .seed:nth-of-type(5n+1) { filter: url(#cloud-back-0); }
-	.cloud-layer.back  .seed:nth-of-type(5n+2) { filter: url(#cloud-back-1); translate: 0 0; }
-	.cloud-layer.back  .seed:nth-of-type(5n+3) { filter: url(#cloud-back-2); }
-	.cloud-layer.back  .seed:nth-of-type(5n+4) { filter: url(#cloud-back-3); }
-	.cloud-layer.back  .seed:nth-of-type(5n)   { filter: url(#cloud-back-4); }
-
-	.cloud-layer.mid   .seed:nth-of-type(5n+1) { filter: url(#cloud-mid-0); }
-	.cloud-layer.mid   .seed:nth-of-type(5n+2) { filter: url(#cloud-mid-1); }
-	.cloud-layer.mid   .seed:nth-of-type(5n+3) { filter: url(#cloud-mid-2); }
-	.cloud-layer.mid   .seed:nth-of-type(5n+4) { filter: url(#cloud-mid-3); }
-	.cloud-layer.mid   .seed:nth-of-type(5n)   { filter: url(#cloud-mid-4); }
-
-	.cloud-layer.front .seed:nth-of-type(5n+1) { filter: url(#cloud-front-0); }
-	.cloud-layer.front .seed:nth-of-type(5n+2) { filter: url(#cloud-front-1); }
-	.cloud-layer.front .seed:nth-of-type(5n+3) { filter: url(#cloud-front-2); }
-	.cloud-layer.front .seed:nth-of-type(5n+4) { filter: url(#cloud-front-3); }
-	.cloud-layer.front .seed:nth-of-type(5n)   { filter: url(#cloud-front-4); }
-
-	/* Cirrus filter cycling — 4 wisps, 4 filter variants */
-	.cloud-layer.cirrus .seed:nth-of-type(4n+1) { filter: url(#cloud-cirrus-0); animation-delay: calc(var(--phase-drift) * -0.5s); }
-	.cloud-layer.cirrus .seed:nth-of-type(4n+2) { filter: url(#cloud-cirrus-1); animation-delay: calc(var(--phase-drift) * -1.1s); }
-	.cloud-layer.cirrus .seed:nth-of-type(4n+3) { filter: url(#cloud-cirrus-2); animation-delay: calc(var(--phase-drift) * -0.7s); }
-	.cloud-layer.cirrus .seed:nth-of-type(4n)   { filter: url(#cloud-cirrus-3); animation-delay: calc(var(--phase-drift) * -1.4s); }
-
-	/* Drift: horizontal X + vertical Y oscillation run as separate animations
-	   on the same element so clouds both stream AND breathe vertically.
-	   Cirrus: very slow horizontal drift + gentle vertical bob.
-	   Back/mid/front: standard horizontal drift + subtle Y oscillation. */
-	/* Added translateZ oscillation so clouds breathe through the depth axis
-	   in addition to horizontal drift. Combined with perspective:1200px this
-	   makes clouds subtly 'come closer / recede' as they pass. */
-	@keyframes cloud-drift {
-		from { transform: translate3d(calc(var(--drift-x) * -60%), calc(var(--drift-y) * -30% + var(--drift-y-osc, 0px)), 0px); }
-		50%  { transform: translate3d(0%, calc(var(--drift-y-osc, 0px)), -40px); }
-		to   { transform: translate3d(calc(var(--drift-x) * 60%),  calc(var(--drift-y) * 30%  + var(--drift-y-osc, 0px)), 0px); }
-	}
-
-	/* Per-cloud animation-delay — each cloud starts at a different phase of
-	   the drift cycle so they don't ALL reset at the same moment (breaks
-	   the 'loop' feel user reported). Negative delays start mid-cycle. */
-	.cloud-layer .seed:nth-of-type(7n+1) { animation-delay: -3s, -1.2s; }
-	.cloud-layer .seed:nth-of-type(7n+2) { animation-delay: -9s, -4.3s; }
-	.cloud-layer .seed:nth-of-type(7n+3) { animation-delay: -15s, -6.7s; }
-	.cloud-layer .seed:nth-of-type(7n+4) { animation-delay: -21s, -2.8s; }
-	.cloud-layer .seed:nth-of-type(7n+5) { animation-delay: -27s, -5.9s; }
-	.cloud-layer .seed:nth-of-type(7n+6) { animation-delay: -33s, -3.6s; }
-	.cloud-layer .seed:nth-of-type(7n+7) { animation-delay: -39s, -7.2s; }
-
-	@keyframes cloud-drift-y {
-		from { --drift-y-osc: -4px; }
-		to   { --drift-y-osc:  4px; }
-	}
-
-	@keyframes cirrus-drift {
-		from { transform: translate(calc(var(--drift-x) * -40%), 0px) scaleY(1); }
-		50%  { transform: translate(calc(var(--drift-x) * -20%), -3px) scaleY(1.08); }
-		to   { transform: translate(calc(var(--drift-x) * 40%),  0px) scaleY(1); }
-	}
-
-	.cloud-layer.back, .cloud-layer.mid, .cloud-layer.front {
-		animation: cloud-drift, cloud-drift-y 8s ease-in-out infinite;
-		/* animation-delay set per-element via :nth-of-type above — each
-		   cloud starts at a different drift-cycle phase */
+		/* Gradient: darkest at top → lighter at bottom.
+		   After feColorMatrix inversion: TOP = bright white (sunlit), BOTTOM = soft gray (shadow).
+		   From airplane looking down: you see the bright sun-lit cloud tops.
+		   #000 inverts to full white, #444 inverts to light gray. */
+		background: linear-gradient(to bottom, #000 0%, #0a0a0a 40%, #222 75%, #444 100%);
+		border-radius: 50% 50% 42% 42%;
+		will-change: transform;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.cloud-layer { animation: none; }
+		.photo-clouds { display: none; }
 	}
 </style>

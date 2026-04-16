@@ -18,6 +18,7 @@
 	<span>{formatTime(pg.timeOfDay)}</span>
 	<span class="sky-tag sky-{skyState}">{skyState.toUpperCase()}</span>
 	<span class="wx-tag">{pg.weather.toUpperCase()}</span>
+	{#if pg.autoFly}<span class="orbit-tag">● ORBIT</span>{/if}
 	{#if isBoosting}<span class="boost-tag">⚡ BOOST</span>{/if}
 </div>
 
@@ -59,6 +60,7 @@
 	.sky-tag.sky-dusk  { background: #301838; color: #d080e0; }
 	.sky-tag.sky-day   { background: #204060; color: #a0d4ff; }
 	.wx-tag { background: #202028; color: #c0c4cc; }
+	.orbit-tag { background: rgba(0, 255, 120, 0.15); color: #00ff88; border: 1px solid rgba(0, 255, 120, 0.2); }
 	.boost-tag {
 		background: #ff8844 !important;
 		color: #fff !important;
