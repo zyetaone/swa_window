@@ -57,11 +57,19 @@
 	// Auto-cycle through locations every 2-4 minutes (120-240s). Each tick
 	// picks the next location in LOCATIONS; landing on same keeps that city
 	// visible for its full duration before rotating away.
+	// Also randomizes altitude / pitch-bias / turbulence per cycle — each
+	// city sequence has its own 'flight profile'.
 	let nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
+	let pitchBias = $state(0);  // ±6° added to base pitch per flight segment
 	function cycleLocation() {
 		const ids = LOCATIONS.map(l => l.id);
 		const idx = ids.indexOf(pg.activeLocation);
 		pg.activeLocation = ids[(idx + 1) % ids.length];
+		// New flight profile for this segment
+		pg.altitude = 18_000 + Math.floor(Math.random() * 24_000);  // 18k-42k ft
+		pitchBias = (Math.random() - 0.5) * 12;                      // ±6°
+		const turbs: typeof pg.turbulenceLevel[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
+		pg.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
 		nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
 	}
 
@@ -184,11 +192,12 @@
 	);
 
 	// Camera pitch responds to turbulence bumps — gentle ±2° wobble on top of
-	// the base pitch (76°). Bank angle (rolling during turns) stays on the
-	// CSS transform (motionTransform) so it rolls the visual frame, not the
-	// MapLibre camera — more comfortable for passengers to watch.
+	// a base pitch (76°) + per-flight-segment pitchBias (±6°). Bank angle
+	// (rolling during turns) stays on the CSS transform (motionTransform)
+	// so it rolls the visual frame, not the MapLibre camera — more
+	// comfortable for passengers to watch.
 	const viewPitch = $derived(
-		Math.max(65, Math.min(84, 76 + motion.motionOffsetY * 0.4)),
+		Math.max(62, Math.min(84, 76 + pitchBias + motion.motionOffsetY * 0.6)),
 	);
 
 	// Sync logic: change map center when user selects a new location
