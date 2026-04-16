@@ -100,11 +100,13 @@
 	const driftX = $derived(Math.cos(driftRad));
 	const driftY = $derived(Math.sin(driftRad) * 0.35);
 
-	// Per-layer drift durations (closer = faster).
-	const backDuration   = $derived(`${30 / Math.max(speed, 0.01)}s`);
-	const midDuration    = $derived(`${18 / Math.max(speed, 0.01)}s`);
-	const frontDuration   = $derived(`${10 / Math.max(speed, 0.01)}s`);
-	const cirrusDuration  = $derived(`${45 / Math.max(speed, 0.01)}s`);
+	// Per-layer drift durations (closer = faster, far = slowest).
+	// Far layers feel stationary; foreground streams past — atmospheric
+	// parallax without per-frame JS motion.
+	const cirrusDuration = $derived(`${120 / Math.max(speed, 0.01)}s`);  // slowest
+	const backDuration   = $derived(`${60 / Math.max(speed, 0.01)}s`);   // slow
+	const midDuration    = $derived(`${20 / Math.max(speed, 0.01)}s`);   // medium
+	const frontDuration  = $derived(`${8 / Math.max(speed, 0.01)}s`);    // fastest
 
 	// Density thresholds
 	const showCirrus = $derived(density > 0.05);
@@ -372,8 +374,10 @@
 	   - ceiling-thin: same width but thinner aspect for third row
 	   - wisp:         thin elongated strands between ceiling and viewer
 	   - near-wisp:    closer thin wisps, slightly taller */
-	.seed.ceiling       { width: 16%; aspect-ratio: 1.8 / 1; opacity: 0.92; }
-	.seed.ceiling-thin  { width: 15%; aspect-ratio: 2.8 / 1; opacity: 0.82; }
+	/* Ceiling (far/top): smaller height (taller aspect), more opaque, packed
+	   dense at top. Drift slowest (handled via .cloud-layer.back duration). */
+	.seed.ceiling       { width: 12%; aspect-ratio: 3 / 1;   opacity: 0.85; }
+	.seed.ceiling-thin  { width: 11%; aspect-ratio: 4 / 1;   opacity: 0.75; }
 	.seed.wisp          { width: 10%; aspect-ratio: 4 / 1;   opacity: 0.5; }
 	.seed.near-wisp     { width: 14%; aspect-ratio: 3.2 / 1; opacity: 0.6; }
 	.seed.cirrus-wisp   { width: 32%; aspect-ratio: 8 / 1;   opacity: 0.22; filter: url(#cloud-cirrus-0); animation-name: cirrus-drift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
