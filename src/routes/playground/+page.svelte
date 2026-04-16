@@ -26,8 +26,13 @@
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	// Module-level singleton — survives SvelteKit navigation. Acceptable for a
+	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
+	// createContext/getContext pattern.
 	import { pg } from './lib/playground-state.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
+	import GlassOverlays from './components/GlassOverlays.svelte';
+	import LensFlare from './components/LensFlare.svelte';
 	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -195,6 +200,10 @@
 
 	// Main RAF loop — invariant #3: untrack() wraps the entire tick body so
 	// 60 Hz reactive reads don't build graph dependencies.
+	// Three independent RAF loops run in the playground (page, MapLibreGlobe,
+	// PhotoClouds). This is intentional — each component owns its animation
+	// lifecycle independently, matching production's pattern where Window.svelte
+	// RAF + scene effect timers run separately.
 	$effect(() => {
 		let raf: number;
 		let last = performance.now();
@@ -319,7 +328,6 @@
 				weather={pg.weather}
 				cloudScale={pg.cloudScale ?? 1.0}
 				cloudSpread={pg.cloudSpread ?? 1.0}
-				pitchOffset={motion.motionOffsetY}
 				bankAngle={motion.bankAngle}
 			/>
 		{:else}
@@ -335,18 +343,10 @@
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
 		<div class="horizon-line" aria-hidden="true"></div>
 
-		{#if sunAlignment > 0.01}
-			<div class="lens-flare" style="opacity: {sunAlignment * (skyState === 'day' ? 0.85 : 0.6)}">
-				<div class="flare-core"></div>
-				<div class="flare-ring"></div>
-				<div class="flare-streak"></div>
-			</div>
-		{/if}
+		<LensFlare {sunAlignment} {skyState} />
 		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
 		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
-		<div class="glass-vignette" aria-hidden="true"></div>
-		<div class="glass-recess" aria-hidden="true"></div>
-		<div class="wing-silhouette" style:transform="rotate({(-2 + motion.bankAngle * 0.3).toFixed(2)}deg)" aria-hidden="true"></div>
+		<GlassOverlays bankAngle={motion.bankAngle} />
 	</button>
 
 	<div class="blind" class:dragging={blindDragging} style:transform={`translateY(${blindY - 100}%)`}>
@@ -426,84 +426,6 @@
 		height: 3px;
 		background: linear-gradient(90deg, transparent 0%, rgba(200, 220, 255, 0.15) 20%, rgba(200, 220, 255, 0.2) 50%, rgba(200, 220, 255, 0.15) 80%, transparent 100%);
 		pointer-events: none;
-	}
-
-	/* ─── Airplane window glass (ported from prod shell/window/Glass.svelte) ── */
-	.glass-vignette {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 12;
-		background: radial-gradient(
-			ellipse 80% 70% at 50% 50%,
-			transparent 50%,
-			rgba(0, 0, 0, 0.06) 70%,
-			rgba(0, 0, 0, 0.25) 100%
-		);
-	}
-	.glass-recess {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 13;
-		border-radius: inherit;
-		box-shadow:
-			inset 0 0 30px 6px rgba(0, 0, 0, 0.15),
-			inset 2px 2px 8px rgba(0, 0, 0, 0.1);
-	}
-	.wing-silhouette {
-		position: absolute;
-		bottom: -5%;
-		left: -15%;
-		width: 75%;
-		height: 32%;
-		pointer-events: none;
-		z-index: 11;
-		transform-origin: 80% 100%;
-		background: linear-gradient(
-			25deg,
-			rgba(20, 20, 25, 0.55) 0%,
-			rgba(30, 30, 35, 0.35) 20%,
-			rgba(40, 40, 50, 0.15) 40%,
-			transparent 60%
-		);
-	}
-
-	/* ─── Lens Flare ─────────────────────────────────────────────────────── */
-	.lens-flare {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		mix-blend-mode: screen;
-		transition: opacity 0.2s ease-out;
-		z-index: 10;
-	}
-	.flare-core {
-		position: absolute;
-		width: 15vw;
-		height: 15vw;
-		border-radius: 50%;
-		background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,230,180,0.5) 20%, rgba(255,180,100,0) 60%);
-		filter: blur(10px);
-	}
-	.flare-ring {
-		position: absolute;
-		width: 45vw;
-		height: 45vw;
-		border-radius: 50%;
-		border: 1px solid rgba(255, 180, 100, 0.15);
-		background: radial-gradient(circle, rgba(255,180,100,0.05) 0%, rgba(255,180,100,0) 70%);
-	}
-	.flare-streak {
-		position: absolute;
-		width: 120vw;
-		height: 4px;
-		background: linear-gradient(90deg, rgba(255,200,100,0) 0%, rgba(255,220,150,0.6) 50%, rgba(255,200,100,0) 100%);
-		filter: blur(2px);
-		transform: rotate(5deg);
 	}
 
 	/* ─── Atmospheric haze — composite color grading overlay ─────────── */
