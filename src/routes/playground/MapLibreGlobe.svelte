@@ -314,7 +314,7 @@
 	let prevTarget = { lat: 0, lon: 0 };
 	$effect(() => {
 		if (!mapRef) return;
-		(window as any).__map = mapRef; // dev debug hook
+		if (import.meta.env.DEV) (window as any).__map = mapRef;
 
 		const target = { center: [lon, lat] as [number, number], zoom: effectiveZoom, pitch, bearing };
 

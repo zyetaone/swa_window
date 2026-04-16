@@ -120,7 +120,7 @@ const edgeShadow = $derived.by(() => {
 // Below 18k ft: looking up at clouds (they rise above you).
 // Above 38k ft: looking down at cloud tops (they sink below).
 // Between: mixed — some above, some below. This shifts the yRanges.
-const altitudeShift = $derived(() => {
+const altitudeShift = $derived.by(() => {
 	if (altitude < 18000) return -15;     // clouds pushed up (you're below them)
 	if (altitude > 38000) return 20;      // clouds pushed down (you're above them)
 	return (altitude - 28000) / 1000;     // gradual shift
@@ -160,7 +160,6 @@ interface Particle {
 	aspect: number;    // width / height ratio
 	opacity: number;
 	filterIdx: number; // which SVG filter variant (0..filterCount-1)
-	rotation: number;  // degrees
 	scaleX: number;
 	scaleY: number;
 	// RAF-driven morph: each cloud steps to a new filter variant at its own rate.
@@ -261,7 +260,6 @@ function createParticle(spec: LayerSpec, idx: number): Particle {
 		aspect: rand(spec.aspectRange[0], spec.aspectRange[1]),
 		opacity: rand(spec.opacityRange[0], spec.opacityRange[1]),
 		filterIdx: idx % spec.filterCount,
-		rotation: 0,
 		scaleX: rand(1.0, 1.6),           // stretch wide (cloud banks, not balls)
 		scaleY: rand(0.6, 0.9),           // compress vertically (flat base)
 		// Each cloud morphs to a new filter variant at its own rate — staggered
@@ -283,7 +281,6 @@ function respawnParticle(c: Particle, spec: LayerSpec, enterFromLeft: boolean): 
 	c.aspect = rand(spec.aspectRange[0], spec.aspectRange[1]);
 	c.opacity = rand(spec.opacityRange[0], spec.opacityRange[1]);
 	c.filterIdx = (c.filterIdx + 1 + Math.floor(Math.random() * Math.max(1, spec.filterCount - 1))) % spec.filterCount;
-	c.rotation = 0;
 	c.scaleX = rand(1.0, 1.6);
 	c.scaleY = rand(0.6, 0.9);
 	c.morphTimer = rand(0, 3);
@@ -479,7 +476,7 @@ $effect(() => {
 	     below 18k = clouds above you, above 38k = clouds below you. -->
 	<div
 		class="cloud-deck"
-		style:transform="skewY({windSkew}deg) translateY({altitudeShift()}%) translateY({pitchOffset * 1.5}px) rotate({bankAngle * 0.3}deg)"
+		style:transform="skewY({windSkew}deg) translateY({altitudeShift}%) translateY({pitchOffset * 1.5}px) rotate({bankAngle * 0.3}deg)"
 		style:bottom="{deckY}%"
 	>
 		{#if showCirrus}
