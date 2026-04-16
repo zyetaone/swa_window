@@ -316,7 +316,15 @@
 		type="button"
 		aria-label="Tap to fly to next location. Hold to boost speed."
 	>
-		<div class="globe-pane" style:transform={motionTransform}>
+		<div
+			class="globe-pane"
+			style:transform={motionTransform}
+			style:--flight-pitch="{viewPitch}deg"
+			style:--flight-bank="{motion.bankAngle}deg"
+			style:--flight-heading="{pg.heading}deg"
+			style:--turbulence-y={motion.motionOffsetY}
+			style:--turbulence-x={motion.motionOffsetX}
+		>
 			<MapLibreGlobe
 				bind:mapRef
 				lat={mapLat}
@@ -354,7 +362,7 @@
 		</div>
 
 		{#if pg.useRealisticClouds}
-			<PhotoClouds density={pg.density} speed={pg.cloudSpeed} heading={pg.heading} {windAngle} nightFactor={nf} />
+			<PhotoClouds density={pg.density} speed={pg.cloudSpeed} heading={pg.heading} {windAngle} nightFactor={nf} weather={pg.weather} />
 		{:else}
 			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
 		{/if}

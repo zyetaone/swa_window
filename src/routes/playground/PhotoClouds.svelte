@@ -259,63 +259,69 @@
 	style:--drift-y={driftY}
 	aria-hidden="true"
 >
-	<!-- Density rule: dense carpet of SMALL far clouds near the horizon,
-	     sparser + larger clouds as we descend toward the viewer. This
-	     matches what you see from a cruise window above a cloud deck. -->
-	<!-- At pitch 76° the horizon sits ~35% from viewport top. Clouds should
-	     cluster AT that band (distance scaled up per perspective — cumulus
-	     looks biggest at horizon, smaller in foreground). Above horizon we
-	     taper to wispy high cirrus; below we never place clouds (the camera
-	     is above them at cruise altitude). -->
 	<!--
-	 Revised layout per user: DENSE CONNECTED at top (far+horizon),
-	 SPARSE THIN near (below horizon). Reads as a solid cloud ceiling
-	 receding into the distance with only a few wisps between us and it.
-
-	   TOP CEILING (0-28%)  — dense packed wide clouds, 20+ seeds
-	                          overlapping into a connected ceiling.
-	                          Each row tighter than the last as we
-	                          approach horizon.
-	   MID WISPS (30-50%)   — 3 small wisps between ceiling and us.
-	   FOREGROUND (60-80%)  — 1-2 thin strands, rare, fast-moving.
+	  Layer stack (top → bottom in viewport, back → front in z):
+	    CIRRUS  (0-8%)   — ultra-thin high wisps, slowest drift
+	    BACK    (0-28%)  — dense connected cloud ceiling, overlaps cirrus base
+	    MID     (30-50%) — sparse wisps between ceiling and viewer
+	    FRONT   (60-80%) — rare thin strands, fastest drift
+	  Vertical drift (Y oscillation) is composited on top of the horizontal
+	  drift via a separate animation-name so both run simultaneously.
 	 -->
+
+	{#if showCirrus}
+		<!-- CIRRUS — thin streaks at the very top of the sky, nearly invisible
+		     wisps that give height + depth to the cloud ceiling above. -->
+		<div class="cloud-layer cirrus" style:animation-duration={cirrusDuration}>
+			{#each cirrusData as c, i}
+				<div class="seed cirrus-wisp"
+					style:top="{c.top}%"
+					style:left="{c.left}%"
+					style:width="{c.width}%"
+					style:--phase-drift="{i * 2.1}">
+				</div>
+			{/each}
+		</div>
+	{/if}
+
 	{#if showBack}
 		<!-- TOP CEILING: dense connected cloud mass at the top of frame -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			<!-- Row 1 — very top, widest, most connected -->
+			<!-- Row 1 — very top, widest, most connected. phaseStep = 0 for row. -->
 			{#each Array(9) as _, i}
 				<div class="seed ceiling"
-					style:top="{jitter(i, 2, 1, 0.4)}%"
-					style:left="{jitter(i, -3 + i * 13, 1.5, 0.2)}%"></div>
+					style:top="{jitter(i, 2, 1, 0.4, 0)}%"
+					style:left="{jitter(i, -3 + i * 13, 1.5, 0.2, 0.3)}%"></div>
 			{/each}
-			<!-- Row 2 — slightly lower, overlaps row 1 for connected look -->
+			<!-- Row 2 — slightly lower, overlaps row 1 for connected look. phaseStep = π/4 -->
 			{#each Array(8) as _, i}
 				<div class="seed ceiling"
-					style:top="{jitter(i + 9, 10, 1, 0.5)}%"
-					style:left="{jitter(i + 9, 5 + i * 13, 1.5, 0.2)}%"></div>
+					style:top="{jitter(i + 9, 10, 1, 0.5, 0.8)}%"
+					style:left="{jitter(i + 9, 5 + i * 13, 1.5, 0.2, 0.6)}%"></div>
 			{/each}
-			<!-- Row 3 — approaches horizon, slightly smaller -->
+			<!-- Row 3 — approaches horizon, slightly smaller. phaseStep = π/2 -->
 			{#each Array(7) as _, i}
 				<div class="seed ceiling-thin"
-					style:top="{jitter(i + 17, 20, 1, 0.4)}%"
-					style:left="{jitter(i + 17, -2 + i * 15, 1.5, 0.2)}%"></div>
+					style:top="{jitter(i + 17, 20, 1, 0.4, 1.2)}%"
+					style:left="{jitter(i + 17, -2 + i * 15, 1.5, 0.2, 0.9)}%"></div>
 			{/each}
 		</div>
 	{/if}
 	{#if showMid}
 		<!-- Mid wisps — 3 SMALL thin clouds between horizon and viewer.
-		     Sparse because the ceiling above dominates the scene. -->
+		     Sparse because the ceiling above dominates the scene. phaseStep = π -->
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			<div class="seed wisp" style:top="{jitter(30, 35, 1.5, 0.3)}%" style:left="{jitter(30, 18, 4, 0.2)}%"></div>
-			<div class="seed wisp" style:top="{jitter(31, 40, 1.5, 0.35)}%" style:left="{jitter(31, 55, 4, 0.2)}%"></div>
-			<div class="seed wisp" style:top="{jitter(32, 44, 1.5, 0.3)}%" style:left="{jitter(32, 82, 4, 0.2)}%"></div>
+			<div class="seed wisp" style:top="{jitter(30, 35, 1.5, 0.3, 1.4)}%" style:left="{jitter(30, 18, 4, 0.2, 1.1)}%"></div>
+			<div class="seed wisp" style:top="{jitter(31, 40, 1.5, 0.35, 1.6)}%" style:left="{jitter(31, 55, 4, 0.2, 1.3)}%"></div>
+			<div class="seed wisp" style:top="{jitter(32, 44, 1.5, 0.3, 1.8)}%" style:left="{jitter(32, 82, 4, 0.2, 1.5)}%"></div>
 		</div>
 	{/if}
 	{#if showFront}
-		<!-- FOREGROUND — rare thin strand drifting fast through lower frame -->
+		<!-- FOREGROUND — rare thin strand drifting fast through lower frame.
+		     PhaseStep = 2π so these are maximally desynchronized from others. -->
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed near-wisp" style:top="{jitter(40, 62, 2, 0.25)}%" style:left="{jitter(40, 30, 5, 0.15)}%"></div>
-			<div class="seed near-wisp" style:top="{jitter(41, 70, 2, 0.2)}%"  style:left="{jitter(41, 75, 5, 0.12)}%"></div>
+			<div class="seed near-wisp" style:top="{jitter(40, 62, 2, 0.25, 3.1)}%" style:left="{jitter(40, 30, 5, 0.15, 2.5)}%"></div>
+			<div class="seed near-wisp" style:top="{jitter(41, 70, 2, 0.2, 3.3)}%"  style:left="{jitter(41, 75, 5, 0.12, 2.8)}%"></div>
 		</div>
 	{/if}
 </div>
@@ -370,6 +376,7 @@
 	.seed.ceiling-thin  { width: 15%; aspect-ratio: 2.8 / 1; opacity: 0.82; }
 	.seed.wisp          { width: 10%; aspect-ratio: 4 / 1;   opacity: 0.5; }
 	.seed.near-wisp     { width: 14%; aspect-ratio: 3.2 / 1; opacity: 0.6; }
+	.seed.cirrus-wisp   { width: 32%; aspect-ratio: 8 / 1;   opacity: 0.22; filter: url(#cloud-cirrus-0); animation-name: cirrus-drift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
 
 	/* Per-seed shape variance — same filter, but pre-displacement rotation
 	   + non-uniform scale break the 'copied shape' pattern. Seven unique
@@ -403,12 +410,51 @@
 	.cloud-layer.front .seed:nth-of-type(5n+4) { filter: url(#cloud-front-3); }
 	.cloud-layer.front .seed:nth-of-type(5n)   { filter: url(#cloud-front-4); }
 
-	/* Drift crosses the viewport fully and WRAPS seamlessly — clouds enter
-	   from one side as others exit the opposite. Doubled amplitude from
-	   40% → 120% so they truly stream past, not just slide slightly. */
+	/* Cirrus filter cycling — 4 wisps, 4 filter variants */
+	.cloud-layer.cirrus .seed:nth-of-type(4n+1) { filter: url(#cloud-cirrus-0); animation-delay: calc(var(--phase-drift) * -0.5s); }
+	.cloud-layer.cirrus .seed:nth-of-type(4n+2) { filter: url(#cloud-cirrus-1); animation-delay: calc(var(--phase-drift) * -1.1s); }
+	.cloud-layer.cirrus .seed:nth-of-type(4n+3) { filter: url(#cloud-cirrus-2); animation-delay: calc(var(--phase-drift) * -0.7s); }
+	.cloud-layer.cirrus .seed:nth-of-type(4n)   { filter: url(#cloud-cirrus-3); animation-delay: calc(var(--phase-drift) * -1.4s); }
+
+	/* Drift: horizontal X + vertical Y oscillation run as separate animations
+	   on the same element so clouds both stream AND breathe vertically.
+	   Cirrus: very slow horizontal drift + gentle vertical bob.
+	   Back/mid/front: standard horizontal drift + subtle Y oscillation. */
+	/* Added translateZ oscillation so clouds breathe through the depth axis
+	   in addition to horizontal drift. Combined with perspective:1200px this
+	   makes clouds subtly 'come closer / recede' as they pass. */
 	@keyframes cloud-drift {
-		from { transform: translate(calc(var(--drift-x) * -60%), calc(var(--drift-y) * -30%)); }
-		to   { transform: translate(calc(var(--drift-x) * 60%),  calc(var(--drift-y) * 30%)); }
+		from { transform: translate3d(calc(var(--drift-x) * -60%), calc(var(--drift-y) * -30% + var(--drift-y-osc, 0px)), 0px); }
+		50%  { transform: translate3d(0%, calc(var(--drift-y-osc, 0px)), -40px); }
+		to   { transform: translate3d(calc(var(--drift-x) * 60%),  calc(var(--drift-y) * 30%  + var(--drift-y-osc, 0px)), 0px); }
+	}
+
+	/* Per-cloud animation-delay — each cloud starts at a different phase of
+	   the drift cycle so they don't ALL reset at the same moment (breaks
+	   the 'loop' feel user reported). Negative delays start mid-cycle. */
+	.cloud-layer .seed:nth-of-type(7n+1) { animation-delay: -3s, -1.2s; }
+	.cloud-layer .seed:nth-of-type(7n+2) { animation-delay: -9s, -4.3s; }
+	.cloud-layer .seed:nth-of-type(7n+3) { animation-delay: -15s, -6.7s; }
+	.cloud-layer .seed:nth-of-type(7n+4) { animation-delay: -21s, -2.8s; }
+	.cloud-layer .seed:nth-of-type(7n+5) { animation-delay: -27s, -5.9s; }
+	.cloud-layer .seed:nth-of-type(7n+6) { animation-delay: -33s, -3.6s; }
+	.cloud-layer .seed:nth-of-type(7n+7) { animation-delay: -39s, -7.2s; }
+
+	@keyframes cloud-drift-y {
+		from { --drift-y-osc: -4px; }
+		to   { --drift-y-osc:  4px; }
+	}
+
+	@keyframes cirrus-drift {
+		from { transform: translate(calc(var(--drift-x) * -40%), 0px) scaleY(1); }
+		50%  { transform: translate(calc(var(--drift-x) * -20%), -3px) scaleY(1.08); }
+		to   { transform: translate(calc(var(--drift-x) * 40%),  0px) scaleY(1); }
+	}
+
+	.cloud-layer.back, .cloud-layer.mid, .cloud-layer.front {
+		animation: cloud-drift, cloud-drift-y 8s ease-in-out infinite;
+		/* animation-delay set per-element via :nth-of-type above — each
+		   cloud starts at a different drift-cycle phase */
 	}
 
 	@media (prefers-reduced-motion: reduce) {
