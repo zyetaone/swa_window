@@ -11,11 +11,16 @@
 	 *   → feColorMatrix (inverts RGB → black becomes white, keeps alpha)
 	 *   → feComposite (clamp alpha to the distorted shape)
 	 *
-	 * Three parallax depth layers at different displacement scales + octaves.
+	 * Four parallax depth layers: cirrus → back → mid → front.
+	 *
+	 * Weather morphology: rain/storm drives darker base, denser mass,
+	 * heavier displacement. Clear sky = crisp small wisps, fast drift.
 	 *
 	 * Inspired by: https://css-tricks.com/drawing-realistic-clouds-with-svg-and-css/
 	 * (adapted with feColorMatrix so we don't need the box-shadow trick).
 	 */
+
+	import type { WeatherType } from '$lib/types';
 
 	let {
 		density = 0.6,
@@ -23,6 +28,8 @@
 		heading = 90,
 		windAngle = 0,
 		nightFactor = 0,
+		/** Drives cloud morphology: dark base for storm, heavy浑浊 for rain, crisp for clear. */
+		weather = 'clear' as WeatherType,
 		/** Enable animated turbulence (baseFrequency animation). Slight CPU cost. */
 		animate = true,
 	}: {
@@ -31,8 +38,61 @@
 		heading?: number;
 		windAngle?: number;
 		nightFactor?: number;
+		weather?: WeatherType;
 		animate?: boolean;
 	} = $props();
+
+	// ── Weather morphology ─────────────────────────────────────────────────
+	// Storm = dark, slow, heavy displacement. Clear = bright, fast, wispy.
+	const wx = $derived.by(() => {
+		switch (weather) {
+			case 'storm':
+				return {
+					baseFreqMul:   0.65,  // slower turbulence → bigger lumps
+					displaceMul:   1.45,  // heavier warping → storm churn
+					blurMul:       1.35,  // softer edges
+					opacityMul:    1.15,  // denser mass
+					darkR: 0.38, darkG: 0.42, darkB: 0.50,  // dark blue-gray
+					morphDurMul:   1.6,   // slow morph cycle
+				};
+			case 'rain':
+				return {
+					baseFreqMul:   0.82,
+					displaceMul:   1.2,
+					blurMul:       1.15,
+					opacityMul:    1.05,
+					darkR: 0.52, darkG: 0.55, darkB: 0.62,
+					morphDurMul:   1.2,
+				};
+			case 'overcast':
+				return {
+					baseFreqMul:   0.92,
+					displaceMul:   1.05,
+					blurMul:       1.0,
+					opacityMul:    1.0,
+					darkR: 0.68, darkG: 0.70, darkB: 0.75,
+					morphDurMul:   1.0,
+				};
+			case 'cloudy':
+				return {
+					baseFreqMul:   1.1,
+					displaceMul:   0.95,
+					blurMul:       0.9,
+					opacityMul:    0.9,
+					darkR: 0.78, darkG: 0.80, darkB: 0.85,
+					morphDurMul:   0.85,
+				};
+			default: /* clear */
+				return {
+					baseFreqMul:   1.3,   // faster turbulence → smaller wisps
+					displaceMul:   0.75,  // lighter warping → clean shapes
+					blurMul:       0.72,
+					opacityMul:    0.75,
+					darkR: 0.88, darkG: 0.90, darkB: 0.93,
+					morphDurMul:   0.6,
+				};
+		}
+	});
 
 	// Drift angle — clouds push opposite to plane heading, offset by wind
 	const driftAngle = $derived((heading + windAngle + 180) % 360);
@@ -40,23 +100,37 @@
 	const driftX = $derived(Math.cos(driftRad));
 	const driftY = $derived(Math.sin(driftRad) * 0.35);
 
-	// Per-layer drift durations (closer = faster). Tightened ~3× from
-	// previous values — user asked 'more drift speed'.
-	const backDuration = $derived(`${30 / Math.max(speed, 0.01)}s`);
-	const midDuration = $derived(`${18 / Math.max(speed, 0.01)}s`);
-	const frontDuration = $derived(`${10 / Math.max(speed, 0.01)}s`);
+	// Per-layer drift durations (closer = faster).
+	const backDuration   = $derived(`${30 / Math.max(speed, 0.01)}s`);
+	const midDuration    = $derived(`${18 / Math.max(speed, 0.01)}s`);
+	const frontDuration   = $derived(`${10 / Math.max(speed, 0.01)}s`);
+	const cirrusDuration  = $derived(`${45 / Math.max(speed, 0.01)}s`);
 
 	// Density thresholds
-	const showBack = $derived(density > 0.1);
-	const showMid = $derived(density > 0.3);
-	const showFront = $derived(density > 0.55);
+	const showCirrus = $derived(density > 0.05);
+	const showBack   = $derived(density > 0.1);
+	const showMid    = $derived(density > 0.3);
+	const showFront  = $derived(density > 0.55);
 	const layerOpacity = $derived(Math.min(1, density * 1.1));
 
-	// Cloud tint via feColorMatrix: day=warm white, night=cool pale blue.
-	// Output channel bias: R, G, B offsets added after inversion.
-	const rOffset = $derived(nightFactor > 0.5 ? 0.68 : 0.98);
-	const gOffset = $derived(nightFactor > 0.5 ? 0.72 : 0.95);
-	const bOffset = $derived(nightFactor > 0.5 ? 0.82 : 0.92);
+	// Night + weather cloud tint via feColorMatrix.
+	// Output channel bias: R, G, B offsets added after RGB inversion (-1 diagonal).
+	// Storm/rain nights shift toward deep blue-gray; clear nights shift cool pale blue.
+	const rOffset = $derived(
+		nightFactor > 0.5
+			? (weather === 'storm' ? 0.30 : weather === 'rain' ? 0.48 : weather === 'overcast' ? 0.58 : 0.68)
+			: 0.98 * wx.darkR
+	);
+	const gOffset = $derived(
+		nightFactor > 0.5
+			? (weather === 'storm' ? 0.34 : weather === 'rain' ? 0.50 : weather === 'overcast' ? 0.60 : 0.72)
+			: 0.95 * wx.darkG
+	);
+	const bOffset = $derived(
+		nightFactor > 0.5
+			? (weather === 'storm' ? 0.45 : weather === 'rain' ? 0.58 : weather === 'overcast' ? 0.70 : 0.82)
+			: 0.92 * wx.darkB
+	);
 	const alphaOffset = $derived(nightFactor > 0.5 ? -0.15 : 0);
 
 	// Build dynamic colorMatrix string. Inverts RGB (-1 diagonal) then adds
@@ -67,71 +141,111 @@
 
 	// ── Cloud phase — RAF-tracked slow seed for per-cloud random sway ───────
 	// Each seed reads `cloudPhase + idx × π/N` → sin/cos → position/size
-	// offsets. This gives every cloud an independent jitter cycle even
-	// though they share the same feTurbulence filter.
+	// offsets. This gives every cloud an independent jitter cycle.
+	// First-frame delta is suppressed by re-arming `last` after the first tick.
 	let cloudPhase = $state(0);
 	$effect(() => {
 		let raf: number;
 		let last = performance.now();
+		let first = true;
 		const loop = (now: number) => {
-			cloudPhase += ((now - last) / 1000) * 0.05 * speed; // slow drift
-			last = now;
+			if (first) { last = now; first = false; }
+			else {
+				cloudPhase += ((now - last) / 1000) * 0.05 * speed;
+				last = now;
+			}
 			raf = requestAnimationFrame(loop);
 		};
 		raf = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// Per-seed position jitter — deterministic sin waves off cloudPhase + idx
-	function jitter(idx: number, base: number, amp: number, freq: number): number {
-		return base + Math.sin(cloudPhase * freq + idx * 1.91) * amp;
+	// Per-seed position jitter — deterministic sin waves off cloudPhase + idx.
+	// phaseStep ensures each cloud (even at same position) has a unique sway cycle.
+	function jitter(idx: number, base: number, amp: number, freq: number, phaseStep = 0): number {
+		return base + Math.sin(cloudPhase * freq + idx * 1.91 + phaseStep) * amp;
 	}
+
+	// Cirrus wisps — very thin horizontal streaks at top of sky.
+	// 4 wisps, 12% opacity, animate independently.
+	const cirrusData = Array(4).fill(0).map((_, i) => ({
+		top:  1 + i * 2.2,
+		left: i * 28 + Math.sin(i * 2.3) * 5,
+		width: 30 + i * 8,
+	}));
 </script>
 
 <!-- Five seed variants per layer so sibling clouds get different shapes.
      Share the same filter chain template but vary feTurbulence `seed` +
-     slight baseFrequency drift so no two clouds look identical. -->
+     slight baseFrequency drift so no two clouds look identical.
+
+     Weather morphology: all filter parameters scale with wx.* multipliers so
+     storm = heavy dark lumps, clear = light crisp wisps. -->
 <svg class="defs" aria-hidden="true">
 	<defs>
-		{#each [1, 7, 13, 19, 31] as seedNum, i (seedNum)}
-			<!-- Back / ceiling clouds — wider baseFrequency animation range so
-			     shapes MORPH visibly over each 42-54s cycle, not just subtly drift. -->
-			<filter id="cloud-back-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={0.010 + i * 0.002} numOctaves="3" seed={seedNum} result="noise">
+		<!-- Cirrus wisps — ultra-thin, very high, minimal displacement -->
+		{#each [2, 11, 23, 37] as seedNum, i}
+			<filter id="cloud-cirrus-{i}" x="-100%" y="-100%" width="300%" height="300%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation={2 * wx.blurMul} result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={0.030 * wx.baseFreqMul + i * 0.004} numOctaves="2" seed={seedNum} result="noise">
 					{#if animate}
-						<animate attributeName="baseFrequency" dur="{42 + i * 3}s"
-							values="{0.008 + i * 0.002};{0.018 + i * 0.002};{0.012 + i * 0.002};{0.008 + i * 0.002}" repeatCount="indefinite" />
+						<animate attributeName="baseFrequency"
+							dur="{(22 + i * 4) * wx.morphDurMul}s"
+							values="{(0.022 + i * 0.004) * wx.baseFreqMul};{(0.038 + i * 0.004) * wx.baseFreqMul};{(0.028 + i * 0.004) * wx.baseFreqMul};{(0.022 + i * 0.004) * wx.baseFreqMul}"
+							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={65 + i * 5} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation="4" result="soft" />
+				<feDisplacementMap in="pre" in2="noise" scale={18 * wx.displaceMul} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={1.5 * wx.blurMul} result="soft" />
+				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
+			</filter>
+		{/each}
+
+		{#each [1, 7, 13, 19, 31] as seedNum, i (seedNum)}
+			<!-- Back / ceiling clouds — wider baseFrequency animation range so
+			     shapes MORPH visibly over each cycle, not just subtly drift. -->
+			<filter id="cloud-back-{i}" x="-25%" y="-25%" width="150%" height="150%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation={6 * wx.blurMul} result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={(0.010 + i * 0.002) * wx.baseFreqMul} numOctaves="3" seed={seedNum} result="noise">
+					{#if animate}
+						<animate attributeName="baseFrequency"
+							dur="{(42 + i * 3) * wx.morphDurMul}s"
+							values="{(0.008 + i * 0.002) * wx.baseFreqMul};{(0.018 + i * 0.002) * wx.baseFreqMul};{(0.012 + i * 0.002) * wx.baseFreqMul};{(0.008 + i * 0.002) * wx.baseFreqMul}"
+							repeatCount="indefinite" />
+					{/if}
+				</feTurbulence>
+				<feDisplacementMap in="pre" in2="noise" scale={(65 + i * 5) * wx.displaceMul} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={4 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 
 			<filter id="cloud-mid-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation="5" result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={0.014 + i * 0.002} numOctaves="2" seed={seedNum + 100} result="noise">
+				<feGaussianBlur in="SourceGraphic" stdDeviation={5 * wx.blurMul} result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={(0.014 + i * 0.002) * wx.baseFreqMul} numOctaves="2" seed={seedNum + 100} result="noise">
 					{#if animate}
-						<animate attributeName="baseFrequency" dur="{28 + i * 2}s"
-							values="{0.012 + i * 0.002};{0.022 + i * 0.002};{0.016 + i * 0.002};{0.012 + i * 0.002}" repeatCount="indefinite" />
+						<animate attributeName="baseFrequency"
+							dur="{(28 + i * 2) * wx.morphDurMul}s"
+							values="{(0.012 + i * 0.002) * wx.baseFreqMul};{(0.022 + i * 0.002) * wx.baseFreqMul};{(0.016 + i * 0.002) * wx.baseFreqMul};{(0.012 + i * 0.002) * wx.baseFreqMul}"
+							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={50 + i * 4} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation="3" result="soft" />
+				<feDisplacementMap in="pre" in2="noise" scale={(50 + i * 4) * wx.displaceMul} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={3 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 
 			<filter id="cloud-front-{i}" x="-25%" y="-25%" width="150%" height="150%">
-				<feGaussianBlur in="SourceGraphic" stdDeviation="4" result="pre" />
-				<feTurbulence type="fractalNoise" baseFrequency={0.017 + i * 0.002} numOctaves="2" seed={seedNum + 200} result="noise">
+				<feGaussianBlur in="SourceGraphic" stdDeviation={4 * wx.blurMul} result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={(0.017 + i * 0.002) * wx.baseFreqMul} numOctaves="2" seed={seedNum + 200} result="noise">
 					{#if animate}
-						<animate attributeName="baseFrequency" dur="{18 + i}s"
-							values="{0.015 + i * 0.002};{0.027 + i * 0.002};{0.019 + i * 0.002};{0.015 + i * 0.002}" repeatCount="indefinite" />
+						<animate attributeName="baseFrequency"
+							dur="{(18 + i) * wx.morphDurMul}s"
+							values="{(0.015 + i * 0.002) * wx.baseFreqMul};{(0.027 + i * 0.002) * wx.baseFreqMul};{(0.019 + i * 0.002) * wx.baseFreqMul};{(0.015 + i * 0.002) * wx.baseFreqMul}"
+							repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
-				<feDisplacementMap in="pre" in2="noise" scale={40 + i * 3} result="disp" />
-				<feGaussianBlur in="disp" stdDeviation="2.5" result="soft" />
+				<feDisplacementMap in="pre" in2="noise" scale={(40 + i * 3) * wx.displaceMul} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation={2.5 * wx.blurMul} result="soft" />
 				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
 			</filter>
 		{/each}

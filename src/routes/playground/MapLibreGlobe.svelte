@@ -599,7 +599,8 @@
 						14, ['match', ['get', 'rank'], 1, 60, 2, 40, 3, 22, 22],
 					],
 					'circle-blur': 1.6,
-					'circle-opacity': 0.35 + nightFactor * 0.45,
+					// Halo appears at dusk, strong at night, invisible during day
+					'circle-opacity': Math.max(0, (nightFactor - 0.15) * 0.9),
 				}}
 			/>
 			<CircleLayer
@@ -615,7 +616,9 @@
 						14, ['match', ['get', 'rank'], 1, 16, 2, 12,   3, 7, 7],
 					],
 					'circle-blur': 0.3,
-					'circle-opacity': 0.9,
+					// Hide landmark cores during day — they read as 'stuck moons'
+					// in bright sunlight. Fade in at dusk, full at night.
+					'circle-opacity': Math.max(0, (nightFactor - 0.2) * 1.25),
 				}}
 			/>
 		</GeoJSONSource>

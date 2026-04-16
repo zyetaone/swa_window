@@ -413,6 +413,17 @@
 		{/each}
 	</div>
 
+	<!-- Drawer toggle — gear icon top-right. Click to open settings panel. -->
+	<button
+		class="drawer-toggle"
+		class:open={drawerOpen}
+		onclick={() => drawerOpen = !drawerOpen}
+		aria-label="Toggle settings drawer"
+		aria-expanded={drawerOpen}
+	>
+		{drawerOpen ? '✕' : '⚙'}
+	</button>
+
 	<PlaygroundDrawer bind:drawerOpen />
 </div>
 
@@ -521,6 +532,29 @@
 		box-shadow: inset 0 0 60px rgba(255, 210, 120, 0.15);
 		transition: box-shadow 0.3s ease;
 	}
+
+	/* ─── Drawer toggle ──────────────────────────────────────────────────── */
+	.drawer-toggle {
+		position: absolute;
+		top: 16px;
+		right: 16px;
+		z-index: 30;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.6);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		color: #eee;
+		font-size: 18px;
+		cursor: pointer;
+		backdrop-filter: blur(6px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.2s;
+	}
+	.drawer-toggle:hover { transform: scale(1.05); }
+	.drawer-toggle.open { transform: rotate(90deg); }
 
 	/* ─── Palette bar ────────────────────────────────────────────────────── */
 	.palette-bar {
