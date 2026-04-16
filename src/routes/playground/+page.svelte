@@ -49,8 +49,6 @@
 	if (typeof window !== 'undefined') {
 		pg.heading = Math.floor(Math.random() * 360);
 	}
-	let nextCourseChange = performance.now() + 25_000 + Math.random() * 40_000;
-
 	// Orbital autoFly state — plane circles currentLocation instead of
 	// drifting linearly. orbitAngularSpeed 0.07 rad/s → ~90s full orbit.
 	let orbitAngle = Math.random() * Math.PI * 2;  // start at random angle
@@ -213,22 +211,6 @@
 			default: return 'linear-gradient(180deg, #4a90d9 0%, #7fb8ea 30%, #a4d4f4 55%, #b8c8a0 80%, #7a8860 100%)';
 		}
 	});
-
-	// ─── RAF loop ────────────────────────────────────────────────────────────
-	function moveForward(lat: number, lon: number, headingDeg: number, distanceMeters: number) {
-		const R = 6371e3; // Earth radius in meters
-		const rad = Math.PI / 180;
-		const rHeading = headingDeg * rad;
-		const rLat1 = lat * rad;
-		const rLon1 = lon * rad;
-
-		const rLat2 = Math.asin(Math.sin(rLat1) * Math.cos(distanceMeters / R) +
-								Math.cos(rLat1) * Math.sin(distanceMeters / R) * Math.cos(rHeading));
-		const rLon2 = rLon1 + Math.atan2(Math.sin(rHeading) * Math.sin(distanceMeters / R) * Math.cos(rLat1),
-								Math.cos(distanceMeters / R) - Math.sin(rLat1) * Math.sin(rLat2));
-
-		return { lat: rLat2 / rad, lon: rLon2 / rad };
-	}
 
 	$effect(() => {
 		let raf: number;
