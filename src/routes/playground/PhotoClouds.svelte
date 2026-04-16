@@ -40,10 +40,11 @@
 	const driftX = $derived(Math.cos(driftRad));
 	const driftY = $derived(Math.sin(driftRad) * 0.35);
 
-	// Per-layer drift durations (closer = faster)
-	const backDuration = $derived(`${90 / Math.max(speed, 0.01)}s`);
-	const midDuration = $derived(`${55 / Math.max(speed, 0.01)}s`);
-	const frontDuration = $derived(`${30 / Math.max(speed, 0.01)}s`);
+	// Per-layer drift durations (closer = faster). Tightened ~3× from
+	// previous values — user asked 'more drift speed'.
+	const backDuration = $derived(`${30 / Math.max(speed, 0.01)}s`);
+	const midDuration = $derived(`${18 / Math.max(speed, 0.01)}s`);
+	const frontDuration = $derived(`${10 / Math.max(speed, 0.01)}s`);
 
 	// Density thresholds
 	const showBack = $derived(density > 0.1);
@@ -151,48 +152,54 @@
 	     taper to wispy high cirrus; below we never place clouds (the camera
 	     is above them at cruise altitude). -->
 	<!--
-	 Physics model: plane at cruise 30k ft is ABOVE typical cumulus.
-	 Layers, top-down on the viewport:
-	   1. CIRRUS   — high ice clouds at 40-60k ft, ABOVE horizon line.
-	                 Wispy, elongated, sparse. Occupy the SKY band (top 8-25%).
-	   2. HORIZON  — mid-altitude cumulus tops visible AT horizon line.
-	                 Few, prominent, largest (perspective peak).
-	   3. DECK     — cumulus deck we're FLYING OVER, below horizon.
-	                 Below the horizon line (45-70% from top). We see the
-	                 TOPS of these clouds stretching away from us.
+	 Revised layout per user: DENSE CONNECTED at top (far+horizon),
+	 SPARSE THIN near (below horizon). Reads as a solid cloud ceiling
+	 receding into the distance with only a few wisps between us and it.
+
+	   TOP CEILING (0-28%)  — dense packed wide clouds, 20+ seeds
+	                          overlapping into a connected ceiling.
+	                          Each row tighter than the last as we
+	                          approach horizon.
+	   MID WISPS (30-50%)   — 3 small wisps between ceiling and us.
+	   FOREGROUND (60-80%)  — 1-2 thin strands, rare, fast-moving.
 	 -->
 	{#if showBack}
-		<!-- CIRRUS — high wispy ice clouds in the upper sky, spread wide -->
+		<!-- TOP CEILING: dense connected cloud mass at the top of frame -->
 		<div class="cloud-layer back" style:animation-duration={backDuration}>
-			{#each Array(10) as _, i}
-				<div class="seed cirrus"
-					style:top="{jitter(i, 10 + (i % 3) * 5, 1.5, 0.5)}%"
-					style:left="{jitter(i, 5 + i * 10, 2, 0.2)}%"></div>
+			<!-- Row 1 — very top, widest, most connected -->
+			{#each Array(9) as _, i}
+				<div class="seed ceiling"
+					style:top="{jitter(i, 2, 1, 0.4)}%"
+					style:left="{jitter(i, -3 + i * 13, 1.5, 0.2)}%"></div>
+			{/each}
+			<!-- Row 2 — slightly lower, overlaps row 1 for connected look -->
+			{#each Array(8) as _, i}
+				<div class="seed ceiling"
+					style:top="{jitter(i + 9, 10, 1, 0.5)}%"
+					style:left="{jitter(i + 9, 5 + i * 13, 1.5, 0.2)}%"></div>
+			{/each}
+			<!-- Row 3 — approaches horizon, slightly smaller -->
+			{#each Array(7) as _, i}
+				<div class="seed ceiling-thin"
+					style:top="{jitter(i + 17, 20, 1, 0.4)}%"
+					style:left="{jitter(i + 17, -2 + i * 15, 1.5, 0.2)}%"></div>
 			{/each}
 		</div>
 	{/if}
 	{#if showMid}
-		<!-- HORIZON cumulus tops — 4-5 prominent shapes at the horizon line -->
+		<!-- Mid wisps — 3 SMALL thin clouds between horizon and viewer.
+		     Sparse because the ceiling above dominates the scene. -->
 		<div class="cloud-layer mid" style:animation-duration={midDuration}>
-			{#each Array(5) as _, i}
-				<div class="seed horizon"
-					style:top="{jitter(i + 10, 30, 1.5, 0.3)}%"
-					style:left="{jitter(i + 10, 8 + i * 20, 2.5, 0.2)}%"></div>
-			{/each}
+			<div class="seed wisp" style:top="{jitter(30, 35, 1.5, 0.3)}%" style:left="{jitter(30, 18, 4, 0.2)}%"></div>
+			<div class="seed wisp" style:top="{jitter(31, 40, 1.5, 0.35)}%" style:left="{jitter(31, 55, 4, 0.2)}%"></div>
+			<div class="seed wisp" style:top="{jitter(32, 44, 1.5, 0.3)}%" style:left="{jitter(32, 82, 4, 0.2)}%"></div>
 		</div>
 	{/if}
 	{#if showFront}
-		<!-- DECK below — cumulus tops we're flying over. Below horizon line.
-		     Bigger as they come closer toward the bottom of frame
-		     (foreground perspective). -->
+		<!-- FOREGROUND — rare thin strand drifting fast through lower frame -->
 		<div class="cloud-layer front" style:animation-duration={frontDuration}>
-			<div class="seed deck-far"  style:top="{jitter(20, 46, 1, 0.3)}%"  style:left="{jitter(20, 10, 3, 0.2)}%"></div>
-			<div class="seed deck-far"  style:top="{jitter(21, 48, 1, 0.35)}%" style:left="{jitter(21, 35, 3, 0.2)}%"></div>
-			<div class="seed deck-far"  style:top="{jitter(22, 45, 1, 0.3)}%"  style:left="{jitter(22, 62, 3, 0.2)}%"></div>
-			<div class="seed deck-far"  style:top="{jitter(23, 47, 1, 0.35)}%" style:left="{jitter(23, 85, 3, 0.2)}%"></div>
-			<div class="seed deck-near" style:top="{jitter(24, 60, 2, 0.25)}%" style:left="{jitter(24, 20, 4, 0.15)}%"></div>
-			<div class="seed deck-near" style:top="{jitter(25, 62, 2, 0.3)}%"  style:left="{jitter(25, 70, 4, 0.15)}%"></div>
-			<div class="seed deck-closest" style:top="{jitter(26, 75, 3, 0.2)}%" style:left="{jitter(26, 48, 6, 0.12)}%"></div>
+			<div class="seed near-wisp" style:top="{jitter(40, 62, 2, 0.25)}%" style:left="{jitter(40, 30, 5, 0.15)}%"></div>
+			<div class="seed near-wisp" style:top="{jitter(41, 70, 2, 0.2)}%"  style:left="{jitter(41, 75, 5, 0.12)}%"></div>
 		</div>
 	{/if}
 </div>
@@ -238,17 +245,15 @@
 		opacity: 0.9;
 	}
 
-	/* Size + opacity per physics tier:
-	   - cirrus:       wispy, transparent, elongated (high ice clouds)
-	   - horizon:      cumulus tops AT horizon, biggest, opaque
-	   - deck-far:     distant deck below us, narrow bands (perspective foreshort)
-	   - deck-near:    mid-deck, medium
-	   - deck-closest: closest deck top, large, foreground */
-	.seed.cirrus        { width: 10%; aspect-ratio: 4.5 / 1; opacity: 0.45; }
-	.seed.horizon       { width: 20%; aspect-ratio: 2.2 / 1; opacity: 0.9; }
-	.seed.deck-far      { width: 14%; aspect-ratio: 3 / 1;   opacity: 0.75; }
-	.seed.deck-near     { width: 20%; aspect-ratio: 2.5 / 1; opacity: 0.85; }
-	.seed.deck-closest  { width: 30%; aspect-ratio: 2.2 / 1; opacity: 0.9; }
+	/* Dense CEILING at top (far), sparse WISP/near-wisp near (close).
+	   - ceiling:      wide + overlapping for connected mass, opaque
+	   - ceiling-thin: same width but thinner aspect for third row
+	   - wisp:         thin elongated strands between ceiling and viewer
+	   - near-wisp:    closer thin wisps, slightly taller */
+	.seed.ceiling       { width: 16%; aspect-ratio: 1.8 / 1; opacity: 0.92; }
+	.seed.ceiling-thin  { width: 15%; aspect-ratio: 2.8 / 1; opacity: 0.82; }
+	.seed.wisp          { width: 10%; aspect-ratio: 4 / 1;   opacity: 0.5; }
+	.seed.near-wisp     { width: 14%; aspect-ratio: 3.2 / 1; opacity: 0.6; }
 
 	/* Per-seed shape variance — same filter, but pre-displacement rotation
 	   + non-uniform scale break the 'copied shape' pattern. Seven unique
