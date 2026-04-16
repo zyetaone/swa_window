@@ -1,35 +1,70 @@
 <script lang="ts">
 	/**
-	 * NightOverlay — artistic atmospheric embellishments for the scene.
+	 * NightOverlay — unified atmospheric overlay for the scene.
 	 *
-	 * Layers (z-order, bottom-up):
-	 *   stars         — CSS star-field above horizon; visible only at night
-	 *   shooting-star — occasional random streak; fades after each
-	 *   shimmer       — full-viewport SVG feTurbulence; heat-haze / air-motion
-	 *   moon          — DOM element; position tracks sun azimuth; phase cycles
+	 * Combines what were previously three separate components:
+	 *   - NightOverlay   (stars, moon, shooting stars, shimmer, city glow)
+	 *   - LensFlare      (sun-tracking optical flare)
+	 *   - atmo-haze div  (screen-blended sky color grading)
 	 *
-	 * All driven by `nightFactor` (0 = day, 1 = night) and `timeOfDay`.
+	 * All driven by `nightFactor`, `timeOfDay`, `skyState`, and `viewBearing`.
 	 */
 
-	let { nightFactor = 0, timeOfDay = 0 }: { nightFactor?: number; timeOfDay?: number } = $props();
+	import type { SkyState } from '$lib/types';
+
+	let {
+		nightFactor = 0,
+		timeOfDay = 0,
+		skyState = 'day' as SkyState,
+		viewBearing = 90,
+	}: {
+		nightFactor?: number;
+		timeOfDay?: number;
+		skyState?: SkyState;
+		viewBearing?: number;
+	} = $props();
+
+	// ── Atmospheric haze gradient — color-grades the entire scene ─────────────
+	const hazeGradient = $derived.by(() => {
+		switch (skyState) {
+			case 'night': return 'linear-gradient(180deg, rgba(20,28,50,0.55) 0%, rgba(10,16,35,0.4) 40%, rgba(5,8,18,0.3) 100%)';
+			case 'dawn':  return 'linear-gradient(180deg, rgba(220,150,110,0.35) 0%, rgba(240,180,120,0.25) 45%, rgba(200,160,100,0.15) 100%)';
+			case 'dusk':  return 'linear-gradient(180deg, rgba(200,110,90,0.4) 0%, rgba(180,90,70,0.3) 40%, rgba(100,60,50,0.2) 100%)';
+			default:      return 'linear-gradient(180deg, rgba(170,195,220,0.3) 0%, rgba(190,210,230,0.2) 50%, rgba(160,180,160,0.1) 100%)';
+		}
+	});
 
 	const starsOpacity = $derived(Math.max(0, nightFactor - 0.1));
 	const moonOpacity = $derived(Math.max(0, (nightFactor - 0.3) * 1.5));
-	// Shimmer peaks at dawn/dusk, fades at noon and midnight
 	const shimmerStrength = $derived(1 - Math.abs(nightFactor - 0.5) * 2);
 
-	// ─── Moon phase ─────────────────────────────────────────────────────────
-	// Lunar cycle ~29.5 days. timeOfDay 0-24 → fraction of current "moon day".
-	// phaseAngle 0=full, 0.5=new. Derived from a continuous value so it morphs.
-	const moonPhaseAngle = $derived((timeOfDay / 24) * 29.5 * Math.PI * 2);
-	// Normalised phase 0=full, 0.5=new (waxing fills left→right)
-	const moonPhaseNorm = $derived(Math.abs(Math.sin(moonPhaseAngle)));
+	// ── Lens flare ─────────────────────────────────────────────────────────
+	const sunAzimuth = $derived((timeOfDay * 15) % 360);
+	const sunBearingDiff = $derived.by(() => {
+		return (sunAzimuth - viewBearing + 540) % 360 - 180;
+	});
+	const sunAlignment = $derived.by(() => {
+		if (skyState === 'night') return 0;
+		return Math.max(0, Math.min(1, 1 - Math.abs(sunBearingDiff) / 40));
+	});
+	const sunScreenX = $derived(Math.max(5, Math.min(95, 50 + (sunBearingDiff / 40) * 45)));
+	const sunScreenY = $derived.by(() => {
+		const hourAngle = (timeOfDay - 12) * 15;
+		const elevation = Math.cos(hourAngle * Math.PI / 180);
+		return Math.max(10, Math.min(70, 45 - elevation * 30));
+	});
 
-	// ─── Stars drift — subtle Earth rotation simulation ───────────────────
+	const lensOpacity = $derived(sunAlignment * (skyState === 'day' ? 0.85 : 0.6));
+	const ghostX = $derived(100 - sunScreenX);
+	const ghostY = $derived(100 - sunScreenY);
+	const streakAngle = $derived((sunScreenX - 50) * 0.15);
+
+	// ── Moon phase ─────────────────────────────────────────────────────────
+	const moonPhaseAngle = $derived((timeOfDay / 24) * 29.5 * Math.PI * 2);
+	const moonPhaseNorm = $derived(Math.abs(Math.sin(moonPhaseAngle)));
 	const starsAngle = $derived((timeOfDay * 15) % 360);
 
-	// ─── Shooting stars ────────────────────────────────────────────────────
-	// Random chance every 4s to fire; visible for 600ms.
+	// ── Shooting stars ────────────────────────────────────────────────────
 	let shootingStar = $state<{ x: number; y: number; angle: number } | null>(null);
 	let shootTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -55,6 +90,26 @@
 		return () => { if (shootTimer) clearTimeout(shootTimer); };
 	});
 </script>
+
+<!-- Atmospheric haze — screen-blended sky color grading overlay.
+     Matches prod atmosphere/haze/effect.svelte: dawn=warm amber, night=deep navy,
+     day=cool atmospheric blue. Softens LOD seams + unifies color grade. -->
+<div class="haze" style:background={hazeGradient} aria-hidden="true"></div>
+
+<!-- Lens flare — sun-tracking optical flare (ghost ring, halo, streak).
+     Ghost is mirrored through viewport center (lens optics). -->
+{#if sunAlignment > 0.01}
+	<div class="lens-flare" style:opacity={lensOpacity} aria-hidden="true">
+		<div class="flare-core" style:left="{sunScreenX}%" style:top="{sunScreenY}%"></div>
+		<div class="flare-halo" style:left="{sunScreenX}%" style:top="{sunScreenY}%"></div>
+		<div class="flare-ghost" style:left="{ghostX}%" style:top="{ghostY}%" style:opacity={sunAlignment * 0.4}></div>
+		<div class="flare-ghost-sm"
+			style:left="{50 + (ghostX - 50) * 0.5}%"
+			style:top="{50 + (ghostY - 50) * 0.5}%"
+			style:opacity={sunAlignment * 0.25}></div>
+		<div class="flare-streak" style:top="{sunScreenY}%" style:transform="rotate({streakAngle}deg)"></div>
+	</div>
+{/if}
 
 <!-- Stars — clipped to upper 55% (sky area above horizon). Fades out at
      the bottom edge via mask-image so it doesn't pop-cut at the horizon. -->
@@ -132,6 +187,100 @@
 </svg>
 
 <style>
+	/* ── Atmospheric haze — composite color grading overlay ─────────── */
+	.haze {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 4;
+		mix-blend-mode: screen;
+		transition: background 2s ease;
+	}
+
+	/* ── Lens flare ─────────────────────────────────────────────────── */
+	.lens-flare {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		mix-blend-mode: screen;
+		transition: opacity 0.3s ease-out;
+		z-index: 10;
+		overflow: hidden;
+	}
+
+	.flare-core {
+		position: absolute;
+		width: 12vw;
+		height: 12vw;
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		background: radial-gradient(circle,
+			rgba(255,255,255,1) 0%,
+			rgba(255,240,200,0.7) 15%,
+			rgba(255,200,120,0.3) 40%,
+			rgba(255,180,100,0) 70%
+		);
+		filter: blur(8px);
+	}
+
+	.flare-halo {
+		position: absolute;
+		width: 30vw;
+		height: 30vw;
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		background: radial-gradient(circle,
+			rgba(255,200,120,0.12) 0%,
+			rgba(255,180,100,0.05) 40%,
+			rgba(255,160,80,0) 70%
+		);
+	}
+
+	.flare-ghost {
+		position: absolute;
+		width: 8vw;
+		height: 8vw;
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		border: 1px solid rgba(255, 180, 100, 0.15);
+		background: radial-gradient(circle,
+			rgba(100, 180, 255, 0.08) 0%,
+			rgba(100, 160, 255, 0.03) 50%,
+			rgba(100, 140, 255, 0) 70%
+		);
+	}
+
+	.flare-ghost-sm {
+		position: absolute;
+		width: 4vw;
+		height: 4vw;
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+		background: radial-gradient(circle,
+			rgba(180, 220, 255, 0.1) 0%,
+			rgba(180, 220, 255, 0) 70%
+		);
+	}
+
+	.flare-streak {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 3px;
+		transform-origin: center;
+		background: linear-gradient(90deg,
+			rgba(255,200,100,0) 0%,
+			rgba(255,220,150,0.15) 20%,
+			rgba(255,240,180,0.5) 45%,
+			rgba(255,255,255,0.7) 50%,
+			rgba(255,240,180,0.5) 55%,
+			rgba(255,220,150,0.15) 80%,
+			rgba(255,200,100,0) 100%
+		);
+		filter: blur(1.5px);
+	}
+
+	/* ── Stars ──────────────────────────────────────────────────────── */
 	.stars, .shimmer {
 		position: absolute;
 		inset: 0;

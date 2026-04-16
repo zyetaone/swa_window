@@ -3,7 +3,6 @@
 		CircleLayer,
 		GeoJSONSource,
 		GlobeControl,
-		HeatmapLayer,
 		Light,
 		LineLayer,
 		Sky,
@@ -69,22 +68,17 @@
 	/>
 
 	<!-- VOLUMETRIC GROUND FOG — Heatmap driven by GeoJSON points. -->
+	<!-- Ground fog — blurred circles instead of HeatmapLayer (which triggers
+	     calculateFogMatrix warnings on globe projection). Same visual effect. -->
 	<GeoJSONSource id="ground-fog" data={fogGeoJSON}>
-		<HeatmapLayer
+		<CircleLayer
 			id="ground-fog-layer"
 			source="ground-fog"
 			paint={{
-				'heatmap-weight': ['get', 'weight'],
-				'heatmap-intensity': 1.0,
-				'heatmap-color': [
-					'interpolate', ['linear'], ['heatmap-density'],
-					0, 'rgba(255, 255, 255, 0)',
-					0.4, hexToRgba(skyPalette.fog, 0.2),
-					0.8, hexToRgba(skyPalette.fog, 0.6),
-					1, hexToRgba(skyPalette.fog, 0.85)
-				],
-				'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 6, 20, 10, 80, 14, 250],
-				'heatmap-opacity': 0.7,
+				'circle-color': hexToRgba(skyPalette.fog, 0.5),
+				'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 25, 10, 100, 14, 300],
+				'circle-blur': 2.0,
+				'circle-opacity': ['*', ['get', 'weight'], 0.45],
 			}}
 		/>
 	</GeoJSONSource>

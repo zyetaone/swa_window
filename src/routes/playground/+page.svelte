@@ -346,12 +346,9 @@
 			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
 		{/if}
 
-		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} />
+		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} skyState={skyState} viewBearing={viewBearing} />
 		<Weather rainOpacity={weatherFx.rainOpacity} {windAngle} {frostAmount} />
 
-		<!-- Atmospheric haze — screen-blended gradient tints the whole scene.
-		     Matches prod atmosphere/haze/effect.svelte: dawn=warm amber, night=deep navy,
-		     day=cool atmospheric blue. Softens LOD seams + unifies color grade. -->
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
 		<div class="horizon-line" aria-hidden="true"></div>
 

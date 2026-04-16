@@ -470,7 +470,7 @@ $effect(() => {
 	</defs>
 </svg>
 
-<div class="photo-clouds" style:opacity={layerOpacity} aria-hidden="true">
+<div class="photo-clouds" style:opacity={layerOpacity} style:transform="scale({0.85 + cloudScale * 0.35})" aria-hidden="true">
 	<!-- Cloud deck — wind skew + altitude coupling.
 	     altitudeShift moves the whole deck vertically based on flight level:
 	     below 18k = clouds above you, above 38k = clouds below you. -->

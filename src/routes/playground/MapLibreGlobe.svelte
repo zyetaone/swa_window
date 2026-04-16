@@ -175,7 +175,8 @@
 	));
 
 	let shadowTime = $state(0);
-	$effect(() => { const id = setInterval(() => { shadowTime += 0.1; }, 100); return () => clearInterval(id); });
+	// Throttled to 2Hz — cloud shadows drift slowly, no need for 10Hz GeoJSON rebuilds
+	$effect(() => { const id = setInterval(() => { shadowTime += 0.5; }, 500); return () => clearInterval(id); });
 
 	const shadowGeoJSON = $derived.by(() => fc(
 		Array.from({ length: 25 }, (_, i) => {
