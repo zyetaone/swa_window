@@ -66,7 +66,7 @@
 		const idx = ids.indexOf(pg.activeLocation);
 		pg.activeLocation = ids[(idx + 1) % ids.length];
 		// New flight profile for this segment
-		pg.altitude = 18_000 + Math.floor(Math.random() * 24_000);  // 18k-42k ft
+		pg.altitude = 20_000 + Math.floor(Math.random() * 25_000);  // 20k-45k ft
 		pitchBias = (Math.random() - 0.5) * 12;                      // ±6°
 		const turbs: typeof pg.turbulenceLevel[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
 		pg.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
@@ -245,6 +245,12 @@
 			if (pg.autoFly || isBoosting) {
 				// Auto-cycle through locations every 2-4 minutes
 				if (now > nextLocationChange) cycleLocation();
+
+				// Gentle altitude drift within the flight segment — plane slowly
+				// climbs/descends between ±2000 ft per minute around target.
+				// Uses sin(time) so altitude oscillates smoothly.
+				const altOsc = Math.sin(now * 0.00006) * 2000;
+				pg.altitude = Math.max(20_000, Math.min(45_000, pg.altitude + altOsc * dt * 0.3));
 
 				// ORBITAL autoFly — plane circles the current city instead of
 				// flying off into empty desert. Keeps the kiosk framed on its
