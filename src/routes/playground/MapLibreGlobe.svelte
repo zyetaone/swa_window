@@ -300,6 +300,7 @@
 	fadeDuration={0}
 	autoloadGlobalCss={false}
 >
+	<!-- DO NOT CHANGE TO MERCATOR — globe projection required for atmosphere + sky -->
 	<Projection type="globe" />
 	<PMTilesProtocol />
 
