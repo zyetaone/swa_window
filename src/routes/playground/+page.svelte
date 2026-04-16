@@ -11,7 +11,7 @@
 	import { untrack } from 'svelte';
 	import type { SkyState } from '$lib/types';
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
-	import { WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
+	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { getSkyState, nightFactor, clamp } from '$lib/utils';
 	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
@@ -137,8 +137,10 @@
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
 
 	// Plane moves tangentially to the orbit, passenger looks at center (90 deg left)
-	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 0.3 + 360) % 360);
-	const viewPitch = $derived(Math.max(62, Math.min(84, 76 + pg.pitchBias + motion.motionOffsetY * 0.6)));
+	// Turbulence coupling: motionOffset → camera bearing/pitch. Boosted from
+	// 0.3/0.6 to 1.5/2.5 so bumps are actually visible in the map camera.
+	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 1.5 + 360) % 360);
+	const viewPitch = $derived(Math.max(62, Math.min(84, 76 + pg.pitchBias + motion.motionOffsetY * 2.5)));
 
 	// Snap map center when location changes (orbital drift takes over after)
 	$effect(() => {
@@ -221,11 +223,14 @@
 					weather: pg.weather,
 					camera: cameraConfig,
 					director: directorConfig,
-					lat: 0, lon: 0, pitch: 0, bankAngle: 0,
-					skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
+					lat: currentLocation.lat,
+					lon: currentLocation.lon,
+					pitch: viewPitch,
+					bankAngle: motion.bankAngle,
+					skyState, nightFactor: nf, dawnDuskFactor: 0,
 					locationId: pg.activeLocation,
 					userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
-					cloudDensity: 0, cloudSpeed: 0, haze: 0,
+					cloudDensity: pg.density, cloudSpeed: pg.cloudSpeed, haze: 0,
 				});
 			});
 
@@ -236,10 +241,11 @@
 	});
 
 	const motionTransform = $derived.by(() => {
-		const turbY = motion.motionOffsetY * 0.08;
-		const turbX = motion.motionOffsetX * 0.08;
-		const turbRot = motion.motionOffsetY * 0.02;
-		const breathY = motion.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE;
+		// Turbulence coupling boosted from 0.08 → 0.25 so bumps are visible
+		const turbY = motion.motionOffsetY * 0.25;
+		const turbX = motion.motionOffsetX * 0.25;
+		const turbRot = motion.motionOffsetY * 0.05;
+		const breathY = motion.breathingOffset * cameraConfig.motion.breathingAmplitude;
 		const bank = motion.bankAngle;
 		const x = turbX + motion.engineVibeX;
 		const y = turbY + breathY + motion.engineVibeY;
@@ -336,6 +342,11 @@
 				<div class="flare-streak"></div>
 			</div>
 		{/if}
+		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
+		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
+		<div class="glass-vignette" aria-hidden="true"></div>
+		<div class="glass-recess" aria-hidden="true"></div>
+		<div class="wing-silhouette" style:transform="rotate({(-2 + motion.bankAngle * 0.3).toFixed(2)}deg)" aria-hidden="true"></div>
 	</button>
 
 	<div class="blind" class:dragging={blindDragging} style:transform={`translateY(${blindY - 100}%)`}>
@@ -415,6 +426,47 @@
 		height: 3px;
 		background: linear-gradient(90deg, transparent 0%, rgba(200, 220, 255, 0.15) 20%, rgba(200, 220, 255, 0.2) 50%, rgba(200, 220, 255, 0.15) 80%, transparent 100%);
 		pointer-events: none;
+	}
+
+	/* ─── Airplane window glass (ported from prod shell/window/Glass.svelte) ── */
+	.glass-vignette {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 12;
+		background: radial-gradient(
+			ellipse 80% 70% at 50% 50%,
+			transparent 50%,
+			rgba(0, 0, 0, 0.06) 70%,
+			rgba(0, 0, 0, 0.25) 100%
+		);
+	}
+	.glass-recess {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 13;
+		border-radius: inherit;
+		box-shadow:
+			inset 0 0 30px 6px rgba(0, 0, 0, 0.15),
+			inset 2px 2px 8px rgba(0, 0, 0, 0.1);
+	}
+	.wing-silhouette {
+		position: absolute;
+		bottom: -5%;
+		left: -15%;
+		width: 75%;
+		height: 32%;
+		pointer-events: none;
+		z-index: 11;
+		transform-origin: 80% 100%;
+		background: linear-gradient(
+			25deg,
+			rgba(20, 20, 25, 0.55) 0%,
+			rgba(30, 30, 35, 0.35) 20%,
+			rgba(40, 40, 50, 0.15) 40%,
+			transparent 60%
+		);
 	}
 
 	/* ─── Lens Flare ─────────────────────────────────────────────────────── */

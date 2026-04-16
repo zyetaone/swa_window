@@ -163,6 +163,10 @@ interface Particle {
 	rotation: number;  // degrees
 	scaleX: number;
 	scaleY: number;
+	// RAF-driven morph: each cloud steps to a new filter variant at its own rate.
+	// Desynchronizes SMIL baseFrequency morphing across the cloud field.
+	morphTimer: number;  // accumulates in seconds; triggers filterIdx step at >= 1
+	morphSpeed: number;  // morph steps per second (0.5 = slow drift, 2 = fast shimmer)
 }
 
 interface LayerSpec {
@@ -257,10 +261,13 @@ function createParticle(spec: LayerSpec, idx: number): Particle {
 		aspect: rand(spec.aspectRange[0], spec.aspectRange[1]),
 		opacity: rand(spec.opacityRange[0], spec.opacityRange[1]),
 		filterIdx: idx % spec.filterCount,
-		// Real clouds: flat bottom, billowy top → no rotation, wide horizontal stretch
 		rotation: 0,
 		scaleX: rand(1.0, 1.6),           // stretch wide (cloud banks, not balls)
 		scaleY: rand(0.6, 0.9),           // compress vertically (flat base)
+		// Each cloud morphs to a new filter variant at its own rate — staggered
+		// so the cloud field never looks synchronized.
+		morphTimer: rand(0, 5),
+		morphSpeed: rand(0.5, 2.0),
 	};
 }
 
@@ -279,6 +286,8 @@ function respawnParticle(c: Particle, spec: LayerSpec, enterFromLeft: boolean): 
 	c.rotation = 0;
 	c.scaleX = rand(1.0, 1.6);
 	c.scaleY = rand(0.6, 0.9);
+	c.morphTimer = rand(0, 3);
+	c.morphSpeed = rand(0.5, 2.0);
 }
 
 function tickPool(pool: Particle[], spec: LayerSpec, dt: number): void {
@@ -296,6 +305,15 @@ function tickPool(pool: Particle[], spec: LayerSpec, dt: number): void {
 		c.vyPhase += dt * 0.25;
 		c.y = c.yBase + Math.sin(c.vyPhase) * c.vyAmp;
 		c.z = c.zBase + Math.sin(c.vyPhase * 0.7) * spec.zOsc;
+
+		// Per-cloud morph: each cloud steps to the next filter variant at its own
+		// rate. morphSpeed is per-cloud (0.5=gradual, 2=rapid shimmer). This
+		// desynchronizes the SMIL baseFrequency morphing across the cloud field.
+		c.morphTimer += c.morphSpeed * dt;
+		if (c.morphTimer >= 1) {
+			c.filterIdx = (c.filterIdx + 1) % spec.filterCount;
+			c.morphTimer -= 1;
+		}
 
 		// Wrap detection — position alone determines exit edge (handles drift flips)
 		if (c.x > 135) respawnParticle(c, spec, true);

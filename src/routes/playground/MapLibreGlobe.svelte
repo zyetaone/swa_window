@@ -147,7 +147,7 @@
 		let last = performance.now();
 		const loop = (now: number) => {
 			untrack(() => {
-				const dt = (now - last) / 1000;
+				const dt = Math.min((now - last) / 1000, 0.1);
 				last = now;
 				waterTime += dt;
 
