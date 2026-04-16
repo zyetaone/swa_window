@@ -94,12 +94,14 @@
 <svg class="defs" aria-hidden="true">
 	<defs>
 		{#each [1, 7, 13, 19, 31] as seedNum, i (seedNum)}
+			<!-- Back / ceiling clouds — wider baseFrequency animation range so
+			     shapes MORPH visibly over each 42-54s cycle, not just subtly drift. -->
 			<filter id="cloud-back-{i}" x="-25%" y="-25%" width="150%" height="150%">
 				<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="pre" />
 				<feTurbulence type="fractalNoise" baseFrequency={0.010 + i * 0.002} numOctaves="3" seed={seedNum} result="noise">
 					{#if animate}
 						<animate attributeName="baseFrequency" dur="{42 + i * 3}s"
-							values="{0.010 + i * 0.002};{0.013 + i * 0.002};{0.010 + i * 0.002}" repeatCount="indefinite" />
+							values="{0.008 + i * 0.002};{0.018 + i * 0.002};{0.012 + i * 0.002};{0.008 + i * 0.002}" repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
 				<feDisplacementMap in="pre" in2="noise" scale={65 + i * 5} result="disp" />
@@ -112,7 +114,7 @@
 				<feTurbulence type="fractalNoise" baseFrequency={0.014 + i * 0.002} numOctaves="2" seed={seedNum + 100} result="noise">
 					{#if animate}
 						<animate attributeName="baseFrequency" dur="{28 + i * 2}s"
-							values="{0.014 + i * 0.002};{0.017 + i * 0.002};{0.014 + i * 0.002}" repeatCount="indefinite" />
+							values="{0.012 + i * 0.002};{0.022 + i * 0.002};{0.016 + i * 0.002};{0.012 + i * 0.002}" repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
 				<feDisplacementMap in="pre" in2="noise" scale={50 + i * 4} result="disp" />
@@ -125,7 +127,7 @@
 				<feTurbulence type="fractalNoise" baseFrequency={0.017 + i * 0.002} numOctaves="2" seed={seedNum + 200} result="noise">
 					{#if animate}
 						<animate attributeName="baseFrequency" dur="{18 + i}s"
-							values="{0.017 + i * 0.002};{0.021 + i * 0.002};{0.017 + i * 0.002}" repeatCount="indefinite" />
+							values="{0.015 + i * 0.002};{0.027 + i * 0.002};{0.019 + i * 0.002};{0.015 + i * 0.002}" repeatCount="indefinite" />
 					{/if}
 				</feTurbulence>
 				<feDisplacementMap in="pre" in2="noise" scale={40 + i * 3} result="disp" />
@@ -287,9 +289,12 @@
 	.cloud-layer.front .seed:nth-of-type(5n+4) { filter: url(#cloud-front-3); }
 	.cloud-layer.front .seed:nth-of-type(5n)   { filter: url(#cloud-front-4); }
 
+	/* Drift crosses the viewport fully and WRAPS seamlessly — clouds enter
+	   from one side as others exit the opposite. Doubled amplitude from
+	   40% → 120% so they truly stream past, not just slide slightly. */
 	@keyframes cloud-drift {
-		from { transform: translate(-15%, -8%); }
-		to   { transform: translate(calc(var(--drift-x) * 40%), calc(var(--drift-y) * 20%)); }
+		from { transform: translate(calc(var(--drift-x) * -60%), calc(var(--drift-y) * -30%)); }
+		to   { transform: translate(calc(var(--drift-x) * 60%),  calc(var(--drift-y) * 30%)); }
 	}
 
 	@media (prefers-reduced-motion: reduce) {
