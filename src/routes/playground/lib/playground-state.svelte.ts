@@ -4,12 +4,17 @@ import type { PaletteName } from '../palettes';
 
 /**
  * PlaygroundState — Centralized Svelte 5 reactive configuration.
- * Groups all interactive controls, isolating the view layer from state logic.
+ *
+ * Additive glide-back: user adjustments act as temporary offsets on top of
+ * the autopilot path. After a cooldown (user stops interacting), the value
+ * smoothly lerps back toward the autopilot's target. Sliders bind directly
+ * to the public getters/setters — the setter captures user intent by setting
+ * a cooldown, and tick() handles the smooth return.
  */
 export class PlaygroundState {
 	// Location
 	activeLocation = $state<LocationId>('dubai');
-	
+
 	// Environment
 	timeOfDay = $state(12);
 	weather = $state<WeatherType>('clear');
@@ -27,21 +32,47 @@ export class PlaygroundState {
 	// Cloud mechanics
 	density = $state(0.6);
 	cloudSpeed = $state(1.0);
-	cloudScale = $state(1.0);   // global cloud size multiplier (panel tunable)
-	cloudSpread = $state(1.0);  // vertical spread multiplier (1.0 = default, 2.0 = full sky)
+	cloudScale = $state(1.0);
+	cloudSpread = $state(1.0);
 
-	// Flight mechanics
-	heading = $state(90);
+	// ── Glide-back flight mechanics ──────────────────────────────────────
+	// Private backing fields + autopilot targets + cooldown timers.
+	// Public get/set: slider binds work unchanged. Setter starts cooldown.
+	// tick() lerps current → target after cooldown expires.
+
+	#altitude = $state(30000);
+	#altTarget = 30000;
+	#altCooldown = 0;
+	static readonly ALT_HOLD_SEC = 6;
+	static readonly ALT_LERP_RATE = 0.4;  // exponential lerp/sec
+
+	get altitude() { return this.#altitude; }
+	set altitude(v: number) {
+		this.#altitude = v;
+		this.#altCooldown = PlaygroundState.ALT_HOLD_SEC;
+	}
+
+	#heading = $state(90);
+	#headingTarget = 90;
+	#headingCooldown = 0;
+	static readonly HDG_HOLD_SEC = 4;
+	static readonly HDG_LERP_RATE = 0.6;
+
+	get heading() { return this.#heading; }
+	set heading(v: number) {
+		this.#heading = v;
+		this.#headingCooldown = PlaygroundState.HDG_HOLD_SEC;
+	}
+
 	planeSpeed = $state(1.0);
-	altitude = $state(30000);
 	turbulenceLevel = $state<'light' | 'moderate' | 'severe'>('light');
 
 	// Automations
 	autoOrbit = $state(false);
 	autoTime = $state(false);
-	autoFly = $state(true); 
-	kioskMode = $state(true); // auto-cycle locations
-	
+	autoFly = $state(true);
+	kioskMode = $state(true);
+
 	// Orbital mechanics
 	orbitAngle = $state(Math.random() * Math.PI * 2);
 	orbitAngularSpeed = $state(0.07);
@@ -59,7 +90,8 @@ export class PlaygroundState {
 	constructor() {
 		if (typeof window !== 'undefined') {
 			this.nextLocationChange = performance.now() + 120_000 + Math.random() * 120_000;
-			this.heading = Math.floor(Math.random() * 360);
+			this.#heading = Math.floor(Math.random() * 360);
+			this.#headingTarget = this.#heading;
 		}
 	}
 
@@ -74,15 +106,38 @@ export class PlaygroundState {
 				this.cycleLocation(now);
 			}
 
-			// Altitude drift
+			// Altitude: autopilot target drifts with sine oscillation
 			const altOsc = Math.sin(now * 0.00006) * 2000;
-			this.altitude = Math.max(20_000, Math.min(45_000, this.altitude + altOsc * dt * 0.3));
+			this.#altTarget = Math.max(20_000, Math.min(45_000, this.#altTarget + altOsc * dt * 0.3));
 
-			// Orbital progress
+			// Glide altitude toward target (skip during user cooldown)
+			if (this.#altCooldown > 0) {
+				this.#altCooldown -= dt;
+			} else {
+				this.#altitude += (this.#altTarget - this.#altitude) * (1 - Math.exp(-PlaygroundState.ALT_LERP_RATE * dt));
+			}
+
+			// Heading: autopilot target follows orbital angle
 			this.orbitAngle += dt * this.orbitAngularSpeed * this.planeSpeed;
-			this.heading = ((this.orbitAngle * 180 / Math.PI) + 90) % 360;
+			this.#headingTarget = ((this.orbitAngle * 180 / Math.PI) + 90) % 360;
+
+			// Glide heading toward target
+			if (this.#headingCooldown > 0) {
+				this.#headingCooldown -= dt;
+			} else {
+				// Shortest-angle lerp (handles 359°→1° wrapping)
+				let diff = this.#headingTarget - this.#heading;
+				if (diff > 180) diff -= 360;
+				if (diff < -180) diff += 360;
+				this.#heading = (this.#heading + diff * (1 - Math.exp(-PlaygroundState.HDG_LERP_RATE * dt)) + 360) % 360;
+			}
 		} else if (this.autoOrbit) {
-			this.heading = (this.heading + dt * 5 * this.planeSpeed) % 360;
+			this.#headingTarget = (this.#heading + dt * 5 * this.planeSpeed) % 360;
+			if (this.#headingCooldown > 0) {
+				this.#headingCooldown -= dt;
+			} else {
+				this.#heading = this.#headingTarget;
+			}
 		}
 	}
 
@@ -91,20 +146,25 @@ export class PlaygroundState {
 		const idx = ids.indexOf(this.activeLocation);
 		this.activeLocation = ids[(idx + 1) % ids.length];
 
-		// New segment profile
-		this.altitude = 20_000 + Math.floor(Math.random() * 25_000);
+		// New segment profile — set targets, not current values
+		this.#altTarget = 20_000 + Math.floor(Math.random() * 25_000);
+		this.#altCooldown = 0; // let it glide to new target immediately
 		this.pitchBias = (Math.random() - 0.5) * 12;
 		const turbs: ('light' | 'moderate' | 'severe')[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
 		this.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
-		
+
 		if (now) {
 			this.nextLocationChange = now + 120_000 + Math.random() * 120_000;
 		}
 	}
 
 	reset() {
-		this.heading = 90;
-		this.altitude = 30000;
+		this.#heading = 90;
+		this.#headingTarget = 90;
+		this.#headingCooldown = 0;
+		this.#altitude = 30000;
+		this.#altTarget = 30000;
+		this.#altCooldown = 0;
 		this.planeSpeed = 1.0;
 		this.density = 0.6;
 		this.cloudSpeed = 1.0;
@@ -119,8 +179,12 @@ export class PlaygroundState {
 	}
 
 	randomize() {
-		this.heading = Math.floor(Math.random() * 360);
-		this.altitude = Math.floor(15000 + Math.random() * 30000);
+		this.#heading = Math.floor(Math.random() * 360);
+		this.#headingTarget = this.#heading;
+		this.#headingCooldown = 0;
+		this.#altitude = Math.floor(15000 + Math.random() * 30000);
+		this.#altTarget = this.#altitude;
+		this.#altCooldown = 0;
 		this.density = 0.3 + Math.random() * 0.6;
 		this.cloudSpeed = 0.5 + Math.random() * 1.5;
 		this.timeOfDay = Math.random() * 24;
@@ -130,4 +194,7 @@ export class PlaygroundState {
 	}
 }
 
+// Module-level singleton — survives SvelteKit navigation. Acceptable for a
+// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
+// createContext/getContext pattern.
 export const pg = new PlaygroundState();
