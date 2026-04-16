@@ -51,6 +51,11 @@
 	}
 	let nextCourseChange = performance.now() + 25_000 + Math.random() * 40_000;
 
+	// Orbital autoFly state — plane circles currentLocation instead of
+	// drifting linearly. orbitAngularSpeed 0.07 rad/s → ~90s full orbit.
+	let orbitAngle = Math.random() * Math.PI * 2;  // start at random angle
+	const orbitAngularSpeed = 0.07;
+
 	const motion = new MotionEngine();
 	let simTime = $state(0);
 
@@ -236,21 +241,22 @@
 			if (pg.autoTime) pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
 
 			if (pg.autoFly || isBoosting) {
-				// Artistic speed: 4× realistic cruise so ground motion is visible
-				// at cruise zoom (z=10). 1000 m/s × speed multiplier.
-				const speedMps = 1000 * pg.planeSpeed;
-				const distanceMeters = speedMps * dt;
-				const nextCoords = moveForward(mapLat, mapLon, pg.heading, distanceMeters);
-				mapLat = nextCoords.lat;
-				mapLon = nextCoords.lon;
-
-				// Slow heading drift — plane makes gentle course adjustments
-				// (±0.2°/s) plus occasional bigger turns every 25-65 seconds.
-				pg.heading = (pg.heading + dt * 0.2) % 360;
-				if (now > nextCourseChange) {
-					pg.heading = (pg.heading + (Math.random() - 0.5) * 60 + 360) % 360;
-					nextCourseChange = now + 25_000 + Math.random() * 40_000;
-				}
+				// ORBITAL autoFly — plane circles the current city instead of
+				// flying off into empty desert. Keeps the kiosk framed on its
+				// subject while the view constantly rotates, giving the city
+				// from every angle over a 90s cycle.
+				orbitAngle += dt * orbitAngularSpeed * pg.planeSpeed;   // rad/s
+				const loc = currentLocation;
+				// Radius chosen so at z=10 the city fills ~2/3 of the frame.
+				// ~0.08° ≈ 9km at equator, scales down toward poles via cos(lat).
+				const radiusDeg = 0.075;
+				const latRad = loc.lat * Math.PI / 180;
+				mapLat = loc.lat + radiusDeg * Math.sin(orbitAngle);
+				mapLon = loc.lon + radiusDeg * Math.cos(orbitAngle) / Math.max(Math.cos(latRad), 0.2);
+				// Heading is tangent to the orbit circle — plane moves forward
+				// along the tangent, so passenger (bearing = heading - 90)
+				// looks at the city center.
+				pg.heading = ((orbitAngle * 180 / Math.PI) + 90) % 360;
 			}
 
 			motion.tick(dt, {
