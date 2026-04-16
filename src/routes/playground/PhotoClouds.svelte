@@ -101,12 +101,15 @@
 	const driftY = $derived(Math.sin(driftRad) * 0.35);
 
 	// Per-layer drift durations (closer = faster, far = slowest).
-	// Far layers feel stationary; foreground streams past — atmospheric
-	// parallax without per-frame JS motion.
-	const cirrusDuration = $derived(`${120 / Math.max(speed, 0.01)}s`);  // slowest
-	const backDuration   = $derived(`${60 / Math.max(speed, 0.01)}s`);   // slow
-	const midDuration    = $derived(`${20 / Math.max(speed, 0.01)}s`);   // medium
-	const frontDuration  = $derived(`${8 / Math.max(speed, 0.01)}s`);    // fastest
+	// Stretched durations × ~5-8× from earlier values so the CSS loop period
+	// exceeds typical viewing time — the 'repeat snap' the user noticed becomes
+	// invisible in practice (nobody watches clouds for 5 minutes straight to
+	// catch the wrap). Combined with baseFrequency animate on feTurbulence,
+	// clouds morph continuously even when positions loop.
+	const cirrusDuration = $derived(`${420 / Math.max(speed, 0.01)}s`);  // 7 min cycle
+	const backDuration   = $derived(`${280 / Math.max(speed, 0.01)}s`);  // 4.5 min
+	const midDuration    = $derived(`${95 / Math.max(speed, 0.01)}s`);   // ~1.5 min
+	const frontDuration  = $derived(`${40 / Math.max(speed, 0.01)}s`);   // ~40s
 
 	// Density thresholds
 	const showCirrus = $derived(density > 0.05);

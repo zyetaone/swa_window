@@ -6,11 +6,6 @@
 	 * full viewport. HUD chip-bar at bottom-left. Right-side drawer hides
 	 * the dev tuning controls behind a toggle so the app-surface feels
 	 * clean by default.
-	 *
-	 * Long-press anywhere on the map = cruise boost (1.0× → 3.0×),
-	 * release to ease back. Tap = fly to next location.
-	 *
-	 * Production `/` still runs Cesium. This route is isolated.
 	 */
 
 	import type { SkyState, LocationId } from '$lib/types';
@@ -20,7 +15,7 @@
 	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { FLIGHT_FEEL } from '$lib/constants';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
-	// Local playground config — no coupling to main-app's reactive config tree.
+	// Local playground config
 	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
 	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
@@ -29,59 +24,24 @@
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import PhotoClouds from './PhotoClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
-	import { PALETTE_ENTRIES, PALETTES } from './palettes';
+	import { PALETTES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { pg } from './lib/playground-state.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
 	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
-	// ─── State ───────────────────────────────────────────────────────────────  // online EOX — global coverage (cached sources only cover dubai/dallas/himalayas bboxes)
-
+	// ─── State ───────────────────────────────────────────────────────────────
 	let mapLat = $state(25.2);
 	let mapLon = $state(55.3);
 
-	// Tracking variables for effect (no $state needed since they just track previous value without driving UI)
+	// Tracking variables for effect
 	let lastActiveLocation: LocationId = 'dubai';
-
-	// Randomize initial heading so each session starts with a different view
-	// direction. Subsequent slow drift + occasional 'course correction' keeps
-	// the passenger view alive without jarring the user.
-	if (typeof window !== 'undefined') {
-		pg.heading = Math.floor(Math.random() * 360);
-	}
-	// Orbital autoFly state — plane circles currentLocation instead of
-	// drifting linearly. orbitAngularSpeed 0.07 rad/s → ~90s full orbit.
-	let orbitAngle = Math.random() * Math.PI * 2;  // start at random angle
-	const orbitAngularSpeed = 0.07;
-
-	// Auto-cycle through locations every 2-4 minutes (120-240s). Each tick
-	// picks the next location in LOCATIONS; landing on same keeps that city
-	// visible for its full duration before rotating away.
-	// Also randomizes altitude / pitch-bias / turbulence per cycle — each
-	// city sequence has its own 'flight profile'.
-	let nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
-	let pitchBias = $state(0);  // ±6° added to base pitch per flight segment
-	function cycleLocation() {
-		const ids = LOCATIONS.map(l => l.id);
-		const idx = ids.indexOf(pg.activeLocation);
-		pg.activeLocation = ids[(idx + 1) % ids.length];
-		// New flight profile for this segment
-		pg.altitude = 20_000 + Math.floor(Math.random() * 25_000);  // 20k-45k ft
-		pitchBias = (Math.random() - 0.5) * 12;                      // ±6°
-		const turbs: typeof pg.turbulenceLevel[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
-		pg.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
-		nextLocationChange = performance.now() + (120_000 + Math.random() * 120_000);
-	}
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
 
-	// Creative controls  // PoC sphere — ground-anchored, looks like a moon stuck on the map
-
-	// Map instance exposed from MapLibreGlobe — fed to Three.js overlay.
+	// Map instance exposed from MapLibreGlobe
 	let mapRef = $state<maplibregl.Map | undefined>(undefined);
-
-	// LOD tuning — see MapLibre level-of-detail-control example
 
 	// ─── UI state ────────────────────────────────────────────────────────────
 	let drawerOpen = $state(false);
@@ -125,10 +85,7 @@
 	}
 
 	function handleMapTap() {
-		// Short tap — cycle to next location
-		const ids = LOCATIONS.map(l => l.id);
-		const idx = ids.indexOf(pg.activeLocation);
-		pg.activeLocation = ids[(idx + 1) % ids.length];
+		pg.cycleLocation();
 	}
 
 	function handlePointerUp() {
@@ -156,7 +113,7 @@
 	}
 
 	// ─── Blind drag ──────────────────────────────────────────────────────────
-	let blindY = $state(0);           // 0 = fully up (open), 100 = fully down (covered)
+	let blindY = $state(0);
 	let blindDragging = $state(false);
 	let blindDragStart = 0;
 	let blindDragStartY = 0;
@@ -176,31 +133,17 @@
 	function handleBlindPointerUp() {
 		if (!blindDragging) return;
 		blindDragging = false;
-		// Snap to nearest end
 		blindY = blindY > 40 ? 100 : 0;
 	}
 
-	// ─── Derived ─────────────────────────────────────────────────────────────
+	// ─── Derived Camera ──────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
 
-	// Passenger-window camera bearing. Plane travels `pg.heading`; a passenger
-	// looks 90° LEFT of travel (out the right-side window). Ground scrolls
-	// laterally across the view, not rushing toward the camera.
-	// Plus a small turbulence-driven wobble (±3°) for organic motion feel.
-	const viewBearing = $derived(
-		(pg.heading - 90 + motion.motionOffsetX * 0.3 + 360) % 360,
-	);
+	// Plane moves tangentially to the orbit, passenger looks at center (90 deg left)
+	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 0.3 + 360) % 360);
+	const viewPitch = $derived(Math.max(62, Math.min(84, 76 + pg.pitchBias + motion.motionOffsetY * 0.6)));
 
-	// Camera pitch responds to turbulence bumps — gentle ±2° wobble on top of
-	// a base pitch (76°) + per-flight-segment pitchBias (±6°). Bank angle
-	// (rolling during turns) stays on the CSS transform (motionTransform)
-	// so it rolls the visual frame, not the MapLibre camera — more
-	// comfortable for passengers to watch.
-	const viewPitch = $derived(
-		Math.max(62, Math.min(84, 76 + pitchBias + motion.motionOffsetY * 0.6)),
-	);
-
-	// Sync logic: change map center when user selects a new location
+	// Map center sync
 	$effect(() => {
 		if (pg.activeLocation !== lastActiveLocation) {
 			const loc = LOCATION_MAP.get(pg.activeLocation);
@@ -226,9 +169,9 @@
 		}
 		switch (skyState) {
 			case 'night': return 'linear-gradient(180deg, #05060f 0%, #0f1428 55%, #1a1f35 100%)';
-			case 'dawn': return 'linear-gradient(180deg, #1a1440 0%, #d96850 45%, #f0b070 70%, #d4a060 100%)';
-			case 'dusk': return 'linear-gradient(180deg, #1a1a3e 0%, #c06040 35%, #ddaa70 55%, #5a4a3a 100%)';
-			default: return 'linear-gradient(180deg, #4a90d9 0%, #7fb8ea 30%, #a4d4f4 55%, #b8c8a0 80%, #7a8860 100%)';
+			case 'dawn':  return 'linear-gradient(180deg, #1a1440 0%, #d96850 45%, #f0b070 70%, #d4a060 100%)';
+			case 'dusk':  return 'linear-gradient(180deg, #1a1a3e 0%, #c06040 35%, #ddaa70 55%, #5a4a3a 100%)';
+			default:      return 'linear-gradient(180deg, #4a90d9 0%, #7fb8ea 30%, #a4d4f4 55%, #b8c8a0 80%, #7a8860 100%)';
 		}
 	});
 
@@ -239,35 +182,17 @@
 			const dt = (now - last) / 1000;
 			last = now;
 			simTime += dt;
-			if (pg.autoOrbit) pg.heading = (pg.heading + dt * 5 * pg.planeSpeed) % 360;
-			if (pg.autoTime) pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
+
+			// Centralized state update
+			pg.tick(dt, now);
 
 			if (pg.autoFly || isBoosting) {
-				// Auto-cycle through locations every 2-4 minutes
-				if (now > nextLocationChange) cycleLocation();
-
-				// Gentle altitude drift within the flight segment — plane slowly
-				// climbs/descends between ±2000 ft per minute around target.
-				// Uses sin(time) so altitude oscillates smoothly.
-				const altOsc = Math.sin(now * 0.00006) * 2000;
-				pg.altitude = Math.max(20_000, Math.min(45_000, pg.altitude + altOsc * dt * 0.3));
-
-				// ORBITAL autoFly — plane circles the current city instead of
-				// flying off into empty desert. Keeps the kiosk framed on its
-				// subject while the view constantly rotates, giving the city
-				// from every angle over a 90s cycle.
-				orbitAngle += dt * orbitAngularSpeed * pg.planeSpeed;   // rad/s
+				// Orbital update - uses pg.orbitAngle and radial dist
 				const loc = currentLocation;
-				// Radius chosen so at z=10 the city fills ~2/3 of the frame.
-				// ~0.08° ≈ 9km at equator, scales down toward poles via cos(lat).
 				const radiusDeg = 0.075;
 				const latRad = loc.lat * Math.PI / 180;
-				mapLat = loc.lat + radiusDeg * Math.sin(orbitAngle);
-				mapLon = loc.lon + radiusDeg * Math.cos(orbitAngle) / Math.max(Math.cos(latRad), 0.2);
-				// Heading is tangent to the orbit circle — plane moves forward
-				// along the tangent, so passenger (bearing = heading - 90)
-				// looks at the city center.
-				pg.heading = ((orbitAngle * 180 / Math.PI) + 90) % 360;
+				mapLat = loc.lat + radiusDeg * Math.sin(pg.orbitAngle);
+				mapLon = loc.lon + radiusDeg * Math.cos(pg.orbitAngle) / Math.max(Math.cos(latRad), 0.2);
 			}
 
 			motion.tick(dt, {
@@ -278,7 +203,6 @@
 				weather: pg.weather,
 				camera: cameraConfig,
 				director: directorConfig,
-				// unused fields required by SimulationContext
 				lat: 0, lon: 0, pitch: 0, bankAngle: 0,
 				skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
 				locationId: pg.activeLocation,
@@ -292,7 +216,6 @@
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// Motion transform applied to the map pane (matches Window.svelte feel)
 	const motionTransform = $derived.by(() => {
 		const turbY = motion.motionOffsetY * 0.08;
 		const turbX = motion.motionOffsetX * 0.08;
@@ -303,15 +226,9 @@
 		const y = turbY + breathY + motion.engineVibeY;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${(turbRot + bank).toFixed(3)}deg)`;
 	});
-
-	// ─── Preset actions ──────────────────────────────────────────────────────
-	
-
-	
 </script>
 
 <div class="playground" class:boosting={isBoosting}>
-	<!-- Full-viewport map — end to end, no frame -->
 	<button
 		class="viewport-btn"
 		style:background={bgGradient}
@@ -320,7 +237,6 @@
 		onpointercancel={handlePointerCancel}
 		onpointerleave={handlePointerCancel}
 		type="button"
-		aria-label="Tap to fly to next location. Hold to boost speed."
 	>
 		<div
 			class="globe-pane"
@@ -374,41 +290,26 @@
 		{/if}
 
 		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} />
-
-		<Weather
-			rainOpacity={weatherFx.rainOpacity}
-			{windAngle}
-			{frostAmount}
-		/>
-
+		<Weather rainOpacity={weatherFx.rainOpacity} {windAngle} {frostAmount} />
 		<div class="horizon-line" aria-hidden="true"></div>
 	</button>
 
-	<!-- Blind overlay — pull-down shade, covers full rectangle (no frame) -->
-	<div
-		class="blind"
-		class:dragging={blindDragging}
-		style:transform={`translateY(${blindY - 100}%)`}
-	>
+	<div class="blind" class:dragging={blindDragging} style:transform={`translateY(${blindY - 100}%)`}>
 		<div class="blind-surface"></div>
 		<button
 			class="blind-pull"
-			aria-label="Pull blind up or down"
 			onpointerdown={handleBlindPointerDown}
 			onpointermove={handleBlindPointerMove}
 			onpointerup={handleBlindPointerUp}
 			onpointercancel={handleBlindPointerUp}
 		>
 			<div class="blind-pull-grip"></div>
-			<div class="blind-pull-hint">
-				{blindY > 50 ? '↑ pull up' : '↓ pull down'}
-			</div>
+			<div class="blind-pull-hint">{blindY > 50 ? '↑ pull up' : '↓ pull down'}</div>
 		</button>
 	</div>
 
 	<PlaygroundHud {isBoosting} />
 
-	<!-- Palette bar — tap a swatch to lock the sky mood -->
 	<div class="palette-bar" role="group" aria-label="Ambient environment">
 		{#each PALETTE_ENTRIES as entry (entry.name)}
 			<button
@@ -416,8 +317,6 @@
 				class:active={pg.paletteName === entry.name}
 				style:background={entry.swatchColor}
 				title={entry.label}
-				aria-label={entry.label}
-				aria-pressed={pg.paletteName === entry.name}
 				onclick={() => pg.paletteName = entry.name}
 			>
 				{#if pg.paletteName === entry.name}
@@ -427,13 +326,11 @@
 		{/each}
 	</div>
 
-	<!-- Drawer toggle — gear icon top-right. Click to open settings panel. -->
 	<button
 		class="drawer-toggle"
 		class:open={drawerOpen}
 		onclick={() => drawerOpen = !drawerOpen}
-		aria-label="Toggle settings drawer"
-		aria-expanded={drawerOpen}
+		aria-label="Toggle settings"
 	>
 		{drawerOpen ? '✕' : '⚙'}
 	</button>
@@ -460,14 +357,8 @@
 		overflow: hidden;
 	}
 
-	.viewport-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
 	.globe-pane {
 		position: absolute;
-		/* Oversize: motion.tick rotates us up to ±6° via bank-angle. At the
-		   typical 1500×800 viewport, a 6° rotation exposes up to ~80px at
-		   the corners. -100px inset ensures the map always covers viewport
-		   even at extreme turbulence. */
 		inset: -100px;
 		will-change: transform;
 	}
@@ -533,10 +424,6 @@
 		background: rgba(212, 200, 168, 0.9);
 		padding: 2px 8px;
 		border-radius: 10px;
-		white-space: nowrap;
-		display: inline-block;
-		margin: 0 auto;
-		width: max-content;
 		transform: translateX(-50%);
 		margin-left: 50%;
 	}
@@ -553,22 +440,33 @@
 		top: 16px;
 		right: 16px;
 		z-index: 30;
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.6);
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		background: rgba(10, 10, 15, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.12);
 		color: #eee;
 		font-size: 18px;
 		cursor: pointer;
-		backdrop-filter: blur(6px);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: transform 0.2s;
+		transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 	}
-	.drawer-toggle:hover { transform: scale(1.05); }
-	.drawer-toggle.open { transform: rotate(90deg); }
+	.drawer-toggle:hover { 
+		transform: scale(1.1); 
+		background: rgba(255, 255, 255, 0.1); 
+		border-color: rgba(255, 255, 255, 0.3);
+		box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+	}
+	.drawer-toggle.open { 
+		transform: rotate(90deg) scale(0.9); 
+		background: rgba(0, 0, 0, 0.85);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
 
 	/* ─── Palette bar ────────────────────────────────────────────────────── */
 	.palette-bar {
@@ -580,26 +478,30 @@
 		display: flex;
 		gap: 8px;
 		align-items: center;
-		background: rgba(0, 0, 0, 0.5);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		padding: 6px 10px;
+		background: rgba(10, 10, 15, 0.45);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		padding: 8px 12px;
 		border-radius: 20px;
-		backdrop-filter: blur(8px);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 	}
 
 	.palette-swatch {
-		width: 22px;
-		height: 22px;
+		width: 24px;
+		height: 24px;
 		border-radius: 50%;
 		border: 1.5px solid rgba(255, 255, 255, 0.25);
 		cursor: pointer;
 		position: relative;
-		transition: transform 0.15s ease, border-color 0.15s ease;
+		transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 		flex-shrink: 0;
+		padding: 0;
 	}
 	.palette-swatch:hover {
-		transform: scale(1.2);
+		transform: scale(1.25) translateY(-2px);
 		border-color: rgba(255, 255, 255, 0.5);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 	.palette-swatch.active {
 		border-color: #fff;
