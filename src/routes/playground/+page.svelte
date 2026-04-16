@@ -142,11 +142,13 @@
 	// ─── Derived Camera ──────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
 
-	// Plane moves tangentially to the orbit, passenger looks at center (90 deg left)
-	// Turbulence coupling: motionOffset → camera bearing/pitch. Boosted from
-	// 0.3/0.6 to 1.5/2.5 so bumps are actually visible in the map camera.
+	// Passenger window: looks 90° left of heading. Pitch responds to altitude
+	// relative to cloud deck — below clouds (descending) you look UP more (lower pitch),
+	// above clouds (climbing) you look DOWN more (higher pitch). Creates the
+	// "descend through clouds, climb back above" holding pattern feel.
 	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 1.5 + 360) % 360);
-	const viewPitch = $derived(Math.max(62, Math.min(84, 76 + pg.pitchBias + motion.motionOffsetY * 2.5)));
+	const cloudDeckBias = $derived((pg.altitude - 28000) / 8000 * 4); // ±4° based on altitude vs cloud deck
+	const viewPitch = $derived(Math.max(58, Math.min(84, 72 + pg.pitchBias + cloudDeckBias + motion.motionOffsetY * 2.5)));
 
 	// Snap map center when location changes (orbital drift takes over after)
 	$effect(() => {
@@ -231,11 +233,18 @@
 				pg.tick(dt, now, isBoosting);
 
 				if (pg.autoFly || isBoosting) {
+					// Elliptical orbit: major/minor axes rotated by orbitTilt.
+					// Each location segment gets a random ellipse shape + CW/CCW.
 					const loc = currentLocation;
-					const radiusDeg = 0.075;
+					const a = pg.orbitAngle;
+					const t = pg.orbitTilt;
+					const ex = pg.orbitMajor * Math.cos(a);
+					const ey = pg.orbitMinor * Math.sin(a);
+					// Rotate ellipse by tilt angle
 					const latRad = loc.lat * Math.PI / 180;
-					mapLat = loc.lat + radiusDeg * Math.sin(pg.orbitAngle);
-					mapLon = loc.lon + radiusDeg * Math.cos(pg.orbitAngle) / Math.max(Math.cos(latRad), 0.2);
+					const cosT = Math.cos(t), sinT = Math.sin(t);
+					mapLat = loc.lat + ex * cosT - ey * sinT;
+					mapLon = loc.lon + (ex * sinT + ey * cosT) / Math.max(Math.cos(latRad), 0.2);
 				}
 
 				motion.tick(dt, {
@@ -425,6 +434,9 @@
 		position: absolute;
 		inset: -100px;
 		will-change: transform;
+		/* Smooth the 60 Hz turbulence + breathing RAF updates. 60ms = ~1 frame
+		   at 60fps — enough to damp micro-jitter without perceptable lag. */
+		transition: transform 60ms linear;
 	}
 
 	.horizon-line {

@@ -73,11 +73,19 @@ export class PlaygroundState {
 	autoFly = $state(true);
 	kioskMode = $state(true);
 
-	// Orbital mechanics
+	// Orbital mechanics — elliptical holding pattern
 	orbitAngle = $state(Math.random() * Math.PI * 2);
 	orbitAngularSpeed = $state(0.07);
+	orbitDirection = $state(Math.random() > 0.5 ? 1 : -1);   // CW or CCW
+	orbitMajor = $state(0.08 + Math.random() * 0.04);         // major axis (deg)
+	orbitMinor = $state(0.04 + Math.random() * 0.03);         // minor axis (deg)
+	orbitTilt = $state(Math.random() * Math.PI);               // ellipse rotation
 	nextLocationChange = $state(0);
 	pitchBias = $state(0);
+
+	// Cloud deck altitude — plane oscillates above/below this for the
+	// "descend through clouds, climb back above" holding pattern feel.
+	static readonly CLOUD_DECK_ALT = 28000;
 
 	// Creative
 	paletteName = $state<PaletteName>('auto');
@@ -106,9 +114,14 @@ export class PlaygroundState {
 				this.cycleLocation(now);
 			}
 
-			// Altitude: autopilot target drifts with sine oscillation
-			const altOsc = Math.sin(now * 0.00006) * 2000;
-			this.#altTarget = Math.max(20_000, Math.min(45_000, this.#altTarget + altOsc * dt * 0.3));
+			// Altitude: slow sine oscillation THROUGH the cloud deck.
+			// At low point (~22k) you're below clouds looking up. At high (~38k) above.
+			// Two-frequency sum avoids predictable rhythm.
+			const altSlow = Math.sin(now * 0.00004) * 6000;     // ±6k, ~26min period
+			const altFast = Math.sin(now * 0.00012) * 2000;     // ±2k, ~8.7min period
+			this.#altTarget = Math.max(18_000, Math.min(42_000,
+				PlaygroundState.CLOUD_DECK_ALT + altSlow + altFast
+			));
 
 			// Glide altitude toward target (skip during user cooldown)
 			if (this.#altCooldown > 0) {
@@ -117,8 +130,8 @@ export class PlaygroundState {
 				this.#altitude += (this.#altTarget - this.#altitude) * (1 - Math.exp(-PlaygroundState.ALT_LERP_RATE * dt));
 			}
 
-			// Heading: autopilot target follows orbital angle
-			this.orbitAngle += dt * this.orbitAngularSpeed * this.planeSpeed;
+			// Heading: autopilot target follows elliptical orbital angle
+			this.orbitAngle += dt * this.orbitAngularSpeed * this.planeSpeed * this.orbitDirection;
 			this.#headingTarget = ((this.orbitAngle * 180 / Math.PI) + 90) % 360;
 
 			// Glide heading toward target
@@ -146,10 +159,14 @@ export class PlaygroundState {
 		const idx = ids.indexOf(this.activeLocation);
 		this.activeLocation = ids[(idx + 1) % ids.length];
 
-		// New segment profile — set targets, not current values
-		this.#altTarget = 20_000 + Math.floor(Math.random() * 25_000);
-		this.#altCooldown = 0; // let it glide to new target immediately
+		// New segment profile — randomize orbit shape + direction
+		this.#altTarget = 22_000 + Math.floor(Math.random() * 18_000);
+		this.#altCooldown = 0;
 		this.pitchBias = (Math.random() - 0.5) * 12;
+		this.orbitDirection = Math.random() > 0.5 ? 1 : -1;  // CW or CCW
+		this.orbitMajor = 0.06 + Math.random() * 0.06;       // 0.06-0.12 deg
+		this.orbitMinor = 0.03 + Math.random() * 0.04;       // 0.03-0.07 deg
+		this.orbitTilt = Math.random() * Math.PI;             // random ellipse rotation
 		const turbs: ('light' | 'moderate' | 'severe')[] = ['light', 'light', 'light', 'moderate', 'moderate', 'severe'];
 		this.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
 

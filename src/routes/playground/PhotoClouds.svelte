@@ -579,6 +579,8 @@ $effect(() => {
 		inset: 0;
 		transform-style: preserve-3d;
 		transform-origin: 50% 45%;
+		/* Smooth bank + wind skew transitions; 80ms ≈ 1 frame so no perceptible lag */
+		transition: transform 80ms linear;
 	}
 
 	.layer {
