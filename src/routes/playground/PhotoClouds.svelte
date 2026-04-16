@@ -87,54 +87,51 @@
 	}
 </script>
 
-<!-- Hidden SVG defs — zero-size container.
-     Filter chain per layer (adapted from Yannakopoulos + ccprog's variant):
-       pre-blur  →  softens the ellipse edge so displacement doesn't carve holes
-       turbulence →  fractal noise as the displacement source
-       displace   →  warp the soft ellipse into cloud silhouette
-       post-blur  →  final feathering for wispy edges
-       colorMatrix →  invert RGB so black seed becomes white cloud
-     Filter region x/y/width/height enlarged to 150% so distortion doesn't clip. -->
+<!-- Five seed variants per layer so sibling clouds get different shapes.
+     Share the same filter chain template but vary feTurbulence `seed` +
+     slight baseFrequency drift so no two clouds look identical. -->
 <svg class="defs" aria-hidden="true">
 	<defs>
-		<filter id="cloud-back" x="-25%" y="-25%" width="150%" height="150%">
-			<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="pre" />
-			<feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="1" result="noise">
-				{#if animate}
-					<animate attributeName="baseFrequency" dur="48s"
-						values="0.011;0.015;0.011" repeatCount="indefinite" />
-				{/if}
-			</feTurbulence>
-			<feDisplacementMap in="pre" in2="noise" scale="70" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="4" result="soft" />
-			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
-		</filter>
+		{#each [1, 7, 13, 19, 31] as seedNum, i (seedNum)}
+			<filter id="cloud-back-{i}" x="-25%" y="-25%" width="150%" height="150%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation="6" result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={0.010 + i * 0.002} numOctaves="3" seed={seedNum} result="noise">
+					{#if animate}
+						<animate attributeName="baseFrequency" dur="{42 + i * 3}s"
+							values="{0.010 + i * 0.002};{0.013 + i * 0.002};{0.010 + i * 0.002}" repeatCount="indefinite" />
+					{/if}
+				</feTurbulence>
+				<feDisplacementMap in="pre" in2="noise" scale={65 + i * 5} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation="4" result="soft" />
+				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
+			</filter>
 
-		<filter id="cloud-mid" x="-25%" y="-25%" width="150%" height="150%">
-			<feGaussianBlur in="SourceGraphic" stdDeviation="5" result="pre" />
-			<feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="2" seed="2" result="noise">
-				{#if animate}
-					<animate attributeName="baseFrequency" dur="32s"
-						values="0.014;0.018;0.014" repeatCount="indefinite" />
-				{/if}
-			</feTurbulence>
-			<feDisplacementMap in="pre" in2="noise" scale="55" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="3" result="soft" />
-			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
-		</filter>
+			<filter id="cloud-mid-{i}" x="-25%" y="-25%" width="150%" height="150%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation="5" result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={0.014 + i * 0.002} numOctaves="2" seed={seedNum + 100} result="noise">
+					{#if animate}
+						<animate attributeName="baseFrequency" dur="{28 + i * 2}s"
+							values="{0.014 + i * 0.002};{0.017 + i * 0.002};{0.014 + i * 0.002}" repeatCount="indefinite" />
+					{/if}
+				</feTurbulence>
+				<feDisplacementMap in="pre" in2="noise" scale={50 + i * 4} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation="3" result="soft" />
+				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
+			</filter>
 
-		<filter id="cloud-front" x="-25%" y="-25%" width="150%" height="150%">
-			<feGaussianBlur in="SourceGraphic" stdDeviation="4" result="pre" />
-			<feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="3" result="noise">
-				{#if animate}
-					<animate attributeName="baseFrequency" dur="20s"
-						values="0.017;0.022;0.017" repeatCount="indefinite" />
-				{/if}
-			</feTurbulence>
-			<feDisplacementMap in="pre" in2="noise" scale="45" result="disp" />
-			<feGaussianBlur in="disp" stdDeviation="2.5" result="soft" />
-			<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
-		</filter>
+			<filter id="cloud-front-{i}" x="-25%" y="-25%" width="150%" height="150%">
+				<feGaussianBlur in="SourceGraphic" stdDeviation="4" result="pre" />
+				<feTurbulence type="fractalNoise" baseFrequency={0.017 + i * 0.002} numOctaves="2" seed={seedNum + 200} result="noise">
+					{#if animate}
+						<animate attributeName="baseFrequency" dur="{18 + i}s"
+							values="{0.017 + i * 0.002};{0.021 + i * 0.002};{0.017 + i * 0.002}" repeatCount="indefinite" />
+					{/if}
+				</feTurbulence>
+				<feDisplacementMap in="pre" in2="noise" scale={40 + i * 3} result="disp" />
+				<feGaussianBlur in="disp" stdDeviation="2.5" result="soft" />
+				<feColorMatrix in="soft" type="matrix" values={colorMatrix} />
+			</filter>
+		{/each}
 	</defs>
 </svg>
 
@@ -264,18 +261,26 @@
 	.cloud-layer .seed:nth-of-type(7n+6) { transform: scale(0.95, 1.15) rotate(4deg); }
 	.cloud-layer .seed:nth-of-type(7n+7) { transform: scale(1.1, 0.85) rotate(-8deg); }
 
-	.cloud-layer.back .seed {
-		filter: url(#cloud-back);
-		transform: scale(0.85);
-	}
-	.cloud-layer.mid .seed {
-		filter: url(#cloud-mid);
-		transform: scale(1.0);
-	}
-	.cloud-layer.front .seed {
-		filter: url(#cloud-front);
-		transform: scale(1.15);
-	}
+	/* Cycle through 5 seed variants via nth-of-type. Each variant is a
+	   distinct feTurbulence seed so sibling clouds have unique shapes
+	   instead of reading as a single connected blob. */
+	.cloud-layer.back  .seed:nth-of-type(5n+1) { filter: url(#cloud-back-0); }
+	.cloud-layer.back  .seed:nth-of-type(5n+2) { filter: url(#cloud-back-1); translate: 0 0; }
+	.cloud-layer.back  .seed:nth-of-type(5n+3) { filter: url(#cloud-back-2); }
+	.cloud-layer.back  .seed:nth-of-type(5n+4) { filter: url(#cloud-back-3); }
+	.cloud-layer.back  .seed:nth-of-type(5n)   { filter: url(#cloud-back-4); }
+
+	.cloud-layer.mid   .seed:nth-of-type(5n+1) { filter: url(#cloud-mid-0); }
+	.cloud-layer.mid   .seed:nth-of-type(5n+2) { filter: url(#cloud-mid-1); }
+	.cloud-layer.mid   .seed:nth-of-type(5n+3) { filter: url(#cloud-mid-2); }
+	.cloud-layer.mid   .seed:nth-of-type(5n+4) { filter: url(#cloud-mid-3); }
+	.cloud-layer.mid   .seed:nth-of-type(5n)   { filter: url(#cloud-mid-4); }
+
+	.cloud-layer.front .seed:nth-of-type(5n+1) { filter: url(#cloud-front-0); }
+	.cloud-layer.front .seed:nth-of-type(5n+2) { filter: url(#cloud-front-1); }
+	.cloud-layer.front .seed:nth-of-type(5n+3) { filter: url(#cloud-front-2); }
+	.cloud-layer.front .seed:nth-of-type(5n+4) { filter: url(#cloud-front-3); }
+	.cloud-layer.front .seed:nth-of-type(5n)   { filter: url(#cloud-front-4); }
 
 	@keyframes cloud-drift {
 		from { transform: translate(-15%, -8%); }
