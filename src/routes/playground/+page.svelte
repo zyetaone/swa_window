@@ -14,6 +14,7 @@
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { getSkyState, nightFactor, clamp } from '$lib/utils';
 	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
+	import { landmarksFor } from './lib/landmarks';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	// Local playground config
 	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
@@ -163,15 +164,28 @@
 	const windAngle = $derived(weatherFx.windAngle);
 	const frostAmount = $derived(clamp((pg.altitude - 25000) / 15000, 0, 1));
 
-	// Lens Flare Alignment
-	// When the camera pan naturally aligns with the sun azimuth we trigger an optical flare
+	// ── Lens Flare — tracks sun position on screen ─────────────────────
 	const sunAzimuth = $derived((pg.timeOfDay * 15) % 360);
+
+	// Signed bearing difference: negative = sun left, positive = sun right
+	const sunBearingDiff = $derived.by(() => {
+		return (sunAzimuth - viewBearing + 540) % 360 - 180;
+	});
+
+	// Intensity ramps as sun aligns with camera (within ±40°)
 	const sunAlignment = $derived.by(() => {
 		if (skyState === 'night') return 0;
-		let diff = Math.abs((viewBearing - sunAzimuth) % 360);
-		if (diff > 180) diff = 360 - diff;
-		// Ramp up as diff shrinks from 40 degrees to 0 degrees
-		return clamp(1 - diff / 40, 0, 1);
+		return clamp(1 - Math.abs(sunBearingDiff) / 40, 0, 1);
+	});
+
+	// Sun screen-space position (% from viewport edges):
+	// X: bearing diff → horizontal offset (±40° maps to ±45% of viewport)
+	// Y: sun elevation → vertical (noon=high, dawn/dusk=horizon line)
+	const sunScreenX = $derived(clamp(50 + (sunBearingDiff / 40) * 45, 5, 95));
+	const sunScreenY = $derived.by(() => {
+		const hourAngle = (pg.timeOfDay - 12) * 15;
+		const elevation = Math.cos(hourAngle * Math.PI / 180); // -1..1
+		return clamp(45 - elevation * 30, 10, 70);
 	});
 
 	const bgGradient = $derived.by(() => {
@@ -309,10 +323,8 @@
 			{#if pg.showThreeBillboards && mapRef}
 				<ThreeBillboards
 					map={mapRef}
-					lon={currentLocation.lon}
-					lat={currentLocation.lat}
-					altitude={500}
-					color="#ffd880"
+					locationId={pg.activeLocation}
+					landmarks={landmarksFor(pg.activeLocation).features}
 				/>
 			{/if}
 		</div>
@@ -343,7 +355,7 @@
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
 		<div class="horizon-line" aria-hidden="true"></div>
 
-		<LensFlare {sunAlignment} {skyState} />
+		<LensFlare {sunAlignment} {skyState} sunX={sunScreenX} sunY={sunScreenY} />
 		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
 		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
 		<GlassOverlays bankAngle={motion.bankAngle} />

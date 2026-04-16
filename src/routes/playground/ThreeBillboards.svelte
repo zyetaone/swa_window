@@ -39,7 +39,7 @@
 	};
 	const RANK_SCALE: Record<1 | 2 | 3, number> = { 1: 1.0, 2: 0.65, 3: 0.45 };
 
-	function makeSpriteMaterial(color: string, rank: 1 | 2 | 3): THREE.SpriteMaterial {
+	function makeSpriteMaterial(color: string): THREE.SpriteMaterial {
 		const c = new THREE.Color(color);
 		// Glowing halo — inner bright core, outer fade
 		return new THREE.SpriteMaterial({
@@ -165,7 +165,7 @@
 				const mPerUnit = origin.meterInMercatorCoordinateUnits();
 				const spriteSize = 800 * scale * mPerUnit; // 800m base size × rank scale
 
-				const mat = makeSpriteMaterial(new THREE.Color(color), rank);
+				const mat = makeSpriteMaterial(color);
 				const sprite = new THREE.Sprite(mat);
 				sprite.position.set(origin.x, origin.y, origin.z);
 				sprite.scale.setScalar(spriteSize);
