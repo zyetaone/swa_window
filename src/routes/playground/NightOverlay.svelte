@@ -48,7 +48,6 @@
 	});
 
 	const starsOpacity = $derived(Math.max(0, nightFactor - 0.1));
-	const moonOpacity = $derived(Math.max(0, (nightFactor - 0.3) * 1.5));
 	const shimmerStrength = $derived(1 - Math.abs(nightFactor - 0.5) * 2);
 
 	// ── Lens flare ─────────────────────────────────────────────────────────
@@ -72,9 +71,9 @@
 	const ghostY = $derived(100 - sunScreenY);
 	const streakAngle = $derived((sunScreenX - 50) * 0.15);
 
-	// ── Moon phase ─────────────────────────────────────────────────────────
-	const moonPhaseAngle = $derived((timeOfDay / 24) * 29.5 * Math.PI * 2);
-	const moonPhaseNorm = $derived(Math.abs(Math.sin(moonPhaseAngle)));
+	// ── Moon phase (removed — not part of skybox) ──────────────────────────
+
+	// ── Star rotation — slow drift reflecting earth rotation ───────────────
 	const starsAngle = $derived((timeOfDay * 15) % 360);
 
 	// ── Shooting stars ────────────────────────────────────────────────────
@@ -141,22 +140,6 @@
 	<div class="star-layer star-layer-1"></div>
 	<div class="star-layer star-layer-2"></div>
 	<div class="star-layer star-layer-3"></div>
-</div>
-
-<!-- Moon — position tracks sun azimuth (upper-right at midnight). -->
-<!-- Crescent via clip-path ellipse: phase 0=full (circle), 0.5=new (thin crescent). -->
-	<div
-	class="moon-container"
-	style:opacity={moonOpacity}
-	style:right={12 + (1 - moonPhaseNorm) * 8 + '%'}
-	aria-hidden="true"
->
-	<div class="moon-halo"></div>
-	<!-- Crescent: box-shadow inset creates shadow side. norm=0 (full) → 0% shadow, norm=1 (new) → 45% shadow. -->
-	<div
-		class="moon-disc"
-		style:box-shadow="inset {moonPhaseNorm * 45}% 0 {moonPhaseNorm * 25}% -2px rgba(10,8,5,0.85)"
-	></div>
 </div>
 
 <!-- Shooting stars — trigger randomly, show for ~0.6s then reset -->
@@ -351,72 +334,64 @@
 		mask-image: linear-gradient(180deg, black 0%, black 40%, transparent 58%);
 	}
 
-	/* Three overlapping star layers with different sizes — parallax feel */
-	.star-layer {
-		position: absolute;
-		inset: 0;
-		background-repeat: repeat;
-	}
+	/* Three star layers with color + size variation:
+     - Layer 1: bright white/blue-white, 1.2-1.5px (brighter stars)
+     - Layer 2: mid-tone, 0.8-1px (medium stars) + twinkle animation
+     - Layer 3: dim small, 0.5-0.7px (distant field)
+     Background-size reduced → higher star density per viewport. */
 	.star-layer-1 {
-		background-image: radial-gradient(1px 1px at 20px 30px, #fff, transparent),
-			radial-gradient(1px 1px at 80px 120px, #fff, transparent),
-			radial-gradient(1px 1px at 150px 80px, #fff, transparent),
-			radial-gradient(1px 1px at 200px 220px, rgba(255,255,220,0.9), transparent),
-			radial-gradient(1px 1px at 320px 90px, #fff, transparent),
-			radial-gradient(1px 1px at 400px 200px, #fff, transparent);
-		background-size: 450px 280px;
-		opacity: 0.9;
+		background-image:
+			radial-gradient(1.4px 1.4px at 15px 22px, rgba(255,255,255,1), transparent),
+			radial-gradient(1.2px 1.2px at 48px 90px, rgba(200,220,255,0.95), transparent),
+			radial-gradient(1.5px 1.5px at 95px 45px, rgba(255,255,220,0.9), transparent),
+			radial-gradient(1.3px 1.3px at 140px 160px, rgba(255,255,255,1), transparent),
+			radial-gradient(1.2px 1.2px at 198px 78px, rgba(220,240,255,0.9), transparent),
+			radial-gradient(1.4px 1.4px at 275px 190px, rgba(255,250,230,0.95), transparent),
+			radial-gradient(1.1px 1.1px at 340px 55px, rgba(255,255,255,1), transparent),
+			radial-gradient(1.3px 1.3px at 410px 130px, rgba(200,220,255,0.9), transparent),
+			radial-gradient(1.5px 1.5px at 70px 200px, rgba(255,255,255,1), transparent),
+			radial-gradient(1.2px 1.2px at 180px 280px, rgba(255,240,220,0.9), transparent),
+			radial-gradient(1.4px 1.4px at 300px 260px, rgba(220,230,255,1), transparent),
+			radial-gradient(1.1px 1.1px at 450px 180px, rgba(255,255,255,0.95), transparent);
+		background-size: 480px 320px;
+		opacity: 0.95;
 	}
 	.star-layer-2 {
-		background-image: radial-gradient(0.8px 0.8px at 60px 80px, rgba(220,220,255,0.8), transparent),
-			radial-gradient(0.8px 0.8px at 140px 40px, #fff, transparent),
-			radial-gradient(0.8px 0.8px at 280px 180px, #fff, transparent),
-			radial-gradient(0.8px 0.8px at 390px 60px, rgba(255,240,220,0.8), transparent);
-		background-size: 520px 320px;
-		opacity: 0.6;
+		background-image:
+			radial-gradient(0.9px 0.9px at 32px 55px, rgba(220,230,255,0.85), transparent),
+			radial-gradient(0.8px 0.8px at 88px 130px, rgba(255,255,255,0.9), transparent),
+			radial-gradient(1.0px 1.0px at 155px 38px, rgba(255,250,230,0.85), transparent),
+			radial-gradient(0.9px 0.9px at 240px 175px, rgba(200,220,255,0.9), transparent),
+			radial-gradient(0.8px 0.8px at 315px 95px, rgba(255,255,255,0.9), transparent),
+			radial-gradient(1.0px 1.0px at 390px 220px, rgba(255,240,220,0.85), transparent),
+			radial-gradient(0.9px 0.9px at 460px 48px, rgba(220,240,255,0.9), transparent),
+			radial-gradient(0.8px 0.8px at 55px 260px, rgba(255,255,255,0.85), transparent),
+			radial-gradient(1.0px 1.0px at 130px 300px, rgba(200,220,255,0.9), transparent),
+			radial-gradient(0.9px 0.9px at 350px 160px, rgba(255,250,240,0.85), transparent);
+		background-size: 500px 340px;
+		opacity: 0.7;
 		animation: twinkle 7s ease-in-out infinite alternate;
 	}
 	.star-layer-3 {
-		background-image: radial-gradient(0.6px 0.6px at 30px 60px, rgba(255,255,255,0.5), transparent),
-			radial-gradient(0.6px 0.6px at 220px 140px, rgba(200,220,255,0.5), transparent),
-			radial-gradient(0.6px 0.6px at 380px 40px, #fff, transparent);
-		background-size: 600px 400px;
-		opacity: 0.4;
+		background-image:
+			radial-gradient(0.6px 0.6px at 22px 45px, rgba(255,255,255,0.55), transparent),
+			radial-gradient(0.5px 0.5px at 80px 120px, rgba(200,220,255,0.5), transparent),
+			radial-gradient(0.6px 0.6px at 165px 70px, rgba(255,255,255,0.6), transparent),
+			radial-gradient(0.5px 0.5px at 230px 180px, rgba(255,245,230,0.55), transparent),
+			radial-gradient(0.6px 0.6px at 310px 95px, rgba(200,230,255,0.5), transparent),
+			radial-gradient(0.5px 0.5px at 385px 40px, rgba(255,255,255,0.6), transparent),
+			radial-gradient(0.6px 0.6px at 440px 200px, rgba(255,240,220,0.55), transparent),
+			radial-gradient(0.5px 0.5px at 60px 290px, rgba(220,240,255,0.5), transparent),
+			radial-gradient(0.6px 0.6px at 195px 240px, rgba(255,255,255,0.6), transparent),
+			radial-gradient(0.5px 0.5px at 420px 280px, rgba(200,220,255,0.55), transparent);
+		background-size: 480px 320px;
+		opacity: 0.5;
 		animation: twinkle 5s ease-in-out infinite alternate-reverse;
 	}
 
-	@keyframes twinkle {
+@keyframes twinkle {
 		from { opacity: 0.3; }
 		to   { opacity: 0.7; }
-	}
-
-	.moon-container {
-		/* Moon far away — tiny disc near top of sky (upper 8% of viewport),
-		   small enough to read as 'distant celestial body' not '3000ft object'.
-		   Was 72×72 at 4% top right 18% — made it read as close+low. */
-		position: absolute;
-		top: 6%;
-		right: 12%;
-		width: 44px;
-		height: 44px;
-		pointer-events: none;
-		z-index: 8;
-		transition: opacity 1.5s ease;
-	}
-	.moon-halo {
-		position: absolute;
-		inset: -28px;
-		background: radial-gradient(circle, rgba(244, 241, 229, 0.18) 0%, rgba(244, 241, 229, 0.04) 40%, transparent 65%);
-		border-radius: 50%;
-	}
-	.moon-disc {
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(circle at 35% 30%, #fbfaf3 0%, #eeeade 55%, #d9d5c4 100%);
-		border-radius: 50%;
-		box-shadow:
-			inset -8px -6px 14px rgba(160, 150, 120, 0.35),
-			0 0 16px rgba(244, 241, 229, 0.5);
 	}
 
 	.shimmer {

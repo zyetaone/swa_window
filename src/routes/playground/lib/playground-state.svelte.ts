@@ -16,7 +16,7 @@ export class PlaygroundState {
 	activeLocation = $state<LocationId>('dubai');
 
 	// Environment
-	timeOfDay = $state(12);
+	timeOfDay = $state(22);
 	weather = $state<WeatherType>('clear');
 	maplibreSource = $state<string>('eox-s2');
 

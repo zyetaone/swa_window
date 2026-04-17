@@ -185,6 +185,7 @@
 	// Intensity ramps as sun aligns with camera (within ±40°)
 	const sunAlignment = $derived.by(() => {
 		if (skyState === 'night') return 0;
+		if (pg.weather !== 'clear') return 0; // sun occluded by clouds
 		return clamp(1 - Math.abs(sunBearingDiff) / 40, 0, 1);
 	});
 

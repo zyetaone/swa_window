@@ -37,7 +37,7 @@
 			id="night-overlay-layer"
 			source="night-overlay"
 			paint={{
-				'raster-opacity': nightFactor * 0.82,
+				'raster-opacity': nightFactor * 0.55,
 				'raster-fade-duration': 400,
 				'raster-contrast': 0.2 + nightFactor * 0.6,
 				'raster-brightness-min': nightFactor > 0.5 ? 0.015 : 0.05,
@@ -61,7 +61,7 @@
 			id="night-labels-layer"
 			source="night-labels"
 			paint={{
-				'raster-opacity': nightFactor * 0.28,
+				'raster-opacity': nightFactor * 0.18,
 				'raster-fade-duration': 400,
 				'raster-brightness-min': 0.06,
 				'raster-brightness-max': 1.5 + nightFactor * 0.4,

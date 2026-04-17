@@ -34,7 +34,7 @@
 				'interpolate', ['linear'], ['zoom'],
 				6,  ['match', ['get', 'class'], 'motorway', 1.2, 'trunk', 0.9, 'primary', 0.6, 0.3],
 				10, ['match', ['get', 'class'], 'motorway', 2.5, 'trunk', 2,   'primary', 1.4, 0.8],
-				14, ['match', ['get', 'class'], 'motorway', 5,   'trunk', 4,   'primary', 3,   1.8],
+				14, ['match', ['get', 'class'], 'motorway', 6.5, 'trunk', 5.2, 'primary', 3.9, 2.3],
 			],
 			'line-blur': 0.6,
 			'line-opacity': 0.85,
@@ -122,16 +122,16 @@
 			'circle-radius': [
 				'interpolate', ['linear'], ['zoom'],
 				4, ['case', ['<=', ['get', 'rank'], 3], 2.5, ['<=', ['get', 'rank'], 6], 1.2, 0.6],
-				10, ['case', ['<=', ['get', 'rank'], 3], 6, ['<=', ['get', 'rank'], 6], 3.5, 1.8],
-				14, ['case', ['<=', ['get', 'rank'], 3], 9, ['<=', ['get', 'rank'], 6], 5.5, 3.2],
+				10, ['case', ['<=', ['get', 'rank'], 3], 7.5, ['<=', ['get', 'rank'], 6], 4.4, 2.2],
+				14, ['case', ['<=', ['get', 'rank'], 3], 11.2, ['<=', ['get', 'rank'], 6], 6.9, 4],
 			],
 			'circle-blur': 1.5,
 			// rank-amplified opacity: mega-cities glow harder at night
 			'circle-opacity': [
 				'case',
-				['<=', ['get', 'rank'], 3], nightFactor * 0.85,
-				['<=', ['get', 'rank'], 6], nightFactor * 0.65,
-				nightFactor * 0.45,
+				['<=', ['get', 'rank'], 3], nightFactor * 1.0,
+				['<=', ['get', 'rank'], 6], nightFactor * 0.9,
+				nightFactor * 0.68,
 			],
 		}}
 	/>

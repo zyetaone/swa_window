@@ -16,6 +16,7 @@
 	import BuildingLayer from './layers/BuildingLayer.svelte';
 	import CityLightsLayer from './layers/CityLightsLayer.svelte';
 	import NightMaskLayer from './layers/NightMaskLayer.svelte';
+	import NightLightLayer from './layers/NightLightLayer.svelte';
 	import NightLayers from './layers/NightLayers.svelte';
 	import LandmarkLayer from './layers/LandmarkLayer.svelte';
 
@@ -343,7 +344,8 @@
 		<CityLightsLayer {nightFactor} {showCityLights} />
 	</VectorTileSource>
 
-	<NightMaskLayer {nightFactor} />
+	<NightLightLayer {timeOfDay} {locationId} />
+	<NightMaskLayer {timeOfDay} />
 	<NightLayers {nightFactor} />
 
 	<LandmarkLayer {showLandmarks} {nightFactor} {locationId} />

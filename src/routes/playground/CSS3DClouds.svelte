@@ -18,6 +18,7 @@
 
 import { untrack } from 'svelte';
 import type { WeatherType } from '$lib/types';
+import { WEATHER_EFFECTS } from '$lib/constants';
 
 let {
 	density = 0.75,
@@ -42,6 +43,11 @@ let {
 	edgeColor?: string;
 	skyState?: string;
 } = $props();
+
+// Weather auto-sets minimum cloud density — cloudy=0.7, storm=0.98
+const weatherDensityFloor = $derived(WEATHER_EFFECTS[weather]?.cloudDensityRange?.[0] ?? 0);
+const nightCloudFloor = $derived(WEATHER_EFFECTS[weather]?.nightCloudFloor ?? 0);
+const effectiveDensity = $derived(Math.max(density, weatherDensityFloor));
 
 // ── Cloud generation ─────────────────────────────────────────────────
 
@@ -124,8 +130,8 @@ function createCloud(idx: number, total: number): Cloud {
 	};
 }
 
-const horizonCount = $derived(Math.max(4, Math.round(density * 8)));
-const midCount = $derived(Math.max(3, Math.round(density * 10)));
+const horizonCount = $derived(Math.max(4, Math.round(effectiveDensity * 8)));
+const midCount = $derived(Math.max(3, Math.round(effectiveDensity * 10)));
 
 let clouds = $state<Cloud[]>([]);
 $effect(() => {
@@ -185,7 +191,21 @@ const cloudProximity = $derived.by(() => {
 	if (dist > 12000) return 0.3;
 	return 1.0 - (dist - 4000) / 8000 * 0.7;
 });
-const layerOpacity = $derived(Math.min(1, density * cloudProximity * 1.2));
+const layerOpacity = $derived.by(() => {
+	let d = effectiveDensity;
+	if (nightFactor > 0.5) d = Math.max(d, nightCloudFloor);
+	return Math.min(1, d * cloudProximity * 1.2);
+});
+
+// KEEP: altitudeShift drives cloud-deck vertical position — linter must not strip
+const altitudeShift = $derived.by(() => {
+	const delta = altitude - CLOUD_DECK;
+	if (Math.abs(delta) < 2000) return 0;
+	// Below deck: clouds shift UP (positive = viewport % down, so negative shifts clouds up)
+	// Above deck: clouds shift DOWN (looking down at cloud tops)
+	const shift = -delta / 15000 * 15;
+	return Math.max(-15, Math.min(12, shift));
+});
 
 // Environment-responsive color filter
 const envFilter = $derived.by(() => {
@@ -207,6 +227,8 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 	class="css3d-clouds"
 	style:opacity={layerOpacity}
 	style:filter={envFilter}
+	style:transform="translateY({altitudeShift}%) scale({0.85 + (cloudScale ?? 1) * 0.35})"
+	style:perspective-origin="50% {42 + altitudeShift * 0.3}%"
 	style:--edge-shadow={edgeShadowFilter}
 	aria-hidden="true"
 >
@@ -242,7 +264,6 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 		z-index: 5;
 		overflow: hidden;
 		perspective: 1800px;
-		perspective-origin: 50% 42%;
 		will-change: opacity;
 		transition: opacity 1.5s ease, filter 2.5s ease;
 		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 82%, transparent 100%);
