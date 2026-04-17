@@ -1,4 +1,17 @@
 <script lang="ts">
+	/**
+	 * NightLayers — CSS + raster compositing for night atmosphere.
+	 *
+	 * NOT a mask/bleed system. VIIRS data is conceptually noted but NOT rendered
+	 * as a pixelated raster. Instead, city light placement + intensity is driven
+	 * by CityLightsLayer (OpenFreeMap `place` points with rank-amplified glow)
+	 * and by the CartoDB dark overlay whose lit pixels punch through as city glow.
+	 *
+	 * The raster layers here serve a compositing role only: CartoDB dark_nolabels
+	 * provides the emission basemap at night (streets/labels glow warm via hue-
+	 * rotate), and dark_all labels appear as lit signs at moderate opacity.
+	 */
+
 	import { RasterLayer, RasterTileSource } from 'svelte-maplibre-gl';
 
 	let {
@@ -8,40 +21,12 @@
 	} = $props();
 </script>
 
-<!-- VIIRS Black Marble — NASA's global earth-at-night composite.
-     Rendered BELOW the CartoDB emission layer so bright city regions
-     light up based on real data. Uses a steeper curve: barely visible at
-     twilight (nf=0.5 → 25% opacity), fully dominant at full dark (nf=1).
-     Production GLSL adds warm light on dark terrain — VIIRS approximates
-     where that light should be. -->
-{#if nightFactor > 0.2}
-	<RasterTileSource
-		id="viirs-nightlights"
-		tiles={['https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png']}
-		tileSize={256}
-		maxzoom={8}
-	>
-		<RasterLayer
-			id="viirs-layer"
-			source="viirs-nightlights"
-			paint={{
-				// Steeper curve: nf=0.5 → 0.25, nf=0.8 → 0.64, nf=1.0 → 1.0
-				'raster-opacity': Math.max(0, (nightFactor - 0.2) * (nightFactor > 0.5 ? 1.5 : 0.8)) * 0.9,
-				'raster-fade-duration': 400,
-				'raster-hue-rotate': 20,
-				'raster-saturation': 0.5,
-				'raster-brightness-max': nightFactor * 1.4 + 0.2,
-				'raster-contrast': 0.3 + nightFactor * 0.3,
-			}}
-		/>
-	</RasterTileSource>
-{/if}
-
-<!-- CartoDB dark_nolabels as emission overlay — streets/buildings glow warm.
-     At full night: near-opaque dark overlay whose lit pixels punch through
-     as warm amber city lights. Hue-rotate pushes the neutral basemap
-     toward warm orange, reinforcing the production GLSL city palette. -->
-{#if nightFactor > 0.1}
+<!-- CartoDB dark_nolabels — the emission basemap at night.
+     At full dark: near-opaque dark tile whose lit road/street pixels
+     become the warm amber city glow. Hue-rotate shifts neutral dark
+     toward sodium-orange to match the production GLSL city palette.
+     Brightness-max capped so the overlay darkens rather than brightens. -->
+{#if nightFactor > 0.15}
 	<RasterTileSource
 		id="night-overlay"
 		tiles={['https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png']}
@@ -52,20 +37,20 @@
 			id="night-overlay-layer"
 			source="night-overlay"
 			paint={{
-				'raster-opacity': nightFactor * 0.85,
+				'raster-opacity': nightFactor * 0.82,
 				'raster-fade-duration': 400,
-				'raster-contrast': 0.25 + nightFactor * 0.55,
-				'raster-brightness-min': nightFactor > 0.5 ? 0.02 : 0.06,
-				'raster-brightness-max': 0.9 + nightFactor * 0.8,
-				// Warm shift: 45° at full night, simulates sodium vapor ambient
-				'raster-hue-rotate': nightFactor * 45,
-				'raster-saturation': -0.3 + nightFactor * 0.6,
+				'raster-contrast': 0.2 + nightFactor * 0.6,
+				'raster-brightness-min': nightFactor > 0.5 ? 0.015 : 0.05,
+				'raster-brightness-max': Math.max(0.3, 1.0 - nightFactor * 1.1),
+				// Warm shift: 40° at full night — sodium vapor ambient
+				'raster-hue-rotate': nightFactor * 40,
+				'raster-saturation': -0.35 + nightFactor * 0.65,
 			}}
 		/>
 	</RasterTileSource>
 
-	<!-- Labeled variant on TOP — labels become lit signs at night.
-	     Moderate opacity (max 0.35) so labels don't dominate the scene. -->
+	<!-- Labeled variant on TOP — road names + city labels glow at night.
+	     Moderate opacity so labels act as signage, not a dominating layer. -->
 	<RasterTileSource
 		id="night-labels"
 		tiles={['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png']}
@@ -76,13 +61,13 @@
 			id="night-labels-layer"
 			source="night-labels"
 			paint={{
-				'raster-opacity': nightFactor * 0.32,
+				'raster-opacity': nightFactor * 0.28,
 				'raster-fade-duration': 400,
-				'raster-brightness-min': 0.08,
-				'raster-brightness-max': 1.6 + nightFactor * 0.5,
-				'raster-hue-rotate': 25,
-				'raster-saturation': 0.4,
-				'raster-contrast': 0.3,
+				'raster-brightness-min': 0.06,
+				'raster-brightness-max': 1.5 + nightFactor * 0.4,
+				'raster-hue-rotate': 22,
+				'raster-saturation': 0.35,
+				'raster-contrast': 0.28,
 			}}
 		/>
 	</RasterTileSource>
