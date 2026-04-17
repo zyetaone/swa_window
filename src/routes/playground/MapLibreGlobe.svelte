@@ -169,11 +169,11 @@
 	});
 
 	const nightWaterColor = $derived.by(() => {
-		const pulse = Math.sin(waterTime * 0.3) * 0.5 + 0.5;
-		const a = Math.round(40 + pulse * 20);
-		return `rgba(255, 200, 120, ${(a / 255).toFixed(3)})`;
+		const pulse = Math.sin(waterTime * 0.5) * 0.5 + 0.5;
+		const a = Math.round(55 + pulse * 40);
+		return `rgba(255, 190, 100, ${(a / 255).toFixed(3)})`;
 	});
-	const nightWaterOpacity = $derived(nightFactor * 0.25 + Math.sin(waterTime * 0.5) * 0.04);
+	const nightWaterOpacity = $derived(nightFactor * 0.45 + Math.sin(waterTime * 0.5) * 0.06);
 
 	function hexToRgba(hex: string, alpha: number) {
 		const r = parseInt(hex.slice(1, 3), 16) || 255;

@@ -269,7 +269,7 @@ function handleResize() {
 }
 
 const impl: Omit<maplibregl.CustomLayerInterface, 'id' | 'type'> = {
-	renderingMode: '2d' as const,
+	renderingMode: '2d',
 
 	onAdd(map: maplibregl.Map, gl: WebGLRenderingContext) {
 		mapRef = map;

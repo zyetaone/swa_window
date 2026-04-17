@@ -124,12 +124,27 @@ const altitudeShift = $derived.by(() => {
 	return (altitude - 28000) / 1000;     // gradual shift
 });
 
-// Density gates
-const showCirrus = $derived(density > 0.05);
-const showBack   = $derived(density > 0.1);
-const showMid    = $derived(density > 0.3);
-const showFront  = $derived(density > 0.55);
-const layerOpacity = $derived(Math.min(1, density * 1.1));
+// ── Altitude-responsive cloud experience ─────────────────────────────
+// When the plane is AT the cloud deck altitude (~28k ft), clouds engulf
+// the viewport (near-whiteout). Above or below, they thin out.
+// This creates the "descending through clouds" and "breaking above" feel.
+const CLOUD_DECK = 28000;
+const cloudProximity = $derived.by(() => {
+	const dist = Math.abs(altitude - CLOUD_DECK);
+	// Within ±4k ft of cloud deck = maximum immersion
+	// Beyond ±12k ft = minimal cloud presence
+	if (dist < 4000) return 1.0;
+	if (dist > 12000) return 0.3;
+	return 1.0 - (dist - 4000) / 8000 * 0.7;
+});
+
+// Density gates — modulated by cloud proximity
+const effectiveDensity = $derived(density * cloudProximity);
+const showCirrus = $derived(effectiveDensity > 0.05);
+const showBack   = $derived(effectiveDensity > 0.08);
+const showMid    = $derived(effectiveDensity > 0.2);
+const showFront  = $derived(effectiveDensity > 0.4);
+const layerOpacity = $derived(Math.min(1, effectiveDensity * 1.3));
 
 // ── Production-matched deck transforms (from CloudBlobs.svelte) ──────
 

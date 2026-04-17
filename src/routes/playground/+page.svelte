@@ -167,6 +167,14 @@
 	const windAngle = $derived(weatherFx.windAngle);
 	const frostAmount = $derived(clamp((pg.altitude - 25000) / 15000, 0, 1));
 
+	// Cloud-layer immersion — white fog overlay when flying through the deck.
+	// Proximity to 28k ft cloud deck → 0 (clear) to 0.35 (near-whiteout).
+	const cloudFogOpacity = $derived.by(() => {
+		const dist = Math.abs(pg.altitude - 28000);
+		if (dist > 6000) return 0;
+		return (1 - dist / 6000) * 0.35;
+	});
+
 	// ── Lens Flare — tracks sun position on screen ─────────────────────
 	const sunAzimuth = $derived((pg.timeOfDay * 15) % 360);
 
@@ -381,6 +389,12 @@
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
 		<div class="horizon-line" aria-hidden="true"></div>
 
+		<!-- Cloud-layer fog — white overlay when flying through the cloud deck.
+		     Fades in as altitude approaches 28k ft, max 35% opacity. -->
+		{#if cloudFogOpacity > 0.01}
+			<div class="cloud-fog" style:opacity={cloudFogOpacity} aria-hidden="true"></div>
+		{/if}
+
 		<LensFlare {sunAlignment} {skyState} sunX={sunScreenX} sunY={sunScreenY} />
 		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
 		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
@@ -457,6 +471,21 @@
 		/* Smooth the 60 Hz turbulence + breathing RAF updates. 60ms = ~1 frame
 		   at 60fps — enough to damp micro-jitter without perceptable lag. */
 		transition: transform 60ms linear;
+	}
+
+	/* Cloud-layer fog — white whiteout when flying through cloud deck */
+	.cloud-fog {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 6;
+		background: radial-gradient(ellipse 120% 100% at 50% 40%,
+			rgba(255, 255, 255, 0.95) 0%,
+			rgba(240, 245, 255, 0.85) 40%,
+			rgba(220, 230, 245, 0.6) 70%,
+			rgba(200, 215, 235, 0.3) 100%
+		);
+		transition: opacity 1.5s ease;
 	}
 
 	.horizon-line {
