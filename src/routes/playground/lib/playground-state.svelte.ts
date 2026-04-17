@@ -21,7 +21,7 @@ export class PlaygroundState {
 	maplibreSource = $state<string>('eox-s2');
 
 	// Rendering flags
-	mlTerrain = $state(false); // off by default — terrain tile loading (mapterhorn) is CPU-heavy + triggers CSP
+	mlTerrain = $state(true);
 	mlBuildings = $state(true);
 	mlAtmosphere = $state(true);
 	showCityLights = $state(true);

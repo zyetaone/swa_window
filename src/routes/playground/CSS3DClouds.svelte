@@ -102,10 +102,10 @@ function createHorizonCloud(): Cloud {
 	const textures = textureSets[weather] ?? textureSets.clear;
 	return {
 		x: rand(-30, 130),
-		y: rand(8, 22),          // horizon band only
-		z: rand(-700, -300),     // far back — small parallax
-		vx: rand(0.8, 2.5),     // slow drift (distant)
-		baseScale: rand(1.2, 2.2), // LARGE — stretched wide
+		y: rand(6, 20),             // horizon band — very top
+		z: rand(-1400, -600),       // MUCH further back — perspective shrinks them at horizon
+		vx: rand(0.5, 1.8),        // very slow drift (distant)
+		baseScale: rand(1.5, 2.8), // extra large to compensate for perspective shrink
 		sprites: createSprites(10 + Math.floor(Math.random() * 6), textures),
 	};
 }
@@ -241,7 +241,7 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 		pointer-events: none;
 		z-index: 5;
 		overflow: hidden;
-		perspective: 900px;
+		perspective: 1800px;
 		perspective-origin: 50% 42%;
 		will-change: opacity;
 		transition: opacity 1.5s ease, filter 2.5s ease;
