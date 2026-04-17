@@ -3,17 +3,17 @@
  * CSS3DClouds — Volumetric clouds via stacked PNG sprites in CSS 3D space.
  *
  * Technique: Jaume Sánchez (spite) — https://www.clicktorelease.com/code/css3dclouds/
- * Adapted for airplane window passenger view.
+ * Adapted for airplane window passenger view with environment color integration.
  *
- * Each cloud = 1 cloudBase div + 6-12 semi-transparent PNG <img> sprites
- * stacked at slightly different Z-depths with random rotation/scale.
- * Multiple overlapping alpha-blended sprites create volumetric appearance.
+ * Each cloud = 1 cloudBase div + 8-14 semi-transparent PNG <img> sprites
+ * stacked at different Z-depths. Multiple overlapping alpha-blended sprites
+ * create volumetric appearance. 100% GPU-composited CSS transforms.
  *
- * 100% GPU-composited CSS transforms — no SVG filters, no WebGL, no canvas.
- * Lightest possible CPU load. Perfect for Pi 5 24/7.
- *
- * Billboard trick: each sprite counter-rotates to face the camera, creating
- * real parallax depth as the heading/pitch changes.
+ * Environment integration:
+ * - Edge glow picks up sky/horizon color via CSS drop-shadow
+ * - Gray undersides via per-sprite brightness (bottom sprites darker)
+ * - Night tint via CSS filter on container
+ * - Weather-responsive texture selection (clear=white, storm=dark+smoke)
  */
 
 import { untrack } from 'svelte';
@@ -27,6 +27,10 @@ let {
 	altitude = 30000,
 	weather = 'clear' as WeatherType,
 	cloudScale = 1.0,
+	/** Environment edge color — tints cloud edges to match sky/horizon */
+	edgeColor = 'rgba(180, 200, 230, 0.3)',
+	/** Sky state for color grading */
+	skyState = 'day' as string,
 }: {
 	density?: number;
 	speed?: number;
@@ -35,52 +39,58 @@ let {
 	altitude?: number;
 	weather?: WeatherType;
 	cloudScale?: number;
+	edgeColor?: string;
+	skyState?: string;
 } = $props();
 
 // ── Cloud generation ─────────────────────────────────────────────────
 
 interface CloudSprite {
-	x: number;      // px offset from cloud center
-	y: number;
-	z: number;      // depth offset within cloud
-	rot: number;    // rotateZ degrees — slowly animates
+	x: number;       // vw offset from cloud center
+	y: number;       // vw offset
+	z: number;       // px depth within cloud
+	rot: number;     // rotateZ degrees — slowly animates
 	scale: number;
-	speed: number;  // rotation speed (deg/frame)
+	speed: number;   // rotation speed
 	texture: string;
 	opacity: number;
+	brightness: number; // 0.6 (bottom/shadow) to 1.0 (top/sunlit)
 }
 
 interface Cloud {
-	x: number;      // % position on screen
+	x: number;       // % position on screen
 	y: number;
-	z: number;      // translateZ for parallax depth
-	vx: number;     // horizontal drift speed (%/s)
+	z: number;       // translateZ for parallax depth
+	vx: number;      // horizontal drift speed (%/s)
+	baseScale: number; // overall cloud size multiplier
 	sprites: CloudSprite[];
 }
 
-// Texture selection based on weather
-const textureSets = {
+const textureSets: Record<string, readonly string[]> = {
 	clear: ['/cloud.png'],
 	cloudy: ['/cloud.png', '/cloud.png'],
 	rain: ['/cloud.png', '/cloud-dark.png'],
 	overcast: ['/cloud-dark.png', '/cloud-smoke.png'],
 	storm: ['/cloud-dark.png', '/cloud-smoke.png'],
-} as const;
+};
 
 function rand(min: number, max: number) { return min + Math.random() * (max - min); }
 
 function createSprites(count: number, textures: readonly string[]): CloudSprite[] {
 	const sprites: CloudSprite[] = [];
 	for (let i = 0; i < count; i++) {
+		const y = rand(-5, 5);
 		sprites.push({
-			x: rand(-60, 60),
-			y: rand(-40, 40),
-			z: rand(-80, 80),
+			x: rand(-8, 8),          // vw units — relative to viewport
+			y,
+			z: rand(-100, 100),
 			rot: rand(0, 360),
-			scale: rand(0.4, 1.2),
-			speed: rand(0.02, 0.12),
+			scale: rand(0.5, 1.4),
+			speed: rand(0.015, 0.08),
 			texture: textures[Math.floor(Math.random() * textures.length)],
-			opacity: rand(0.5, 0.9),
+			opacity: rand(0.55, 0.92),
+			// Bottom sprites darker (gray underside), top sprites bright (sunlit)
+			brightness: 0.7 + (y + 5) / 10 * 0.35,
 		});
 	}
 	return sprites;
@@ -88,25 +98,23 @@ function createSprites(count: number, textures: readonly string[]): CloudSprite[
 
 function createCloud(idx: number, total: number): Cloud {
 	const textures = textureSets[weather] ?? textureSets.clear;
-	// Distribute clouds vertically: more at horizon (20-45%), fewer below
-	const yBand = idx < total * 0.6 ? rand(15, 45) : rand(45, 80);
+	// Cloud deck composition: dense band at horizon (15-45%), sparse below
+	const yBand = idx < total * 0.55 ? rand(12, 42) : rand(42, 78);
 	return {
-		x: rand(-15, 115),
+		x: rand(-20, 120),
 		y: yBand,
-		z: rand(-600, -100),     // far = more parallax
-		vx: rand(2, 8),          // %/s drift speed
-		sprites: createSprites(6 + Math.floor(Math.random() * 7), textures),
+		z: rand(-500, -80),
+		vx: rand(1.5, 6),
+		baseScale: rand(0.7, 1.5),
+		sprites: createSprites(8 + Math.floor(Math.random() * 7), textures),
 	};
 }
 
-// Cloud count scales with density
-const cloudCount = $derived(Math.max(3, Math.round(density * 12)));
+const cloudCount = $derived(Math.max(4, Math.round(density * 14)));
 
-// Initialize cloud pool
 let clouds = $state<Cloud[]>([]);
 $effect(() => {
 	const count = cloudCount;
-	// Re-create pool when density or weather type changes
 	void weather;
 	clouds = Array.from({ length: count }, (_, i) => createCloud(i, count));
 });
@@ -125,23 +133,22 @@ $effect(() => {
 			const dir = Math.abs(drift) > 0.15 ? drift : (drift >= 0 ? 0.2 : -0.2);
 
 			for (const cloud of clouds) {
-				// Horizontal drift
 				cloud.x += cloud.vx * dt * speed * dir;
 
-				// Wrap at edges — respawn with new properties
-				if (cloud.x > 125) {
-					cloud.x = rand(-25, -15);
-					cloud.y = rand(15, 75);
-					cloud.z = rand(-600, -100);
-					cloud.vx = rand(2, 8);
-				} else if (cloud.x < -25) {
-					cloud.x = rand(115, 125);
-					cloud.y = rand(15, 75);
-					cloud.z = rand(-600, -100);
-					cloud.vx = rand(2, 8);
+				if (cloud.x > 130) {
+					cloud.x = rand(-30, -18);
+					cloud.y = rand(12, 75);
+					cloud.z = rand(-500, -80);
+					cloud.vx = rand(1.5, 6);
+					cloud.baseScale = rand(0.7, 1.5);
+				} else if (cloud.x < -30) {
+					cloud.x = rand(118, 130);
+					cloud.y = rand(12, 75);
+					cloud.z = rand(-500, -80);
+					cloud.vx = rand(1.5, 6);
+					cloud.baseScale = rand(0.7, 1.5);
 				}
 
-				// Sprites slowly rotate for organic morphing
 				for (const s of cloud.sprites) {
 					s.rot += s.speed * speed;
 				}
@@ -154,7 +161,7 @@ $effect(() => {
 	return () => cancelAnimationFrame(raf);
 });
 
-// ── Altitude-responsive ──────────────────────────────────────────────
+// ── Altitude + environment ───────────────────────────────────────────
 const CLOUD_DECK = 28000;
 const cloudProximity = $derived.by(() => {
 	const dist = Math.abs(altitude - CLOUD_DECK);
@@ -164,21 +171,27 @@ const cloudProximity = $derived.by(() => {
 });
 const layerOpacity = $derived(Math.min(1, density * cloudProximity * 1.2));
 
-// Night tint
-const tintFilter = $derived.by(() => {
-	if (nightFactor > 0.5) return 'brightness(0.4) saturate(0.5) hue-rotate(200deg)';
-	if (nightFactor > 0.2) return `brightness(${1 - nightFactor * 0.6}) saturate(${1 - nightFactor * 0.3})`;
+// Environment-responsive color filter
+const envFilter = $derived.by(() => {
+	if (nightFactor > 0.6) return 'brightness(0.35) saturate(0.4) hue-rotate(210deg)';
+	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.5}) saturate(${1 - nightFactor * 0.25}) hue-rotate(${nightFactor * 30}deg)`;
+	if (skyState === 'dawn') return 'brightness(1.05) saturate(1.1) sepia(0.15)';
+	if (skyState === 'dusk') return 'brightness(0.9) saturate(1.2) sepia(0.2) hue-rotate(-10deg)';
 	return 'none';
 });
 
-// Scale multiplier from cloudScale prop
-const sizeMultiplier = $derived(180 * cloudScale);
+// Sprite size in vw — scales with cloudScale prop AND individual cloud baseScale
+const baseSpriteVw = $derived(18 * cloudScale);
+
+// Environment edge shadow — CSS drop-shadow tints sprite edges with sky color
+const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 </script>
 
 <div
 	class="css3d-clouds"
 	style:opacity={layerOpacity}
-	style:filter={tintFilter}
+	style:filter={envFilter}
+	style:--edge-shadow={edgeShadowFilter}
 	aria-hidden="true"
 >
 	{#each clouds as cloud, ci (ci)}
@@ -193,10 +206,11 @@ const sizeMultiplier = $derived(180 * cloudScale);
 					class="cloud-sprite"
 					src={s.texture}
 					alt=""
-					width={sizeMultiplier}
-					height={sizeMultiplier}
-					style:transform="translateX({s.x}px) translateY({s.y}px) translateZ({s.z}px) rotateZ({s.rot}deg) scale({s.scale})"
+					style:width="{baseSpriteVw * cloud.baseScale * s.scale}vw"
+					style:height="{baseSpriteVw * cloud.baseScale * s.scale}vw"
+					style:transform="translate({s.x}vw, {s.y}vw) translateZ({s.z}px) rotateZ({s.rot}deg)"
 					style:opacity={s.opacity}
+					style:filter="brightness({s.brightness}) var(--edge-shadow)"
 					loading="lazy"
 				/>
 			{/each}
@@ -211,34 +225,32 @@ const sizeMultiplier = $derived(180 * cloudScale);
 		pointer-events: none;
 		z-index: 5;
 		overflow: hidden;
-		/* 3D perspective — clouds at different Z feel at different depths */
-		perspective: 800px;
-		perspective-origin: 50% 45%;
+		perspective: 900px;
+		perspective-origin: 50% 42%;
 		will-change: opacity;
-		transition: opacity 1.5s ease, filter 2s ease;
-		/* Gradient mask — fade at top and bottom edges */
-		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 80%, transparent 100%);
-		mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 80%, transparent 100%);
+		transition: opacity 1.5s ease, filter 2.5s ease;
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 82%, transparent 100%);
+		mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 82%, transparent 100%);
 	}
 
 	.cloud-base {
 		position: absolute;
 		width: 0;
 		height: 0;
-		/* preserve-3d so child sprites exist in 3D space */
 		transform-style: preserve-3d;
 	}
 
 	.cloud-sprite {
 		position: absolute;
-		/* Center the sprite on the cloud base point */
 		transform-origin: center;
+		/* Center on cloud base */
 		margin-left: -50%;
 		margin-top: -50%;
-		/* GPU-composited — no CPU paint */
 		will-change: transform;
-		/* Soft blending of overlapping sprites */
+		/* Screen blend: overlapping sprites add brightness naturally */
 		mix-blend-mode: screen;
+		/* Smooth the per-frame rotation updates */
+		transition: filter 2s ease;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

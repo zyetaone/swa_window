@@ -364,6 +364,8 @@
 				nightFactor={nf}
 				weather={pg.weather}
 				cloudScale={pg.cloudScale ?? 1.0}
+				{skyState}
+				edgeColor={skyState === 'night' ? 'rgba(60,80,140,0.25)' : skyState === 'dawn' ? 'rgba(255,170,80,0.3)' : skyState === 'dusk' ? 'rgba(220,120,80,0.3)' : 'rgba(180,210,240,0.2)'}
 			/>
 		{:else if pg.cloudRenderer === 'maplibre'}
 			<!-- Clouds rendered inside MapLibre's GL pipeline via CloudShaderLayer -->
