@@ -96,27 +96,43 @@ function createSprites(count: number, textures: readonly string[]): CloudSprite[
 	return sprites;
 }
 
+// Horizon clouds — dense, wide, flat band at the far horizon (8-22%).
+// These form the continuous cloud deck that terrain fades into.
+function createHorizonCloud(): Cloud {
+	const textures = textureSets[weather] ?? textureSets.clear;
+	return {
+		x: rand(-30, 130),
+		y: rand(8, 22),          // horizon band only
+		z: rand(-700, -300),     // far back — small parallax
+		vx: rand(0.8, 2.5),     // slow drift (distant)
+		baseScale: rand(1.2, 2.2), // LARGE — stretched wide
+		sprites: createSprites(10 + Math.floor(Math.random() * 6), textures),
+	};
+}
+
+// Mid/foreground clouds — scattered below the horizon deck.
 function createCloud(idx: number, total: number): Cloud {
 	const textures = textureSets[weather] ?? textureSets.clear;
-	// Cloud deck composition: dense band at horizon (15-45%), sparse below
-	const yBand = idx < total * 0.55 ? rand(12, 42) : rand(42, 78);
+	const yBand = idx < total * 0.5 ? rand(25, 50) : rand(50, 82);
 	return {
 		x: rand(-20, 120),
 		y: yBand,
-		z: rand(-500, -80),
-		vx: rand(1.5, 6),
+		z: rand(-400, -60),
+		vx: rand(2, 7),
 		baseScale: rand(0.7, 1.5),
 		sprites: createSprites(8 + Math.floor(Math.random() * 7), textures),
 	};
 }
 
-const cloudCount = $derived(Math.max(4, Math.round(density * 14)));
+const horizonCount = $derived(Math.max(4, Math.round(density * 8)));
+const midCount = $derived(Math.max(3, Math.round(density * 10)));
 
 let clouds = $state<Cloud[]>([]);
 $effect(() => {
-	const count = cloudCount;
 	void weather;
-	clouds = Array.from({ length: count }, (_, i) => createCloud(i, count));
+	const horizon = Array.from({ length: horizonCount }, () => createHorizonCloud());
+	const mid = Array.from({ length: midCount }, (_, i) => createCloud(i, midCount));
+	clouds = [...horizon, ...mid];
 });
 
 // ── Animation loop ───────────────────────────────────────────────────

@@ -15,6 +15,7 @@
 	import WaterLayer from './layers/WaterLayer.svelte';
 	import BuildingLayer from './layers/BuildingLayer.svelte';
 	import CityLightsLayer from './layers/CityLightsLayer.svelte';
+	import NightMaskLayer from './layers/NightMaskLayer.svelte';
 	import NightLayers from './layers/NightLayers.svelte';
 	import LandmarkLayer from './layers/LandmarkLayer.svelte';
 
@@ -67,7 +68,6 @@
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
-		cloudScale?: number;
 		mapRef?: maplibregl.Map | undefined;
 	} = $props();
 
@@ -343,6 +343,7 @@
 		<CityLightsLayer {nightFactor} {showCityLights} />
 	</VectorTileSource>
 
+	<NightMaskLayer {nightFactor} />
 	<NightLayers {nightFactor} />
 
 	<LandmarkLayer {showLandmarks} {nightFactor} {locationId} />
