@@ -274,8 +274,9 @@
 		VOYAGER_STYLE
 	);
 
-	const baseBrightness = $derived(1.0 - (nightFactor * 0.85));
-	const baseSaturation = $derived(1.0 - (nightFactor * 0.75));
+	const baseBrightness = $derived(1.0 - (nightFactor * 0.92));
+	const baseSaturation = $derived(1.0 - (nightFactor * 0.82));
+	const baseContrast = $derived(1.0 + nightFactor * 0.6);
 
 	$effect(() => {
 		if (!mapRef) return;
@@ -284,7 +285,9 @@
 			try {
 				if (m.getLayer('sat-imagery')) {
 					m.setPaintProperty('sat-imagery', 'raster-brightness-max', baseBrightness);
+					m.setPaintProperty('sat-imagery', 'raster-brightness-min', nightFactor > 0.5 ? 0.02 : 0.08);
 					m.setPaintProperty('sat-imagery', 'raster-saturation', baseSaturation - 1);
+					m.setPaintProperty('sat-imagery', 'raster-contrast', baseContrast - 1);
 				}
 			} catch(e) {
 				console.warn('Failed to apply night filters to base layer', e);

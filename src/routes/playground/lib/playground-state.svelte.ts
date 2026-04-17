@@ -31,7 +31,7 @@ export class PlaygroundState {
 	cloudRenderer = $state<'maplibre' | 'webgl' | 'svg' | 'css'>('svg');
 
 	// Cloud mechanics
-	density = $state(0.6);
+	density = $state(0.75);
 	cloudSpeed = $state(1.0);
 	cloudScale = $state(1.0);
 	cloudSpread = $state(1.0);

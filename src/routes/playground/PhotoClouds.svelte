@@ -171,27 +171,27 @@ const SPECS: Record<string, LayerSpec> = {
 		filterPrefix: 'cloud-cirrus', filterCount: 4,
 	},
 	back: {
-		count: 8, yRange: [10, 40], yBias: 1.2,
+		count: 14, yRange: [8, 42], yBias: 1.2,     // more clouds for denser coverage
 		zBase: -500, zVar: 100, zOsc: 15,
-		speedBase: 3.5, speedVar: 0.7,
-		widthRange: [30, 55], aspectRange: [3.5, 6],
-		opacityRange: [0.35, 0.6],
+		speedBase: 3.0, speedVar: 0.5,               // slower + tighter variance = smooth
+		widthRange: [30, 60], aspectRange: [3.5, 6],
+		opacityRange: [0.45, 0.72],                   // boosted opacity
 		filterPrefix: 'cloud-back', filterCount: 5,
 	},
 	mid: {
-		count: 4, yRange: [38, 62], yBias: 1.0,
+		count: 6, yRange: [36, 64], yBias: 1.0,
 		zBase: -200, zVar: 60, zOsc: 20,
-		speedBase: 10, speedVar: 3,
-		widthRange: [25, 45], aspectRange: [3, 5],
-		opacityRange: [0.2, 0.45],
+		speedBase: 8, speedVar: 2,                    // smoother mid drift
+		widthRange: [28, 48], aspectRange: [3, 5],
+		opacityRange: [0.3, 0.55],
 		filterPrefix: 'cloud-mid', filterCount: 5,
 	},
 	front: {
-		count: 2, yRange: [60, 85], yBias: 1.0,
+		count: 3, yRange: [60, 86], yBias: 1.0,
 		zBase: 0, zVar: 30, zOsc: 25,
-		speedBase: 25, speedVar: 8,
+		speedBase: 20, speedVar: 5,
 		widthRange: [35, 60], aspectRange: [3, 5],
-		opacityRange: [0.15, 0.35],
+		opacityRange: [0.2, 0.42],
 		filterPrefix: 'cloud-front', filterCount: 5,
 	},
 };
@@ -464,7 +464,7 @@ interface PoolArrays {
 	     below 18k = clouds above you, above 38k = clouds below you. -->
 	<div
 		class="cloud-deck"
-		style:transform="skewY({windSkew}deg) translateY({altitudeShift}%) rotate({bankAngle * 0.3}deg)"
+		style:transform="skewY({windSkew * 0.3}deg) translateY({altitudeShift}%) rotate({bankAngle * 0.08}deg)"
 		style:bottom="{deckY}%"
 	>
 		{#if showCirrus}
@@ -567,8 +567,8 @@ interface PoolArrays {
 		inset: 0;
 		transform-style: preserve-3d;
 		transform-origin: 50% 45%;
-		/* Smooth bank + wind skew transitions; 80ms ≈ 1 frame so no perceptible lag */
-		transition: transform 80ms linear;
+		/* Smooth transitions — clouds don't jitter, they drift gracefully */
+		transition: transform 400ms ease-out;
 	}
 
 	.layer {
