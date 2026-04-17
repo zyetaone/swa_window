@@ -23,8 +23,6 @@
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
 	import ThreeBillboards from './ThreeBillboards.svelte';
-	import PhotoClouds from './PhotoClouds.svelte';
-	import WebGLClouds from './WebGLClouds.svelte';
 	import CSS3DClouds from './CSS3DClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
@@ -337,14 +335,6 @@
 				terrainExaggeration={1.5}
 				lodMaxZoomLevels={pg.lodMaxZoomLevels}
 				lodTileCountRatio={pg.lodTileCountRatio}
-				showClouds={pg.cloudRenderer === 'maplibre'}
-				cloudDensity={pg.density}
-				cloudSpeed={pg.cloudSpeed}
-				cloudHeading={pg.heading}
-				cloudNightFactor={nf}
-				cloudAltitude={pg.altitude}
-				cloudWeather={pg.weather}
-				cloudScale={pg.cloudScale ?? 1.0}
 			/>
 			{#if pg.showThreeBillboards && mapRef}
 				<ThreeBillboards
@@ -366,31 +356,6 @@
 				cloudScale={pg.cloudScale ?? 1.0}
 				{skyState}
 				edgeColor={skyState === 'night' ? 'rgba(60,80,140,0.25)' : skyState === 'dawn' ? 'rgba(255,170,80,0.3)' : skyState === 'dusk' ? 'rgba(220,120,80,0.3)' : 'rgba(180,210,240,0.2)'}
-			/>
-		{:else if pg.cloudRenderer === 'maplibre'}
-			<!-- Clouds rendered inside MapLibre's GL pipeline via CloudShaderLayer -->
-		{:else if pg.cloudRenderer === 'webgl'}
-			<WebGLClouds
-				density={pg.density}
-				speed={pg.cloudSpeed}
-				heading={pg.heading}
-				altitude={pg.altitude}
-				nightFactor={nf}
-				weather={pg.weather}
-				cloudScale={pg.cloudScale ?? 1.0}
-			/>
-		{:else if pg.cloudRenderer === 'svg'}
-			<PhotoClouds
-				density={pg.density}
-				speed={pg.cloudSpeed}
-				heading={pg.heading}
-				altitude={pg.altitude}
-				{windAngle}
-				nightFactor={nf}
-				weather={pg.weather}
-				cloudScale={pg.cloudScale ?? 1.0}
-				cloudSpread={pg.cloudSpread ?? 1.0}
-				bankAngle={motion.bankAngle}
 			/>
 		{:else}
 			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />

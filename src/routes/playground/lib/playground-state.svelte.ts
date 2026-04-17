@@ -27,8 +27,8 @@ export class PlaygroundState {
 	showCityLights = $state(true);
 	showLandmarks = $state(true);
 	showThreeBillboards = $state(false);
-	/** Cloud renderer: 'css3d' (PNG sprites, GPU-composited), 'svg' (feTurbulence), 'maplibre' (GL CustomLayer), 'webgl' (canvas), 'css' (prod) */
-	cloudRenderer = $state<'css3d' | 'maplibre' | 'webgl' | 'svg' | 'css'>('css3d');
+	/** Cloud renderer: 'css3d' (volumetric PNG sprites) or 'css' (prod CloudBlobs fallback) */
+	cloudRenderer = $state<'css3d' | 'css'>('css3d');
 
 	// Cloud mechanics
 	density = $state(0.75);

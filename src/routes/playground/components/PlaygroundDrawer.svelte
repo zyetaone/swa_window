@@ -95,10 +95,7 @@
 		<label>Renderer
 			<select bind:value={pg.cloudRenderer}>
 				<option value="css3d">CSS 3D Sprites (volumetric)</option>
-				<option value="svg">SVG feTurbulence (detailed)</option>
-				<option value="maplibre">MapLibre GL (integrated)</option>
-				<option value="webgl">WebGL canvas (Pi fallback)</option>
-				<option value="css">CSS CloudBlobs (prod)</option>
+				<option value="css">CSS CloudBlobs (prod fallback)</option>
 			</select>
 		</label>
 		<label>Density <span class="val">{(pg.density * 100).toFixed(0)}%</span>
