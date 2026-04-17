@@ -34,6 +34,19 @@
 		}
 	});
 
+	// ── Dark void crush — vignette that darkens terrain edges at night.
+	//    Production shader: terrain dimmed 30% at night. This CSS radial
+	//    gradient creates a similar "city light swallowed by darkness" feel.
+	const voidOpacity = $derived(Math.max(0, (nightFactor - 0.25) * 0.45));
+
+	// ── Dawn/dusk rim light — warm wash on the left frame edge during
+	//    transition hours. Production shader's directional rim light.
+	const rimOpacity = $derived.by(() => {
+		if (skyState === 'dawn') return Math.min(1, nightFactor * 1.2) * 0.25;
+		if (skyState === 'dusk') return Math.min(1, nightFactor * 1.2) * 0.25;
+		return 0;
+	});
+
 	const starsOpacity = $derived(Math.max(0, nightFactor - 0.1));
 	const moonOpacity = $derived(Math.max(0, (nightFactor - 0.3) * 1.5));
 	const shimmerStrength = $derived(1 - Math.abs(nightFactor - 0.5) * 2);
@@ -95,6 +108,17 @@
      Matches prod atmosphere/haze/effect.svelte: dawn=warm amber, night=deep navy,
      day=cool atmospheric blue. Softens LOD seams + unifies color grade. -->
 <div class="haze" style:background={hazeGradient} aria-hidden="true"></div>
+
+<!-- Dark void crush — radial vignette darkening terrain edges at night.
+     Production shader: terrain dimmed 30% at night. Creates the "city lights
+     swallowed by darkness" feel — the world fades to black at the edges. -->
+<div class="void-crush" style:opacity={voidOpacity} aria-hidden="true"></div>
+
+<!-- Dawn/dusk rim light — warm wash on the left frame edge during transition.
+     Production shader's directional rim light: left-frame warm wash at dawn/dusk. -->
+{#if rimOpacity > 0.01}
+	<div class="rim-light" style:opacity={rimOpacity} aria-hidden="true"></div>
+{/if}
 
 <!-- Lens flare — sun-tracking optical flare (ghost ring, halo, streak).
      Ghost is mirrored through viewport center (lens optics). -->
@@ -195,6 +219,36 @@
 		z-index: 4;
 		mix-blend-mode: screen;
 		transition: background 2s ease;
+	}
+
+	/* ── Dark void crush — radial vignette darkening edges at night ─── */
+	.void-crush {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 3;
+		background: radial-gradient(ellipse 80% 70% at 50% 50%,
+			transparent 35%,
+			rgba(5, 8, 20, 0.5) 70%,
+			rgba(2, 4, 12, 0.75) 100%
+		);
+		mix-blend-mode: multiply;
+		transition: opacity 2s ease;
+	}
+
+	/* ── Dawn/dusk rim light — left-edge warm wash ─────────────────── */
+	.rim-light {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 5;
+		background: linear-gradient(90deg,
+			rgba(255, 160, 80, 0.35) 0%,
+			rgba(255, 140, 60, 0.12) 15%,
+			transparent 40%
+		);
+		mix-blend-mode: screen;
+		transition: opacity 2s ease;
 	}
 
 	/* ── Lens flare ─────────────────────────────────────────────────── */

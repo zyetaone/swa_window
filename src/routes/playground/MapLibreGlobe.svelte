@@ -16,7 +16,9 @@
 	import BuildingLayer from './layers/BuildingLayer.svelte';
 	import CityLightsLayer from './layers/CityLightsLayer.svelte';
 	import NightLayers from './layers/NightLayers.svelte';
+	import CloudShaderLayer from './layers/CloudShaderLayer.svelte';
 	import LandmarkLayer from './layers/LandmarkLayer.svelte';
+	import type { WeatherType } from '$lib/types';
 
 	let {
 		lat = 25.2,
@@ -43,6 +45,14 @@
 		terrainExaggeration = 1.5,
 		lodMaxZoomLevels = 6,
 		lodTileCountRatio = 2.0,
+		showClouds = false,
+		cloudDensity = 0.6,
+		cloudSpeed = 1.0,
+		cloudHeading = 90,
+		cloudNightFactor = 0,
+		cloudAltitude = 30000,
+		cloudWeather = 'clear' as WeatherType,
+		cloudScale = 1.0,
 		mapRef = $bindable<maplibregl.Map | undefined>(undefined),
 	}: {
 		lat?: number;
@@ -69,6 +79,14 @@
 		terrainExaggeration?: number;
 		lodMaxZoomLevels?: number;
 		lodTileCountRatio?: number;
+		showClouds?: boolean;
+		cloudDensity?: number;
+		cloudSpeed?: number;
+		cloudHeading?: number;
+		cloudNightFactor?: number;
+		cloudAltitude?: number;
+		cloudWeather?: WeatherType;
+		cloudScale?: number;
 		mapRef?: maplibregl.Map | undefined;
 	} = $props();
 
@@ -338,6 +356,18 @@
 	</VectorTileSource>
 
 	<NightLayers {nightFactor} />
+
+	{#if showClouds}
+		<CloudShaderLayer
+			density={cloudDensity}
+			speed={cloudSpeed}
+			heading={cloudHeading}
+			nightFactor={cloudNightFactor}
+			altitude={cloudAltitude}
+			weather={cloudWeather}
+			cloudScale={cloudScale}
+		/>
+	{/if}
 
 	<LandmarkLayer {showLandmarks} {nightFactor} {locationId} />
 </MapLibre>

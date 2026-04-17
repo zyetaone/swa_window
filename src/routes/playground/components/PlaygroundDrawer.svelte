@@ -94,6 +94,7 @@
 		<legend>Clouds</legend>
 		<label>Renderer
 			<select bind:value={pg.cloudRenderer}>
+				<option value="maplibre">MapLibre GL (GPU, integrated)</option>
 				<option value="webgl">WebGL (GPU, Pi-optimized)</option>
 				<option value="svg">SVG feTurbulence (CPU)</option>
 				<option value="css">CSS CloudBlobs (prod)</option>

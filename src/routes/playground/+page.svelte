@@ -329,6 +329,14 @@
 				terrainExaggeration={1.5}
 				lodMaxZoomLevels={pg.lodMaxZoomLevels}
 				lodTileCountRatio={pg.lodTileCountRatio}
+				showClouds={pg.cloudRenderer === 'maplibre'}
+				cloudDensity={pg.density}
+				cloudSpeed={pg.cloudSpeed}
+				cloudHeading={pg.heading}
+				cloudNightFactor={nf}
+				cloudAltitude={pg.altitude}
+				cloudWeather={pg.weather}
+				cloudScale={pg.cloudScale ?? 1.0}
 			/>
 			{#if pg.showThreeBillboards && mapRef}
 				<ThreeBillboards
@@ -339,7 +347,9 @@
 			{/if}
 		</div>
 
-		{#if pg.cloudRenderer === 'webgl'}
+		{#if pg.cloudRenderer === 'maplibre'}
+			<!-- Clouds rendered inside MapLibre's GL pipeline via CloudShaderLayer -->
+		{:else if pg.cloudRenderer === 'webgl'}
 			<WebGLClouds
 				density={pg.density}
 				speed={pg.cloudSpeed}
