@@ -92,7 +92,13 @@
 
 	<fieldset>
 		<legend>Clouds</legend>
-		<label class="check"><input type="checkbox" bind:checked={pg.useRealisticClouds} /> Photo clouds (SVG feDisplacement)</label>
+		<label>Renderer
+			<select bind:value={pg.cloudRenderer}>
+				<option value="webgl">WebGL (GPU, Pi-optimized)</option>
+				<option value="svg">SVG feTurbulence (CPU)</option>
+				<option value="css">CSS CloudBlobs (prod)</option>
+			</select>
+		</label>
 		<label>Density <span class="val">{(pg.density * 100).toFixed(0)}%</span>
 			<input type="range" bind:value={pg.density} min="0" max="1" step="0.01" />
 		</label>

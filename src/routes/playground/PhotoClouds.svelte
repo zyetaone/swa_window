@@ -35,7 +35,6 @@ let {
 	animate = true,
 	cloudScale = 1.0,
 	cloudSpread = 1.0,
-	pitchOffset = 0,
 	bankAngle = 0,
 }: {
 	density?: number;
@@ -48,7 +47,6 @@ let {
 	animate?: boolean;
 	cloudScale?: number;
 	cloudSpread?: number;
-	pitchOffset?: number;
 	bankAngle?: number;
 } = $props();
 
@@ -147,27 +145,6 @@ const PARALLAX = { cirrus: 0.08, back: 0.15, mid: 0.4, front: 0.85 } as const;
 
 // ── Cloud Particle System ────────────────────────────────────────────
 
-interface Particle {
-	x: number;         // horizontal position (%)
-	y: number;         // final vertical position (% — includes oscillation)
-	yBase: number;     // base vertical position (set at spawn)
-	z: number;         // final translateZ (px — includes oscillation)
-	zBase: number;     // base z-depth (set at spawn)
-	vx: number;        // horizontal speed (%/s, always positive)
-	vyPhase: number;   // vertical oscillation phase (radians)
-	vyAmp: number;     // vertical oscillation amplitude (%)
-	width: number;     // element width (%)
-	aspect: number;    // width / height ratio
-	opacity: number;
-	filterIdx: number; // which SVG filter variant (0..filterCount-1)
-	scaleX: number;
-	scaleY: number;
-	// RAF-driven morph: each cloud steps to a new filter variant at its own rate.
-	// Desynchronizes SMIL baseFrequency morphing across the cloud field.
-	morphTimer: number;  // accumulates in seconds; triggers filterIdx step at >= 1
-	morphSpeed: number;  // morph steps per second (0.5 = slow drift, 2 = fast shimmer)
-}
-
 interface LayerSpec {
 	count: number;
 	yRange: [number, number];
@@ -184,40 +161,28 @@ interface LayerSpec {
 	filterCount: number;
 }
 
-// translateZ scaled to fit WITHIN parent perspective (2500px).
-// yRanges define the vertical band for each layer (% from top of viewport).
-// From a passenger window: horizon ≈ top third, ground below, sky above.
-// cloudSpread multiplier widens/narrows these bands dynamically.
-// Real airplane window cloud reference:
-// - At 30k ft you look DOWN through clouds at terrain
-// - Far horizon: dense bright haze, no individual clouds
-// - Mid: broken cumulus tops, billowy, extremely soft edges
-// - Near/below: individual forms, gaps show terrain, wispy trailing edges
-// - Colors: bright white tops, gray-blue undersides, golden at sunset
-// - Edges: ALWAYS soft, feathered, dissolve into atmosphere — never hard
-// - Coverage: 30-60% broken, gaps throughout
 const SPECS: Record<string, LayerSpec> = {
 	cirrus: {
 		count: 4, yRange: [0, 14], yBias: 1.0,
 		zBase: -700, zVar: 80, zOsc: 10,
 		speedBase: 2.0, speedVar: 0.6,
-		widthRange: [45, 80], aspectRange: [8, 14],   // very wide thin streaks
+		widthRange: [45, 80], aspectRange: [8, 14],
 		opacityRange: [0.05, 0.12],
 		filterPrefix: 'cloud-cirrus', filterCount: 4,
 	},
 	back: {
-		count: 8, yRange: [10, 40], yBias: 1.2,      // fewer, wider → cloud banks not blobs
+		count: 8, yRange: [10, 40], yBias: 1.2,
 		zBase: -500, zVar: 100, zOsc: 15,
 		speedBase: 3.5, speedVar: 0.7,
-		widthRange: [30, 55], aspectRange: [3.5, 6],  // WIDE cloud masses
-		opacityRange: [0.35, 0.6],                    // translucent so terrain shows through
+		widthRange: [30, 55], aspectRange: [3.5, 6],
+		opacityRange: [0.35, 0.6],
 		filterPrefix: 'cloud-back', filterCount: 5,
 	},
 	mid: {
 		count: 4, yRange: [38, 62], yBias: 1.0,
 		zBase: -200, zVar: 60, zOsc: 20,
 		speedBase: 10, speedVar: 3,
-		widthRange: [25, 45], aspectRange: [3, 5],    // wide mid-level banks
+		widthRange: [25, 45], aspectRange: [3, 5],
 		opacityRange: [0.2, 0.45],
 		filterPrefix: 'cloud-mid', filterCount: 5,
 	},
@@ -225,8 +190,8 @@ const SPECS: Record<string, LayerSpec> = {
 		count: 2, yRange: [60, 85], yBias: 1.0,
 		zBase: 0, zVar: 30, zOsc: 25,
 		speedBase: 25, speedVar: 8,
-		widthRange: [35, 60], aspectRange: [3, 5],    // large fast-passing banks
-		opacityRange: [0.15, 0.35],                   // very transparent
+		widthRange: [35, 60], aspectRange: [3, 5],
+		opacityRange: [0.15, 0.35],
 		filterPrefix: 'cloud-front', filterCount: 5,
 	},
 };
@@ -236,8 +201,6 @@ function rand(min: number, max: number): number {
 }
 
 function biasedY(spec: LayerSpec): number {
-	// cloudSpread widens the yRange around its center.
-	// spread=1 → default, spread=2 → double range, spread=0.5 → half.
 	const spread = untrack(() => cloudSpread);
 	const center = (spec.yRange[0] + spec.yRange[1]) / 2;
 	const halfRange = ((spec.yRange[1] - spec.yRange[0]) / 2) * spread;
@@ -246,107 +209,132 @@ function biasedY(spec: LayerSpec): number {
 	return lo + Math.pow(Math.random(), spec.yBias) * (hi - lo);
 }
 
-function createParticle(spec: LayerSpec, idx: number): Particle {
-	const yBase = biasedY(spec);
-	const zBase = spec.zBase + rand(-spec.zVar, spec.zVar);
-	return {
-		x: rand(-25, 115),   // distribute across full viewport
-		y: yBase, yBase,
-		z: zBase, zBase,
-		vx: spec.speedBase + rand(-spec.speedVar, spec.speedVar),
-		vyPhase: rand(0, Math.PI * 2),
-		vyAmp: rand(0.3, 1.2),
-		width: rand(spec.widthRange[0], spec.widthRange[1]),
-		aspect: rand(spec.aspectRange[0], spec.aspectRange[1]),
-		opacity: rand(spec.opacityRange[0], spec.opacityRange[1]),
-		filterIdx: idx % spec.filterCount,
-		scaleX: rand(1.0, 1.6),           // stretch wide (cloud banks, not balls)
-		scaleY: rand(0.6, 0.9),           // compress vertically (flat base)
-		// Each cloud morphs to a new filter variant at its own rate — staggered
-		// so the cloud field never looks synchronized.
-		morphTimer: rand(0, 5),
-		morphSpeed: rand(0.5, 2.0),
-	};
+// ── Particle pools — plain parallel arrays, NOT $state. ────────────────────────
+// A single $state `renderTick` counter increments each RAF frame. The template
+// {#each} iterates over particle INDICES (0..count-1) and reads pool values by
+// index. This avoids Svelte's deep reactive tracking on every c.x/c.y mutation
+// (was 18 × ~10 props = 180 tracked mutations/frame). Only the primitive
+// renderTick counter is reactive; pool mutations happen in RAF with zero overhead.
+
+interface PoolArrays {
+	x: number[]; y: number[]; yBase: number[]; z: number[]; zBase: number[];
+	vx: number[]; vyPhase: number[]; vyAmp: number[];
+	width: number[]; aspect: number[]; opacity: number[];
+	filterIdx: number[]; scaleX: number[]; scaleY: number[];
+	morphTimer: number[]; morphSpeed: number[];
 }
 
-/** Respawn a cloud at the incoming edge with completely new random properties. */
-function respawnParticle(c: Particle, spec: LayerSpec, enterFromLeft: boolean): void {
-	c.x = enterFromLeft ? rand(-35, -18) : rand(115, 135);
-	c.yBase = biasedY(spec);
-	c.zBase = spec.zBase + rand(-spec.zVar, spec.zVar);
-	c.vx = spec.speedBase + rand(-spec.speedVar, spec.speedVar);
-	c.vyPhase = rand(0, Math.PI * 2);
-	c.vyAmp = rand(0.3, 1.2);
-	c.width = rand(spec.widthRange[0], spec.widthRange[1]);
-	c.aspect = rand(spec.aspectRange[0], spec.aspectRange[1]);
-	c.opacity = rand(spec.opacityRange[0], spec.opacityRange[1]);
-	c.filterIdx = (c.filterIdx + 1 + Math.floor(Math.random() * Math.max(1, spec.filterCount - 1))) % spec.filterCount;
-	c.scaleX = rand(1.0, 1.6);
-	c.scaleY = rand(0.6, 0.9);
-	c.morphTimer = rand(0, 3);
-	c.morphSpeed = rand(0.5, 2.0);
-}
-
-function tickPool(pool: Particle[], spec: LayerSpec, dt: number): void {
-	// untrack(): invariant #3 — 60 Hz reads must not build reactive dependencies
-	const drift = untrack(() => driftX);
-	const spd = untrack(() => speed);
-	// Minimum drift prevents stalling when heading is perpendicular to view
-	const dir = Math.abs(drift) > 0.15 ? drift : (drift >= 0 ? 0.2 : -0.2);
-
-	for (const c of pool) {
-		// Horizontal drift (mutates in place — perf exception for 37×60fps hot path)
-		c.x += c.vx * dt * spd * dir;
-
-		// Vertical + depth oscillation (independent per cloud via vyPhase)
-		c.vyPhase += dt * 0.25;
-		c.y = c.yBase + Math.sin(c.vyPhase) * c.vyAmp;
-		c.z = c.zBase + Math.sin(c.vyPhase * 0.7) * spec.zOsc;
-
-		// Per-cloud morph: each cloud steps to the next filter variant at its own
-		// rate. morphSpeed is per-cloud (0.5=gradual, 2=rapid shimmer). This
-		// desynchronizes the SMIL baseFrequency morphing across the cloud field.
-		c.morphTimer += c.morphSpeed * dt;
-		if (c.morphTimer >= 1) {
-			c.filterIdx = (c.filterIdx + 1) % spec.filterCount;
-			c.morphTimer -= 1;
-		}
-
-		// Wrap detection — position alone determines exit edge (handles drift flips)
-		if (c.x > 135) respawnParticle(c, spec, true);
-		else if (c.x < -35) respawnParticle(c, spec, false);
+	function makePoolArrays(spec: LayerSpec): PoolArrays {
+		const n = spec.count;
+		return {
+			x: Array(n), y: Array(n), yBase: Array(n), z: Array(n), zBase: Array(n),
+			vx: Array(n), vyPhase: Array(n), vyAmp: Array(n),
+			width: Array(n), aspect: Array(n), opacity: Array(n),
+			filterIdx: Array(n), scaleX: Array(n), scaleY: Array(n),
+			morphTimer: Array(n), morphSpeed: Array(n),
+		};
 	}
-}
 
-// $state (deep proxy) — each c.x, c.y mutation triggers granular DOM update
-// on the specific style binding that reads it. $state.raw doesn't work here
-// because {#each} caches on array reference which never changes with mutation.
-let cirrusPool = $state(Array.from({ length: SPECS.cirrus.count }, (_, i) => createParticle(SPECS.cirrus, i)));
-let backPool   = $state(Array.from({ length: SPECS.back.count },   (_, i) => createParticle(SPECS.back, i)));
-let midPool    = $state(Array.from({ length: SPECS.mid.count },    (_, i) => createParticle(SPECS.mid, i)));
-let frontPool  = $state(Array.from({ length: SPECS.front.count },  (_, i) => createParticle(SPECS.front, i)));
+	function initPoolArrays(p: PoolArrays, spec: LayerSpec): void {
+		for (let i = 0; i < spec.count; i++) {
+			p.yBase[i] = biasedY(spec);
+			p.zBase[i] = spec.zBase + rand(-spec.zVar, spec.zVar);
+			p.x[i] = rand(-25, 115);
+			p.y[i] = p.yBase[i];
+			p.z[i] = p.zBase[i];
+			p.vx[i] = spec.speedBase + rand(-spec.speedVar, spec.speedVar);
+			p.vyPhase[i] = rand(0, Math.PI * 2);
+			p.vyAmp[i] = rand(0.3, 1.2);
+			p.width[i] = rand(spec.widthRange[0], spec.widthRange[1]);
+			p.aspect[i] = rand(spec.aspectRange[0], spec.aspectRange[1]);
+			p.opacity[i] = rand(spec.opacityRange[0], spec.opacityRange[1]);
+			p.filterIdx[i] = i % spec.filterCount;
+			p.scaleX[i] = rand(1.0, 1.6);
+			p.scaleY[i] = rand(0.6, 0.9);
+			p.morphTimer[i] = rand(0, 5);
+			p.morphSpeed[i] = rand(0.5, 2.0);
+		}
+	}
 
-// Animation loop — ticks all four pools each frame.
-// Runs inside $effect for setup/teardown; pool mutations + renderTick++
-// happen in the RAF callback (async context, not tracked by the $effect).
-$effect(() => {
-	let raf: number;
-	let last = performance.now();
+	function tickPool(p: PoolArrays, spec: LayerSpec, dt: number): void {
+		const drift = untrack(() => driftX);
+		const spd = untrack(() => speed);
+		const dir = Math.abs(drift) > 0.15 ? drift : (drift >= 0 ? 0.2 : -0.2);
 
-	const loop = (now: number) => {
-		const dt = Math.min((now - last) / 1000, 0.1); // cap to avoid teleport on tab-switch
-		last = now;
+		for (let i = 0; i < spec.count; i++) {
+			p.x[i] += p.vx[i] * dt * spd * dir;
+			p.vyPhase[i] += dt * 0.25;
+			p.y[i] = p.yBase[i] + Math.sin(p.vyPhase[i]) * p.vyAmp[i];
+			p.z[i] = p.zBase[i] + Math.sin(p.vyPhase[i] * 0.7) * spec.zOsc;
+			p.morphTimer[i] += p.morphSpeed[i] * dt;
+			if (p.morphTimer[i] >= 1) {
+				p.filterIdx[i] = (p.filterIdx[i] + 1) % spec.filterCount;
+				p.morphTimer[i] -= 1;
+			}
+			if (p.x[i] > 135) {
+				p.x[i] = untrack(() => rand(-35, -18));
+				p.yBase[i] = untrack(() => biasedY(spec));
+				p.zBase[i] = spec.zBase + untrack(() => rand(-spec.zVar, spec.zVar));
+				p.vx[i] = spec.speedBase + untrack(() => rand(-spec.speedVar, spec.speedVar));
+				p.vyPhase[i] = untrack(() => rand(0, Math.PI * 2));
+				p.vyAmp[i] = untrack(() => rand(0.3, 1.2));
+				p.width[i] = untrack(() => rand(spec.widthRange[0], spec.widthRange[1]));
+				p.aspect[i] = untrack(() => rand(spec.aspectRange[0], spec.aspectRange[1]));
+				p.opacity[i] = untrack(() => rand(spec.opacityRange[0], spec.opacityRange[1]));
+				p.filterIdx[i] = (p.filterIdx[i] + 1 + Math.floor(Math.random() * Math.max(1, spec.filterCount - 1))) % spec.filterCount;
+				p.scaleX[i] = untrack(() => rand(1.0, 1.6));
+				p.scaleY[i] = untrack(() => rand(0.6, 0.9));
+				p.morphTimer[i] = untrack(() => rand(0, 3));
+				p.morphSpeed[i] = untrack(() => rand(0.5, 2.0));
+			} else if (p.x[i] < -35) {
+				p.x[i] = untrack(() => rand(115, 135));
+				p.yBase[i] = untrack(() => biasedY(spec));
+				p.zBase[i] = spec.zBase + untrack(() => rand(-spec.zVar, spec.zVar));
+				p.vx[i] = spec.speedBase + untrack(() => rand(-spec.speedVar, spec.speedVar));
+				p.vyPhase[i] = untrack(() => rand(0, Math.PI * 2));
+				p.vyAmp[i] = untrack(() => rand(0.3, 1.2));
+				p.width[i] = untrack(() => rand(spec.widthRange[0], spec.widthRange[1]));
+				p.aspect[i] = untrack(() => rand(spec.aspectRange[0], spec.aspectRange[1]));
+				p.opacity[i] = untrack(() => rand(spec.opacityRange[0], spec.opacityRange[1]));
+				p.filterIdx[i] = (p.filterIdx[i] + 1 + Math.floor(Math.random() * Math.max(1, spec.filterCount - 1))) % spec.filterCount;
+				p.scaleX[i] = untrack(() => rand(1.0, 1.6));
+				p.scaleY[i] = untrack(() => rand(0.6, 0.9));
+				p.morphTimer[i] = untrack(() => rand(0, 3));
+				p.morphSpeed[i] = untrack(() => rand(0.5, 2.0));
+			}
+		}
+	}
 
-		tickPool(cirrusPool, SPECS.cirrus, dt);
-		tickPool(backPool, SPECS.back, dt);
-		tickPool(midPool, SPECS.mid, dt);
-		tickPool(frontPool, SPECS.front, dt);
+	const cirrusP = makePoolArrays(SPECS.cirrus);
+	const backP   = makePoolArrays(SPECS.back);
+	const midP    = makePoolArrays(SPECS.mid);
+	const frontP  = makePoolArrays(SPECS.front);
+	initPoolArrays(cirrusP, SPECS.cirrus);
+	initPoolArrays(backP, SPECS.back);
+	initPoolArrays(midP, SPECS.mid);
+	initPoolArrays(frontP, SPECS.front);
 
+	// Single $state primitive — pool mutations happen in RAF with zero reactive overhead.
+	// Template reads pool arrays by index; Svelte re-evaluates only when renderTick changes.
+	let renderTick = $state(0);
+
+	$effect(() => {
+		let raf: number;
+		let last = performance.now();
+
+		const loop = (now: number) => {
+			const dt = Math.min((now - last) / 1000, 0.1);
+			last = now;
+			tickPool(cirrusP, SPECS.cirrus, dt);
+			tickPool(backP, SPECS.back, dt);
+			tickPool(midP, SPECS.mid, dt);
+			tickPool(frontP, SPECS.front, dt);
+			renderTick++;
+			raf = requestAnimationFrame(loop);
+		};
 		raf = requestAnimationFrame(loop);
-	};
-	raf = requestAnimationFrame(loop);
-	return () => cancelAnimationFrame(raf);
-});
+		return () => cancelAnimationFrame(raf);
+	});
 </script>
 
 <!-- SVG filter definitions — 5 seed variants per main layer + 4 cirrus.
@@ -476,20 +464,20 @@ $effect(() => {
 	     below 18k = clouds above you, above 38k = clouds below you. -->
 	<div
 		class="cloud-deck"
-		style:transform="skewY({windSkew}deg) translateY({altitudeShift}%) translateY({pitchOffset * 1.5}px) rotate({bankAngle * 0.3}deg)"
+		style:transform="skewY({windSkew}deg) translateY({altitudeShift}%) rotate({bankAngle * 0.3}deg)"
 		style:bottom="{deckY}%"
 	>
 		{#if showCirrus}
 			<div class="layer" style:transform="translateX({heading * PARALLAX.cirrus}px)">
-				{#each cirrusPool as c, i (i)}
+				{#each Array(cirrusP.x.length) as _, i (i)}
 					<div class="seed"
-						style:left="{c.x}%"
-						style:top="{c.y}%"
-						style:width="{c.width * cloudScale}%"
-						style:aspect-ratio="{c.aspect}"
-						style:opacity={c.opacity}
-						style:filter="url(#cloud-cirrus-{c.filterIdx}) {edgeShadow}"
-						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+						style:left="{cirrusP.x[i]}%"
+						style:top="{cirrusP.y[i]}%"
+						style:width="{cirrusP.width[i] * cloudScale}%"
+						style:aspect-ratio="{cirrusP.aspect[i]}"
+						style:opacity={cirrusP.opacity[i]}
+						style:filter="url(#cloud-cirrus-{cirrusP.filterIdx[i]}) {edgeShadow}"
+						style:transform="translate3d(0,0,{cirrusP.z[i]}px) scale({cirrusP.scaleX[i]},{cirrusP.scaleY[i]})"
 					></div>
 				{/each}
 			</div>
@@ -497,15 +485,15 @@ $effect(() => {
 
 		{#if showBack}
 			<div class="layer" style:transform="translateX({heading * PARALLAX.back}px)">
-				{#each backPool as c, i (i)}
+				{#each Array(backP.x.length) as _, i (i)}
 					<div class="seed"
-						style:left="{c.x}%"
-						style:top="{c.y}%"
-						style:width="{c.width * cloudScale}%"
-						style:aspect-ratio="{c.aspect}"
-						style:opacity={c.opacity}
-						style:filter="url(#cloud-back-{c.filterIdx}) {edgeShadow}"
-						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+						style:left="{backP.x[i]}%"
+						style:top="{backP.y[i]}%"
+						style:width="{backP.width[i] * cloudScale}%"
+						style:aspect-ratio="{backP.aspect[i]}"
+						style:opacity={backP.opacity[i]}
+						style:filter="url(#cloud-back-{backP.filterIdx[i]}) {edgeShadow}"
+						style:transform="translate3d(0,0,{backP.z[i]}px) scale({backP.scaleX[i]},{backP.scaleY[i]})"
 					></div>
 				{/each}
 			</div>
@@ -513,15 +501,15 @@ $effect(() => {
 
 		{#if showMid}
 			<div class="layer" style:transform="translateX({heading * PARALLAX.mid}px)">
-				{#each midPool as c, i (i)}
+				{#each Array(midP.x.length) as _, i (i)}
 					<div class="seed"
-						style:left="{c.x}%"
-						style:top="{c.y}%"
-						style:width="{c.width * cloudScale}%"
-						style:aspect-ratio="{c.aspect}"
-						style:opacity={c.opacity}
-						style:filter="url(#cloud-mid-{c.filterIdx}) {edgeShadow}"
-						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+						style:left="{midP.x[i]}%"
+						style:top="{midP.y[i]}%"
+						style:width="{midP.width[i] * cloudScale}%"
+						style:aspect-ratio="{midP.aspect[i]}"
+						style:opacity={midP.opacity[i]}
+						style:filter="url(#cloud-mid-{midP.filterIdx[i]}) {edgeShadow}"
+						style:transform="translate3d(0,0,{midP.z[i]}px) scale({midP.scaleX[i]},{midP.scaleY[i]})"
 					></div>
 				{/each}
 			</div>
@@ -529,15 +517,15 @@ $effect(() => {
 
 		{#if showFront}
 			<div class="layer" style:transform="translateX({heading * PARALLAX.front}px)">
-				{#each frontPool as c, i (i)}
+				{#each Array(frontP.x.length) as _, i (i)}
 					<div class="seed"
-						style:left="{c.x}%"
-						style:top="{c.y}%"
-						style:width="{c.width * cloudScale}%"
-						style:aspect-ratio="{c.aspect}"
-						style:opacity={c.opacity}
-						style:filter="url(#cloud-front-{c.filterIdx}) {edgeShadow}"
-						style:transform="translate3d(0,0,{c.z}px) scale({c.scaleX},{c.scaleY})"
+						style:left="{frontP.x[i]}%"
+						style:top="{frontP.y[i]}%"
+						style:width="{frontP.width[i] * cloudScale}%"
+						style:aspect-ratio="{frontP.aspect[i]}"
+						style:opacity={frontP.opacity[i]}
+						style:filter="url(#cloud-front-{frontP.filterIdx[i]}) {edgeShadow}"
+						style:transform="translate3d(0,0,{frontP.z[i]}px) scale({frontP.scaleX[i]},{frontP.scaleY[i]})"
 					></div>
 				{/each}
 			</div>
@@ -598,6 +586,8 @@ $effect(() => {
 		background: linear-gradient(to bottom, #000 0%, #0a0a0a 40%, #222 75%, #444 100%);
 		border-radius: 50% 50% 42% 42%;
 		will-change: transform;
+		/* Isolate particle layout — changes to seeds don't affect layout of siblings/parent */
+		contain: layout style;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

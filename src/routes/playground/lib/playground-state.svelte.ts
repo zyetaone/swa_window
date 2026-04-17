@@ -21,13 +21,14 @@ export class PlaygroundState {
 	maplibreSource = $state<string>('eox-s2');
 
 	// Rendering flags
-	mlTerrain = $state(true);
+	mlTerrain = $state(false); // off by default — terrain tile loading (mapterhorn) is CPU-heavy + triggers CSP
 	mlBuildings = $state(true);
 	mlAtmosphere = $state(true);
 	showCityLights = $state(true);
 	showLandmarks = $state(true);
 	showThreeBillboards = $state(false);
-	useRealisticClouds = $state(true);
+	/** Cloud renderer: 'webgl' (GPU, Pi-optimized), 'svg' (feTurbulence), 'css' (prod CloudBlobs) */
+	cloudRenderer = $state<'webgl' | 'svg' | 'css'>('webgl');
 
 	// Cloud mechanics
 	density = $state(0.6);

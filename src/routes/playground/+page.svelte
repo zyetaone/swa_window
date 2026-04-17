@@ -24,6 +24,7 @@
 	import NightOverlay from './NightOverlay.svelte';
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import PhotoClouds from './PhotoClouds.svelte';
+	import WebGLClouds from './WebGLClouds.svelte';
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -338,7 +339,17 @@
 			{/if}
 		</div>
 
-		{#if pg.useRealisticClouds}
+		{#if pg.cloudRenderer === 'webgl'}
+			<WebGLClouds
+				density={pg.density}
+				speed={pg.cloudSpeed}
+				heading={pg.heading}
+				altitude={pg.altitude}
+				nightFactor={nf}
+				weather={pg.weather}
+				cloudScale={pg.cloudScale ?? 1.0}
+			/>
+		{:else if pg.cloudRenderer === 'svg'}
 			<PhotoClouds
 				density={pg.density}
 				speed={pg.cloudSpeed}
