@@ -9,6 +9,11 @@
 	let { drawerOpen = $bindable(false) } : { drawerOpen?: boolean } = $props();
 
 	const skyState = $derived(getSkyState(pg.timeOfDay));
+
+	function compassDir(deg: number): string {
+		const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+		return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+	}
 </script>
 
 <!-- Settings drawer — slides in from right -->
@@ -17,6 +22,12 @@
 		<h2>Scene Lab</h2>
 		<p class="hint">MapLibre globe + atmosphere + terrain + buildings. GeoJSON-driven styling.</p>
 	</header>
+
+	<div class="compass-bar">
+		<div class="compass-arrow" style:transform="rotate({pg.heading}deg)"></div>
+		<span class="compass-heading">{pg.heading.toFixed(0)}° {compassDir(pg.heading)}</span>
+		<span class="compass-alt">ALT {(pg.altitude / 1000).toFixed(0)}k ft</span>
+	</div>
 
 	<fieldset>
 		<legend>Location</legend>
@@ -77,11 +88,8 @@
 		<label class="check"><input type="checkbox" bind:checked={pg.mlBuildings} /> 3D Buildings (fill-extrusion)</label>
 		<label class="check"><input type="checkbox" bind:checked={pg.showCityLights} /> City-light glow (night)</label>
 		<label class="check"><input type="checkbox" bind:checked={pg.showLandmarks} /> Curated landmarks</label>
-	</fieldset>
-
-	<fieldset>
-		<legend>LOD (Pi tuning)</legend>
-		<p class="field-note">setSourceTileLodParams — trades distant crispness for lower tile load.</p>
+		<div class="field-divider"></div>
+		<p class="field-note">LOD — trades distant crispness for lower tile load.</p>
 		<label>Max zoom levels <span class="val">{pg.lodMaxZoomLevels}</span>
 			<input type="range" bind:value={pg.lodMaxZoomLevels} min="1" max="11" step="1" />
 		</label>
@@ -92,11 +100,10 @@
 
 	<fieldset>
 		<legend>Clouds</legend>
-		<label>Renderer
-			<select bind:value={pg.cloudRenderer}>
-				<option value="css3d">CSS 3D Sprites (volumetric)</option>
-				<option value="css">CSS CloudBlobs (prod fallback)</option>
-			</select>
+		<label class="check">
+			<input type="checkbox" checked={pg.cloudRenderer === 'css3d'}
+				onchange={() => pg.cloudRenderer = pg.cloudRenderer === 'css3d' ? 'css' : 'css3d'} />
+			Volumetric 3D clouds
 		</label>
 		<label>Density <span class="val">{(pg.density * 100).toFixed(0)}%</span>
 			<input type="range" bind:value={pg.density} min="0" max="1" step="0.01" />
@@ -161,14 +168,12 @@
 		bottom: 0;
 		width: 340px;
 		z-index: 25;
-		background: rgba(10, 10, 15, 0.45);
+		background: rgba(10, 10, 15, 0.94);
 		border-left: 1px solid rgba(255, 255, 255, 0.12);
 		padding: 64px 16px 16px;
 		overflow-y: auto;
 		transform: translateX(100%);
 		transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
-		backdrop-filter: blur(20px);
-		-webkit-backdrop-filter: blur(20px);
 		box-shadow: -10px 0 30px rgba(0, 0, 0, 0);
 	}
 	.drawer.open { 
@@ -262,4 +267,52 @@
 		transition: all 0.2s;
 	}
 	.btn:hover { background: rgba(58, 80, 112, 0.8); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+
+	.compass-bar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 12px;
+		margin: 0 0 12px;
+		background: rgba(0, 0, 0, 0.3);
+		border-radius: 10px;
+		font-size: 12px;
+		color: #aab;
+	}
+	.compass-arrow {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		position: relative;
+		flex-shrink: 0;
+	}
+	.compass-arrow::after {
+		content: '';
+		position: absolute;
+		top: 2px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 0;
+		height: 0;
+		border-left: 4px solid transparent;
+		border-right: 4px solid transparent;
+		border-bottom: 8px solid #7faeff;
+	}
+	.compass-heading {
+		font-family: ui-monospace, monospace;
+		color: #7faeff;
+		font-weight: 600;
+	}
+	.compass-alt {
+		margin-left: auto;
+		font-family: ui-monospace, monospace;
+		color: #8a8;
+	}
+
+	.field-divider {
+		height: 1px;
+		background: rgba(255, 255, 255, 0.06);
+		margin: 12px 0 8px;
+	}
 </style>

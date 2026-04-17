@@ -88,6 +88,9 @@ export class PlaygroundState {
 	// "descend through clouds, climb back above" holding pattern feel.
 	static readonly CLOUD_DECK_ALT = 28000;
 
+	// Blind (window shade)
+	blindOpen = $state(true);
+
 	// Creative
 	paletteName = $state<PaletteName>('auto');
 	freeCam = $state(false);

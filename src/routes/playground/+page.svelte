@@ -31,9 +31,9 @@
 	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
 	// createContext/getContext pattern.
 	import { pg } from './lib/playground-state.svelte';
+	import { useBlind } from '$lib/shell/use-blind.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
-	import GlassOverlays from './components/GlassOverlays.svelte';
-	import LensFlare from './components/LensFlare.svelte';
+	import WindowGlass from './components/WindowGlass.svelte';
 	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -115,29 +115,12 @@
 		}
 	}
 
-	// ─── Blind drag ──────────────────────────────────────────────────────────
-	let blindY = $state(0);
-	let blindDragging = $state(false);
-	let blindDragStart = 0;
-	let blindDragStartY = 0;
-
-	function handleBlindPointerDown(e: PointerEvent) {
-		blindDragging = true;
-		blindDragStart = e.clientY;
-		blindDragStartY = blindY;
-		(e.target as HTMLElement).setPointerCapture(e.pointerId);
-	}
-	function handleBlindPointerMove(e: PointerEvent) {
-		if (!blindDragging) return;
-		const dy = e.clientY - blindDragStart;
-		const vh = window.innerHeight;
-		blindY = clamp(blindDragStartY + (dy / vh) * 100, 0, 100);
-	}
-	function handleBlindPointerUp() {
-		if (!blindDragging) return;
-		blindDragging = false;
-		blindY = blindY > 40 ? 100 : 0;
-	}
+	// ─── Blind (production composable) ───────────────────────────────────────
+	const blind = useBlind({
+		get blindOpen() { return pg.blindOpen; },
+		set blindOpen(v: boolean) { pg.blindOpen = v; },
+		flight: { isTransitioning: false },
+	});
 
 	// ─── Derived Camera ──────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
@@ -172,31 +155,6 @@
 		const dist = Math.abs(pg.altitude - 28000);
 		if (dist > 6000) return 0;
 		return (1 - dist / 6000) * 0.35;
-	});
-
-	// ── Lens Flare — tracks sun position on screen ─────────────────────
-	const sunAzimuth = $derived((pg.timeOfDay * 15) % 360);
-
-	// Signed bearing difference: negative = sun left, positive = sun right
-	const sunBearingDiff = $derived.by(() => {
-		return (sunAzimuth - viewBearing + 540) % 360 - 180;
-	});
-
-	// Intensity ramps as sun aligns with camera (within ±40°)
-	const sunAlignment = $derived.by(() => {
-		if (skyState === 'night') return 0;
-		if (pg.weather !== 'clear') return 0; // sun occluded by clouds
-		return clamp(1 - Math.abs(sunBearingDiff) / 40, 0, 1);
-	});
-
-	// Sun screen-space position (% from viewport edges):
-	// X: bearing diff → horizontal offset (±40° maps to ±45% of viewport)
-	// Y: sun elevation → vertical (noon=high, dawn/dusk=horizon line)
-	const sunScreenX = $derived(clamp(50 + (sunBearingDiff / 40) * 45, 5, 95));
-	const sunScreenY = $derived.by(() => {
-		const hourAngle = (pg.timeOfDay - 12) * 15;
-		const elevation = Math.cos(hourAngle * Math.PI / 180); // -1..1
-		return clamp(45 - elevation * 30, 10, 70);
 	});
 
 	const bgGradient = $derived.by(() => {
@@ -362,7 +320,7 @@
 			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
 		{/if}
 
-		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} skyState={skyState} viewBearing={viewBearing} />
+		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} skyState={skyState} viewBearing={viewBearing} weather={pg.weather} />
 		<Weather rainOpacity={weatherFx.rainOpacity} {windAngle} {frostAmount} />
 
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>
@@ -374,24 +332,38 @@
 			<div class="cloud-fog" style:opacity={cloudFogOpacity} aria-hidden="true"></div>
 		{/if}
 
-		<LensFlare {sunAlignment} {skyState} sunX={sunScreenX} sunY={sunScreenY} />
 		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
 		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
-		<GlassOverlays bankAngle={motion.bankAngle} />
+		<WindowGlass bankAngle={motion.bankAngle} />
 	</button>
 
-	<div class="blind" class:dragging={blindDragging} style:transform={`translateY(${blindY - 100}%)`}>
-		<div class="blind-surface"></div>
-		<button
-			class="blind-pull"
-			onpointerdown={handleBlindPointerDown}
-			onpointermove={handleBlindPointerMove}
-			onpointerup={handleBlindPointerUp}
-			onpointercancel={handleBlindPointerUp}
+	<div class="blind-clip" bind:this={blind.clipEl}>
+		<div
+			class={['blind-overlay', !pg.blindOpen && !blind.hasAnimated && 'discoverable']}
+			onanimationend={() => { blind.hasAnimated = true; }}
+			onpointerdown={blind.onPointerDown}
+			onpointermove={blind.onPointerMove}
+			onpointerup={blind.onPointerUp}
+			onkeydown={blind.onKeyDown}
+			role="slider"
+			tabindex={0}
+			aria-label="Window blind — drag to open or close"
+			aria-valuenow={Math.round(Math.abs(blind.dragY))}
+			aria-valuemin={0}
+			aria-valuemax={105}
+			style:transform={blind.transform}
+			style:transition={blind.transition}
+			style:pointer-events={pg.blindOpen ? 'none' : 'auto'}
 		>
-			<div class="blind-pull-grip"></div>
-			<div class="blind-pull-hint">{blindY > 50 ? '↑ pull up' : '↓ pull down'}</div>
-		</button>
+			<div class="blind-slats"></div>
+			{#if !pg.blindOpen && !blind.hasAnimated}
+				<div class="pull-hint" aria-hidden="true">
+					<span class="chev chev-1">&#x25BC;</span>
+					<span class="chev chev-2">&#x25BC;</span>
+					<span class="chev chev-3">&#x25BC;</span>
+				</div>
+			{/if}
+		</div>
 	</div>
 
 	<PlaygroundHud {isBoosting} />
@@ -487,59 +459,120 @@
 		transition: background 2s ease;
 	}
 
-	/* ─── Blind overlay ──────────────────────────────────────────────────── */
-	.blind {
+	/* ─── Blind overlay (production useBlind composable) ─────────────────── */
+	.blind-clip {
 		position: absolute;
 		inset: 0;
+		overflow: hidden;
 		z-index: 15;
 		pointer-events: none;
-		transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
-	.blind.dragging { transition: none; }
 
-	.blind-surface {
+	.blind-overlay {
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(180deg, #d4c8a8 0%, #c4b898 50%, #b4a888 100%);
-		background-image:
-			repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0, rgba(0, 0, 0, 0.03) 1px, transparent 1px, transparent 14px),
-			linear-gradient(180deg, #d4c8a8, #b4a888);
-		box-shadow: inset 0 -20px 40px rgba(0, 0, 0, 0.3);
-	}
-
-	.blind-pull {
-		position: absolute;
-		bottom: -28px;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 80px;
-		height: 56px;
-		background: transparent;
+		background:
+			linear-gradient(
+				180deg,
+				#efece6 0%,
+				#e8e4dd 35%,
+				#e1ddd5 65%,
+				#d6d1c8 100%
+			);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		border: none;
 		padding: 0;
-		cursor: grab;
 		pointer-events: auto;
 		touch-action: none;
-	}
-	.blind-pull:active { cursor: grabbing; }
-
-	.blind-pull-grip {
-		width: 40px;
-		height: 6px;
-		margin: 6px auto;
-		background: rgba(80, 70, 50, 0.8);
-		border-radius: 3px;
+		box-shadow:
+			inset 0 2px 4px rgba(255, 255, 255, 0.6),
+			inset 0 -6px 12px rgba(0, 0, 0, 0.15);
 	}
 
-	.blind-pull-hint {
-		font-size: 10px;
-		color: rgba(80, 70, 50, 0.9);
-		text-align: center;
-		background: rgba(212, 200, 168, 0.9);
-		padding: 2px 8px;
-		border-radius: 10px;
+	.blind-slats {
+		position: absolute;
+		inset: 0;
+		background: repeating-linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.12) 0px,
+			rgba(255, 255, 255, 0.12) 2px,
+			rgba(230, 227, 221, 0.55) 2px,
+			rgba(220, 217, 211, 0.55) 10px,
+			rgba(0, 0, 0, 0.12) 10px,
+			rgba(0, 0, 0, 0.12) 11px
+		);
+		mask-image: linear-gradient(
+			90deg,
+			rgba(0, 0, 0, 0.75) 0%,
+			rgba(0, 0, 0, 1) 20%,
+			rgba(0, 0, 0, 1) 80%,
+			rgba(0, 0, 0, 0.75) 100%
+		);
+	}
+
+	/* Pull-tab handle — recessed rectangle with grip ridges + drop shadow. */
+	.blind-overlay::after {
+		content: "";
+		position: absolute;
+		bottom: 10%;
+		left: 50%;
+		width: 56px;
+		height: 18px;
 		transform: translateX(-50%);
-		margin-left: 50%;
+		background:
+			repeating-linear-gradient(
+				180deg,
+				transparent 0px,
+				transparent 3px,
+				rgba(0, 0, 0, 0.22) 3px,
+				rgba(0, 0, 0, 0.22) 4px
+			),
+			linear-gradient(180deg, #d8d4cc 0%, #a89f92 100%);
+		border-radius: 9px;
+		box-shadow:
+			0 2px 5px rgba(0, 0, 0, 0.35),
+			inset 0 1px 0 rgba(255, 255, 255, 0.6),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+	}
+
+	/* First-view "drag me" hint — tab bobs down-and-up 3x to signal direction. */
+	@keyframes handle-breathe {
+		0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.9; }
+		50%      { transform: translateX(-50%) translateY(4px); opacity: 1; }
+	}
+
+	.blind-overlay.discoverable::after {
+		animation: handle-breathe 1.2s ease-in-out 3;
+	}
+
+	/* Three cascading chevrons below tab — reinforces pull direction. */
+	.pull-hint {
+		position: absolute;
+		bottom: 3%;
+		left: 50%;
+		transform: translateX(-50%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		pointer-events: none;
+		opacity: 0.55;
+	}
+	.chev {
+		font-size: 14px;
+		color: rgba(0, 0, 0, 0.35);
+		animation: chev-cascade 1.6s ease-in-out infinite;
+	}
+	.chev-1 { animation-delay: 0.0s; }
+	.chev-2 { animation-delay: 0.2s; }
+	.chev-3 { animation-delay: 0.4s; }
+
+	@keyframes chev-cascade {
+		0%, 100% { opacity: 0.25; transform: translateY(0); }
+		50%      { opacity: 0.85; transform: translateY(3px); }
 	}
 
 	/* ─── Boost visual cue ───────────────────────────────────────────────── */
@@ -557,13 +590,11 @@
 		width: 44px;
 		height: 44px;
 		border-radius: 50%;
-		background: rgba(10, 10, 15, 0.45);
+		background: rgba(10, 10, 15, 0.94);
 		border: 1px solid rgba(255, 255, 255, 0.12);
 		color: #eee;
 		font-size: 18px;
 		cursor: pointer;
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
 		display: flex;
 		align-items: center;
 		justify-content: center;

@@ -10,18 +10,20 @@
 	 * All driven by `nightFactor`, `timeOfDay`, `skyState`, and `viewBearing`.
 	 */
 
-	import type { SkyState } from '$lib/types';
+	import type { SkyState, WeatherType } from '$lib/types';
 
 	let {
 		nightFactor = 0,
 		timeOfDay = 0,
 		skyState = 'day' as SkyState,
 		viewBearing = 90,
+		weather = 'clear' as WeatherType,
 	}: {
 		nightFactor?: number;
 		timeOfDay?: number;
 		skyState?: SkyState;
 		viewBearing?: number;
+		weather?: WeatherType;
 	} = $props();
 
 	// ── Atmospheric haze gradient — color-grades the entire scene ─────────────
@@ -57,6 +59,7 @@
 	});
 	const sunAlignment = $derived.by(() => {
 		if (skyState === 'night') return 0;
+		if (weather !== 'clear') return 0;
 		return Math.max(0, Math.min(1, 1 - Math.abs(sunBearingDiff) / 40));
 	});
 	const sunScreenX = $derived(Math.max(5, Math.min(95, 50 + (sunBearingDiff / 40) * 45)));
