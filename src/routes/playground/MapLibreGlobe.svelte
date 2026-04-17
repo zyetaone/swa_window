@@ -23,7 +23,6 @@
 	let {
 		lat = 25.2,
 		lon = 55.3,
-		altitude = 30000,
 		zoom,
 		pitch = 45,
 		bearing = 0,
@@ -57,7 +56,6 @@
 	}: {
 		lat?: number;
 		lon?: number;
-		altitude?: number;
 		zoom?: number;
 		pitch?: number;
 		bearing?: number;
@@ -231,7 +229,11 @@
 	// ── Camera sync ─────────────────────────────────────────────────────────
 	let cameraInit = false;
 	let prevTarget = { lat: 0, lon: 0 };
-	const effectiveZoom = $derived(zoom ?? altitudeToZoom(altitude));
+	// Fixed cruise zoom — altitude affects cloud behavior, not map zoom.
+	// A passenger's field of view through the window doesn't change when
+	// the plane climbs or descends. Zoom ~10.5 gives good terrain detail
+	// at cruise altitude with visible city layout + coastlines.
+	const effectiveZoom = $derived(zoom ?? 10.5);
 
 	$effect(() => {
 		if (!mapRef) return;

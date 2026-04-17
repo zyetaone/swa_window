@@ -309,7 +309,6 @@
 				bind:mapRef
 				lat={mapLat}
 				lon={mapLon}
-				altitude={pg.altitude}
 				pitch={viewPitch}
 				bearing={viewBearing}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}

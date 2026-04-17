@@ -123,7 +123,7 @@ void main() {
 }`;
 
 const FRAG = `
-precision mediump float;
+precision highp float;
 varying vec2 v_uv;
 uniform sampler2D u_noise;
 uniform float u_time;
@@ -136,13 +136,62 @@ uniform float u_cloudScale;
 uniform float u_weatherDark;
 uniform vec2 u_resolution;
 
-float cloudLayer(vec2 uv, float scale, float speedMul, float time) {
+// ── Proper fBm noise (matches what SVG feTurbulence does internally) ──
+// Hash-based pseudo-random — no texture lookup, pure math.
+// This is what makes clouds look REAL instead of a flat wash.
+vec2 hash(vec2 p) {
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return -1.0 + 2.0 * fract(sin(p) * 43758.5453);
+}
+
+// Gradient noise (Perlin-style)
+float gnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f); // smoothstep
+
+  return mix(
+    mix(dot(hash(i + vec2(0.0, 0.0)), f - vec2(0.0, 0.0)),
+        dot(hash(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0)), u.x),
+    mix(dot(hash(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0)),
+        dot(hash(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0)), u.x),
+    u.y
+  );
+}
+
+// Fractional Brownian motion — 5 octaves of gradient noise layered.
+// This produces the rich, organic, fractal cloud texture that feTurbulence
+// generates. Each octave doubles frequency and halves amplitude.
+float fbm(vec2 p) {
+  float val = 0.0;
+  float amp = 0.5;
+  float freq = 1.0;
+  // 5 octaves — matches feTurbulence numOctaves="5" on back clouds
+  for (int i = 0; i < 5; i++) {
+    val += amp * gnoise(p * freq);
+    freq *= 2.0;
+    amp *= 0.5;
+  }
+  return val;
+}
+
+// Domain-warped fBm — feeds noise into itself for organic cloud shapes.
+// This is what creates the billowy, irregular, non-repeating structure.
+float cloudNoise(vec2 p) {
+  // First pass: base noise field
+  float n1 = fbm(p);
+  // Second pass: warp the coordinates by the first noise → organic distortion
+  vec2 warp = vec2(fbm(p + vec2(1.7, 9.2)), fbm(p + vec2(8.3, 2.8)));
+  float n2 = fbm(p + warp * 0.5);
+  return n2 * 0.5 + 0.5; // remap -1..1 → 0..1
+}
+
+// Cloud layer with heading-based drift
+float cloudLayer(vec2 uv, float scale, float speedMul, float seed) {
   float headRad = u_heading * 0.01745329;
-  vec2 drift = vec2(cos(headRad), sin(headRad) * 0.4) * time * speedMul * u_speed;
-  vec2 st = uv * scale + drift;
-  float n1 = texture2D(u_noise, fract(st)).r;
-  float n2 = texture2D(u_noise, fract(st * 2.13 + 0.37)).r;
-  return n1 * 0.7 + n2 * 0.3;
+  vec2 drift = vec2(cos(headRad), sin(headRad) * 0.4) * u_time * speedMul * u_speed;
+  vec2 st = uv * scale + drift + vec2(seed);
+  return cloudNoise(st);
 }
 
 void main() {
@@ -152,35 +201,48 @@ void main() {
 
   float scale = 1.0 / max(u_cloudScale, 0.3);
 
-  // Three cloud layers — far (slow), mid, near (fast)
-  float far  = cloudLayer(uv, 1.5 * scale, 0.008, u_time);
-  float mid  = cloudLayer(uv + vec2(0.31, 0.17), 2.5 * scale, 0.025, u_time);
-  float near = cloudLayer(uv + vec2(0.67, 0.43), 4.0 * scale, 0.06, u_time);
+  // Three cloud layers with different seeds — unique shapes per layer.
+  // Far: large scale, slow drift (distant cloud deck at horizon)
+  // Mid: medium scale (cloud masses between horizon and viewer)
+  // Near: small scale, fast drift (wisps passing close to window)
+  float far  = cloudLayer(uv, 1.2 * scale, 0.006, 0.0);
+  float mid  = cloudLayer(uv, 2.0 * scale, 0.02,  5.3);
+  float near = cloudLayer(uv, 3.5 * scale, 0.05,  11.7);
 
-  // Density threshold
+  // Density threshold — carves cloud shapes from noise field.
+  // Higher density = lower threshold = more coverage.
   float thresh = 1.0 - u_density;
-  far  = smoothstep(thresh, thresh + 0.25, far);
-  mid  = smoothstep(thresh + 0.05, thresh + 0.3, mid);
-  near = smoothstep(thresh + 0.1, thresh + 0.35, near);
+  far  = smoothstep(thresh, thresh + 0.18, far);
+  mid  = smoothstep(thresh + 0.04, thresh + 0.22, mid);
+  near = smoothstep(thresh + 0.08, thresh + 0.28, near);
 
+  // Combine layers — far dominates (cloud deck), near adds wisps
   float cloud = far * 0.5 + mid * 0.3 + near * 0.2;
 
-  // Altitude modulation
-  float altFactor = smoothstep(18000.0, 28000.0, u_altitude);
-  cloud *= mix(1.2, 0.6, altFactor);
+  // Internal detail — subtle bright/dark variation within cloud body
+  float detail = cloudNoise(uv * 6.0 * scale + u_time * 0.01) * 0.15;
+  cloud = cloud + detail * cloud; // only adds detail where cloud exists
 
-  // Horizon fade
-  float horizonFade = smoothstep(0.0, 0.3, v_uv.y) * smoothstep(1.0, 0.6, v_uv.y);
+  // Altitude modulation — below cloud deck more coverage, above less
+  float altFactor = smoothstep(18000.0, 28000.0, u_altitude);
+  cloud *= mix(1.3, 0.5, altFactor);
+
+  // Horizon fade — dense middle, transparent at screen edges
+  float horizonFade = smoothstep(0.0, 0.25, v_uv.y) * smoothstep(1.0, 0.55, v_uv.y);
   cloud *= horizonFade;
 
-  // Color
+  // Color: pure white in clear day, gray for storm, blue-gray at night
   float dark = u_weatherDark;
-  vec3 dayColor = vec3(1.0 - dark * 0.3, 1.0 - dark * 0.25, 1.0 - dark * 0.15);
-  vec3 nightColor = vec3(0.55, 0.6, 0.75);
+  vec3 dayColor = vec3(1.0 - dark * 0.25, 1.0 - dark * 0.2, 1.0 - dark * 0.12);
+  vec3 nightColor = vec3(0.5, 0.55, 0.72);
   vec3 color = mix(dayColor, nightColor, u_nightFactor);
 
-  float alpha = cloud * u_density * 1.2;
-  alpha = clamp(alpha, 0.0, 0.85);
+  // Subtle gray underside — bottom of clouds slightly darker
+  float underside = smoothstep(0.3, 0.7, v_uv.y) * 0.12;
+  color -= underside;
+
+  float alpha = cloud * u_density * 1.4;
+  alpha = clamp(alpha, 0.0, 0.82);
 
   // Premultiplied alpha for MapLibre compositing
   gl_FragColor = vec4(color * alpha, alpha);
