@@ -73,15 +73,19 @@
 		/>
 	</GeoJSONSource>
 
-	<!-- Sky — fog-color blends horizon into CSS cloud overlay. -->
+	<!-- Sky — fog creates the cloud-white haze band AT the horizon.
+	     This is the primary mechanism for horizon clouds — MapLibre's native
+	     atmosphere rendering. fog-color is cloud-white (from palette), and
+	     fog-ground-blend at 0.85 pushes the haze high from the ground so it
+	     fills the space between terrain and sky at the horizon line. -->
 	<Sky
 		sky-color={skyPalette.sky}
 		horizon-color={skyPalette.horizon}
 		fog-color={skyPalette.fog}
-		sky-horizon-blend={0.95}
+		sky-horizon-blend={0.98}
 		horizon-fog-blend={1.0}
-		fog-ground-blend={0.7}
-		atmosphere-blend={['interpolate', ['linear'], ['zoom'], 0, 1.0, 8, 0.9, 14, 0.6]}
+		fog-ground-blend={0.85}
+		atmosphere-blend={['interpolate', ['linear'], ['zoom'], 0, 1.0, 5, 1.0, 8, 0.95, 14, 0.7]}
 	/>
 
 	<!-- VOLUMETRIC GROUND FOG — Heatmap driven by GeoJSON points. -->
