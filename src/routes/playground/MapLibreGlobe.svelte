@@ -19,9 +19,9 @@
 		getNightWaterOpacity,
 		hexToRgba
 	} from './lib/water-anim.svelte';
-	import { globeCamera, getEffectiveZoom } from './lib/globe-camera.svelte';
-	import { globeFilters } from './lib/globe-filters.svelte';
-	import { globeLod } from './lib/globe-lod.svelte';
+	import { globeCamera, getEffectiveZoom, syncCamera } from './lib/globe-camera.svelte';
+	import { globeFilters, applyNightFilters } from './lib/globe-filters.svelte';
+	import { globeLod, syncLod } from './lib/globe-lod.svelte';
 	import { generateFogGeoJSON, generateShadowGeoJSON, generateLocalGridGeoJSON } from './lib/globe-geojson.svelte';
 
 	import AtmosphereLayer from './layers/AtmosphereLayer.svelte';
@@ -97,6 +97,13 @@
 	$effect(() => { globeLod.mapRef = mapRef ?? null; });
 	$effect(() => { globeLod.lodMaxZoomLevels = lodMaxZoomLevels; });
 	$effect(() => { globeLod.lodTileCountRatio = lodTileCountRatio; });
+
+	// Sync effects — invoke module functions from component context.
+	// These were extracted by the linter into .svelte.ts modules, but
+	// $effect requires component context, so we call the sync functions here.
+	$effect(() => { syncCamera(); });
+	$effect(() => { applyNightFilters(); });
+	$effect(() => { syncLod(); });
 
 	// ── Ambient light + sky palette — driven by timeOfDay ───────────────────
 	const sunParams = $derived(getSunParams(timeOfDay));

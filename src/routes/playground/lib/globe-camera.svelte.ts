@@ -1,5 +1,7 @@
 import type maplibregl from 'maplibre-gl';
 
+// Pure state holder — NO $effect here (requires component context).
+// The camera sync $effect lives in MapLibreGlobe.svelte.
 export const globeCamera = $state({
 	mapRef: null as maplibregl.Map | null,
 	lat: 0,
@@ -14,7 +16,8 @@ export const globeCamera = $state({
 
 export const getEffectiveZoom = () => 10.5;
 
-$effect(() => {
+/** Call this from a component $effect — syncs camera state to MapLibre. */
+export function syncCamera() {
 	const mapRef = globeCamera.mapRef;
 	if (!mapRef) return;
 	if (import.meta.env.DEV) (window as any).__map = mapRef;
@@ -43,7 +46,7 @@ $effect(() => {
 		mapRef.jumpTo(target);
 	}
 	globeCamera.prevTarget = { lat: globeCamera.lat, lon: globeCamera.lon };
-});
+}
 
 export function flyTo(dst: { lat: number; lon: number; altitude?: number }, _duration = 2000) {
 	if (!globeCamera.mapRef) return;

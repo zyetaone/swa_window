@@ -64,7 +64,7 @@
 				'raster-opacity': nightFactor * 0.18,
 				'raster-fade-duration': 400,
 				'raster-brightness-min': 0.06,
-				'raster-brightness-max': 1.5 + nightFactor * 0.4,
+				'raster-brightness-max': Math.min(1.0, 0.6 + nightFactor * 0.4),
 				'raster-hue-rotate': 22,
 				'raster-saturation': 0.35,
 				'raster-contrast': 0.28,

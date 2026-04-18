@@ -1,5 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 
+// Pure state holder — NO $effect here.
 export const globeLod = $state({
 	mapRef: null as maplibregl.Map | null,
 	lodMaxZoomLevels: 6,
@@ -14,10 +15,11 @@ export function applyLodParams(mapRef: maplibregl.Map, lodMaxZoomLevels: number,
 	}
 }
 
-$effect(() => {
+/** Call from a component $effect — applies LOD settings to map. */
+export function syncLod() {
 	const mapRef = globeLod.mapRef;
 	if (!mapRef) return;
 	const apply = () => applyLodParams(mapRef, globeLod.lodMaxZoomLevels, globeLod.lodTileCountRatio);
 	if (mapRef.loaded()) apply();
 	else mapRef.once('load', apply);
-});
+}

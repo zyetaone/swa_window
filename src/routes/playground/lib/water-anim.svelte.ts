@@ -1,25 +1,20 @@
-import { untrack } from 'svelte';
 import type { Band } from './sun-palette.svelte';
 
+// Module-level water animation clock — plain RAF, not $effect (which
+// requires component context and can't run at module scope).
 export const waterState = $state({ time: 0 });
 
 export const getWaterTime = () => waterState.time;
 
 if (typeof window !== 'undefined') {
-	$effect(() => {
-		let raf: number;
-		let last = performance.now();
-		const loop = (now: number) => {
-			untrack(() => {
-				const dt = Math.min((now - last) / 1000, 0.1);
-				last = now;
-				waterState.time += dt;
-			});
-			raf = requestAnimationFrame(loop);
-		};
-		raf = requestAnimationFrame(loop);
-		return () => cancelAnimationFrame(raf);
-	});
+	let last = performance.now();
+	const loop = (now: number) => {
+		const dt = Math.min((now - last) / 1000, 0.1);
+		last = now;
+		waterState.time += dt;
+		requestAnimationFrame(loop);
+	};
+	requestAnimationFrame(loop);
 }
 
 export function getWaterColor(waterTime: number, skyPalette: Band): string {

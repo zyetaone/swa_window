@@ -1,5 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 
+// Pure state holder — NO $effect here.
 export const globeFilters = $state({
 	mapRef: null as maplibregl.Map | null,
 	nightFactor: 0,
@@ -10,11 +11,12 @@ export const getBaseSaturation = () => 1.0 - (globeFilters.nightFactor * 0.82);
 export const getBaseContrast = () => 1.0 + globeFilters.nightFactor * 0.6;
 export const getNightBrightness = () => Math.max(0.15, 1 - globeFilters.nightFactor * 1.5);
 
-$effect(() => {
+/** Call from a component $effect — applies night dimming to base satellite layer. */
+export function applyNightFilters() {
 	const mapRef = globeFilters.mapRef;
 	if (!mapRef) return;
 	const m = mapRef;
-	const applyFilters = () => {
+	const apply = () => {
 		try {
 			if (m.getLayer('sat-imagery')) {
 				m.setPaintProperty('sat-imagery', 'raster-brightness-max', getBaseBrightness());
@@ -26,9 +28,9 @@ $effect(() => {
 			console.warn('Failed to apply night filters to base layer', e);
 		}
 	};
-	if (mapRef.loaded() && mapRef.isStyleLoaded()) applyFilters();
+	if (mapRef.loaded() && mapRef.isStyleLoaded()) apply();
 	else {
-		mapRef.once('load', applyFilters);
-		mapRef.once('styledata', applyFilters);
+		mapRef.once('load', apply);
+		mapRef.once('styledata', apply);
 	}
-});
+}

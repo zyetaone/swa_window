@@ -4,7 +4,7 @@ import type { PaletteName } from '../palettes';
 
 export const pg = $state({
 	activeLocation: 'dubai' as LocationId,
-	timeOfDay: 22,
+	timeOfDay: 12,
 	weather: 'clear' as WeatherType,
 	maplibreSource: 'eox-s2',
 	mlTerrain: true,
