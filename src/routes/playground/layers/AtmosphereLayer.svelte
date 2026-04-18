@@ -7,6 +7,8 @@
 		LineLayer,
 		Sky,
 	} from 'svelte-maplibre-gl';
+	import type maplibregl from 'maplibre-gl';
+	import CloudCanvasLayer from './CloudCanvasLayer.svelte';
 
 	let {
 		showAtmosphere,
@@ -16,6 +18,14 @@
 		shadowGeoJSON,
 		localGridGeoJSON,
 		hexToRgba,
+		/** Cloud canvas props — AtmosphereLayer is SSOT for distant clouds */
+		mapRef,
+		lat = 25.2,
+		lon = 55.3,
+		nightFactor = 0,
+		cloudDensity = 0.75,
+		heading = 0,
+		weather = 'clear',
 	}: {
 		showAtmosphere: boolean;
 		sunParams: { polar: number; azimuth: number; elevation: number };
@@ -24,6 +34,13 @@
 		shadowGeoJSON: GeoJSON.FeatureCollection;
 		localGridGeoJSON: GeoJSON.FeatureCollection;
 		hexToRgba: (hex: string, alpha: number) => string;
+		mapRef?: maplibregl.Map;
+		lat?: number;
+		lon?: number;
+		nightFactor?: number;
+		cloudDensity?: number;
+		heading?: number;
+		weather?: string;
 	} = $props();
 </script>
 
@@ -96,4 +113,17 @@
 			}}
 		/>
 	</GeoJSONSource>
+
+	<!-- DISTANT CLOUD LAYER — Canvas source projected onto globe.
+	     SSOT for horizon/distant clouds. Proper depth sorting with terrain.
+	     CSS3DClouds handles foreground sprites as CSS overlay. -->
+	<CloudCanvasLayer
+		{mapRef}
+		{lat}
+		{lon}
+		{nightFactor}
+		density={cloudDensity}
+		{heading}
+		{weather}
+	/>
 {/if}
