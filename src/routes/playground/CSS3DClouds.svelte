@@ -102,17 +102,39 @@ function createSprites(count: number, textures: readonly string[]): CloudSprite[
 	return sprites;
 }
 
-// Horizon clouds — dense, wide, flat band at the far horizon (8-22%).
-// These form the continuous cloud deck that terrain fades into.
+// Horizon clouds — translucent haze band at the far horizon (6-22%).
+// Lower opacity than mid/foreground so terrain shows THROUGH them,
+// not BEHIND them. Real clouds at 30k ft are ABOVE terrain — they
+// don't occlude foreground terrain, they BLEND with the sky.
+function createHorizonSprites(count: number, textures: readonly string[]): CloudSprite[] {
+	const sprites: CloudSprite[] = [];
+	for (let i = 0; i < count; i++) {
+		const y = rand(-5, 5);
+		sprites.push({
+			x: rand(-8, 8),
+			y,
+			z: rand(-80, 80),
+			rot: rand(0, 360),
+			scale: rand(0.5, 1.3),
+			speed: rand(0.01, 0.05),
+			texture: textures[Math.floor(Math.random() * textures.length)],
+			// KEY: low opacity so terrain shows through — horizon is a haze, not a wall
+			opacity: rand(0.18, 0.38),
+			brightness: 0.8 + (y + 5) / 10 * 0.2,
+		});
+	}
+	return sprites;
+}
+
 function createHorizonCloud(): Cloud {
 	const textures = textureSets[weather] ?? textureSets.clear;
 	return {
 		x: rand(-30, 130),
-		y: rand(6, 20),             // horizon band — very top
-		z: rand(-1400, -600),       // MUCH further back — perspective shrinks them at horizon
-		vx: rand(0.5, 1.8),        // very slow drift (distant)
-		baseScale: rand(1.5, 2.8), // extra large to compensate for perspective shrink
-		sprites: createSprites(10 + Math.floor(Math.random() * 6), textures),
+		y: rand(6, 22),
+		z: rand(-1400, -600),
+		vx: rand(0.5, 1.8),
+		baseScale: rand(1.8, 3.2),  // wide but translucent
+		sprites: createHorizonSprites(8 + Math.floor(Math.random() * 5), textures),
 	};
 }
 
@@ -266,8 +288,10 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 		perspective: 1800px;
 		will-change: opacity;
 		transition: opacity 1.5s ease, filter 2.5s ease;
-		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 82%, transparent 100%);
-		mask-image: linear-gradient(to bottom, transparent 0%, black 6%, black 82%, transparent 100%);
+		/* Gradient mask: clouds fade at horizon (top) so they BLEND with sky/terrain
+		   rather than blocking it. Dense in the middle, transparent at edges. */
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 10%, black 25%, black 75%, transparent 100%);
+		mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 10%, black 25%, black 75%, transparent 100%);
 	}
 
 	.cloud-base {
