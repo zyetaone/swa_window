@@ -30,7 +30,7 @@
 	// Module-level singleton — survives SvelteKit navigation. Acceptable for a
 	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
 	// createContext/getContext pattern.
-	import { pg } from './lib/playground-state.svelte';
+	import { pg, pgTick, pgCycleLocation } from './lib/playground-state.svelte';
 	import { useBlind } from '$lib/shell/use-blind.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
 	import WindowGlass from './components/WindowGlass.svelte';
@@ -88,7 +88,7 @@
 	}
 
 	function handleMapTap() {
-		pg.cycleLocation();
+		pgCycleLocation();
 	}
 
 	function handlePointerUp() {
@@ -197,7 +197,7 @@
 			untrack(() => {
 				simTime += dt;
 
-				pg.tick(dt, now, isBoosting);
+				pgTick(dt, now, isBoosting);
 
 				if (pg.autoFly || isBoosting) {
 					// Elliptical orbit: major/minor axes rotated by orbitTilt.
@@ -279,7 +279,6 @@
 				bearing={viewBearing}
 				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
 				imageryAttribution={maplibreSrc.attribution ?? ''}
-				imageryMaxZoom={maplibreSrc.maxZoom ?? 14}
 				pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
 				showTerrain={pg.mlTerrain}
 				showBuildings={pg.mlBuildings}

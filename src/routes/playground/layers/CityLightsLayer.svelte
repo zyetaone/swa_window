@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { CircleLayer, LineLayer } from 'svelte-maplibre-gl';
+	import { pg } from '../lib/playground-state.svelte';
 
 	let {
 		nightFactor,
-		showCityLights,
+		showCityLights = undefined,
 	}: {
 		nightFactor: number;
-		showCityLights: boolean;
+		showCityLights?: boolean;
 	} = $props();
 
+	const effectiveShowCityLights = $derived(showCityLights ?? pg.showCityLights);
 	</script>
 
 <!-- ROADS — warm amber glow at night. Per-class sizing: highways
@@ -85,7 +87,7 @@
 <!-- LIGHT POLLUTION CORONA — wide amber disc under each city.
      Simulates atmospheric light scatter visible from altitude.
      Larger blur + lower opacity than city-glow disc. -->
-{#if showCityLights && nightFactor > 0.2}
+{#if effectiveShowCityLights && nightFactor > 0.2}
 	<CircleLayer
 		id="city-corona"
 		source="openmaptiles"
@@ -110,7 +112,7 @@
 <!-- CITY GLOW — procedural warm discs on 'place' points.
      Opacity driven by nightFactor + rank amplitude.
      rank 1-3: 1.8× intensity | 4-6: 1.3× | 7+: 0.8× -->
-{#if showCityLights && nightFactor > 0.15}
+{#if effectiveShowCityLights && nightFactor > 0.15}
 	<CircleLayer
 		id="city-glow"
 		source="openmaptiles"

@@ -3,7 +3,7 @@
 	import { WEATHER_TYPES } from '$lib/types';
 	import { formatTime } from '$lib/utils';
 	import { MAPLIBRE_SOURCES, CACHED_SOURCES } from '../imagery';
-	import { pg } from '../lib/playground-state.svelte';
+	import { pg, pgReset, pgRandomize, ALT_HOLD_SEC, HDG_HOLD_SEC } from '../lib/playground-state.svelte';
 	import { getSkyState } from '$lib/utils';
 
 	let { drawerOpen = $bindable(false) } : { drawerOpen?: boolean } = $props();
@@ -122,7 +122,8 @@
 	<fieldset>
 		<legend>Plane</legend>
 		<label>Heading <span class="val">{pg.heading.toFixed(0)}°</span>
-			<input type="range" bind:value={pg.heading} min="0" max="360" step="1" disabled={pg.autoOrbit || pg.autoFly} />
+			<input type="range" value={pg.heading} min="0" max="360" step="1" disabled={pg.autoOrbit || pg.autoFly}
+				oninput={(e) => { pg.heading = +e.currentTarget.value; pg.headingCooldown = HDG_HOLD_SEC; }} />
 		</label>
 		<label>Orbit Speed <span class="val">{pg.orbitAngularSpeed.toFixed(3)}</span>
 			<input type="range" bind:value={pg.orbitAngularSpeed} min="0.01" max="0.3" step="0.01" />
@@ -131,7 +132,8 @@
 			<input type="range" bind:value={pg.planeSpeed} min="0.1" max="5" step="0.1" />
 		</label>
 		<label>Altitude <span class="val">{(pg.altitude / 1000).toFixed(0)}k ft</span>
-			<input type="range" bind:value={pg.altitude} min="5000" max="45000" step="1000" />
+			<input type="range" value={pg.altitude} min="5000" max="45000" step="1000"
+				oninput={(e) => { pg.altitude = +e.currentTarget.value; pg.altitudeCooldown = ALT_HOLD_SEC; }} />
 		</label>
 		<label>Turbulence <span class="val">{pg.turbulenceLevel}</span>
 			<select bind:value={pg.turbulenceLevel}>
@@ -155,8 +157,8 @@
 	</fieldset>
 
 	<div class="actions">
-		<button class="btn" onclick={() => pg.randomize()}>Randomize</button>
-		<button class="btn" onclick={() => pg.reset()}>Reset</button>
+		<button class="btn" onclick={pgRandomize}>Randomize</button>
+		<button class="btn" onclick={pgReset}>Reset</button>
 	</div>
 </aside>
 
