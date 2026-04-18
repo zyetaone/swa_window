@@ -284,8 +284,8 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 		margin-left: -50%;
 		margin-top: -50%;
 		will-change: transform;
-		/* Screen blend: overlapping sprites add brightness naturally */
-		mix-blend-mode: screen;
+		/* Normal blend: cloud PNGs have alpha channels for natural transparency.
+		   Screen mode washes out against light terrain backgrounds. */
 		/* Smooth the per-frame rotation updates */
 		transition: filter 2s ease;
 	}
