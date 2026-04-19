@@ -9,6 +9,7 @@
 	} from 'svelte-maplibre-gl';
 	import type maplibregl from 'maplibre-gl';
 	import CloudCanvasLayer from './CloudCanvasLayer.svelte';
+	import VectorCloudLayer from './VectorCloudLayer.svelte';
 
 	let {
 		showAtmosphere,
@@ -40,7 +41,7 @@
 		nightFactor?: number;
 		cloudDensity?: number;
 		heading?: number;
-		weather?: string;
+		weather?: 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
 	} = $props();
 </script>
 
@@ -128,6 +129,18 @@
 		{nightFactor}
 		density={cloudDensity}
 		{heading}
+		{weather}
+	/>
+
+	<!-- VECTOR CLOUDS — GeoJSON-driven cloud sprites rendered natively by MapLibre.
+	     Proper perspective, depth sorting, horizon recession — all automatic.
+	     This is the SSOT for distant/mid-field clouds. -->
+	<VectorCloudLayer
+		{lat}
+		{lon}
+		density={cloudDensity}
+		{heading}
+		{nightFactor}
 		{weather}
 	/>
 {/if}
