@@ -303,17 +303,9 @@
 			{/if}
 		</div>
 
-		<!-- Cloud floor — continuous white surface below the plane.
-		     "A vast field of snow stretching to the horizon" (O'Keeffe).
-		     Sits BEHIND CSS 3D sprites, ABOVE terrain. Creates the "sea
-		     of clouds" base that individual cloud formations sit on top of.
-		     Opacity modulated by density + cloudProximity (altitude). -->
-		<div
-			class="cloud-floor"
-			style:opacity={Math.min(0.75, pg.density * 0.85 * (Math.abs(pg.altitude - 28000) < 8000 ? 1 : 0.3))}
-			class:night={nf > 0.5}
-			aria-hidden="true"
-		></div>
+		<!-- Cloud floor is now the FillLayer deck polygon in VectorCloudLayer
+		     (inside AtmosphereLayer). No CSS gradient needed — MapLibre handles
+		     perspective + depth sorting natively. -->
 
 		{#if pg.cloudRenderer === 'css3d'}
 			<CSS3DClouds
@@ -454,35 +446,8 @@
 	   Gradient: transparent at top (sky) → white at horizon (~35%) → solid
 	   white below horizon → transparent at very bottom (near ground).
 	   z-index 3 = below CSS 3D clouds (z:5) but above terrain (z:0). */
-	.cloud-floor {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 3;
-		background: linear-gradient(to bottom,
-			transparent 0%,
-			transparent 20%,
-			rgba(240, 245, 250, 0.15) 30%,
-			rgba(245, 248, 252, 0.5) 40%,
-			rgba(248, 250, 253, 0.75) 50%,
-			rgba(250, 252, 255, 0.85) 60%,
-			rgba(248, 250, 253, 0.7) 75%,
-			rgba(240, 245, 250, 0.4) 90%,
-			transparent 100%
-		);
-		transition: opacity 2s ease;
-	}
-	.cloud-floor.night {
-		background: linear-gradient(to bottom,
-			transparent 0%,
-			transparent 25%,
-			rgba(15, 20, 35, 0.2) 35%,
-			rgba(20, 28, 45, 0.5) 50%,
-			rgba(18, 25, 40, 0.6) 65%,
-			rgba(15, 22, 38, 0.4) 80%,
-			transparent 100%
-		);
-	}
+	/* Cloud floor CSS gradient removed — replaced by FillLayer deck polygon
+	   in VectorCloudLayer (MapLibre native, proper depth sorting). */
 
 	.horizon-line {
 		position: absolute;

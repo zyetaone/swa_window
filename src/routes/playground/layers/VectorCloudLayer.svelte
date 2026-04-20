@@ -60,9 +60,10 @@ const deckGeoJSON = $derived.by(() => {
 	};
 });
 
-// Deck opacity — density + altitude modulated
-const deckOpacity = $derived(Math.min(0.55, density * 0.6) * (nightFactor > 0.5 ? 0.35 : 1));
-const deckColor = $derived(nightFactor > 0.5 ? 'rgba(20, 28, 45, 0.8)' : 'rgba(245, 248, 252, 0.85)');
+// Deck opacity — lower so terrain shows through gaps between CSS 3D sprites.
+// The FillLayer is the "sea of clouds" base, not a solid wall.
+const deckOpacity = $derived(Math.min(0.35, density * 0.4) * (nightFactor > 0.5 ? 0.3 : 1));
+const deckColor = $derived(nightFactor > 0.5 ? 'rgba(20, 28, 45, 0.6)' : 'rgba(248, 250, 255, 0.7)');
 
 // ── Individual cloud sprites ────────────────────────────────────────
 const CLOUD_SPRITES = [

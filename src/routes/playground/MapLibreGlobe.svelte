@@ -182,7 +182,6 @@
 		{shadowGeoJSON}
 		{localGridGeoJSON}
 		{hexToRgba}
-		{mapRef}
 		{lat}
 		{lon}
 		{nightFactor}

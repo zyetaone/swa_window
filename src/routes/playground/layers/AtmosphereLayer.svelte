@@ -7,8 +7,6 @@
 		LineLayer,
 		Sky,
 	} from 'svelte-maplibre-gl';
-	import type maplibregl from 'maplibre-gl';
-	import CloudCanvasLayer from './CloudCanvasLayer.svelte';
 	import VectorCloudLayer from './VectorCloudLayer.svelte';
 
 	let {
@@ -19,8 +17,7 @@
 		shadowGeoJSON,
 		localGridGeoJSON,
 		hexToRgba,
-		/** Cloud canvas props — AtmosphereLayer is SSOT for distant clouds */
-		mapRef,
+		/** Cloud vector layer props — AtmosphereLayer is SSOT for distant clouds */
 		lat = 25.2,
 		lon = 55.3,
 		nightFactor = 0,
@@ -35,7 +32,6 @@
 		shadowGeoJSON: GeoJSON.FeatureCollection;
 		localGridGeoJSON: GeoJSON.FeatureCollection;
 		hexToRgba: (hex: string, alpha: number) => string;
-		mapRef?: maplibregl.Map;
 		lat?: number;
 		lon?: number;
 		nightFactor?: number;
@@ -122,16 +118,6 @@
 	<!-- DISTANT CLOUD LAYER — Canvas source projected onto globe.
 	     SSOT for horizon/distant clouds. Proper depth sorting with terrain.
 	     CSS3DClouds handles foreground sprites as CSS overlay. -->
-	<CloudCanvasLayer
-		{mapRef}
-		{lat}
-		{lon}
-		{nightFactor}
-		density={cloudDensity}
-		{heading}
-		{weather}
-	/>
-
 	<!-- VECTOR CLOUDS — GeoJSON-driven cloud sprites rendered natively by MapLibre.
 	     Proper perspective, depth sorting, horizon recession — all automatic.
 	     This is the SSOT for distant/mid-field clouds. -->
