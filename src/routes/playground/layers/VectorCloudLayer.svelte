@@ -36,34 +36,43 @@ let {
 // ── Cloud deck polygon ──────────────────────────────────────────────
 // A large polygon covering ~8° around the camera. MapLibre renders this
 // as a filled area on the globe. At cruise pitch (72°), the far edge
-// of this polygon IS the horizon — it appears as the cloud deck band.
+// Cloud deck = RING polygon. Outer boundary at 6° (far horizon), inner
+// hole at 1.5° (near terrain stays visible). The ring only covers the
+// DISTANT area where clouds would be at the horizon. MapLibre's
+// perspective projection makes the ring's far edge appear as a bright
+// white band at the horizon line.
 const deckGeoJSON = $derived.by(() => {
-	const span = 4; // degrees radius
+	const outer = 6;  // outer ring edge (degrees from camera)
+	const inner = 1.5; // inner hole (near terrain stays clear)
 	const cosLat = Math.max(Math.cos(lat * Math.PI / 180), 0.2);
-	const lonSpan = span / cosLat;
+
+	// Generate approximate circles as 24-sided polygons
+	const outerRing: [number, number][] = [];
+	const innerRing: [number, number][] = [];
+	for (let i = 0; i <= 24; i++) {
+		const a = (i / 24) * Math.PI * 2;
+		outerRing.push([lon + Math.cos(a) * outer / cosLat, lat + Math.sin(a) * outer]);
+		innerRing.push([lon + Math.cos(a) * inner / cosLat, lat + Math.sin(a) * inner]);
+	}
+	// GeoJSON polygon with hole: outer ring CCW, inner ring CW
+	innerRing.reverse();
+
 	return {
 		type: 'FeatureCollection' as const,
 		features: [{
 			type: 'Feature' as const,
 			geometry: {
 				type: 'Polygon' as const,
-				coordinates: [[
-					[lon - lonSpan, lat - span],
-					[lon + lonSpan, lat - span],
-					[lon + lonSpan, lat + span],
-					[lon - lonSpan, lat + span],
-					[lon - lonSpan, lat - span],
-				]],
+				coordinates: [outerRing, innerRing],
 			},
 			properties: {},
 		}],
 	};
 });
 
-// Deck opacity — lower so terrain shows through gaps between CSS 3D sprites.
-// The FillLayer is the "sea of clouds" base, not a solid wall.
-const deckOpacity = $derived(Math.min(0.35, density * 0.4) * (nightFactor > 0.5 ? 0.3 : 1));
-const deckColor = $derived(nightFactor > 0.5 ? 'rgba(20, 28, 45, 0.6)' : 'rgba(248, 250, 255, 0.7)');
+// Higher opacity — this IS the horizon cloud band, needs to be visible
+const deckOpacity = $derived(Math.min(0.6, density * 0.7) * (nightFactor > 0.5 ? 0.3 : 1));
+const deckColor = $derived(nightFactor > 0.5 ? 'rgba(20, 28, 45, 0.7)' : 'rgba(248, 250, 255, 0.85)');
 
 // ── Individual cloud sprites ────────────────────────────────────────
 const CLOUD_SPRITES = [
