@@ -2,22 +2,19 @@
 /**
  * VectorCloudLayer — GeoJSON-driven clouds rendered natively by MapLibre.
  *
- * Each cloud = a GeoJSON Point with properties (size, opacity, rotation, type).
- * MapLibre's SymbolLayer renders cloud.png sprites at geographic positions.
- * Perspective, depth sorting, and horizon recession happen AUTOMATICALLY
- * because clouds are part of the 3D map scene, not a CSS overlay.
+ * Two-layer approach:
+ * 1. FillLayer — large polygon covering the area around the camera with
+ *    semi-transparent white fill. Creates the "cloud deck floor" that
+ *    MapLibre renders with proper perspective. The horizon naturally
+ *    shows this as a white band because it extends to the edge of view.
+ * 2. SymbolLayer — individual cloud sprites at geographic positions for
+ *    the billowy formations that rise above the deck.
  *
- * This is the SSOT for cloud rendering — replaces CSS 3D overlay approach
- * for horizon/distant clouds where depth sorting with terrain matters.
- *
- * Architecture:
- * - <Image> registers cloud.png as a map sprite
- * - GeoJSONSource holds cloud positions (updated at 2Hz)
- * - SymbolLayer renders sprites with data-driven size/opacity/rotation
- * - icon-allow-overlap + icon-ignore-placement = clouds can overlap freely
+ * Both layers participate in MapLibre's 3D scene — proper depth sorting
+ * with terrain, automatic perspective projection, horizon recession.
  */
 
-import { GeoJSONSource, SymbolLayer, Image } from 'svelte-maplibre-gl';
+import { GeoJSONSource, FillLayer, SymbolLayer, Image } from 'svelte-maplibre-gl';
 import type { WeatherType } from '$lib/types';
 
 let {
@@ -36,14 +33,44 @@ let {
 	weather?: WeatherType;
 } = $props();
 
-// Load multiple cloud sprite textures for variety
+// ── Cloud deck polygon ──────────────────────────────────────────────
+// A large polygon covering ~8° around the camera. MapLibre renders this
+// as a filled area on the globe. At cruise pitch (72°), the far edge
+// of this polygon IS the horizon — it appears as the cloud deck band.
+const deckGeoJSON = $derived.by(() => {
+	const span = 4; // degrees radius
+	const cosLat = Math.max(Math.cos(lat * Math.PI / 180), 0.2);
+	const lonSpan = span / cosLat;
+	return {
+		type: 'FeatureCollection' as const,
+		features: [{
+			type: 'Feature' as const,
+			geometry: {
+				type: 'Polygon' as const,
+				coordinates: [[
+					[lon - lonSpan, lat - span],
+					[lon + lonSpan, lat - span],
+					[lon + lonSpan, lat + span],
+					[lon - lonSpan, lat + span],
+					[lon - lonSpan, lat - span],
+				]],
+			},
+			properties: {},
+		}],
+	};
+});
+
+// Deck opacity — density + altitude modulated
+const deckOpacity = $derived(Math.min(0.55, density * 0.6) * (nightFactor > 0.5 ? 0.35 : 1));
+const deckColor = $derived(nightFactor > 0.5 ? 'rgba(20, 28, 45, 0.8)' : 'rgba(245, 248, 252, 0.85)');
+
+// ── Individual cloud sprites ────────────────────────────────────────
 const CLOUD_SPRITES = [
 	{ id: 'cloud-sprite-0', src: '/cloud.png' },
 	{ id: 'cloud-sprite-1', src: '/cloud-01.png' },
 	{ id: 'cloud-sprite-2', src: '/cloud-05.png' },
 	{ id: 'cloud-sprite-3', src: '/cloud-07.png' },
 ];
-// Dark/storm variants
 const STORM_SPRITES = [
 	{ id: 'cloud-sprite-dark', src: '/cloud-dark.png' },
 	{ id: 'cloud-sprite-gray', src: '/cloud-03.png' },
@@ -68,97 +95,62 @@ $effect(() => {
 });
 const imagesReady = $derived(loadedImages.size === ALL_SPRITES.length);
 
-// Generate cloud positions around the current location
+// Generate cloud sprite positions — biased toward view direction
 interface CloudFeature {
 	type: 'Feature';
 	geometry: { type: 'Point'; coordinates: [number, number] };
-	properties: {
-		sprite: string;  // icon-image ID
-		size: number;
-		opacity: number;
-		rotation: number;
-		sortKey: number;
-	};
+	properties: { sprite: string; size: number; opacity: number; rotation: number; sortKey: number };
 }
 
-function generateClouds(
-	centerLat: number,
-	centerLon: number,
-	count: number,
-	headingDeg: number,
-): CloudFeature[] {
-	const features: CloudFeature[] = [];
-	// Passenger looks 90° left of heading — that's the view direction.
-	// Concentrate clouds TOWARD the horizon in the view direction.
-	const viewRad = (headingDeg - 90) * Math.PI / 180;
-
-	for (let i = 0; i < count; i++) {
-		// Bias distribution toward view direction for horizon clouds.
-		// 60% of clouds go in the forward-view hemisphere, 40% elsewhere.
-		const isFrontBiased = Math.random() < 0.6;
-		const angle = isFrontBiased
-			? viewRad + (Math.random() - 0.5) * Math.PI * 0.8  // ±72° from view direction
-			: Math.random() * Math.PI * 2;                       // full circle
-
-		// Distance: front-biased clouds go FURTHER (toward horizon)
-		const dist = isFrontBiased
-			? 1.0 + Math.random() * 4.0   // 1°-5° from center (toward horizon)
-			: 0.3 + Math.random() * 2.5;  // 0.3°-2.8° (nearer, scattered)
-
-		const cosLat = Math.cos(centerLat * Math.PI / 180);
-		const lat = centerLat + Math.cos(angle) * dist;
-		const lon = centerLon + Math.sin(angle) * dist / Math.max(cosLat, 0.2);
-
-		// Clouds further from camera = slightly smaller, more transparent
-		const distNorm = Math.min(dist / 5, 1);
-		const size = (1.8 - distNorm * 0.6) * (0.5 + Math.random() * 0.8);
-		const opacity = (0.8 - distNorm * 0.35) * (0.4 + Math.random() * 0.5);
-
-		// Pick sprite based on weather
-		const isStorm = weather === 'storm' || weather === 'rain' || weather === 'overcast';
-		const sprites = isStorm ? STORM_SPRITES : CLOUD_SPRITES;
-		const sprite = sprites[Math.floor(Math.random() * sprites.length)].id;
-
-		features.push({
-			type: 'Feature' as const,
-			geometry: { type: 'Point' as const, coordinates: [lon, lat] },
-			properties: {
-				sprite,
-				size: Math.max(0.1, size),
-				opacity: Math.max(0.05, Math.min(0.85, opacity)),
-				rotation: Math.random() * 360,
-				sortKey: dist,
-			},
-		});
-	}
-	return features;
-}
-
-// Cloud count and GeoJSON — regenerated at 2Hz for drift
-const cloudCount = $derived(Math.max(8, Math.round(density * 35)));
+const cloudCount = $derived(Math.max(10, Math.round(density * 40)));
+const isStorm = $derived(weather === 'storm' || weather === 'rain' || weather === 'overcast');
 
 let cloudGeoJSON = $state<GeoJSON.FeatureCollection>({
 	type: 'FeatureCollection',
 	features: [],
 });
 
-// Regenerate cloud positions when location changes
 $effect(() => {
-	void lat; void lon; void weather;
-	cloudGeoJSON = {
-		type: 'FeatureCollection',
-		features: generateClouds(lat, lon, cloudCount, heading),
-	};
+	void lat; void lon; void weather; void heading;
+	const viewRad = (heading - 90) * Math.PI / 180;
+	const cosLat = Math.max(Math.cos(lat * Math.PI / 180), 0.2);
+	const sprites = isStorm ? STORM_SPRITES : CLOUD_SPRITES;
+	const features: CloudFeature[] = [];
+
+	for (let i = 0; i < cloudCount; i++) {
+		const isFront = Math.random() < 0.6;
+		const angle = isFront
+			? viewRad + (Math.random() - 0.5) * Math.PI * 0.8
+			: Math.random() * Math.PI * 2;
+		const dist = isFront ? 1.0 + Math.random() * 4.0 : 0.3 + Math.random() * 2.5;
+
+		const cLat = lat + Math.cos(angle) * dist;
+		const cLon = lon + Math.sin(angle) * dist / cosLat;
+		const distNorm = Math.min(dist / 5, 1);
+		const size = (2.0 - distNorm * 0.8) * (0.5 + Math.random() * 0.8);
+		const opacity = (0.85 - distNorm * 0.4) * (0.4 + Math.random() * 0.5);
+
+		features.push({
+			type: 'Feature' as const,
+			geometry: { type: 'Point' as const, coordinates: [cLon, cLat] },
+			properties: {
+				sprite: sprites[Math.floor(Math.random() * sprites.length)].id,
+				size: Math.max(0.15, size),
+				opacity: Math.max(0.08, Math.min(0.85, opacity)),
+				rotation: Math.random() * 360,
+				sortKey: dist,
+			},
+		});
+	}
+	cloudGeoJSON = { type: 'FeatureCollection', features };
 });
 
-// Slow drift — update positions at 2Hz
+// Drift at 2Hz
 $effect(() => {
 	const interval = setInterval(() => {
 		const headRad = heading * Math.PI / 180;
-		const drift = 0.0003; // degrees per update (~150m)
-		const dx = Math.cos(headRad) * drift;
-		const dy = Math.sin(headRad) * drift;
-
+		const dx = Math.cos(headRad) * 0.0003;
+		const dy = Math.sin(headRad) * 0.00015;
 		cloudGeoJSON = {
 			type: 'FeatureCollection',
 			features: cloudGeoJSON.features.map(f => ({
@@ -166,8 +158,8 @@ $effect(() => {
 				geometry: {
 					...f.geometry,
 					coordinates: [
-						((f.geometry as any).coordinates[0] + dx),
-						((f.geometry as any).coordinates[1] + dy * 0.5),
+						(f.geometry as any).coordinates[0] + dx,
+						(f.geometry as any).coordinates[1] + dy,
 					],
 				},
 			})),
@@ -176,11 +168,10 @@ $effect(() => {
 	return () => clearInterval(interval);
 });
 
-// Night opacity multiplier
 const nightMul = $derived(nightFactor > 0.5 ? 0.4 : 1.0);
 </script>
 
-<!-- Register ALL cloud sprites as map images -->
+<!-- Register all cloud sprites as map images -->
 {#if imagesReady}
 	{#each ALL_SPRITES as s (s.id)}
 		{@const img = loadedImages.get(s.id)}
@@ -190,14 +181,28 @@ const nightMul = $derived(nightFactor > 0.5 ? 0.4 : 1.0);
 	{/each}
 {/if}
 
-<!-- Cloud positions as GeoJSON points — icon-image is data-driven per feature -->
+<!-- CLOUD DECK — large white polygon covering the area around camera.
+     At cruise pitch, the far edge IS the horizon cloud band.
+     MapLibre renders it with native perspective — no CSS hack needed. -->
+<GeoJSONSource id="cloud-deck-polygon" data={deckGeoJSON}>
+	<FillLayer
+		id="cloud-deck-fill"
+		source="cloud-deck-polygon"
+		paint={{
+			'fill-color': deckColor,
+			'fill-opacity': deckOpacity,
+		}}
+	/>
+</GeoJSONSource>
+
+<!-- CLOUD SPRITES — individual formations above the deck -->
 <GeoJSONSource id="vector-clouds" data={cloudGeoJSON}>
 	<SymbolLayer
 		id="vector-cloud-layer"
 		source="vector-clouds"
 		layout={{
 			'icon-image': ['get', 'sprite'],
-			'icon-size': ['*', ['get', 'size'], 0.4],
+			'icon-size': ['*', ['get', 'size'], 0.5],
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true,
 			'icon-rotate': ['get', 'rotation'],
