@@ -36,20 +36,44 @@ let {
 	weather?: WeatherType;
 } = $props();
 
-// Load the cloud sprite image
-let cloudImg = $state<HTMLImageElement | null>(null);
+// Load multiple cloud sprite textures for variety
+const CLOUD_SPRITES = [
+	{ id: 'cloud-sprite-0', src: '/cloud.png' },
+	{ id: 'cloud-sprite-1', src: '/cloud-01.png' },
+	{ id: 'cloud-sprite-2', src: '/cloud-05.png' },
+	{ id: 'cloud-sprite-3', src: '/cloud-07.png' },
+];
+// Dark/storm variants
+const STORM_SPRITES = [
+	{ id: 'cloud-sprite-dark', src: '/cloud-dark.png' },
+	{ id: 'cloud-sprite-gray', src: '/cloud-03.png' },
+	{ id: 'cloud-sprite-smoke', src: '/cloud-smoke.png' },
+];
+const ALL_SPRITES = [...CLOUD_SPRITES, ...STORM_SPRITES];
+
+let loadedImages = $state<Map<string, HTMLImageElement>>(new Map());
 $effect(() => {
-	const img = new window.Image();
-	img.crossOrigin = 'anonymous';
-	img.src = '/cloud.png';
-	img.onload = () => { cloudImg = img; };
+	const map = new Map<string, HTMLImageElement>();
+	let loaded = 0;
+	for (const s of ALL_SPRITES) {
+		const img = new window.Image();
+		img.crossOrigin = 'anonymous';
+		img.src = s.src;
+		img.onload = () => {
+			map.set(s.id, img);
+			loaded++;
+			if (loaded === ALL_SPRITES.length) loadedImages = new Map(map);
+		};
+	}
 });
+const imagesReady = $derived(loadedImages.size === ALL_SPRITES.length);
 
 // Generate cloud positions around the current location
 interface CloudFeature {
 	type: 'Feature';
 	geometry: { type: 'Point'; coordinates: [number, number] };
 	properties: {
+		sprite: string;  // icon-image ID
 		size: number;
 		opacity: number;
 		rotation: number;
@@ -64,28 +88,46 @@ function generateClouds(
 	headingDeg: number,
 ): CloudFeature[] {
 	const features: CloudFeature[] = [];
-	void headingDeg; // used for future wind-direction bias
+	// Passenger looks 90° left of heading — that's the view direction.
+	// Concentrate clouds TOWARD the horizon in the view direction.
+	const viewRad = (headingDeg - 90) * Math.PI / 180;
 
 	for (let i = 0; i < count; i++) {
-		// Distribute clouds in a ~4° radius around the camera
-		const angle = Math.random() * Math.PI * 2;
-		const dist = 0.3 + Math.random() * 3.5; // 0.3° to 3.8° from center
-		const lat = centerLat + Math.cos(angle) * dist;
-		const lon = centerLon + Math.sin(angle) * dist / Math.cos(centerLat * Math.PI / 180);
+		// Bias distribution toward view direction for horizon clouds.
+		// 60% of clouds go in the forward-view hemisphere, 40% elsewhere.
+		const isFrontBiased = Math.random() < 0.6;
+		const angle = isFrontBiased
+			? viewRad + (Math.random() - 0.5) * Math.PI * 0.8  // ±72° from view direction
+			: Math.random() * Math.PI * 2;                       // full circle
 
-		// Clouds further from camera = smaller, more transparent (perspective)
-		const distNorm = dist / 4; // 0..1
-		const size = (1.5 - distNorm * 0.8) * (0.6 + Math.random() * 0.8);
-		const opacity = (0.7 - distNorm * 0.4) * (0.5 + Math.random() * 0.5);
+		// Distance: front-biased clouds go FURTHER (toward horizon)
+		const dist = isFrontBiased
+			? 1.0 + Math.random() * 4.0   // 1°-5° from center (toward horizon)
+			: 0.3 + Math.random() * 2.5;  // 0.3°-2.8° (nearer, scattered)
+
+		const cosLat = Math.cos(centerLat * Math.PI / 180);
+		const lat = centerLat + Math.cos(angle) * dist;
+		const lon = centerLon + Math.sin(angle) * dist / Math.max(cosLat, 0.2);
+
+		// Clouds further from camera = slightly smaller, more transparent
+		const distNorm = Math.min(dist / 5, 1);
+		const size = (1.8 - distNorm * 0.6) * (0.5 + Math.random() * 0.8);
+		const opacity = (0.8 - distNorm * 0.35) * (0.4 + Math.random() * 0.5);
+
+		// Pick sprite based on weather
+		const isStorm = weather === 'storm' || weather === 'rain' || weather === 'overcast';
+		const sprites = isStorm ? STORM_SPRITES : CLOUD_SPRITES;
+		const sprite = sprites[Math.floor(Math.random() * sprites.length)].id;
 
 		features.push({
 			type: 'Feature' as const,
 			geometry: { type: 'Point' as const, coordinates: [lon, lat] },
 			properties: {
+				sprite,
 				size: Math.max(0.1, size),
 				opacity: Math.max(0.05, Math.min(0.85, opacity)),
 				rotation: Math.random() * 360,
-				sortKey: dist, // further = lower sort key (drawn first)
+				sortKey: dist,
 			},
 		});
 	}
@@ -138,18 +180,23 @@ $effect(() => {
 const nightMul = $derived(nightFactor > 0.5 ? 0.4 : 1.0);
 </script>
 
-<!-- Register cloud.png as a map sprite -->
-{#if cloudImg}
-	<Image id="cloud-sprite" image={cloudImg} />
+<!-- Register ALL cloud sprites as map images -->
+{#if imagesReady}
+	{#each ALL_SPRITES as s (s.id)}
+		{@const img = loadedImages.get(s.id)}
+		{#if img}
+			<Image id={s.id} image={img} />
+		{/if}
+	{/each}
 {/if}
 
-<!-- Cloud positions as GeoJSON points -->
+<!-- Cloud positions as GeoJSON points — icon-image is data-driven per feature -->
 <GeoJSONSource id="vector-clouds" data={cloudGeoJSON}>
 	<SymbolLayer
 		id="vector-cloud-layer"
 		source="vector-clouds"
 		layout={{
-			'icon-image': 'cloud-sprite',
+			'icon-image': ['get', 'sprite'],
 			'icon-size': ['*', ['get', 'size'], 0.4],
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true,
