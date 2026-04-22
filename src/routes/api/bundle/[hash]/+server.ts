@@ -19,7 +19,7 @@
 
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { readLocal } from '$lib/fleet/lan-proxy.server';
+import { readLocal } from '$lib/fleet/lan-bundle-cache.server';
 import { lanCorsHeaders } from '$lib/http/cors';
 
 export const GET: RequestHandler = async ({ params, request }) => {
