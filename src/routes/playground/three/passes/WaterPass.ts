@@ -116,7 +116,7 @@ export function createWaterPass(normalMapUrl = '/textures/water-normals.jpg'): W
 			tex.anisotropy = 4;
 			loadedTex = tex;
 			pass.uniforms.tWaterNormals.value = tex;
-			pass.uniforms.u_waterIntensity.value = 1;
+			pass.uniforms.u_waterIntensity.value = 0.35;
 		},
 		undefined,
 		(err) => {
@@ -130,7 +130,7 @@ export function createWaterPass(normalMapUrl = '/textures/water-normals.jpg'): W
 	function setNormalMap(tex: THREE.Texture): void {
 		loadedTex = tex;
 		pass.uniforms.tWaterNormals.value = tex;
-		pass.uniforms.u_waterIntensity.value = 1;
+		pass.uniforms.u_waterIntensity.value = 0.35;
 	}
 
 	function setUniforms(u: WaterUniforms): void {
