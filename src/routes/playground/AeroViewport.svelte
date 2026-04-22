@@ -9,14 +9,24 @@
 	 */
 	import { onMount, untrack } from 'svelte';
 	import * as THREE from 'three';
-	import maplibregl from 'maplibre-gl';
+	import type maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	import {
+		MapLibre,
+		Projection,
+		RasterTileSource,
+		RasterLayer,
+		BackgroundLayer,
+		VectorTileSource,
+	} from 'svelte-maplibre-gl';
 	import { Canvas, T } from '@threlte/core';
 	import { Geodetic, Ellipsoid } from '@takram/three-geospatial';
-	
+
 	import { pg, motion, pgNightFactor, pgTick, pgHeadingOffsetDeg, pgSkyState } from './lib/playground-state.svelte';
 	import { altitudeToZoom, latZoomAdjust } from '$lib/simulation/globe';
 	import { addBuildings } from './layers/buildings';
 	import { simulationCameraConfig as cameraConfig, simulationDirectorConfig as directorConfig } from '$lib/simulation/camera-config';
+	import { MAPLIBRE_SOURCES, findSource } from '$lib/simulation/imagery';
 	import { LOCATION_MAP, LOCATIONS } from '$lib/locations';
 	
 	import LandscapeAbstractionLayer from './layers/LandscapeAbstractionLayer.svelte';
@@ -27,16 +37,19 @@
 
 	let { isBoosting = false }: { isBoosting?: boolean } = $props();
 
-	let container = $state<HTMLDivElement | undefined>();
-	let map = $state<maplibregl.Map | null>(null);
+	let map = $state<maplibregl.Map | undefined>(undefined);
 	let mapReady = $state(false);
 
 	// --- Internal State (Map Center) ---
 	let mapLat = $state(25.2);
 	let mapLon = $state(55.3);
 
+	// --- Imagery Config ---
+	const satSource = findSource(MAPLIBRE_SOURCES, 'eox-s2');
+
 	// --- ECEF Camera Constants ---
 	const DEG2RAD = Math.PI / 180;
+	// ... (rest of cam constants)
 	const geo = new Geodetic();
 	const camPos = new THREE.Vector3();
 	const enuFrame = new THREE.Matrix4();
@@ -92,38 +105,17 @@
 		};
 	});
 
+	// Flip mapReady when the MapLibre instance (owned by <MapLibre> below) finishes its initial load.
+	$effect(() => {
+		if (!map) { mapReady = false; return; }
+		if (map.loaded()) { mapReady = true; return; }
+		const onLoad = () => { mapReady = true; };
+		map.once('load', onLoad);
+		return () => { map?.off('load', onLoad); };
+	});
+
 	// --- Animation Loop ---
 	onMount(() => {
-		if (!container) return;
-		map = new maplibregl.Map({
-			container,
-			style: {
-				version: 8,
-				sources: {
-					satellite: {
-						type: 'raster',
-						tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg'],
-						tileSize: 256, maxzoom: 14,
-						attribution: 'Sentinel-2 cloudless — © EOX IT Services GmbH',
-					},
-				},
-				layers: [
-					{ id: 'bg', type: 'background', paint: { 'background-color': '#04060d' } },
-					{ id: 'sat', type: 'raster', source: 'satellite', paint: { 'raster-fade-duration': 350 } },
-				],
-			},
-			center: [mapLon, mapLat],
-			zoom: altitudeToZoom(altitudeMeters),
-			pitch: 60, bearing: viewBearing,
-			attributionControl: false, interactive: false,
-		});
-
-		map.on('style.load', () => {
-			map!.setProjection({ type: 'globe' });
-			mapReady = true;
-		});
-
-		// Consolidated RAF loop
 		let raf: number;
 		let last = performance.now();
 		let simTime = 0;
@@ -178,10 +170,9 @@
 		};
 		raf = requestAnimationFrame(loop);
 
-		return () => { 
+		return () => {
 			cancelAnimationFrame(raf);
-			map?.remove(); 
-			map = null; 
+			// <MapLibre> handles map.remove() on unmount.
 		};
 	});
 
@@ -192,7 +183,30 @@
 </script>
 
 <div class="viewport">
-	<div class="map-target" bind:this={container}></div>
+	<MapLibre
+		bind:map
+		class="map-target"
+		center={{ lng: mapLon, lat: mapLat }}
+		zoom={altitudeToZoom(altitudeMeters)}
+		pitch={60}
+		bearing={viewBearing}
+		attributionControl={false}
+		interactive={false}
+		autoloadGlobalCss={false}
+	>
+		<Projection type="globe" />
+		<BackgroundLayer id="bg" paint={{ 'background-color': '#04060d' }} />
+		<RasterTileSource
+			id="satellite"
+			tiles={[satSource.url]}
+			tileSize={256}
+			maxzoom={satSource.maxZoom ?? 14}
+			attribution={satSource.attribution}
+		>
+			<RasterLayer id="sat" paint={{ 'raster-fade-duration': 350 }} />
+		</RasterTileSource>
+		<VectorTileSource id="openmaptiles" url="https://tiles.openfreemap.org/planet" />
+	</MapLibre>
 
 	{#if map && mapReady && pg.abstractionEnabled}
 		<LandscapeAbstractionLayer {map} />
@@ -220,7 +234,7 @@
 
 <style>
 	.viewport { position: relative; width: 100%; height: 100%; background: #04060d; overflow: hidden; }
-	.map-target { position: absolute; inset: 0; }
+	:global(.map-target) { position: absolute; inset: 0; }
 	.three-overlay { position: absolute; inset: 0; pointer-events: none; }
 	.three-overlay :global(canvas) { background: transparent; }
 	:global(.map-target .maplibregl-ctrl-attrib) { display: none !important; }
