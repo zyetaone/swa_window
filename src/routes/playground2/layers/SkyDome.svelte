@@ -36,6 +36,29 @@
 	const sky = new Sky();
 	sky.scale.setScalar(450_000);
 
+	// Above-horizon clipping. Sky.js is a full 360° dome — it paints the
+	// entire viewport, including the lower hemisphere, which would occlude
+	// the MapLibre globe composited underneath the Canvas. We inject a
+	// `discard` in the fragment shader for any pixel whose view direction
+	// points below the horizon. With the Canvas cleared to alpha 0, those
+	// pixels stay transparent and the globe beneath shows through.
+	//
+	// `direction` is already computed inside Sky.js's main() as:
+	//   vec3 direction = normalize( vWorldPosition - cameraPosition );
+	// We inject the discard right after that line.
+	sky.material.onBeforeCompile = (shader) => {
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'vec3 direction = normalize( vWorldPosition - cameraPosition );',
+			`vec3 direction = normalize( vWorldPosition - cameraPosition );
+			 if (direction.y < -0.01) discard;`,
+		);
+	};
+	// Let Sky render behind everything — depthTest off so it never blocks
+	// later layers, and we manually put it first via renderOrder.
+	sky.material.transparent = true;
+	sky.material.depthWrite = false;
+	sky.renderOrder = -100;
+
 	// Baseline scattering uniforms. Values picked to match the "clear
 	// but slightly hazy" look used across the production window — a
 	// clean azure at zenith with a visible horizon glow.
