@@ -15,8 +15,12 @@
  *                        radius    ← sigma-like spread
  *                        threshold ← 1 - |brightness| → only bright
  *                                    fragments contribute
- *   4. (future) WaterPass — reserved slot. See comment below where to
- *      insert.
+ *   4. WaterPass     — Cesium-style animated water: scrolling normals +
+ *                      Fresnel reflection + sun specular, masked by
+ *                      chroma-key against the palette's live water
+ *                      color. Runs AFTER bloom so bloom halos aren't
+ *                      smeared, and the chroma-key early-outs on non-
+ *                      water fragments.
  *   5. OutputPass    — sRGB encoding + tone-mapping output.
  *
  * The composer's input is a plane textured with MapLibre's canvas. Each
@@ -38,6 +42,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 import { createColorGradePass, updateColorGradeUniforms } from './passes/ColorGradePass';
+import { createWaterPass, type WaterPassHandle, type WaterUniforms } from './passes/WaterPass';
 
 /** Bloom tuning — tightened from prod after first-light test: MapLibre's
  * VIIRS raster input is hotter than Cesium's atmosphere-dimmed globe, so
@@ -53,10 +58,16 @@ export interface PostComposerHandle {
 	readonly renderer: THREE.WebGLRenderer;
 	readonly colorGrade: ShaderPass;
 	readonly bloom: UnrealBloomPass;
+	readonly water: WaterPassHandle;
 	/** Upload a DOM canvas (MapLibre's) into the composer's input texture. */
 	syncInput(canvas: HTMLCanvasElement): void;
 	/** Push live uniform values this frame. */
-	setUniforms(u: { nightFactor: number; dawnDuskFactor: number; lightIntensity: number }): void;
+	setUniforms(u: {
+		nightFactor: number;
+		dawnDuskFactor: number;
+		lightIntensity: number;
+		water?: WaterUniforms;
+	}): void;
 	/** Resize renderer + bloom + composer when the host canvas resizes. */
 	resize(width: number, height: number, dpr?: number): void;
 	/** Draw one frame into the overlay canvas. */
@@ -119,13 +130,14 @@ export function createPostComposer(overlayCanvas: HTMLCanvasElement): PostCompos
 	composer.addPass(bloom);
 
 	// ─────────────────────────────────────────────────────────────────────
-	// Future WaterPass slot — insert BEFORE OutputPass, AFTER bloom so the
-	// scrolling normal-map distortion runs on already-graded + bloomed
-	// pixels. See plan_apr22_next_session.md for the plan.
-	//
-	//   const water = createWaterPass();
-	//   composer.addPass(water);
+	// WaterPass — Cesium-style animated water: scrolling normals + fresnel +
+	// sun specular, masked by chroma-key against the live palette water
+	// color. Runs AFTER bloom so city-light halos aren't smeared; water
+	// pixels are replaced outright where the mask is strong. Early-outs
+	// on non-water fragments so the shader is near-free off-water.
 	// ─────────────────────────────────────────────────────────────────────
+	const water = createWaterPass();
+	composer.addPass(water.pass);
 
 	const outputPass = new OutputPass();
 	composer.addPass(outputPass);
@@ -148,11 +160,17 @@ export function createPostComposer(overlayCanvas: HTMLCanvasElement): PostCompos
 		inputTexture.needsUpdate = true;
 	}
 
-	function setUniforms(u: { nightFactor: number; dawnDuskFactor: number; lightIntensity: number }): void {
+	function setUniforms(u: {
+		nightFactor: number;
+		dawnDuskFactor: number;
+		lightIntensity: number;
+		water?: WaterUniforms;
+	}): void {
 		updateColorGradeUniforms(colorGrade, u);
 		// Let bloom fade to nothing during the day — no point burning
 		// fillrate on a pass that has nothing bright to bloom.
 		bloom.enabled = u.nightFactor > 0.02;
+		if (u.water) water.setUniforms(u.water);
 	}
 
 	function resize(w: number, h: number, newDpr?: number): void {
@@ -174,6 +192,7 @@ export function createPostComposer(overlayCanvas: HTMLCanvasElement): PostCompos
 		quadMat.dispose();
 		quad.geometry.dispose();
 		bloom.dispose?.();
+		water.dispose();
 		composer.dispose();
 		renderer.dispose();
 	}
@@ -183,6 +202,7 @@ export function createPostComposer(overlayCanvas: HTMLCanvasElement): PostCompos
 		renderer,
 		colorGrade,
 		bloom,
+		water,
 		syncInput,
 		setUniforms,
 		resize,

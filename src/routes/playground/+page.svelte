@@ -23,14 +23,22 @@
 	import NightOverlay from './NightOverlay.svelte';
 	import CSS3DClouds from './CSS3DClouds.svelte';
 	import { PostProcessMount } from './three';
+	import type { WaterUniforms } from './three';
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
+	import { getSunParams, getSkyPalette } from './lib/sun-palette.svelte';
+	import { waterState } from './lib/water-anim.svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	// Module-level singleton — survives SvelteKit navigation. Acceptable for a
 	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
 	// createContext/getContext pattern.
-	import { pg, pgTick, pgCycleLocation } from './lib/playground-state.svelte';
+	import { pg, pgTick, pgCycleLocation, pgApplyRemoteLocation } from './lib/playground-state.svelte';
+	import { isGroupLeader, shouldApplyDirectorDecision } from './lib/corridor.svelte';
 	import { useBlind } from '$lib/shell/use-blind.svelte';
+	import { LOCATION_IDS } from '$lib/locations';
+	import { isV2 } from '$lib/fleet/protocol';
+	import { isValidWeather } from '$lib/types';
+	import { resolveFleetUrl } from '$lib/fleet/url';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
 	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
@@ -114,11 +122,22 @@
 	}
 
 	// ─── Blind (production composable) ───────────────────────────────────────
-	const blind = useBlind({
-		get blindOpen() { return pg.blindOpen; },
-		set blindOpen(v: boolean) { pg.blindOpen = v; },
-		flight: { isTransitioning: false },
-	});
+	// Long-press (≥400ms, no horizontal pan) → 3× drag speed + amber inner glow.
+	const blind = useBlind(
+		{
+			get blindOpen() { return pg.blindOpen; },
+			set blindOpen(v: boolean) { pg.blindOpen = v; },
+			flight: { isTransitioning: false },
+		},
+		{
+			longPress: {
+				enabled: true,
+				thresholdMs: 400,
+				speedMultiplier: 3.0,
+				releaseMs: 300,
+			},
+		},
+	);
 
 	// ─── Derived Camera ──────────────────────────────────────────────────────
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
@@ -179,6 +198,65 @@
 		}
 	});
 
+	// ─── Corridor fleet (SWA Day 5) ──────────────────────────────────────────
+	// Leader panes (solo/center) broadcast v2 director_decision when they
+	// rotate location; follower panes (left/right) apply inbound decisions
+	// scoped to their groupId at the shared wall-clock instant.
+	let fleetWs = $state<WebSocket | null>(null);
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		let closed = false;
+		let ws: WebSocket | null = null;
+		try {
+			const { wsUrl } = resolveFleetUrl('display');
+			ws = new WebSocket(wsUrl);
+			ws.onopen = () => { if (!closed) fleetWs = ws; };
+			ws.onclose = () => { fleetWs = null; };
+			ws.onerror = () => { /* silent — LAN offline is fine in playground */ };
+			ws.onmessage = (e) => {
+				try {
+					const parsed = JSON.parse(e.data);
+					if (!isV2(parsed)) return;
+					if (parsed.type !== 'director_decision') return;
+					if (!shouldApplyDirectorDecision(pg.groupId, parsed.groupId)) return;
+					if (!LOCATION_IDS.has(parsed.locationId)) return;
+					const weather = isValidWeather(parsed.weather) ? parsed.weather : undefined;
+					const delay = parsed.transitionAtMs - Date.now();
+					const apply = () => pgApplyRemoteLocation(parsed.locationId, weather);
+					if (delay < -50) apply();
+					else setTimeout(apply, Math.max(0, delay));
+				} catch { /* ignore malformed */ }
+			};
+		} catch { /* offline — ignore */ }
+		return () => { closed = true; if (ws) ws.close(); fleetWs = null; };
+	});
+
+	// Broadcast once per activeLocation change — but only if this pane leads.
+	let lastBroadcastLocation = '';
+	$effect(() => {
+		const loc = pg.activeLocation;
+		if (!isGroupLeader(pg.role)) return;
+		if (loc === lastBroadcastLocation) return;
+		lastBroadcastLocation = loc;
+		untrack(() => {
+			const ws = fleetWs;
+			if (!ws || ws.readyState !== WebSocket.OPEN) return;
+			try {
+				ws.send(JSON.stringify({
+					v: 2,
+					type: 'director_decision',
+					scenarioId: 'playground-rotation',
+					locationId: loc,
+					weather: pg.weather,
+					decidedAtMs: Date.now(),
+					transitionAtMs: Date.now() + 2500,
+					groupId: pg.groupId,
+				}));
+			} catch { /* offline */ }
+		});
+	});
+
 	// Main RAF loop — invariant #3: untrack() wraps the entire tick body so
 	// 60 Hz reactive reads don't build graph dependencies.
 	// Three independent RAF loops run in the playground (page, MapLibreGlobe,
@@ -195,7 +273,7 @@
 			untrack(() => {
 				simTime += dt;
 
-				pgTick(dt, now, isBoosting);
+				pgTick(dt, now, isBoosting, isGroupLeader(pg.role));
 
 				if (pg.autoFly || isBoosting) {
 					// Elliptical orbit: major/minor axes rotated by orbitTilt.
@@ -235,6 +313,63 @@
 		};
 		raf = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(raf);
+	});
+
+	// ─── Water post-process uniforms ─────────────────────────────────────────
+	// Plumbed into PostProcessMount so the WaterPass (inserted after bloom,
+	// before OutputPass) can re-paint water pixels with scrolling normals +
+	// fresnel + sun specular — Cesium prod's animated-water look, ported
+	// into screen-space. Palette-driven: the water base RGB matches what
+	// WaterLayer actually paints, so the chroma-key mask is precise.
+	const waterPalette = $derived(getSkyPalette(pg.timeOfDay, pg.paletteName));
+	const waterSun = $derived(getSunParams(pg.timeOfDay));
+
+	// Dawn/dusk factor — same math as dawnDuskFrom() in post-composer.
+	const dawnDusk = $derived(4 * nf * (1 - nf));
+
+	const waterUniforms = $derived.by<WaterUniforms>(() => {
+		// Base water RGB — same source WaterLayer reads, normalized to 0-1.
+		const w = waterPalette.water;
+		const base: [number, number, number] = [w.r / 255, w.g / 255, w.b / 255];
+
+		// Sun direction in screen-space.
+		//   azimuth shifted by view bearing so the specular highlight
+		//   slides with camera yaw. Elevation (z) gates specular strength.
+		const azRad = ((waterSun.azimuth - viewBearing) * Math.PI) / 180;
+		const elev = waterSun.elevation;                          // -1..1
+		const horiz = Math.sqrt(Math.max(0, 1 - elev * elev));    // side magnitude
+		const sunDir: [number, number, number] = [
+			Math.sin(azRad) * horiz,
+			horiz * 0.3,      // biased upward — sun sits above water always
+			Math.max(0, elev),
+		];
+
+		// Sun color — warm at dawn/dusk, near-white at noon. Reuse the
+		// palette's light color; it's already time-shifted.
+		const lightHex = waterPalette.light;
+		const sunR = parseInt(lightHex.slice(1, 3), 16) / 255;
+		const sunG = parseInt(lightHex.slice(3, 5), 16) / 255;
+		const sunB = parseInt(lightHex.slice(5, 7), 16) / 255;
+
+		// Sky reflection — what the water mirrors back at grazing angles.
+		// Use the palette's sky color so night water reflects navy and
+		// day water reflects blue.
+		const skyHex = waterPalette.sky;
+		const skyR = parseInt(skyHex.slice(1, 3), 16) / 255;
+		const skyG = parseInt(skyHex.slice(3, 5), 16) / 255;
+		const skyB = parseInt(skyHex.slice(5, 7), 16) / 255;
+
+		return {
+			nightFactor: nf,
+			dawnDuskFactor: dawnDusk,
+			waterBase: base,
+			waterKeyTolerance: 0.22, // loose enough for anti-aliased coast pixels
+			sunDirScreen: sunDir,
+			sunColor: [sunR, sunG, sunB],
+			skyReflection: [skyR, skyG, skyB],
+			waterIntensity: 1,
+			time: waterState.time,
+		};
 	});
 
 	const motionTransform = $derived.by(() => {
@@ -293,9 +428,10 @@
 				lodTileCountRatio={pg.lodTileCountRatio}
 			/>
 			<!-- Three.js post-process — reads MapLibre's canvas each frame,
-			     applies SWA night color-grade + UnrealBloom, draws the
-			     result into an overlay canvas above the globe. -->
-			<PostProcessMount map={mapRef} nightFactor={nf} />
+			     applies SWA night color-grade + UnrealBloom + animated-water
+			     WaterPass, draws the result into an overlay canvas above
+			     the globe. -->
+			<PostProcessMount map={mapRef} nightFactor={nf} water={waterUniforms} />
 		</div>
 
 		<!-- Cloud floor is now the FillLayer deck polygon in VectorCloudLayer
@@ -333,7 +469,7 @@
 
 	<div class="blind-clip" bind:this={blind.clipEl}>
 		<div
-			class={['blind-overlay', !pg.blindOpen && !blind.hasAnimated && 'discoverable']}
+			class={['blind-overlay', !pg.blindOpen && !blind.hasAnimated && 'discoverable', blind.accelerated && 'accelerated']}
 			onanimationend={() => { blind.hasAnimated = true; }}
 			onpointerdown={blind.onPointerDown}
 			onpointermove={blind.onPointerMove}
@@ -489,6 +625,16 @@
 		pointer-events: auto;
 		touch-action: none;
 		box-shadow:
+			inset 0 2px 4px rgba(255, 255, 255, 0.6),
+			inset 0 -6px 12px rgba(0, 0, 0, 0.15);
+		transition: box-shadow 180ms ease;
+	}
+
+	/* Long-press acceleration — SWA city-amber inner glow. 300ms CSS
+	   transition tracks the composable's 300ms decel curve on release. */
+	.blind-overlay.accelerated {
+		box-shadow:
+			inset 0 0 40px rgba(255, 184, 74, 0.3),
 			inset 0 2px 4px rgba(255, 255, 255, 0.6),
 			inset 0 -6px 12px rgba(0, 0, 0, 0.15);
 	}

@@ -8,3 +8,4 @@
 export { default as PostProcessMount } from './PostProcessMount.svelte';
 export { createPostComposer, dawnDuskFrom, type PostComposerHandle } from './post-composer.svelte';
 export { createColorGradePass, updateColorGradeUniforms, type ColorGradeUniforms } from './passes/ColorGradePass';
+export { createWaterPass, type WaterPassHandle, type WaterUniforms } from './passes/WaterPass';

@@ -26,15 +26,19 @@
 	import { onMount, onDestroy } from 'svelte';
 	import type maplibregl from 'maplibre-gl';
 	import { createPostComposer, dawnDuskFrom, type PostComposerHandle } from './post-composer.svelte';
+	import type { WaterUniforms } from './passes/WaterPass';
 
 	let {
 		map,
 		nightFactor = 0,
 		lightIntensity = 1,
+		water = undefined,
 	}: {
 		map: maplibregl.Map | undefined;
 		nightFactor?: number;
 		lightIntensity?: number;
+		/** Live water uniforms — palette-driven. Omit to skip water effect. */
+		water?: WaterUniforms | undefined;
 	} = $props();
 
 	let canvasEl = $state<HTMLCanvasElement | undefined>(undefined);
@@ -56,6 +60,7 @@
 				nightFactor,
 				dawnDuskFactor: dawnDusk,
 				lightIntensity,
+				water,
 			});
 			handle.render();
 		}
