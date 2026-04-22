@@ -477,12 +477,14 @@ export class CesiumManager {
 			this.nightLayer.contrast = lerp(1, w.nightContrast, nf);
 		}
 
-		// VIIRS lights fade in at night too. Capped below 1 so bright cells
-		// don't wash the scene. Using the same alpha curve as nightLayer,
-		// scaled by user's nightLightScale override.
+		// VIIRS lights fade in at night. Cap at 0.5 (was 0.9) so the amber
+		// overlay reads as "lit terrain" rather than washing the whole
+		// surface with VIIRS colour. The underlying CartoDB dark layer
+		// carries the sky/ocean darkness; VIIRS is an additive accent
+		// confined to the lit cells by colorToAlpha.
 		if (this.viirsLayer) {
 			this.viirsLayer.show = show || firstNight;
-			this.viirsLayer.alpha = lerp(0, 0.9, nf) * scale;
+			this.viirsLayer.alpha = lerp(0, 0.5, nf) * scale;
 		}
 	}
 

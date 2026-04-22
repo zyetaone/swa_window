@@ -44,6 +44,12 @@
 		if (!loc) return;
 
 		ds = makeDataSource(Cesium, loc);
+		// Initial visibility gate. The reactive $effect below will keep this
+		// in sync on subsequent nightFactor changes — but without the seed
+		// here, the dots render by default (Cesium DataSource.show defaults
+		// true) until nightFactor first transitions, leaving midday dots
+		// visible for minutes at a time.
+		ds.show = model.nightFactor > 0.2;
 		viewer.dataSources.add(ds);
 
 		return () => {
@@ -54,9 +60,12 @@
 		};
 	});
 
-	// Hide the dots during the day — they're meant to read as headlights +
-	// taillights at night, not scatter in broad daylight. Threshold at 0.2
-	// lets them fade in around dusk and stay visible through to dawn.
+	// Reactive gate — follows nightFactor for the component's lifetime.
+	// Dots fade in around dusk (nf crosses 0.2) and stay visible through
+	// night → dawn. Note: this effect's dependency on `ds` isn't tracked
+	// (plain let, not $state), but that's OK — useCesiumEffect above seeds
+	// the initial value and all subsequent writes come through THIS effect
+	// when nightFactor changes.
 	$effect(() => {
 		if (ds) ds.show = model.nightFactor > 0.2;
 	});
