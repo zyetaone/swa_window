@@ -1,0 +1,55 @@
+[Unit]
+Description=Aero Window Chromium Kiosk
+Documentation=https://github.com/zyetaone/z-aero-window
+After=aero-xserver.service aero-app.service
+Requires=aero-xserver.service
+Wants=aero-app.service
+
+[Service]
+Type=simple
+User=__AERO_USER__
+EnvironmentFile=-/etc/aero/config.env
+Environment=DISPLAY=:0
+Environment=AERO_ROLE=solo
+Environment=AERO_GROUP=default
+
+# Wait a beat for X to fully bind the display.
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do xdpyinfo -display :0 >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+ExecStartPre=/usr/bin/xset -display :0 s off -dpms s noblank
+
+# Chromium kiosk. Flags:
+#   --kiosk                     full-screen, no chrome
+#   --use-gl=angle --use-angle=gles    ANGLE GLES backend for Mali GPU
+#   --enable-webgl              needed for MapLibre + Three
+#   --disk-cache-dir/size       2 GB warm tile cache survives reboots
+#   --incognito                 no user profile bleed across updates
+#   --autoplay-policy=no-user-gesture-required  for future video/audio
+#   --noerrdialogs / --disable-infobars / --hide-scrollbars  hide all UI
+ExecStart=/usr/bin/chromium \
+	--kiosk \
+	--use-gl=angle \
+	--use-angle=gles \
+	--enable-webgl \
+	--ignore-gpu-blocklist \
+	--enable-gpu-rasterization \
+	--enable-zero-copy \
+	--disk-cache-dir=/home/__AERO_USER__/.cache/aero-tiles \
+	--disk-cache-size=2147483648 \
+	--incognito \
+	--no-first-run \
+	--autoplay-policy=no-user-gesture-required \
+	--disable-infobars \
+	--noerrdialogs \
+	--hide-scrollbars \
+	--disable-session-crashed-bubble \
+	--disable-features=TranslateUI \
+	--check-for-update-interval=31536000 \
+	--app=http://localhost:3000/playground?role=${AERO_ROLE}&group=${AERO_GROUP}
+
+Restart=always
+RestartSec=10
+# Clean-shutdown budget: SIGTERM, then give Chromium 10s to tear down GPU contexts.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

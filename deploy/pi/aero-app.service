@@ -1,0 +1,32 @@
+[Unit]
+Description=Aero Window App Server (SvelteKit + Fleet hub)
+Documentation=https://github.com/zyetaone/z-aero-window
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__AERO_USER__
+WorkingDirectory=__AERO_INSTALL_DIR__
+
+EnvironmentFile=-/etc/aero/config.env
+Environment=NODE_ENV=production
+Environment=HOME=/home/__AERO_USER__
+Environment=PORT=3000
+
+# Build + serve in the same unit so the Pi always ships what's on disk.
+# `bun run build` is a no-op on an already-fresh build (Vite caches).
+ExecStart=/bin/bash -lc '__BUN_BIN__ run build && __BUN_BIN__ run start'
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits — app should never monopolise the Pi.
+LimitNOFILE=65536
+# Graceful shutdown — SvelteKit adapter-node handles SIGTERM within 10s.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
