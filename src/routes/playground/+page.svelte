@@ -32,11 +32,11 @@
 	// Module-level singleton — survives SvelteKit navigation. Acceptable for a
 	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
 	// createContext/getContext pattern.
-	import { pg, pgTick, pgCycleLocation, pgApplyRemoteLocation } from './lib/playground-state.svelte';
+	import { pg, pgTick, pgCycleLocation, pgApplyRemoteLocation, pgHeadingOffsetDeg } from './lib/playground-state.svelte';
 	import { isGroupLeader, shouldApplyDirectorDecision } from './lib/corridor.svelte';
 	import { useBlind } from '$lib/shell/use-blind.svelte';
 	import { LOCATION_IDS } from '$lib/locations';
-	import { isV2 } from '$lib/fleet/protocol';
+	import { isV2, type ServerMessageV2 } from '$lib/fleet/protocol';
 	import { isValidWeather } from '$lib/types';
 	import { resolveFleetUrl } from '$lib/fleet/url';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
@@ -146,7 +146,12 @@
 	// relative to cloud deck — below clouds (descending) you look UP more (lower pitch),
 	// above clouds (climbing) you look DOWN more (higher pitch). Creates the
 	// "descend through clouds, climb back above" holding pattern feel.
-	const viewBearing = $derived((pg.heading - 90 + motion.motionOffsetX * 1.5 + 360) % 360);
+	// Corridor pane: offset the bearing by the role's heading-delta so the
+	// three panes look "through" the same flight at slightly different angles.
+	const paneHeadingOffset = $derived(pgHeadingOffsetDeg());
+	const viewBearing = $derived(
+		(pg.heading - 90 + paneHeadingOffset + motion.motionOffsetX * 1.5 + 360) % 360,
+	);
 	const cloudDeckBias = $derived((pg.altitude - 28000) / 8000 * 4); // ±4° based on altitude vs cloud deck
 	const viewPitch = $derived(Math.max(58, Math.min(84, 72 + pg.pitchBias + cloudDeckBias + motion.motionOffsetY * 2.5)));
 
@@ -216,14 +221,15 @@
 			ws.onerror = () => { /* silent — LAN offline is fine in playground */ };
 			ws.onmessage = (e) => {
 				try {
-					const parsed = JSON.parse(e.data);
+					const parsed: unknown = JSON.parse(e.data);
 					if (!isV2(parsed)) return;
 					if (parsed.type !== 'director_decision') return;
-					if (!shouldApplyDirectorDecision(pg.groupId, parsed.groupId)) return;
-					if (!LOCATION_IDS.has(parsed.locationId)) return;
-					const weather = isValidWeather(parsed.weather) ? parsed.weather : undefined;
-					const delay = parsed.transitionAtMs - Date.now();
-					const apply = () => pgApplyRemoteLocation(parsed.locationId, weather);
+					const msg = parsed as Extract<ServerMessageV2, { type: 'director_decision' }>;
+					if (!shouldApplyDirectorDecision(pg.groupId, msg.groupId)) return;
+					if (!LOCATION_IDS.has(msg.locationId)) return;
+					const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
+					const delay = msg.transitionAtMs - Date.now();
+					const apply = () => pgApplyRemoteLocation(msg.locationId, weather);
 					if (delay < -50) apply();
 					else setTimeout(apply, Math.max(0, delay));
 				} catch { /* ignore malformed */ }

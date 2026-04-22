@@ -1,6 +1,12 @@
 import { type LocationId, type WeatherType } from '$lib/types';
 import { LOCATIONS } from '$lib/locations';
 import type { PaletteName } from '../palettes';
+import { resolveBinding, type DeviceRole, isGroupLeader, headingOffsetForRole } from './corridor.svelte';
+
+// Resolve binding ONCE at module load — same lifecycle as the rest of `pg`.
+// Safe because resolveBinding() returns the SSR-safe default when window is
+// absent.
+const initialBinding = resolveBinding();
 
 export const pg = $state({
 	activeLocation: 'dubai' as LocationId,
@@ -42,10 +48,19 @@ export const pg = $state({
 	freeCam: false,
 	lodMaxZoomLevels: 6,
 	lodTileCountRatio: 2.0,
+	// ─── SWA corridor (Feature 1 + 2) ────────────────────────────────────────
+	/** Pane role within its corridor. Default 'solo' = single-window mode. */
+	role: initialBinding.role as DeviceRole,
+	/** Corridor group — panes sharing this id share altitude/weather/location. */
+	groupId: initialBinding.groupId,
+	/** Auto-cycle location every rotateIntervalMin ± 0.2 min. */
+	autoRotate: true,
+	/** Interval between location rotations, in minutes (2–3). */
+	rotateIntervalMin: 2.5,
 });
 
 if (typeof window !== 'undefined') {
-	pg.nextLocationChange = performance.now() + 120_000 + Math.random() * 120_000;
+	pg.nextLocationChange = performance.now() + rotateIntervalMs();
 	pg.heading = Math.floor(Math.random() * 360);
 	pg.headingTarget = pg.heading;
 }
@@ -56,13 +71,58 @@ export const HDG_HOLD_SEC = 4;
 const HDG_LERP_RATE = 0.6;
 const CLOUD_DECK_ALT = 28_000;
 
-export function pgTick(dt: number, now: number, isBoosting = false) {
+// ─── Weighted location pool ─────────────────────────────────────────────────
+// Hero destinations (SWA hubs + flagship routes) get 3x weight vs tertiary
+// picks. Tertiary still appears so the wall doesn't feel repetitive.
+const HERO_IDS = new Set<LocationId>([
+	'dallas', 'chicago_midway', 'phoenix', 'las_vegas', 'denver',
+]);
+const HERO_WEIGHT = 3;
+const OTHER_WEIGHT = 1;
+
+function pickWeightedLocation(exclude?: LocationId): LocationId {
+	const pool = LOCATIONS.filter((l) => l.id !== exclude);
+	const total = pool.reduce(
+		(sum, l) => sum + (HERO_IDS.has(l.id) ? HERO_WEIGHT : OTHER_WEIGHT),
+		0,
+	);
+	let r = Math.random() * total;
+	for (const l of pool) {
+		r -= HERO_IDS.has(l.id) ? HERO_WEIGHT : OTHER_WEIGHT;
+		if (r <= 0) return l.id;
+	}
+	return pool[0].id;
+}
+
+/**
+ * Randomised rotation interval in ms. Adds ±12s jitter (uniform in [-0.2, +0.2]
+ * minute) so two panes that boot at the same second don't drift in lockstep.
+ */
+function rotateIntervalMs(): number {
+	const mins = Math.max(2, Math.min(3, pg.rotateIntervalMin));
+	const jitter = (Math.random() - 0.5) * 0.4; // ±0.2 min = ±12s
+	return (mins + jitter) * 60_000;
+}
+
+/**
+ * Tick. `isLeader` gates local location rotation — follower panes (left/right)
+ * wait for `director_decision` from the leader over the fleet WS.
+ */
+export function pgTick(
+	dt: number,
+	now: number,
+	isBoosting = false,
+	isLeader = isGroupLeader(pg.role),
+) {
 	if (pg.autoTime) {
 		pg.timeOfDay = (pg.timeOfDay + dt * 0.5) % 24;
 	}
 
 	if (pg.autoFly || isBoosting) {
-		if (pg.kioskMode && now > pg.nextLocationChange) {
+		// Only the group leader rotates locally. Followers receive a
+		// director_decision and schedule it to apply at a shared wall-clock
+		// instant.
+		if (pg.kioskMode && pg.autoRotate && isLeader && now > pg.nextLocationChange) {
 			pgCycleLocation(now);
 		}
 
@@ -99,10 +159,13 @@ export function pgTick(dt: number, now: number, isBoosting = false) {
 	}
 }
 
+/**
+ * Rotate to a new location. If `now` is provided, also reschedules the next
+ * rotation timer. The weighted picker favours SWA hubs so the wall feels like
+ * a brand story, not a random world tour.
+ */
 export function pgCycleLocation(now?: number) {
-	const ids = LOCATIONS.map(l => l.id);
-	const idx = ids.indexOf(pg.activeLocation);
-	pg.activeLocation = ids[(idx + 1) % ids.length];
+	pg.activeLocation = pickWeightedLocation(pg.activeLocation);
 
 	pg.altitudeTarget = 22_000 + Math.floor(Math.random() * 18_000);
 	pg.altitudeCooldown = 0;
@@ -114,8 +177,37 @@ export function pgCycleLocation(now?: number) {
 	pg.turbulenceLevel = turbs[Math.floor(Math.random() * turbs.length)];
 
 	if (now) {
-		pg.nextLocationChange = now + 120_000 + Math.random() * 120_000;
+		pg.nextLocationChange = now + rotateIntervalMs();
 	}
+}
+
+/**
+ * Apply a remote director_decision — used by follower panes to sync to the
+ * leader's rotation. Takes the location (plus optional weather) and schedules
+ * all the same local scene shuffle without re-broadcasting.
+ */
+export function pgApplyRemoteLocation(locationId: LocationId, weather?: WeatherType) {
+	pg.activeLocation = locationId;
+	if (weather) pg.weather = weather;
+	// Reset scene params like a local cycle, so followers feel the same beat.
+	pg.altitudeTarget = 22_000 + Math.floor(Math.random() * 18_000);
+	pg.altitudeCooldown = 0;
+	pg.pitchBias = (Math.random() - 0.5) * 12;
+	pg.orbitMajor = 0.06 + Math.random() * 0.06;
+	pg.orbitMinor = 0.03 + Math.random() * 0.04;
+	pg.orbitTilt = Math.random() * Math.PI;
+}
+
+/** Re-read the saved binding (used after admin panel writes a new binding). */
+export function pgReloadBinding() {
+	const b = resolveBinding();
+	pg.role = b.role;
+	pg.groupId = b.groupId;
+}
+
+/** Public — read the per-role heading offset (deg) for this pane. */
+export function pgHeadingOffsetDeg(): number {
+	return headingOffsetForRole(pg.role);
 }
 
 export function pgReset() {

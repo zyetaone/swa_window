@@ -5,6 +5,14 @@
 	import { LOCATIONS } from '$lib/locations';
 	import { onDestroy } from 'svelte';
 	import ConfigSandbox from './lib/ConfigSandbox.svelte';
+	import {
+		listBindings,
+		saveBinding,
+		getDeviceFingerprint,
+		resolveBinding,
+		type DeviceRole,
+		type DeviceBinding,
+	} from '../playground/lib/corridor.svelte';
 
 	// Read config from URL params: ?server=ws://...&transport=sse
 	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -138,6 +146,55 @@
 		{ value: 'screensaver', label: 'Screensaver' },
 		{ value: 'video', label: 'Video' },
 	];
+
+	// ─── Device Bindings (SWA corridor Day 5) ─────────────────────────────────
+	// Persistent fingerprint → (role, groupId) map. Admin edits this locally in
+	// the browser running the admin panel — each physical display's binding is
+	// authored by visiting /admin on that device. Also reflects this admin's
+	// own current binding so the operator can sanity-check which pane they're on.
+	const ROLE_OPTIONS: DeviceRole[] = ['solo', 'left', 'center', 'right'];
+	let bindings = $state<Array<{ fingerprint: string; binding: DeviceBinding }>>([]);
+	let myFingerprint = $state('');
+	let myBinding = $state<DeviceBinding>({ role: 'solo', groupId: 'default' });
+
+	// Form state for "assign this device" form.
+	let formRole = $state<DeviceRole>('solo');
+	let formGroup = $state('default');
+
+	function refreshBindings() {
+		if (typeof window === 'undefined') return;
+		myFingerprint = getDeviceFingerprint();
+		myBinding = resolveBinding();
+		bindings = listBindings();
+		formRole = myBinding.role;
+		formGroup = myBinding.groupId;
+	}
+
+	if (typeof window !== 'undefined') refreshBindings();
+
+	function handleSaveMyBinding() {
+		if (!formGroup.trim()) return;
+		saveBinding(myFingerprint, { role: formRole, groupId: formGroup.trim() });
+		refreshBindings();
+	}
+
+	function handleSetBinding(fp: string, role: DeviceRole, groupId: string) {
+		if (!groupId.trim()) return;
+		saveBinding(fp, { role, groupId: groupId.trim() });
+		refreshBindings();
+	}
+
+	function handleDeleteBinding(fp: string) {
+		if (typeof window === 'undefined') return;
+		const raw = window.localStorage.getItem('aero.device.bindings');
+		if (!raw) return;
+		try {
+			const map = JSON.parse(raw) as Record<string, DeviceBinding>;
+			delete map[fp];
+			window.localStorage.setItem('aero.device.bindings', JSON.stringify(map));
+		} catch { /* ignore */ }
+		refreshBindings();
+	}
 </script>
 
 <div class="dashboard">
@@ -324,6 +381,57 @@
 						? 'Deselect All'
 						: 'Select All'}
 				</button>
+			</section>
+
+			<section class="control-section">
+				<h3>Device Bindings</h3>
+				<div class="bindings-my">
+					<p class="bindings-caption">This device</p>
+					<code class="bindings-fp" title={myFingerprint}>{myFingerprint}</code>
+					<div class="bindings-form">
+						<select bind:value={formRole} class="select">
+							{#each ROLE_OPTIONS as r (r)}
+								<option value={r}>{r}</option>
+							{/each}
+						</select>
+						<input type="text" class="input" bind:value={formGroup} placeholder="groupId" />
+						<button class="btn btn-secondary" onclick={handleSaveMyBinding}>Save</button>
+					</div>
+					<p class="bindings-hint">
+						Current: <strong>{myBinding.role}</strong> / <strong>{myBinding.groupId}</strong>
+						<br /><span class="muted">Applies on next playground load. Visit /admin on each pane to bind.</span>
+					</p>
+				</div>
+				{#if bindings.length > 0}
+					<p class="bindings-caption">Known bindings (this browser)</p>
+					<ul class="bindings-list">
+						{#each bindings as entry (entry.fingerprint)}
+							<li class="bindings-row" class:me={entry.fingerprint === myFingerprint}>
+								<code class="bindings-fp-small" title={entry.fingerprint}>{entry.fingerprint.slice(0, 8)}</code>
+								<select
+									class="select"
+									value={entry.binding.role}
+									onchange={(e) => handleSetBinding(entry.fingerprint, (e.currentTarget as HTMLSelectElement).value as DeviceRole, entry.binding.groupId)}
+								>
+									{#each ROLE_OPTIONS as r (r)}
+										<option value={r}>{r}</option>
+									{/each}
+								</select>
+								<input
+									type="text"
+									class="input input-sm"
+									value={entry.binding.groupId}
+									onchange={(e) => handleSetBinding(entry.fingerprint, entry.binding.role, (e.currentTarget as HTMLInputElement).value)}
+								/>
+								<button
+									class="btn-x"
+									aria-label="Delete binding"
+									onclick={() => handleDeleteBinding(entry.fingerprint)}
+								>✕</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</section>
 
 			<section class="control-section">
@@ -860,4 +968,81 @@
 		font-size: 14px;
 		color: #52525b;
 	}
+
+	/* Device bindings (SWA corridor) */
+	.bindings-my {
+		background: #0f1117;
+		border: 1px solid #27272a;
+		border-radius: 6px;
+		padding: 10px;
+		margin-bottom: 12px;
+	}
+	.bindings-caption {
+		font-size: 10px;
+		color: #71717a;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin-bottom: 6px;
+	}
+	.bindings-fp {
+		display: inline-block;
+		font-size: 11px;
+		color: #93c5fd;
+		background: #111827;
+		padding: 2px 6px;
+		border-radius: 3px;
+		margin-bottom: 8px;
+		font-family: ui-monospace, Menlo, monospace;
+	}
+	.bindings-form {
+		display: flex;
+		gap: 6px;
+		margin-bottom: 8px;
+	}
+	.bindings-form .select { flex: 0 0 80px; padding: 6px 8px; font-size: 12px; }
+	.bindings-form .input { flex: 1; padding: 6px 8px; font-size: 12px; }
+	.bindings-form .btn { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
+	.bindings-hint { font-size: 11px; color: #71717a; margin: 0; }
+	.bindings-hint strong { color: #e4e4e7; }
+	.bindings-hint .muted { color: #52525b; }
+	.bindings-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.bindings-row {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+	}
+	.bindings-row.me {
+		outline: 1px solid #1e3a5f;
+		border-radius: 4px;
+		padding: 2px;
+	}
+	.bindings-fp-small {
+		font-size: 10px;
+		color: #93c5fd;
+		font-family: ui-monospace, Menlo, monospace;
+		flex: 0 0 60px;
+	}
+	.bindings-row .select { flex: 0 0 70px; padding: 4px 6px; font-size: 11px; }
+	.input-sm { padding: 4px 6px; font-size: 11px; flex: 1; min-width: 0; }
+	.btn-x {
+		background: transparent;
+		border: 1px solid #3f3f46;
+		color: #71717a;
+		border-radius: 4px;
+		width: 22px;
+		height: 22px;
+		cursor: pointer;
+		font-size: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.btn-x:hover { border-color: #7f1d1d; color: #fca5a5; }
 </style>
