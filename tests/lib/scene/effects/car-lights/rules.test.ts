@@ -106,9 +106,13 @@ describe('lightColorBytes', () => {
 		expect(r).toBeGreaterThan(b * 3);
 	});
 
-	it('blue dominates the blue bucket', () => {
+	it('blue class is warm yellow (aircraft aesthetic — no emergency blue)', () => {
+		// Palette change: the 'blue' class label is preserved for back-compat
+		// but its RGB now maps to warm yellow (255, 220, 150). All car lights
+		// read as warm sodium amber from altitude — never cool blue.
+		// See rules.ts:62-64 for rationale.
 		const [r, g, b] = lightColorBytes('blue');
-		expect(b).toBeGreaterThan(r);
-		expect(b).toBeGreaterThan(g);
+		expect(r).toBeGreaterThan(g);
+		expect(g).toBeGreaterThan(b);
 	});
 });

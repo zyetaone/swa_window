@@ -10,6 +10,7 @@
 	 */
 	import { LOCATION_MAP } from '$lib/locations';
 	import { useCesiumEffect } from '$lib/world/active.svelte';
+	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/night';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 
@@ -49,7 +50,7 @@
 		// here, the dots render by default (Cesium DataSource.show defaults
 		// true) until nightFactor first transitions, leaving midday dots
 		// visible for minutes at a time.
-		ds.show = model.nightFactor > 0.2;
+		ds.show = model.nightFactor > CAR_LIGHTS_NIGHT_THRESHOLD;
 		viewer.dataSources.add(ds);
 
 		return () => {
@@ -70,6 +71,6 @@
 	// the initial value and all subsequent writes come through THIS effect
 	// when nightFactor changes.
 	$effect(() => {
-		if (ds) ds.show = model.nightFactor > 0.2;
+		if (ds) ds.show = model.nightFactor > CAR_LIGHTS_NIGHT_THRESHOLD;
 	});
 </script>

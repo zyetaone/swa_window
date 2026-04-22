@@ -9,7 +9,8 @@ import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { syncWorldQuality, world } from '$lib/model/config-tree.svelte';
 type WorldConfig = typeof world;
-import { normalizeHeading, shortestAngleDelta, lerp } from '$lib/utils';
+import { normalizeHeading, shortestAngleDelta, lerp, smoothstep } from '$lib/utils';
+import { VIIRS_SMOOTHSTEP_FLOOR, VIIRS_SMOOTHSTEP_CEIL, VIIRS_MAX_ALPHA } from '$lib/night';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -482,15 +483,16 @@ export class CesiumManager {
 		// carries the sky/ocean darkness; VIIRS is an additive accent
 		// confined to the lit cells by colorToAlpha.
 		//
-		// Curve: smoothstep(0.55, 0.9, nightFactor). Linear lerp left
+		// Smoothstep curve (VIIRS_SMOOTHSTEP_FLOOR..CEIL). Linear lerp left
 		// VIIRS at 15–25% alpha through dawn/dusk, where hue+saturation
 		// tints leaked through colorToAlpha as magenta on city cores.
-		// Smoothstep keeps VIIRS effectively zero until deep twilight.
+		// Thresholds + cap live in $lib/night for discoverability.
 		if (this.viirsLayer) {
-			const t = Math.max(0, Math.min(1, (nf - 0.55) / 0.35));
-			const viirsEase = t * t * (3 - 2 * t);
+			const viirsEase = smoothstep(
+				(nf - VIIRS_SMOOTHSTEP_FLOOR) / (VIIRS_SMOOTHSTEP_CEIL - VIIRS_SMOOTHSTEP_FLOOR),
+			);
 			this.viirsLayer.show = (show || firstNight) && viirsEase > 0.001;
-			this.viirsLayer.alpha = 0.5 * viirsEase * scale;
+			this.viirsLayer.alpha = VIIRS_MAX_ALPHA * viirsEase * scale;
 		}
 	}
 
