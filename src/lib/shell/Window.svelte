@@ -14,6 +14,7 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
+	import { untrack } from "svelte";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { clamp } from "$lib/utils";
@@ -34,10 +35,16 @@
 	// GAME LOOP — single RAF driving model.tick()
 	// ========================================================================
 
+	// Tick body wrapped in untrack() so 60 Hz reads of config/flight/weather
+	// state inside model.tick() don't build a reactive dependency from this
+	// effect back onto AeroWindow — otherwise any config change re-subscribes
+	// the game loop, silently doubling tick frequency until the next subscribe.
 	$effect(() =>
 		subscribe((dt: number) => {
-			model.tick(dt);
-			model.reportFrame();
+			untrack(() => {
+				model.tick(dt);
+				model.reportFrame();
+			});
 		}),
 	);
 
@@ -61,8 +68,10 @@
 	const RAMP_UP_MS = 700;
 	const RAMP_DOWN_MS = 500;
 
-	let pressTimer = $state<number | null>(null);
-	let boostRampId = $state<number | null>(null);
+	// pressTimer + boostRampId are imperative handles (setTimeout/rAF),
+	// never read in a template or derived — plain let avoids signal-graph bloat.
+	let pressTimer: number | null = null;
+	let boostRampId: number | null = null;
 	let isBoosting = $state(false);
 
 	function cancelBoostRamp() {

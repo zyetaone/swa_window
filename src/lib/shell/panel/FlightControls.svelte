@@ -29,6 +29,6 @@
 		step={1000}
 		value={model.flight.altitude}
 		formatValue={(v) => (v / 1000).toFixed(0) + 'k ft'}
-		oninput={(e) => model.flight.setAltitude(parseFloat(e.currentTarget.value))}
+		oninput={(e) => model.setAltitude(parseFloat(e.currentTarget.value))}
 	/>
 </section>

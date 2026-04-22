@@ -74,10 +74,9 @@ export class FlightSimEngine {
 		this.#initScenario(locationId, skyState);
 	}
 
-	setAltitude(alt: number): void {
+	setAltitude(alt: number, bounds: { min: number; max: number }): void {
 		if (!Number.isFinite(alt)) return;
-		const altCfg = { min: 10_000, max: 65_000, default: 35_000 };
-		this.altitude = clamp(alt, altCfg.min, altCfg.max);
+		this.altitude = clamp(alt, bounds.min, bounds.max);
 	}
 
 	// ====================================================================

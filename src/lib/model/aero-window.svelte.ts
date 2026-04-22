@@ -93,9 +93,10 @@ export class AeroWindow {
 
 	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
 	// Window.svelte does not consume this yet; add a display-path consumer here
-	// when screensaver/video modes are implemented.
-	displayMode = $state<DisplayMode>('flight');
-	videoUrl    = $state('');
+	// when screensaver/video modes are implemented. Plain fields (not $state):
+	// only read by setInterval-driven fleet status push — never in a template.
+	displayMode: DisplayMode = 'flight';
+	videoUrl    = '';
 
 	// Performance (delegated to world config — single source of truth)
 	measuredFps = $state(0);
@@ -200,7 +201,8 @@ export class AeroWindow {
 	}
 
 	setAltitude(alt: number): void {
-		this.flight.setAltitude(alt);
+		const { min, max } = this.config.camera.altitude;
+		this.flight.setAltitude(alt, { min, max });
 		this.onUserInteraction('altitude');
 	}
 
