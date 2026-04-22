@@ -16,11 +16,6 @@ import {
 	director,
 	world,
 	shell,
-	setAtmospherePath,
-	setCameraPath,
-	setDirectorPath,
-	setWorldPath,
-	setShellPath,
 } from '$lib/model/config-tree.svelte';
 
 // ─── applyConfigPatch — layer dispatch ──────────────────────────────────────
@@ -81,20 +76,20 @@ describe('applyConfigPatch', () => {
 
 // ─── setByPath (per-layer) — deep paths, unknown keys, type coercion ────────
 
-describe('setByPath behaviour (via layer setters)', () => {
+describe('setByPath behaviour (via applyConfigPatch)', () => {
 	it('returns false for a key that does not exist on the object', () => {
-		const ok = setAtmospherePath('clouds.nonexistentField', 'x');
+		const ok = applyConfigPatch('atmosphere.clouds.nonexistentField', 'x');
 		expect(ok).toBe(false);
 	});
 
 	it('returns false when an intermediate segment is not an object', () => {
 		// atmosphere.clouds.density is a number; can't descend into a number
-		const ok = setAtmospherePath('clouds.density.foo', 1);
+		const ok = applyConfigPatch('atmosphere.clouds.density.foo', 1);
 		expect(ok).toBe(false);
 	});
 
 	it('returns false for a nested path where the leaf key is missing', () => {
-		const ok = setCameraPath('orbit.nope', 1);
+		const ok = applyConfigPatch('camera.orbit.nope', 1);
 		expect(ok).toBe(false);
 	});
 
@@ -102,7 +97,7 @@ describe('setByPath behaviour (via layer setters)', () => {
 		// setByPath is a low-level mutator — it does NOT validate value types.
 		// Callers that need validation (fleet protocol) do so before calling.
 		const original = shell.hudVisible;
-		const ok = setShellPath('hudVisible', 'not-a-boolean' as unknown as boolean);
+		const ok = applyConfigPatch('shell.hudVisible', 'not-a-boolean' as unknown as boolean);
 		expect(ok).toBe(true);
 		expect(shell.hudVisible).toBe('not-a-boolean' as unknown as boolean);
 		shell.hudVisible = original;
@@ -168,23 +163,23 @@ describe('configSnapshot', () => {
 	});
 });
 
-// ─── Per-layer setters — direct invocation (not via applyConfigPatch) ──────
+// ─── Namespace isolation — applyConfigPatch must not leak across layers ───
 
-describe('per-layer setters dispatch to correct namespace', () => {
-	it('setAtmospherePath does NOT touch camera', () => {
+describe('applyConfigPatch namespace isolation', () => {
+	it('atmosphere.* writes do NOT touch camera', () => {
 		const before = camera.orbit.driftRate;
-		setAtmospherePath('clouds.density', atmosphere.clouds.density);
+		applyConfigPatch('atmosphere.clouds.density', atmosphere.clouds.density);
 		expect(camera.orbit.driftRate).toBe(before);
 	});
 
-	it('setDirectorPath does NOT touch world', () => {
+	it('director.* writes do NOT touch world', () => {
 		const before = world.buildingsEnabled;
-		setDirectorPath('daylight.syncToRealTime', director.daylight.syncToRealTime);
+		applyConfigPatch('director.daylight.syncToRealTime', director.daylight.syncToRealTime);
 		expect(world.buildingsEnabled).toBe(before);
 	});
 
-	it('setWorldPath rejects paths targeting shell fields', () => {
-		const ok = setWorldPath('hudVisible', true);
+	it('world.hudVisible — nonexistent path rejected', () => {
+		const ok = applyConfigPatch('world.hudVisible', true);
 		expect(ok).toBe(false);
 	});
 });

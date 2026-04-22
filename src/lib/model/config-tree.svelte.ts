@@ -73,9 +73,6 @@ export function syncAtmosphereWeather(
 	Object.assign(atmosphere.weather, fx);
 }
 
-export function setAtmospherePath(path: string, value: unknown): boolean {
-	return setByPath(atmosphere as unknown as Record<string, unknown>, path, value);
-}
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
 
@@ -182,14 +179,6 @@ export function setParallaxRole(role: DeviceRole): void {
 	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);
 }
 
-export function setCameraPath(path: string, value: unknown): boolean {
-	if (path.startsWith('parallax.role')) {
-		setByPath(camera as unknown as Record<string, unknown>, 'parallax.role', value);
-		setParallaxRole(value as DeviceRole);
-		return true;
-	}
-	return setByPath(camera as unknown as Record<string, unknown>, path, value);
-}
 
 // ─── Director ─────────────────────────────────────────────────────────────────
 
@@ -223,9 +212,6 @@ export const director = $state({
 	},
 });
 
-export function setDirectorPath(path: string, value: unknown): boolean {
-	return setByPath(director as unknown as Record<string, unknown>, path, value);
-}
 
 // ─── World ───────────────────────────────────────────────────────────────────
 
@@ -259,9 +245,6 @@ export function syncWorldQuality(mode: QualityMode): void {
 	world.loadingDescendantLimit = p.loadingDescendantLimit;
 }
 
-export function setWorldPath(path: string, value: unknown): boolean {
-	return setByPath(world as unknown as Record<string, unknown>, path, value);
-}
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
@@ -273,31 +256,32 @@ export const shell = $state({
 	showWing: true,
 });
 
-export function setShellPath(path: string, value: unknown): boolean {
-	return setByPath(shell as unknown as Record<string, unknown>, path, value);
-}
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
 export const config = $state({ atmosphere, camera, director, world, shell });
 
+// Flat namespace map — single dispatch point for all path-targeted patches.
+const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
+
 /**
  * Dispatch a path-targeted patch to the right namespace.
- * e.g. 'atmosphere.weather.turbulence' → setAtmospherePath('weather.turbulence', value)
+ * e.g. 'atmosphere.weather.turbulence' → sets atmosphere.weather.turbulence = value
  */
 export function applyConfigPatch(path: string, value: unknown): boolean {
-	const dot = path.indexOf('.');
-	if (dot < 0) return false;
-	const layer = path.slice(0, dot);
-	const rest = path.slice(dot + 1);
-	switch (layer) {
-		case 'atmosphere': return setAtmospherePath(rest, value);
-		case 'camera':     return setCameraPath(rest, value);
-		case 'director':   return setDirectorPath(rest, value);
-		case 'world':      return setWorldPath(rest, value);
-		case 'shell':      return setShellPath(rest, value);
+	const idx = path.indexOf('.');
+	if (idx < 0) return false;
+	const ns = path.slice(0, idx) as keyof typeof NAMESPACES;
+	const rest = path.slice(idx + 1);
+	const root = NAMESPACES[ns];
+	if (!root) return false;
+	// Special case: camera.parallax.role also syncs the heading offset.
+	if (ns === 'camera' && rest.startsWith('parallax.role')) {
+		setByPath(root as unknown as Record<string, unknown>, 'parallax.role', value);
+		setParallaxRole(value as DeviceRole);
+		return true;
 	}
-	return false;
+	return setByPath(root as unknown as Record<string, unknown>, rest, value);
 }
 
 function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {

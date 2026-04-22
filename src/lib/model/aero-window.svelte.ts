@@ -40,29 +40,18 @@ export interface AeroWindowPatch {
 	showBuildings: boolean;
 }
 
-// ─── UserOverrideTracker ─────────────────────────────────────────────────────
+// ─── User override state ──────────────────────────────────────────────────────
 
-/** Tracks short-lived user interaction flags that pause auto-behaviors. */
-class UserOverrideTracker {
-	altitude   = $state(false);
-	time       = $state(false);
-	atmosphere = $state(false);
+/** Expiry timestamps (performance.now()) per override kind. 0 = inactive. */
+const OVERRIDE_COOLDOWN_MS = 8000;
+const _overrides = $state({ altitude: 0, time: 0, atmosphere: 0 });
 
-	#timers: { altitude?: ReturnType<typeof setTimeout>; time?: ReturnType<typeof setTimeout>; atmosphere?: ReturnType<typeof setTimeout> } = {};
+export function trackOverride(kind: keyof typeof _overrides): void {
+	_overrides[kind] = performance.now() + OVERRIDE_COOLDOWN_MS;
+}
 
-	track(type: 'altitude' | 'time' | 'atmosphere', durationMs = 8000): void {
-		this[type] = true;
-		const existing = this.#timers[type];
-		if (existing) clearTimeout(existing);
-		this.#timers[type] = setTimeout(() => { this[type] = false; }, durationMs);
-	}
-
-	destroy(): void {
-		clearTimeout(this.#timers.altitude);
-		clearTimeout(this.#timers.time);
-		clearTimeout(this.#timers.atmosphere);
-		this.#timers = {};
-	}
+export function hasActiveOverride(kind: keyof typeof _overrides): boolean {
+	return performance.now() < _overrides[kind];
 }
 
 // ─── AeroWindow ──────────────────────────────────────────────────────────────
@@ -122,11 +111,10 @@ export class AeroWindow {
 	autoQuality = $state(true);
 	measuredFps = $state(0);
 
-	// User-interaction override tracker (pauses auto-behavior for 8 s)
-	readonly #overrides = new UserOverrideTracker();
-	get userAdjustingAltitude()   { return this.#overrides.altitude; }
-	get userAdjustingTime()       { return this.#overrides.time; }
-	get userAdjustingAtmosphere() { return this.#overrides.atmosphere; }
+	// User-interaction override accessors (pauses auto-behavior for 8 s)
+	get userAdjustingAltitude()   { return hasActiveOverride('altitude'); }
+	get userAdjustingTime()       { return hasActiveOverride('time'); }
+	get userAdjustingAtmosphere() { return hasActiveOverride('atmosphere'); }
 
 	// High-frequency animation time (not reactive — updated via untrack in game loop)
 	time = 0;
@@ -290,7 +278,7 @@ export class AeroWindow {
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
-		this.#overrides.track(type);
+		trackOverride(type);
 	}
 
 	getPersistedSnapshot(): PersistedState {
@@ -412,7 +400,7 @@ export class AeroWindow {
 	}
 
 	destroy(): void {
-		this.#overrides.destroy();
+		// override timestamps are module-level — nothing to teardown
 	}
 }
 
