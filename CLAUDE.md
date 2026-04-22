@@ -104,7 +104,7 @@ src/routes/
 ├── admin/               Fleet admin panel + ConfigSandbox
 ├── architecture/        Architecture visualization
 ├── content/             Drag-drop bundle UI (LAN only)
-├── playground/          MapLibre + Cesium experiment sandbox
+├── playground/          Lean Cesium scene lab (same pipeline as /, no shell / fleet / corridor)
 └── api/                 Content + assets + tiles + buildings + fleet endpoints
 
 tools/
@@ -354,16 +354,21 @@ $effect(() => {
 
 ## Routes
 
-- `/` — Main window display (Pi kiosk)
-- `/playground` — MapLibre + Cesium experiment sandbox
-- `/content` — Drag-drop bundle UI (LAN)
-- `/admin` — Fleet admin panel (incl. ConfigSandbox for live $state preview)
-- `/architecture` — Architecture visualization
-- `/api/content` — Content bundle CRUD
-- `/api/assets` — Asset upload + serve
-- `/api/buildings/:city` — OSM extrusion GeoJSON (Phase 0c)
-- `/api/tiles/[...path]` — Tile proxy
-- `/api/fleet` — Fleet server endpoint
+- `/` — Main window display (Pi kiosk). Full shell: Cesium + all atmosphere layers + blind + fleet + corridor.
+- `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet / corridor. For tuning the composite in isolation.
+- `/admin` — Fleet admin panel (incl. ConfigSandbox for live $state preview).
+- `/admin/content` — Drag-drop bundle UI (LAN-only, was `/content` pre-consolidation).
+- `/admin/fleet/health` — Fleet health dashboard sub-route.
+- `/architecture` — Architecture visualization (static docs page; scheduled for rewrite or deletion).
+- `/api/content` — Content bundle CRUD.
+- `/api/content/[id]` — DELETE a single bundle.
+- `/api/assets` — Asset upload + serve.
+- `/api/assets/[filename]` — Serve a stored asset by name.
+- `/api/bundle/[hash]` — LAN peer-cache bundle blob (was `/lan/bundle/[hash]` pre-consolidation).
+- `/api/buildings/:city` — OSM extrusion GeoJSON (Phase 0c).
+- `/api/tiles/[...path]` — Tile proxy.
+- `/api/fleet` — Fleet server endpoint.
+- `/api/wifi` — WiFi network management (hotspot fallback — state unaudited).
 
 ## Environment variables
 
@@ -417,3 +422,6 @@ ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /co
 | 5.7 push | Cloudflare Worker firmware-like OTA | `909ab7c` |
 | 7 parallax | Multi-Pi yaw offset + leader/follower director | `fea557f` |
 | 5.6 observe | Ring-buffer telemetry + in-window viewer | `5d1dd16` |
+| 8 clouds css3d | ArtsyClouds (spite CSS3D) promoted to `$lib/atmosphere/clouds/` and wired as canonical cloud renderer in `effect.svelte`; `CloudBlobs` (SVG feTurbulence) retained as fallback until next commit | `970c146` |
+| 8a route cleanup | `/content` → `/admin/content`; `/lan/bundle` → `/api/bundle`; `/playground2` deleted | `6dc4abc` |
+| 8b scene lab | `/playground` re-Cesiumified as lean composition lab — drops Threlte/takram/MapLibre experiment (−1,612 lines). Same `CesiumViewer` + `Compositor` as production `/`. | `970c146` |

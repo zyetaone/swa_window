@@ -1,12 +1,21 @@
 # takram Atmosphere + Clouds Integration — Recipe
 
-> Captures the only working integration in this codebase of
-> `@takram/three-atmosphere` + `@takram/three-clouds` + pmndrs
-> `postprocessing` inside Threlte. The original implementation lives in
-> `src/routes/playground2/layers/EffectStack.svelte` + `SkyDome.svelte`
-> and is scheduled for archival/removal. This doc preserves the lived
-> knowledge — pass order, async init, render-loop takeover — so future
-> work can rebuild without starting from zero.
+> **ARCHIVED — the takram stack is no longer in the codebase.**
+>
+> Removed 2026-04-23 during the Cesium re-consolidation (phase 8b,
+> commit `970c146`). Both `/` and `/playground` now use Cesium's native
+> sky + ocean post-process (waterMask + animated normals). CSS3D sprite
+> clouds (`$lib/atmosphere/clouds/ArtsyClouds.svelte`) replaced the
+> Bruneton volumetric path per the user's call that "CSS3D becomes the
+> only cloud renderer on `/`."
+>
+> This doc is kept as a reference recipe so the takram + Threlte +
+> pmndrs `postprocessing` integration can be rebuilt from scratch
+> without re-discovering the non-obvious parts (pass order, async LUT
+> init, render-loop takeover). Originally referenced
+> `src/routes/playground2/layers/EffectStack.svelte` and
+> `src/routes/playground/layers/EffectStack.svelte` — both deleted.
+> Reconstruct from git history: `git log --all -- "**/EffectStack.svelte"`.
 
 ## When to use this
 

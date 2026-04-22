@@ -3,7 +3,17 @@
 
 **Date:** 2026-04-22
 **Branch:** playground/maplibre-app
-**Status:** PLANNING
+**Status:** SUPERSEDED (2026-04-23)
+
+> ⚠ **SUPERSEDED — DO NOT EXECUTE.** This plan envisioned a MapLibre + Three.js
+> scene lab with a layer-stack UI. It was partially executed over the
+> 2026-04-22/23 sessions, then reversed on the user's direction: `/playground`
+> is now a lean **Cesium** scene lab that mirrors production `/`'s rendering
+> pipeline. The Threlte + takram atmosphere stack was removed; CSS3D sprite
+> clouds (`ArtsyClouds.svelte` in `$lib/atmosphere/clouds/`) became the
+> canonical cloud renderer on both routes. Final resting point: phase 8b,
+> commit `970c146`. See `CLAUDE.md` → Phase history. Kept in-tree as a
+> process artifact.
 
 ---
 
