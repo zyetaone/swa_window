@@ -5,8 +5,7 @@
 import type { ServerMessage, ServerMessageV2, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/fleet/protocol';
 import { isV2 } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
-import { BaseTransport } from './transport.svelte';
-import { createFleetTransport } from './transport.svelte';
+import { createFleetTransport, type FleetTransport, type TransportState } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
 
@@ -46,16 +45,23 @@ function getDeviceCaps(): DeviceCaps {
 	};
 }
 
-export class DisplayWsClient extends BaseTransport {
-	#transport: { send: (data: string) => void; close: () => void } | null = null;
+export class DisplayWsClient {
+	#transport: FleetTransport | null = null;
 	#model: FleetClientModel;
 	#deviceId: string;
 	#serverUrl: string;
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
 	#bootTime = Date.now();
+	#destroyed = false;
+
+	/** Pass-through of the underlying transport's reactive state. */
+	get connectionState(): TransportState {
+		return this.#transport?.state ?? 'disconnected';
+	}
+
+	get isDestroyed(): boolean { return this.#destroyed; }
 
 	constructor(model: FleetClientModel, serverUrl?: string) {
-		super();
 		this.#model = model;
 		this.#deviceId = getDeviceId();
 		this.#serverUrl = serverUrl || resolveFleetUrl('display').wsUrl;
@@ -63,23 +69,22 @@ export class DisplayWsClient extends BaseTransport {
 	}
 
 	connect(): void {
-		if (this.isDestroyed) return;
+		if (this.#destroyed) return;
 		this.#transport = createFleetTransport({
 			url: this.#serverUrl,
 			autoReconnect: true,
-			onOpen: () => {
-				this.onConnected();
+			onMessage: (data) => this.#handleMessage(data),
+		});
+		// React to transport state transitions — register + status updates
+		// on connect, cleanup on disconnect. Replaces the previous
+		// onOpen / onClose callbacks that BaseTransport used to expose.
+		this.#transport.subscribe((s) => {
+			if (s === 'connected') {
 				this.#sendRegister();
 				this.#startStatusUpdates();
-			},
-			onMessage: (data) => this.#handleMessage(data),
-			onClose: (autoReconnect) => {
+			} else if (s === 'disconnected') {
 				this.#stopStatusUpdates();
-				this.onDisconnected(autoReconnect);
-			},
-			onError: () => {
-				this.onDisconnected(true);
-			},
+			}
 		});
 	}
 
@@ -87,6 +92,11 @@ export class DisplayWsClient extends BaseTransport {
 		this.#stopStatusUpdates();
 		this.#transport?.close();
 		this.#transport = null;
+	}
+
+	destroy(): void {
+		this.#destroyed = true;
+		this.disconnect();
 	}
 
 	#send(msg: DisplayMessage | { v: 2; type: string; [k: string]: unknown }): void {

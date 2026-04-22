@@ -4,7 +4,7 @@
 
 import type { DeviceInfo, DisplayConfig, ServerAdminMessage } from '$lib/fleet/protocol';
 import { safeParse, type LocationId, type WeatherType, type DisplayMode } from '$lib/types';
-import { BaseTransport, createFleetTransport } from './transport.svelte';
+import { createFleetTransport, type FleetTransport, type TransportState } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 
 export type Transport = 'ws' | 'sse';
@@ -23,7 +23,7 @@ export interface HealthAlert {
 	message: string;
 }
 
-export class AdminStore extends BaseTransport {
+export class AdminStore {
 	devices = $state<DeviceInfo[]>([]);
 	transportType = $state<Transport>('ws');
 	apiBase: string;
@@ -31,13 +31,25 @@ export class AdminStore extends BaseTransport {
 	alerts = $state<HealthAlert[]>([]);
 	serverUptime = $state(0);
 
-	#transport: { send: (data: string) => void; close: () => void } | null = null;
+	/** Reactive connection state — reads fall through to the underlying transport,
+	 *  or 'disconnected' if no transport exists (pre-connect / post-destroy). */
+	#transport: FleetTransport | null = null;
 	#sse: EventSource | null = $state.raw(null);
+	#sseState = $state<TransportState>('disconnected');
 	#wsUrl: string;
 	#healthInterval: ReturnType<typeof setInterval> | null = null;
+	#destroyed = false;
+
+	/** Current transport state — pass-through from the underlying FleetTransport
+	 *  (or the SSE branch). Used by the admin page's connection badge. */
+	get connectionState(): TransportState {
+		if (this.transportType === 'ws') return this.#transport?.state ?? 'disconnected';
+		return this.#sseState;
+	}
+
+	get isDestroyed(): boolean { return this.#destroyed; }
 
 	constructor(serverUrl?: string, forceTransport?: Transport) {
-		super();
 		const endpoint = resolveFleetUrl('admin', serverUrl);
 		this.#wsUrl = endpoint.wsUrl;
 		this.apiBase = endpoint.apiBase;
@@ -56,7 +68,7 @@ export class AdminStore extends BaseTransport {
 	}
 
 	connect(): void {
-		if (this.isDestroyed) return;
+		if (this.#destroyed) return;
 		if (this.transportType === 'ws') this.#connectWs();
 		else this.#connectSse();
 	}
@@ -64,33 +76,29 @@ export class AdminStore extends BaseTransport {
 	disconnect(): void {
 		this.#transport?.close();
 		this.#transport = null;
-		if (this.#sse) { this.#sse.close(); this.#sse = null; }
+		if (this.#sse) { this.#sse.close(); this.#sse = null; this.#sseState = 'disconnected'; }
 	}
 
 	#connectWs(): void {
 		this.#transport = createFleetTransport({
 			url: this.#wsUrl,
 			autoReconnect: true,
-			onOpen: () => this.onConnected(),
 			onMessage: (data) => this.#handleEvent(data),
-			onClose: (autoReconnect) => this.onDisconnected(autoReconnect),
-			onError: () => this.onDisconnected(true),
 		});
 	}
 
 	#connectSse(): void {
 		try {
+			this.#sseState = 'connecting';
 			this.#sse = new EventSource(`${this.apiBase}/api/events`);
-			this.#sse.onopen = () => this.onConnected();
-			this.#sse.onerror = () => {
-				this.onDisconnected(false); // SSE auto-reconnects
-			};
+			this.#sse.onopen = () => { this.#sseState = 'connected'; };
+			this.#sse.onerror = () => { this.#sseState = 'disconnected'; /* SSE auto-reconnects */ };
 			this.#sse.onmessage = (e) => this.#handleEvent(e.data);
 			this.#sse.addEventListener('device_registered', (e: MessageEvent) => this.#handleEvent(e.data));
 			this.#sse.addEventListener('device_status', (e: MessageEvent) => this.#handleEvent(e.data));
 			this.#sse.addEventListener('device_offline', (e: MessageEvent) => this.#handleEvent(e.data));
 		} catch {
-			this.onDisconnected();
+			this.#sseState = 'disconnected';
 		}
 	}
 
@@ -191,8 +199,9 @@ export class AdminStore extends BaseTransport {
 		await this.#request('/api/broadcast/scene', 'POST', { location, weather });
 	}
 
-	override destroy(): void {
-		super.destroy();
+	destroy(): void {
+		this.#destroyed = true;
+		this.disconnect();
 		if (this.#healthInterval) {
 			clearInterval(this.#healthInterval);
 			this.#healthInterval = null;
