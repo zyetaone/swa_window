@@ -19,10 +19,7 @@
 	 */
 	import { Canvas } from '@threlte/core';
 	import MapLibreCell from './MapLibreCell.svelte';
-	import WaterOverlay from './layers/WaterOverlay.svelte';
 	import SkyDome from './layers/SkyDome.svelte';
-	import VolumetricClouds from './layers/VolumetricClouds.svelte';
-	import PostFX from './layers/PostFX.svelte';
 	import TransparentClear from './layers/TransparentClear.svelte';
 	import ThrelteScene from './ThrelteScene.svelte';
 	import { GRID_LAYERS, layersFor } from './lib/scene-state.svelte';
@@ -36,12 +33,10 @@
 	// WaterOverlay needs this to chroma-key against the live globe pixels.
 	let mapCanvas = $state<HTMLCanvasElement | undefined>(undefined);
 
-	// Pure-Three path (ThrelteScene + takram) needs ECEF coords + proper
-	// asset hosting for precomputed atmosphere LUTs. Disabled for now —
-	// ALL cells use the hybrid MapLibre + Three overlay stack, which
-	// renders reliably. Volumetric clouds + full PostFX stack return in
-	// a Day 4 commit once the takram asset pipeline is wired.
-	const USE_THRELTE_PURE = false;
+	// Cells 5-6 use pure Threlte (ECEF camera + EffectStack). Cells 1-4
+	// use the hybrid MapLibre + Three overlay stack.
+	// svelte-ignore state_referenced_locally
+	const USE_THRELTE_PURE = cellIdx >= 4;
 </script>
 
 <div class="cell">
@@ -55,11 +50,8 @@
 		<MapLibreCell
 			bind:mapCanvas
 			showBuildings={activeLayers.has('buildings')}
+			showWaterMesh={activeLayers.has('water')}
 		/>
-
-		{#if activeLayers.has('water') && mapCanvas}
-			<WaterOverlay {mapCanvas} />
-		{/if}
 
 		<div class="three-overlay">
 			<Canvas>

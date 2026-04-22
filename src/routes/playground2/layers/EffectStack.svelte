@@ -75,6 +75,12 @@
 
 	let { clouds = false, postfx = false }: { clouds?: boolean; postfx?: boolean } = $props();
 
+	// Capture initial prop values — this component is designed to run with
+	// stable props for its lifetime (cells 5-6 set them once at mount).
+	// svelte-ignore state_referenced_locally
+	const enableClouds = clouds;
+	// svelte-ignore state_referenced_locally
+	const enablePostfx = postfx;
 	const { renderer, scene, camera, size, autoRender, invalidate, renderStage } = useThrelte();
 
 	// --- Build the unified composer ------------------------------------
@@ -88,7 +94,7 @@
 	let cloudsEffect: CloudsEffect | null = null;
 	let aerial: AerialPerspectiveEffect | null = null;
 
-	if (clouds) {
+	if (enableClouds) {
 		cloudsEffect = new CloudsEffect();
 		cloudsEffect.coverage = 0.3;
 		cloudsEffect.localWeatherVelocity.set(0.001, 0);
@@ -108,7 +114,7 @@
 	let lensFlare: LensFlareEffect | null = null;
 	let dithering: DitheringEffect | null = null;
 
-	if (postfx) {
+	if (enablePostfx) {
 		bloom = new BloomEffect({
 			luminanceThreshold: 0.85,
 			intensity: 0.4,
@@ -123,7 +129,7 @@
 	// --- Renderer: AgX tone mapping (only when postfx is on) -----------
 	const prevToneMapping = renderer.toneMapping;
 	const prevExposure = renderer.toneMappingExposure;
-	if (postfx) {
+	if (enablePostfx) {
 		renderer.toneMapping = THREE.AgXToneMapping;
 		renderer.toneMappingExposure = 1.0;
 	}
@@ -209,7 +215,7 @@
 		invalidate();
 	}
 
-	if (clouds) {
+	if (enableClouds) {
 		initAtmosphere().catch((err) => {
 			// eslint-disable-next-line no-console
 			console.warn('[EffectStack] atmosphere init failed', err);
@@ -246,7 +252,7 @@
 	// --- Teardown ------------------------------------------------------
 	onDestroy(() => {
 		autoRender.set(prevAutoRender);
-		if (postfx) {
+		if (enablePostfx) {
 			renderer.toneMapping = prevToneMapping;
 			renderer.toneMappingExposure = prevExposure;
 		}

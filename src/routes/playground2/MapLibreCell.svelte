@@ -18,21 +18,27 @@
 	import { sceneState } from './lib/scene-state.svelte';
 	import { altitudeToZoom, latZoomAdjust } from './lib/globe-zoom';
 	import { addBuildings, removeBuildings } from './layers/buildings';
+	import LandscapeAbstractionLayer from './layers/LandscapeAbstractionLayer.svelte';
+	import SceneHost from './three-map/SceneHost.svelte';
 
 	interface Props {
 		/** When true, load OSM building extrusions for the active location. */
 		showBuildings?: boolean;
+		/** When true, render Three.js water mesh via the MapScene CustomLayer
+		 *  (the artwork-abstraction path — replaces chroma-key). */
+		showWaterMesh?: boolean;
 		/** The MapLibre canvas — exposed for overlay layers (WaterOverlay reads this). */
 		mapCanvas?: HTMLCanvasElement;
 	}
 
 	let {
 		showBuildings = false,
+		showWaterMesh = false,
 		mapCanvas = $bindable(),
 	}: Props = $props();
 
 	let container = $state<HTMLDivElement | undefined>();
-	let map: maplibregl.Map | null = null;
+	let map = $state<maplibregl.Map | null>(null);
 	let ready = $state(false);
 
 	// Simple night-factor — dark between 18.5–5.5h, full day 7–17h, smooth transitions.
@@ -139,6 +145,13 @@
 </script>
 
 <div class="map-root" bind:this={container}></div>
+
+{#if map && ready}
+	<LandscapeAbstractionLayer {map} />
+	{#if showWaterMesh}
+		<SceneHost {map} showWater={true} />
+	{/if}
+{/if}
 
 <style>
 	.map-root {
