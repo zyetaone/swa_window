@@ -213,10 +213,16 @@ const cloudProximity = $derived.by(() => {
 	if (dist > 12000) return 0.3;
 	return 1.0 - (dist - 4000) / 8000 * 0.7;
 });
+// Weather-keyed transparency multiplier. Clear-sky foreground clouds
+// must not dominate — the viewer should see the terrain and horizon
+// clearly. Cloudy / rain / overcast / storm stay at full opacity.
+// Per the user's call: "much more transparent on clear".
+const weatherOpacityFactor = $derived(weather === 'clear' ? 0.25 : 1.0);
+
 const layerOpacity = $derived.by(() => {
 	let d = effectiveDensity;
 	if (nightFactor > 0.5) d = Math.max(d, nightCloudFloor);
-	return Math.min(1, d * cloudProximity * 1.2);
+	return Math.min(1, d * cloudProximity * 1.2 * weatherOpacityFactor);
 });
 
 // KEEP: altitudeShift drives cloud-deck vertical position — linter must not strip
@@ -288,10 +294,15 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 		perspective: 1800px;
 		will-change: opacity;
 		transition: opacity 1.5s ease, filter 2.5s ease;
-		/* Gradient mask: clouds fade at horizon (top) so they BLEND with sky/terrain
-		   rather than blocking it. Dense in the middle, transparent at edges. */
-		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 10%, black 25%, black 75%, transparent 100%);
-		mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) 10%, black 25%, black 75%, transparent 100%);
+		/* Horizon-clip gradient mask — the MapLibre-era "bg hack" equivalent.
+		   Clouds are only visible ABOVE the horizon line (~45% from top at
+		   typical cruise pitch). Below that, the mask goes transparent so
+		   the terrain underneath reads as "clipping" the cloud deck, giving
+		   the illusion of clouds sitting at the horizon rather than in
+		   front of the ground. Top 10% still fades to let the pure sky
+		   read through; dense band is 15%–40%; hard fall-off 40%–55%. */
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.4) 8%, black 15%, black 40%, rgba(0,0,0,0.35) 50%, transparent 58%);
+		mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.4) 8%, black 15%, black 40%, rgba(0,0,0,0.35) 50%, transparent 58%);
 	}
 
 	.cloud-base {

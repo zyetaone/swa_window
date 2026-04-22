@@ -44,12 +44,14 @@ export function seedDots(
 
 /**
  * Classify a light by its rand value.
- * 70% warm white (headlights), 25% warm red (taillights), 5% blue (emergency).
+ * 70% warm white (headlights), 25% warm red (taillights), 5% warm yellow
+ * accent (was "blue/emergency" — changed per user feedback to match the
+ * view-from-an-aircraft aesthetic; no emergency-blue flicker).
  */
 export function lightClass(rand: number): LightClass {
 	if (rand < 0.70) return 'white';
 	if (rand < 0.95) return 'red';
-	return 'blue';
+	return 'blue'; // type label preserved for back-compat; palette is warm yellow
 }
 
 /** RGBA byte tuple for a given class — consumed by the effect component. */
@@ -57,6 +59,8 @@ export function lightColorBytes(cls: LightClass): [number, number, number, numbe
 	switch (cls) {
 		case 'white': return [255, 230, 200, 220];
 		case 'red':   return [255, 60, 40, 200];
-		case 'blue':  return [120, 160, 255, 230];
+		// Warm yellow (was cool blue). Aircraft-window aesthetic: all lights
+		// from altitude read as warm sodium amber, never emergency blue.
+		case 'blue':  return [255, 220, 150, 230];
 	}
 }

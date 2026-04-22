@@ -233,6 +233,7 @@ export const world = $state({
 	showClouds: true,
 	overpassRadiusMeters: 3500,
 	qualityMode: 'balanced' as QualityMode,
+	autoQuality: true,
 	msse: CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError,
 	tileCache: CESIUM_QUALITY_PRESETS.balanced.tileCacheSize,
 	preloadSiblings: CESIUM_QUALITY_PRESETS.balanced.preloadSiblings,

@@ -109,6 +109,8 @@ export class AeroWindow {
 	get showClouds() { return this.config.world.showClouds; }
 	get showBuildings() { return this.config.world.showBuildings; }
 	get haze() { return this.config.atmosphere.haze.amount; }
+	get qualityMode() { return this.config.world.qualityMode; }
+	get autoQuality() { return this.config.world.autoQuality; }
 
 	// High-frequency animation time (not reactive — updated via untrack in game loop)
 	time = 0;
@@ -388,9 +390,9 @@ export class AeroWindow {
 		if (this.#qualityCheckTimer < 5) return;
 		this.#qualityCheckTimer = 0;
 
-		const idx = QUALITY_MODES.indexOf(this.qualityMode);
-		if (this.measuredFps < 20 && idx > 0)               this.qualityMode = QUALITY_MODES[idx - 1];
-		else if (this.measuredFps > 40 && idx < QUALITY_MODES.length - 1) this.qualityMode = QUALITY_MODES[idx + 1];
+		const idx = QUALITY_MODES.indexOf(this.config.world.qualityMode);
+		if (this.measuredFps < 20 && idx > 0)               this.config.world.qualityMode = QUALITY_MODES[idx - 1];
+		else if (this.measuredFps > 40 && idx < QUALITY_MODES.length - 1) this.config.world.qualityMode = QUALITY_MODES[idx + 1];
 	}
 
 	destroy(): void {
