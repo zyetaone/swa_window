@@ -7,7 +7,6 @@
 		LineLayer,
 		Sky,
 	} from 'svelte-maplibre-gl';
-	import VectorCloudLayer from './VectorCloudLayer.svelte';
 
 	let {
 		showAtmosphere,
@@ -17,13 +16,6 @@
 		shadowGeoJSON,
 		localGridGeoJSON,
 		hexToRgba,
-		/** Cloud vector layer props — AtmosphereLayer is SSOT for distant clouds */
-		lat = 25.2,
-		lon = 55.3,
-		nightFactor = 0,
-		cloudDensity = 0.75,
-		heading = 0,
-		weather = 'clear',
 	}: {
 		showAtmosphere: boolean;
 		sunParams: { polar: number; azimuth: number; elevation: number };
@@ -32,12 +24,6 @@
 		shadowGeoJSON: GeoJSON.FeatureCollection;
 		localGridGeoJSON: GeoJSON.FeatureCollection;
 		hexToRgba: (hex: string, alpha: number) => string;
-		lat?: number;
-		lon?: number;
-		nightFactor?: number;
-		cloudDensity?: number;
-		heading?: number;
-		weather?: 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
 	} = $props();
 </script>
 
@@ -115,18 +101,4 @@
 		/>
 	</GeoJSONSource>
 
-	<!-- DISTANT CLOUD LAYER — Canvas source projected onto globe.
-	     SSOT for horizon/distant clouds. Proper depth sorting with terrain.
-	     CSS3DClouds handles foreground sprites as CSS overlay. -->
-	<!-- VECTOR CLOUDS — GeoJSON-driven cloud sprites rendered natively by MapLibre.
-	     Proper perspective, depth sorting, horizon recession — all automatic.
-	     This is the SSOT for distant/mid-field clouds. -->
-	<VectorCloudLayer
-		{lat}
-		{lon}
-		density={cloudDensity}
-		{heading}
-		{nightFactor}
-		{weather}
-	/>
 {/if}

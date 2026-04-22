@@ -182,12 +182,6 @@
 		{shadowGeoJSON}
 		{localGridGeoJSON}
 		{hexToRgba}
-		{lat}
-		{lon}
-		{nightFactor}
-		cloudDensity={0.75}
-		heading={bearing}
-		weather="clear"
 	/>
 
 	<TerrainLayer {showTerrain} {nightFactor} {terrainExaggeration} {terrainPmtilesUrl} />

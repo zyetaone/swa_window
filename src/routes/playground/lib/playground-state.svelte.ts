@@ -12,7 +12,6 @@ export const pg = $state({
 	mlAtmosphere: true,
 	showCityLights: true,
 	showLandmarks: true,
-	showThreeBillboards: false,
 	cloudRenderer: 'css3d' as 'css3d' | 'css',
 	density: 0.75,
 	cloudSpeed: 1.0,

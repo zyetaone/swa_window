@@ -14,7 +14,6 @@
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { getSkyState, nightFactor, clamp } from '$lib/utils';
 	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
-	import { landmarksFor } from './lib/landmarks';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	// Local playground config
 	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
@@ -22,7 +21,6 @@
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import MapLibreGlobe from './MapLibreGlobe.svelte';
 	import NightOverlay from './NightOverlay.svelte';
-	import ThreeBillboards from './ThreeBillboards.svelte';
 	import CSS3DClouds from './CSS3DClouds.svelte';
 	import { PostProcessMount } from './three';
 	import type maplibregl from 'maplibre-gl';
@@ -294,14 +292,6 @@
 				lodMaxZoomLevels={pg.lodMaxZoomLevels}
 				lodTileCountRatio={pg.lodTileCountRatio}
 			/>
-			{#if pg.showThreeBillboards && mapRef}
-				<ThreeBillboards
-					map={mapRef}
-					locationId={pg.activeLocation}
-					landmarks={landmarksFor(pg.activeLocation).features}
-				/>
-			{/if}
-
 			<!-- Three.js post-process — reads MapLibre's canvas each frame,
 			     applies SWA night color-grade + UnrealBloom, draws the
 			     result into an overlay canvas above the globe. -->
