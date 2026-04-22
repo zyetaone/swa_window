@@ -9,8 +9,22 @@
  */
 
 import { fleet } from './src/lib/fleet/hub';
+import { startLanProxy } from './src/lib/fleet/lan-proxy.server';
 
 const PORT = parseInt(process.env.PORT || '5173', 10);
+
+// mDNS peer discovery + announce. Silent-fails on platforms without
+// multicast (Docker-networked-host, some WSL2 setups) — the app keeps
+// running, it just can't find LAN peers. On the Pi, a straight multicast
+// socket on the LAN is always available.
+if (process.env.AERO_DISABLE_LAN_PROXY !== '1') {
+	try {
+		startLanProxy();
+		console.log('[server] LAN bundle proxy started (mDNS _aero-bundle._tcp.local)');
+	} catch (e) {
+		console.warn('[server] LAN bundle proxy failed to start:', (e as Error).message);
+	}
+}
 
 // In production, import the built SvelteKit handler
 let svelteHandler: ((req: Request) => Promise<Response>) | null = null;
