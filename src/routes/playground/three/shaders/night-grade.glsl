@@ -74,11 +74,12 @@ void main() {
 	float redSpark = step(0.98, fract(hash * 7.3));
 	lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.3);
 
-	// Additive emissive injection — 1.6x multiplier like prod. Clamp to
-	// 2.0 so the downstream shadowCrush pow() doesn't blow district
-	// centres out to grey-white.
-	rgb += lightColor * lum * 1.6 * u_nightFactor;
-	rgb = min(rgb, vec3(2.0));
+	// Additive emissive injection — tuned down from prod's 1.6 because
+	// our MapLibre VIIRS input raster is hotter than Cesium's atmosphere-
+	// dimmed render, and the bloom pass spreads already-bright pixels.
+	// 0.9 keeps cities emissive without blowing out to white halos.
+	rgb += lightColor * lum * 0.9 * u_nightFactor;
+	rgb = min(rgb, vec3(1.4));
 
 	// --- Dark Void Crush ---
 	// Keep terrain visible at night — dim terrain loses ~30% brightness.

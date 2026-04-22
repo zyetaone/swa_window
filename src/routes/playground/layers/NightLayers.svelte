@@ -37,14 +37,17 @@
 			id="night-overlay-layer"
 			source="night-overlay"
 			paint={{
-				'raster-opacity': nightFactor * 0.55,
+				// Post-process (three/shaders/night-grade.glsl) handles the
+				// amber/bloom — this raster just needs to contribute dim
+				// structure (darker terrain + lit-road hints). Hot input
+				// pixels blow bloom out, so we clamp hard.
+				'raster-opacity': nightFactor * 0.32,
 				'raster-fade-duration': 400,
-				'raster-contrast': 0.2 + nightFactor * 0.6,
-				'raster-brightness-min': nightFactor > 0.5 ? 0.015 : 0.05,
-				'raster-brightness-max': Math.max(0.3, 1.0 - nightFactor * 1.1),
-				// Warm shift: 40° at full night — sodium vapor ambient
-				'raster-hue-rotate': nightFactor * 40,
-				'raster-saturation': -0.35 + nightFactor * 0.65,
+				'raster-contrast': 0.05 + nightFactor * 0.25,
+				'raster-brightness-min': 0.02,
+				'raster-brightness-max': 0.55,
+				'raster-hue-rotate': nightFactor * 18,
+				'raster-saturation': -0.4 + nightFactor * 0.4,
 			}}
 		/>
 	</RasterTileSource>

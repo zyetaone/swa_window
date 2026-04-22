@@ -39,10 +39,14 @@ import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js
 
 import { createColorGradePass, updateColorGradeUniforms } from './passes/ColorGradePass';
 
-/** Bloom tuning — mapped from Cesium prod. */
-const BLOOM_STRENGTH = 0.85;   // ≈ emissive punch (prod contrast 128 / 150)
-const BLOOM_RADIUS = 0.55;     // ≈ sigma 3.5 → wider halos
-const BLOOM_THRESHOLD = 0.75;  // ≈ -0.3 brightness → only bright fragments
+/** Bloom tuning — tightened from prod after first-light test: MapLibre's
+ * VIIRS raster input is hotter than Cesium's atmosphere-dimmed globe, so
+ * bloom at 0.85 strength + 0.75 threshold was painting huge white halos
+ * over whole cities. Lower strength + higher threshold narrows bloom to
+ * only truly bright pixels (bright intersections, not whole districts). */
+const BLOOM_STRENGTH = 0.38;
+const BLOOM_RADIUS = 0.35;
+const BLOOM_THRESHOLD = 0.88;
 
 export interface PostComposerHandle {
 	readonly composer: EffectComposer;
