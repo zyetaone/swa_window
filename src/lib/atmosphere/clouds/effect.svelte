@@ -20,5 +20,6 @@
 	altitude={model.flight.altitude}
 	nightFactor={model.nightFactor}
 	weather={model.weather}
+	skyState={model.skyState}
 	cloudScale={1.0}
 />

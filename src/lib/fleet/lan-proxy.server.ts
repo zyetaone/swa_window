@@ -288,12 +288,25 @@ export async function fetchBundle(
 		}
 	}
 
-	// 3. Cloudflare push Worker
+	// 3. Cloudflare push Worker — only if configured and https:.
+	// Validating here closes a future SSRF surface: even if `pushWorkerUrl`
+	// were ever repopulated from a fleet message (currently build-time env),
+	// http:// or a malformed value would never reach `fetchFromOrigin`.
 	if (pushWorkerUrl) {
-		const pushBlob = await fetchFromOrigin(`${pushWorkerUrl.replace(/\/$/, '')}/blob/${hash}`);
-		if (pushBlob) {
-			await writeLocal(hash, pushBlob);
-			return { data: pushBlob, source: 'push' };
+		let safePushUrl: string | null = null;
+		try {
+			const u = new URL(pushWorkerUrl);
+			if (u.protocol === 'https:') safePushUrl = `${u.origin}${u.pathname.replace(/\/$/, '')}/blob/${hash}`;
+			else console.warn(`[lan-proxy] ignoring non-https pushWorkerUrl: ${u.protocol}`);
+		} catch (e) {
+			console.warn(`[lan-proxy] invalid pushWorkerUrl: ${(e as Error).message}`);
+		}
+		if (safePushUrl) {
+			const pushBlob = await fetchFromOrigin(safePushUrl);
+			if (pushBlob) {
+				await writeLocal(hash, pushBlob);
+				return { data: pushBlob, source: 'push' };
+			}
 		}
 	}
 
