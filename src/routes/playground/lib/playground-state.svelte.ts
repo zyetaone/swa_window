@@ -102,16 +102,27 @@ export const pgCloudFogOpacity = $derived.by(() => {
 });
 
 import * as THREE from 'three';
-/** Reactive sun direction vector based on time of day */
-export function getSunDirection() {
-	const t = pg.timeOfDay;
-	const angle = (t - 12) * (Math.PI / 12);
-	const radius = 1e6;
-	return new THREE.Vector3(
-		Math.sin(angle) * radius,
-		Math.cos(angle) * radius,
-		Math.sin(angle) * 0.4 * radius
-	).normalize();
+import { sunVectorForSky } from '$lib/simulation/sun';
+import { LOCATION_MAP } from '$lib/locations';
+
+// Module-level scratch vector — reused each call to avoid per-frame heap
+// alloc when getSunDirection() is invoked from render loops (EffectStack).
+const _sunScratch = new THREE.Vector3();
+
+/**
+ * Three.js Y-up unit vector pointing toward the sun.
+ *
+ * Consumers: SkyDome (Sky.js sunPosition uniform), EffectStack (takram
+ * CloudsEffect.sunDirection + AerialPerspectiveEffect.sunDirection),
+ * LandscapeAbstractionLayer (DirectionalLight.position). All three
+ * accept Three.js world-space Y-up; takram does its own ECEF→world
+ * conversion internally. Math lives in $lib/simulation/sun.ts so the
+ * production `/` route can share it for post-process shader work.
+ */
+export function getSunDirection(): THREE.Vector3 {
+	const loc = LOCATION_MAP.get(pg.activeLocation);
+	const lat = loc ? loc.lat : 0;
+	return sunVectorForSky(pg.timeOfDay, lat, _sunScratch);
 }
 
 if (typeof window !== 'undefined') {

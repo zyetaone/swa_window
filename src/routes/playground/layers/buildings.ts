@@ -11,14 +11,6 @@ export function addBuildings(map: maplibregl.Map, _locationId: LocationId, night
 	const sourceId = 'openmaptiles';
 	const layerId = '3d-buildings';
 
-	// Check if source exists (OpenFreeMap/OpenMapTiles)
-	if (!map.getSource(sourceId)) {
-		map.addSource(sourceId, {
-			type: 'vector',
-			url: 'https://tiles.openfreemap.org/planet'
-		});
-	}
-
 	// Add/Update the 3D-building extrusion layer
 	if (!map.getLayer(layerId)) {
 		map.addLayer({

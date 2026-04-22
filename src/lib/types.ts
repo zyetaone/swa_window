@@ -37,6 +37,13 @@ export function isValidQualityMode(v: unknown): v is QualityMode {
 	return typeof v === 'string' && (QUALITY_MODES as readonly string[]).includes(v);
 }
 
+/** Multi-Pi parallax role (Phase 7). solo = single device, no offset; center = broadcasting leader (no yaw offset); left/right = followers with per-side yaw offset. */
+export const DEVICE_ROLES = ['solo', 'left', 'center', 'right'] as const;
+export type DeviceRole = typeof DEVICE_ROLES[number];
+export function isValidDeviceRole(v: unknown): v is DeviceRole {
+	return typeof v === 'string' && (DEVICE_ROLES as readonly string[]).includes(v);
+}
+
 /** Safe JSON parse — returns null on failure instead of throwing. */
 export function safeParse<T = unknown>(raw: string): T | null {
 	try { return JSON.parse(raw); }

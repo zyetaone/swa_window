@@ -12,7 +12,8 @@
  */
 
 import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
-import type { QualityMode, WeatherType } from '$lib/types';
+import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
+export type { DeviceRole };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -77,8 +78,6 @@ export function setAtmospherePath(path: string, value: unknown): boolean {
 }
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
-
-export type DeviceRole = 'solo' | 'left' | 'center' | 'right';
 
 interface CameraShape {
 	orbit: {

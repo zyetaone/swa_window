@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * SkyDome — commit 3 of the /playground2 layer visualizer.
+	 * SkyDome — High-fidelity atmospheric sky dome for the Aero viewport.
 	 *
 	 * Three.js Sky.js (Hosek-Wilkie analytical scattering) mounted at a
 	 * huge scale so it wraps the whole scene. Sun position is driven by

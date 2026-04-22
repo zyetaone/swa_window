@@ -13,7 +13,7 @@
 	import { createAppState } from "$lib/model/state.svelte";
 	import { AIRCRAFT } from "$lib/constants";
 	import { LOCATION_MAP } from "$lib/locations";
-	import type { LocationId } from "$lib/types";
+	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
@@ -152,16 +152,11 @@
 		// hide the window frame since three oval frames tile poorly.
 		const ROLE_KEY = "aero.device.role";
 		const roleParam = params.get("role")?.toLowerCase();
-		const VALID_ROLES = ["solo", "left", "center", "right"] as const;
-		type Role = (typeof VALID_ROLES)[number];
-		const validRole = (r: string | null | undefined): r is Role =>
-			typeof r === "string" && (VALID_ROLES as readonly string[]).includes(r);
 
-		const fromUrl = validRole(roleParam) ? roleParam : null;
-		const fromStorage = validRole(localStorage.getItem(ROLE_KEY))
-			? (localStorage.getItem(ROLE_KEY) as Role)
-			: null;
-		const chosenRole: Role = fromUrl ?? fromStorage ?? "solo";
+		const fromUrl = isValidDeviceRole(roleParam) ? roleParam : null;
+		const stored = localStorage.getItem(ROLE_KEY);
+		const fromStorage = isValidDeviceRole(stored) ? stored : null;
+		const chosenRole: DeviceRole = fromUrl ?? fromStorage ?? "solo";
 
 		if (chosenRole !== "solo") {
 			setParallaxRole(chosenRole);

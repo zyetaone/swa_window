@@ -215,12 +215,7 @@ const customLayer = {
 
 onMount(() => {
 	const setup = () => {
-		if (!map.getSource('openmaptiles')) {
-			map.addSource('openmaptiles', {
-				type: 'vector',
-				url: 'https://tiles.openfreemap.org/planet'
-			});
-		}
+		// Sources are now managed by the parent AeroViewport.
 		['water', 'landcover', 'landuse', 'park'].forEach(l => {
 			if (!map.getLayer(l + '-dummy')) {
 				map.addLayer({ id: l + '-dummy', type: 'fill', source: 'openmaptiles', 'source-layer': l, paint: { 'fill-opacity': 0 } });
@@ -235,7 +230,7 @@ onMount(() => {
 	let lastUpdate = 0;
 	function throttledDraw() {
 		const now = Date.now();
-		if (now - lastUpdate < 500) return; // Wait 500ms between geometry rebuilds
+		if (now - lastUpdate < 500) return;
 		lastUpdate = now;
 		drawFeatures();
 	}
@@ -246,10 +241,8 @@ onMount(() => {
 	});
 
 	$effect(() => {
-		// SSOT Camera reactivity
+		// Re-draw when location changes explicitly
 		void pg.activeLocation;
-		void pg.altitude;
-		void pg.heading;
 		throttledDraw();
 	});
 });

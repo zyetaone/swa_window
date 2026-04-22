@@ -6,8 +6,7 @@
  * - Displays send status → server aggregates for admin
  */
 
-import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
-import type { DeviceRole } from '$lib/model/config.svelte';
+import type { LocationId, WeatherType, DisplayMode, QualityMode, DeviceRole } from '$lib/types';
 import type { Telemetry } from '$lib/model/telemetry.svelte';
 
 // ============================================================================

@@ -15,7 +15,8 @@
  * localStorage key so a device keeps its binding across browser restarts even
  * when MAC / LAN changes (e.g. kiosk re-image).
  */
-export type DeviceRole = 'solo' | 'left' | 'center' | 'right';
+import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
+export type { DeviceRole };
 
 export interface DeviceBinding {
 	role: DeviceRole;
@@ -26,7 +27,7 @@ const STORAGE_KEY_BINDINGS = 'aero.device.bindings'; // map: fingerprint → bin
 const STORAGE_KEY_SELF = 'aero.device.binding';      // resolved binding for THIS device
 const STORAGE_KEY_FP = 'aero.device.fingerprint';
 
-const VALID_ROLES = new Set<DeviceRole>(['solo', 'left', 'center', 'right']);
+const VALID_ROLES = new Set<DeviceRole>(DEVICE_ROLES);
 
 /** Simple djb2 hash — stable across page reloads, no crypto overhead. */
 function djb2(input: string): string {
