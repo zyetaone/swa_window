@@ -33,7 +33,6 @@
 	import { pg, pgTick, pgCycleLocation } from './lib/playground-state.svelte';
 	import { useBlind } from '$lib/shell/use-blind.svelte';
 	import PlaygroundHud from './components/PlaygroundHud.svelte';
-	import WindowGlass from './components/WindowGlass.svelte';
 	import PlaygroundDrawer from './components/PlaygroundDrawer.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────
@@ -334,10 +333,6 @@
 		{#if cloudFogOpacity > 0.01}
 			<div class="cloud-fog" style:opacity={cloudFogOpacity} aria-hidden="true"></div>
 		{/if}
-
-		<!-- Airplane window glass overlays — fixed to "glass", don't move with turbulence.
-		     Ported from prod shell/window/Glass.svelte. Creates depth illusion. -->
-		<WindowGlass bankAngle={motion.bankAngle} />
 	</button>
 
 	<div class="blind-clip" bind:this={blind.clipEl}>
