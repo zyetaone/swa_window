@@ -136,8 +136,8 @@ export class CesiumManager {
 		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
-		// @ts-expect-error Cesium types omit `show` on SkyBox; runtime has it
-		if (v.scene.skyBox) v.scene.skyBox.show = true;
+		if (v.scene.skyBox)
+			(v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		if (v.scene.moon) v.scene.moon.show = true;
 
@@ -363,8 +363,8 @@ export class CesiumManager {
 		// star textures from /cesiumStatic/Assets/Textures/SkyBox/, so night
 		// gets a real starfield. (Earlier workaround disabled it because of
 		// a stale-build issue — fixed at the static-asset config layer now.)
-		// @ts-expect-error Cesium types omit `show` on SkyBox; runtime has it
-		if (v.scene.skyBox) v.scene.skyBox.show = true;
+		if (v.scene.skyBox)
+			(v.scene.skyBox as any).show = true;
 
 		let r = lerp(140, 25, nf); let g = lerp(170, 25, nf); let b = lerp(200, 40, nf);
 		r = lerp(r, 100, dd * 0.3); g = lerp(g, 80, dd * 0.3); b = lerp(b, 70, dd * 0.3);

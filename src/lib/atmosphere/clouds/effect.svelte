@@ -1,21 +1,24 @@
 <script lang="ts">
 	/**
-	 * Clouds — SVG feTurbulence parallax deck along the horizon.
-	 * Density and speed come from model; wind angle from weather config.
+	 * Clouds — CSS3D volumetric sprite clouds (spite's technique).
+	 *
+	 * Replaced the SVG feTurbulence CloudBlobs pipeline in this session
+	 * on the user's call: CSS3D becomes the only cloud renderer on `/`.
+	 * CloudBlobs kept at sibling path until the deletion commit so
+	 * rollback is still a one-line swap if needed.
 	 */
-	import CloudBlobs from './CloudBlobs.svelte';
+	import ArtsyClouds from './ArtsyClouds.svelte';
 	import type { EffectProps } from '$lib/scene/types';
 
 	let { model }: EffectProps = $props();
-
-	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 </script>
 
-<CloudBlobs
+<ArtsyClouds
 	density={model.effectiveCloudDensity}
 	speed={model.cloudSpeed}
-	skyState={model.skyState}
 	heading={model.flight.heading}
 	altitude={model.flight.altitude}
-	{windAngle}
+	nightFactor={model.nightFactor}
+	weather={model.weather}
+	cloudScale={1.0}
 />
