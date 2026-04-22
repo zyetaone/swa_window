@@ -18,17 +18,14 @@
 	const LIGHT_COUNT = 350;
 	const LIGHT_RADIUS_DEG = 0.08;
 
-	useCesiumEffect((_mgr, Cesium, viewer) => {
-		const loc = LOCATION_MAP.get(model.location);
-		if (!loc) return;
+	let ds: ReturnType<typeof makeDataSource> | null = null;
 
-		const ds = new Cesium.CustomDataSource('car-lights');
-		viewer.dataSources.add(ds);
-
+	function makeDataSource(Cesium: typeof import('cesium'), loc: { lat: number; lon: number }) {
+		const datasource = new Cesium.CustomDataSource('car-lights');
 		const seeds = seedDots(loc.lat, loc.lon, LIGHT_COUNT, LIGHT_RADIUS_DEG);
 		for (const seed of seeds) {
 			const [r, g, b, a] = lightColorBytes(lightClass(seed.rand));
-			ds.entities.add({
+			datasource.entities.add({
 				position: Cesium.Cartesian3.fromDegrees(seed.lon, seed.lat),
 				point: {
 					color: Cesium.Color.fromBytes(r, g, b, a),
@@ -39,9 +36,28 @@
 				},
 			});
 		}
+		return datasource;
+	}
+
+	useCesiumEffect((_mgr, Cesium, viewer) => {
+		const loc = LOCATION_MAP.get(model.location);
+		if (!loc) return;
+
+		ds = makeDataSource(Cesium, loc);
+		viewer.dataSources.add(ds);
 
 		return () => {
-			viewer.dataSources.remove(ds, true);
+			if (ds) {
+				viewer.dataSources.remove(ds, true);
+				ds = null;
+			}
 		};
+	});
+
+	// Hide the dots during the day — they're meant to read as headlights +
+	// taillights at night, not scatter in broad daylight. Threshold at 0.2
+	// lets them fade in around dusk and stay visible through to dawn.
+	$effect(() => {
+		if (ds) ds.show = model.nightFactor > 0.2;
 	});
 </script>

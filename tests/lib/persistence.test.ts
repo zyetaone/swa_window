@@ -67,7 +67,7 @@ describe('savePersistedState', () => {
 			altitude: 30000,
 			weather: 'clear',
 			cloudDensity: 0.5,
-			showBuildings: true,
+			buildingsEnabled: true,
 			showClouds: true,
 			syncToRealTime: true,
 		});

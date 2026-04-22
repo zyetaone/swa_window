@@ -15,7 +15,7 @@ export interface PersistedState {
 	altitude: number;
 	weather: WeatherType;
 	cloudDensity: number;
-	showBuildings: boolean;
+	buildingsEnabled: boolean;
 	showClouds: boolean;
 	syncToRealTime: boolean;
 }
@@ -60,8 +60,8 @@ export function loadPersistedState(): Partial<PersistedState> {
 		}
 
 		// Validate boolean flags
-		if (parsed.showBuildings !== undefined && typeof parsed.showBuildings !== 'boolean') {
-			delete parsed.showBuildings;
+		if (parsed.buildingsEnabled !== undefined && typeof parsed.buildingsEnabled !== 'boolean') {
+			delete parsed.buildingsEnabled;
 		}
 		if (parsed.showClouds !== undefined && typeof parsed.showClouds !== 'boolean') {
 			delete parsed.showClouds;

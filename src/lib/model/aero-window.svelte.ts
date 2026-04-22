@@ -37,7 +37,7 @@ export interface AeroWindowPatch {
 	flightSpeed: number;
 	syncToRealTime: boolean;
 	showClouds: boolean;
-	showBuildings: boolean;
+	showBuildings?: boolean;
 }
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export class AeroWindow {
 
 	get blindOpen() { return this.config.shell.blindOpen; }
 	get showClouds() { return this.config.world.showClouds; }
-	get showBuildings() { return this.config.world.showBuildings; }
+	get showBuildings() { return this.config.world.buildingsEnabled; }
 	get haze() { return this.config.atmosphere.haze.amount; }
 	get qualityMode() { return this.config.world.qualityMode; }
 	get autoQuality() { return this.config.world.autoQuality; }
@@ -181,7 +181,7 @@ export class AeroWindow {
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
 		if (saved.weather) { this.weather = saved.weather; this.#syncWeatherConfig(); }
 		if (saved.cloudDensity !== undefined) this.config.atmosphere.clouds.density = saved.cloudDensity;
-		if (saved.showBuildings !== undefined) this.config.world.showBuildings = saved.showBuildings;
+		if (saved.buildingsEnabled !== undefined) this.config.world.buildingsEnabled = saved.buildingsEnabled;
 		if (saved.showClouds !== undefined) this.config.world.showClouds = saved.showClouds;
 		this.syncToRealTime = saved.syncToRealTime ?? true;
 	}
@@ -220,10 +220,6 @@ export class AeroWindow {
 
 	flyTo(locationId: LocationId): void {
 		this.flight.flyTo(locationId);
-	}
-
-	toggleBuildings(): void {
-		this.config.world.showBuildings = !this.config.world.showBuildings;
 	}
 
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
@@ -269,7 +265,7 @@ export class AeroWindow {
 		if (patch.flightSpeed !== undefined) this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') this.syncToRealTime = patch.syncToRealTime;
 		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') this.config.world.showClouds = patch.showClouds;
-		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.config.world.showBuildings = patch.showBuildings;
+		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.config.world.buildingsEnabled = patch.showBuildings;
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
@@ -280,7 +276,7 @@ export class AeroWindow {
 		return {
 			location: this.location, altitude: this.flight.altitude, weather: this.weather,
 			cloudDensity: this.config.atmosphere.clouds.density,
-			showBuildings: this.config.world.showBuildings,
+			buildingsEnabled: this.config.world.buildingsEnabled,
 			showClouds: this.config.world.showClouds, syncToRealTime: this.syncToRealTime,
 		};
 	}

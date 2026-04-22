@@ -229,7 +229,6 @@ export const world = $state({
 	defaultExaggeration: 1.0,
 	fogDensityScale: 1.0,
 	buildingsEnabled: true,
-	showBuildings: true,
 	showClouds: true,
 	overpassRadiusMeters: 3500,
 	qualityMode: 'balanced' as QualityMode,
