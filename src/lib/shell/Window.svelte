@@ -5,16 +5,12 @@
 	 * Owns the RAF tick loop (single game clock).
 	 * Composes: Cesium (terrain) + CSS clouds + CSS effect overlays.
 	 *
-	 * Z-order:
-	 *   0: Cesium (terrain, buildings, NASA night lights, CartoDB roads)
-	 *   1: Clouds (CSS-only feTurbulence + feDisplacementMap via CloudBlobs)
-	 *   2: Weather (CSS rain + lightning)
-	 *   5: Frost
-	 *   7: Wing silhouette
-	 *   9: Glass vignette
-	 *  10: Vignette
+	 * Z-order is declared in $lib/scene/layers.ts (one source of truth,
+	 * shared with the effect registry, Weather.svelte, and every atmo/*
+	 * effect index). Read Z.* there.
 	 */
 	import { untrack } from "svelte";
+	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { clamp } from "$lib/utils";
@@ -256,21 +252,21 @@
 			style:transform={motionTransform}
 			style:filter={filterString}
 		>
-			<!-- z:0 — Cesium terrain/buildings/city light billboards -->
-			<div class="render-layer" style:z-index={0}>
+			<!-- Cesium terrain/buildings/city light billboards -->
+			<div class="render-layer" style:z-index={Z.cesium}>
 				<CesiumViewer />
 			</div>
 
-			<!-- z:1-3 — Scene effects (clouds, lightning, micro-events) -->
+			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
 			<Compositor />
 
-			<!-- z:2 rain, z:5 frost -->
+			<!-- Rain + frost -->
 			<Weather {rainOpacity} {windAngle} {frostAmount} />
 
-			<!-- z:7 — Wing silhouette (bottom-left, shifts with bank) -->
+			<!-- Wing silhouette (bottom-left, shifts with bank) -->
 			<div
 				class="wing-silhouette"
-				style:z-index={7}
+				style:z-index={Z.wing}
 				style:transform={wingTransform}
 			></div>
 		</div>

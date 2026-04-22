@@ -3,11 +3,10 @@
 	 * Weather - Rain streaks + frost overlay.
 	 *
 	 * Lightning moved to scene/effects/lightning/ (self-contained effect).
-	 *
-	 * Z-order (inline styles, set by parent):
-	 *   2: Rain streaks
-	 *   5: Frost overlay
+	 * Z-ordering sourced from $lib/scene/layers — single source of truth
+	 * shared with the effect registry, HUD, and window frame.
 	 */
+	import { Z } from '$lib/scene/layers';
 
 	interface Props {
 		rainOpacity: number;
@@ -22,7 +21,7 @@
 {#if rainOpacity > 0}
 	<div
 		class="rain-layer"
-		style:z-index={2}
+		style:z-index={Z.rain}
 		style:opacity={rainOpacity}
 		style:--angle="{windAngle}deg"
 	>
@@ -35,7 +34,7 @@
 {#if frostAmount > 0}
 	<div
 		class="frost-layer"
-		style:z-index={5}
+		style:z-index={Z.frost}
 		style:opacity={frostAmount * 0.3}
 	></div>
 {/if}
