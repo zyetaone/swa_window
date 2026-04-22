@@ -13,21 +13,12 @@
 	import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { getSkyState, nightFactor, clamp } from '$lib/utils';
-	import { ALL_MAPLIBRE_SOURCES, findSource } from './imagery';
 	import { MotionEngine } from '$lib/camera/motion.svelte';
 	// Local playground config
 	import { playgroundCameraConfig as cameraConfig, playgroundDirectorConfig as directorConfig } from './lib/motion-config';
-	import CloudBlobs from '$lib/atmosphere/clouds/CloudBlobs.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
-	import MapLibreGlobe from './MapLibreGlobe.svelte';
-	import NightOverlay from './NightOverlay.svelte';
-	import CSS3DClouds from './CSS3DClouds.svelte';
-	import { PostProcessMount } from './three';
-	import type { WaterUniforms } from './three';
-	import type maplibregl from 'maplibre-gl';
+	import AeroViewport from './AeroViewport.svelte';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
-	import { getSunParams, getSkyPalette } from './lib/sun-palette.svelte';
-	import { waterState } from './lib/water-anim.svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	// Module-level singleton — survives SvelteKit navigation. Acceptable for a
 	// scene lab route; if route-lifecycle cleanup is ever needed, migrate to
@@ -48,9 +39,6 @@
 
 	const motion = new MotionEngine();
 	let simTime = $state(0);
-
-	// Map instance exposed from MapLibreGlobe
-	let mapRef = $state<maplibregl.Map | undefined>(undefined);
 
 	// ─── UI state ────────────────────────────────────────────────────────────
 	let drawerOpen = $state(false);
@@ -164,7 +152,6 @@
 		}
 	});
 
-	const maplibreSrc = $derived(findSource(ALL_MAPLIBRE_SOURCES, pg.maplibreSource));
 	const skyState = $derived<SkyState>(getSkyState(pg.timeOfDay));
 	const nf = $derived(nightFactor(pg.timeOfDay));
 	const weatherFx = $derived(WEATHER_EFFECTS[pg.weather]);
@@ -324,62 +311,8 @@
 		return () => cancelAnimationFrame(raf);
 	});
 
-	// ─── Water post-process uniforms ─────────────────────────────────────────
-	// Plumbed into PostProcessMount so the WaterPass (inserted after bloom,
-	// before OutputPass) can re-paint water pixels with scrolling normals +
-	// fresnel + sun specular — Cesium prod's animated-water look, ported
-	// into screen-space. Palette-driven: the water base RGB matches what
-	// WaterLayer actually paints, so the chroma-key mask is precise.
-	const waterPalette = $derived(getSkyPalette(pg.timeOfDay, pg.paletteName));
-	const waterSun = $derived(getSunParams(pg.timeOfDay));
+	// Water post-process removed. Unified viewport handles rendering natively.
 
-	// Dawn/dusk factor — same math as dawnDuskFrom() in post-composer.
-	const dawnDusk = $derived(4 * nf * (1 - nf));
-
-	const waterUniforms = $derived.by<WaterUniforms>(() => {
-		// Base water RGB — same source WaterLayer reads, normalized to 0-1.
-		const w = waterPalette.water;
-		const base: [number, number, number] = [w.r / 255, w.g / 255, w.b / 255];
-
-		// Sun direction in screen-space.
-		//   azimuth shifted by view bearing so the specular highlight
-		//   slides with camera yaw. Elevation (z) gates specular strength.
-		const azRad = ((waterSun.azimuth - viewBearing) * Math.PI) / 180;
-		const elev = waterSun.elevation;                          // -1..1
-		const horiz = Math.sqrt(Math.max(0, 1 - elev * elev));    // side magnitude
-		const sunDir: [number, number, number] = [
-			Math.sin(azRad) * horiz,
-			horiz * 0.3,      // biased upward — sun sits above water always
-			Math.max(0, elev),
-		];
-
-		// Sun color — warm at dawn/dusk, near-white at noon. Reuse the
-		// palette's light color; it's already time-shifted.
-		const lightHex = waterPalette.light;
-		const sunR = parseInt(lightHex.slice(1, 3), 16) / 255;
-		const sunG = parseInt(lightHex.slice(3, 5), 16) / 255;
-		const sunB = parseInt(lightHex.slice(5, 7), 16) / 255;
-
-		// Sky reflection — what the water mirrors back at grazing angles.
-		// Use the palette's sky color so night water reflects navy and
-		// day water reflects blue.
-		const skyHex = waterPalette.sky;
-		const skyR = parseInt(skyHex.slice(1, 3), 16) / 255;
-		const skyG = parseInt(skyHex.slice(3, 5), 16) / 255;
-		const skyB = parseInt(skyHex.slice(5, 7), 16) / 255;
-
-		return {
-			nightFactor: nf,
-			dawnDuskFactor: dawnDusk,
-			waterBase: base,
-			waterKeyTolerance: 0.22, // loose enough for anti-aliased coast pixels
-			sunDirScreen: sunDir,
-			sunColor: [sunR, sunG, sunB],
-			skyReflection: [skyR, skyG, skyB],
-			waterIntensity: 1,
-			time: waterState.time,
-		};
-	});
 
 	const motionTransform = $derived.by(() => {
 		// Turbulence coupling boosted from 0.08 → 0.25 so bumps are visible
@@ -413,57 +346,16 @@
 			style:--turbulence-y={motion.motionOffsetY}
 			style:--turbulence-x={motion.motionOffsetX}
 		>
-			<MapLibreGlobe
-				bind:mapRef
+			<AeroViewport
 				lat={mapLat}
 				lon={mapLon}
-				pitch={viewPitch}
-				bearing={viewBearing}
-				imageryUrl={maplibreSrc.isPmtiles ? '' : maplibreSrc.url}
-				imageryAttribution={maplibreSrc.attribution ?? ''}
-				pmtilesUrl={maplibreSrc.isPmtiles ? maplibreSrc.url : ''}
-				showTerrain={pg.mlTerrain}
-				showBuildings={pg.mlBuildings}
-				showAtmosphere={pg.mlAtmosphere}
-				nightFactor={nf}
-				timeOfDay={pg.timeOfDay}
-				paletteName={pg.paletteName}
-				freeCam={pg.freeCam}
-				showCityLights={pg.showCityLights}
-				showLandmarks={pg.showLandmarks}
-				locationId={pg.activeLocation}
-				terrainExaggeration={1.5}
-				lodMaxZoomLevels={pg.lodMaxZoomLevels}
-				lodTileCountRatio={pg.lodTileCountRatio}
+				altitudeMeters={pg.altitude * 0.3048}
+				headingDeg={viewBearing}
+				pitchDeg={viewPitch}
 			/>
-			<!-- Three.js post-process — reads MapLibre's canvas each frame,
-			     applies SWA night color-grade + UnrealBloom + animated-water
-			     WaterPass, draws the result into an overlay canvas above
-			     the globe. -->
-			<PostProcessMount map={mapRef} nightFactor={nf} water={waterUniforms} />
 		</div>
 
-		<!-- Cloud floor is now the FillLayer deck polygon in VectorCloudLayer
-		     (inside AtmosphereLayer). No CSS gradient needed — MapLibre handles
-		     perspective + depth sorting natively. -->
 
-		{#if pg.cloudRenderer === 'css3d'}
-			<CSS3DClouds
-				density={pg.density}
-				speed={pg.cloudSpeed}
-				heading={pg.heading}
-				altitude={pg.altitude}
-				nightFactor={nf}
-				weather={pg.weather}
-				cloudScale={pg.cloudScale ?? 1.0}
-				{skyState}
-				edgeColor={skyState === 'night' ? 'rgba(60,80,140,0.25)' : skyState === 'dawn' ? 'rgba(255,170,80,0.3)' : skyState === 'dusk' ? 'rgba(220,120,80,0.3)' : 'rgba(180,210,240,0.2)'}
-			/>
-		{:else}
-			<CloudBlobs density={pg.density} speed={pg.cloudSpeed} {skyState} heading={pg.heading} altitude={pg.altitude} {windAngle} />
-		{/if}
-
-		<NightOverlay nightFactor={nf} timeOfDay={pg.timeOfDay} skyState={skyState} viewBearing={viewBearing} weather={pg.weather} />
 		<Weather rainOpacity={weatherFx.rainOpacity} {windAngle} {frostAmount} />
 
 		<div class="atmo-haze" style:background={hazeGradient} aria-hidden="true"></div>

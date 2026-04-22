@@ -83,6 +83,11 @@
 
 	<fieldset>
 		<legend>Layers</legend>
+		<label class="check">
+			<input type="checkbox" bind:checked={pg.abstractionEnabled} /> 
+			<b>Artwork Abstraction</b> (Tactile layers)
+		</label>
+		<div class="field-divider"></div>
 		<label class="check"><input type="checkbox" bind:checked={pg.mlAtmosphere} /> Atmosphere + Sky</label>
 		<label class="check"><input type="checkbox" bind:checked={pg.mlTerrain} /> 3D Terrain (raster-dem)</label>
 		<label class="check"><input type="checkbox" bind:checked={pg.mlBuildings} /> 3D Buildings (fill-extrusion)</label>
@@ -100,11 +105,11 @@
 
 	<fieldset>
 		<legend>Clouds</legend>
-		<label class="check">
-			<input type="checkbox" checked={pg.cloudRenderer === 'css3d'}
-				onchange={() => pg.cloudRenderer = pg.cloudRenderer === 'css3d' ? 'css' : 'css3d'} />
-			Volumetric 3D clouds
-		</label>
+		<div class="chip-row">
+			<button type="button" class={[pg.cloudMode === 'sim' && 'active']} onclick={() => pg.cloudMode = 'sim'}>Sim</button>
+			<button type="button" class={[pg.cloudMode === 'artsy' && 'active']} onclick={() => pg.cloudMode = 'artsy'}>Artsy</button>
+		</div>
+		<div class="field-divider"></div>
 		<label>Density <span class="val">{(pg.density * 100).toFixed(0)}%</span>
 			<input type="range" bind:value={pg.density} min="0" max="1" step="0.01" />
 		</label>
@@ -118,6 +123,7 @@
 			<input type="range" bind:value={pg.cloudSpread} min="0.3" max="3.0" step="0.1" />
 		</label>
 	</fieldset>
+
 
 	<fieldset>
 		<legend>Plane</legend>

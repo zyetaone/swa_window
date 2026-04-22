@@ -18,11 +18,11 @@ export const pg = $state({
 	mlAtmosphere: true,
 	showCityLights: true,
 	showLandmarks: true,
-	cloudRenderer: 'css3d' as 'css3d' | 'css',
 	density: 0.75,
 	cloudSpeed: 1.0,
 	cloudScale: 1.0,
 	cloudSpread: 1.0,
+
 	altitude: 30000,
 	altitudeTarget: 30000,
 	altitudeCooldown: 0,
@@ -57,7 +57,37 @@ export const pg = $state({
 	autoRotate: true,
 	/** Interval between location rotations, in minutes (2–3). */
 	rotateIntervalMin: 2.5,
+
+	/** Unified Viewport Extensions */
+	abstractionEnabled: true,
+	// Use 'sim' for takram volumetric or 'artsy' for css3d
+	cloudMode: 'sim' as 'sim' | 'artsy', 
 });
+
+/** Global night factor derived from time of day (0=day, 1=night) */
+export const pgNightFactor = $derived.by(() => {
+	const t = pg.timeOfDay;
+	if (t >= 18.5 || t <= 5.5) return 1.0;
+	if (t >= 7 && t <= 17) return 0.0;
+	if (t < 7) return (7 - t) / 1.5;
+	return (t - 17) / 1.5;
+});
+
+import * as THREE from 'three';
+/** Reactive sun direction vector based on time of day */
+export function getSunDirection() {
+	const t = pg.timeOfDay;
+	const angle = (t - 12) * (Math.PI / 12);
+	const radius = 1e6;
+	return new THREE.Vector3(
+		Math.sin(angle) * radius,
+		Math.cos(angle) * radius,
+		Math.sin(angle) * 0.4 * radius
+	).normalize();
+}
+
+
+
 
 if (typeof window !== 'undefined') {
 	pg.nextLocationChange = performance.now() + rotateIntervalMs();
