@@ -9,7 +9,7 @@
 ```
 src/lib/ (5,915 lines across 25 files)
 ├── core/              (4 files, ~1,700 lines) — SSOT state, persistence, scenarios
-│   ├── WindowModel.svelte.ts   809 lines — THE model. 35 $state fields, 15 $derived, ~20 methods
+│   ├── AeroWindow.svelte.ts   809 lines — THE model. 35 $state fields, 15 $derived, ~20 methods
 │   ├── flight-scenarios.ts     484 lines — Location-specific flight patterns (data, not logic)
 │   ├── ws-client.svelte.ts     211 lines — Fleet server WebSocket client
 │   ├── overpass-client.ts      180 lines — OSM building data fetcher
@@ -35,7 +35,7 @@ src/lib/ (5,915 lines across 25 files)
 
 ## 2. What to Make Leaner
 
-### A. WindowModel.svelte.ts (809 lines → target: 500)
+### A. AeroWindow.svelte.ts (809 lines → target: 500)
 
 The SSOT is doing too many things:
 - Simulation state (position, time, weather, altitude, heading)
@@ -53,7 +53,7 @@ The SSOT is doing too many things:
 
 ```typescript
 // BEFORE: monolith
-class WindowModel {
+class AeroWindow {
     lat = $state(0);
     lon = $state(0);
     altitude = $state(35000);
@@ -86,7 +86,7 @@ class Director {
 }
 
 // Composed in a single SSOT that delegates
-class WindowModel {
+class AeroWindow {
     readonly flight = new FlightSim();
     readonly atmosphere = new AtmosphericModel();
     readonly director = new Director(this.flight);
@@ -273,7 +273,7 @@ Level 2: STATIC (pre-rendered location images + CSS clouds + CSS weather)
 Level 3: MINIMAL (CSS sky gradient + CSS clouds — the /playground route)
 ```
 
-Detection: CesiumViewer already catches init failures. Add a `renderLevel` field to WindowModel:
+Detection: CesiumViewer already catches init failures. Add a `renderLevel` field to AeroWindow:
 ```typescript
 renderLevel = $state<0 | 1 | 2 | 3>(0);
 ```
@@ -310,15 +310,15 @@ The admin panel shows which level each Pi is running at. The fleet server can al
 
 ## 9. The ES6 Class Refactor Rick Wants
 
-Rick mentioned wanting a "modern ES6 class-based approach." The current WindowModel IS already a class with $state fields — but it's a monolith. The refactor should:
+Rick mentioned wanting a "modern ES6 class-based approach." The current AeroWindow IS already a class with $state fields — but it's a monolith. The refactor should:
 
-1. **Split WindowModel into composed classes** (FlightSim, AtmosphericModel, Director, MicroEvents)
+1. **Split AeroWindow into composed classes** (FlightSim, AtmosphericModel, Director, MicroEvents)
 2. **Use $state.raw for non-reactive data** (position tuples, Cesium objects, WebSocket)
 3. **Use $state.snapshot() for persistence** instead of manual field-by-field serialization
 4. **Use $derived.by() for all computed state** — the current model has some computed values as methods instead of derived
 5. **Arrow functions for methods** used in event handlers (per Svelte 5 docs: "use arrow functions for methods to preserve `this` binding")
 
-This is a 2-3 hour refactor that should reduce WindowModel from 809 → ~500 lines while improving testability (each sub-class can be tested independently).
+This is a 2-3 hour refactor that should reduce AeroWindow from 809 → ~500 lines while improving testability (each sub-class can be tested independently).
 
 ---
 
@@ -329,7 +329,7 @@ This is a 2-3 hour refactor that should reduce WindowModel from 809 → ~500 lin
 | 1 | Get the fan, enable GPU turbo | 5 min | Pi perf → 30fps |
 | 2 | Re-enable OSM Buildings (3D Tiles, height-filtered) | 30 min | Visual wow |
 | 3 | Tile caching for 10 SWA cities | 2 hr | $0/mo forever |
-| 4 | WindowModel class refactor | 2-3 hr | Code quality + testability |
+| 4 | AeroWindow class refactor | 2-3 hr | Code quality + testability |
 | 5 | Multi-screen URL params + cloud parallax | 1-2 hr | Installation ready |
 | 6 | Captive portal WiFi setup | 1 hr | Field deployment |
 | 7 | Sound design (engine + weather loops) | 2-3 hr | Immersion |

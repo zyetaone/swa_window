@@ -3,7 +3,7 @@
  *
  * An Effect is a self-contained piece of the visual scene: it owns its own
  * internal state (via $state in its component) and renders a Svelte component
- * that receives the WindowModel (and optional params) as props.
+ * that receives the AeroWindow (and optional params) as props.
  *
  * Effects are registered in registry.ts (static stock effects) OR produced at
  * runtime by the bundle loader (dynamic, pushed content). Both paths converge
@@ -17,7 +17,7 @@
  */
 
 import type { Component } from 'svelte';
-import type { WindowModel } from '$lib/model/state.svelte';
+import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 /**
  * Conceptual layer the effect belongs to.
@@ -36,7 +36,7 @@ export type LayerKind = 'geo' | 'atmo' | 'window' | 'frame';
  * sprite with a sprite-sheet, etc.). Stock hand-coded effects omit it.
  */
 export interface EffectProps<TParams = undefined> {
-	model: WindowModel;
+	model: AeroWindow;
 	params?: TParams;
 }
 
@@ -53,7 +53,7 @@ export interface Effect<TParams = undefined> {
 	 * Omit for always-on effects. Evaluated inside a compositor {#if}, so any
 	 * model.* access is tracked and the effect mounts/unmounts automatically.
 	 */
-	when?: (model: WindowModel) => boolean;
+	when?: (model: AeroWindow) => boolean;
 	/** The component to render. Receives EffectProps<TParams>. */
 	component: Component<EffectProps<TParams>>;
 	/**

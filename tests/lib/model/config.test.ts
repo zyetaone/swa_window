@@ -21,7 +21,7 @@ import {
 	setDirectorPath,
 	setWorldPath,
 	setShellPath,
-} from '$lib/model/config.svelte';
+} from '$lib/model/config-tree.svelte';
 
 // ─── applyConfigPatch — layer dispatch ──────────────────────────────────────
 

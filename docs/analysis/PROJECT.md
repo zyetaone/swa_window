@@ -103,7 +103,7 @@ z:11  Glass recess rim (inner shadow for depth)
 | Clouds | SVG feTurbulence + CSS animation | GPU-light, runs on Pi 5 VideoCore VII, no WebGL shader needed |
 | Styling | Tailwind CSS v4 + scoped styles | Component CSS for layers, Tailwind for admin panel |
 | Build | Vite 7 + adapter-node | Single bundle for Pi deployment, Bun runtime |
-| State | Svelte 5 class with $state fields | WindowModel is a single reactive class, context-provided |
+| State | Svelte 5 class with $state fields | AeroWindow is a single reactive class, context-provided |
 | Fleet | Bun WebSocket server | Master Pi broadcasts state to display Pis over LAN |
 | Hardware | Raspberry Pi 5 (16GB) | ARM Cortex-A76 4-core, VideoCore VII GPU, 512MB CMA |
 
@@ -189,7 +189,7 @@ Chromium:   --kiosk --use-gl=angle --use-angle=gles --enable-webgl
 ```
 src/lib/
 ├── core/                          # State + logic
-│   ├── WindowModel.svelte.ts  801 # THE model: 35+ $state, 9 tick methods, Director
+│   ├── AeroWindow.svelte.ts  801 # THE model: 35+ $state, 9 tick methods, Director
 │   ├── flight-scenarios.ts    484 # Waypoint data for 10+ cities
 │   ├── ws-client.svelte.ts    211 # Fleet WebSocket client ($state.raw for WS)
 │   ├── persistence.ts          77 # localStorage save/load
@@ -214,7 +214,7 @@ src/lib/
 ├── admin-store.svelte.ts      254 # Fleet admin transport (WS + SSE)
 │
 routes/
-├── +page.svelte                   # Main app (createAppState, RAF, auto-save)
+├── +page.svelte                   # Main app (createAeroWindow, RAF, auto-save)
 ├── admin/+page.svelte         500 # Fleet control panel
 ├── playground/+page.svelte    140 # Cloud sandbox with live sliders
 └── architecture/+page.svelte  700 # In-app documentation / architecture page
@@ -240,7 +240,7 @@ User input ──→ SidePanel.svelte ──→ model.applyPatch({...})
 Fleet server ──→ ws-client ──→ model.applyPatch({...})
                                               │
                                     ┌─────────▼─────────┐
-                                    │   WindowModel      │
+                                    │   AeroWindow      │
                                     │   tick(delta)      │◄── Window.svelte RAF loop
                                     │                    │
                                     │   $state fields    │──→ $derived values
@@ -303,7 +303,7 @@ Monthly: $0-25 (self-hosted tiles or Cesium Ion free tier).
 | 1 | Fan + GPU turbo (hardware) | 0.5h |
 | 2 | 3D Tiles buildings height-filtered | 1.5h |
 | 3 | Self-hosted tiles for 10 SWA cities | 2h |
-| 4 | WindowModel refactor → 5 composed classes | 2.5h |
+| 4 | AeroWindow refactor → 5 composed classes | 2.5h |
 | 5 | Multi-screen parallax URL params | 1.5h |
 | 6 | Everything else (captive portal, sound, voice, CORENET demo) | 10h |
 | **Total** | | **18h** |
@@ -328,7 +328,7 @@ An AI editor (Minimax via opencode) made uncommitted changes:
 | DELETE CloudCanvas.svelte | **SAFE** — replaced by CloudBlobs.svelte |
 | DELETE cloud-post-process.reference.ts | **SAFE** — reference code, belongs in docs/ if needed |
 | DELETE cloud-shader.ts | **SAFE** — old GLSL shader, replaced by SVG approach |
-| MODIFY WindowModel.svelte.ts | **NEEDS REVIEW** — Minimax changed ~184 lines |
+| MODIFY AeroWindow.svelte.ts | **NEEDS REVIEW** — Minimax changed ~184 lines |
 | MODIFY CesiumViewer.svelte (648→239) | **NEEDS REVIEW** — massive reduction |
 | MODIFY core/index.ts | **SAFE** — updated re-exports to match deletions |
 | NEW shared/constants.ts (+34 lines) | **NEEDS REVIEW** — constants may have moved here |

@@ -4,7 +4,7 @@
 
 **Goal:** Replace CSS blur-gradient clouds with volumetric raymarched clouds via Threlte, fix the favicon 404, and add live layer previews to the architecture page.
 
-**Architecture:** Threlte `<Canvas>` overlays Cesium at z:1 with a transparent WebGL context. A custom FBM raymarching shader (adapted from user reference code) renders volumetric clouds driven by WindowModel state. The architecture page gets self-contained CSS animation previews per layer plus a mini Threlte cloud canvas.
+**Architecture:** Threlte `<Canvas>` overlays Cesium at z:1 with a transparent WebGL context. A custom FBM raymarching shader (adapted from user reference code) renders volumetric clouds driven by AeroWindow state. The architecture page gets self-contained CSS animation previews per layer plus a mini Threlte cloud canvas.
 
 **Tech Stack:** Svelte 5, Threlte 8, Three.js, custom GLSL (FBM raymarching), Cesium (existing)
 
@@ -120,7 +120,7 @@ Create `src/lib/layers/cloud-shader.ts`:
  * Volumetric Cloud Shaders
  *
  * FBM raymarching shader for volumetric clouds rendered on a fullscreen quad.
- * Adapted for the Aero Window pipeline — uniforms driven by WindowModel state.
+ * Adapted for the Aero Window pipeline — uniforms driven by AeroWindow state.
  */
 
 export const CLOUD_VERTEX = /* glsl */ `
@@ -273,7 +273,7 @@ This component wraps a Threlte `<Canvas>` with a transparent WebGL renderer, ren
    * Renders raymarched FBM clouds on a transparent WebGL canvas.
    * Designed to overlay Cesium at z:1 with pointer-events: none.
    *
-   * Props drive shader uniforms — synced from WindowModel in Window.svelte.
+   * Props drive shader uniforms — synced from AeroWindow in Window.svelte.
    */
   import { Canvas } from '@threlte/core';
   import * as THREE from 'three';

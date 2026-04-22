@@ -7,11 +7,11 @@
 	 * Effects that expose a `when` predicate are reactively mounted/unmounted —
 	 * Svelte's {#if} tracks the predicate and tears down state cleanly on exit.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { EFFECTS } from './registry';
 	import { bundleStore } from './bundle/store.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	// Merge static (baked-in) + dynamic (bundles pushed at runtime).
 	// Reactive via bundleStore.effects — additions/removals re-render.

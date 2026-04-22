@@ -28,12 +28,16 @@
 		}
 	});
 
-	// Composite haze: global scalar (model.haze, 0–0.15) × per-location multiplier × altitude depth.
-	// Normalized so max global haze (0.15) × max location multiplier (1.3) × max altitude (1.1) = 1.0.
-	const MAX_HAZE = 0.15 * 1.3 * 1.1; // ≈ 0.215
+	const MAX_HAZE = 0.15 * 1.3 * 1.1;
 	const altitudeScale = $derived(0.8 + Math.min(model.flight.altitude / 50000, 1) * 0.3);
 	const intensity = $derived(
-		clamp(model.haze * (model.currentLocation.scene.haze?.intensity ?? 1.0) * altitudeScale / MAX_HAZE, 0, 1),
+		clamp(
+			model.config.atmosphere.haze.amount
+			* (model.currentLocation.scene.haze?.intensity ?? 1.0)
+			* altitudeScale / MAX_HAZE,
+			0,
+			1,
+		),
 	);
 </script>
 

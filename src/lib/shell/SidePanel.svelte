@@ -13,13 +13,13 @@
 	 * without touching this shell.
 	 */
 	import type { Snippet } from 'svelte';
-	import { useAppState } from "$lib/model/state.svelte";
+	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
 	let { children }: { children?: Snippet } = $props();
 
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	let panelOpen = $state(false);
 	let closing = $state(false);

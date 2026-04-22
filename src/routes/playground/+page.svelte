@@ -12,7 +12,7 @@
 	 * only difference is `/` adds the installation shell on top.
 	 */
 	import { onDestroy } from 'svelte';
-	import { createAppState } from '$lib/model/state.svelte';
+	import { createAeroWindow } from '$lib/model/aero-window.svelte';
 	import { LOCATIONS } from '$lib/locations';
 	import { WEATHER_TYPES, type LocationId, type WeatherType } from '$lib/types';
 	import { WEATHER_EFFECTS } from '$lib/constants';
@@ -21,7 +21,7 @@
 	import Compositor from '$lib/scene/compositor.svelte';
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 
-	const model = createAppState();
+	const model = createAeroWindow();
 
 	let drawerOpen = $state(false);
 
@@ -34,7 +34,7 @@
 	const frostAmount = $derived(clamp((model.flight.altitude - 25000) / 15000, 0, 1));
 
 	onDestroy(() => {
-		// Model cleanup handled by createAppState lifecycle.
+		// Model cleanup handled by createAeroWindow lifecycle.
 	});
 </script>
 

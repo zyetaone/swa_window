@@ -9,13 +9,13 @@
 	 *   - Reactive effects that call CesiumManager methods
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { CesiumManager } from '$lib/world/compose';
 	import { COLOR_GRADING_GLSL } from '$lib/world/shaders';
 	import { initCesiumGlobal } from '$lib/world/cesium-setup';
 	import { activeCesium } from '$lib/world/active.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	// ─── Cesium lifecycle ────────────────────────────────────────────────────
 

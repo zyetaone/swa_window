@@ -3,12 +3,12 @@
 	 * TelemetryPanel — in-window observability viewer.
 	 *
 	 * Lives on the main display (/), toggled via Shift+T. Admin is the fleet
-	 * hub and has no local WindowModel — remote telemetry polling is a
+	 * hub and has no local AeroWindow — remote telemetry polling is a
 	 * separate concern (Phase 5.7+).
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 	const telemetry = model.telemetry;
 
 	let visible = $state(false);

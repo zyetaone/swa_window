@@ -10,7 +10,7 @@
 **Current:** `orbitAngle += angularSpeed * delta` — always increments (counter-clockwise).
 No way to reverse the orbit direction.
 
-**Fix:** Add `orbitDirection` to WindowModel:
+**Fix:** Add `orbitDirection` to AeroWindow:
 
 ```typescript
 orbitDirection = $state<1 | -1>(1); // 1 = CCW, -1 = CW
@@ -119,7 +119,7 @@ Flying WEST  → blind slides RIGHT (reveal from left)
 **Implementation:**
 
 ```typescript
-// In WindowModel:
+// In AeroWindow:
 readonly blindDirection = $derived.by(() => {
     const h = this.heading % 360;
     if (h > 315 || h <= 45) return 'up';     // N

@@ -5,7 +5,7 @@
 	 * a local-preview of what admin-push will actually mutate on fleet devices.
 	 */
 
-	import { config, applyConfigPatch, configSnapshot as snapshot } from '$lib/model/config.svelte';
+	import { config, applyConfigPatch, configSnapshot as snapshot } from '$lib/model/config-tree.svelte';
 
 	const cloudsSummary = $derived(
 		`${(config.atmosphere.clouds.density * 100).toFixed(0)}% @ ${config.atmosphere.clouds.speed.toFixed(1)}x, ${config.atmosphere.clouds.layerCount} layers`,

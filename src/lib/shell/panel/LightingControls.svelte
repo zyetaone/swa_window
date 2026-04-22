@@ -3,11 +3,11 @@
 	 * LightingControls — night light intensity slider + view toggles.
 	 * Toggle.checked is $bindable — bind straight to config $state.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import Toggle from '../Toggle.svelte';
 	import RangeSlider from '../RangeSlider.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <section>

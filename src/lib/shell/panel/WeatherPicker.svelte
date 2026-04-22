@@ -3,10 +3,10 @@
 	 * WeatherPicker — weather-type button grid. Goes through applyPatch so
 	 * the user-override timer + WeatherConfig sync helper fire correctly.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { WEATHER_TYPES } from '$lib/types';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <section>

@@ -47,7 +47,7 @@
 			const types: Array<'bird' | 'shooting-star' | 'contrail'> = [];
 			const altitude = model.flight.altitude;
 			const sky = model.skyState;
-			const density = model.cloudDensity;
+			const density = model.config.atmosphere.clouds.density;
 			const weather = model.weather;
 
 			if (altitude < 15000 && sky === 'day' && weather !== 'rain' && weather !== 'overcast') {

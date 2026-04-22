@@ -10,10 +10,10 @@
 	 * Depends on parent `.window-container` exposing `--inner-radius` and
 	 * `--frame-width` CSS custom properties — Window.svelte defines them.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { useBlind } from '../use-blind.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 	const blind = useBlind(model);
 </script>
 

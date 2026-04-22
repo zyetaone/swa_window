@@ -3,10 +3,10 @@
 	 * AtmosphereControls — cloud density / cloud speed / haze sliders.
 	 * Ranges pull from director.ambient + atmosphere.haze config SSOT.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import RangeSlider from '../RangeSlider.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <section>

@@ -3,7 +3,7 @@
 	 * Lightning — self-contained strike timer + positional flash visual.
 	 *
 	 * Subscribes directly to the game-loop. Timer, position, and decay live
-	 * in local $state — no coupling to WindowModel beyond reading weather.
+	 * in local $state — no coupling to AeroWindow beyond reading weather.
 	 *
 	 * Phase 5 migration: lightning timing reads from model.config.atmosphere.weather.*.
 	 */

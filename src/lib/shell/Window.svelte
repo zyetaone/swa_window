@@ -14,7 +14,7 @@
 	 *   9: Glass vignette
 	 *  10: Vignette
 	 */
-	import { useAppState } from "$lib/model/state.svelte";
+	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
@@ -23,7 +23,7 @@
 	import Blind from "./window/Blind.svelte";
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
 	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)

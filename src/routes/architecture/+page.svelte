@@ -712,7 +712,7 @@
 		<div class="state-flow">
 			<div class="flow-row">
 				<div class="module module-model">
-					<div class="module-title">WindowModel</div>
+					<div class="module-title">AeroWindow</div>
 					<div class="module-type">($state + $derived)</div>
 					<div class="module-fields">
 						<span>position, time, weather</span>

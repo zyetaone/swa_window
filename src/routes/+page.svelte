@@ -10,11 +10,11 @@
 	 */
 
 	import { onDestroy, onMount } from "svelte";
-	import { createAppState } from "$lib/model/state.svelte";
+	import { createAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT } from "$lib/constants";
 	import { LOCATION_MAP } from "$lib/locations";
 	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
-	import { savePersistedState } from "$lib/model/persistence";
+	import { savePersistedState } from "$lib/model/aero-window-persistence";
 	import { createWsClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
 	import { bundleStore } from "$lib/scene/bundle/store.svelte";
@@ -28,7 +28,7 @@
 	import Controls from "$lib/shell/HUD.svelte";
 	import SidePanel from "$lib/shell/SidePanel.svelte";
 	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
-	import { setParallaxRole } from "$lib/model/config.svelte";
+	import { setParallaxRole } from "$lib/model/config-tree.svelte";
 	// Composed panel sections — page picks the set + order it wants.
 	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
 	import TimeControl from "$lib/shell/panel/TimeControl.svelte";
@@ -38,10 +38,10 @@
 	import WeatherPicker from "$lib/shell/panel/WeatherPicker.svelte";
 
 	// Create unified app state (provides context to all child components)
-	// All state is reactive via $state/$derived in WindowModel
-	const model = createAppState();
+	// All state is reactive via $state/$derived in AeroWindow
+	const model = createAeroWindow();
 
-	// Real-time sync (moved out of WindowModel for testability)
+	// Real-time sync (moved out of AeroWindow for testability)
 	$effect(() => {
 		if (model.syncToRealTime && typeof window !== "undefined") {
 			const update = () => model.updateTimeFromSystem();
@@ -54,7 +54,7 @@
 		return undefined;
 	});
 
-	// Debounced auto-save (moved out of WindowModel for testability)
+	// Debounced auto-save (moved out of AeroWindow for testability)
 	$effect(() => {
 		const data = model.getPersistedSnapshot();
 		const timeout = setTimeout(() => savePersistedState(data), 2000);

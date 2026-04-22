@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { evalWhen } from '$lib/scene/bundle/when';
 import type { WhenPredicate } from '$lib/scene/bundle/types';
-import type { WindowModel } from '$lib/model/state.svelte';
+import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 /** Minimal fake model for predicate evaluation — only the fields evalWhen reads. */
-function fakeModel(overrides: Partial<Pick<WindowModel, 'location' | 'nightFactor' | 'skyState' | 'weather'>> = {}): WindowModel {
+function fakeModel(overrides: Partial<Pick<AeroWindow, 'location' | 'nightFactor' | 'skyState' | 'weather'>> = {}): AeroWindow {
 	return {
 		location: 'dubai',
 		nightFactor: 0.0,
 		skyState: 'day',
 		weather: 'clear',
 		...overrides,
-	} as WindowModel;
+	} as AeroWindow;
 }
 
 describe('evalWhen', () => {

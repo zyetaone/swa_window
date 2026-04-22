@@ -6,8 +6,8 @@
 ## src/lib/ — Core Library
 
 ### app-state.svelte.ts (376 lines)
-WindowModel class + context DI. Composes engines, owns shared reactive state, tick pipeline.
-- **Exports:** `WindowModel`, `PatchableState`, `createAppState()`, `useAppState()`
+AeroWindow class + context DI. Composes engines, owns shared reactive state, tick pipeline.
+- **Exports:** `AeroWindow`, `AeroWindowPatch`, `createAeroWindow()`, `useAeroWindow()`
 - **Imports:** shared/*, engine/*, services/persistence
 
 ### engine/ — Pure Simulation (zero DOM)
@@ -34,10 +34,10 @@ WindowModel class + context DI. Composes engines, owns shared reactive state, ti
 
 | File | Lines | Context | Purpose |
 |------|-------|---------|---------|
-| SidePanel.svelte | 691 | useAppState() | Location picker, weather sliders, settings |
-| Window.svelte | 590 | useAppState() | Layer compositor, RAF tick, blind drag |
-| HUD.svelte | 269 | useAppState() | Altitude/time/weather controls overlay |
-| Globe.svelte | 246 | useAppState() | CesiumManager mount/destroy lifecycle |
+| SidePanel.svelte | 691 | useAeroWindow() | Location picker, weather sliders, settings |
+| Window.svelte | 590 | useAeroWindow() | Layer compositor, RAF tick, blind drag |
+| HUD.svelte | 269 | useAeroWindow() | Altitude/time/weather controls overlay |
+| Globe.svelte | 246 | useAeroWindow() | CesiumManager mount/destroy lifecycle |
 | CloudBlobs.svelte | 167 | props only | SVG feTurbulence cloud parallax |
 | Weather.svelte | 147 | props only | Rain, lightning flash, frost |
 | MicroEvent.svelte | 134 | props only | Shooting stars, birds, contrails |

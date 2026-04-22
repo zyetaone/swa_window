@@ -65,7 +65,7 @@ src/lib/
 │   └── use-blind.svelte.ts  Composable — blind drag/snap controller
 │
 ├── model/              STATE graph + admin-tunable config tree
-│   ├── state.svelte.ts     createAppState() / useAppState() — WindowModel root
+│   ├── state.svelte.ts     createAeroWindow() / useAeroWindow() — AeroWindow root
 │   ├── telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
 │   └── config.svelte.ts    Flat $state config — atmosphere / camera / director / world / shell
 │                            + applyConfigPatch(path, value) dispatcher
@@ -133,11 +133,11 @@ These are the three rules the whole reorg was designed to preserve. If a future 
 ### 3. `untrack()` in hot paths
 Every `tick()` body (FlightSimEngine, MotionEngine, DirectorEngine) wraps its work in `untrack(() => ...)` so 60 Hz config reads don't build reactive dependencies across the graph. If you add a new engine, wrap its tick too.
 
-## WindowModel — composition
+## AeroWindow — composition
 
 ```typescript
-const model = createAppState();         // in +page.svelte only
-const model = useAppState();            // in any descendant component
+const model = createAeroWindow();         // in +page.svelte only
+const model = useAeroWindow();            // in any descendant component
 
 // Engines (tick at 60 Hz)
 model.flight                            // FlightSimEngine
@@ -301,8 +301,8 @@ export type WeatherType = typeof WEATHER_TYPES[number];
 ### Context-based state access
 
 ```typescript
-const model = createAppState();  // only in +page.svelte
-const model = useAppState();     // in any descendant
+const model = createAeroWindow();  // only in +page.svelte
+const model = useAeroWindow();     // in any descendant
 ```
 
 ### `$state` flat config via `config.svelte.ts`
@@ -327,7 +327,7 @@ export const camera = $state({ orbit: { driftRate: 0.01, major: 10, ... }, paral
 ## Scene composition system
 
 Each effect is a self-contained Svelte component that:
-- Owns its own `$state` — no global mutation of WindowModel
+- Owns its own `$state` — no global mutation of AeroWindow
 - Receives `{ model, params? }` as its only prop
 - Subscribes to the game-loop directly via `$effect(() => subscribe(...))` if it needs ticking
 - Mounts/unmounts via a `when` predicate evaluated against `model.*`

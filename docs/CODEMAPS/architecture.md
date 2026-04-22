@@ -18,7 +18,7 @@
  ┌─────────────────────┐    ┌───────────────────────────┐
  │  APP STATE           │    │  UI COMPONENTS            │
  │  app-state.svelte.ts │    │  Window, Globe, HUD,      │
- │  WindowModel + DI    │    │  SidePanel, CloudBlobs,   │
+ │  AeroWindow + DI    │    │  SidePanel, CloudBlobs,   │
  └───┬─────────────┬────┘    │  Weather, MicroEvent      │
      │             │         └────────────┬──────────────┘
      v             v                      │
@@ -45,7 +45,7 @@
 SidePanel slider → model.applyPatch({ cloudDensity: 0.8 })
      │
      v
-WindowModel validates + clamps + sets $state
+AeroWindow validates + clamps + sets $state
      │
      ├──→ $derived recalculates (skyState, nightFactor, effectiveCloudDensity...)
      │
@@ -97,17 +97,17 @@ DisplayWsClient.#handleMessage → validates → model.flight.flyTo('dubai')
 ## Component Tree
 
 ```
-+page.svelte ─── CONTEXT BOUNDARY (createAppState)
++page.svelte ─── CONTEXT BOUNDARY (createAeroWindow)
 │
-├── Window.svelte ─── useAppState(), game-loop subscription
-│   ├── Globe.svelte ── useAppState(), CesiumManager lifecycle
+├── Window.svelte ─── useAeroWindow(), game-loop subscription
+│   ├── Globe.svelte ── useAeroWindow(), CesiumManager lifecycle
 │   ├── CloudBlobs.svelte ── props only
 │   ├── Weather.svelte ── props only
 │   └── MicroEvent.svelte ── props only
 │
-├── HUD.svelte ── useAppState()
+├── HUD.svelte ── useAeroWindow()
 │
-└── SidePanel.svelte ── useAppState()
+└── SidePanel.svelte ── useAeroWindow()
     ├── AirlineLoader.svelte (pure)
     ├── Toggle.svelte (props)
     └── RangeSlider.svelte (props)
@@ -115,7 +115,7 @@ DisplayWsClient.#handleMessage → validates → model.flight.flyTo('dubai')
 
 ## State Ownership
 
-### WindowModel (coordinator)
+### AeroWindow (coordinator)
 
 | Field | Type | Range |
 |-------|------|-------|
@@ -170,12 +170,12 @@ Intention pattern — WorldEngine proposes, coordinator disposes:
 ```
 
 ### CesiumModelView (`cesium-manager.ts`)
-Narrow read-only interface for CesiumManager. WindowModel satisfies structurally.
+Narrow read-only interface for CesiumManager. AeroWindow satisfies structurally.
 
 ### FleetClientModel (`shared/protocol.ts`)
-Narrow interface for DisplayWsClient. Decouples fleet service from concrete WindowModel.
+Narrow interface for DisplayWsClient. Decouples fleet service from concrete AeroWindow.
 
-### PatchableState (`app-state.svelte.ts`)
+### AeroWindowPatch (`app-state.svelte.ts`)
 Fields that `model.applyPatch()` accepts — union of fleet-pushable and UI-adjustable state.
 
 ## Flight Mode State Machine

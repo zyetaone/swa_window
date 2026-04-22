@@ -14,7 +14,7 @@
 import type { LocationId } from './locations';
 export type { LocationId, Location, SceneDefaults } from './locations';
 
-import type { CameraConfig, DirectorConfig } from './model/config.svelte';
+import type { CameraConfig, DirectorConfig } from './model/config-tree.svelte';
 export type { CameraConfig, DirectorConfig };
 
 // ─── Const-array-derived unions (runtime + compile-time SSOT) ────────────────
@@ -77,9 +77,9 @@ export interface SimulationContext {
 	cloudSpeed: number;
 	haze: number;
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
-	/** Populated by WindowModel so engines can read CameraConfig without importing it. */
+	/** Populated by AeroWindow so engines can read CameraConfig without importing it. */
 	camera: CameraConfig;
-	/** Populated by WindowModel so engines can read DirectorConfig without importing it. */
+	/** Populated by AeroWindow so engines can read DirectorConfig without importing it. */
 	director: DirectorConfig;
 	/** DirectorEngine-specific (populated only for director.tick) */
 	isOrbitMode?: boolean;

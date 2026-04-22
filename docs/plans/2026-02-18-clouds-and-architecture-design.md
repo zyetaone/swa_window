@@ -44,7 +44,7 @@ Window.svelte (existing RAF loop — single clock)
 
 1. **Transparent overlay**: Threlte `<Canvas>` renders with `alpha: true` WebGLRenderer so Cesium terrain shows through non-cloud areas
 2. **Manual render mode**: `renderMode="manual"` with `autoRender={false}` — the existing RAF in `Window.svelte` calls Threlte's `advance()` to keep a single clock
-3. **State sync**: Cloud uniforms driven by WindowModel reactive state:
+3. **State sync**: Cloud uniforms driven by AeroWindow reactive state:
    - `effectiveCloudDensity` → cloud opacity/volume
    - `cloudSpeed` → wind animation speed
    - `nightFactor` → cloud color tinting (dark blue at night)
@@ -82,7 +82,7 @@ Enhance `/architecture` with small (200x150) live preview canvases for each laye
 | Cloud layer | Mini Threlte canvas with VolumetricClouds component |
 | Imagery layers (ESRI, VIIRS, CartoDB) | Static annotated thumbnails (can't spin up Cesium per-layer) |
 
-Each preview appears beside its layer bar on expand (click). Architecture page stays standalone — no WindowModel dependency.
+Each preview appears beside its layer bar on expand (click). Architecture page stays standalone — no AeroWindow dependency.
 
 ## Build Configuration
 

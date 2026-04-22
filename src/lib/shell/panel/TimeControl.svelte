@@ -3,12 +3,12 @@
 	 * TimeControl — "Real Time" toggle + manual time-of-day slider.
 	 * Manual slider only renders when real-time sync is off.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { formatTime } from '$lib/utils';
 	import Toggle from '../Toggle.svelte';
 	import RangeSlider from '../RangeSlider.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <section>

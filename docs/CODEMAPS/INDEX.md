@@ -24,11 +24,11 @@ shared/          (leaf — types, constants, utils, locations, protocol)
     |
 engine/          (pure simulation — zero DOM)
     |
-app-state        (coordinator — WindowModel + context DI)
+app-state        (coordinator — AeroWindow + context DI)
     |
 ui/ + routes/    (presentation + side-effects)
     |
 services/        (side channel — persistence, fleet WS)
 ```
 
-All state flows through `WindowModel`. Engines are pure. UI reads via Svelte context (`useAppState()`). Fleet commands validated at the display boundary.
+All state flows through `AeroWindow`. Engines are pure. UI reads via Svelte context (`useAeroWindow()`). Fleet commands validated at the display boundary.

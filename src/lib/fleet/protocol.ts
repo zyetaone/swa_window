@@ -7,7 +7,7 @@
  */
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode, DeviceRole } from '$lib/types';
-import type { Telemetry } from '$lib/model/telemetry.svelte';
+import type { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
 // ============================================================================
 // FLEET CLIENT MODEL (narrow interface for display WS client)
@@ -154,7 +154,7 @@ export type ConfigLayer = 'world' | 'atmosphere' | 'camera' | 'director' | 'shel
 export type ServerMessageV2 =
 	/**
 	 * Path-keyed mutation of a RootConfig field. Dispatched through
-	 * WindowModel.config.applyPatch(path, value). Paths look like
+	 * AeroWindow.config.applyPatch(path, value). Paths look like
 	 * 'atmosphere.clouds.density' or 'shell.windowFrame'.
 	 */
 	| { v: 2; type: 'config_patch'; path: string; value: unknown }

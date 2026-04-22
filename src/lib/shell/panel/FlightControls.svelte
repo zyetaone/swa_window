@@ -3,10 +3,10 @@
 	 * FlightControls — cruising speed + altitude sliders.
 	 * Slider ranges pull from config SSOT (camera.cruise + camera.altitude).
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import RangeSlider from '../RangeSlider.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <section>

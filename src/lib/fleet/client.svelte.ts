@@ -96,7 +96,7 @@ export class DisplayWsClient extends BaseTransport {
 
 	/**
 	 * Phase 7 — publish a v2 message from display to server. Used by
-	 * WindowModel.#fleetBroadcast so the panorama leader can emit
+	 * AeroWindow.#fleetBroadcast so the panorama leader can emit
 	 * `director_decision` frames the server fans out to followers.
 	 */
 	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {

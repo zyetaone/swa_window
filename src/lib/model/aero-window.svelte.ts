@@ -1,16 +1,16 @@
 /**
- * WindowModel — authoritative reactive simulation state + Svelte context DI.
+ * AeroWindow — authoritative reactive simulation state + Svelte context DI.
  *
  * Usage:
- *   Root component: const model = createAppState()
- *   Child components: const model = useAppState()
+ *   Root component: const model = createAeroWindow()
+ *   Child components: const model = useAeroWindow()
  */
 
 import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
 import { QUALITY_MODES, isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
-import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
+import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
@@ -21,12 +21,12 @@ import {
 	syncAtmosphereWeather,
 	syncWorldQuality,
 	applyConfigPatch as _applyConfigPatch,
-} from '$lib/model/config.svelte';
-import { Telemetry } from '$lib/model/telemetry.svelte';
+} from '$lib/model/config-tree.svelte';
+import { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface PatchableState {
+export interface AeroWindowPatch {
 	altitude: number;
 	timeOfDay: number;
 	weather: WeatherType;
@@ -65,9 +65,9 @@ class UserOverrideTracker {
 	}
 }
 
-// ─── WindowModel ─────────────────────────────────────────────────────────────
+// ─── AeroWindow ──────────────────────────────────────────────────────────────
 
-export class WindowModel {
+export class AeroWindow {
 	// ── Engines ───────────────────────────────────────────────────────────────
 	readonly flight = new FlightSimEngine();
 	readonly motion = new MotionEngine();
@@ -271,7 +271,7 @@ export class WindowModel {
 		return _applyConfigPatch(path, value);
 	}
 
-	applyPatch(patch: Partial<PatchableState>): void {
+	applyPatch(patch: Partial<AeroWindowPatch>): void {
 		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
 		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
 		if (patch.weather !== undefined && isValidWeather(patch.weather)) {
@@ -420,17 +420,17 @@ export class WindowModel {
 //
 // createContext (Svelte 5.40+) provides type-safe get/set without a manual
 // Symbol key or cast. The returned tuple's set/get names stay private inside
-// this module; public API is still createAppState() / useAppState().
-const [getAppContext, setAppContext] = createContext<WindowModel>();
+// this module; public API is createAeroWindow() / useAeroWindow().
+const [getAeroWindowContext, setAeroWindowContext] = createContext<AeroWindow>();
 
-export function createAppState(): WindowModel {
-	const model = new WindowModel();
-	setAppContext(model);
+export function createAeroWindow(): AeroWindow {
+	const model = new AeroWindow();
+	setAeroWindowContext(model);
 	return model;
 }
 
-export function useAppState(): WindowModel {
-	const model = getAppContext();
-	if (!model) throw new Error('useAppState() called outside component tree');
+export function useAeroWindow(): AeroWindow {
+	const model = getAeroWindowContext();
+	if (!model) throw new Error('useAeroWindow() called outside component tree');
 	return model;
 }

@@ -8,11 +8,11 @@
 	 * announcements — that lives here (not in either card) because it
 	 * should narrate regardless of which mode is showing.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import TelemetryOverlay from './hud/TelemetryOverlay.svelte';
 	import BlindInfoCard from './hud/BlindInfoCard.svelte';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	// aria-live tracking — plain var (prev-state memoisation, not reactive).
 	let prevTransitioning = false;

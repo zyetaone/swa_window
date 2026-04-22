@@ -44,7 +44,7 @@ The codebase is lean: ~12 files, ~2,000 lines of application code. Architecture 
 
 | File | Lines | Role |
 |------|-------|------|
-| `WindowModel.svelte.ts` | 489 | Single source of truth. Position, time, weather, flight state. Owns `tick(delta)` game loop and `flyTo()` async state machine. |
+| `AeroWindow.svelte.ts` | 489 | Single source of truth. Position, time, weather, flight state. Owns `tick(delta)` game loop and `flyTo()` async state machine. |
 | `ViewState.svelte.ts` | 108 | Pure derived presentation. No mutable state. Computes sky, frost, haze, glass effects. |
 | `Window.svelte` | 557 | Layer compositor. Owns RAF tick loop. Composes Cesium + 4 CSS overlay layers. |
 | `CesiumViewer.svelte` | 399 | Terrain, imagery, NASA night layer, OSM buildings with custom night shaders. HMR-safe. |
@@ -54,12 +54,12 @@ The codebase is lean: ~12 files, ~2,000 lines of application code. Architecture 
 | `Controls.svelte` | 547 | Kiosk control panel. Auto-hides. Location grid, time presets, atmosphere tuning. |
 | `constants.ts` | 82 | Aircraft physics, atmospheric constants. |
 | `types.ts` | 5 | SkyState type. |
-| `index.ts` | 58 | Context provider (createAppState, useAppState). |
+| `index.ts` | 58 | Context provider (createAeroWindow, useAeroWindow). |
 | `+page.svelte` | 207 | Root. Creates context, renders cabin wall + window + controls. |
 
 ### Key Architectural Properties
 
-1. **Model/View separation is clean.** WindowModel owns simulation truth. ViewState derives all CSS-facing values. No bidirectional sync.
+1. **Model/View separation is clean.** AeroWindow owns simulation truth. ViewState derives all CSS-facing values. No bidirectional sync.
 
 2. **All effects are CSS-only.** Three.js/Threlte was deleted. Clouds, city lights, weather, and glass are all CSS transforms + gradients + animations. GPU-composited on the display's hardware.
 
@@ -67,14 +67,14 @@ The codebase is lean: ~12 files, ~2,000 lines of application code. Architecture 
 
 4. **State flows one direction:** `model -> $derived -> DOM`.
 
-5. **WindowModel is already serializable.** Every field is a primitive (number, string, boolean). No DOM refs, no framework objects. The entire state can be JSON.stringify'd today.
+5. **AeroWindow is already serializable.** Every field is a primitive (number, string, boolean). No DOM refs, no framework objects. The entire state can be JSON.stringify'd today.
 
 6. **Auto-cycle:** 10 preset locations, cycling every 25 minutes via `setInterval` in Window.svelte.
 
 ### State Shape (What Gets Synced)
 
 ```typescript
-// Everything in WindowModel that would need to cross the wire:
+// Everything in AeroWindow that would need to cross the wire:
 {
   // Position
   lat: number, lon: number, altitude: number,
@@ -113,7 +113,7 @@ This is roughly 200 bytes of JSON. Sending this at 1Hz over WebSocket is trivial
 
 #### Core Insight: The controller is a SvelteKit route, not a separate service.
 
-The existing Model/View separation maps perfectly to a Controller/Display split. WindowModel already has setter methods for every field (`setLocation`, `setAltitude`, `setWeather`, etc.). Adding a `applyPatch(state: Partial<ModelState>)` method is ~20 lines.
+The existing Model/View separation maps perfectly to a Controller/Display split. AeroWindow already has setter methods for every field (`setLocation`, `setAltitude`, `setWeather`, etc.). Adding a `applyPatch(state: Partial<ModelState>)` method is ~20 lines.
 
 #### Topology
 
@@ -134,7 +134,7 @@ The existing Model/View separation maps perfectly to a Controller/Display split.
     +---------v--+   +--------v---+   +--------v---+
     | Display 1  |   | Display 2  |   | Display 6  |
     |            |   |            |   |            |
-    | WindowModel|   | WindowModel|   | WindowModel|
+    | AeroWindow|   | AeroWindow|   | AeroWindow|
     | (receives) |   | (receives) |   | (receives) |
     | ViewState  |   | ViewState  |   | ViewState  |
     | Renderer   |   | Renderer   |   | Renderer   |
@@ -351,7 +351,7 @@ Groups share a scene. Camera offset creates parallax:
   Display 3: lon + 0.01  (looking slightly right)
 ```
 
-Each display's `WindowModel` receives the same scene but applies a `lonOffset` based on its position in the group. This creates the illusion of looking through adjacent airplane windows at the same landscape.
+Each display's `AeroWindow` receives the same scene but applies a `lonOffset` based on its position in the group. This creates the illusion of looking through adjacent airplane windows at the same landscape.
 
 ---
 
@@ -363,7 +363,7 @@ Each display's `WindowModel` receives the same scene but applies a `lonOffset` b
 
 | Component | Why It Works |
 |-----------|-------------|
-| WindowModel | Already serializable. Already has setters. |
+| AeroWindow | Already serializable. Already has setters. |
 | ViewState | Pure derived. Will work identically with remote state. |
 | Window.svelte | Layer compositor pattern is extensible. |
 | CesiumViewer | HMR-safe, terrain/buildings/night working. |
@@ -373,7 +373,7 @@ Each display's `WindowModel` receives the same scene but applies a `lonOffset` b
 
 | Feature | Complexity | Lines (est.) |
 |---------|-----------|-------------|
-| `WindowModel.applyPatch()` | Trivial | ~30 |
+| `AeroWindow.applyPatch()` | Trivial | ~30 |
 | WebSocket server (hooks.server.ts) | Low | ~100 |
 | WebSocket client (display mode) | Low | ~80 |
 | Scene type definitions | Trivial | ~50 |
@@ -630,7 +630,7 @@ aero-window/
 ├── src/
 │   ├── lib/
 │   │   ├── core/                        # UNCHANGED
-│   │   │   ├── WindowModel.svelte.ts    # + applyPatch() method
+│   │   │   ├── AeroWindow.svelte.ts    # + applyPatch() method
 │   │   │   ├── ViewState.svelte.ts
 │   │   │   ├── types.ts                 # + Scene, LayerConfig types
 │   │   │   ├── constants.ts
@@ -739,7 +739,7 @@ aero-window/
 **Goal:** Two or more Pis showing synchronized content controlled by a dashboard.
 
 **Tasks:**
-- [ ] Add `applyPatch(state: Partial<ModelState>)` to WindowModel
+- [ ] Add `applyPatch(state: Partial<ModelState>)` to AeroWindow
 - [ ] Create `hooks.server.ts` with WebSocket upgrade handler
 - [ ] Create `sync/ws-server.ts` (broadcasts scene commands to connected displays)
 - [ ] Create `sync/ws-client.ts` (receives commands, applies to local model, auto-reconnects)
@@ -873,7 +873,7 @@ Reopen this architecture discussion if:
 
 ## Summary
 
-The path from single-display to 6-display platform is approximately 950 lines of new code across 6 phases. The key insight is that the current WindowModel is already a serializable state object -- multi-display coordination is a thin WebSocket layer on top of what exists, not a rewrite.
+The path from single-display to 6-display platform is approximately 950 lines of new code across 6 phases. The key insight is that the current AeroWindow is already a serializable state object -- multi-display coordination is a thin WebSocket layer on top of what exists, not a rewrite.
 
 The architecture avoids overengineering by refusing to build abstractions before they are needed: no plugin system, no render backend interface, no scene editor, no message broker. Extensibility comes from the simplicity of the content model (scenes are Svelte components in a directory) and the openness of the API (REST + WebSocket).
 

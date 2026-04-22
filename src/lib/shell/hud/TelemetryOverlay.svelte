@@ -3,10 +3,10 @@
 	 * TelemetryOverlay — cinematic top-right ALT / GS / LOC readout.
 	 * Shown when the blind is OPEN (scene visible).
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { formatTime } from '$lib/utils';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 	const locationName = $derived(model.currentLocation.name);
 	const destName     = $derived(model.flight.cruiseDestinationName ?? '');
 	const isCruising   = $derived(model.flight.flightMode !== 'orbit');

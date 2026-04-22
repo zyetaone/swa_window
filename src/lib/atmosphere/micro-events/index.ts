@@ -1,12 +1,11 @@
 import type { Effect } from '$lib/scene/types';
-import Component from './effect.svelte';
+import MicroEventsEffect from './MicroEventsEffect.svelte';
 
 const microEvents: Effect = {
 	id: 'micro-events',
 	kind: 'atmo',
 	z: 3,
-	// Always mounted — the component decides when to actually spawn an event.
-	component: Component,
+	component: MicroEventsEffect,
 };
 
 export default microEvents;

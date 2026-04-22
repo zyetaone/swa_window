@@ -19,7 +19,7 @@ import type { LayerKind } from '../types';
 export type BundleType = 'video-bg' | 'sprite';
 
 /**
- * Declarative when-predicate. Evaluated against WindowModel at render time.
+ * Declarative when-predicate. Evaluated against AeroWindow at render time.
  * All fields are AND-ed; within a field, values are OR-ed (e.g. any of these locations).
  * Omitted fields impose no constraint.
  */

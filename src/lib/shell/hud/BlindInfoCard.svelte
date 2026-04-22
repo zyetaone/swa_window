@@ -3,10 +3,10 @@
 	 * BlindInfoCard — centered Sky Portal branding + time/location readout.
 	 * Shown when the blind is CLOSED (blind covers the scene).
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { formatTime } from '$lib/utils';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 </script>
 
 <div class="blind-info">

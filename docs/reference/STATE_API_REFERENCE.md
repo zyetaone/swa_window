@@ -7,21 +7,21 @@ Quick reference for the state architecture using Svelte 5 runes.
 ## Import
 
 ```typescript
-import { useAppState, createAppState, LOCATIONS, WEATHER_EFFECTS, type LocationId } from '$lib/core';
+import { useAeroWindow, createAeroWindow, LOCATIONS, WEATHER_EFFECTS, type LocationId } from '$lib/core';
 ```
 
 ## Root Component Setup
 
 ```typescript
 // In +page.svelte
-const model = createAppState();
+const model = createAeroWindow();
 ```
 
 ## Child Component Access
 
 ```typescript
 // In any child component
-const model = useAppState();
+const model = useAeroWindow();
 ```
 
 ## Extracted Modules
@@ -38,7 +38,7 @@ The core is decomposed into focused files:
 
 All re-exported through `$lib/core/index.ts`.
 
-## WindowModel API (Simulation)
+## AeroWindow API (Simulation)
 
 ### Position & Camera
 
@@ -155,12 +155,12 @@ model.setLon(lon: number): void
 ### Batch Update (Validated)
 
 ```typescript
-model.applyPatch(patch: Partial<PatchableState>): void
+model.applyPatch(patch: Partial<AeroWindowPatch>): void
 // Single validated entry point for UI control updates.
 // Routes each field through its setter with clamping/validation.
 ```
 
-`PatchableState` fields: `altitude`, `timeOfDay`, `heading`, `pitch`, `weather`, `cloudDensity`, `terrainDarkness`, `cloudSpeed`, `cloudScale`, `haze`, `nightLightIntensity`, `flightSpeed`, `syncToRealTime`.
+`AeroWindowPatch` fields: `altitude`, `timeOfDay`, `heading`, `pitch`, `weather`, `cloudDensity`, `terrainDarkness`, `cloudSpeed`, `cloudScale`, `haze`, `nightLightIntensity`, `flightSpeed`, `syncToRealTime`.
 
 ### Toggles
 

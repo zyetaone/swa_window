@@ -15,7 +15,7 @@
 
 <ArtsyClouds
 	density={model.effectiveCloudDensity}
-	speed={model.cloudSpeed}
+	speed={model.config.atmosphere.clouds.speed}
 	heading={model.flight.heading}
 	altitude={model.flight.altitude}
 	nightFactor={model.nightFactor}

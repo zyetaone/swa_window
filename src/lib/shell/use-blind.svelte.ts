@@ -15,7 +15,7 @@
 
 import { clamp } from '$lib/utils';
 
-/** Narrow interface — only what the blind needs from WindowModel. */
+/** Narrow interface — only what the blind needs from AeroWindow. */
 export interface BlindControl {
 	blindOpen: boolean;
 	flight: { isTransitioning: boolean };

@@ -49,7 +49,7 @@ src/lib/
 │       ├── Toggle.svelte
 │       └── RangeSlider.svelte
 ├── model/              State + config + persistence
-│   ├── state.ts           (was app-state.svelte.ts — WindowModel class)
+│   ├── state.ts           (was app-state.svelte.ts — AeroWindow class)
 │   ├── persistence.ts
 │   └── config/
 │       ├── world.ts         ($state class)
@@ -84,7 +84,7 @@ src/lib/
 ## Three rules the reorg must obey
 
 1. **Cesium isolation preserved.** Only `world/compose.ts` imports `cesium`. Every other `world/*.ts` exports pure data/functions that `compose.ts` consumes. This is the single most valuable architectural boundary in the codebase.
-2. **Flat DTO boundary preserved at fleet + persistence.** The config classes live inside `WindowModel` as nested instances (`model.config.atmosphere.clouds.density`), but fleet patches and `localStorage` snapshots still serialize through a flat-key interface for back-compat with v1 protocol. Protocol v2 adds path-targeted patches additively; v1 is never broken.
+2. **Flat DTO boundary preserved at fleet + persistence.** The config classes live inside `AeroWindow` as nested instances (`model.config.atmosphere.clouds.density`), but fleet patches and `localStorage` snapshots still serialize through a flat-key interface for back-compat with v1 protocol. Protocol v2 adds path-targeted patches additively; v1 is never broken.
 3. **`tick()` bodies read config via `untrack()`** so 60 Hz reads don't build reactivity dependencies that trigger graph re-evaluation and tank FPS.
 
 ## Phase order — all shipped

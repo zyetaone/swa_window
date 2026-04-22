@@ -4,10 +4,10 @@
 	 * Clicking triggers flyTo() so the FSM drives the transition rather than
 	 * a direct lat/lon binding. Composed by SidePanel via snippet children.
 	 */
-	import { useAppState } from '$lib/model/state.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { LOCATIONS } from '$lib/locations';
 
-	const model = useAppState();
+	const model = useAeroWindow();
 
 	// "hasBuildings" is the existing flag the SidePanel shell used to split
 	// the two grids — mirror here so behaviour is unchanged.
