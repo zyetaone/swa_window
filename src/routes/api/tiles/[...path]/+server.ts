@@ -21,6 +21,7 @@ import { resolve, dirname } from 'node:path';
 import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
+import { lanCorsHeaders } from '$lib/http/cors';
 
 // Resolve TILE_DIR from project root (five levels up from this route file).
 // Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
@@ -33,18 +34,14 @@ function resolveTileDir(): string {
 }
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 
-const CORS = {
-	'Access-Control-Allow-Origin': '*',
-	'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
-
 const MIME: Record<string, string> = {
 	'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
 	'.terrain': 'application/vnd.quantized-mesh', '.json': 'application/json',
 };
 
-export const OPTIONS: RequestHandler = async () => {
-	return new Response(null, { status: 204, headers: CORS });
+export const OPTIONS: RequestHandler = async ({ request }) => {
+	const cors = { ...lanCorsHeaders(request.headers.get('Origin')), 'Access-Control-Allow-Methods': 'GET, OPTIONS' };
+	return new Response(null, { status: 204, headers: cors });
 };
 
 function safeResolve(subPath: string): { filePath: string; notFound: boolean; forbidden: boolean } {
@@ -58,14 +55,14 @@ function safeResolve(subPath: string): { filePath: string; notFound: boolean; fo
 	return { filePath, notFound: false, forbidden: false };
 }
 
-function serveTile(filePath: string): Response {
+function serveTile(filePath: string, cors: Record<string, string>): Response {
 	const ext = filePath.substring(filePath.lastIndexOf('.'));
 	const contentType = MIME[ext] ?? 'application/octet-stream';
 	const { size } = statSync(filePath);
 	const stream = createReadStream(filePath);
 	return new Response(stream as any, {
 		headers: {
-			...CORS,
+			...cors,
 			'Content-Type': contentType,
 			'Content-Length': String(size),
 			'Cache-Control': 'public, max-age=31536000, immutable',
@@ -73,12 +70,13 @@ function serveTile(filePath: string): Response {
 	});
 }
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
 	const path = params.path ?? '';
+	const cors = lanCorsHeaders(request.headers.get('Origin'));
 
 	if (path === 'health') {
 		return new Response(JSON.stringify({ status: 'ok' }), {
-			headers: { ...CORS, 'Content-Type': 'application/json' },
+			headers: { ...cors, 'Content-Type': 'application/json' },
 		});
 	}
 
@@ -90,13 +88,13 @@ export const GET: RequestHandler = async ({ params }) => {
 		const remapped = `${layer}/${z}/${y}/${x}.${ext}`;
 		const { filePath, notFound, forbidden } = safeResolve(remapped);
 		if (forbidden) return new Response('Forbidden', { status: 403 });
-		if (notFound) return new Response('Not found', { status: 404, headers: CORS });
-		return serveTile(filePath);
+		if (notFound) return new Response('Not found', { status: 404, headers: cors });
+		return serveTile(filePath, cors);
 	}
 
 	// Direct WMTS path: /api/tiles/{layer}/{z}/{y}/{x}.ext
 	const { filePath, notFound, forbidden } = safeResolve(path);
 	if (forbidden) return new Response('Forbidden', { status: 403 });
-	if (notFound) return new Response('Not found', { status: 404, headers: CORS });
-	return serveTile(filePath);
+	if (notFound) return new Response('Not found', { status: 404, headers: cors });
+	return serveTile(filePath, cors);
 };

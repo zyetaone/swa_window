@@ -23,37 +23,37 @@ import {
 	latestAll,
 	summarize,
 } from '$lib/fleet/heartbeat.svelte';
+import { lanCorsHeadersFull } from '$lib/http/cors';
 
-const CORS = {
-	'Access-Control-Allow-Origin': '*',
-	'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-	'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export const OPTIONS: RequestHandler = async () =>
-	new Response(null, { status: 204, headers: CORS });
+export const OPTIONS: RequestHandler = async ({ request }) =>
+	new Response(null, {
+		status: 204,
+		headers: lanCorsHeadersFull(request.headers.get('Origin')),
+	});
 
 export const POST: RequestHandler = async ({ request }) => {
+	const cors = lanCorsHeadersFull(request.headers.get('Origin'));
 	let body: unknown;
 	try {
 		body = await request.json();
 	} catch {
-		return json({ error: 'invalid json' }, { status: 400, headers: CORS });
+		return json({ error: 'invalid json' }, { status: 400, headers: cors });
 	}
 	const sample = recordHeartbeat(body);
 	if (!sample) {
-		return json({ error: 'invalid payload' }, { status: 400, headers: CORS });
+		return json({ error: 'invalid payload' }, { status: 400, headers: cors });
 	}
-	return json({ ok: true, receivedAt: sample.receivedAt }, { headers: CORS });
+	return json({ ok: true, receivedAt: sample.receivedAt }, { headers: cors });
 };
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, request }) => {
+	const cors = lanCorsHeadersFull(request.headers.get('Origin'));
 	if (url.searchParams.has('summary')) {
-		return json(summarize(), { headers: CORS });
+		return json(summarize(), { headers: cors });
 	}
 	const deviceId = url.searchParams.get('deviceId');
 	if (deviceId) {
-		return json(historyForDevice(deviceId), { headers: CORS });
+		return json(historyForDevice(deviceId), { headers: cors });
 	}
-	return json(latestAll(), { headers: CORS });
+	return json(latestAll(), { headers: cors });
 };

@@ -20,8 +20,9 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLocal } from '$lib/fleet/lan-proxy.server';
+import { lanCorsHeaders } from '$lib/http/cors';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, request }) => {
 	const hash = params.hash ?? '';
 	const blob = await readLocal(hash);
 	if (!blob) throw error(404, 'not cached');
@@ -34,7 +35,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			'Content-Type': 'application/octet-stream',
 			'Content-Length': String(blob.byteLength),
 			'Cache-Control': 'public, max-age=30',
-			'Access-Control-Allow-Origin': '*',
+			...lanCorsHeaders(request.headers.get('Origin')),
 		},
 	});
 };
