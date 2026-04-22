@@ -1,29 +1,25 @@
 <script lang="ts">
 	/**
-	 * ThrelteScene — pure-Threlte scene for cells 5-6.
+	 * ThrelteScene — pure-Threlte scene for cells 5-6 (no MapLibre).
 	 *
-	 * No MapLibre. Full Three.js scene built from:
-	 *   - SkyDome       (Three.js Sky.js, Hosek-Wilkie atmospheric scattering)
-	 *   - VolumetricClouds (CloudsEffect + AerialPerspective, @takram)
-	 *   - PostFX        (Bloom + LensFlare + Dithering, pmndrs + takram)
-	 *
-	 * Camera is bird's-eye, positioned at sceneState altitude, looking
-	 * slightly down and rotated by headingDeg. Matches the "airplane window"
-	 * vantage of the hybrid cells.
+	 * Camera sits bird's-eye at sceneState altitude, looking slightly down
+	 * and rotated by heading. SkyDome always present; clouds + post-FX
+	 * drive through a single EffectStack composer so the two never fight
+	 * over `autoRender` (the bug that made cells 5/6 go dark earlier).
 	 */
-	import { Canvas } from '@threlte/core';
-	import { T } from '@threlte/core';
+	import { Canvas, T } from '@threlte/core';
 	import * as THREE from 'three';
 	import SkyDome from './layers/SkyDome.svelte';
-	import VolumetricClouds from './layers/VolumetricClouds.svelte';
-	import PostFX from './layers/PostFX.svelte';
+	import EffectStack from './layers/EffectStack.svelte';
 	import { sceneState } from './lib/scene-state.svelte';
 
-	let { showClouds, showPostFX }: { showClouds: boolean; showPostFX: boolean } = $props();
+	let {
+		showClouds,
+		showPostFX,
+	}: { showClouds: boolean; showPostFX: boolean } = $props();
 
 	const DEG2RAD = Math.PI / 180;
 
-	// Camera: bird's-eye at altitudeMeters, pitch + heading from sceneState.
 	const camPos = $derived([0, sceneState.altitudeMeters, 0] as [number, number, number]);
 	const camRot = $derived([
 		-sceneState.pitchDeg * DEG2RAD,
@@ -32,10 +28,10 @@
 	] as [number, number, number]);
 </script>
 
-<!-- Threlte canvas: transparent so the page background (#04060d) shows through.
-     No MapLibre underneath — this IS the scene. -->
-<Canvas toneMapping={THREE.AgXToneMapping}>
-	<!-- Camera -->
+<!-- AgX is applied by EffectStack when postfx is on; Canvas uses
+     NoToneMapping as the fallback so plain SkyDome renders in linear
+     (vivid blues). -->
+<Canvas toneMapping={THREE.NoToneMapping}>
 	<T.PerspectiveCamera
 		makeDefault
 		position={camPos}
@@ -45,20 +41,11 @@
 		near={10}
 		far={2e6}
 	/>
-
-	<!-- Ambient so terrain/buildings aren't pitch-black before sun loads -->
 	<T.AmbientLight intensity={0.35} />
 
-	<!-- Sky dome — always present in pure-Threlte cells -->
 	<SkyDome />
 
-	<!-- Volumetric clouds — async init, skipRendering until LUTs ready -->
-	{#if showClouds}
-		<VolumetricClouds />
-	{/if}
-
-	<!-- Post-processing — bloom + lens flare + dithering + AgX tone -->
-	{#if showPostFX}
-		<PostFX />
-	{/if}
+	<!-- One composer drives whichever passes are active. No autoRender
+	     collision — EffectStack owns the render loop. -->
+	<EffectStack clouds={showClouds} postfx={showPostFX} />
 </Canvas>
