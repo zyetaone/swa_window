@@ -24,6 +24,7 @@
 	import NightOverlay from './NightOverlay.svelte';
 	import ThreeBillboards from './ThreeBillboards.svelte';
 	import CSS3DClouds from './CSS3DClouds.svelte';
+	import { PostProcessMount } from './three';
 	import type maplibregl from 'maplibre-gl';
 	import { PALETTES, PALETTE_ENTRIES } from './palettes';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -300,6 +301,11 @@
 					landmarks={landmarksFor(pg.activeLocation).features}
 				/>
 			{/if}
+
+			<!-- Three.js post-process — reads MapLibre's canvas each frame,
+			     applies SWA night color-grade + UnrealBloom, draws the
+			     result into an overlay canvas above the globe. -->
+			<PostProcessMount map={mapRef} nightFactor={nf} />
 		</div>
 
 		<!-- Cloud floor is now the FillLayer deck polygon in VectorCloudLayer
