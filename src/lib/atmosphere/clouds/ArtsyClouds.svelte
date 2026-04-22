@@ -213,11 +213,18 @@ const cloudProximity = $derived.by(() => {
 	if (dist > 12000) return 0.3;
 	return 1.0 - (dist - 4000) / 8000 * 0.7;
 });
-// Weather-keyed transparency multiplier. Clear-sky foreground clouds
-// must not dominate — the viewer should see the terrain and horizon
-// clearly. Cloudy / rain / overcast / storm stay at full opacity.
-// Per the user's call: "much more transparent on clear".
-const weatherOpacityFactor = $derived(weather === 'clear' ? 0.25 : 1.0);
+// Weather-keyed transparency multiplier with a golden-hour exception.
+// Clear weather mid-day → clouds should barely show (terrain + horizon
+// read clearly). But at dawn / dusk, even "clear" skies get dramatic
+// horizon clouds catching the low-angle sun — letting them breathe
+// back up to 55% makes the golden-hour view pop. Non-clear weather
+// (cloudy / rain / overcast / storm) stays at full opacity regardless
+// of time of day.
+const weatherOpacityFactor = $derived.by(() => {
+	if (weather !== 'clear') return 1.0;
+	if (skyState === 'dawn' || skyState === 'dusk') return 0.55;
+	return 0.25;
+});
 
 const layerOpacity = $derived.by(() => {
 	let d = effectiveDensity;
@@ -239,8 +246,11 @@ const altitudeShift = $derived.by(() => {
 const envFilter = $derived.by(() => {
 	if (nightFactor > 0.6) return 'brightness(0.35) saturate(0.4) hue-rotate(210deg)';
 	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.5}) saturate(${1 - nightFactor * 0.25}) hue-rotate(${nightFactor * 30}deg)`;
-	if (skyState === 'dawn') return 'brightness(1.05) saturate(1.1) sepia(0.15)';
-	if (skyState === 'dusk') return 'brightness(0.9) saturate(1.2) sepia(0.2) hue-rotate(-10deg)';
+	// Golden hour: push warm strongly. Dawn skews yellow-gold; dusk skews
+	// orange-red. Sepia + hue-rotate together give a painterly glow rather
+	// than a flat tint wash.
+	if (skyState === 'dawn') return 'brightness(1.08) saturate(1.25) sepia(0.32) hue-rotate(-8deg)';
+	if (skyState === 'dusk') return 'brightness(0.95) saturate(1.3) sepia(0.38) hue-rotate(-14deg)';
 	return 'none';
 });
 
