@@ -2,17 +2,14 @@
 	/**
 	 * SceneCell — one tile in the 6-grid layer visualizer.
 	 *
-	 * Hosts a Threlte <Canvas> with a cumulative set of layers. The
-	 * first cell shows only `sky`; the second adds `terrain`; the
-	 * sixth composites everything plus post-FX. Shared SSOT
-	 * (scene-state.svelte.ts) keeps all cells in lockstep for apples-
-	 * to-apples comparison.
-	 *
-	 * Each layer is a small Svelte component mounted inside the Canvas
-	 * — we add them one at a time in subsequent commits.
+	 * Commit 2: MapLibre globe as the base layer for every cell. Later
+	 * commits stack Three.js overlays (sky dome, sun/moon, clouds,
+	 * post-FX) on top of this MapLibre canvas. For cells that don't
+	 * yet have their "own" layer defined, they simply show the globe
+	 * — visually identical until a later commit adds the distinguishing
+	 * layer.
 	 */
-	import { Canvas } from '@threlte/core';
-	import Scene from './Scene.svelte';
+	import MapLibreCell from './MapLibreCell.svelte';
 	import { GRID_LAYERS, layersFor } from './lib/scene-state.svelte';
 
 	let { cellIdx }: { cellIdx: number } = $props();
@@ -22,12 +19,17 @@
 </script>
 
 <div class="cell">
-	<Canvas>
-		<Scene layers={activeLayers} />
-	</Canvas>
+	<!-- Layer 2 (terrain / satellite) — actually lives at every cell
+	     because the MapLibre globe IS the terrain substrate. Layer 1
+	     (sky dome) will compose over this in commit 4. -->
+	<MapLibreCell />
+
 	<div class="cell-label" aria-hidden="true">
 		<span class="cell-title">{info.label}</span>
 		<span class="cell-caption">{info.caption}</span>
+		<span class="cell-layers">
+			{#each activeLayers as id}<span class="layer-chip">{id}</span>{/each}
+		</span>
 	</div>
 </div>
 
@@ -54,7 +56,7 @@
 		font-size: 11px;
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
+		gap: 3px;
 		pointer-events: none;
 	}
 
@@ -66,5 +68,23 @@
 	.cell-caption {
 		color: rgba(255, 255, 255, 0.65);
 		font-size: 10px;
+	}
+
+	.cell-layers {
+		display: flex;
+		gap: 4px;
+		flex-wrap: wrap;
+		margin-top: 2px;
+	}
+
+	.layer-chip {
+		background: rgba(74, 144, 217, 0.25);
+		border: 1px solid rgba(74, 144, 217, 0.5);
+		padding: 1px 6px;
+		border-radius: 3px;
+		font-size: 9px;
+		color: #bad4f2;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 	}
 </style>
