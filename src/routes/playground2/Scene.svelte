@@ -1,50 +1,54 @@
 <script lang="ts">
 	/**
-	 * Scene — the Threlte scene graph for a single cell. Gated by the
-	 * `layers` set so each cell only renders what it's responsible for.
+	 * Scene — the Threlte scene graph for a single cell.
 	 *
-	 * First commit: only sky support — just a placeholder gradient
-	 * background so every cell renders SOMETHING while we wait for the
-	 * takram atmosphere import to stabilize. Subsequent commits add
-	 * one layer per file in ./layers/ and include them here.
+	 * Camera is bird's-eye at altitudeMeters (default 9000 ≈ 30k ft).
+	 * The camera sits at world origin (lat/lon) looking forward and
+	 * slightly down, matching the "airplane side window" vantage.
+	 * Heading rotates the camera around the world-up axis so cells
+	 * react to the heading slider.
+	 *
+	 * Layer gating: `layers.has(id)` toggles which layer meshes are
+	 * included in THIS cell. Cell 1 = sky only, cell 6 = everything.
 	 */
 	import { T } from '@threlte/core';
 	import type { GridLayerId } from './lib/scene-state.svelte';
 	import { sceneState } from './lib/scene-state.svelte';
+	import Sky from './layers/Sky.svelte';
 
 	let { layers }: { layers: Set<GridLayerId> } = $props();
 
-	// Sky colour placeholder until we wire takram/three-atmosphere.
-	// Phase-driven so cells still change with the time-of-day slider.
-	const skyColor = $derived.by(() => {
-		const t = sceneState.timeOfDay;
-		// crude day-arc: lerp between night navy / day blue / dusk red
-		if (t < 5 || t > 22) return '#050a22';
-		if (t < 7) return '#d8c4e0';
-		if (t < 17) return '#4a90d9';
-		if (t < 19) return '#e51d34';
-		return '#1a1a3e';
-	});
+	const DEG2RAD = Math.PI / 180;
+
+	// Camera rotation: pitch down, then rotate around world-up by heading.
+	// Three.js Euler order 'YXZ' = first yaw around Y, then pitch around
+	// rotated X. Heading is clockwise-from-north, so we negate.
+	const cameraRot = $derived([
+		-sceneState.pitchDeg * DEG2RAD,
+		-sceneState.headingDeg * DEG2RAD,
+		0,
+	] as [number, number, number]);
 </script>
 
 <T.PerspectiveCamera
 	makeDefault
-	position={[0, 0, 5]}
-	fov={60}
+	position={[0, sceneState.altitudeMeters, 0]}
+	rotation={cameraRot}
+	rotation.order={'YXZ'}
+	fov={55}
+	near={10}
+	far={2e6}
 />
 
-<T.AmbientLight intensity={0.3} />
-<T.DirectionalLight position={[4, 6, 3]} intensity={1.0} />
+<!-- Lights: keep a faint ambient so future layers (terrain, buildings)
+     aren't pitch-black below sun. Directional light will sync with sun
+     direction when we add takram in a later commit. -->
+<T.AmbientLight intensity={0.35} />
+<T.DirectionalLight position={[5000, 8000, 3000]} intensity={1.1} />
 
 {#if layers.has('sky')}
-	<!-- Placeholder background sphere — replaced by takram atmosphere
-	     in commit 2. Keeping a cheap gradient here so the grid shows
-	     something non-black on first load. -->
-	<T.Mesh>
-		<T.SphereGeometry args={[100, 32, 16]} />
-		<T.MeshBasicMaterial color={skyColor} side={1} />
-	</T.Mesh>
+	<Sky />
 {/if}
 
-<!-- Future layers: terrain, water, buildings, clouds, post-fx.
-     Each lands in a subsequent commit, guarded by layers.has(...). -->
+<!-- Future layers slot in below as each commit lands:
+     terrain, water, buildings, clouds, post-fx. -->
