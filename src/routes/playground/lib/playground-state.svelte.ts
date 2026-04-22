@@ -4,7 +4,7 @@ import { getSkyState } from '$lib/utils';
 import { PALETTES } from '$lib/simulation/palettes';
 import type { PaletteName } from '$lib/simulation/palettes';
 import { MotionEngine } from '$lib/camera/motion.svelte';
-import { resolveBinding, type DeviceRole, isGroupLeader, headingOffsetForRole } from './corridor.svelte';
+import { resolveBinding, type DeviceRole, isGroupLeader, headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 
 // Resolve binding ONCE at module load — same lifecycle as the rest of `pg`.
 const initialBinding = resolveBinding();

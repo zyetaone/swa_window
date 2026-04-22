@@ -12,7 +12,7 @@
 		resolveBinding,
 		type DeviceRole,
 		type DeviceBinding,
-	} from '../playground/lib/corridor.svelte';
+	} from '$lib/fleet/parallax.svelte';
 
 	// Read config from URL params: ?server=ws://...&transport=sse
 	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;

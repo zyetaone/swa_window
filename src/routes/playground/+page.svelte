@@ -9,7 +9,7 @@
 	import Weather from '$lib/atmosphere/weather/Weather.svelte';
 	import { PALETTE_ENTRIES } from '$lib/simulation/palettes';
 	import { pg, pgCycleLocation, pgApplyRemoteLocation, pgBgGradient, pgHazeGradient, pgCloudFogOpacity } from './lib/playground-state.svelte';
-	import { isGroupLeader, shouldApplyDirectorDecision } from './lib/corridor.svelte';
+	import { isGroupLeader, shouldApplyDirectorDecision } from '$lib/fleet/parallax.svelte';
 	import { useBlind } from '$lib/shell/use-blind.svelte';
 	import { LOCATION_IDS } from '$lib/locations';
 	import { isV2, type ServerMessageV2 } from '$lib/fleet/protocol';
