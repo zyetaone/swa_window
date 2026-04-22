@@ -18,14 +18,14 @@
 		min={0}
 		max={5.0}
 		step={0.1}
-		value={model.nightLightIntensity}
+		value={model.config.world.nightLightIntensity}
 		formatValue={(v) => v.toFixed(1)}
-		oninput={(e) => model.applyPatch({ nightLightIntensity: parseFloat(e.currentTarget.value) })}
+		oninput={(e) => model.applyConfigPatch('world.nightLightIntensity', parseFloat(e.currentTarget.value))}
 	/>
 	<Toggle
 		label="3D Buildings"
-		checked={model.showBuildings}
-		onchange={() => model.toggleBuildings()}
+		checked={model.config.world.buildingsEnabled}
+		onchange={() => model.applyConfigPatch('world.buildingsEnabled', !model.config.world.buildingsEnabled)}
 	/>
 	<Toggle label="Window Frame" bind:checked={model.config.shell.windowFrame} />
 </section>

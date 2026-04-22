@@ -89,16 +89,7 @@ export class AeroWindow {
 	syncToRealTime = $state(true);
 
 	// Environment
-	weather             = $state<WeatherType>('cloudy');
-	cloudDensity        = $state(0.85);
-	cloudSpeed          = $state(0.6);
-	haze                = $state(0.07);
-	nightLightIntensity = $state(0.6);
-
-	// View
-	blindOpen     = $state(true);
-	showBuildings = $state(true);
-	showClouds    = $state(true);
+	weather = $state<WeatherType>('cloudy');
 
 	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
 	// Window.svelte does not consume this yet; add a display-path consumer here
@@ -106,15 +97,18 @@ export class AeroWindow {
 	displayMode = $state<DisplayMode>('flight');
 	videoUrl    = $state('');
 
-	// Performance
-	qualityMode = $state<QualityMode>('balanced');
-	autoQuality = $state(true);
+	// Performance (delegated to world config — single source of truth)
 	measuredFps = $state(0);
 
 	// User-interaction override accessors (pauses auto-behavior for 8 s)
 	get userAdjustingAltitude()   { return hasActiveOverride('altitude'); }
 	get userAdjustingTime()       { return hasActiveOverride('time'); }
 	get userAdjustingAtmosphere() { return hasActiveOverride('atmosphere'); }
+
+	get blindOpen() { return this.config.shell.blindOpen; }
+	get showClouds() { return this.config.world.showClouds; }
+	get showBuildings() { return this.config.world.showBuildings; }
+	get haze() { return this.config.atmosphere.haze.amount; }
 
 	// High-frequency animation time (not reactive — updated via untrack in game loop)
 	time = 0;
@@ -150,12 +144,13 @@ export class AeroWindow {
 		return 0;
 	});
 
-	nightLightScale = $derived(this.nightLightIntensity);
+	nightLightScale = $derived(this.config.world.nightLightIntensity);
 
 	effectiveCloudDensity = $derived.by(() => {
 		const fx = WEATHER_EFFECTS[this.weather];
+		const raw = this.config.atmosphere.clouds.density;
 		const [min, max] = fx.cloudDensityRange;
-		let d = max > 0 ? clamp(this.cloudDensity, min, max) : this.cloudDensity * 0.3;
+		let d = max > 0 ? clamp(raw, min, max) : raw * 0.3;
 		if (this.skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor);
 		else if (this.skyState === 'dusk') d *= 0.7;
 		return d;
@@ -180,31 +175,26 @@ export class AeroWindow {
 	}
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
-		if (saved.location)            this.setLocation(saved.location);
+		if (saved.location) this.setLocation(saved.location);
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
-		if (saved.weather)             { this.weather = saved.weather; this.#syncWeatherConfig(); }
-		if (saved.cloudDensity !== undefined) this.cloudDensity = saved.cloudDensity;
-		this.showBuildings = saved.showBuildings ?? true;
-		this.showClouds    = saved.showClouds    ?? true;
+		if (saved.weather) { this.weather = saved.weather; this.#syncWeatherConfig(); }
+		if (saved.cloudDensity !== undefined) this.config.atmosphere.clouds.density = saved.cloudDensity;
+		if (saved.showBuildings !== undefined) this.config.world.showBuildings = saved.showBuildings;
+		if (saved.showClouds !== undefined) this.config.world.showClouds = saved.showClouds;
 		this.syncToRealTime = saved.syncToRealTime ?? true;
 	}
 
 	// ── Actions ───────────────────────────────────────────────────────────────
 
-	setLocation(id: LocationId): void {
+		setLocation(id: LocationId): void {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
-		// Apply per-location scene defaults — then nudge each scalar a touch
-		// so the same city never looks identical twice. Small ±12% drift is
-		// imperceptible on the first view and cumulatively reads as "real
-		// world, always a bit different." Clamped so drift can't escape
-		// weather-pool bounds or the per-location look entirely.
 		const scene = this.currentLocation.scene;
 		const jitter = (base: number, amp: number, lo: number, hi: number) =>
 			clamp(base + (Math.random() - 0.5) * amp, lo, hi);
-		this.cloudDensity = jitter(scene.clouds.density, 0.24, 0.1, 1.0);
-		this.cloudSpeed   = jitter(scene.clouds.speed,   0.24, 0.2, 1.6);
-		this.haze         = jitter(this.haze,            0.03, 0,   0.18);
+		this.config.atmosphere.clouds.density = jitter(scene.clouds.density, 0.24, 0.1, 1.0);
+		this.config.atmosphere.clouds.speed = jitter(scene.clouds.speed, 0.24, 0.2, 1.6);
+		this.config.atmosphere.haze.amount = jitter(this.config.atmosphere.haze.amount, 0.03, 0, 0.18);
 	}
 
 	setAltitude(alt: number): void {
@@ -231,7 +221,7 @@ export class AeroWindow {
 	}
 
 	toggleBuildings(): void {
-		this.showBuildings = !this.showBuildings;
+		this.config.world.showBuildings = !this.config.world.showBuildings;
 	}
 
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
@@ -245,7 +235,7 @@ export class AeroWindow {
 	}
 
 	setQualityMode(mode: QualityMode): void {
-		this.qualityMode = mode;
+		this.config.world.qualityMode = mode;
 		syncWorldQuality(mode);
 	}
 
@@ -260,21 +250,24 @@ export class AeroWindow {
 	}
 
 	applyPatch(patch: Partial<AeroWindowPatch>): void {
-		if (patch.altitude !== undefined)           this.setAltitude(patch.altitude);
-		if (patch.timeOfDay !== undefined)          this.setTime(patch.timeOfDay);
+		if (patch.altitude !== undefined) this.setAltitude(patch.altitude);
+		if (patch.timeOfDay !== undefined) this.setTime(patch.timeOfDay);
 		if (patch.weather !== undefined && isValidWeather(patch.weather)) {
 			this.weather = patch.weather;
 			this.#syncWeatherConfig();
 			this.onUserInteraction('atmosphere');
 		}
-		if (patch.cloudDensity !== undefined)       { this.cloudDensity = clamp(patch.cloudDensity, 0, 1); this.onUserInteraction('atmosphere'); }
-		if (patch.cloudSpeed !== undefined)         this.cloudSpeed = clamp(patch.cloudSpeed, 0, 2);
-		if (patch.haze !== undefined)               this.haze = clamp(patch.haze, 0, 0.2);
-		if (patch.nightLightIntensity !== undefined) this.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
-		if (patch.flightSpeed !== undefined)        this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
+		if (patch.cloudDensity !== undefined) {
+			this.config.atmosphere.clouds.density = clamp(patch.cloudDensity, 0, 1);
+			this.onUserInteraction('atmosphere');
+		}
+		if (patch.cloudSpeed !== undefined) this.config.atmosphere.clouds.speed = clamp(patch.cloudSpeed, 0, 2);
+		if (patch.haze !== undefined) this.config.atmosphere.haze.amount = clamp(patch.haze, 0, 0.2);
+		if (patch.nightLightIntensity !== undefined) this.config.world.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
+		if (patch.flightSpeed !== undefined) this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
 		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') this.syncToRealTime = patch.syncToRealTime;
-		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') this.showClouds = patch.showClouds;
-		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.showBuildings = patch.showBuildings;
+		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') this.config.world.showClouds = patch.showClouds;
+		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.config.world.showBuildings = patch.showBuildings;
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
@@ -284,8 +277,9 @@ export class AeroWindow {
 	getPersistedSnapshot(): PersistedState {
 		return {
 			location: this.location, altitude: this.flight.altitude, weather: this.weather,
-			cloudDensity: this.cloudDensity, showBuildings: this.showBuildings,
-			showClouds: this.showClouds, syncToRealTime: this.syncToRealTime,
+			cloudDensity: this.config.atmosphere.clouds.density,
+			showBuildings: this.config.world.showBuildings,
+			showClouds: this.config.world.showClouds, syncToRealTime: this.syncToRealTime,
 		};
 	}
 
@@ -310,7 +304,7 @@ export class AeroWindow {
 		const ctx = this.#createContext();
 
 		const flightPatch = this.flight.tick(delta, ctx);
-		if (flightPatch.blindOpen !== undefined) this.blindOpen = flightPatch.blindOpen;
+		if (flightPatch.blindOpen !== undefined) this.config.shell.blindOpen = flightPatch.blindOpen;
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
 		if (flightPatch.resetDirector)           this.director.resetDirector(ctx);
 
@@ -379,9 +373,9 @@ export class AeroWindow {
 		c.userAdjustingAltitude = this.userAdjustingAltitude;
 		c.userAdjustingTime     = this.userAdjustingTime;
 		c.userAdjustingAtmosphere = this.userAdjustingAtmosphere;
-		c.cloudDensity          = this.cloudDensity;
-		c.cloudSpeed            = this.cloudSpeed;
-		c.haze                  = this.haze;
+		c.cloudDensity = this.config.atmosphere.clouds.density;
+		c.cloudSpeed   = this.config.atmosphere.clouds.speed;
+		c.haze         = this.config.atmosphere.haze.amount;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		c.camera                = _config.camera;
 		c.director              = _config.director;

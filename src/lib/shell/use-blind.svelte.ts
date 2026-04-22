@@ -18,6 +18,7 @@ import { clamp } from '$lib/utils';
 /** Narrow interface — only what the blind needs from AeroWindow. */
 export interface BlindControl {
 	blindOpen: boolean;
+	applyConfigPatch: (path: string, value: unknown) => boolean;
 	flight: { isTransitioning: boolean };
 }
 
@@ -146,7 +147,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		isDragging = false;
 		const travelRatio = Math.abs(dragY - dragStartY) / Math.abs(OPEN_Y);
 		if (travelRatio > SNAP_THRESHOLD) {
-			model.blindOpen = dragY < dragStartY;
+			model.applyConfigPatch('shell.blindOpen', dragY < dragStartY);
 		}
 		if (lpEnabled) {
 			clearPressTimer();
@@ -158,7 +159,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') model.blindOpen = !model.blindOpen;
+		if (e.key === 'Enter' || e.key === ' ') model.applyConfigPatch('shell.blindOpen', !model.blindOpen);
 	}
 
 	return {

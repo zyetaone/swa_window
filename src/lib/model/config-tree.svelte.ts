@@ -14,10 +14,11 @@
 import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
+import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
+export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
 	const segments = path.split('.');
 	let current: Record<string, unknown> = obj;
 	for (let i = 0; i < segments.length - 1; i++) {
@@ -221,12 +222,15 @@ export const world = $state({
 	nightAlpha: CESIUM.NIGHT_ALPHA as number,
 	nightBrightness: CESIUM.NIGHT_BRIGHTNESS as number,
 	nightContrast: CESIUM.NIGHT_CONTRAST as number,
+	nightLightIntensity: 0.6,
 	bloomContrast: CESIUM.BLOOM_CONTRAST as number,
 	bloomBrightness: CESIUM.BLOOM_BRIGHTNESS as number,
 	bloomSigma: CESIUM.BLOOM_SIGMA as number,
 	defaultExaggeration: 1.0,
 	fogDensityScale: 1.0,
 	buildingsEnabled: true,
+	showBuildings: true,
+	showClouds: true,
 	overpassRadiusMeters: 3500,
 	qualityMode: 'balanced' as QualityMode,
 	msse: CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError,
@@ -262,11 +266,18 @@ export const shell = $state({
 export const config = $state({ atmosphere, camera, director, world, shell });
 
 // Flat namespace map — single dispatch point for all path-targeted patches.
-const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
+export const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
+
+// ─── CRDT layer ─────────────────────────────────────────────────────────────
+
+const _configRoot: Record<string, unknown> = config as unknown as Record<string, unknown>;
+export const crdt = createCRDTStore(_configRoot);
 
 /**
- * Dispatch a path-targeted patch to the right namespace.
- * e.g. 'atmosphere.weather.turbulence' → sets atmosphere.weather.turbulence = value
+ * CRDT-aware config patch dispatcher.
+ * Writes value + timestamp to CRDT store, then propagates via setByPath.
+ * Incoming fleet patches call crdt.merge() directly — this function is for
+ * local UI (which writes with a fresh local timestamp).
  */
 export function applyConfigPatch(path: string, value: unknown): boolean {
 	const idx = path.indexOf('.');
@@ -275,7 +286,9 @@ export function applyConfigPatch(path: string, value: unknown): boolean {
 	const rest = path.slice(idx + 1);
 	const root = NAMESPACES[ns];
 	if (!root) return false;
-	// Special case: camera.parallax.role also syncs the heading offset.
+
+	crdt.set(path, value);
+
 	if (ns === 'camera' && rest.startsWith('parallax.role')) {
 		setByPath(root as unknown as Record<string, unknown>, 'parallax.role', value);
 		setParallaxRole(value as DeviceRole);
@@ -283,6 +296,27 @@ export function applyConfigPatch(path: string, value: unknown): boolean {
 	}
 	return setByPath(root as unknown as Record<string, unknown>, rest, value);
 }
+
+/**
+ * Apply a fleet-sourced CRDT patch (from a remote device).
+ * Checks timestamp before applying. Returns true if patch was applied.
+ */
+export function applyCRDTPatch(patch: { path: string; value: unknown; timestamp: number; sourceId: string }): boolean {
+	return crdt.merge(patch);
+}
+
+/** Snapshot of all CRDT timestamps (for persistence). */
+export function crdtSnapshot() {
+	return crdt.snapshot();
+}
+
+/** Restore CRDT state from a persisted snapshot. */
+export function crdtRestore(snap: Record<string, { value: unknown; timestamp: number }>): void {
+	crdt.restore(snap);
+}
+
+/** Export device ID for use in fleet message sourceId field. */
+export { setCRDTDeviceId, getCRDTDeviceId };
 
 function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};

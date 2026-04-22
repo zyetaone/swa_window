@@ -77,10 +77,16 @@ export class CesiumManager {
 	// nightLayer: CartoDB Dark — composited over base at night. Its dark
 	//   background darkens; its lit road grid punches through as warm city
 	//   light after the GLSL shader's additive pass.
+	// viirsLayer: NASA VIIRS Black Marble night lights — real satellite
+	//   nightlight imagery (z3-z8, 500m/px). Replaces the procedural
+	//   hash-palette the shader used to invent. ColorToAlpha hides dark
+	//   (unlit) pixels; hue+saturation tint the greyscale toward sodium
+	//   amber. Only visible at night via alpha gated on nightFactor.
 	private baseLayer: CesiumType.ImageryLayer | null = null;
 	private baseDaySaturation = 1.0;
 	private baseDayContrast = 1.0;
 	private nightLayer: CesiumType.ImageryLayer | null = null;
+	private viirsLayer: CesiumType.ImageryLayer | null = null;
 
 	// Effect sync caches
 	private lastGlobeColor = '';
@@ -203,7 +209,7 @@ export class CesiumManager {
 		// Performance preset disables — Pi 5 GPU headroom is too tight there.
 		const bloom = v.scene.postProcessStages?.bloom;
 		if (bloom) {
-			const allowBloom = this.model.qualityMode !== 'performance';
+			const allowBloom = this.model.config.world.qualityMode !== 'performance';
 			bloom.enabled = allowBloom;
 			if (allowBloom) {
 				const w = this.model.config.world;
@@ -293,6 +299,38 @@ export class CesiumManager {
 			}
 		} catch (e) {
 			console.warn('[CesiumManager] Night layer failed:', e);
+		}
+
+		// VIIRS night lights layer — NASA Black Marble via tile-packager cache.
+		// Greyscale input → tinted amber via hue + saturation. ColorToAlpha
+		// drops the near-black pixels so unlit terrain shows through.
+		// Source: tools/tile-packager/src/sources.ts (viirs-night-lights).
+		try {
+			const viirsUrl = tileBase
+				? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
+				: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+			this.viirsLayer = this.viewer.imageryLayers.addImageryProvider(
+				new C.UrlTemplateImageryProvider({
+					url: viirsUrl,
+					maximumLevel: 8, // VIIRS data only available through z8
+					minimumLevel: 3,
+					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
+				}),
+			);
+			if (this.viirsLayer) {
+				this.viirsLayer.alpha = 0;
+				this.viirsLayer.show = false;
+				// Dark pixels → transparent so only lit cells composite over terrain.
+				this.viirsLayer.colorToAlpha = C.Color.BLACK;
+				this.viirsLayer.colorToAlphaThreshold = 0.12;
+				// Greyscale → sodium amber. hue offset + reduced saturation + boost.
+				this.viirsLayer.hue = 0.08;
+				this.viirsLayer.saturation = 0.55;
+				this.viirsLayer.brightness = 2.2;
+				this.viirsLayer.contrast = 1.3;
+			}
+		} catch (e) {
+			console.warn('[CesiumManager] VIIRS layer failed:', e);
 		}
 	}
 
@@ -438,6 +476,14 @@ export class CesiumManager {
 			this.nightLayer.brightness = lerp(1, w.nightBrightness, nf) * scale;
 			this.nightLayer.contrast = lerp(1, w.nightContrast, nf);
 		}
+
+		// VIIRS lights fade in at night too. Capped below 1 so bright cells
+		// don't wash the scene. Using the same alpha curve as nightLayer,
+		// scaled by user's nightLightScale override.
+		if (this.viirsLayer) {
+			this.viirsLayer.show = show || firstNight;
+			this.viirsLayer.alpha = lerp(0, 0.9, nf) * scale;
+		}
 	}
 
 	// ─── Terrain Setup ────────────────────────────────────────────────────────
@@ -471,7 +517,7 @@ export class CesiumManager {
 		try {
 			this.tileset = await this.CesiumModule.createOsmBuildingsAsync();
 			if (this.tileset) {
-				this.tileset.show = this.model.showBuildings;
+				this.tileset.show = this.model.config.world.buildingsEnabled;
 				const w = this.model.config.world;
 				this.tileset.maximumScreenSpaceError = w.msse;
 				// Cast + receive shadows — buildings drop long shadows across
@@ -484,7 +530,7 @@ export class CesiumManager {
 
 	private syncBuildings(): void {
 		if (!this.tileset) return;
-		this.tileset.show = this.model.showBuildings;
+		this.tileset.show = this.model.config.world.buildingsEnabled;
 		const nf = this.model.nightFactor;
 		if (Math.abs(nf - this.lastBuildingNightFactor) < 0.01) return;
 		this.lastBuildingNightFactor = nf;
