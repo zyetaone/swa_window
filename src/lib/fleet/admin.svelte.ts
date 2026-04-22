@@ -34,7 +34,9 @@ export class AdminStore {
 	/** Reactive connection state — reads fall through to the underlying transport,
 	 *  or 'disconnected' if no transport exists (pre-connect / post-destroy). */
 	#transport: FleetTransport | null = null;
-	#sse: EventSource | null = $state.raw(null);
+	// Plain field (not $state) — no reactive readers; only imperative assignment
+	// in #connectSse() / disconnect().
+	#sse: EventSource | null = null;
 	#sseState = $state<TransportState>('disconnected');
 	#wsUrl: string;
 	#healthInterval: ReturnType<typeof setInterval> | null = null;
