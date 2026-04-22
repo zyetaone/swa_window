@@ -12,12 +12,6 @@ export const pg = $state({
 	activeLocation: 'dubai' as LocationId,
 	timeOfDay: 12,
 	weather: 'clear' as WeatherType,
-	maplibreSource: 'eox-s2',
-	mlTerrain: true,
-	mlBuildings: true,
-	mlAtmosphere: true,
-	showCityLights: true,
-	showLandmarks: true,
 	density: 0.75,
 	cloudSpeed: 1.0,
 	cloudScale: 1.0,
@@ -45,9 +39,6 @@ export const pg = $state({
 	pitchBias: 0,
 	blindOpen: true,
 	paletteName: 'auto' as PaletteName,
-	freeCam: false,
-	lodMaxZoomLevels: 6,
-	lodTileCountRatio: 2.0,
 	// ─── SWA corridor (Feature 1 + 2) ────────────────────────────────────────
 	/** Pane role within its corridor. Default 'solo' = single-window mode. */
 	role: initialBinding.role as DeviceRole,

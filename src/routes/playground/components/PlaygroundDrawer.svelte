@@ -2,7 +2,6 @@
 	import { LOCATIONS } from '$lib/locations';
 	import { WEATHER_TYPES } from '$lib/types';
 	import { formatTime } from '$lib/utils';
-	import { MAPLIBRE_SOURCES, CACHED_SOURCES } from '../imagery';
 	import { pg, pgReset, pgRandomize, ALT_HOLD_SEC, HDG_HOLD_SEC } from '../lib/playground-state.svelte';
 	import { getSkyState } from '$lib/utils';
 
@@ -59,47 +58,10 @@
 	</fieldset>
 
 	<fieldset>
-		<legend>Imagery</legend>
-		{#each MAPLIBRE_SOURCES as src (src.id)}
-			<label class={['source-btn', pg.maplibreSource === src.id && 'active']}>
-				<input type="radio" name="maplibre-src" checked={pg.maplibreSource === src.id} onchange={() => pg.maplibreSource = src.id} />
-				<span class="source-name">{src.label}</span>
-				<span class="source-note">{src.note}</span>
-			</label>
-		{/each}
-	</fieldset>
-
-	<fieldset>
-		<legend>🗄️ Cached (offline)</legend>
-		<p class="field-note">Pre-downloaded for dubai / dallas / himalayas — 189 MB total</p>
-		{#each CACHED_SOURCES as src (src.id)}
-			<label class={['source-btn', pg.maplibreSource === src.id && 'active']}>
-				<input type="radio" name="maplibre-src" checked={pg.maplibreSource === src.id} onchange={() => pg.maplibreSource = src.id} />
-				<span class="source-name">{src.label}</span>
-				<span class="source-note">{src.note}</span>
-			</label>
-		{/each}
-	</fieldset>
-
-	<fieldset>
 		<legend>Layers</legend>
 		<label class="check">
-			<input type="checkbox" bind:checked={pg.abstractionEnabled} /> 
+			<input type="checkbox" bind:checked={pg.abstractionEnabled} />
 			<b>Artwork Abstraction</b> (Tactile layers)
-		</label>
-		<div class="field-divider"></div>
-		<label class="check"><input type="checkbox" bind:checked={pg.mlAtmosphere} /> Atmosphere + Sky</label>
-		<label class="check"><input type="checkbox" bind:checked={pg.mlTerrain} /> 3D Terrain (raster-dem)</label>
-		<label class="check"><input type="checkbox" bind:checked={pg.mlBuildings} /> 3D Buildings (fill-extrusion)</label>
-		<label class="check"><input type="checkbox" bind:checked={pg.showCityLights} /> City-light glow (night)</label>
-		<label class="check"><input type="checkbox" bind:checked={pg.showLandmarks} /> Curated landmarks</label>
-		<div class="field-divider"></div>
-		<p class="field-note">LOD — trades distant crispness for lower tile load.</p>
-		<label>Max zoom levels <span class="val">{pg.lodMaxZoomLevels}</span>
-			<input type="range" bind:value={pg.lodMaxZoomLevels} min="1" max="11" step="1" />
-		</label>
-		<label>Tile count ratio <span class="val">{pg.lodTileCountRatio.toFixed(1)}</span>
-			<input type="range" bind:value={pg.lodTileCountRatio} min="1" max="10" step="0.1" />
 		</label>
 	</fieldset>
 
