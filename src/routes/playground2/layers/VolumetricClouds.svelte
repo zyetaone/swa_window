@@ -52,18 +52,13 @@
 	import { CloudsEffect } from '@takram/three-clouds';
 	import {
 		CLOUD_SHAPE_DETAIL_TEXTURE_SIZE,
-		CLOUD_SHAPE_TEXTURE_SIZE,
-		DEFAULT_LOCAL_WEATHER_URL,
-		DEFAULT_SHAPE_DETAIL_URL,
-		DEFAULT_SHAPE_URL,
-		DEFAULT_TURBULENCE_URL
+		CLOUD_SHAPE_TEXTURE_SIZE
 	} from '@takram/three-clouds';
 	import {
 		AerialPerspectiveEffect,
 		PrecomputedTexturesGenerator
 	} from '@takram/three-atmosphere';
 	import {
-		DEFAULT_STBN_URL,
 		DataTextureLoader,
 		STBNLoader,
 		parseUint8Array
@@ -148,11 +143,11 @@
 
 	async function initClouds() {
 		const [localWeather, shape, shapeDetail, turbulence, stbn] = await Promise.all([
-			load2D(DEFAULT_LOCAL_WEATHER_URL),
-			load3D(DEFAULT_SHAPE_URL, CLOUD_SHAPE_TEXTURE_SIZE),
-			load3D(DEFAULT_SHAPE_DETAIL_URL, CLOUD_SHAPE_DETAIL_TEXTURE_SIZE),
-			load2D(DEFAULT_TURBULENCE_URL),
-			loadSTBN(DEFAULT_STBN_URL)
+			load2D('/textures/takram/local_weather.png'),
+			load3D('/textures/takram/shape.bin', CLOUD_SHAPE_TEXTURE_SIZE),
+			load3D('/textures/takram/shape_detail.bin', CLOUD_SHAPE_DETAIL_TEXTURE_SIZE),
+			load2D('/textures/takram/turbulence.png'),
+			loadSTBN('/textures/takram/stbn.bin')
 		]);
 
 		clouds.localWeatherTexture = localWeather;

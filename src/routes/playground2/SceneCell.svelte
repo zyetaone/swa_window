@@ -32,25 +32,26 @@
 	const info = $derived(GRID_LAYERS[cellIdx]);
 	const activeLayers = $derived(layersFor(cellIdx));
 
-	// Pure-Threlte cells: cells 5 and 6 (0-indexed: 4 and 5).
-	// These skip MapLibre entirely and render via ThrelteScene.
-	const IS_THRELTE = $derived(cellIdx >= 4);
-
 	// The MapLibre canvas, forwarded up from MapLibreCell via $bindable.
 	// WaterOverlay needs this to chroma-key against the live globe pixels.
 	let mapCanvas = $state<HTMLCanvasElement | undefined>(undefined);
+
+	// Pure-Three path (ThrelteScene + takram) needs ECEF coords + proper
+	// asset hosting for precomputed atmosphere LUTs. Disabled for now —
+	// ALL cells use the hybrid MapLibre + Three overlay stack, which
+	// renders reliably. Volumetric clouds + full PostFX stack return in
+	// a Day 4 commit once the takram asset pipeline is wired.
+	const USE_THRELTE_PURE = false;
 </script>
 
 <div class="cell">
-	{#if IS_THRELTE}
-		<!-- Cell 5: SkyDome + VolumetricClouds
-		     Cell 6: SkyDome + VolumetricClouds + PostFX -->
+	{#if USE_THRELTE_PURE && cellIdx >= 4}
 		<ThrelteScene
 			showClouds={true}
 			showPostFX={cellIdx === 5}
 		/>
 	{:else}
-		<!-- Cells 1-4: MapLibre globe + optional overlay layers -->
+		<!-- All cells: MapLibre globe + Three overlay with layer-gated content -->
 		<MapLibreCell
 			bind:mapCanvas
 			showBuildings={activeLayers.has('buildings')}
@@ -65,12 +66,6 @@
 				<TransparentClear />
 				{#if activeLayers.has('sky')}
 					<SkyDome />
-				{/if}
-				{#if activeLayers.has('clouds')}
-					<VolumetricClouds />
-				{/if}
-				{#if activeLayers.has('postfx')}
-					<PostFX />
 				{/if}
 			</Canvas>
 		</div>

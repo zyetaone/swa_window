@@ -95,9 +95,11 @@ export function buildingsLayer(nightFactor: number): FillExtrusionLayerSpecifica
 			// Vertical gradient looks natural in daylight (top lit, bottom
 			// shadowed); disable at night so emissive amber reads flat+self-lit.
 			'fill-extrusion-vertical-gradient': t < 0.5,
-			// `emissive-strength` is honoured by MapLibre's 3D style; on
-			// older GL builds it's ignored silently. Safe to include.
-			'fill-extrusion-emissive-strength': t,
+			// NOTE: `fill-extrusion-emissive-strength` is a MapLibre GL JS
+			// 5.x (style spec v9) property and throws a validation error in
+			// older versions. We imitate emissivity by pushing the night
+			// colour warmer + disabling the vertical gradient above — close
+			// enough at cruise altitude.
 		},
 	} as FillExtrusionLayerSpecification;
 }
