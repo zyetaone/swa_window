@@ -72,6 +72,30 @@ export function nightFactor(timeOfDay: number): number {
 }
 
 /**
+ * Dawn/dusk factor 0..1 from decimal time of day.
+ * Peaks at 0.5 during the transition band, 0 during full day/night.
+ * Used by the night-rendering pipeline to tint the color-grading shader
+ * toward warm amber at the terminator.
+ */
+export function dawnDuskFactor(timeOfDay: number): number {
+	if (timeOfDay >= 7 && timeOfDay <= 18) return 0;
+	if (timeOfDay < 5 || timeOfDay > 22) return 0;
+	if (timeOfDay < 7) return (timeOfDay - 5) / 2;
+	if (timeOfDay > 18) return (22 - timeOfDay) / 4;
+	return 0;
+}
+
+/**
+ * Smoothstep easing: 3t² − 2t³. Input clamped to [0, 1].
+ * Produces zero derivative at 0 and 1 — good for gate-like alpha fades
+ * where linear ramps reveal banding.
+ */
+export function smoothstep(t: number): number {
+	const x = Math.max(0, Math.min(1, t));
+	return x * x * (3 - 2 * x);
+}
+
+/**
  * Format a decimal time (e.g. 14.5) as "2:30 PM".
  * Handles edge cases: 24 wraps to midnight, negative times normalized.
  */

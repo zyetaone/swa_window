@@ -5,7 +5,7 @@ const clouds: Effect = {
 	id: 'clouds',
 	kind: 'atmo',
 	z: 1,
-	when: (model) => model.showClouds,
+	when: (model) => model.config.world.showClouds,
 	component: CloudsEffect,
 };
 

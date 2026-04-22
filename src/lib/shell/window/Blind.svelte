@@ -19,7 +19,7 @@
 
 <div class="blind-clip" bind:this={blind.clipEl}>
 	<div
-		class={['blind-overlay', !model.blindOpen && !blind.hasAnimated && 'discoverable']}
+		class={['blind-overlay', !model.config.shell.blindOpen && !blind.hasAnimated && 'discoverable']}
 		onanimationend={() => { blind.hasAnimated = true; }}
 		onpointerdown={blind.onPointerDown}
 		onpointermove={blind.onPointerMove}
@@ -33,10 +33,10 @@
 		aria-valuemax={105}
 		style:transform={blind.transform}
 		style:transition={blind.transition}
-		style:pointer-events={model.blindOpen ? 'none' : 'auto'}
+		style:pointer-events={model.config.shell.blindOpen ? 'none' : 'auto'}
 	>
 		<div class="blind-slats"></div>
-		{#if !model.blindOpen && !blind.hasAnimated}
+		{#if !model.config.shell.blindOpen && !blind.hasAnimated}
 			<div class="pull-hint" aria-hidden="true">
 				<span class="chev chev-1">▼</span>
 				<span class="chev chev-2">▼</span>

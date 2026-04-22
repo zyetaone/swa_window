@@ -36,13 +36,12 @@ export interface CesiumModelView {
 			effectiveHeading(baseHeading: number): number;
 		};
 		world: WorldConfig;
+		atmosphere: { haze: { amount: number } };
 	};
 	timeOfDay: number;
 	nightFactor: number;
 	dawnDuskFactor: number;
 	nightLightScale: number;
-	haze: number;
-	showBuildings: boolean;
 	qualityMode: QualityMode;
 	location: LocationId;
 	weather: WeatherType;
@@ -419,7 +418,7 @@ export class CesiumManager {
 		}
 
 		const fog = m.sceneFog;
-		const targetDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + m.haze * 8);
+		const targetDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + m.config.atmosphere.haze.amount * 8);
 		const targetBrightness = lerp(fog.dayBrightness, fog.nightBrightness, nf);
 		if (Math.abs(targetDensity - this.lastFogDensity) > 0.00001) {
 			this.lastFogDensity = targetDensity;

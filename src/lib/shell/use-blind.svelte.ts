@@ -17,7 +17,7 @@ import { clamp } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from AeroWindow. */
 export interface BlindControl {
-	blindOpen: boolean;
+	config: { shell: { blindOpen: boolean } };
 	applyConfigPatch: (path: string, value: unknown) => boolean;
 	flight: { isTransitioning: boolean };
 }
@@ -47,7 +47,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	let clipEl: HTMLDivElement | undefined = $state();
 	let isDragging = $state(false);
 	let hasAnimated = $state(false);
-	let dragY = $state(model.blindOpen ? OPEN_Y : CLOSED_Y);
+	let dragY = $state(model.config.shell.blindOpen ? OPEN_Y : CLOSED_Y);
 	let accelerated = $state(false);
 	let speedMultiplier = $state(1);
 
@@ -101,7 +101,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	// Keep dragY in sync with external model changes when not dragging.
 	$effect(() => {
 		if (!isDragging) {
-			dragY = model.blindOpen ? OPEN_Y : CLOSED_Y;
+			dragY = model.config.shell.blindOpen ? OPEN_Y : CLOSED_Y;
 		}
 	});
 
@@ -159,7 +159,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') model.applyConfigPatch('shell.blindOpen', !model.blindOpen);
+		if (e.key === 'Enter' || e.key === ' ') model.applyConfigPatch('shell.blindOpen', !model.config.shell.blindOpen);
 	}
 
 	return {

@@ -37,7 +37,7 @@
 	{liveAnnouncement}
 </div>
 
-{#if model.blindOpen}
+{#if model.config.shell.blindOpen}
 	<TelemetryOverlay />
 {:else}
 	<BlindInfoCard />

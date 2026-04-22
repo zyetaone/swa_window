@@ -7,9 +7,11 @@
  */
 
 import { createContext } from 'svelte';
-import { clamp, getSkyState, nightFactor } from '$lib/utils';
+import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$lib/constants';
-import { QUALITY_MODES, isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
+import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
+import { effectiveCloudDensity } from '$lib/atmosphere/clouds/rules';
+import { nextQualityMode } from '$lib/world/auto-quality';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
@@ -106,10 +108,11 @@ export class AeroWindow {
 	get userAdjustingTime()       { return hasActiveOverride('time'); }
 	get userAdjustingAtmosphere() { return hasActiveOverride('atmosphere'); }
 
-	get blindOpen() { return this.config.shell.blindOpen; }
-	get showClouds() { return this.config.world.showClouds; }
-	get showBuildings() { return this.config.world.buildingsEnabled; }
-	get haze() { return this.config.atmosphere.haze.amount; }
+	// qualityMode/autoQuality stay as getters because CesiumModelView takes
+	// a narrowed typed interface — dropping them would push the narrowing
+	// into every consumer. The other four (blindOpen / showClouds /
+	// showBuildings / haze) were pure delegation and are gone; read
+	// `model.config.*` directly instead.
 	get qualityMode() { return this.config.world.qualityMode; }
 	get autoQuality() { return this.config.world.autoQuality; }
 
@@ -137,27 +140,16 @@ export class AeroWindow {
 	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
 
 	nightFactor = $derived(nightFactor(this.timeOfDay));
+	dawnDuskFactor = $derived(dawnDuskFactor(this.timeOfDay));
 
-	dawnDuskFactor = $derived.by(() => {
-		const t = this.timeOfDay;
-		if (t >= 7 && t <= 18) return 0;
-		if (t < 5 || t > 22) return 0;
-		if (t < 7) return (t - 5) / 2;
-		if (t > 18) return (22 - t) / 4;
-		return 0;
-	});
+	// Rename alias — nightLightScale is the reactive reading used by
+	// compose.ts shader uniforms. Plain getter (not $derived) because
+	// wrapping a $state in $derived just adds a signal-graph node.
+	get nightLightScale() { return this.config.world.nightLightIntensity; }
 
-	nightLightScale = $derived(this.config.world.nightLightIntensity);
-
-	effectiveCloudDensity = $derived.by(() => {
-		const fx = WEATHER_EFFECTS[this.weather];
-		const raw = this.config.atmosphere.clouds.density;
-		const [min, max] = fx.cloudDensityRange;
-		let d = max > 0 ? clamp(raw, min, max) : raw * 0.3;
-		if (this.skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor);
-		else if (this.skyState === 'dusk') d *= 0.7;
-		return d;
-	});
+	effectiveCloudDensity = $derived(
+		effectiveCloudDensity(this.weather, this.config.atmosphere.clouds.density, this.skyState),
+	);
 
 	// ── Constructor ───────────────────────────────────────────────────────────
 	constructor() {
@@ -387,10 +379,7 @@ export class AeroWindow {
 		this.#qualityCheckTimer += delta;
 		if (this.#qualityCheckTimer < 5) return;
 		this.#qualityCheckTimer = 0;
-
-		const idx = QUALITY_MODES.indexOf(this.config.world.qualityMode);
-		if (this.measuredFps < 20 && idx > 0)               this.config.world.qualityMode = QUALITY_MODES[idx - 1];
-		else if (this.measuredFps > 40 && idx < QUALITY_MODES.length - 1) this.config.world.qualityMode = QUALITY_MODES[idx + 1];
+		this.config.world.qualityMode = nextQualityMode(this.measuredFps, this.config.world.qualityMode);
 	}
 
 	destroy(): void {

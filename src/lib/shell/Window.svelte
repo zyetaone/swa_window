@@ -166,8 +166,8 @@
 				: model.skyState === "dawn" || model.skyState === "dusk"
 					? 0.95
 					: 1.0;
-		const hazeContrast = 1 - model.haze * 0.08;
-		const hazeSaturate = 1 - model.haze * 0.1;
+		const hazeContrast = 1 - model.config.atmosphere.haze.amount * 0.08;
+		const hazeSaturate = 1 - model.config.atmosphere.haze.amount * 0.1;
 		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
 		const w = model.flight.warpFactor;
 		const baseBlur = 0.35;
@@ -217,7 +217,7 @@
 	// --- Timed click-hint (touch kiosks have no :hover) ---
 	let showHint = $state(false);
 	$effect(() => {
-		if (model.blindOpen && !model.flight.isTransitioning) {
+		if (model.config.shell.blindOpen && !model.flight.isTransitioning) {
 			const showTimer = setTimeout(() => { showHint = true; }, 3000);
 			const hideTimer = setTimeout(() => { showHint = false; }, 8000);
 			return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
