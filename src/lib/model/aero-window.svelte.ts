@@ -16,8 +16,8 @@ import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
-import { MotionEngine } from '$lib/camera/motion.svelte';
-import { DirectorEngine } from '$lib/director/autopilot.svelte';
+import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
+import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
 import {
 	config as _config,
 	syncAtmosphereWeather,
@@ -60,9 +60,14 @@ export function hasActiveOverride(kind: keyof typeof _overrides): boolean {
 
 export class AeroWindow {
 	// ── Engines ───────────────────────────────────────────────────────────────
+	// flight is the only remaining class (public methods called outside
+	// tick, in-class $derived for cruise state). motion + director are
+	// modules of pure functions with state in module scope. `model.motion`
+	// is a getter returning the module's singleton state object — keeps
+	// existing `model.motion.*` call sites untouched across Window.svelte
+	// and compose.ts.
 	readonly flight = new FlightSimEngine();
-	readonly motion = new MotionEngine();
-	readonly director = new DirectorEngine();
+	get motion() { return motionState; }
 
 	// ── Config tree ──────────────────────────────────────────────────────────
 	// Flat reactive config — single-file state with generic path dispatcher.
@@ -298,9 +303,9 @@ export class AeroWindow {
 		const flightPatch = this.flight.tick(delta, ctx);
 		if (flightPatch.blindOpen !== undefined) this.config.shell.blindOpen = flightPatch.blindOpen;
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
-		if (flightPatch.resetDirector)           this.director.resetDirector(ctx);
+		if (flightPatch.resetDirector)           directorReset(ctx);
 
-		this.motion.tick(delta, ctx);
+		motionStep(delta, ctx);
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
 		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
@@ -308,7 +313,7 @@ export class AeroWindow {
 		// are followers (wait for director_decision from leader).
 		const role = this.config.camera.parallax.role;
 		ctx.isLeader = role === 'solo' || role === 'center';
-		const directorPatch = this.director.tick(delta, ctx);
+		const directorPatch = directorTick(delta, ctx);
 
 		if (directorPatch.atmosphere) this.applyPatch(directorPatch.atmosphere);
 		if (directorPatch.nextLocation) {
