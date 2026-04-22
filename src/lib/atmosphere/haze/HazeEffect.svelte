@@ -19,12 +19,16 @@
 
 	let { model }: EffectProps = $props();
 
+	// Alpha tuning: screen-blend compounds brightness over bright sky. Daytime
+	// Cesium sky is already near (120,160,200) — adding pale blue at 0.45 pushes
+	// the top band to white. 0.18 restores subtle horizon haze without washout.
+	// Night stays at 0.55 because navy + screen on black-starry = tint-only.
 	const hazeColor = $derived.by(() => {
 		switch (model.skyState) {
 			case 'night': return 'rgba(20, 28, 50, 0.55)';    // deep navy
-			case 'dawn':  return 'rgba(220, 150, 110, 0.45)'; // warm amber
-			case 'dusk':  return 'rgba(200, 110, 90, 0.5)';   // warm coral
-			default:      return 'rgba(170, 195, 220, 0.45)'; // cool atmospheric blue
+			case 'dawn':  return 'rgba(220, 150, 110, 0.22)'; // warm amber
+			case 'dusk':  return 'rgba(200, 110, 90, 0.24)';  // warm coral
+			default:      return 'rgba(170, 195, 220, 0.18)'; // cool atmospheric blue
 		}
 	});
 

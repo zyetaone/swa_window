@@ -53,10 +53,13 @@
 		viewer.dataSources.add(ds);
 
 		return () => {
-			if (ds) {
-				viewer.dataSources.remove(ds, true);
-				ds = null;
+			// Guard for HMR: viewer may already be destroyed (Cesium's
+			// get dataSources throws "Cannot read properties of undefined")
+			// before our teardown runs.
+			if (ds && !viewer.isDestroyed?.()) {
+				try { viewer.dataSources.remove(ds, true); } catch {}
 			}
+			ds = null;
 		};
 	});
 

@@ -482,9 +482,16 @@ export class CesiumManager {
 		// surface with VIIRS colour. The underlying CartoDB dark layer
 		// carries the sky/ocean darkness; VIIRS is an additive accent
 		// confined to the lit cells by colorToAlpha.
+		//
+		// Curve: smoothstep(0.55, 0.9, nightFactor). Linear lerp left
+		// VIIRS at 15–25% alpha through dawn/dusk, where hue+saturation
+		// tints leaked through colorToAlpha as magenta on city cores.
+		// Smoothstep keeps VIIRS effectively zero until deep twilight.
 		if (this.viirsLayer) {
-			this.viirsLayer.show = show || firstNight;
-			this.viirsLayer.alpha = lerp(0, 0.5, nf) * scale;
+			const t = Math.max(0, Math.min(1, (nf - 0.55) / 0.35));
+			const viirsEase = t * t * (3 - 2 * t);
+			this.viirsLayer.show = (show || firstNight) && viirsEase > 0.001;
+			this.viirsLayer.alpha = 0.5 * viirsEase * scale;
 		}
 	}
 
