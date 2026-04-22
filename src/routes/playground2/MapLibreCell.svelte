@@ -17,10 +17,32 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { sceneState } from './lib/scene-state.svelte';
 	import { altitudeToZoom, latZoomAdjust } from './lib/globe-zoom';
+	import { addBuildings, removeBuildings } from './layers/buildings';
+
+	interface Props {
+		/** When true, load OSM building extrusions for the active location. */
+		showBuildings?: boolean;
+		/** The MapLibre canvas — exposed for overlay layers (WaterOverlay reads this). */
+		mapCanvas?: HTMLCanvasElement;
+	}
+
+	let {
+		showBuildings = false,
+		mapCanvas = $bindable(),
+	}: Props = $props();
 
 	let container = $state<HTMLDivElement | undefined>();
 	let map: maplibregl.Map | null = null;
 	let ready = $state(false);
+
+	// Simple night-factor — dark between 18.5–5.5h, full day 7–17h, smooth transitions.
+	const nightFactor = $derived.by(() => {
+		const t = sceneState.timeOfDay;
+		if (t >= 18.5 || t <= 5.5) return 1.0;
+		if (t >= 7 && t <= 17) return 0.0;
+		if (t < 7) return (7 - t) / 1.5;
+		return (t - 17) / 1.5;
+	});
 
 	// Track last applied latitude so camera changes can compensate for
 	// globe auto-enlargement. Without this, sliding "altitude" while
@@ -71,6 +93,9 @@
 		map.on('style.load', () => {
 			map!.setProjection({ type: 'globe' });
 			ready = true;
+			// Expose the rendering canvas upward so overlay layers (Water,
+			// future post-process) can read from it.
+			mapCanvas = map!.getCanvas();
 		});
 
 		return () => {
@@ -95,6 +120,21 @@
 			duration: 250,
 		});
 		lastLat = targetLat;
+	});
+
+	// Buildings layer: add / remove based on the showBuildings toggle.
+	// Re-applies on nightFactor changes so the photometric tint updates.
+	$effect(() => {
+		if (!map || !ready) return;
+		// `dubai` is the starting city — later cities will need their own
+		// pre-baked GeoJSON under /api/buildings/:city. Missing files
+		// resolve to empty (harmless).
+		const city = 'dubai';
+		if (showBuildings) {
+			addBuildings(map, city, nightFactor);
+		} else {
+			removeBuildings(map);
+		}
 	});
 </script>
 

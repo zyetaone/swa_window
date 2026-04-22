@@ -2,27 +2,64 @@
 	/**
 	 * SceneCell — one tile in the 6-grid layer visualizer.
 	 *
-	 * Commit 2: MapLibre globe as the base layer for every cell. Later
-	 * commits stack Three.js overlays (sky dome, sun/moon, clouds,
-	 * post-FX) on top of this MapLibre canvas. For cells that don't
-	 * yet have their "own" layer defined, they simply show the globe
-	 * — visually identical until a later commit adds the distinguishing
-	 * layer.
+	 * Composes the full multiplane stack per cell, gated by activeLayers.
+	 * Each cell is a self-contained rendering pipeline; the shared SSOT
+	 * (scene-state.svelte.ts) keeps the 6 cells in lockstep so sliding
+	 * time-of-day updates every cell at once.
+	 *
+	 * Stacking order (bottom → top):
+	 *   1. MapLibreCell        — globe + Sentinel-2 satellite + (opt.)
+	 *                            OSM building extrusions
+	 *   2. WaterOverlay         — reads MapLibre canvas, chroma-keys water,
+	 *                             paints animated normals (transparent DOM
+	 *                             sibling over MapLibre, below Three.js)
+	 *   3. Threlte <Canvas>     — SkyDome + VolumetricClouds + PostFX
+	 *                             (alpha so MapLibre + water show through
+	 *                             below the horizon)
 	 */
+	import { Canvas } from '@threlte/core';
 	import MapLibreCell from './MapLibreCell.svelte';
+	import WaterOverlay from './layers/WaterOverlay.svelte';
+	import SkyDome from './layers/SkyDome.svelte';
+	import VolumetricClouds from './layers/VolumetricClouds.svelte';
+	import PostFX from './layers/PostFX.svelte';
+	import TransparentClear from './layers/TransparentClear.svelte';
 	import { GRID_LAYERS, layersFor } from './lib/scene-state.svelte';
 
 	let { cellIdx }: { cellIdx: number } = $props();
 
 	const info = $derived(GRID_LAYERS[cellIdx]);
 	const activeLayers = $derived(layersFor(cellIdx));
+
+	// The MapLibre canvas, forwarded up from MapLibreCell via $bindable.
+	// WaterOverlay needs this to chroma-key against the live globe pixels.
+	let mapCanvas = $state<HTMLCanvasElement | undefined>(undefined);
 </script>
 
 <div class="cell">
-	<!-- Layer 2 (terrain / satellite) — actually lives at every cell
-	     because the MapLibre globe IS the terrain substrate. Layer 1
-	     (sky dome) will compose over this in commit 4. -->
-	<MapLibreCell />
+	<MapLibreCell
+		bind:mapCanvas
+		showBuildings={activeLayers.has('buildings')}
+	/>
+
+	{#if activeLayers.has('water') && mapCanvas}
+		<WaterOverlay {mapCanvas} />
+	{/if}
+
+	<div class="three-overlay">
+		<Canvas>
+			<TransparentClear />
+			{#if activeLayers.has('sky')}
+				<SkyDome />
+			{/if}
+			{#if activeLayers.has('clouds')}
+				<VolumetricClouds />
+			{/if}
+			{#if activeLayers.has('postfx')}
+				<PostFX />
+			{/if}
+		</Canvas>
+	</div>
 
 	<div class="cell-label" aria-hidden="true">
 		<span class="cell-title">{info.label}</span>
@@ -43,6 +80,16 @@
 		border: 1px solid rgba(255, 255, 255, 0.05);
 	}
 
+	.three-overlay {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+
+	.three-overlay :global(canvas) {
+		background: transparent;
+	}
+
 	.cell-label {
 		position: absolute;
 		left: 10px;
@@ -58,6 +105,7 @@
 		flex-direction: column;
 		gap: 3px;
 		pointer-events: none;
+		z-index: 10;
 	}
 
 	.cell-title {

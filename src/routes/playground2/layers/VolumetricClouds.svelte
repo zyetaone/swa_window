@@ -93,8 +93,10 @@
 	composer.addPass(new EffectPass(camera.current, aerial));
 
 	// Take over Threlte's rendering so we drive the composer instead.
+	// Threlte v8 `autoRender` is a read-only store; use `.set()` for writes.
+	// (PostFX layer uses the same pattern — matched here for consistency.)
 	const priorAutoRender = autoRender.current;
-	autoRender.current = false;
+	autoRender.set(false);
 
 	// --- Async texture + LUT load ----------------------------------------------
 
@@ -210,7 +212,7 @@
 	// --- Teardown ---------------------------------------------------------------
 
 	onDestroy(() => {
-		autoRender.current = priorAutoRender;
+		autoRender.set(priorAutoRender);
 		composer.dispose();
 		clouds.dispose();
 		aerial.dispose();
