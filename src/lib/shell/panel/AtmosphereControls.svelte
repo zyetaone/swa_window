@@ -17,9 +17,9 @@
 		min={0}
 		max={1.0}
 		step={0.05}
-		value={model.cloudDensity}
+		value={model.config.atmosphere.clouds.density}
 		formatValue={(v) => Math.round(v * 100) + '%'}
-		oninput={(e) => model.applyPatch({ cloudDensity: parseFloat(e.currentTarget.value) })}
+		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="cloudSpeed"
@@ -27,9 +27,9 @@
 		min={model.config.director.ambient.cloudSpeedMin}
 		max={model.config.director.ambient.cloudSpeedMax}
 		step={0.1}
-		value={model.cloudSpeed}
+		value={model.config.atmosphere.clouds.speed}
 		formatValue={(v) => v.toFixed(1) + 'x'}
-		oninput={(e) => model.applyPatch({ cloudSpeed: parseFloat(e.currentTarget.value) })}
+		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="haze"
@@ -37,8 +37,8 @@
 		min={model.config.atmosphere.haze.min}
 		max={model.config.atmosphere.haze.max}
 		step={0.005}
-		value={model.haze}
+		value={model.config.atmosphere.haze.amount}
 		formatValue={(v) => Math.round(v * 100) + '%'}
-		oninput={(e) => model.applyPatch({ haze: parseFloat(e.currentTarget.value) })}
+		oninput={(e) => model.applyConfigPatch('atmosphere.haze.amount', parseFloat(e.currentTarget.value))}
 	/>
 </section>

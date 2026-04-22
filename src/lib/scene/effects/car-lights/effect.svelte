@@ -9,24 +9,18 @@
 	 * Output: no DOM. All rendering happens inside the Cesium canvas.
 	 */
 	import { LOCATION_MAP } from '$lib/locations';
-	import { activeCesium } from '$lib/world/active.svelte';
+	import { useCesiumEffect } from '$lib/world/active.svelte';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 
 	let { model }: EffectProps = $props();
 
 	const LIGHT_COUNT = 350;
-	const LIGHT_RADIUS_DEG = 0.08; // ~9 km at equator
+	const LIGHT_RADIUS_DEG = 0.08;
 
-	$effect(() => {
-		const mgr = activeCesium.manager;
-		if (!mgr) return;
-
+	useCesiumEffect((_mgr, Cesium, viewer) => {
 		const loc = LOCATION_MAP.get(model.location);
 		if (!loc) return;
-
-		const Cesium = mgr.getCesium();
-		const viewer = mgr.getViewer();
 
 		const ds = new Cesium.CustomDataSource('car-lights');
 		viewer.dataSources.add(ds);

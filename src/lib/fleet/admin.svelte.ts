@@ -4,7 +4,7 @@
 
 import type { DeviceInfo, DisplayConfig, ServerAdminMessage } from '$lib/fleet/protocol';
 import { safeParse, type LocationId, type WeatherType, type DisplayMode } from '$lib/types';
-import { BaseTransport } from './transport.svelte';
+import { BaseTransport, createFleetTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 
 export type Transport = 'ws' | 'sse';
@@ -31,7 +31,7 @@ export class AdminStore extends BaseTransport {
 	alerts = $state<HealthAlert[]>([]);
 	serverUptime = $state(0);
 
-	#ws: WebSocket | null = $state.raw(null);
+	#transport: { send: (data: string) => void; close: () => void } | null = null;
 	#sse: EventSource | null = $state.raw(null);
 	#wsUrl: string;
 	#healthInterval: ReturnType<typeof setInterval> | null = null;
@@ -62,19 +62,20 @@ export class AdminStore extends BaseTransport {
 	}
 
 	disconnect(): void {
-		if (this.#ws) { this.#ws.close(); this.#ws = null; }
+		this.#transport?.close();
+		this.#transport = null;
 		if (this.#sse) { this.#sse.close(); this.#sse = null; }
 	}
 
 	#connectWs(): void {
-		try {
-			this.#ws = new WebSocket(this.#wsUrl);
-			this.#ws.onopen = () => this.onConnected();
-			this.#ws.onclose = () => this.onDisconnected();
-			this.#ws.onmessage = (e) => this.#handleEvent(e.data);
-		} catch {
-			this.onDisconnected();
-		}
+		this.#transport = createFleetTransport({
+			url: this.#wsUrl,
+			autoReconnect: true,
+			onOpen: () => this.onConnected(),
+			onMessage: (data) => this.#handleEvent(data),
+			onClose: (autoReconnect) => this.onDisconnected(autoReconnect),
+			onError: () => this.onDisconnected(true),
+		});
 	}
 
 	#connectSse(): void {

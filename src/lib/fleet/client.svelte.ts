@@ -6,6 +6,7 @@ import type { ServerMessage, ServerMessageV2, DisplayMessage, DeviceCaps, FleetC
 import { isV2 } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
 import { BaseTransport } from './transport.svelte';
+import { createFleetTransport } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
 
@@ -46,7 +47,7 @@ function getDeviceCaps(): DeviceCaps {
 }
 
 export class DisplayWsClient extends BaseTransport {
-	#ws: WebSocket | null = $state.raw(null);
+	#transport: { send: (data: string) => void; close: () => void } | null = null;
 	#model: FleetClientModel;
 	#deviceId: string;
 	#serverUrl: string;
@@ -63,36 +64,34 @@ export class DisplayWsClient extends BaseTransport {
 
 	connect(): void {
 		if (this.isDestroyed) return;
-		try {
-			this.#ws = new WebSocket(this.#serverUrl);
-			this.#ws.onopen = () => {
+		this.#transport = createFleetTransport({
+			url: this.#serverUrl,
+			autoReconnect: true,
+			onOpen: () => {
 				this.onConnected();
 				this.#sendRegister();
 				this.#startStatusUpdates();
-			};
-			this.#ws.onmessage = (e) => this.#handleMessage(e.data);
-			this.#ws.onclose = () => {
+			},
+			onMessage: (data) => this.#handleMessage(data),
+			onClose: (autoReconnect) => {
 				this.#stopStatusUpdates();
-				this.onDisconnected();
-			};
-		} catch {
-			this.onDisconnected();
-		}
+				this.onDisconnected(autoReconnect);
+			},
+			onError: () => {
+				this.onDisconnected(true);
+			},
+		});
 	}
 
 	disconnect(): void {
 		this.#stopStatusUpdates();
-		if (this.#ws) {
-			this.#ws.close();
-			this.#ws = null;
-		}
+		this.#transport?.close();
+		this.#transport = null;
 	}
 
 	#send(msg: DisplayMessage | { v: 2; type: string; [k: string]: unknown }): void {
 		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
-		if (this.#ws?.readyState === WebSocket.OPEN) {
-			this.#ws.send(JSON.stringify(msg));
-		}
+		this.#transport?.send(JSON.stringify(msg));
 	}
 
 	/**

@@ -14,6 +14,23 @@
 
 import type { CesiumManager } from './compose';
 
+export type CesiumCleanup = (() => void) | void;
+
+export function useCesiumEffect(
+	fn: (mgr: CesiumManager, Cesium: typeof import('cesium'), viewer: any) => CesiumCleanup
+): void {
+	$effect(() => {
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		const Cesium = mgr.getCesium();
+		const viewer = mgr.getViewer();
+		const cleanup = fn(mgr, Cesium, viewer);
+		return () => {
+			if (typeof cleanup === 'function') cleanup();
+		};
+	});
+}
+
 class ActiveCesium {
 	manager = $state<CesiumManager | null>(null);
 }

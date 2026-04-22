@@ -13,7 +13,7 @@
 
 import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
-export type { DeviceRole };
+import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -179,13 +179,7 @@ export type CameraConfig = typeof _camera;
 
 export function setParallaxRole(role: DeviceRole): void {
 	camera.parallax.role = role;
-	if (role === 'solo' || role === 'center') {
-		camera.parallax.headingOffsetDeg = 0;
-	} else if (role === 'left') {
-		camera.parallax.headingOffsetDeg = -camera.parallax.panoramaArcDeg / 2 + camera.parallax.panoramaArcDeg / 6;
-	} else {
-		camera.parallax.headingOffsetDeg = camera.parallax.panoramaArcDeg / 2 - camera.parallax.panoramaArcDeg / 6;
-	}
+	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);
 }
 
 export function setCameraPath(path: string, value: unknown): boolean {
@@ -248,7 +242,6 @@ export const world = $state({
 	fogDensityScale: 1.0,
 	buildingsEnabled: true,
 	overpassRadiusMeters: 3500,
-	nightLightIntensity: 0.6,
 	qualityMode: 'balanced' as QualityMode,
 	msse: CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError,
 	tileCache: CESIUM_QUALITY_PRESETS.balanced.tileCacheSize,
