@@ -10,6 +10,7 @@
 
 import { json, error } from '@sveltejs/kit';
 import { listAssets, saveAsset, isAllowedExtension } from '$lib/scene/bundle/assets.server';
+import { readLimitedBlob } from '$lib/http/body';
 import type { RequestHandler } from './$types';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB cap per upload
@@ -20,9 +21,11 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	const len = Number(request.headers.get('content-length') ?? 0);
-	if (Number.isFinite(len) && len > MAX_BYTES) {
-		error(413, 'asset too large (max 50 MB)');
+	// Early-reject via Content-Length header when present — avoids reading the
+	// multipart body at all for obviously oversized requests.
+	const declaredLen = Number(request.headers.get('content-length') ?? 0);
+	if (Number.isFinite(declaredLen) && declaredLen > MAX_BYTES) {
+		error(413, `asset too large: declared ${declaredLen} bytes, limit is ${MAX_BYTES} bytes`);
 	}
 
 	let form: FormData;
@@ -34,12 +37,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const file = form.get('file');
 	if (!(file instanceof File)) error(400, 'missing form field "file"');
-	if (file.size > MAX_BYTES) error(413, 'asset too large (max 50 MB)');
 	if (!isAllowedExtension(file.name)) {
 		error(400, 'unsupported file type — allowed: mp4, webm, png, jpg, webp');
 	}
 
-	const bytes = new Uint8Array(await file.arrayBuffer());
+	// Stream the file blob through readLimitedBlob — aborts and throws 413
+	// before fully buffering into memory if the file exceeds the cap.
+	// This covers the case where Content-Length was absent or lied.
+	const bytes = await readLimitedBlob(file.stream(), MAX_BYTES);
 	const asset = await saveAsset(file.name, bytes);
 	return json({ ok: true, asset });
 };

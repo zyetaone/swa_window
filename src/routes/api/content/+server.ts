@@ -13,6 +13,7 @@
 import { json, error } from '@sveltejs/kit';
 import { listBundles, saveBundle } from '$lib/scene/bundle/disk.server';
 import { isContentBundle } from '$lib/scene/bundle/loader';
+import { readLimitedJson } from '$lib/http/body';
 import type { RequestHandler } from './$types';
 
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -24,18 +25,10 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
-	// Reject oversized payloads up front.
-	const len = Number(request.headers.get('content-length') ?? 0);
-	if (Number.isFinite(len) && len > MAX_BODY_BYTES) {
-		error(413, 'bundle too large');
-	}
-
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		error(400, 'invalid JSON');
-	}
+	// readLimitedJson counts actual bytes received — covers the content-length
+	// bypass (chunked transfer encoding) because it enforces the cap mid-stream
+	// before any JSON parsing occurs.
+	const body = await readLimitedJson<unknown>(request, MAX_BODY_BYTES);
 
 	if (!isContentBundle(body)) error(400, 'invalid bundle shape');
 	if (!ID_PATTERN.test(body.id)) {
