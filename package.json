@@ -39,10 +39,17 @@
 	},
 	"dependencies": {
 		"@svelte-maplibre-gl/pmtiles": "^1.0.3",
+		"@takram/three-atmosphere": "^0.18.0",
+		"@takram/three-clouds": "^0.7.4",
+		"@takram/three-geospatial": "^0.8.0",
+		"@takram/three-geospatial-effects": "^0.6.2",
+		"@threlte/core": "^8.5.9",
+		"@threlte/extras": "^9.14.8",
 		"cesium": "^1.138.0",
 		"maplibre-gl": "^5.23.0",
 		"multicast-dns": "^7.2.5",
 		"pmtiles": "^4.4.1",
+		"postprocessing": "^6.39.1",
 		"svelte-maplibre-gl": "^1.0.3",
 		"three": "^0.183.2"
 	}
