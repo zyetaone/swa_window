@@ -28,7 +28,7 @@
 	 */
 
 	import { useTask, useThrelte } from '@threlte/core';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import * as THREE from 'three';
 	import {
 		Data3DTexture,
@@ -70,7 +70,12 @@
 		LensFlareEffect,
 	} from '@takram/three-geospatial-effects';
 
-	import { getSunDirection } from '../lib/playground-state.svelte';
+	import { pg, getSunDirection } from '../lib/playground-state.svelte';
+
+	// Baseline takram defaults; the sliders scale them each frame.
+	// `localWeatherRepeat` scales inversely — smaller repeat = larger-looking clouds.
+	const BASE_LOCAL_WEATHER_REPEAT = 100;
+	const BASE_WEATHER_VELOCITY = 0.001;
 
 
 	let { clouds = false, postfx = false }: { clouds?: boolean; postfx?: boolean } = $props();
@@ -240,10 +245,22 @@
 				aerial.shadow = cloudsEffect.atmosphereShadow;
 				aerial.shadowLength = cloudsEffect.atmosphereShadowLength;
 
-				const sun = getSunDirection();
-				cloudsEffect.sunDirection.copy(sun);
-				aerial.sunDirection.copy(sun);
+				// untrack: we read pg.* inside a render loop; no reactive deps.
+				untrack(() => {
+					const sun = getSunDirection();
+					cloudsEffect!.sunDirection.copy(sun);
+					aerial!.sunDirection.copy(sun);
 
+					// Drive cloud controls from pg — all three uniforms are
+					// per-frame mutable (confirmed from takram source: coverage →
+					// parameterUniforms, localWeatherVelocity / Repeat are
+					// Vector2 mutable in place).
+					cloudsEffect!.coverage = pg.density;
+					const velScale = pg.cloudSpeed * BASE_WEATHER_VELOCITY;
+					cloudsEffect!.localWeatherVelocity.set(velScale, 0);
+					const repeat = BASE_LOCAL_WEATHER_REPEAT / Math.max(0.1, pg.cloudScale);
+					cloudsEffect!.localWeatherRepeat.set(repeat, repeat);
+				});
 			}
 			composer.render(delta);
 		},
