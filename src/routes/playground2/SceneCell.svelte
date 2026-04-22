@@ -24,6 +24,7 @@
 	import VolumetricClouds from './layers/VolumetricClouds.svelte';
 	import PostFX from './layers/PostFX.svelte';
 	import TransparentClear from './layers/TransparentClear.svelte';
+	import ThrelteScene from './ThrelteScene.svelte';
 	import { GRID_LAYERS, layersFor } from './lib/scene-state.svelte';
 
 	let { cellIdx }: { cellIdx: number } = $props();
@@ -31,35 +32,49 @@
 	const info = $derived(GRID_LAYERS[cellIdx]);
 	const activeLayers = $derived(layersFor(cellIdx));
 
+	// Pure-Threlte cells: cells 5 and 6 (0-indexed: 4 and 5).
+	// These skip MapLibre entirely and render via ThrelteScene.
+	const IS_THRELTE = $derived(cellIdx >= 4);
+
 	// The MapLibre canvas, forwarded up from MapLibreCell via $bindable.
 	// WaterOverlay needs this to chroma-key against the live globe pixels.
 	let mapCanvas = $state<HTMLCanvasElement | undefined>(undefined);
 </script>
 
 <div class="cell">
-	<MapLibreCell
-		bind:mapCanvas
-		showBuildings={activeLayers.has('buildings')}
-	/>
+	{#if IS_THRELTE}
+		<!-- Cell 5: SkyDome + VolumetricClouds
+		     Cell 6: SkyDome + VolumetricClouds + PostFX -->
+		<ThrelteScene
+			showClouds={true}
+			showPostFX={cellIdx === 5}
+		/>
+	{:else}
+		<!-- Cells 1-4: MapLibre globe + optional overlay layers -->
+		<MapLibreCell
+			bind:mapCanvas
+			showBuildings={activeLayers.has('buildings')}
+		/>
 
-	{#if activeLayers.has('water') && mapCanvas}
-		<WaterOverlay {mapCanvas} />
+		{#if activeLayers.has('water') && mapCanvas}
+			<WaterOverlay {mapCanvas} />
+		{/if}
+
+		<div class="three-overlay">
+			<Canvas>
+				<TransparentClear />
+				{#if activeLayers.has('sky')}
+					<SkyDome />
+				{/if}
+				{#if activeLayers.has('clouds')}
+					<VolumetricClouds />
+				{/if}
+				{#if activeLayers.has('postfx')}
+					<PostFX />
+				{/if}
+			</Canvas>
+		</div>
 	{/if}
-
-	<div class="three-overlay">
-		<Canvas>
-			<TransparentClear />
-			{#if activeLayers.has('sky')}
-				<SkyDome />
-			{/if}
-			{#if activeLayers.has('clouds')}
-				<VolumetricClouds />
-			{/if}
-			{#if activeLayers.has('postfx')}
-				<PostFX />
-			{/if}
-		</Canvas>
-	</div>
 
 	<div class="cell-label" aria-hidden="true">
 		<span class="cell-title">{info.label}</span>

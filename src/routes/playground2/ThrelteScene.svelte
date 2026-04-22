@@ -34,11 +34,7 @@
 
 <!-- Threlte canvas: transparent so the page background (#04060d) shows through.
      No MapLibre underneath — this IS the scene. -->
-<Canvas
-	autoRender={false}
-	toneMapping={THREE.AgXToneMapping}
-	toneMappingExposure={1.0}
->
+<Canvas toneMapping={THREE.AgXToneMapping}>
 	<!-- Camera -->
 	<T.PerspectiveCamera
 		makeDefault
