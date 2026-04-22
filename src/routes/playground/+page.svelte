@@ -193,13 +193,16 @@
 	});
 
 	// Atmospheric haze — screen-blended gradient that color-grades the entire
-	// scene. Matches prod atmosphere/haze/effect.svelte per skyState.
+	// scene. ONLY applied for mood phases (dawn/dusk/night) — daytime uses
+	// transparent so the CSS sky gradient and MapLibre atmosphere stay vivid.
+	// The grey day-haze was washing the sky to a muddy grey-blue; removing it
+	// restores the Variant B noon palette.
 	const hazeGradient = $derived.by(() => {
 		switch (skyState) {
 			case 'night': return 'linear-gradient(180deg, rgba(20,28,50,0.55) 0%, rgba(10,16,35,0.4) 40%, rgba(5,8,18,0.3) 100%)';
 			case 'dawn':  return 'linear-gradient(180deg, rgba(220,150,110,0.35) 0%, rgba(240,180,120,0.25) 45%, rgba(200,160,100,0.15) 100%)';
 			case 'dusk':  return 'linear-gradient(180deg, rgba(200,110,90,0.4) 0%, rgba(180,90,70,0.3) 40%, rgba(100,60,50,0.2) 100%)';
-			default:      return 'linear-gradient(180deg, rgba(170,195,220,0.3) 0%, rgba(190,210,230,0.2) 50%, rgba(160,180,160,0.1) 100%)';
+			default:      return 'transparent';
 		}
 	});
 

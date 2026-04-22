@@ -123,6 +123,15 @@ void main() {
 	float chromaMask = 1.0 - smoothstep(u_waterKeyTolerance * 0.6, u_waterKeyTolerance, d);
 	float mask = chromaMask * horizonGate;
 
+	// ── Shoreline ripple boost ────────────────────────────────────────
+	// Beach + shallow water reads with more wave action than open ocean
+	// in reality. The chroma-mask transition is a free coastline proxy —
+	// fragments where the mask is mid-value (0.35–0.75) are near the
+	// water-land boundary. Boost normal-map contribution there so the
+	// shoreline shimmers with extra micro-movement.
+	float shoreBoost = 1.0 - 4.0 * abs(chromaMask - 0.55);
+	shoreBoost = clamp(shoreBoost, 0.0, 1.0) * horizonGate;
+
 	// Early-out: nothing to do. Keeping the branch short (1 texture
 	// read + 1 distance) keeps non-water pixels cheap.
 	if (mask < 0.01 || u_waterIntensity < 0.01) {
@@ -138,7 +147,22 @@ void main() {
 	float distFade = 1.0 - clamp(vUv.y / 0.45, 0.0, 1.0);
 
 	// ── Scrolling normal map (tiled, distance-aware) ──────────────────
-	vec3 n = sampleWaterNormal(vUv, u_time, distFade);
+	// Boost the effective "nearness" along the shore so shallow-water
+	// readings get more small-scale ripple energy. Shore pixels use
+	// clamp(distFade + 0.35*shoreBoost, 0, 1) — adds up to 35% near
+	// the coastline. Plus an extra small-scale scroll sample mixed in
+	// ONLY where shoreBoost is strong, for that "lapping waves" feel.
+	float shoreDistFade = clamp(distFade + 0.35 * shoreBoost, 0.0, 1.0);
+	vec3 n = sampleWaterNormal(vUv, u_time, shoreDistFade);
+
+	// Shoreline micro-ripple — extra-fast scroll, tiny amplitude, only
+	// near the mask transition. Gives beaches the "slight movement /
+	// rippled / waves" feel without adding noise to open water.
+	if (shoreBoost > 0.05) {
+		vec2 uvRipple = vUv * 36.0 + vec2(0.18, -0.12) * u_time;
+		vec3 nRipple = texture2D(tWaterNormals, uvRipple).rgb * 2.0 - 1.0;
+		n = normalize(n + nRipple * 0.15 * shoreBoost);
+	}
 
 	// ── Fresnel ───────────────────────────────────────────────────────
 	// In screen-space with viewDir = (0,0,1), fresnel reduces to
