@@ -79,7 +79,7 @@ WindowModel class + context DI. Composes engines, owns shared reactive state, ti
 | +page.ts | 8 | `ssr = false`, `prerender = true` |
 | +layout.svelte | 11 | Tailwind import |
 | admin/+page.svelte | 855 | Fleet admin dashboard |
-| playground/+page.svelte | 241 | Cloud rendering sandbox (no WindowModel) |
+| playground/+page.svelte | ~650 | MapLibre globe lab — MotionEngine + CSS3D clouds + NightOverlay |
 | architecture/+page.svelte | 1892 | Interactive architecture documentation |
 | api/fleet/+server.ts | 56 | Fleet REST endpoints (scene, mode, config push) |
 | api/tiles/[...path]/+server.ts | 61 | Tile file proxy with path traversal guard |
@@ -91,4 +91,4 @@ WindowModel class + context DI. Composes engines, owns shared reactive state, ti
 | svelte.config.js | adapter-node, bundleStrategy:'single', CSP directives |
 | vite.config.ts | Cesium static copy, 0.0.0.0 host binding, chunk size limit |
 | tsconfig.json | Strict mode |
-| package.json | bun scripts, cesium dep, svelte 5.50+ |
+| package.json | bun scripts, cesium dep, svelte 5.50+, three.js (playground only) |

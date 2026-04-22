@@ -1,18 +1,9 @@
 /**
- * Local motion tuning for the playground.
- *
- * Carved out of $lib/model/config to make playground freestanding.
- * Kept as plain constants (no $state) — playground doesn't need fleet
- * patches or admin-tunable values; it's a scene lab, not the product.
- *
- * Shape matches the `ctx.camera` expected by `$lib/camera/motion.svelte`
- * (one of the last main-app couplings we keep — a genuinely reusable
- * physics engine that any renderer can drive).
+ * camera-config.ts — Simulation tuning for cameras and directors.
  */
-
 import type { CameraConfig, DirectorConfig } from '$lib/types';
 
-export const playgroundCameraConfig: CameraConfig = {
+export const simulationCameraConfig: CameraConfig = {
 	orbit: {
 		driftRate: 0.15,
 		major: 0.015,
@@ -60,8 +51,7 @@ export const playgroundCameraConfig: CameraConfig = {
 	},
 };
 
-/** Director config — playground doesn't run autopilot, so these are stubs. */
-export const playgroundDirectorConfig: DirectorConfig = {
+export const simulationDirectorConfig: DirectorConfig = {
 	daylight: { syncToRealTime: false, manualTimeOfDay: 12, syncIntervalMs: 60000 },
 	autopilot: {
 		enabled: false,
@@ -73,7 +63,9 @@ export const playgroundDirectorConfig: DirectorConfig = {
 		weatherPool: ['clear'],
 		directorMinInterval: 60,
 		directorMaxInterval: 300,
-	},
+		directorMinIntervalSec: 60,
+		directorMaxIntervalSec: 300,
+	} as any,
 	ambient: {
 		cloudDensityShift: 0.08,
 		cloudDensityMin: 0.05,

@@ -1,10 +1,7 @@
 /**
  * Creative sky/light palettes — named presets that override the time-driven
  * `auto` palette with a single locked mood. Each preset exports the same
- * shape as the time-driven band: `{ sky, horizon, fog, light, intensity }`.
- *
- * The preset also suggests a water color band (golden / navy / neon) that
- * MapLibreGlobe reads for the water-fill layer.
+ * shape: `{ sky, horizon, fog, light, intensity }`.
  */
 
 export interface Palette {
@@ -71,7 +68,6 @@ export const PALETTES: Record<Exclude<PaletteName, 'auto'>, Palette> = {
 		swatchColor: '#2a2a2a',
 	},
 	'southwest-warm': {
-		// Southwest's brand: warm oranges, deep navy, cream highlights.
 		sky: '#13243c',
 		horizon: '#ecb156',
 		fog: '#c0885b',

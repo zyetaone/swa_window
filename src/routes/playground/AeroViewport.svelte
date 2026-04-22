@@ -7,15 +7,17 @@
 	 *   2. LandscapeAbstractionLayer (Three.js GeoJSON water/land abstraction)
 	 *   3. Threlte Overlay (ECEF camera, Takram volumetric clouds, atmosphere, Post-FX)
 	 */
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import * as THREE from 'three';
 	import maplibregl from 'maplibre-gl';
 	import { Canvas, T } from '@threlte/core';
 	import { Geodetic, Ellipsoid } from '@takram/three-geospatial';
 	
-	import { pg } from './lib/playground-state.svelte';
-	import { altitudeToZoom, latZoomAdjust } from './lib/globe-zoom';
+	import { pg, motion, pgNightFactor, pgTick, pgHeadingOffsetDeg, pgSkyState } from './lib/playground-state.svelte';
+	import { altitudeToZoom, latZoomAdjust } from '$lib/simulation/globe';
 	import { addBuildings } from './layers/buildings';
+	import { simulationCameraConfig as cameraConfig, simulationDirectorConfig as directorConfig } from '$lib/simulation/camera-config';
+	import { LOCATION_MAP, LOCATIONS } from '$lib/locations';
 	
 	import LandscapeAbstractionLayer from './layers/LandscapeAbstractionLayer.svelte';
 	import EffectStack from './layers/EffectStack.svelte';
@@ -23,23 +25,15 @@
 	import TransparentClear from './layers/TransparentClear.svelte';
 	import ArtsyClouds from './layers/ArtsyClouds.svelte';
 
-	let {
-		lat = 25.2,
-		lon = 55.3,
-		altitudeMeters = 9144,
-		headingDeg = 90,
-		pitchDeg = 12,
-	}: {
-		lat?: number;
-		lon?: number;
-		altitudeMeters?: number;
-		headingDeg?: number;
-		pitchDeg?: number;
-	} = $props();
+	let { isBoosting = false }: { isBoosting?: boolean } = $props();
 
 	let container = $state<HTMLDivElement | undefined>();
 	let map = $state<maplibregl.Map | null>(null);
 	let mapReady = $state(false);
+
+	// --- Internal State (Map Center) ---
+	let mapLat = $state(25.2);
+	let mapLon = $state(55.3);
 
 	// --- ECEF Camera Constants ---
 	const DEG2RAD = Math.PI / 180;
@@ -55,21 +49,22 @@
 	const camQuat = new THREE.Quaternion();
 	const tempQuat = new THREE.Quaternion();
 
-	const nightFactor = $derived.by(() => {
-		const t = pg.timeOfDay;
-		if (t >= 18.5 || t <= 5.5) return 1.0;
-		if (t >= 7 && t <= 17) return 0.0;
-		if (t < 7) return (7 - t) / 1.5;
-		return (t - 17) / 1.5;
-	});
-
-	let lastLat = lat;
+	// --- Simulation Derivations (DRYed from +page.svelte) ---
+	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? LOCATIONS[0]);
+	const paneHeadingOffset = $derived(pgHeadingOffsetDeg());
+	
+	const viewBearing = $derived(
+		(pg.heading - 90 + paneHeadingOffset + motion.motionOffsetX * 1.5 + 360) % 360,
+	);
+	const cloudDeckBias = $derived((pg.altitude - 28000) / 8000 * 4);
+	const viewPitch = $derived(Math.max(58, Math.min(84, 72 + pg.pitchBias + cloudDeckBias + motion.motionOffsetY * 2.5)));
+	const altitudeMeters = $derived(pg.altitude * 0.3048);
 
 	const cameraTransform = $derived.by(() => {
-		const lonRad = lon * DEG2RAD;
-		const latRad = lat * DEG2RAD;
-		const hRad = headingDeg * DEG2RAD;
-		const pRad = pitchDeg * DEG2RAD;
+		const lonRad = mapLon * DEG2RAD;
+		const latRad = mapLat * DEG2RAD;
+		const hRad = viewBearing * DEG2RAD;
+		const pRad = viewPitch * DEG2RAD;
 
 		geo.set(lonRad, latRad, altitudeMeters);
 		geo.toECEF(camPos);
@@ -97,6 +92,7 @@
 		};
 	});
 
+	// --- Animation Loop ---
 	onMount(() => {
 		if (!container) return;
 		map = new maplibregl.Map({
@@ -116,9 +112,9 @@
 					{ id: 'sat', type: 'raster', source: 'satellite', paint: { 'raster-fade-duration': 350 } },
 				],
 			},
-			center: [lon, lat],
+			center: [mapLon, mapLat],
 			zoom: altitudeToZoom(altitudeMeters),
-			pitch: 60, bearing: headingDeg,
+			pitch: 60, bearing: viewBearing,
 			attributionControl: false, interactive: false,
 		});
 
@@ -127,19 +123,71 @@
 			mapReady = true;
 		});
 
-		return () => { map?.remove(); map = null; };
+		// Consolidated RAF loop
+		let raf: number;
+		let last = performance.now();
+		let simTime = 0;
+		let lastLat = mapLat;
+
+		const loop = (now: number) => {
+			const dt = Math.min((now - last) / 1000, 0.1);
+			last = now;
+
+			untrack(() => {
+				simTime += dt;
+				pgTick(dt, now, isBoosting);
+
+				if (pg.autoFly || isBoosting) {
+					const loc = currentLocation;
+					const a = pg.orbitAngle;
+					const t = pg.orbitTilt;
+					const ex = pg.orbitMajor * Math.cos(a);
+					const ey = pg.orbitMinor * Math.sin(a);
+					const latRad = loc.lat * DEG2RAD;
+					const cosT = Math.cos(t), sinT = Math.sin(t);
+					mapLat = loc.lat + ex * cosT - ey * sinT;
+					mapLon = loc.lon + (ex * sinT + ey * cosT) / Math.max(Math.cos(latRad), 0.2);
+				}
+
+				motion.tick(dt, {
+					time: simTime,
+					heading: pg.heading,
+					altitude: pg.altitude,
+					turbulenceLevel: pg.turbulenceLevel,
+					weather: pg.weather,
+					camera: cameraConfig,
+					director: directorConfig,
+					lat: currentLocation.lat,
+					lon: currentLocation.lon,
+					pitch: viewPitch,
+					bankAngle: motion.bankAngle,
+					skyState: pgSkyState, nightFactor: pgNightFactor, dawnDuskFactor: 0,
+					locationId: pg.activeLocation,
+					userAdjustingAltitude: false, userAdjustingTime: false, userAdjustingAtmosphere: false,
+					cloudDensity: pg.density, cloudSpeed: pg.cloudSpeed, haze: 0,
+				});
+
+				if (map && mapReady) {
+					const compensated = altitudeToZoom(altitudeMeters) + latZoomAdjust(lastLat, mapLat);
+					map.easeTo({ center: [mapLon, mapLat], zoom: compensated, bearing: viewBearing, duration: 250 });
+					lastLat = mapLat;
+				}
+			});
+
+			raf = requestAnimationFrame(loop);
+		};
+		raf = requestAnimationFrame(loop);
+
+		return () => { 
+			cancelAnimationFrame(raf);
+			map?.remove(); 
+			map = null; 
+		};
 	});
 
 	$effect(() => {
 		if (!map || !mapReady) return;
-		const compensated = altitudeToZoom(altitudeMeters) + latZoomAdjust(lastLat, lat);
-		map.easeTo({ center: [lon, lat], zoom: compensated, bearing: headingDeg, duration: 250 });
-		lastLat = lat;
-	});
-
-	$effect(() => {
-		if (!map || !mapReady) return;
-		addBuildings(map, pg.activeLocation, nightFactor);
+		addBuildings(map, pg.activeLocation, pgNightFactor);
 	});
 </script>
 
@@ -166,7 +214,7 @@
 	</div>
 
 	{#if pg.cloudMode === 'artsy'}
-		<ArtsyClouds density={pg.density} cloudScale={pg.cloudScale} speed={pg.cloudSpeed} heading={pg.heading} altitude={pg.altitude} nightFactor={nightFactor} weather={pg.weather} />
+		<ArtsyClouds density={pg.density} cloudScale={pg.cloudScale} speed={pg.cloudSpeed} heading={pg.heading} altitude={pg.altitude} nightFactor={pgNightFactor} weather={pg.weather} />
 	{/if}
 </div>
 
@@ -177,3 +225,4 @@
 	.three-overlay :global(canvas) { background: transparent; }
 	:global(.map-target .maplibregl-ctrl-attrib) { display: none !important; }
 </style>
+

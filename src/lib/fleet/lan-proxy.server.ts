@@ -38,7 +38,7 @@ function cacheDir(): string {
 	return process.env.AERO_LAN_CACHE_DIR ?? './data/lan-cache';
 }
 
-/** Local service port — the admin-exposed `/lan/bundle/:hash` endpoint. */
+/** Local service port — the admin-exposed `/api/bundle/:hash` endpoint. */
 function servicePort(): number {
 	return Number.parseInt(process.env.PORT ?? '3000', 10);
 }
@@ -195,7 +195,7 @@ function pathFor(hash: string): string {
 
 /**
  * Read a cached bundle blob from disk. Returns null if absent.
- * Used by the `/lan/bundle/:hash` endpoint.
+ * Used by the `/api/bundle/:hash` endpoint.
  */
 export async function readLocal(hash: string): Promise<Uint8Array | null> {
 	let path: string;
@@ -235,7 +235,7 @@ async function fetchFromPeer(peer: Peer, hash: string): Promise<Uint8Array | nul
 		// a peer leaving the network and we should fall through to remote.
 		const ctrl = new AbortController();
 		const t = setTimeout(() => ctrl.abort(), 2_000);
-		const res = await fetch(`http://${peer.host}:${peer.port}/lan/bundle/${hash}`, {
+		const res = await fetch(`http://${peer.host}:${peer.port}/api/bundle/${hash}`, {
 			signal: ctrl.signal,
 		});
 		clearTimeout(t);

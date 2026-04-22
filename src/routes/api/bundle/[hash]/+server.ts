@@ -1,7 +1,7 @@
 /**
  * LAN bundle proxy endpoint.
  *
- * GET /lan/bundle/:hash → the raw blob from this Pi's local cache, or 404.
+ * GET /api/bundle/:hash → the raw blob from this Pi's local cache, or 404.
  *
  * Called by other Pis on the same LAN when a new bundle rolls out. If we
  * already have it cached on disk, we serve it directly so the peer doesn't

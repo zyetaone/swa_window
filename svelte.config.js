@@ -30,6 +30,7 @@ const config = {
 					'https://*.tile.openstreetmap.org',
 					'https://gibs.earthdata.nasa.gov',
 					'https://tiles.maps.eox.at',
+					'https://media.githubusercontent.com',
 				],
 				'connect-src': [
 					'self',
@@ -42,6 +43,8 @@ const config = {
 					'https://*.tile.openstreetmap.org',
 					'https://gibs.earthdata.nasa.gov',
 					'https://tiles.maps.eox.at',
+					'https://tiles.openfreemap.org',
+					'https://*.openfreemap.org',
 				],
 				'worker-src': ['self', 'blob:'],              // Cesium web workers
 				'child-src': ['blob:'],

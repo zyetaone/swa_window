@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { LOCATION_MAP } from '$lib/locations';
-	import { formatTime, getSkyState } from '$lib/utils';
-	import { pg } from '../lib/playground-state.svelte';
+	import { formatTime } from '$lib/utils';
+	import { pg, pgSkyState } from '../lib/playground-state.svelte';
 
 	let { isBoosting = false }: { isBoosting?: boolean } = $props();
 
 	const currentLocation = $derived(LOCATION_MAP.get(pg.activeLocation) ?? Array.from(LOCATION_MAP.values())[0]);
-	const skyState = $derived(getSkyState(pg.timeOfDay));
+	const skyState = $derived(pgSkyState);
 </script>
 
 <!-- HUD chips — bottom-left -->

@@ -39,3 +39,6 @@ tile-server/*.lock
 
 # Runtime content (pushed bundles + uploaded assets)
 data/
+
+# graphify knowledge-graph output (regenerable)
+graphify-out/

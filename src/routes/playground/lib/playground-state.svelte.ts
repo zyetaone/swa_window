@@ -1,11 +1,12 @@
 import { type LocationId, type WeatherType } from '$lib/types';
 import { LOCATIONS } from '$lib/locations';
-import type { PaletteName } from '../palettes';
+import { getSkyState } from '$lib/utils';
+import { PALETTES } from '$lib/simulation/palettes';
+import type { PaletteName } from '$lib/simulation/palettes';
+import { MotionEngine } from '$lib/camera/motion.svelte';
 import { resolveBinding, type DeviceRole, isGroupLeader, headingOffsetForRole } from './corridor.svelte';
 
 // Resolve binding ONCE at module load — same lifecycle as the rest of `pg`.
-// Safe because resolveBinding() returns the SSR-safe default when window is
-// absent.
 const initialBinding = resolveBinding();
 
 export const pg = $state({
@@ -55,6 +56,12 @@ export const pg = $state({
 	cloudMode: 'sim' as 'sim' | 'artsy', 
 });
 
+/** Shared MotionEngine singleton */
+export const motion = new MotionEngine();
+
+/** Global reactive sky state */
+export const pgSkyState = $derived(getSkyState(pg.timeOfDay));
+
 /** Global night factor derived from time of day (0=day, 1=night) */
 export const pgNightFactor = $derived.by(() => {
 	const t = pg.timeOfDay;
@@ -62,6 +69,36 @@ export const pgNightFactor = $derived.by(() => {
 	if (t >= 7 && t <= 17) return 0.0;
 	if (t < 7) return (7 - t) / 1.5;
 	return (t - 17) / 1.5;
+});
+
+/** Visual Gradients — moved from +page.svelte to DRY up the UI */
+export const pgBgGradient = $derived.by(() => {
+	if (pg.paletteName !== 'auto' && PALETTES[pg.paletteName]) {
+		const p = PALETTES[pg.paletteName];
+		return `linear-gradient(180deg, ${p.sky} 0%, ${p.horizon} 60%, ${p.fog} 100%)`;
+	}
+	switch (pgSkyState) {
+		case 'night': return 'linear-gradient(180deg, #05060f 0%, #0f1428 55%, #1a1f35 100%)';
+		case 'dawn':  return 'linear-gradient(180deg, #1a1440 0%, #d96850 45%, #f0b070 70%, #d4a060 100%)';
+		case 'dusk':  return 'linear-gradient(180deg, #1a1a3e 0%, #c06040 35%, #ddaa70 55%, #5a4a3a 100%)';
+		default:      return 'linear-gradient(180deg, #4a90d9 0%, #7fb8ea 30%, #a4d4f4 55%, #b8c8a0 80%, #7a8860 100%)';
+	}
+});
+
+export const pgHazeGradient = $derived.by(() => {
+	switch (pgSkyState) {
+		case 'night': return 'linear-gradient(180deg, rgba(20,28,50,0.55) 0%, rgba(10,16,35,0.4) 40%, rgba(5,8,18,0.3) 100%)';
+		case 'dawn':  return 'linear-gradient(180deg, rgba(220,150,110,0.35) 0%, rgba(240,180,120,0.25) 45%, rgba(200,160,100,0.15) 100%)';
+		case 'dusk':  return 'linear-gradient(180deg, rgba(200,110,90,0.4) 0%, rgba(180,90,70,0.3) 40%, rgba(100,60,50,0.2) 100%)';
+		default:      return 'transparent';
+	}
+});
+
+/** Cloud-layer immersion opacity */
+export const pgCloudFogOpacity = $derived.by(() => {
+	const dist = Math.abs(pg.altitude - 28000);
+	if (dist > 6000) return 0;
+	return (1 - dist / 6000) * 0.35;
 });
 
 import * as THREE from 'three';
@@ -77,9 +114,6 @@ export function getSunDirection() {
 	).normalize();
 }
 
-
-
-
 if (typeof window !== 'undefined') {
 	pg.nextLocationChange = performance.now() + rotateIntervalMs();
 	pg.heading = Math.floor(Math.random() * 360);
@@ -92,9 +126,6 @@ export const HDG_HOLD_SEC = 4;
 const HDG_LERP_RATE = 0.6;
 const CLOUD_DECK_ALT = 28_000;
 
-// ─── Weighted location pool ─────────────────────────────────────────────────
-// Hero destinations (SWA hubs + flagship routes) get 3x weight vs tertiary
-// picks. Tertiary still appears so the wall doesn't feel repetitive.
 const HERO_IDS = new Set<LocationId>([
 	'dallas', 'chicago_midway', 'phoenix', 'las_vegas', 'denver',
 ]);
@@ -115,20 +146,12 @@ function pickWeightedLocation(exclude?: LocationId): LocationId {
 	return pool[0].id;
 }
 
-/**
- * Randomised rotation interval in ms. Adds ±12s jitter (uniform in [-0.2, +0.2]
- * minute) so two panes that boot at the same second don't drift in lockstep.
- */
 function rotateIntervalMs(): number {
 	const mins = Math.max(2, Math.min(3, pg.rotateIntervalMin));
 	const jitter = (Math.random() - 0.5) * 0.4; // ±0.2 min = ±12s
 	return (mins + jitter) * 60_000;
 }
 
-/**
- * Tick. `isLeader` gates local location rotation — follower panes (left/right)
- * wait for `director_decision` from the leader over the fleet WS.
- */
 export function pgTick(
 	dt: number,
 	now: number,
@@ -140,9 +163,6 @@ export function pgTick(
 	}
 
 	if (pg.autoFly || isBoosting) {
-		// Only the group leader rotates locally. Followers receive a
-		// director_decision and schedule it to apply at a shared wall-clock
-		// instant.
 		if (pg.kioskMode && pg.autoRotate && isLeader && now > pg.nextLocationChange) {
 			pgCycleLocation(now);
 		}
@@ -180,11 +200,6 @@ export function pgTick(
 	}
 }
 
-/**
- * Rotate to a new location. If `now` is provided, also reschedules the next
- * rotation timer. The weighted picker favours SWA hubs so the wall feels like
- * a brand story, not a random world tour.
- */
 export function pgCycleLocation(now?: number) {
 	pg.activeLocation = pickWeightedLocation(pg.activeLocation);
 
@@ -202,15 +217,9 @@ export function pgCycleLocation(now?: number) {
 	}
 }
 
-/**
- * Apply a remote director_decision — used by follower panes to sync to the
- * leader's rotation. Takes the location (plus optional weather) and schedules
- * all the same local scene shuffle without re-broadcasting.
- */
 export function pgApplyRemoteLocation(locationId: LocationId, weather?: WeatherType) {
 	pg.activeLocation = locationId;
 	if (weather) pg.weather = weather;
-	// Reset scene params like a local cycle, so followers feel the same beat.
 	pg.altitudeTarget = 22_000 + Math.floor(Math.random() * 18_000);
 	pg.altitudeCooldown = 0;
 	pg.pitchBias = (Math.random() - 0.5) * 12;
@@ -219,14 +228,12 @@ export function pgApplyRemoteLocation(locationId: LocationId, weather?: WeatherT
 	pg.orbitTilt = Math.random() * Math.PI;
 }
 
-/** Re-read the saved binding (used after admin panel writes a new binding). */
 export function pgReloadBinding() {
 	const b = resolveBinding();
 	pg.role = b.role;
 	pg.groupId = b.groupId;
 }
 
-/** Public — read the per-role heading offset (deg) for this pane. */
 export function pgHeadingOffsetDeg(): number {
 	return headingOffsetForRole(pg.role);
 }
@@ -267,3 +274,4 @@ export function pgRandomize() {
 }
 
 export type PlaygroundState = typeof pg;
+

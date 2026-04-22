@@ -2,12 +2,11 @@
 	import { LOCATIONS } from '$lib/locations';
 	import { WEATHER_TYPES } from '$lib/types';
 	import { formatTime } from '$lib/utils';
-	import { pg, pgReset, pgRandomize, ALT_HOLD_SEC, HDG_HOLD_SEC } from '../lib/playground-state.svelte';
-	import { getSkyState } from '$lib/utils';
+	import { pg, pgReset, pgRandomize, ALT_HOLD_SEC, HDG_HOLD_SEC, pgSkyState } from '../lib/playground-state.svelte';
 
 	let { drawerOpen = $bindable(false) } : { drawerOpen?: boolean } = $props();
 
-	const skyState = $derived(getSkyState(pg.timeOfDay));
+	const skyState = $derived(pgSkyState);
 
 	function compassDir(deg: number): string {
 		const dirs = ['N','NE','E','SE','S','SW','W','NW'];
