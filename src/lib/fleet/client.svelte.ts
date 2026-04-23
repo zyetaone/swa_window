@@ -197,6 +197,17 @@ export class DisplayWsClient {
 				if (isValidDisplayMode(mode)) this.#model.setDisplayMode(mode, msg.payload as string | undefined);
 				break;
 			}
+			case 'set_config': {
+				// Flat DisplayConfig coming from admin via /api/command. Routed
+				// through the DTO adapter (applyPatch) — fields decompose into
+				// typed setters + applyConfigPatch internally.
+				const patch = msg.patch;
+				if (patch && typeof patch === 'object') {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					this.#model.applyPatch(patch as any);
+				}
+				break;
+			}
 			case 'role_assign': {
 				const role = msg.role;
 				if (typeof role === 'string') {

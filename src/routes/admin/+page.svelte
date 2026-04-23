@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AdminStore, type Transport } from '$lib/fleet/admin.svelte';
+	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 	import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
 	import type { DisplayConfig } from '$lib/fleet/protocol';
 	import { LOCATIONS } from '$lib/locations';
@@ -14,11 +14,10 @@
 		type DeviceBinding,
 	} from '$lib/fleet/parallax.svelte';
 
-	// Read config from URL params: ?server=ws://...&transport=sse
-	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-	const serverParam = params?.get('server') || undefined;
-	const transportParam = (params?.get('transport') as Transport) || undefined;
-	const store = new AdminStore(serverParam, transportParam);
+	// No URL params needed — admin uses REST direct to each discovered device.
+	// Device list comes from /api/devices on the Pi serving this page; admin
+	// fetches each device's /api/status + PATCH /api/config directly.
+	const store = new RestAdminStore();
 	onDestroy(() => store.destroy());
 
 	// Selection state
@@ -207,7 +206,7 @@
 		</div>
 		<div class="header-right">
 			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
-				{store.connectionState === 'connected' ? store.transportType.toUpperCase() : 'Disconnected'}
+				{store.connectionState === 'connected' ? 'REST' : store.connectionState}
 			</span>
 			<span class="device-count">
 				{onlineCount}/{totalCount} online
