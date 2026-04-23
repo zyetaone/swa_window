@@ -288,13 +288,17 @@ export function applyConfigPatch(path: string, value: unknown): boolean {
 	if (!root) return false;
 
 	crdt.set(path, value);
-
-	if (ns === 'camera' && rest.startsWith('parallax.role')) {
-		setByPath(root as unknown as Record<string, unknown>, 'parallax.role', value);
-		setParallaxRole(value as DeviceRole);
-		return true;
-	}
 	return setByPath(root as unknown as Record<string, unknown>, rest, value);
+}
+
+/**
+ * Syncs parallax role across CRDT, local state, and heading-offset side-effect.
+ * Called directly by fleet role_assign so the heading-offset propagates atomically.
+ */
+export function setParallaxRoleWithSync(role: DeviceRole): void {
+	crdt.set('camera.parallax.role', role);
+	setByPath(camera as unknown as Record<string, unknown>, 'parallax.role', role);
+	setParallaxRole(role);
 }
 
 /**

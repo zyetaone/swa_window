@@ -8,6 +8,7 @@ import { LOCATION_IDS } from '$lib/locations';
 import { createFleetTransport, type FleetTransport, type TransportState } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
+import { setParallaxRoleWithSync } from '$lib/model/config-tree.svelte';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -196,7 +197,7 @@ export class DisplayWsClient {
 				break;
 			case 'role_assign':
 				// Applied via path patches so all routing converges.
-				this.#model.applyConfigPatch?.('camera.parallax.role', msg.role);
+				setParallaxRoleWithSync(msg.role);
 				if (msg.headingOffsetDeg !== undefined) {
 					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);
 				}
