@@ -1,15 +1,17 @@
 /**
- * Custom Bun server — SvelteKit app + WebSocket fleet hub on one port.
+ * Custom Bun server — wraps the built SvelteKit handler and kicks off
+ * the LAN mDNS peer advertiser.
  *
- * Replaces the separate server/ package. Run with: bun run server.ts
- * Or in production: bun run build && bun run server.ts
+ * Post-WS: there's no custom transport layer here anymore. Admin talks
+ * to each device's REST endpoints (/api/config, /api/status, /api/command)
+ * over LAN, and each device's browser subscribes to its own SvelteKit-
+ * served /api/events SSE route. All of that runs through `svelteHandler`
+ * — this entry just keeps `startLanProxy()` alive so mDNS discovery works.
  *
- * WebSocket: ws://host:PORT/ws?role=display|admin
- * SvelteKit: everything else (handled by adapter-node)
+ * Run: bun run build && bun run server.ts
  */
 
-import { fleet } from './src/lib/fleet/hub';
-import { startLanProxy } from './src/lib/fleet/lan-proxy.server';
+import { startLanProxy } from './src/lib/fleet/lan-peers.server';
 
 const PORT = parseInt(process.env.PORT || '5173', 10);
 
@@ -20,79 +22,18 @@ const PORT = parseInt(process.env.PORT || '5173', 10);
 if (process.env.AERO_DISABLE_LAN_PROXY !== '1') {
 	try {
 		startLanProxy();
-		console.log('[server] LAN bundle proxy started (mDNS _aero-bundle._tcp.local)');
+		console.log('[server] LAN peer discovery started (mDNS _aero-bundle._tcp.local)');
 	} catch (e) {
-		console.warn('[server] LAN bundle proxy failed to start:', (e as Error).message);
+		console.warn('[server] LAN peer discovery failed to start:', (e as Error).message);
 	}
 }
 
-// In production, import the built SvelteKit handler
-let svelteHandler: ((req: Request) => Promise<Response>) | null = null;
-try {
-	const mod = await import('./build/handler.js');
-	svelteHandler = mod.handler;
-	console.log('[server] SvelteKit handler loaded from build/');
-} catch {
-	console.log('[server] No build/ found — WebSocket-only mode (run vite dev separately)');
-}
+const mod = await import('./build/handler.js');
+const svelteHandler: (req: Request) => Promise<Response> = mod.handler;
 
-interface WsData { role: 'display' | 'admin' }
-
-Bun.serve<WsData>({
+Bun.serve({
 	port: PORT,
-	async fetch(req, server) {
-		const url = new URL(req.url);
-
-		// WebSocket upgrade
-		if (url.pathname === '/ws') {
-			const role = url.searchParams.get('role') === 'admin' ? 'admin' : 'display';
-			const upgraded = server.upgrade(req, { data: { role } as WsData });
-			if (upgraded) return undefined as unknown as Response;
-			return new Response('WebSocket upgrade failed', { status: 400 });
-		}
-
-		// SSE endpoint for remote admin
-		if (url.pathname === '/api/events') {
-			const clientId = crypto.randomUUID();
-			const stream = new ReadableStream({
-				type: 'direct',
-				pull(controller: ReadableStreamDirectController) {
-					fleet.addSseClient(clientId, controller);
-					const keepAlive = setInterval(() => {
-						try { controller.write(': keepalive\n\n'); }
-						catch { clearInterval(keepAlive); }
-					}, 30_000);
-					return new Promise<void>(() => {});
-				},
-				cancel() { fleet.removeSseClient(clientId); },
-			} as unknown as UnderlyingSource);
-
-			return new Response(stream, {
-				headers: {
-					'Content-Type': 'text/event-stream',
-					'Cache-Control': 'no-cache',
-					'Connection': 'keep-alive',
-					'Access-Control-Allow-Origin': '*',
-				},
-			});
-		}
-
-		// SvelteKit handles everything else
-		if (svelteHandler) {
-			return svelteHandler(req);
-		}
-
-		return new Response('Not found (no build)', { status: 404 });
-	},
-	websocket: {
-		open(ws) { fleet.onOpen(ws); },
-		message(ws, message) {
-			const raw = typeof message === 'string' ? message : new TextDecoder().decode(message);
-			fleet.onMessage(ws, raw);
-		},
-		close(ws) { fleet.onClose(ws); },
-	},
+	fetch(req) { return svelteHandler(req); },
 });
 
 console.log(`[server] Aero Window running on http://localhost:${PORT}`);
-console.log(`[server] WebSocket: ws://localhost:${PORT}/ws`);
