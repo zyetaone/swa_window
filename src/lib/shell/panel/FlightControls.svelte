@@ -19,7 +19,7 @@
 		step={0.1}
 		value={model.flight.flightSpeed}
 		formatValue={(v) => v.toFixed(1) + 'x'}
-		oninput={(e) => model.applyPatch({ flightSpeed: parseFloat(e.currentTarget.value) })}
+		oninput={(e) => model.setFlightSpeed(parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="altitude"

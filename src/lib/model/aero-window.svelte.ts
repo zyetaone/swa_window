@@ -208,6 +208,17 @@ export class AeroWindow {
 		this.onUserInteraction('time');
 	}
 
+	setWeather(w: WeatherType): void {
+		if (!isValidWeather(w)) return;
+		this.weather = w;
+		this.#syncWeatherConfig();
+		this.onUserInteraction('atmosphere');
+	}
+
+	setFlightSpeed(n: number): void {
+		this.flight.flightSpeed = clamp(n, 0.1, 5);
+	}
+
 	updateTimeFromSystem(): void {
 		const now = new Date();
 		this.timeOfDay = now.getHours() + now.getMinutes() / 60;
@@ -246,25 +257,38 @@ export class AeroWindow {
 		return _applyConfigPatch(path, value);
 	}
 
+	/**
+	 * Flat-DTO adapter. NOT a parallel writer — every field delegates to a
+	 * typed setter (for behaviours that need side effects like bounds clamp
+	 * or user-interaction tracking) or to applyConfigPatch (for pure config
+	 * tree values). Two callers remain: (a) director returns AtmospherePatch
+	 * through this adapter; (b) fleet v1 `set_config` handler until admin
+	 * panel migrates to v2 path patches.
+	 *
+	 * Direct panel callers (WeatherPicker, TimeControl, FlightControls)
+	 * should use the typed setters instead.
+	 */
 	applyPatch(patch: Partial<AeroWindowPatch>): void {
-		if (patch.altitude !== undefined) this.setAltitude(patch.altitude);
-		if (patch.timeOfDay !== undefined) this.setTime(patch.timeOfDay);
-		if (patch.weather !== undefined && isValidWeather(patch.weather)) {
-			this.weather = patch.weather;
-			this.#syncWeatherConfig();
-			this.onUserInteraction('atmosphere');
+		if (patch.altitude !== undefined)            this.setAltitude(patch.altitude);
+		if (patch.timeOfDay !== undefined)           this.setTime(patch.timeOfDay);
+		if (patch.weather !== undefined)             this.setWeather(patch.weather as WeatherType);
+		if (patch.flightSpeed !== undefined)         this.setFlightSpeed(patch.flightSpeed);
+		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') {
+			this.syncToRealTime = patch.syncToRealTime;
 		}
 		if (patch.cloudDensity !== undefined) {
-			this.config.atmosphere.clouds.density = clamp(patch.cloudDensity, 0, 1);
+			this.applyConfigPatch('atmosphere.clouds.density', clamp(patch.cloudDensity, 0, 1));
 			this.onUserInteraction('atmosphere');
 		}
-		if (patch.cloudSpeed !== undefined) this.config.atmosphere.clouds.speed = clamp(patch.cloudSpeed, 0, 2);
-		if (patch.haze !== undefined) this.config.atmosphere.haze.amount = clamp(patch.haze, 0, 0.2);
-		if (patch.nightLightIntensity !== undefined) this.config.world.nightLightIntensity = clamp(patch.nightLightIntensity, 0, 5);
-		if (patch.flightSpeed !== undefined) this.flight.flightSpeed = clamp(patch.flightSpeed, 0.1, 5);
-		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') this.syncToRealTime = patch.syncToRealTime;
-		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') this.config.world.showClouds = patch.showClouds;
-		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') this.config.world.buildingsEnabled = patch.showBuildings;
+		if (patch.cloudSpeed !== undefined)          this.applyConfigPatch('atmosphere.clouds.speed', clamp(patch.cloudSpeed, 0, 2));
+		if (patch.haze !== undefined)                this.applyConfigPatch('atmosphere.haze.amount', clamp(patch.haze, 0, 0.2));
+		if (patch.nightLightIntensity !== undefined) this.applyConfigPatch('world.nightLightIntensity', clamp(patch.nightLightIntensity, 0, 5));
+		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') {
+			this.applyConfigPatch('world.showClouds', patch.showClouds);
+		}
+		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') {
+			this.applyConfigPatch('world.buildingsEnabled', patch.showBuildings);
+		}
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {

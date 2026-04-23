@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
-	 * WeatherPicker — weather-type button grid. Goes through applyPatch so
-	 * the user-override timer + WeatherConfig sync helper fire correctly.
+	 * WeatherPicker — weather-type button grid. Goes through the typed
+	 * setter so the user-override timer + WeatherConfig sync helper fire
+	 * correctly.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { WEATHER_TYPES } from '$lib/types';
@@ -15,7 +16,7 @@
 		{#each WEATHER_TYPES as w (w)}
 			<button
 				class={['weather-btn', model.weather === w && 'active']}
-				onclick={() => model.applyPatch({ weather: w })}
+				onclick={() => model.setWeather(w)}
 			>
 				{w[0].toUpperCase() + w.slice(1)}
 			</button>

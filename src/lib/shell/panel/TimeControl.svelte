@@ -16,7 +16,7 @@
 	<Toggle
 		label="Real Time"
 		checked={model.syncToRealTime}
-		onchange={() => model.applyPatch({ syncToRealTime: !model.syncToRealTime })}
+		onchange={() => { model.syncToRealTime = !model.syncToRealTime; }}
 	/>
 
 	{#if !model.syncToRealTime}
