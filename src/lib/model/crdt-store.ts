@@ -24,6 +24,7 @@ export interface CRDTPatch {
 export interface CRDTEntry {
 	value: unknown;
 	timestamp: number;
+	sourceId: string;
 }
 
 export class CRDTStore {
@@ -38,26 +39,34 @@ export class CRDTStore {
 		return this.#timestamps.get(path);
 	}
 
+	/**
+	 * Local write — stamps with Date.now() (wall-clock) and the current
+	 * device id. Wall-clock is comparable across devices; NTP drift is
+	 * an accepted risk. For LWW on concurrent admin pushes, this is the
+	 * right primitive — lamport/vector clocks would be overkill.
+	 */
 	set(path: string, value: unknown): boolean {
-		const now = performance.now();
-		const existing = this.#timestamps.get(path);
-		if (existing && existing.timestamp > now) {
-			this.#timestamps.set(path, { value: existing.value, timestamp: now });
-		} else {
-			this.#timestamps.set(path, { value, timestamp: now });
-		}
+		this.#timestamps.set(path, { value, timestamp: Date.now(), sourceId: _deviceId });
 		setByPath(this.#root, path, value);
 		return true;
 	}
 
+	/**
+	 * Tiebreak on equal timestamps by sourceId (lexicographic). Ensures
+	 * two devices receiving the same pair of concurrent writes in
+	 * different orders converge to the same winner.
+	 */
 	canMerge(patch: CRDTPatch): boolean {
 		const local = this.#timestamps.get(patch.path);
-		return local ? patch.timestamp > local.timestamp : true;
+		if (!local) return true;
+		if (patch.timestamp > local.timestamp) return true;
+		if (patch.timestamp < local.timestamp) return false;
+		return patch.sourceId > local.sourceId;
 	}
 
 	merge(patch: CRDTPatch): boolean {
 		if (!this.canMerge(patch)) return false;
-		this.#timestamps.set(patch.path, { value: patch.value, timestamp: patch.timestamp });
+		this.#timestamps.set(patch.path, { value: patch.value, timestamp: patch.timestamp, sourceId: patch.sourceId });
 		setByPath(this.#root, patch.path, patch.value);
 		return true;
 	}

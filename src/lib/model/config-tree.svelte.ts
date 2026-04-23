@@ -302,20 +302,34 @@ export function setParallaxRoleWithSync(role: DeviceRole): void {
 }
 
 /**
- * Apply a fleet-sourced CRDT patch (from a remote device).
- * Checks timestamp before applying. Returns true if patch was applied.
+ * Apply a fleet-sourced patch with LWW-CRDT semantics. Routes through
+ * crdt.merge — incoming patch only applies if its timestamp beats the
+ * local last-writer for this path (tiebreak by sourceId). Fleet v2
+ * message handler calls this when the incoming message carries timestamp
+ * + sourceId; absent either field, the caller should fall through to
+ * local applyConfigPatch (which stamps fresh locally).
  */
+export function applyRemoteConfigPatch(
+	path: string,
+	value: unknown,
+	timestamp: number,
+	sourceId: string,
+): boolean {
+	return crdt.merge({ path, value, timestamp, sourceId });
+}
+
+/** @deprecated Use applyRemoteConfigPatch — same behaviour, named arguments. */
 export function applyCRDTPatch(patch: { path: string; value: unknown; timestamp: number; sourceId: string }): boolean {
 	return crdt.merge(patch);
 }
 
-/** Snapshot of all CRDT timestamps (for persistence). */
+/** Snapshot of all CRDT timestamps (for persistence + reconcile-on-reconnect). */
 export function crdtSnapshot() {
 	return crdt.snapshot();
 }
 
 /** Restore CRDT state from a persisted snapshot. */
-export function crdtRestore(snap: Record<string, { value: unknown; timestamp: number }>): void {
+export function crdtRestore(snap: Record<string, { value: unknown; timestamp: number; sourceId: string }>): void {
 	crdt.restore(snap);
 }
 

@@ -154,15 +154,22 @@ export type ConfigLayer = 'world' | 'atmosphere' | 'camera' | 'director' | 'shel
 export type ServerMessageV2 =
 	/**
 	 * Path-keyed mutation of a RootConfig field. Dispatched through
-	 * AeroWindow.config.applyPatch(path, value). Paths look like
+	 * AeroWindow.applyConfigPatch(path, value). Paths look like
 	 * 'atmosphere.clouds.density' or 'shell.windowFrame'.
+	 *
+	 * When `timestamp` + `sourceId` are present, the receiver routes through
+	 * CRDT merge — only applies if the incoming write beats the local last-
+	 * writer per path (tiebreak by sourceId). Lets concurrent admin/user
+	 * writes on different fields both survive. Omitted fields fall back to
+	 * local-semantics applyConfigPatch (legacy + tests).
 	 */
-	| { v: 2; type: 'config_patch'; path: string; value: unknown }
+	| { v: 2; type: 'config_patch'; path: string; value: unknown; timestamp?: number; sourceId?: string }
 	/**
 	 * Bulk replace one layer's config (e.g. admin loads a named preset).
-	 * Internally calls every leaf setPath on that layer.
+	 * Internally calls every leaf setPath on that layer. CRDT-timestamp
+	 * fields are optional (same semantics as config_patch).
 	 */
-	| { v: 2; type: 'config_replace'; layer: ConfigLayer; snapshot: Record<string, unknown> }
+	| { v: 2; type: 'config_replace'; layer: ConfigLayer; snapshot: Record<string, unknown>; timestamp?: number; sourceId?: string }
 	/**
 	 * Multi-Pi parallax role assignment. Device uses this to pick its
 	 * per-frame yaw offset. Sent to a specific deviceId, not broadcast.

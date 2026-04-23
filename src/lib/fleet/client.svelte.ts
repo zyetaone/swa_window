@@ -8,7 +8,8 @@ import { LOCATION_IDS } from '$lib/locations';
 import { createFleetTransport, type FleetTransport, type TransportState } from './transport.svelte';
 import { resolveFleetUrl } from './url';
 import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
-import { setParallaxRoleWithSync } from '$lib/model/config-tree.svelte';
+import { setParallaxRoleWithSync, applyRemoteConfigPatch } from '$lib/model/config-tree.svelte';
+import { setCRDTDeviceId } from '$lib/model/crdt-store';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -65,6 +66,9 @@ export class DisplayWsClient {
 	constructor(model: FleetClientModel, serverUrl?: string) {
 		this.#model = model;
 		this.#deviceId = getDeviceId();
+		// Register the deviceId with the CRDT store so local writes stamp
+		// with the right sourceId for cross-device LWW tiebreaks.
+		setCRDTDeviceId(this.#deviceId);
 		this.#serverUrl = serverUrl || resolveFleetUrl('display').wsUrl;
 		this.connect();
 	}
@@ -183,15 +187,28 @@ export class DisplayWsClient {
 		switch (msg.type) {
 			case 'config_patch':
 				if (typeof msg.path === 'string') {
-					this.#model.applyConfigPatch?.(msg.path, msg.value);
+					// CRDT-gated when the sender stamps {timestamp, sourceId}.
+					// Missing either field → fall back to local-semantics
+					// applyConfigPatch (stamps fresh here — legacy senders).
+					if (typeof msg.timestamp === 'number' && typeof msg.sourceId === 'string') {
+						applyRemoteConfigPatch(msg.path, msg.value, msg.timestamp, msg.sourceId);
+					} else {
+						this.#model.applyConfigPatch?.(msg.path, msg.value);
+					}
 				}
 				break;
 			case 'config_replace':
 				// Apply every leaf of the snapshot as a targeted patch.
-				// Keeps one code path (applyConfigPatch) authoritative.
+				// Same CRDT/legacy split per leaf.
 				if (msg.snapshot && typeof msg.snapshot === 'object') {
+					const canMerge = typeof msg.timestamp === 'number' && typeof msg.sourceId === 'string';
 					for (const [key, value] of Object.entries(msg.snapshot)) {
-						this.#model.applyConfigPatch?.(`${msg.layer}.${key}`, value);
+						const path = `${msg.layer}.${key}`;
+						if (canMerge) {
+							applyRemoteConfigPatch(path, value, msg.timestamp!, msg.sourceId!);
+						} else {
+							this.#model.applyConfigPatch?.(path, value);
+						}
 					}
 				}
 				break;
