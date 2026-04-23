@@ -1,15 +1,27 @@
 /**
- * WebSocket Client — connects display to fleet management server
+ * Device fleet client — SSE subscriber + REST heartbeat poster.
+ *
+ * The Pi's browser opens a long-lived EventSource to its OWN SvelteKit
+ * server at `/api/events`. Admin PATCHes the server's /api/config, the
+ * server's in-process sse-bus publishes the event, the stream forwards
+ * it here, and we apply it to `$state` — same reactive graph that local
+ * sliders write to.
+ *
+ * Heartbeat: browser POSTs {fps, location, mode, uptime} to /api/status
+ * every 5 s. Admin dashboard polls that endpoint to populate its table.
+ *
+ * Replaces the old DisplayWsClient (WS subscription to a central broker)
+ * one-for-one — same exports, same `createWsClient(model)` factory, same
+ * `publishV2` for Phase 7 leader broadcasts.
  */
 
-import type { ServerMessage, ServerMessageV2, DisplayMessage, DeviceCaps, FleetClientModel } from '$lib/fleet/protocol';
-import { isV2 } from '$lib/fleet/protocol';
+import type { FleetClientModel } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
-import { createFleetTransport, type FleetTransport, type TransportState } from './transport.svelte';
-import { resolveFleetUrl } from './url';
-import { safeParse, isValidWeather, isValidDisplayMode } from '$lib/types';
+import { isValidWeather, isValidDisplayMode } from '$lib/types';
 import { setParallaxRoleWithSync, applyRemoteConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
+
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -27,76 +39,76 @@ function getDeviceId(): string {
 	return id;
 }
 
-function getDeviceCaps(): DeviceCaps {
-	if (typeof document === 'undefined') return {} as DeviceCaps;
-	const canvas = document.createElement('canvas');
-	const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-	const renderer = gl
-		? (gl.getExtension('WEBGL_debug_renderer_info')
-			? gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info')!.UNMASKED_RENDERER_WEBGL)
-			: 'Unknown')
-		: 'No WebGL';
+interface ConfigPatchEvent {
+	path: string;
+	value: unknown;
+	timestamp?: number;
+	sourceId?: string;
+}
 
-	return {
-		webglVersion: gl instanceof WebGL2RenderingContext ? 2 : 1,
-		supportsHDR: gl ? !!gl.getExtension('EXT_color_buffer_float') : false,
-		screenWidth: window.screen.width,
-		screenHeight: window.screen.height,
-		gpuRenderer: renderer,
-		userAgent: navigator.userAgent,
-	};
+interface CommandEvent {
+	type: string;
+	[k: string]: unknown;
 }
 
 export class DisplayWsClient {
-	#transport: FleetTransport | null = null;
 	#model: FleetClientModel;
 	#deviceId: string;
-	#serverUrl: string;
+	#eventSource: EventSource | null = null;
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
 	#bootTime = Date.now();
 	#destroyed = false;
+	#state: ConnectionState = $state('disconnected');
 
-	/** Pass-through of the underlying transport's reactive state. */
-	get connectionState(): TransportState {
-		return this.#transport?.state ?? 'disconnected';
+	/** Reactive connection state — mirrors old WS transport's `state`. */
+	get connectionState(): ConnectionState {
+		return this.#state;
 	}
 
 	get isDestroyed(): boolean { return this.#destroyed; }
 
-	constructor(model: FleetClientModel, serverUrl?: string) {
+	constructor(model: FleetClientModel) {
 		this.#model = model;
 		this.#deviceId = getDeviceId();
 		// Register the deviceId with the CRDT store so local writes stamp
 		// with the right sourceId for cross-device LWW tiebreaks.
 		setCRDTDeviceId(this.#deviceId);
-		this.#serverUrl = serverUrl || resolveFleetUrl('display').wsUrl;
 		this.connect();
+		this.#startStatusUpdates();
 	}
 
 	connect(): void {
 		if (this.#destroyed) return;
-		this.#transport = createFleetTransport({
-			url: this.#serverUrl,
-			autoReconnect: true,
-			onMessage: (data) => this.#handleMessage(data),
+		this.#state = 'connecting';
+		this.#eventSource = new EventSource('/api/events');
+
+		this.#eventSource.addEventListener('open', () => {
+			this.#state = 'connected';
 		});
-		// React to transport state transitions — register + status updates
-		// on connect, cleanup on disconnect. Replaces the previous
-		// onOpen / onClose callbacks that BaseTransport used to expose.
-		this.#transport.subscribe((s) => {
-			if (s === 'connected') {
-				this.#sendRegister();
-				this.#startStatusUpdates();
-			} else if (s === 'disconnected') {
-				this.#stopStatusUpdates();
-			}
+
+		this.#eventSource.addEventListener('connected', () => {
+			this.#state = 'connected';
+		});
+
+		this.#eventSource.addEventListener('error', () => {
+			// EventSource auto-reconnects; we just reflect the state.
+			this.#state = this.#destroyed ? 'disconnected' : 'retrying';
+		});
+
+		this.#eventSource.addEventListener('config_patch', (ev) => {
+			this.#handleConfigPatch(ev as MessageEvent);
+		});
+
+		this.#eventSource.addEventListener('command', (ev) => {
+			this.#handleCommand(ev as MessageEvent);
 		});
 	}
 
 	disconnect(): void {
 		this.#stopStatusUpdates();
-		this.#transport?.close();
-		this.#transport = null;
+		this.#eventSource?.close();
+		this.#eventSource = null;
+		this.#state = 'disconnected';
 	}
 
 	destroy(): void {
@@ -104,42 +116,38 @@ export class DisplayWsClient {
 		this.disconnect();
 	}
 
-	#send(msg: DisplayMessage | { v: 2; type: string; [k: string]: unknown }): void {
-		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
-		this.#transport?.send(JSON.stringify(msg));
-	}
-
 	/**
-	 * Phase 7 — publish a v2 message from display to server. Used by
-	 * AeroWindow.#fleetBroadcast so the panorama leader can emit
-	 * `director_decision` frames the server fans out to followers.
+	 * Phase 7 leader broadcast. Was `server.send({...})` over WS; in REST
+	 * mode the leader POSTs a `director_decision` command to each
+	 * discovered follower directly. Deferred to Phase D — for now, logs
+	 * a warning and drops the message so admin-pushed single-device
+	 * flows still work.
 	 */
 	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {
-		this.#send(msg);
-	}
-
-	#sendRegister(): void {
-		const params = new URLSearchParams(window.location.search);
-		const displayName = params.get('display');
-		this.#send({
-			type: 'register',
-			deviceId: this.#deviceId,
-			hostname: displayName || this.#deviceId,
-			capabilities: getDeviceCaps(),
-		});
+		console.warn('[fleet] publishV2 not wired in REST mode yet:', msg.type);
 	}
 
 	#startStatusUpdates(): void {
 		this.#stopStatusUpdates();
-		this.#statusInterval = setInterval(() => {
-			this.#send({
-				type: 'status',
-				fps: this.#model.measuredFps,
-				mode: this.#model.displayMode,
-				location: this.#model.location,
-				uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
-			});
-		}, 5000);
+		const send = () => {
+			if (this.#destroyed) return;
+			fetch('/api/status', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					deviceId: this.#deviceId,
+					hostname: this.#deviceId,
+					fps: this.#model.measuredFps,
+					mode: this.#model.displayMode,
+					location: this.#model.location,
+					weather: this.#model.weather,
+					uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
+					lastSeen: Date.now(),
+				}),
+			}).catch(() => { /* heartbeat best-effort — don't pollute console */ });
+		};
+		send();
+		this.#statusInterval = setInterval(send, 5000);
 	}
 
 	#stopStatusUpdates(): void {
@@ -149,98 +157,70 @@ export class DisplayWsClient {
 		}
 	}
 
-	#handleMessage(raw: string): void {
-		const parsed = safeParse<ServerMessage | ServerMessageV2>(raw);
-		if (!parsed) return;
+	#handleConfigPatch(ev: MessageEvent): void {
+		let body: ConfigPatchEvent;
+		try { body = JSON.parse(ev.data); }
+		catch { return; }
 
-		this.#model.telemetry?.recordEvent('fleet_in', {
-			type: (parsed as { type?: string }).type,
-			v: (parsed as { v?: number }).v ?? 1,
-		});
+		this.#model.telemetry?.recordEvent('fleet_in', { type: 'config_patch' });
 
-		// v2 dispatcher — additive. v2 carries an explicit `v: 2` discriminator;
-		// v1 messages never do, so the routing is unambiguous.
-		if (isV2(parsed)) {
-			this.#handleV2(parsed as ServerMessageV2);
-			return;
-		}
+		if (typeof body.path !== 'string') return;
 
-		const msg = parsed as ServerMessage;
-		switch (msg.type) {
-			case 'ping': this.#send({ type: 'pong' }); break;
-			case 'set_scene':
-				if (LOCATION_IDS.has(msg.location)) {
-					this.#model.applyScene(msg.location, isValidWeather(msg.weather) ? msg.weather : undefined);
-				}
-				break;
-			case 'set_mode':
-				if (isValidDisplayMode(msg.mode)) this.#model.setDisplayMode(msg.mode, msg.payload);
-				break;
-			case 'set_config':
-				if (msg.patch && typeof msg.patch === 'object') this.#model.applyPatch(msg.patch);
-				break;
+		if (typeof body.timestamp === 'number' && typeof body.sourceId === 'string') {
+			applyRemoteConfigPatch(body.path, body.value, body.timestamp, body.sourceId);
+		} else {
+			this.#model.applyConfigPatch?.(body.path, body.value);
 		}
 	}
 
-	/** v2 handler — path patches + parallax role + director decisions. */
-	#handleV2(msg: ServerMessageV2): void {
+	#handleCommand(ev: MessageEvent): void {
+		let msg: CommandEvent;
+		try { msg = JSON.parse(ev.data); }
+		catch { return; }
+
+		this.#model.telemetry?.recordEvent('fleet_in', { type: msg.type });
+
 		switch (msg.type) {
-			case 'config_patch':
-				if (typeof msg.path === 'string') {
-					// CRDT-gated when the sender stamps {timestamp, sourceId}.
-					// Missing either field → fall back to local-semantics
-					// applyConfigPatch (stamps fresh here — legacy senders).
-					if (typeof msg.timestamp === 'number' && typeof msg.sourceId === 'string') {
-						applyRemoteConfigPatch(msg.path, msg.value, msg.timestamp, msg.sourceId);
-					} else {
-						this.#model.applyConfigPatch?.(msg.path, msg.value);
-					}
+			case 'set_scene': {
+				const location = msg.location as string;
+				const weather = msg.weather;
+				if (LOCATION_IDS.has(location as never)) {
+					this.#model.applyScene(
+						location as never,
+						isValidWeather(weather) ? (weather as never) : undefined,
+					);
 				}
 				break;
-			case 'config_replace':
-				// Apply every leaf of the snapshot as a targeted patch.
-				// Same CRDT/legacy split per leaf.
-				if (msg.snapshot && typeof msg.snapshot === 'object') {
-					const canMerge = typeof msg.timestamp === 'number' && typeof msg.sourceId === 'string';
-					for (const [key, value] of Object.entries(msg.snapshot)) {
-						const path = `${msg.layer}.${key}`;
-						if (canMerge) {
-							applyRemoteConfigPatch(path, value, msg.timestamp!, msg.sourceId!);
-						} else {
-							this.#model.applyConfigPatch?.(path, value);
-						}
-					}
-				}
+			}
+			case 'set_mode': {
+				const mode = msg.mode;
+				if (isValidDisplayMode(mode)) this.#model.setDisplayMode(mode, msg.payload as string | undefined);
 				break;
-			case 'role_assign':
-				// Applied via path patches so all routing converges.
-				setParallaxRoleWithSync(msg.role);
-				if (msg.headingOffsetDeg !== undefined) {
+			}
+			case 'role_assign': {
+				const role = msg.role;
+				if (typeof role === 'string') {
+					setParallaxRoleWithSync(role as never);
+				}
+				if (typeof msg.headingOffsetDeg === 'number') {
 					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);
 				}
-				if (msg.fovDeg !== undefined) {
+				if (typeof msg.fovDeg === 'number') {
 					this.#model.applyConfigPatch?.('camera.parallax.fovDeg', msg.fovDeg);
 				}
 				break;
+			}
 			case 'director_decision': {
-				// Phase 7 — schedule the flyTo at transitionAtMs wall-clock so
-				// all three Pis in a panorama flip simultaneously even with
-				// ~50-200ms NTP drift between devices. If the message arrived
-				// late (transitionAtMs already past), apply immediately and log.
-				if (!LOCATION_IDS.has(msg.locationId)) break;
-				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
-				const now = Date.now();
-				const delay = msg.transitionAtMs - now;
+				const loc = msg.locationId as string;
+				if (!LOCATION_IDS.has(loc as never)) break;
+				const weather = isValidWeather(msg.weather) ? (msg.weather as never) : undefined;
+				const transitionAtMs = typeof msg.transitionAtMs === 'number' ? msg.transitionAtMs : Date.now();
+				const delay = transitionAtMs - Date.now();
 				if (delay < -50) {
-					console.warn(
-						`[fleet v2] director_decision arrived ${-delay}ms late; applying immediately`,
-					);
-					this.#model.applyScene(msg.locationId, weather);
+					console.warn(`[fleet] director_decision arrived ${-delay}ms late; applying immediately`);
+					this.#model.applyScene(loc as never, weather);
 				} else {
-					setTimeout(
-						() => this.#model.applyScene(msg.locationId, weather),
-						Math.max(0, delay),
-					);
+					setTimeout(() => this.#model.applyScene(loc as never, weather), Math.max(0, delay));
 				}
 				break;
 			}
@@ -248,9 +228,7 @@ export class DisplayWsClient {
 	}
 }
 
+/** Factory — same signature as the old WS client so consumers don't change. */
 export function createWsClient(model: FleetClientModel): DisplayWsClient {
-	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-	const override = params.get('server') || (import.meta as any).env?.VITE_FLEET_SERVER;
-	const { wsUrl } = resolveFleetUrl('display', override);
-	return new DisplayWsClient(model, wsUrl);
+	return new DisplayWsClient(model);
 }
