@@ -58,3 +58,16 @@ export const VIIRS_SMOOTHSTEP_CEIL = 0.9;
  * keeps them reading as "lit terrain" on top of the CartoDB dark base.
  */
 export const VIIRS_MAX_ALPHA = 0.5;
+
+/**
+ * CartoDB dark-overlay gate. Linear lerp from nightFactor=0.01 meant
+ * morning terrain (nf ~0.25 at 6:30 AM Dubai) got ~15% dark wash, which
+ * leaves fresh EOX imagery looking pre-dimmed. Floor=0.45 keeps visible
+ * morning (nf < 0.45) fully clean; atmospheric darkening fades in
+ * through late-dusk/early-night before the city lights do.
+ *
+ * Intentionally gentler than the VIIRS curve — sky darkening naturally
+ * precedes visible city lights by 30+ minutes.
+ */
+export const NIGHT_MAP_SMOOTHSTEP_FLOOR = 0.45;
+export const NIGHT_MAP_SMOOTHSTEP_CEIL = 0.9;

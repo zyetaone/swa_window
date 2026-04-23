@@ -10,7 +10,13 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { syncWorldQuality, world } from '$lib/model/config-tree.svelte';
 type WorldConfig = typeof world;
 import { normalizeHeading, shortestAngleDelta, lerp, smoothstep } from '$lib/utils';
-import { VIIRS_SMOOTHSTEP_FLOOR, VIIRS_SMOOTHSTEP_CEIL, VIIRS_MAX_ALPHA } from '$lib/night';
+import {
+	VIIRS_SMOOTHSTEP_FLOOR,
+	VIIRS_SMOOTHSTEP_CEIL,
+	VIIRS_MAX_ALPHA,
+	NIGHT_MAP_SMOOTHSTEP_FLOOR,
+	NIGHT_MAP_SMOOTHSTEP_CEIL,
+} from '$lib/night';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -456,25 +462,30 @@ export class CesiumManager {
 		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
 		this.lastNightFactor = nf;
 
-		// Base layer: dim + desaturate as night falls so the EOX day vibrance
-		// doesn't leak through the CartoDB overlay's alpha gap. Without this
-		// step the shader's additive-light pass (lightMask 0.12–0.5) catches
-		// faint terrain pixels and amber-boosts them, making night look like
-		// an orange haze rather than actual darkness.
+		// Both base-layer tonemap AND CartoDB overlay use the same night-map
+		// smoothstep curve. Previously linear lerp left morning (nf ~0.25)
+		// with 79% base brightness AND ~15% dark overlay — EOX imagery
+		// looked pre-dimmed before sunrise finished. Gated curve keeps
+		// visible morning at full vibrance; darkening fades in through
+		// late dusk before city lights appear (see $lib/night).
+		const nightEase = smoothstep(
+			(nf - NIGHT_MAP_SMOOTHSTEP_FLOOR) / (NIGHT_MAP_SMOOTHSTEP_CEIL - NIGHT_MAP_SMOOTHSTEP_FLOOR),
+		);
+
 		const w = this.model.config.world;
 		if (this.baseLayer) {
-			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, nf);
-			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, nf);
+			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, nightEase);
+			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, nightEase);
 		}
 
 		if (!this.nightLayer) return;
-		this.nightLayer.show = show || firstNight;
-		const alpha = lerp(0, w.nightAlpha, nf) * scale;
+		this.nightLayer.show = (show || firstNight) && nightEase > 0.001;
+		const alpha = w.nightAlpha * nightEase * scale;
 		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
 			this.lastNightAlpha = alpha;
 			this.nightLayer.alpha = alpha;
-			this.nightLayer.brightness = lerp(1, w.nightBrightness, nf) * scale;
-			this.nightLayer.contrast = lerp(1, w.nightContrast, nf);
+			this.nightLayer.brightness = lerp(1, w.nightBrightness, nightEase) * scale;
+			this.nightLayer.contrast = lerp(1, w.nightContrast, nightEase);
 		}
 
 		// VIIRS lights fade in at night. Cap at 0.5 (was 0.9) so the amber
