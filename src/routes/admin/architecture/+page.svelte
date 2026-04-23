@@ -19,22 +19,21 @@
 			<ul>
 				<li>
 					<code>CLAUDE.md</code>
-					— invariants (Cesium isolation, flat DTO boundary, <code>untrack()</code> in hot paths), the tick
-					pipeline, and the full phase history.
+					— invariants, tick pipeline, phase history.
 				</li>
 				<li>
-					<code>docs/reference/</code>
-					— integration recipes. Notably
-					<code>takram-atmosphere-recipe.md</code>
-					(archived but rebuildable) and
-					<code>cesium-osm-buildings-styling.md</code>.
+					<code>docs/reference/</code> — integration recipes (takram atmosphere, Cesium OSM styling).
 				</li>
 				<li>
-					<code>docs/CODEMAPS/</code> — per-concern maps: scene, content-api, security, files.
+					<code>docs/CODEMAPS/</code> — per-concern maps.
 				</li>
 				<li>
 					<code>docs/ADR-001-offline-tile-architecture.md</code> + <code>ADR-002-zero-cost-caching-strategy.md</code>
-					— the decisions behind the Pi-5-fleet offline-tile pipeline.
+					— Pi-5-fleet offline-tile pipeline decisions.
+				</li>
+				<li>
+					<code>graphify-out/graph.html</code>
+					— interactive force-directed code graph (run <code>graphify src</code> to refresh).
 				</li>
 			</ul>
 		</section>
@@ -43,20 +42,60 @@
 			<h2>The three invariants</h2>
 			<ol>
 				<li>
-					<strong>Cesium isolation</strong> — <code>cesium</code> only imported inside
-					<code>src/lib/world/</code>. Everything else is Cesium-free and unit-testable.
+					<strong>Cesium isolation</strong> — <code>cesium</code> is imported only inside
+					<code>src/lib/world/</code>. Verify with <code>rg "from 'cesium'" src/lib/</code> — expect two
+					hits, both in <code>world/</code>.
 				</li>
 				<li>
-					<strong>Flat DTO boundary</strong> —
-					<code>model.applyConfigPatch(path, value)</code> and the fleet v1/v2 protocols cross the wire and
-					<code>localStorage</code> as flat DTOs. Persistence and fleet back-compat depend on this.
+					<strong>Path-keyed config + LWW-CRDT boundary</strong> — every config mutation flows through
+					<code>applyConfigPatch(path, value)</code>
+					(local stamps fresh) or
+					<code>applyRemoteConfigPatch(path, value, timestamp, sourceId)</code>
+					(fleet-sourced, CRDT-gated). Per-path last-writer-wins with sourceId tiebreak. <code>applyPatch(DTO)</code>
+					is a thin adapter that decomposes into typed setters + <code>applyConfigPatch</code>.
 				</li>
 				<li>
-					<strong><code>untrack()</code> in hot paths</strong> — every engine's <code>tick()</code> body wraps
-					its work in <code>untrack()</code> so 60 Hz config reads don't build reactive dependencies across the
-					graph.
+					<strong><code>untrack()</code> in hot paths</strong> — every engine tick body (flight, motion,
+					director) and the Window.svelte RAF subscriber wrap work in <code>untrack()</code> so 60 Hz reads
+					don't build reactive dependencies across the graph.
 				</li>
 			</ol>
+		</section>
+
+		<section>
+			<h2>Fleet topology — REST + SSE, no central broker</h2>
+			<p>
+				Six Pis on an office LAN. Admin talks to each device directly over HTTP; each device's browser
+				subscribes to its own SvelteKit-served SSE stream. No long-lived connections between admin and
+				devices.
+			</p>
+			<pre class="pipeline">admin-browser ──PATCH /api/config ──▶ device-pi Node ──publish()──▶ sse-bus
+                                                                   │
+                                                                   ▼
+device-browser ◀── EventSource /api/events ◀─── subscribe() ──────┘
+
+admin-browser ──GET /api/devices ──▶  mDNS peer list (from lan-peers.server)
+admin-browser ──POLL /api/status──▶  per-device cached status (updated by
+                                     device browser POST /api/status @ 5s)
+leader-device ──POST /api/command──▶ follower-pi (director_decision etc.)</pre>
+			<ul>
+				<li>
+					<code>/api/config</code> PATCH — config patch, CRDT-merged when <code>&#123;timestamp, sourceId&#125;</code> set.
+				</li>
+				<li>
+					<code>/api/command</code> POST — one-shot commands (<code>set_scene</code>, <code>set_mode</code>,
+					<code>set_config</code>, <code>director_decision</code>, <code>role_assign</code>).
+				</li>
+				<li>
+					<code>/api/events</code> GET (SSE) — same-origin stream for the local browser.
+				</li>
+				<li>
+					<code>/api/status</code> GET (admin polls) / POST (browser heartbeat @ 5 s).
+				</li>
+				<li>
+					<code>/api/devices</code> GET — mDNS peer list + self.
+				</li>
+			</ul>
 		</section>
 
 		<section>
@@ -64,58 +103,65 @@
 			<div class="module-grid">
 				<div class="module-card">
 					<h3>model/</h3>
-					<p>AeroWindow root (<code>aero-window.svelte.ts</code>), CRDT store, flat config tree, frame telemetry.</p>
+					<p>AeroWindow class, flat config tree + CRDT store, persistence, frame telemetry.</p>
 				</div>
 				<div class="module-card">
 					<h3>world/</h3>
-					<p>CesiumManager — terrain, imagery, buildings, atmosphere, post-processing. The only module that imports <code>cesium</code>.</p>
+					<p>CesiumManager — the only module that imports <code>cesium</code>. Terrain, imagery, VIIRS, buildings, post-process. <code>auto-quality.ts</code> is pure.</p>
+				</div>
+				<div class="module-card">
+					<h3>night/</h3>
+					<p>Barrel hub for night-rendering pipeline — sky-state utils + color-grading GLSL + VIIRS/night-map thresholds.</p>
 				</div>
 				<div class="module-card">
 					<h3>camera/</h3>
-					<p>FlightSimEngine (orbit + cruise FSM) and MotionEngine (turbulence, banking, breathing, vibe).</p>
+					<p>FlightSimEngine (orbit + cruise FSM) is a class. <code>motion.svelte.ts</code> is a module — reactive <code>motion</code> object + <code>motionStep()</code>.</p>
 				</div>
 				<div class="module-card">
 					<h3>director/</h3>
-					<p>DirectorEngine — autopilot location/weather randomizer. Only runs on solo/center (leader) devices.</p>
+					<p>Module of pure functions — <code>directorTick()</code> + <code>directorReset()</code>. Leader-only (solo/center). Scenarios in <code>scenarios.ts</code>.</p>
 				</div>
 				<div class="module-card">
 					<h3>atmosphere/</h3>
-					<p>Cloud blobs, weather effects (rain/frost/lightning), micro-events (stars/birds/contrails), haze.</p>
-				</div>
-				<div class="module-card">
-					<h3>shell/</h3>
-					<p>Window compositor, HUD, SidePanel, Blind, glass vignette, wing silhouette.</p>
+					<p>Clouds (ArtsyClouds CSS3D), weather (rain + frost + lightning), micro-events, haze. Each effect registered in <code>scene/registry.ts</code>.</p>
 				</div>
 				<div class="module-card">
 					<h3>scene/</h3>
-					<p>Effect registry, compositor, bundle store (install/remove/reconcile), and scene effects (car-lights, video-bg, sprite).</p>
+					<p>Compositor, registry, <code>layers.ts</code> (Z-order SSOT), bundle system (install/remove/reconcile), car-lights effect.</p>
+				</div>
+				<div class="module-card">
+					<h3>shell/</h3>
+					<p>Window frame, HUD, SidePanel (typed setters), Blind (one gesture: pull → fly to new location).</p>
 				</div>
 				<div class="module-card">
 					<h3>fleet/</h3>
-					<p>Protocol v1/v2, WS/SSE transport, Display WS client, Admin store, fleet hub server, parallax role binding.</p>
+					<p>SSE client (device browser), REST admin store, SSE bus + status registry (server-side), parallax role math, mDNS peers, LAN bundle cache.</p>
 				</div>
 			</div>
 		</section>
 
 		<section>
 			<h2>Tick pipeline</h2>
-			<pre class="pipeline">game-loop.ts (RAF loop)
-└── model.tick(delta)
-    ├── FlightSimEngine.tick() → FlightPatch
-    ├── MotionEngine (pure function)
-    ├── DirectorEngine.tick() → WorldPatch  [leader only]
-    └── Telemetry.recordFrame()</pre>
+			<pre class="pipeline">Window.svelte $effect(untrack(() =&gt; …))
+└── game-loop.subscribe (RAF 60 Hz)
+    └── model.tick(delta)
+        ├── flight.tick(delta, ctx)   → FlightPatch
+        ├── motionStep(delta, ctx)    → mutates motion.*
+        ├── directorTick(delta, ctx)  → WorldPatch  [leader only]
+        └── #tickAutoQuality(delta)   → nextQualityMode(fps, current)</pre>
 			<p>
-				Scene effects (lightning timer, micro-event scheduler) manage their own timers independently —
-				they are NOT driven by <code>model.tick()</code>.
+				Scene effects (lightning timer, micro-events) schedule independently — not driven by
+				<code>model.tick()</code>. Effect-side teardown guards for HMR via <code>viewer.isDestroyed?.()</code>.
 			</p>
 		</section>
 
 		<section>
 			<h2>Multi-Pi parallax (Phase 7)</h2>
 			<p>
-				Three Pis side-by-side form one continuous panoramic window. Same shared state; per-device camera yaw.
-				Role assignment: URL param → localStorage binding → default <code>'solo'</code>.
+				Three Pis side-by-side form one continuous panoramic window. Role: URL param →
+				<code>localStorage</code> binding → default <code>'solo'</code>. Leader runs the director; followers
+				apply <code>director_decision</code> commands at a shared wall-clock
+				<code>transitionAtMs</code> so all three flip simultaneously.
 			</p>
 			<table class="role-table">
 				<thead>
@@ -128,20 +174,31 @@
 					<tr><td><code>right</code></td><td>+(arc/2−arc/6)°</td><td>off</td><td>follower</td></tr>
 				</tbody>
 			</table>
+			<p class="note">
+				Leader-to-follower broadcast (POST to follower's <code>/api/command</code>) is deferred — the
+				existing <code>publishV2</code> hook logs a warning until it's wired through the REST path.
+			</p>
 		</section>
 
 		<section>
-			<h2>Interactive code graph</h2>
-			<p>
-				For a navigable view of the module structure, run <code>graphify .</code> at the project root. It produces
-				<code>graphify-out/graph.html</code> — a force-directed graph with labeled communities.
-			</p>
+			<h2>Recent cleanup (Apr 24 session)</h2>
+			<ul>
+				<li>One gesture: blind-pull → fly-to-new-location. Deleted tap-to-fly + long-press speed boost (~80 lines).</li>
+				<li>Pure functions off AeroWindow: <code>dawnDuskFactor</code> / <code>smoothstep</code> → <code>utils</code>, <code>effectiveCloudDensity</code> → <code>atmosphere/clouds/rules</code>, <code>nextQualityMode</code> → <code>world/auto-quality</code>.</li>
+				<li>Four shim getters removed from AeroWindow — callers read <code>model.config.*</code> directly.</li>
+				<li>Motion + Director engines: class → module. ~30 lines saved plus one allocation per AeroWindow.</li>
+				<li><code>scene/layers.ts</code> — named Z constants. Replaced triplicated z-order docs.</li>
+				<li><code>lan-proxy.server.ts</code> split into <code>lan-peers</code> + <code>lan-bundle-cache</code>.</li>
+				<li><code>night/</code> barrel exposing VIIRS / haze / color-grading constants in one place.</li>
+				<li>CRDT wiring finished: <code>applyRemoteConfigPatch</code> with timestamp + sourceId tiebreak.</li>
+				<li>WS fleet broker deleted: <code>hub.ts</code>, <code>admin.svelte.ts</code>, <code>transport.svelte.ts</code>, <code>url.ts</code>, <code>routes/api/fleet/+server.ts</code>, v1/v2 wire-message unions. ~1100 lines gone.</li>
+			</ul>
 		</section>
 
 		<footer>
 			<p>
-				Replaced a 1,921-line static layer-stack mock-up that drifted out of sync during the 2026-04
-				Cesium consolidation. Git history preserves the old version (pre-commit <code>970c146</code>).
+				The old 1,921-line static layer-stack page (pre-<code>970c146</code>) is in git history. This page
+				tracks the current shape. Edit in place as the code evolves.
 			</p>
 		</footer>
 	</article>
@@ -194,6 +251,12 @@
 	}
 	ul, ol { padding-left: 20px; }
 	li + li { margin-top: 6px; }
+	.note {
+		color: rgba(232, 238, 247, 0.55);
+		font-size: 12px;
+		margin-top: 10px;
+		font-style: italic;
+	}
 	code {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		background: rgba(255, 255, 255, 0.05);
@@ -235,7 +298,7 @@
 		font-size: 12px;
 		color: #a1a1aa;
 		overflow-x: auto;
-		line-height: 1.8;
+		line-height: 1.6;
 	}
 	.role-table {
 		width: 100%;
