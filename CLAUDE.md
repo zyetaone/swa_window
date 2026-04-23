@@ -14,7 +14,7 @@ bun run build        # Build for production (single-bundle for Pi)
 bun run preview      # Preview production build
 bun run check        # Type check with svelte-check
 bun run check:watch  # Type check in watch mode
-bun x vitest run     # Run unit/integration tests (104 tests currently)
+bun x vitest run     # Run unit/integration tests
 ```
 
 ## Tech Stack
@@ -24,7 +24,7 @@ bun x vitest run     # Run unit/integration tests (104 tests currently)
 - **Imagery**: EOX Sentinel-2 Cloudless (default, no auth) → Mapbox Satellite (token-gated) → ESRI World Imagery (fallback).
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
-- **State**: Flat reactive `$state` objects in `src/lib/model/config.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
+- **State**: Flat reactive `$state` objects in `src/lib/model/config-tree.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
 - **Build**: Vite 7, adapter-node, `bundleStrategy:'single'`, SSR disabled.
 - **Remote push**: Cloudflare Worker (`tools/aero-push-worker/`) for firmware-like OTA bundle + config delivery.
 
@@ -65,10 +65,10 @@ src/lib/
 │   └── use-blind.svelte.ts  Composable — blind drag/snap controller
 │
 ├── model/              STATE graph + admin-tunable config tree
-│   ├── state.svelte.ts     createAeroWindow() / useAeroWindow() — AeroWindow root
-│   ├── telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
-│   └── config.svelte.ts    Flat $state config — atmosphere / camera / director / world / shell
-│                            + applyConfigPatch(path, value) dispatcher
+│   ├── crdt-store.ts       CRDT LWW-register store (performance.now() timestamps)
+│   ├── config-tree.svelte.ts  Flat $state config + applyConfigPatch / applyRemoteConfigPatch / crdtSnapshot / crdtRestore
+│   ├── frame-telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
+│   └── aero-window.svelte.ts  createAeroWindow() / useAeroWindow() — AeroWindow root
 │
 ├── scene/              Scene composition system
 │   ├── types.ts             Effect<TParams> contract + LayerKind
@@ -96,7 +96,7 @@ src/lib/
 │   ├── hub.ts               Server-side WS hub + SSE broadcast
 │   └── url.ts               Fleet endpoint resolver
 │
-├── app-state.svelte.ts  (does not exist — use model/state.svelte.ts)
+├── app-state.svelte.ts  (does not exist — use model/aero-window.svelte.ts)
 ├── types.ts, utils.ts, locations.ts, validation.ts, persistence.ts, constants.ts, game-loop.ts
 
 src/routes/
@@ -141,8 +141,7 @@ const model = useAeroWindow();            // in any descendant component
 
 // Engines (tick at 60 Hz)
 model.flight                            // FlightSimEngine
-model.motion                            // MotionEngine
-model.director                          // DirectorEngine  (renamed from WorldEngine in Phase 3)
+model.motion                            // MotionEngine singleton (module-level state)
 
 // Config tree (admin-tunable; drives engines via SimulationContext)
 model.config.world.*                    // imagery + bloom + terrain + buildings + lights + qualityMode
@@ -176,7 +175,7 @@ model.terrainExaggeration               // per-location (Himalayas 1.5x, cities 
 model.measuredFps                       // live FPS (Fleet + Telemetry)
 
 // Patch dispatch (fleet v2 config_patch entry point)
-model.applyConfigPatch(path, value)     // → config.applyPatch(path, value), also records telemetry
+model.applyConfigPatch(path, value)     // → _applyConfigPatch(path, value) in config-tree, also records telemetry
 
 // Multi-Pi parallax leader hook (Phase 7)
 model.setFleetBroadcast(fn)             // WS client registers on connect
@@ -190,8 +189,8 @@ Window.svelte (RAF loop via game-loop.ts)
     ├── frameStart = performance.now()
     ├── ctx = this.#createContext()        // carries config.camera, config.director, isLeader
     ├── flight.tick(delta, ctx)            → FlightPatch  (wraps body in untrack())
-    ├── motion.tick(delta, ctx)            → void         (wraps body in untrack())
-    ├── director.tick(delta, ctx)          → WorldPatch   (early-returns if !ctx.isLeader)
+    ├── motionStep(delta, ctx)             → void         (wraps body in untrack())
+    ├── directorTick(delta, ctx)           → WorldPatch   (early-returns if !ctx.isLeader)
     │   ├── #tickRandomize → AtmospherePatch
     │   └── #tickDirector  → LocationId
     ├── if (leader + broadcast hook)       emit director_decision (transitionAtMs = now+2.5s)
@@ -265,7 +264,7 @@ Device-side: `src/lib/scene/bundle/remote.ts` polls via `startRemotePoll()`. Opt
 
 ## Observability (Phase 5.6)
 
-`model.telemetry` (`src/lib/model/telemetry.svelte.ts`) — ring buffer with:
+`model.telemetry` (`src/lib/model/frame-telemetry.svelte.ts`) — ring buffer with:
 - FPS samples (last 120), rolling p50/p95 via percentile math
 - Event log (last 500): `config_patch`, `fleet_in`, `fleet_out`, `error`, `info`
 - Counters: configPatches, fleetIn, fleetOut, errors
@@ -305,10 +304,10 @@ const model = createAeroWindow();  // only in +page.svelte
 const model = useAeroWindow();     // in any descendant
 ```
 
-### `$state` flat config via `config.svelte.ts`
+### `$state` flat config via `config-tree.svelte.ts`
 
 ```typescript
-// src/lib/model/config.svelte.ts — one $state per namespace
+// src/lib/model/config-tree.svelte.ts — one $state per namespace
 export const atmosphere = $state({ clouds: { density: 0.4, speed: 0.6, layerCount: 3 }, ... });
 export const camera = $state({ orbit: { driftRate: 0.01, major: 10, ... }, parallax: { role: 'solo', ... }, ... });
 
@@ -357,9 +356,9 @@ $effect(() => {
 - `/` — Main window display (Pi kiosk). Full shell: Cesium + all atmosphere layers + blind + fleet + corridor.
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet / corridor. For tuning the composite in isolation.
 - `/admin` — Fleet admin panel (incl. ConfigSandbox for live $state preview).
-- `/admin/content` — Drag-drop bundle UI (LAN-only, was `/content` pre-consolidation).
+- `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard sub-route.
-- `/architecture` — Architecture visualization (static docs page; scheduled for rewrite or deletion).
+- `/admin/architecture` — Architecture visualization (moved from `/architecture`).
 - `/api/content` — Content bundle CRUD.
 - `/api/content/[id]` — DELETE a single bundle.
 - `/api/assets` — Asset upload + serve.

@@ -196,7 +196,7 @@ export const director = $state({
 		subsequentMinDelay: AMBIENT.SUBSEQUENT_MIN_DELAY as number,
 		subsequentMaxDelay: AMBIENT.SUBSEQUENT_MAX_DELAY as number,
 		weatherChangeChance: AMBIENT.WEATHER_CHANGE_CHANCE as number,
-		weatherPool: ['clear', 'cloudy', 'cloudy', 'rain', 'overcast'] as readonly WeatherType[],
+		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast']) as readonly WeatherType[],
 		directorMinInterval: AMBIENT.DIRECTOR_MIN_INTERVAL as number,
 		directorMaxInterval: AMBIENT.DIRECTOR_MAX_INTERVAL as number,
 	},

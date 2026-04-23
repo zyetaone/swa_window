@@ -7,7 +7,7 @@
 
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
-import { syncWorldQuality, world } from '$lib/model/config-tree.svelte';
+	import { world } from '$lib/model/config-tree.svelte';
 type WorldConfig = typeof world;
 import { normalizeHeading, shortestAngleDelta, lerp, smoothstep } from '$lib/utils';
 import {
@@ -561,8 +561,7 @@ export class CesiumManager {
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({ color: `rgba(${r}, ${g}, ${b}, 0.9)` });
 	}
 
-	applyQualityMode(mode: QualityMode): void {
-		syncWorldQuality(mode);
+	applyQualityMode(_mode: QualityMode): void {
 		const w = this.model.config.world;
 		const globe = this.viewer.scene.globe;
 		globe.maximumScreenSpaceError = w.msse;

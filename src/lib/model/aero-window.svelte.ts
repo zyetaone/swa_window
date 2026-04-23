@@ -21,7 +21,6 @@ import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
 import {
 	config as _config,
 	syncAtmosphereWeather,
-	syncWorldQuality,
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/frame-telemetry.svelte';
@@ -244,7 +243,6 @@ export class AeroWindow {
 
 	setQualityMode(mode: QualityMode): void {
 		this.config.world.qualityMode = mode;
-		syncWorldQuality(mode);
 	}
 
 	/**

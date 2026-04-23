@@ -203,6 +203,7 @@
 		<div class="header-left">
 			<h1>Aero Admin</h1>
 			<span class="subtitle">Fleet Management</span>
+			<a href="/admin/architecture" class="nav-link">Architecture</a>
 		</div>
 		<div class="header-right">
 			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
@@ -535,6 +536,20 @@
 	.subtitle {
 		font-size: 13px;
 		color: #71717a;
+	}
+	.nav-link {
+		font-size: 12px;
+		color: #52525b;
+		text-decoration: none;
+		padding: 4px 8px;
+		border-radius: 4px;
+		border: 1px solid #27272a;
+		transition: color 0.15s, border-color 0.15s;
+		margin-left: 8px;
+	}
+	.nav-link:hover {
+		color: #a1a1aa;
+		border-color: #3f3f46;
 	}
 
 	.header-right {
