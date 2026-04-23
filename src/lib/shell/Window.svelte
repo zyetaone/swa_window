@@ -45,87 +45,14 @@
 	);
 
 	// ========================================================================
-	// ACTIONS
-	// ========================================================================
-
-	function handleWindowClick() {
-		if (model.flight.isTransitioning) return;
-		const nextId = model.pickNextLocation();
-		model.flight.flyTo(nextId);
-	}
-
-	// ─── Long-press → speed boost ────────────────────────────────────────────
-	// Press + hold the window for >250ms to ramp speed 1.4x → 3.0x over 700ms.
-	// Release returns to baseline over 500ms. Short tap still fires
-	// handleWindowClick (fly-to next location).
-	const BASE_SPEED = 1.4;        // matches config.camera.cruise.defaultSpeed
-	const BOOST_SPEED = 3.0;
-	const LONG_PRESS_MS = 250;
-	const RAMP_UP_MS = 700;
-	const RAMP_DOWN_MS = 500;
-
-	// pressTimer + boostRampId are imperative handles (setTimeout/rAF),
-	// never read in a template or derived — plain let avoids signal-graph bloat.
-	let pressTimer: number | null = null;
-	let boostRampId: number | null = null;
-	let isBoosting = $state(false);
-
-	function cancelBoostRamp() {
-		if (boostRampId !== null) {
-			cancelAnimationFrame(boostRampId);
-			boostRampId = null;
-		}
-	}
-
-	function rampSpeed(from: number, to: number, durationMs: number) {
-		cancelBoostRamp();
-		const t0 = performance.now();
-		const step = (now: number) => {
-			const t = clamp((now - t0) / durationMs, 0, 1);
-			model.flight.flightSpeed = from + (to - from) * (t * t * (3 - 2 * t));
-			if (t < 1) boostRampId = requestAnimationFrame(step);
-			else boostRampId = null;
-		};
-		boostRampId = requestAnimationFrame(step);
-	}
-
-	function handlePointerDown() {
-		if (model.flight.isTransitioning) return;
-		pressTimer = window.setTimeout(() => {
-			pressTimer = null;
-			isBoosting = true;
-			rampSpeed(model.flight.flightSpeed, BOOST_SPEED, RAMP_UP_MS);
-		}, LONG_PRESS_MS);
-	}
-
-	function handlePointerUp() {
-		if (pressTimer !== null) {
-			// Short tap — fire the fly-to action, skip boost.
-			clearTimeout(pressTimer);
-			pressTimer = null;
-			handleWindowClick();
-			return;
-		}
-		if (isBoosting) {
-			isBoosting = false;
-			rampSpeed(model.flight.flightSpeed, BASE_SPEED, RAMP_DOWN_MS);
-		}
-	}
-
-	function handlePointerCancel() {
-		if (pressTimer !== null) {
-			clearTimeout(pressTimer);
-			pressTimer = null;
-		}
-		if (isBoosting) {
-			isBoosting = false;
-			rampSpeed(model.flight.flightSpeed, BASE_SPEED, RAMP_DOWN_MS);
-		}
-	}
-
-	// ========================================================================
 	// DERIVED — presentation values
 	// ========================================================================
+	//
+	// One gesture, one meaning: pull the blind down → fly somewhere new.
+	// Wiring lives in useBlind.svelte (the composable that already owns the
+	// drag + keyboard machinery). The window viewport itself is not a button —
+	// taps and long-presses no longer do anything. If someone wants to tweak
+	// speed, the admin panel slider handles it.
 
 	const FROST_RANGE =
 		AIRCRAFT.FROST_MAX_ALTITUDE - AIRCRAFT.FROST_START_ALTITUDE;
@@ -234,17 +161,10 @@
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
 >
-	<!-- The oval window. Click = fly somewhere new. Long-press = speed boost. -->
-	<button
-		class={['window-viewport', isBoosting && 'boosting']}
-		onpointerdown={handlePointerDown}
-		onpointerup={handlePointerUp}
-		onpointercancel={handlePointerCancel}
-		onpointerleave={handlePointerCancel}
-		type="button"
-		aria-label="Tap to fly somewhere new. Hold to speed up."
+	<!-- The oval window. Passive surface — user gestures live on the Blind. -->
+	<div
+		class="window-viewport"
 		style:background={skyBackground}
-		disabled={model.flight.isTransitioning}
 	>
 		<!-- Scene content — shifts with turbulence/bank, clipped by the fixed viewport -->
 		<div
@@ -278,10 +198,10 @@
 		<!-- UI overlays — timed reveal (no :hover on touch kiosks) -->
 		{#if showHint}
 			<div class="click-hint visible">
-				<span>Tap to fly somewhere new</span>
+				<span>Pull the blind down to fly somewhere new</span>
 			</div>
 		{/if}
-	</button>
+	</div>
 
 	<!-- Blind — pull-down shade with slats + pull-tab + from→to chevrons.
 	     Uses useBlind() composable internally; styles own their CSS. -->
@@ -429,14 +349,6 @@
 	}
 
 	/* Blind styles live inside window/Blind.svelte. */
-
-	/* Subtle inner-glow during long-press boost — reads as "going faster". */
-	.window-viewport.boosting {
-		box-shadow:
-			inset 0 0 40px rgba(255, 210, 120, 0.25),
-			inset 0 0 80px rgba(255, 170, 80, 0.12);
-		transition: box-shadow 0.3s ease;
-	}
 
 	/* ─── Window frame on/off ────────────────────────────────────────────────
 	   When config.shell.windowFrame = false, all cabin-style chrome

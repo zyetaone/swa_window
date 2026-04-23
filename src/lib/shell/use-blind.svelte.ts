@@ -20,6 +20,10 @@ export interface BlindControl {
 	config: { shell: { blindOpen: boolean } };
 	applyConfigPatch: (path: string, value: unknown) => boolean;
 	flight: { isTransitioning: boolean };
+	/** Pick a next-location id based on current state. */
+	pickNextLocation(): string;
+	/** Trigger the flight sim to cruise to a new location. */
+	flyTo(locationId: string): void;
 }
 
 export interface BlindLongPressOptions {
@@ -142,12 +146,26 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		dragY = clamp(dragStartY + deltaPct, OPEN_Y, CLOSED_Y);
 	}
 
+	/**
+	 * Commit a new blind state. If the user just CLOSED the blind (from open),
+	 * that's the canonical "fly somewhere new" gesture — fire it here so the
+	 * blind-pull becomes a scene-change trigger. Mid-cruise pulls are ignored
+	 * (isTransitioning gate) to avoid re-firing during cruise_departure.
+	 */
+	function commitBlind(nextOpen: boolean): void {
+		const wasOpen = model.config.shell.blindOpen;
+		model.applyConfigPatch('shell.blindOpen', nextOpen);
+		if (wasOpen && !nextOpen && !model.flight.isTransitioning) {
+			model.flyTo(model.pickNextLocation());
+		}
+	}
+
 	function onPointerUp() {
 		if (!isDragging) return;
 		isDragging = false;
 		const travelRatio = Math.abs(dragY - dragStartY) / Math.abs(OPEN_Y);
 		if (travelRatio > SNAP_THRESHOLD) {
-			model.applyConfigPatch('shell.blindOpen', dragY < dragStartY);
+			commitBlind(dragY < dragStartY);
 		}
 		if (lpEnabled) {
 			clearPressTimer();
@@ -159,7 +177,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	}
 
 	function onKeyDown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') model.applyConfigPatch('shell.blindOpen', !model.config.shell.blindOpen);
+		if (e.key === 'Enter' || e.key === ' ') commitBlind(!model.config.shell.blindOpen);
 	}
 
 	return {
