@@ -10,7 +10,7 @@ import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
-import { effectiveCloudDensity } from '$lib/atmosphere/clouds/rules';
+import { effectiveCloudDensity } from '$lib/scene/effects/clouds/rules';
 import { nextQualityMode } from '$lib/world/auto-quality';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
@@ -368,7 +368,7 @@ export class AeroWindow {
 			this.flight.flyTo(directorPatch.nextLocation);
 		}
 
-		if (this.autoQuality) this.#tickAutoQuality(delta);
+		if (this.config.world.autoQuality) this.#tickAutoQuality(delta);
 
 		this.telemetry.recordFrame(performance.now() - frameStart);
 	}

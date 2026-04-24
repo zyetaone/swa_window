@@ -7,10 +7,10 @@
 
 import type { Effect } from './types';
 import { carLights } from './effects/car-lights';
-import { atmosphericHaze } from '$lib/atmosphere/haze';
-import { clouds } from '$lib/atmosphere/clouds';
-import { lightning } from '$lib/atmosphere/lightning';
-import { microEvents } from '$lib/atmosphere/micro-events';
+import { atmosphericHaze } from './effects/haze';
+import { clouds } from './effects/clouds';
+import { lightning } from './effects/lightning';
+import { microEvents } from './effects/micro-events';
 
 export const EFFECTS: readonly Effect[] = [
 	carLights,        // z:0 — geo (renders inside Cesium; compositor-z is inert)

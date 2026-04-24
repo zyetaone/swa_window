@@ -19,7 +19,7 @@
 	import { clamp, formatTime } from '$lib/utils';
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
-	import Weather from '$lib/atmosphere/weather/Weather.svelte';
+	import Weather from '$lib/shell/window/Weather.svelte';
 
 	const model = createAeroWindow();
 

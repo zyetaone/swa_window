@@ -19,7 +19,7 @@
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import Glass from "./window/Glass.svelte";
 	import Blind from "./window/Blind.svelte";
-	import Weather from '$lib/atmosphere/weather/Weather.svelte';
+	import Weather from './window/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	const model = useAeroWindow();
 
