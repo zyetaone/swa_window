@@ -212,11 +212,8 @@ export const world = $state({
 	bloomContrast: CESIUM.BLOOM_CONTRAST as number,
 	bloomBrightness: CESIUM.BLOOM_BRIGHTNESS as number,
 	bloomSigma: CESIUM.BLOOM_SIGMA as number,
-	defaultExaggeration: 1.0,
-	fogDensityScale: 1.0,
 	buildingsEnabled: true,
 	showClouds: true,
-	overpassRadiusMeters: 3500,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
 });

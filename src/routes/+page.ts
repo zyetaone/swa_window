@@ -1,8 +1,3 @@
-/**
- * Page config - disable SSR for WebGL components
- *
- * This app uses Cesium which requires browser APIs.
- * SSR must be disabled to prevent "ReferenceError: window is not defined" errors.
- */
-export const ssr = false;
+// Prerender only the root (`/`) — the production Pi build ships with this
+// single pre-rendered HTML entry. SSR is off at the layout level.
 export const prerender = true;

@@ -23,18 +23,6 @@
 import { config } from '$lib/model/config-tree.svelte';
 import type { RestAdminStore } from './rest-admin.svelte';
 
-const SOURCE_ID_KEY = 'aero-admin-session-id';
-
-function getSourceId(): string {
-	if (typeof localStorage === 'undefined') return 'admin';
-	let id = localStorage.getItem(SOURCE_ID_KEY);
-	if (!id) {
-		id = `admin-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-		localStorage.setItem(SOURCE_ID_KEY, id);
-	}
-	return id;
-}
-
 /**
  * Paths the peer-sync watches. Adding a slider to admin means adding the
  * path here — no other changes. Keep in alphabetical order by namespace so
@@ -56,7 +44,6 @@ const WATCHED_PATHS: ReadonlyArray<{ path: string; read: () => unknown }> = [
  * Returns a stop() function that tears down the effect.
  */
 export function startPeerSync(store: RestAdminStore): () => void {
-	const sourceId = getSourceId();
 	let snapshot = WATCHED_PATHS.map((p) => p.read());
 
 	const cleanup = $effect.root(() => {
@@ -75,10 +62,6 @@ export function startPeerSync(store: RestAdminStore): () => void {
 			snapshot = next;
 		});
 	});
-
-	// Mark our admin session in the CRDT so tiebreaks are consistent across
-	// reconnects of the same admin.
-	void sourceId;
 
 	return cleanup;
 }
