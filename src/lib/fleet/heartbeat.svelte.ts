@@ -36,7 +36,7 @@ export interface HeartbeatSample {
 }
 
 /** How many samples we keep per device. 500 × 60s ≈ 8.3h. */
-export const MAX_SAMPLES_PER_DEVICE = 500;
+const MAX_SAMPLES_PER_DEVICE = 500;
 
 /**
  * Per-device ring buffer. Oldest samples drop off once we hit
@@ -91,16 +91,6 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 }
 
 /**
- * Get the most recent sample for a device, or null if none recorded yet.
- * Used by the /admin/fleet/health tile display.
- */
-export function latestSample(deviceId: string): HeartbeatSample | null {
-	const buf = samples.get(deviceId);
-	if (!buf || buf.length === 0) return null;
-	return buf[buf.length - 1];
-}
-
-/**
  * Get the full sample history for a device. Returned array is a copy so
  * callers can sort / filter without mutating the ring buffer.
  */
@@ -128,7 +118,7 @@ export function latestAll(): HeartbeatSample[] {
  */
 const ONLINE_THRESHOLD_MS = 3 * 60_000;
 
-export function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
+function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
 	return now - sample.receivedAt < ONLINE_THRESHOLD_MS;
 }
 
@@ -136,7 +126,7 @@ export function isOnline(sample: HeartbeatSample, now: number = Date.now()): boo
  * Compute basic rollups across the whole fleet — the dashboard header uses
  * these. Online count, average FPS across online devices, hottest CPU, etc.
  */
-export interface FleetSummary {
+interface FleetSummary {
 	total: number;
 	online: number;
 	offline: number;
@@ -163,8 +153,3 @@ export function summarize(now: number = Date.now()): FleetSummary {
 	};
 }
 
-// ─── Test hooks ─────────────────────────────────────────────────────────────
-
-export function _resetForTests(): void {
-	samples.clear();
-}

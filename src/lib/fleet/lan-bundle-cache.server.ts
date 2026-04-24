@@ -59,7 +59,7 @@ export async function readLocal(hash: string): Promise<Uint8Array | null> {
  * Write a newly-fetched blob to disk so we become a future source for peers.
  * No-ops on failure — disk pressure shouldn't block the app.
  */
-export async function writeLocal(hash: string, data: Uint8Array): Promise<void> {
+async function writeLocal(hash: string, data: Uint8Array): Promise<void> {
 	let path: string;
 	try { path = pathFor(hash); } catch { return; }
 	try {
@@ -74,7 +74,7 @@ export async function writeLocal(hash: string, data: Uint8Array): Promise<void> 
  * Compute a sha256 hex hash of a blob. Caller-facing — used for integrity
  * checks when we pull from a peer or remote origin.
  */
-export function sha256Hex(data: Uint8Array): string {
+function sha256Hex(data: Uint8Array): string {
 	return createHash('sha256').update(data).digest('hex');
 }
 

@@ -20,7 +20,7 @@ import mdns from 'multicast-dns';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-export const SERVICE_TYPE = '_aero-bundle._tcp.local';
+const SERVICE_TYPE = '_aero-bundle._tcp.local';
 const ANNOUNCE_INTERVAL_MS = 30_000;
 /** Peer announcement is considered stale after this many ms without a refresh. */
 const PEER_TTL_MS = 90_000;
@@ -150,7 +150,7 @@ export function startLanProxy(): () => void {
 	return stopLanProxy;
 }
 
-export function stopLanProxy(): void {
+function stopLanProxy(): void {
 	if (announceTimer) {
 		clearInterval(announceTimer);
 		announceTimer = null;
@@ -159,17 +159,5 @@ export function stopLanProxy(): void {
 		try { mdnsServer.destroy(); } catch { /* already torn down */ }
 		mdnsServer = null;
 	}
-	peers.clear();
-}
-
-// ─── Test hooks ─────────────────────────────────────────────────────────────
-
-/** Inject a synthetic peer — for tests only. */
-export function _addPeerForTests(peer: Peer): void {
-	peers.set(peer.deviceId, peer);
-}
-
-/** Clear all peers + in-memory state — for tests only. */
-export function _resetForTests(): void {
 	peers.clear();
 }

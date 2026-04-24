@@ -25,7 +25,7 @@ export function isValidWeather(v: unknown): v is WeatherType {
 	return typeof v === 'string' && (WEATHER_TYPES as readonly string[]).includes(v);
 }
 
-export const DISPLAY_MODES = ['flight', 'screensaver', 'video'] as const;
+const DISPLAY_MODES = ['flight', 'screensaver', 'video'] as const;
 export type DisplayMode = typeof DISPLAY_MODES[number];
 export function isValidDisplayMode(v: unknown): v is DisplayMode {
 	return typeof v === 'string' && (DISPLAY_MODES as readonly string[]).includes(v);

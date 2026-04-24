@@ -250,19 +250,13 @@ export const shell = $state({
 export const config = $state({ atmosphere, camera, director, world, shell });
 
 // Flat namespace map — single dispatch point for all path-targeted patches.
-export const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
+const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
 
 // ─── CRDT layer ─────────────────────────────────────────────────────────────
 
 const _configRoot: Record<string, unknown> = config as unknown as Record<string, unknown>;
-export const crdt = createCRDTStore(_configRoot);
+const crdt = createCRDTStore(_configRoot);
 
-/**
- * CRDT-aware config patch dispatcher.
- * Writes value + timestamp to CRDT store, then propagates via setByPath.
- * Incoming fleet patches call crdt.merge() directly — this function is for
- * local UI (which writes with a fresh local timestamp).
- */
 /**
  * Apply a path-keyed patch to the config tree.
  *
@@ -302,16 +296,6 @@ export function setParallaxRoleWithSync(role: DeviceRole): void {
 	crdt.set('camera.parallax.role', role);
 	setByPath(camera as unknown as Record<string, unknown>, 'parallax.role', role);
 	setParallaxRole(role);
-}
-
-/** Snapshot of all CRDT timestamps (for persistence + reconcile-on-reconnect). */
-export function crdtSnapshot() {
-	return crdt.snapshot();
-}
-
-/** Restore CRDT state from a persisted snapshot. */
-export function crdtRestore(snap: Record<string, { value: unknown; timestamp: number; sourceId: string }>): void {
-	crdt.restore(snap);
 }
 
 /** Export device ID for use in fleet message sourceId field. */
