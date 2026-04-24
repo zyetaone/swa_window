@@ -9,4 +9,4 @@ const microEvents: Effect = {
 	component: MicroEventsEffect,
 };
 
-export default microEvents;
+export { microEvents };

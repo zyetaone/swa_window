@@ -10,4 +10,4 @@ const lightning: Effect = {
 	component: Component,
 };
 
-export default lightning;
+export { lightning };

@@ -15,4 +15,4 @@ const carLights: Effect = {
 	component: CarLightsEffect,
 };
 
-export default carLights;
+export { carLights };

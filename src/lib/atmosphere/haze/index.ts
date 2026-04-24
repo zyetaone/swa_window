@@ -9,4 +9,4 @@ const atmosphericHaze: Effect = {
 	component: HazeEffect,
 };
 
-export default atmosphericHaze;
+export { atmosphericHaze };

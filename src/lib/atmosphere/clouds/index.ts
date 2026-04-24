@@ -10,4 +10,4 @@ const clouds: Effect = {
 	component: Clouds,
 };
 
-export default clouds;
+export { clouds };
