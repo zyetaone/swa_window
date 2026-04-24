@@ -2,6 +2,8 @@
 	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
 	import { config } from '$lib/model/config-tree.svelte';
+	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
+	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS } from '$lib/locations';
 	import { onDestroy } from 'svelte';
@@ -292,34 +294,11 @@
 				<h3>
 					Ambient <span class="hint-muted">— auto-syncs to fleet</span>
 				</h3>
-				<label>
-					<div class="slider-header">
-						<span>Cloud Density</span>
-						<span class="slider-value">{Math.round(config.atmosphere.clouds.density * 100)}%</span>
-					</div>
-					<input type="range" min="0" max="1" step="0.05" bind:value={config.atmosphere.clouds.density} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Cloud Speed</span>
-						<span class="slider-value">{config.atmosphere.clouds.speed.toFixed(1)}×</span>
-					</div>
-					<input type="range" min="0.1" max="3" step="0.1" bind:value={config.atmosphere.clouds.speed} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Haze</span>
-						<span class="slider-value">{config.atmosphere.haze.amount.toFixed(2)}</span>
-					</div>
-					<input type="range" min="0" max="0.2" step="0.01" bind:value={config.atmosphere.haze.amount} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Night Lights</span>
-						<span class="slider-value">{config.world.nightLightIntensity.toFixed(1)}</span>
-					</div>
-					<input type="range" min="0" max="5" step="0.1" bind:value={config.world.nightLightIntensity} class="range" />
-				</label>
+				<!-- Shared components with device SidePanel. They bind directly to the
+				     module-scope config rune — editing here is identical to editing
+				     on-device. peer-sync (above) propagates to peers. -->
+				<AtmosphereControls />
+				<LightingControls />
 				<label>
 					<div class="slider-header">
 						<span>Quality</span>
@@ -331,16 +310,10 @@
 						<option value="ultra">Ultra (high-end)</option>
 					</select>
 				</label>
-				<div class="toggle-row">
-					<label class="toggle-label">
-						<input type="checkbox" bind:checked={config.world.showClouds} />
-						<span>Show Clouds</span>
-					</label>
-					<label class="toggle-label">
-						<input type="checkbox" bind:checked={config.world.buildingsEnabled} />
-						<span>Show Buildings</span>
-					</label>
-				</div>
+				<label class="toggle-label">
+					<input type="checkbox" bind:checked={config.world.showClouds} />
+					<span>Show Clouds</span>
+				</label>
 			</section>
 
 			<section class="control-section">
@@ -797,13 +770,6 @@
 	}
 
 	/* Toggles */
-	.toggle-row {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin-bottom: 10px;
-	}
-
 	.toggle-label {
 		display: flex;
 		flex-direction: row;
