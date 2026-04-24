@@ -25,7 +25,42 @@ import {
 	VIEWER_OPTIONS,
 	CARTODB_DARK_URL,
 } from './cesium-setup';
-import { CESIUM_QUALITY_PRESETS } from '$lib/constants';
+
+// Cesium tile subdivision + preload tuning per quality mode. Sole consumer
+// is this file — lives next to the CesiumManager that actually applies it.
+interface CesiumQualityPreset {
+	maximumScreenSpaceError: number;
+	tileCacheSize: number;
+	preloadSiblings: boolean;
+	preloadAncestors: boolean;
+	loadingDescendantLimit: number;
+}
+
+const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
+	performance: {
+		maximumScreenSpaceError: 8,    // Bigger tiles, fewer LOD changes (low-end Pi)
+		tileCacheSize: 50,
+		preloadSiblings: false,
+		preloadAncestors: true,
+		loadingDescendantLimit: 4,
+	},
+	balanced: {
+		// MSSE 4 produced visible LOD seams at perspective angles. 5 keeps
+		// detail high while reducing per-tile LOD divergence.
+		maximumScreenSpaceError: 5,
+		tileCacheSize: 100,
+		preloadSiblings: true,         // eliminates LOD-boundary lines on camera move
+		preloadAncestors: true,
+		loadingDescendantLimit: 6,
+	},
+	ultra: {
+		maximumScreenSpaceError: 2,    // High detail — sharper edges
+		tileCacheSize: 200,
+		preloadSiblings: true,
+		preloadAncestors: true,
+		loadingDescendantLimit: 8,
+	},
+};
 
 export interface CesiumModelView {
 	flight: {

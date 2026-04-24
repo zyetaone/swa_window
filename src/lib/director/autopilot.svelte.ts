@@ -13,16 +13,18 @@
 
 import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
-import { AMBIENT } from '$lib/constants';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
 
 // ── Private timers ──────────────────────────────────────────────────────────
+// Initial seeds use the same window as the config tree's autopilot defaults
+// (initialMinDelay=120, initialMaxDelay=300). Subsequent re-seeds read live
+// from ctx.director.autopilot.*, so admin tuning propagates within one cycle.
 
 let _randomizeTimer = 0;
-let _nextRandomizeTime: number = AMBIENT.INITIAL_MIN_DELAY as number;
+let _nextRandomizeTime = 120;
 
 let _directorTimer = 0;
-let _timeToNextLocation: number = AMBIENT.INITIAL_MAX_DELAY as number;
+let _timeToNextLocation = 300;
 
 // ─── Tick ───────────────────────────────────────────────────────────────────
 

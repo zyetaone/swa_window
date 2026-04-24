@@ -1,19 +1,18 @@
 /**
  * Config — flat reactive state for all tuneable parameters.
  *
+ * This is the SSOT for every tuning number the app exposes. Consumers
+ * read from `config.*` rather than importing raw constants; the default
+ * literals below are the place to edit tuning.
+ *
  * Design:
  * - One $state object per namespace (no class-per-namespace)
  * - Generic setByPath(root, path, value) handles ALL mutations — no switch statements
  * - Sync functions (syncFromMode, syncFromEffects) are plain functions, not class methods
- * - toJSON() is a plain spread of the reactive tree — no manual field mapping
- *
- * SSOT defaults: constants.ts (AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS,
- * CESIUM, FLIGHT_FEEL). Every $state field initialises from these.
  */
 
-import { CESIUM, AIRCRAFT, AMBIENT, MICRO_EVENTS, FLIGHT_FEEL } from '$lib/constants';
 import { WEATHER_EFFECTS } from '$content/weather';
-import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
+import { QUALITY_MODES, type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath } from '$lib/utils';
@@ -22,14 +21,14 @@ import { setByPath } from '$lib/utils';
 
 export const atmosphere = $state({
 	clouds: {
-		density: AMBIENT.CLOUD_DENSITY_MAX * 0.85,
-		speed: AMBIENT.CLOUD_SPEED_MIN + 0.4,
+		density: 0.85,   // CLOUD_DENSITY_MAX(1.0) * 0.85
+		speed: 0.6,      // CLOUD_SPEED_MIN(0.2) + 0.4
 		layerCount: 3,
 	},
 	haze: {
-		amount: AMBIENT.HAZE_MIN + 0.07,
-		min: AMBIENT.HAZE_MIN,
-		max: AMBIENT.HAZE_MAX,
+		amount: 0.07,    // HAZE_MIN(0) + 0.07
+		min: 0,
+		max: 0.15,
 	},
 	weather: {
 		turbulence: WEATHER_EFFECTS.cloudy.turbulence,
@@ -39,18 +38,19 @@ export const atmosphere = $state({
 		cloudDensityRange: [...WEATHER_EFFECTS.cloudy.cloudDensityRange] as [number, number],
 		nightCloudFloor: WEATHER_EFFECTS.cloudy.nightCloudFloor,
 		filterBrightness: WEATHER_EFFECTS.cloudy.filterBrightness,
-		frostStartAltitude: AIRCRAFT.FROST_START_ALTITUDE as number,
-		frostMaxAltitude: AIRCRAFT.FROST_MAX_ALTITUDE as number,
-		lightningMinInterval: AIRCRAFT.LIGHTNING_MIN_INTERVAL as number,
-		lightningMaxInterval: AIRCRAFT.LIGHTNING_MAX_INTERVAL as number,
-		lightningDecayRate: AIRCRAFT.LIGHTNING_DECAY_RATE as number,
+		frostStartAltitude: 25000,   // feet
+		frostMaxAltitude:   40000,   // feet
+		lightningMinInterval: 5,     // seconds
+		lightningMaxInterval: 30,
+		lightningDecayRate:   8,
 	},
 	microEvents: {
-		minInterval: MICRO_EVENTS.MIN_INTERVAL as number,
-		maxInterval: MICRO_EVENTS.MAX_INTERVAL as number,
-		shootingStarDuration: MICRO_EVENTS.SHOOTING_STAR_DURATION as number,
-		birdDuration: MICRO_EVENTS.BIRD_DURATION as number,
-		contrailDuration: MICRO_EVENTS.CONTRAIL_DURATION as number,
+		// Moments of surprise for attentive viewers.
+		minInterval: 100,            // seconds between events (lower bound)
+		maxInterval: 300,
+		shootingStarDuration: 1.5,
+		birdDuration: 8,
+		contrailDuration: 12,
 	},
 });
 
@@ -111,12 +111,14 @@ interface CameraShape {
 
 const _camera: CameraShape = {
 	orbit: {
-		driftRate: AIRCRAFT.DRIFT_RATE as number,
-		major: AIRCRAFT.ORBIT_MAJOR as number,
-		minor: AIRCRAFT.ORBIT_MINOR as number,
-		majorMin: AIRCRAFT.ORBIT_MAJOR_MIN as number,
-		majorMax: AIRCRAFT.ORBIT_MAJOR_MAX as number,
-		breathePeriod: AIRCRAFT.ORBIT_BREATHE_PERIOD as number,
+		// Flight drift in degrees/second at speed=1.0. 0.01 gives commercial-cruise
+		// pace at the default 1.4x (~2.3× earlier 0.006 setting's apparent motion).
+		driftRate: 0.01,
+		major: 0.15,            // degrees (~17 km) long axis
+		minor: 0.06,            // degrees (~7 km) short axis — ~2.5:1 aspect
+		majorMin: 0.08,         // tightest orbit (dense city passes)
+		majorMax: 0.25,         // widest orbit (sweeping vistas)
+		breathePeriod: 180,     // seconds per full breathe cycle
 	},
 	cruise: {
 		departureDurationSec: 2.0,
@@ -126,25 +128,29 @@ const _camera: CameraShape = {
 		maxSpeed: 3.0,
 	},
 	motion: {
-		bankAngleMax: FLIGHT_FEEL.BANK_ANGLE_MAX,
-		bankSmoothing: FLIGHT_FEEL.BANK_SMOOTHING,
-		breathingPeriod: FLIGHT_FEEL.BREATHING_PERIOD,
-		breathingAmplitude: FLIGHT_FEEL.BREATHING_AMPLITUDE,
-		engineVibeFreqX: FLIGHT_FEEL.ENGINE_VIBE_FREQ_X,
-		engineVibeFreqY: FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y,
-		engineVibeAmp: FLIGHT_FEEL.ENGINE_VIBE_AMP,
-		bumpMinInterval: FLIGHT_FEEL.BUMP_MIN_INTERVAL,
-		bumpMaxInterval: FLIGHT_FEEL.BUMP_MAX_INTERVAL,
-		bumpDecay: FLIGHT_FEEL.BUMP_DECAY,
-		bumpRingFreq: FLIGHT_FEEL.BUMP_RING_FREQ,
-		bumpAmplitude: FLIGHT_FEEL.BUMP_AMPLITUDE,
-		turbulenceMultipliers: AIRCRAFT.TURBULENCE_MULTIPLIERS,
-		turbulenceOffsetY: AIRCRAFT.TURBULENCE_OFFSET_Y,
+		// Banking — horizon tilt during orbit turns.
+		bankAngleMax: 6.0,
+		bankSmoothing: 2.5,
+		// Pitch breathing — slow nose up/down oscillation.
+		breathingPeriod: 22,
+		breathingAmplitude: 1.5,
+		// Engine micro-vibration — constant fine hum.
+		engineVibeFreqX: 7,     // Hz
+		engineVibeFreqY: 11,    // Hz (different to avoid Lissajous lock)
+		engineVibeAmp: 0.35,    // pixels
+		// Turbulence bumps — occasional jolts.
+		bumpMinInterval: 30,
+		bumpMaxInterval: 120,
+		bumpDecay: 8,
+		bumpRingFreq: 15,
+		bumpAmplitude: 3,
+		turbulenceMultipliers: { severe: 3, moderate: 1.5, light: 1 },
+		turbulenceOffsetY: 0.05,
 	},
 	altitude: {
-		default: AIRCRAFT.DEFAULT_ALTITUDE as number,
-		min: AIRCRAFT.MIN_ALTITUDE as number,
-		max: AIRCRAFT.MAX_ALTITUDE as number,
+		default: 35000,         // feet
+		min: 10000,
+		max: 65000,
 	},
 	parallax: {
 		role: 'solo' as DeviceRole,
@@ -173,29 +179,32 @@ export const director = $state({
 	daylight: {
 		syncToRealTime: true,
 		manualTimeOfDay: 12,
-		syncIntervalMs: AIRCRAFT.REAL_TIME_SYNC_INTERVAL as number,
+		syncIntervalMs: 60_000,        // 1 minute
 	},
 	autopilot: {
 		enabled: true,
-		initialMinDelay: AMBIENT.INITIAL_MIN_DELAY as number,
-		initialMaxDelay: AMBIENT.INITIAL_MAX_DELAY as number,
-		subsequentMinDelay: AMBIENT.SUBSEQUENT_MIN_DELAY as number,
-		subsequentMaxDelay: AMBIENT.SUBSEQUENT_MAX_DELAY as number,
-		weatherChangeChance: AMBIENT.WEATHER_CHANGE_CHANCE as number,
+		// Timer windows in seconds. First change waits 2-5 min; subsequent
+		// changes 3-8 min. Director location cycles avg ~2:10 per location.
+		initialMinDelay: 120,
+		initialMaxDelay: 300,
+		subsequentMinDelay: 180,
+		subsequentMaxDelay: 480,
+		weatherChangeChance: 0.2,
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast']) as readonly WeatherType[],
-		directorMinInterval: AMBIENT.DIRECTOR_MIN_INTERVAL as number,
-		directorMaxInterval: AMBIENT.DIRECTOR_MAX_INTERVAL as number,
+		directorMinInterval: 100,      // 1:40
+		directorMaxInterval: 160,      // 2:40
 	},
 	ambient: {
-		cloudDensityShift: AMBIENT.CLOUD_DENSITY_SHIFT as number,
-		cloudDensityMin: AMBIENT.CLOUD_DENSITY_MIN as number,
-		cloudDensityMax: AMBIENT.CLOUD_DENSITY_MAX as number,
-		cloudSpeedShift: AMBIENT.CLOUD_SPEED_SHIFT as number,
-		cloudSpeedMin: AMBIENT.CLOUD_SPEED_MIN as number,
-		cloudSpeedMax: AMBIENT.CLOUD_SPEED_MAX as number,
-		hazeShift: AMBIENT.HAZE_SHIFT as number,
-		hazeMin: AMBIENT.HAZE_MIN as number,
-		hazeMax: AMBIENT.HAZE_MAX as number,
+		// Drift ranges per randomisation cycle.
+		cloudDensityShift: 0.3,
+		cloudDensityMin: 0.2,
+		cloudDensityMax: 1.0,
+		cloudSpeedShift: 0.4,
+		cloudSpeedMin: 0.2,
+		cloudSpeedMax: 1.5,
+		hazeShift: 0.04,
+		hazeMin: 0,
+		hazeMax: 0.15,
 	},
 });
 
@@ -203,15 +212,21 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	baseNightBrightness: CESIUM.BASE_NIGHT_BRIGHTNESS as number,
-	baseNightSaturation: CESIUM.BASE_NIGHT_SATURATION as number,
-	nightAlpha: CESIUM.NIGHT_ALPHA as number,
-	nightBrightness: CESIUM.NIGHT_BRIGHTNESS as number,
-	nightContrast: CESIUM.NIGHT_CONTRAST as number,
+	// Base imagery dim at full night. 15% of day brightness so the shader's
+	// lightMask doesn't misread faint terrain as city lights.
+	baseNightBrightness: 0.15,
+	baseNightSaturation: 0.25,
+	// Night city glow overlay (CartoDB Dark) composited on the dimmed base.
+	// Brightness 1.6 keeps roads visible without blowing to pure white.
+	nightAlpha: 0.8,
+	nightBrightness: 1.6,
+	nightContrast: 1.6,
 	nightLightIntensity: 0.6,
-	bloomContrast: CESIUM.BLOOM_CONTRAST as number,
-	bloomBrightness: CESIUM.BLOOM_BRIGHTNESS as number,
-	bloomSigma: CESIUM.BLOOM_SIGMA as number,
+	// Bloom post-process — high contrast + negative brightness means only the
+	// top of the luminance range blooms. Sigma controls the Gaussian spread.
+	bloomContrast: 128,
+	bloomBrightness: -0.3,
+	bloomSigma: 2.2,
 	buildingsEnabled: true,
 	showClouds: true,
 	qualityMode: 'balanced' as QualityMode,
@@ -301,6 +316,21 @@ export function crdtRestore(snap: Record<string, { value: unknown; timestamp: nu
 
 /** Export device ID for use in fleet message sourceId field. */
 export { setCRDTDeviceId, getCRDTDeviceId };
+
+// ─── Auto-quality stepping ─────────────────────────────────────────────────────
+
+/**
+ * Bands: below 20 fps → step down one level, above 40 fps → step up.
+ * Returns the same mode if inside the hysteresis band, or if already at
+ * the extreme of the available presets.
+ */
+export function nextQualityMode(fps: number, current: QualityMode): QualityMode {
+	if (fps <= 0) return current;
+	const idx = QUALITY_MODES.indexOf(current);
+	if (fps < 20 && idx > 0) return QUALITY_MODES[idx - 1];
+	if (fps > 40 && idx < QUALITY_MODES.length - 1) return QUALITY_MODES[idx + 1];
+	return current;
+}
 
 function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};

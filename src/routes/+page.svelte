@@ -11,7 +11,6 @@
 
 	import { onDestroy, onMount } from "svelte";
 	import { createAeroWindow } from "$lib/model/aero-window.svelte";
-	import { AIRCRAFT } from "$lib/constants";
 	import { LOCATION_MAP } from "$content/locations";
 	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
@@ -47,7 +46,7 @@
 			const update = () => model.updateTimeFromSystem();
 			const interval = setInterval(
 				update,
-				AIRCRAFT.REAL_TIME_SYNC_INTERVAL,
+				model.config.director.daylight.syncIntervalMs,
 			);
 			return () => clearInterval(interval);
 		}
@@ -139,8 +138,8 @@
 			const alt = Number(altitudeParam);
 			if (
 				Number.isFinite(alt) &&
-				alt >= AIRCRAFT.MIN_ALTITUDE &&
-				alt <= AIRCRAFT.MAX_ALTITUDE
+				alt >= model.config.camera.altitude.min &&
+				alt <= model.config.camera.altitude.max
 			) {
 				model.setAltitude(alt);
 			}

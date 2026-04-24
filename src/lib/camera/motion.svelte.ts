@@ -15,7 +15,6 @@
 
 import { untrack } from 'svelte';
 import { clamp, shortestAngleDelta, randomBetween } from '$lib/utils';
-import { FLIGHT_FEEL } from '$lib/constants';
 import type { SimulationContext } from '$lib/types';
 
 // ── Reactive outputs ────────────────────────────────────────────────────────
@@ -33,7 +32,9 @@ export const motion = $state({
 
 let _prevHeading = 0;
 let _bumpTimer = 0;
-let _nextBump = randomBetween(FLIGHT_FEEL.BUMP_MIN_INTERVAL as number, FLIGHT_FEEL.BUMP_MAX_INTERVAL as number);
+// First-bump seed only. Subsequent bumps re-seed inside the tick from
+// ctx.camera.motion.bumpMin/MaxInterval, which is the live config tree.
+let _nextBump = randomBetween(30, 120);
 let _bumpElapsed = -1;
 let _bumpSign = 1;
 

@@ -11,7 +11,7 @@
 	 */
 	import { activeCesium } from '$lib/world/active.svelte';
 	import type { EffectProps } from '../../types';
-	import type { SpriteParams } from './types';
+	import type { SpriteParams } from './factory';
 
 	let { params }: EffectProps<SpriteParams> = $props();
 

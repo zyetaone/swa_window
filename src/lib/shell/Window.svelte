@@ -12,7 +12,6 @@
 	import { untrack } from "svelte";
 	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
-	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
 	import { SKY_PALETTE } from "$content/palettes";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
@@ -55,22 +54,17 @@
 	// taps and long-presses no longer do anything. If someone wants to tweak
 	// speed, the admin panel slider handles it.
 
-	const FROST_RANGE =
-		AIRCRAFT.FROST_MAX_ALTITUDE - AIRCRAFT.FROST_START_ALTITUDE;
-
 	// --- Sky ---
 
 	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
 
 	// --- Atmospheric effects ---
 
-	const frostAmount = $derived(
-		clamp(
-			(model.flight.altitude - AIRCRAFT.FROST_START_ALTITUDE) / FROST_RANGE,
-			0,
-			1,
-		),
-	);
+	const frostAmount = $derived.by(() => {
+		const start = model.config.atmosphere.weather.frostStartAltitude;
+		const max   = model.config.atmosphere.weather.frostMaxAltitude;
+		return clamp((model.flight.altitude - start) / (max - start), 0, 1);
+	});
 
 	const filterString = $derived.by(() => {
 		const timeBrightness =
@@ -103,7 +97,7 @@
 	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
 	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
 	const breathingY = $derived(
-		model.motion.breathingOffset * FLIGHT_FEEL.BREATHING_AMPLITUDE,
+		model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude,
 	);
 	const bankDegrees = $derived(model.motion.bankAngle);
 

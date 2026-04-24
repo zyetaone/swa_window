@@ -10,7 +10,7 @@
 	 * VideoCore VII HW decode — cheap for 1080p loops, trivial for 720p.
 	 */
 	import type { EffectProps } from '../../types';
-	import type { VideoBgParams } from './types';
+	import type { VideoBgParams } from './factory';
 
 	let { params }: EffectProps<VideoBgParams> = $props();
 </script>

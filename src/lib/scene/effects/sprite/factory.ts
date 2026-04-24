@@ -5,9 +5,17 @@
 
 import type { Effect } from '../../types';
 import type { SpriteBundle } from '../../bundle/types';
-import type { SpriteParams } from './types';
 import { evalWhen } from '../../bundle/when';
 import Component from './effect.svelte';
+
+export interface SpriteParams {
+	image: string;
+	lat: number;
+	lon: number;
+	altitude?: number;
+	width?: number;
+	height?: number;
+}
 
 export function createSpriteEffect(bundle: SpriteBundle): Effect<SpriteParams> {
 	return {

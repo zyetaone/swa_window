@@ -5,9 +5,15 @@
 
 import type { Effect } from '../../types';
 import type { VideoBgBundle } from '../../bundle/types';
-import type { VideoBgParams } from './types';
 import { evalWhen } from '../../bundle/when';
 import Component from './effect.svelte';
+
+export interface VideoBgParams {
+	asset: string;
+	fit?: 'cover' | 'contain' | 'fill';
+	opacity?: number;
+	blend?: 'normal' | 'screen' | 'multiply' | 'overlay';
+}
 
 export function createVideoBgEffect(bundle: VideoBgBundle): Effect<VideoBgParams> {
 	return {

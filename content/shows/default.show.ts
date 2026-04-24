@@ -7,7 +7,7 @@
  * file. No code change needed elsewhere.
  */
 
-import type { Show } from '$lib/show/types';
+import type { Show } from '$lib/show/load';
 
 export const defaultShow: Show = {
 	id: 'default',
