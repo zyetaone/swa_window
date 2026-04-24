@@ -77,6 +77,8 @@ export class RestAdminStore {
 
 	get connectionState(): ConnectionState { return this.#state; }
 	get isDestroyed(): boolean { return this.#destroyed; }
+	/** Discovered peer addresses. Read by peer-sync's $effect. */
+	get peers(): ReadonlyArray<DiscoveredPeer> { return this.#peers; }
 
 	constructor() {
 		this.#sourceId = adminSourceId();
@@ -200,14 +202,19 @@ export class RestAdminStore {
 	}
 
 	/**
-	 * Push a flat DisplayConfig. Ships as a single `set_config` command;
-	 * the device applies through model.applyPatch (the DTO adapter).
-	 * For CRDT-aware per-field merge, use pushConfigPath instead.
+	 * Push a scene-draft DTO — one-shot "command this device to be X." Ships
+	 * as a `set_config` command; device applies through model.applyPatch (the
+	 * DTO adapter that decomposes into typed setters + config PATCHes).
+	 *
+	 * This is for SCENE state (altitude, timeOfDay, weather, flightSpeed,
+	 * syncToRealTime) — things that aren't in the config tree. Ambient config
+	 * (clouds, haze, lights, quality) auto-propagates via peer-sync, so it
+	 * does NOT belong in a scene push.
 	 */
-	async pushConfig(deviceId: string, config: DisplayConfig): Promise<void> {
+	async pushSceneFull(deviceId: string, scene: Partial<DisplayConfig>): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
-		await this.#postCommand(peer, { type: 'set_config', patch: config });
+		await this.#postCommand(peer, { type: 'set_config', patch: scene });
 	}
 
 	/**

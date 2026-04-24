@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
-	import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
-	import type { DisplayConfig } from '$lib/fleet/protocol';
+	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
+	import { config } from '$lib/model/config-tree.svelte';
+	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS } from '$lib/locations';
 	import { onDestroy } from 'svelte';
-	import ConfigSandbox from './lib/ConfigSandbox.svelte';
 	import {
 		listBindings,
 		saveBinding,
@@ -14,55 +14,45 @@
 		type DeviceBinding,
 	} from '$lib/fleet/parallax.svelte';
 
-	// No URL params needed — admin uses REST direct to each discovered device.
-	// Device list comes from /api/devices on the Pi serving this page; admin
-	// fetches each device's /api/status + PATCH /api/config directly.
+	// Admin is a view into the global config rune. Slider sliders bind directly
+	// to `config.*` (module-scope $state — single instance per process). A $effect
+	// inside startPeerSync watches those fields and POSTs PATCH /api/config to
+	// every peer in `store.peers`, so edits propagate without an explicit push.
+	//
+	// Scene-level state (location/weather/altitude/time/flightSpeed) stays in
+	// local `scene` state because it's a one-shot command ("go there"), not an
+	// ambient config value. The "Push Scene" button dispatches on demand.
 	const store = new RestAdminStore();
-	onDestroy(() => store.destroy());
+	const stopPeerSync = startPeerSync(store);
+	onDestroy(() => { stopPeerSync(); store.destroy(); });
 
 	// Selection state
 	let selectedDevices = $state<Set<string>>(new Set());
-	let sceneLocation = $state<LocationId>('dallas');
-	let sceneWeather = $state<WeatherType>('clear');
 	let pushMode = $state<DisplayMode>('flight');
 	let videoUrl = $state('');
 
-	// Config controls — fine-grained display overrides
-	// These push live to selected devices on change (debounced 200ms)
-	let cfgAltitude = $state(35000);
-	let cfgTimeOfDay = $state(12);
-	let cfgFlightSpeed = $state(1.0);
-	let cfgCloudDensity = $state(0.7);
-	let cfgNightLightIntensity = $state(0.6);
-	let cfgSyncToRealTime = $state(true);
-	let cfgShowClouds = $state(true);
-	let cfgQualityMode = $state<QualityMode>('balanced');
+	// One-shot scene builder — what to command devices to be (not ambient config).
+	// Shadow state is justified here because admin authors a DRAFT before pushing;
+	// the device's actual location/time/weather is elsewhere (its own simulation).
+	let scene = $state({
+		location: 'dallas' as LocationId,
+		weather: 'clear' as WeatherType,
+		altitude: 35000,
+		timeOfDay: 12,
+		flightSpeed: 1.0,
+		syncToRealTime: true,
+	});
 
-	// Derived display labels for sliders
-	const altitudeLabel = $derived(`${(cfgAltitude / 1000).toFixed(0)}k ft`);
+	// Derived display labels for scene sliders
+	const altitudeLabel = $derived(`${(scene.altitude / 1000).toFixed(0)}k ft`);
 	const timeLabel = $derived.by(() => {
-		const h = Math.floor(cfgTimeOfDay);
-		const m = Math.floor((cfgTimeOfDay % 1) * 60);
+		const h = Math.floor(scene.timeOfDay);
+		const m = Math.floor((scene.timeOfDay % 1) * 60);
 		const period = h >= 12 ? 'PM' : 'AM';
 		const h12 = h % 12 || 12;
 		return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
 	});
-	const speedLabel = $derived(`${cfgFlightSpeed.toFixed(1)}x`);
-	const cloudLabel = $derived(`${Math.round(cfgCloudDensity * 100)}%`);
-	const nightLabel = $derived(cfgNightLightIntensity.toFixed(1));
-
-	// Live push: debounced config sync on slider change
-	let livePushTimeout: ReturnType<typeof setTimeout> | null = null;
-	let livePushEnabled = $state(true);
-
-	function pushConfigLive(partial: DisplayConfig) {
-		if (!livePushEnabled) return;
-		if (livePushTimeout) clearTimeout(livePushTimeout);
-		livePushTimeout = setTimeout(async () => {
-			const targets = getTargets();
-			await Promise.all(targets.map(id => store.pushConfig(id, partial)));
-		}, 200);
-	}
+	const speedLabel = $derived(`${scene.flightSpeed.toFixed(1)}x`);
 
 	function getTargets(): string[] {
 		return selectedDevices.size > 0
@@ -74,9 +64,9 @@
 	async function handlePushScene() {
 		const targets = getTargets();
 		if (targets.length === store.devices.length && store.devices.length > 0) {
-			await store.broadcastScene(sceneLocation, sceneWeather);
+			await store.broadcastScene(scene.location, scene.weather);
 		} else {
-			await Promise.all(targets.map(id => store.pushScene(id, sceneLocation, sceneWeather)));
+			await Promise.all(targets.map(id => store.pushScene(id, scene.location, scene.weather)));
 		}
 	}
 
@@ -90,19 +80,19 @@
 		await Promise.all(targets.map(id => store.pushMode(id, pushMode, payload)));
 	}
 
-	async function handlePushConfig() {
+	async function handlePushScene_Full() {
+		// One-shot push of the whole scene draft. Ambient config (clouds, haze,
+		// lights, quality, showClouds) propagates continuously via peer-sync,
+		// so it isn't included here — only scene-level overrides.
 		const targets = getTargets();
-		const config: DisplayConfig = {
-			altitude: cfgAltitude,
-			timeOfDay: cfgTimeOfDay,
-			flightSpeed: cfgFlightSpeed,
-			cloudDensity: cfgCloudDensity,
-			nightLightIntensity: cfgNightLightIntensity,
-			syncToRealTime: cfgSyncToRealTime,
-			showClouds: cfgShowClouds,
-			qualityMode: cfgQualityMode,
+		const patch = {
+			altitude: scene.altitude,
+			timeOfDay: scene.timeOfDay,
+			flightSpeed: scene.flightSpeed,
+			syncToRealTime: scene.syncToRealTime,
+			weather: scene.weather,
 		};
-		await Promise.all(targets.map(id => store.pushConfig(id, config)));
+		await Promise.all(targets.map(id => store.pushSceneFull(id, patch)));
 	}
 
 	function toggleSelectAll() {
@@ -251,10 +241,10 @@
 		<!-- Control Panel -->
 		<aside class="controls">
 			<section class="control-section">
-				<h3>Scene</h3>
+				<h3>Location + Weather</h3>
 				<label>
 					<span>Location</span>
-					<select bind:value={sceneLocation}>
+					<select bind:value={scene.location}>
 						{#each LOCATIONS as loc (loc.id)}
 							<option value={loc.id}>{loc.name}</option>
 						{/each}
@@ -262,14 +252,14 @@
 				</label>
 				<label>
 					<span>Weather</span>
-					<select bind:value={sceneWeather}>
+					<select bind:value={scene.weather}>
 						{#each WEATHER_OPTIONS as w (w)}
 							<option value={w}>{w[0].toUpperCase() + w.slice(1)}</option>
 						{/each}
 					</select>
 				</label>
 				<button class="btn btn-primary" onclick={handlePushScene}>
-					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
+					Fly There {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
 
@@ -300,58 +290,42 @@
 
 			<section class="control-section">
 				<h3>
-					Display Config
-					<label class="live-toggle">
-						<input type="checkbox" bind:checked={livePushEnabled} />
-						<span>Live</span>
-					</label>
+					Ambient <span class="hint-muted">— auto-syncs to fleet</span>
 				</h3>
 				<label>
 					<div class="slider-header">
-						<span>Altitude</span>
-						<span class="slider-value">{altitudeLabel}</span>
-					</div>
-					<input type="range" min="5000" max="48000" step="1000" bind:value={cfgAltitude}
-						oninput={() => pushConfigLive({ altitude: cfgAltitude })} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Time of Day</span>
-						<span class="slider-value">{timeLabel}</span>
-					</div>
-					<input type="range" min="0" max="24" step="0.25" bind:value={cfgTimeOfDay}
-						oninput={() => pushConfigLive({ timeOfDay: cfgTimeOfDay })} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Flight Speed</span>
-						<span class="slider-value">{speedLabel}</span>
-					</div>
-					<input type="range" min="0.1" max="5" step="0.1" bind:value={cfgFlightSpeed}
-						oninput={() => pushConfigLive({ flightSpeed: cfgFlightSpeed })} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
 						<span>Cloud Density</span>
-						<span class="slider-value">{cloudLabel}</span>
+						<span class="slider-value">{Math.round(config.atmosphere.clouds.density * 100)}%</span>
 					</div>
-					<input type="range" min="0" max="1" step="0.05" bind:value={cfgCloudDensity}
-						oninput={() => pushConfigLive({ cloudDensity: cfgCloudDensity })} class="range" />
+					<input type="range" min="0" max="1" step="0.05" bind:value={config.atmosphere.clouds.density} class="range" />
+				</label>
+				<label>
+					<div class="slider-header">
+						<span>Cloud Speed</span>
+						<span class="slider-value">{config.atmosphere.clouds.speed.toFixed(1)}×</span>
+					</div>
+					<input type="range" min="0.1" max="3" step="0.1" bind:value={config.atmosphere.clouds.speed} class="range" />
+				</label>
+				<label>
+					<div class="slider-header">
+						<span>Haze</span>
+						<span class="slider-value">{config.atmosphere.haze.amount.toFixed(2)}</span>
+					</div>
+					<input type="range" min="0" max="0.2" step="0.01" bind:value={config.atmosphere.haze.amount} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Night Lights</span>
-						<span class="slider-value">{nightLabel}</span>
+						<span class="slider-value">{config.world.nightLightIntensity.toFixed(1)}</span>
 					</div>
-					<input type="range" min="0" max="5" step="0.1" bind:value={cfgNightLightIntensity}
-						oninput={() => pushConfigLive({ nightLightIntensity: cfgNightLightIntensity })} class="range" />
+					<input type="range" min="0" max="5" step="0.1" bind:value={config.world.nightLightIntensity} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Quality</span>
-						<span class="slider-value">{cfgQualityMode}</span>
+						<span class="slider-value">{config.world.qualityMode}</span>
 					</div>
-					<select bind:value={cfgQualityMode} onchange={() => pushConfigLive({ qualityMode: cfgQualityMode })} class="select">
+					<select bind:value={config.world.qualityMode} class="select">
 						<option value="performance">Performance (Pi/Raspberry)</option>
 						<option value="balanced">Balanced (default)</option>
 						<option value="ultra">Ultra (high-end)</option>
@@ -359,18 +333,45 @@
 				</label>
 				<div class="toggle-row">
 					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgSyncToRealTime}
-							onchange={() => pushConfigLive({ syncToRealTime: cfgSyncToRealTime })} />
-						<span>Sync to Real Time</span>
-					</label>
-					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgShowClouds}
-							onchange={() => pushConfigLive({ showClouds: cfgShowClouds })} />
+						<input type="checkbox" bind:checked={config.world.showClouds} />
 						<span>Show Clouds</span>
 					</label>
+					<label class="toggle-label">
+						<input type="checkbox" bind:checked={config.world.buildingsEnabled} />
+						<span>Show Buildings</span>
+					</label>
 				</div>
-				<button class="btn btn-primary" onclick={handlePushConfig}>
-					Push All Config {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
+			</section>
+
+			<section class="control-section">
+				<h3>Scene — one-shot push</h3>
+				<label>
+					<div class="slider-header">
+						<span>Altitude</span>
+						<span class="slider-value">{altitudeLabel}</span>
+					</div>
+					<input type="range" min="5000" max="48000" step="1000" bind:value={scene.altitude} class="range" />
+				</label>
+				<label>
+					<div class="slider-header">
+						<span>Time of Day</span>
+						<span class="slider-value">{timeLabel}</span>
+					</div>
+					<input type="range" min="0" max="24" step="0.25" bind:value={scene.timeOfDay} class="range" />
+				</label>
+				<label>
+					<div class="slider-header">
+						<span>Flight Speed</span>
+						<span class="slider-value">{speedLabel}</span>
+					</div>
+					<input type="range" min="0.1" max="5" step="0.1" bind:value={scene.flightSpeed} class="range" />
+				</label>
+				<label class="toggle-label">
+					<input type="checkbox" bind:checked={scene.syncToRealTime} />
+					<span>Sync to Real Time</span>
+				</label>
+				<button class="btn btn-primary" onclick={handlePushScene_Full}>
+					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
 
@@ -434,10 +435,6 @@
 				{/if}
 			</section>
 
-			<section class="control-section">
-				<h3>Config Sandbox</h3>
-				<ConfigSandbox />
-			</section>
 		</aside>
 
 		<!-- Device Grid -->
@@ -671,23 +668,12 @@
 		align-items: center;
 	}
 
-	.live-toggle {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 4px;
+	.hint-muted {
 		font-size: 10px;
 		color: #52525b;
 		text-transform: none;
 		letter-spacing: normal;
-		margin-bottom: 0;
-		cursor: pointer;
-	}
-
-	.live-toggle input {
-		width: 12px;
-		height: 12px;
-		accent-color: #22c55e;
+		font-weight: 400;
 	}
 
 	label {
