@@ -8,7 +8,7 @@
 
 import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
-import { WEATHER_EFFECTS } from '$lib/constants';
+import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
 import { effectiveCloudDensity } from '$lib/atmosphere/clouds/rules';
 import { nextQualityMode } from '$lib/world/auto-quality';

@@ -8,7 +8,7 @@
  */
 
 import { clamp } from '$lib/utils';
-import { WEATHER_EFFECTS } from '$lib/constants';
+import { WEATHER_EFFECTS } from '$content/weather';
 import type { WeatherType, SkyState } from '$lib/types';
 
 /**

@@ -18,7 +18,7 @@
 
 import { untrack } from 'svelte';
 import type { WeatherType } from '$lib/types';
-import { WEATHER_EFFECTS } from '$lib/constants';
+import { WEATHER_EFFECTS } from '$content/weather';
 
 let {
 	density = 0.75,

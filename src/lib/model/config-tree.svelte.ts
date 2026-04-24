@@ -11,7 +11,8 @@
  * CESIUM, FLIGHT_FEEL). Every $state field initialises from these.
  */
 
-import { CESIUM, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
+import { CESIUM, AIRCRAFT, AMBIENT, MICRO_EVENTS, FLIGHT_FEEL } from '$lib/constants';
+import { WEATHER_EFFECTS } from '$content/weather';
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';

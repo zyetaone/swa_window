@@ -15,7 +15,7 @@
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
 	import { LOCATIONS } from '$content/locations';
 	import { WEATHER_TYPES, type LocationId, type WeatherType } from '$lib/types';
-	import { WEATHER_EFFECTS } from '$lib/constants';
+	import { WEATHER_EFFECTS } from '$content/weather';
 	import { clamp, formatTime } from '$lib/utils';
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
