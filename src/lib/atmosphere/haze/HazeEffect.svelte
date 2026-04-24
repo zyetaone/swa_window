@@ -15,22 +15,18 @@
 	 * the horizon — looks like real airborne haze, not a tinted overlay.
 	 */
 	import type { EffectProps } from '$lib/scene/types';
+	import { SKY_PALETTE } from '$content/palettes';
 	import { clamp } from '$lib/utils';
 
 	let { model }: EffectProps = $props();
 
-	// Alpha tuning: screen-blend compounds brightness over bright sky. Daytime
-	// Cesium sky is already near (120,160,200) — adding pale blue at 0.45 pushes
-	// the top band to white. 0.18 restores subtle horizon haze without washout.
-	// Night stays at 0.55 because navy + screen on black-starry = tint-only.
-	const hazeColor = $derived.by(() => {
-		switch (model.skyState) {
-			case 'night': return 'rgba(20, 28, 50, 0.55)';    // deep navy
-			case 'dawn':  return 'rgba(220, 150, 110, 0.22)'; // warm amber
-			case 'dusk':  return 'rgba(200, 110, 90, 0.24)';  // warm coral
-			default:      return 'rgba(170, 195, 220, 0.18)'; // cool atmospheric blue
-		}
-	});
+	// Per-skyState haze color + alpha — authored in $content/palettes/sky.ts.
+	// Alpha tuning note (kept here because it's about BLEND MODE not palette):
+	// screen blend compounds brightness over bright sky. Daytime Cesium sky
+	// near (120,160,200) + pale blue at 0.45 → near-white. 0.18 alpha on day
+	// restores subtle haze without washout. Night stays at 0.55 because
+	// navy + screen on black-starry = tint-only.
+	const hazeColor = $derived(SKY_PALETTE[model.skyState].haze);
 
 	const MAX_HAZE = 0.15 * 1.3 * 1.1;
 	const altitudeScale = $derived(0.8 + Math.min(model.flight.altitude / 50000, 1) * 0.3);

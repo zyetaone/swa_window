@@ -13,6 +13,7 @@
 	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT, FLIGHT_FEEL } from "$lib/constants";
+	import { SKY_PALETTE } from "$content/palettes";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
@@ -59,18 +60,7 @@
 
 	// --- Sky ---
 
-	const skyBackground = $derived.by(() => {
-		switch (model.skyState) {
-			case "night":
-				return "linear-gradient(180deg, #0a0a1e 0%, #1a1a2e 50%, #0d0d20 100%)";
-			case "dawn":
-				return "linear-gradient(180deg, #1a1a3a 0%, #4a3060 30%, #d08060 70%, #e0a070 100%)";
-			case "dusk":
-				return "linear-gradient(180deg, #1a1a3a 0%, #503050 30%, #c07050 70%, #d09060 100%)";
-			default:
-				return "linear-gradient(180deg, #4a7ab5 0%, #6a9ad0 40%, #8cb8e0 70%, #a0c8e8 100%)";
-		}
-	});
+	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
 
 	// --- Atmospheric effects ---
 
