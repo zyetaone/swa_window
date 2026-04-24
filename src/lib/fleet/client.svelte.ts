@@ -51,11 +51,19 @@ interface CommandEvent {
 	[k: string]: unknown;
 }
 
+interface PeerAddress {
+	deviceId: string;
+	host: string;
+	port: number;
+}
+
 export class DisplayWsClient {
 	#model: FleetClientModel;
 	#deviceId: string;
 	#eventSource: EventSource | null = null;
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
+	#peerInterval: ReturnType<typeof setInterval> | null = null;
+	#peers: PeerAddress[] = [];
 	#bootTime = Date.now();
 	#destroyed = false;
 	#state: ConnectionState = $state('disconnected');
@@ -75,6 +83,7 @@ export class DisplayWsClient {
 		setCRDTDeviceId(this.#deviceId);
 		this.connect();
 		this.#startStatusUpdates();
+		this.#startPeerRefresh();
 	}
 
 	connect(): void {
@@ -106,6 +115,7 @@ export class DisplayWsClient {
 
 	disconnect(): void {
 		this.#stopStatusUpdates();
+		this.#stopPeerRefresh();
 		this.#eventSource?.close();
 		this.#eventSource = null;
 		this.#state = 'disconnected';
@@ -117,14 +127,51 @@ export class DisplayWsClient {
 	}
 
 	/**
-	 * Phase 7 leader broadcast. Was `server.send({...})` over WS; in REST
-	 * mode the leader POSTs a `director_decision` command to each
-	 * discovered follower directly. Deferred to Phase D — for now, logs
-	 * a warning and drops the message so admin-pushed single-device
-	 * flows still work.
+	 * Phase 7 leader broadcast — panorama leader fires director_decision
+	 * when the director picks a new location. Fan out as POST /api/command
+	 * to each discovered peer. Peers' servers publish to their local SSE,
+	 * their browsers schedule the applyScene at transitionAtMs so all Pis
+	 * flip together.
+	 *
+	 * Best-effort: each POST is fire-and-forget with a catch; failure to
+	 * reach one follower doesn't block the rest. Self is excluded by
+	 * deviceId match on the peer list (which /api/devices already flags).
 	 */
 	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {
-		console.warn('[fleet] publishV2 not wired in REST mode yet:', msg.type);
+		if (this.#peers.length === 0) return;
+		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
+		for (const peer of this.#peers) {
+			void fetch(`http://${peer.host}:${peer.port}/api/command`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(msg),
+			}).catch(() => { /* follower unreachable — skip */ });
+		}
+	}
+
+	async #refreshPeers(): Promise<void> {
+		if (this.#destroyed) return;
+		try {
+			const res = await fetch('/api/devices', { cache: 'no-store' });
+			if (!res.ok) return;
+			const body = await res.json() as { devices: Array<PeerAddress & { self?: boolean }> };
+			this.#peers = body.devices.filter((d) => !d.self && d.deviceId !== this.#deviceId);
+		} catch { /* mDNS not populated yet or offline — try again next tick */ }
+	}
+
+	#startPeerRefresh(): void {
+		this.#stopPeerRefresh();
+		// Seed immediately so the first director_decision has a list,
+		// then refresh every 30s to match mDNS ANNOUNCE_INTERVAL_MS.
+		void this.#refreshPeers();
+		this.#peerInterval = setInterval(() => void this.#refreshPeers(), 30_000);
+	}
+
+	#stopPeerRefresh(): void {
+		if (this.#peerInterval) {
+			clearInterval(this.#peerInterval);
+			this.#peerInterval = null;
+		}
 	}
 
 	#startStatusUpdates(): void {

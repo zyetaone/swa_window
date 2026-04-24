@@ -175,8 +175,10 @@ leader-device ──POST /api/command──▶ follower-pi (director_decision et
 				</tbody>
 			</table>
 			<p class="note">
-				Leader-to-follower broadcast (POST to follower's <code>/api/command</code>) is deferred — the
-				existing <code>publishV2</code> hook logs a warning until it's wired through the REST path.
+				Leader-to-follower broadcast is wired: each device's SSE client caches its peer list from
+				<code>/api/devices</code> (refreshed every 30 s) and <code>publishV2</code> fires fire-and-forget
+				POSTs to every peer's <code>/api/command</code>. Followers schedule the flyTo at
+				<code>transitionAtMs</code> so all Pis flip together.
 			</p>
 		</section>
 
