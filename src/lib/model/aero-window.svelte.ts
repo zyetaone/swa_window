@@ -15,6 +15,8 @@ import { nextQualityMode } from '$lib/world/auto-quality';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
+import { defaultShow } from '$content/shows/default.show';
+import { applyShowOpening } from '$lib/show/load';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
@@ -157,6 +159,13 @@ export class AeroWindow {
 
 	// ── Constructor ───────────────────────────────────────────────────────────
 	constructor() {
+		// Precedence at boot:
+		//   1. Show opening (baseline — from $content/shows/default.show.ts)
+		//   2. Persisted localStorage (user's last session, wins over show)
+		//   3. Real-time wall-clock (if syncToRealTime, overrides timeOfDay
+		//      to current wall-clock below)
+		// URL params and admin pushes come later in the page lifecycle.
+		applyShowOpening(this, defaultShow);
 		this.#applyPersisted(loadPersistedState());
 		this.#syncWeatherConfig();
 
