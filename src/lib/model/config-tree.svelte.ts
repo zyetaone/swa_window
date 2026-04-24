@@ -15,22 +15,10 @@ import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHE
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
+import { setByPath } from '$lib/utils';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
-	const segments = path.split('.');
-	let current: Record<string, unknown> = obj;
-	for (let i = 0; i < segments.length - 1; i++) {
-		const next = current[segments[i]];
-		if (typeof next !== 'object' || next === null) return false;
-		current = next as Record<string, unknown>;
-	}
-	const key = segments[segments.length - 1];
-	if (!(key in current)) return false;
-	current[key] = value;
-	return true;
-}
+// Re-export for callers who imported it from here pre-extraction.
+export { setByPath };
 
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
 

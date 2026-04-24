@@ -96,6 +96,28 @@ export function smoothstep(t: number): number {
 }
 
 /**
+ * Write `value` into `obj` at a dotted path (e.g. 'atmosphere.clouds.density').
+ * Returns true on success; false if the path traverses a non-object segment
+ * or if the leaf key doesn't already exist on its parent.
+ *
+ * Used by the config tree dispatcher AND the CRDT store — extracted here to
+ * break the circular import those two modules used to have.
+ */
+export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
+	const segments = path.split('.');
+	let current: Record<string, unknown> = obj;
+	for (let i = 0; i < segments.length - 1; i++) {
+		const next = current[segments[i]];
+		if (typeof next !== 'object' || next === null) return false;
+		current = next as Record<string, unknown>;
+	}
+	const key = segments[segments.length - 1];
+	if (!(key in current)) return false;
+	current[key] = value;
+	return true;
+}
+
+/**
  * Format a decimal time (e.g. 14.5) as "2:30 PM".
  * Handles edge cases: 24 wraps to midnight, negative times normalized.
  */

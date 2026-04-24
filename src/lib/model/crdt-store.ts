@@ -12,7 +12,7 @@
  *   crdt.merge({ path, value, timestamp, sourceId }); // fleet
  */
 
-import { setByPath } from './config-tree.svelte';
+import { setByPath } from '$lib/utils';
 
 export interface CRDTPatch {
 	path: string;
