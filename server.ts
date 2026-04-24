@@ -28,12 +28,28 @@ if (process.env.AERO_DISABLE_LAN_PROXY !== '1') {
 	}
 }
 
-const mod = await import('./build/handler.js');
-const svelteHandler: (req: Request) => Promise<Response> = mod.handler;
+// The SvelteKit handler is produced by `bun run build`. In dev we usually
+// run `bun run dev` (Vite) instead, and this entry point is unused. But
+// anyone who runs `bun run server.ts` without a build should see a useful
+// message, not an unhandled module-import rejection.
+let svelteHandler: ((req: Request) => Promise<Response>) | null = null;
+try {
+	const mod = await import('./build/handler.js');
+	svelteHandler = mod.handler;
+	console.log('[server] SvelteKit handler loaded from build/');
+} catch {
+	console.warn('[server] No build/ found — run `bun run build` first, or use `bun run dev` for the Vite server.');
+}
 
 Bun.serve({
 	port: PORT,
-	fetch(req) { return svelteHandler(req); },
+	fetch(req) {
+		if (svelteHandler) return svelteHandler(req);
+		return new Response(
+			'Aero server: no build found. Run `bun run build` (then `bun run server.ts`), or use `bun run dev`.',
+			{ status: 503, headers: { 'Content-Type': 'text/plain' } },
+		);
+	},
 });
 
-console.log(`[server] Aero Window running on http://localhost:${PORT}`);
+console.log(`[server] Aero Window listening on http://localhost:${PORT}`);
