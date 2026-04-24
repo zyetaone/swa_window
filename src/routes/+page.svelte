@@ -15,7 +15,7 @@
 	import { LOCATION_MAP } from "$lib/locations";
 	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
-	import { createWsClient } from "$lib/fleet/client.svelte";
+	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
 	import { bundleStore } from "$lib/scene/bundle/store.svelte";
 	import {
@@ -61,13 +61,13 @@
 		return () => clearTimeout(timeout);
 	});
 
-	// Fleet server connection — receives admin push (location, weather, config).
-	// createWsClient reads ?server= URL param or VITE_FLEET_SERVER env internally,
-	// falls back to ws://hostname:3001. Always connects so the Pi registers
-	// with the fleet server even if Cesium/WebGL fails downstream.
+	// Fleet connection — SSE subscriber to own server's /api/events + peer
+	// broadcast fan-out for Phase 7 leader→follower director_decision.
+	// Always connects so the Pi is discoverable and responsive to admin
+	// PATCHes even if Cesium/WebGL fails downstream.
 	$effect(() => {
 		if (typeof window === "undefined") return;
-		const client = createWsClient(model);
+		const client = createDeviceClient(model);
 		// Phase 7 — register the leader-broadcast hook so the director can
 		// emit director_decision messages when this device is a panorama
 		// leader. Solo devices set the hook too; it's harmless (nobody

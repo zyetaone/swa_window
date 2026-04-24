@@ -25,6 +25,7 @@ import {
 	VIEWER_OPTIONS,
 	CARTODB_DARK_URL,
 } from './cesium-setup';
+import { CESIUM_QUALITY_PRESETS } from '$lib/constants';
 
 export interface CesiumModelView {
 	flight: {
@@ -561,15 +562,15 @@ export class CesiumManager {
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({ color: `rgba(${r}, ${g}, ${b}, 0.9)` });
 	}
 
-	applyQualityMode(_mode: QualityMode): void {
-		const w = this.model.config.world;
+	applyQualityMode(mode: QualityMode): void {
+		const p = CESIUM_QUALITY_PRESETS[mode];
 		const globe = this.viewer.scene.globe;
-		globe.maximumScreenSpaceError = w.msse;
-		globe.tileCacheSize = w.tileCache;
-		globe.preloadSiblings = w.preloadSiblings;
-		globe.preloadAncestors = w.preloadAncestors;
-		globe.loadingDescendantLimit = w.loadingDescendantLimit;
-		if (this.tileset) this.tileset.maximumScreenSpaceError = w.msse;
+		globe.maximumScreenSpaceError = p.maximumScreenSpaceError;
+		globe.tileCacheSize = p.tileCacheSize;
+		globe.preloadSiblings = p.preloadSiblings;
+		globe.preloadAncestors = p.preloadAncestors;
+		globe.loadingDescendantLimit = p.loadingDescendantLimit;
+		if (this.tileset) this.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
 	}
 
 	destroy(): void {

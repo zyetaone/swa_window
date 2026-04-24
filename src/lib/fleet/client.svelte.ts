@@ -1,24 +1,26 @@
 /**
- * Device fleet client — SSE subscriber + REST heartbeat poster.
+ * Device fleet client — SSE subscriber + REST heartbeat poster + Phase 7
+ * leader broadcast fan-out.
  *
  * The Pi's browser opens a long-lived EventSource to its OWN SvelteKit
  * server at `/api/events`. Admin PATCHes the server's /api/config, the
  * server's in-process sse-bus publishes the event, the stream forwards
- * it here, and we apply it to `$state` — same reactive graph that local
- * sliders write to.
+ * it here, and we apply it through model.applyConfigPatch — same
+ * reactive graph that local sliders write to.
  *
  * Heartbeat: browser POSTs {fps, location, mode, uptime} to /api/status
  * every 5 s. Admin dashboard polls that endpoint to populate its table.
  *
- * Replaces the old DisplayWsClient (WS subscription to a central broker)
- * one-for-one — same exports, same `createWsClient(model)` factory, same
- * `publishV2` for Phase 7 leader broadcasts.
+ * Leader broadcast: panorama leader's director picks a new location,
+ * fires publishV2 → this module POSTs director_decision to every
+ * discovered peer's /api/command. Peer's SSE delivers; followers
+ * schedule the applyScene at transitionAtMs so all Pis flip together.
  */
 
 import type { FleetClientModel } from '$lib/fleet/protocol';
 import { LOCATION_IDS } from '$lib/locations';
 import { isValidWeather, isValidDisplayMode } from '$lib/types';
-import { setParallaxRoleWithSync, applyRemoteConfigPatch } from '$lib/model/config-tree.svelte';
+import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
@@ -57,7 +59,7 @@ interface PeerAddress {
 	port: number;
 }
 
-export class DisplayWsClient {
+export class DeviceClient {
 	#model: FleetClientModel;
 	#deviceId: string;
 	#eventSource: EventSource | null = null;
@@ -214,7 +216,7 @@ export class DisplayWsClient {
 		if (typeof body.path !== 'string') return;
 
 		if (typeof body.timestamp === 'number' && typeof body.sourceId === 'string') {
-			applyRemoteConfigPatch(body.path, body.value, body.timestamp, body.sourceId);
+			applyConfigPatch(body.path, body.value, { timestamp: body.timestamp, sourceId: body.sourceId });
 		} else {
 			this.#model.applyConfigPatch?.(body.path, body.value);
 		}
@@ -287,6 +289,6 @@ export class DisplayWsClient {
 }
 
 /** Factory — same signature as the old WS client so consumers don't change. */
-export function createWsClient(model: FleetClientModel): DisplayWsClient {
-	return new DisplayWsClient(model);
+export function createDeviceClient(model: FleetClientModel): DeviceClient {
+	return new DeviceClient(model);
 }

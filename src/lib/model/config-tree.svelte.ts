@@ -11,14 +11,11 @@
  * CESIUM, CESIUM_QUALITY_PRESETS). Every $state field initialises from these.
  */
 
-import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS } from '$lib/constants';
+import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath } from '$lib/utils';
-
-// Re-export for callers who imported it from here pre-extraction.
-export { setByPath };
 
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
 
@@ -128,20 +125,20 @@ const _camera: CameraShape = {
 		maxSpeed: 3.0,
 	},
 	motion: {
-		bankAngleMax: 6.0,
-		bankSmoothing: 2.5,
-		breathingPeriod: 22,
-		breathingAmplitude: 1.5,
-		engineVibeFreqX: 7,
-		engineVibeFreqY: 11,
-		engineVibeAmp: 0.35,
-		bumpMinInterval: 30,
-		bumpMaxInterval: 120,
-		bumpDecay: 8,
-		bumpRingFreq: 15,
-		bumpAmplitude: 3,
-		turbulenceMultipliers: { severe: 3, moderate: 1.5, light: 1 },
-		turbulenceOffsetY: 0.05,
+		bankAngleMax: FLIGHT_FEEL.BANK_ANGLE_MAX,
+		bankSmoothing: FLIGHT_FEEL.BANK_SMOOTHING,
+		breathingPeriod: FLIGHT_FEEL.BREATHING_PERIOD,
+		breathingAmplitude: FLIGHT_FEEL.BREATHING_AMPLITUDE,
+		engineVibeFreqX: FLIGHT_FEEL.ENGINE_VIBE_FREQ_X,
+		engineVibeFreqY: FLIGHT_FEEL.ENGINE_VIBE_FREQ_Y,
+		engineVibeAmp: FLIGHT_FEEL.ENGINE_VIBE_AMP,
+		bumpMinInterval: FLIGHT_FEEL.BUMP_MIN_INTERVAL,
+		bumpMaxInterval: FLIGHT_FEEL.BUMP_MAX_INTERVAL,
+		bumpDecay: FLIGHT_FEEL.BUMP_DECAY,
+		bumpRingFreq: FLIGHT_FEEL.BUMP_RING_FREQ,
+		bumpAmplitude: FLIGHT_FEEL.BUMP_AMPLITUDE,
+		turbulenceMultipliers: AIRCRAFT.TURBULENCE_MULTIPLIERS,
+		turbulenceOffsetY: AIRCRAFT.TURBULENCE_OFFSET_Y,
 	},
 	altitude: {
 		default: AIRCRAFT.DEFAULT_ALTITUDE as number,
@@ -228,15 +225,6 @@ export const world = $state({
 	loadingDescendantLimit: CESIUM_QUALITY_PRESETS.balanced.loadingDescendantLimit,
 });
 
-export function syncWorldQuality(mode: QualityMode): void {
-	const p = CESIUM_QUALITY_PRESETS[mode];
-	world.msse = p.maximumScreenSpaceError;
-	world.tileCache = p.tileCacheSize;
-	world.preloadSiblings = p.preloadSiblings;
-	world.preloadAncestors = p.preloadAncestors;
-	world.loadingDescendantLimit = p.loadingDescendantLimit;
-}
-
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
@@ -267,7 +255,26 @@ export const crdt = createCRDTStore(_configRoot);
  * Incoming fleet patches call crdt.merge() directly — this function is for
  * local UI (which writes with a fresh local timestamp).
  */
-export function applyConfigPatch(path: string, value: unknown): boolean {
+/**
+ * Apply a path-keyed patch to the config tree.
+ *
+ * Local writes (no `remote` arg) stamp with `Date.now()` + current
+ * device id and write through. Remote writes (with `remote` arg) route
+ * through CRDT merge — the incoming patch only applies if its
+ * timestamp beats the local last-writer for this path, with sourceId
+ * lexicographic tiebreak on equal timestamps.
+ *
+ * Returns true if the write was applied. For remote writes, false means
+ * "lost the CRDT race" (stale); for local writes, false means "unknown
+ * namespace or invalid path segment."
+ */
+export function applyConfigPatch(
+	path: string,
+	value: unknown,
+	remote?: { timestamp: number; sourceId: string },
+): boolean {
+	if (remote) return crdt.merge({ path, value, ...remote });
+
 	const idx = path.indexOf('.');
 	if (idx < 0) return false;
 	const ns = path.slice(0, idx) as keyof typeof NAMESPACES;
@@ -287,28 +294,6 @@ export function setParallaxRoleWithSync(role: DeviceRole): void {
 	crdt.set('camera.parallax.role', role);
 	setByPath(camera as unknown as Record<string, unknown>, 'parallax.role', role);
 	setParallaxRole(role);
-}
-
-/**
- * Apply a fleet-sourced patch with LWW-CRDT semantics. Routes through
- * crdt.merge — incoming patch only applies if its timestamp beats the
- * local last-writer for this path (tiebreak by sourceId). Fleet v2
- * message handler calls this when the incoming message carries timestamp
- * + sourceId; absent either field, the caller should fall through to
- * local applyConfigPatch (which stamps fresh locally).
- */
-export function applyRemoteConfigPatch(
-	path: string,
-	value: unknown,
-	timestamp: number,
-	sourceId: string,
-): boolean {
-	return crdt.merge({ path, value, timestamp, sourceId });
-}
-
-/** @deprecated Use applyRemoteConfigPatch — same behaviour, named arguments. */
-export function applyCRDTPatch(patch: { path: string; value: unknown; timestamp: number; sourceId: string }): boolean {
-	return crdt.merge(patch);
 }
 
 /** Snapshot of all CRDT timestamps (for persistence + reconcile-on-reconnect). */

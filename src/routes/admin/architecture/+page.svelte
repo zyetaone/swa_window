@@ -48,11 +48,10 @@
 				</li>
 				<li>
 					<strong>Path-keyed config + LWW-CRDT boundary</strong> — every config mutation flows through
-					<code>applyConfigPatch(path, value)</code>
-					(local stamps fresh) or
-					<code>applyRemoteConfigPatch(path, value, timestamp, sourceId)</code>
-					(fleet-sourced, CRDT-gated). Per-path last-writer-wins with sourceId tiebreak. <code>applyPatch(DTO)</code>
-					is a thin adapter that decomposes into typed setters + <code>applyConfigPatch</code>.
+					<code>applyConfigPatch(path, value, remote?)</code>. Called with no third arg it stamps locally;
+					called with <code>&#123;timestamp, sourceId&#125;</code> it CRDT-merges (per-path last-writer-wins,
+					sourceId tiebreak). <code>applyPatch(DTO)</code> is a thin adapter that decomposes flat scene DTOs
+					into typed setters + <code>applyConfigPatch</code>.
 				</li>
 				<li>
 					<strong><code>untrack()</code> in hot paths</strong> — every engine tick body (flight, motion,
@@ -192,7 +191,7 @@ leader-device ──POST /api/command──▶ follower-pi (director_decision et
 				<li><code>scene/layers.ts</code> — named Z constants. Replaced triplicated z-order docs.</li>
 				<li><code>lan-proxy.server.ts</code> split into <code>lan-peers</code> + <code>lan-bundle-cache</code>.</li>
 				<li><code>night/</code> barrel exposing VIIRS / haze / color-grading constants in one place.</li>
-				<li>CRDT wiring finished: <code>applyRemoteConfigPatch</code> with timestamp + sourceId tiebreak.</li>
+				<li>CRDT wiring finished: <code>applyConfigPatch(path, value, remote?)</code> — one function, optional timestamp+sourceId tiebreak.</li>
 				<li>WS fleet broker deleted: <code>hub.ts</code>, <code>admin.svelte.ts</code>, <code>transport.svelte.ts</code>, <code>url.ts</code>, <code>routes/api/fleet/+server.ts</code>, v1/v2 wire-message unions. ~1100 lines gone.</li>
 			</ul>
 		</section>
