@@ -70,7 +70,8 @@ export class RestAdminStore {
 	serverUptime = 0;
 
 	#peers: DiscoveredPeer[] = [];
-	#pollInterval: ReturnType<typeof setInterval> | null = null;
+	#statusInterval: ReturnType<typeof setInterval> | null = null;
+	#discoveryInterval: ReturnType<typeof setInterval> | null = null;
 	#destroyed = false;
 	#sourceId: string;
 	#state = $state<ConnectionState>('connecting');
@@ -83,13 +84,19 @@ export class RestAdminStore {
 	constructor() {
 		this.#sourceId = adminSourceId();
 		this.refresh();
-		// Re-enumerate peers every 30 s (mDNS roster can change); poll status every 5 s.
-		this.#pollInterval = setInterval(() => this.#pollStatus(), 5000);
+		// Two cadences:
+		//   status poll  — every 5 s, per-peer /api/status GET
+		//   discovery    — every 30 s, re-read /api/devices so new Pis appear
+		//                  without a manual page refresh. Matches mDNS
+		//                  ANNOUNCE_INTERVAL_MS — no point polling faster.
+		this.#statusInterval = setInterval(() => this.#pollStatus(), 5000);
+		this.#discoveryInterval = setInterval(() => this.refresh(), 30000);
 	}
 
 	destroy(): void {
 		this.#destroyed = true;
-		if (this.#pollInterval) clearInterval(this.#pollInterval);
+		if (this.#statusInterval) clearInterval(this.#statusInterval);
+		if (this.#discoveryInterval) clearInterval(this.#discoveryInterval);
 	}
 
 	/** Initial discover + status fetch. Also exposed so admin UI can manually refresh. */
