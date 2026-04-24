@@ -9,7 +9,7 @@ import type { Effect } from './types';
 import carLights from './effects/car-lights';
 import atmosphericHaze from '$lib/atmosphere/haze';
 import clouds from '$lib/atmosphere/clouds';
-import lightning from '$lib/atmosphere/weather/lightning';
+import lightning from '$lib/atmosphere/lightning';
 import microEvents from '$lib/atmosphere/micro-events';
 
 export const EFFECTS: readonly Effect[] = [

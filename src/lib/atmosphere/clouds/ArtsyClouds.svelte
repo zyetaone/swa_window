@@ -17,32 +17,27 @@
  */
 
 import { untrack } from 'svelte';
-import type { WeatherType } from '$lib/types';
+import type { EffectProps } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$content/weather';
 
-let {
-	density = 0.75,
-	speed = 1.0,
-	heading = 90,
-	nightFactor = 0,
-	altitude = 30000,
-	weather = 'clear' as WeatherType,
-	cloudScale = 1.0,
-	/** Environment edge color — tints cloud edges to match sky/horizon */
-	edgeColor = 'rgba(180, 200, 230, 0.3)',
-	/** Sky state for color grading */
-	skyState = 'day' as string,
-}: {
-	density?: number;
-	speed?: number;
-	heading?: number;
-	nightFactor?: number;
-	altitude?: number;
-	weather?: WeatherType;
-	cloudScale?: number;
-	edgeColor?: string;
-	skyState?: string;
-} = $props();
+// Effect-component signature — compositor passes { model }. The wrapper
+// that used to unpack model into explicit props (CloudsEffect.svelte) is
+// gone per Rule 3 (one component per effect folder).
+let { model }: EffectProps = $props();
+
+const density = $derived(model.effectiveCloudDensity);
+const speed = $derived(model.config.atmosphere.clouds.speed);
+const heading = $derived(model.flight.heading);
+const altitude = $derived(model.flight.altitude);
+const nightFactor = $derived(model.nightFactor);
+const weather = $derived(model.weather);
+const skyState = $derived<string>(model.skyState);
+
+// Static tuning — the wrapper only ever passed cloudScale=1.0 and left
+// edgeColor at its default. Keeping them as constants here instead of
+// prop defaults since there's exactly one caller (the effect registry).
+const cloudScale = 1.0;
+const edgeColor = 'rgba(180, 200, 230, 0.3)';
 
 // Weather auto-sets minimum cloud density — cloudy=0.7, storm=0.98
 const weatherDensityFloor = $derived(WEATHER_EFFECTS[weather]?.cloudDensityRange?.[0] ?? 0);
