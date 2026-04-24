@@ -9,6 +9,12 @@ const config = {
 
 	kit: {
 		adapter: adapter(),
+		// $content alias → repo-root content/ folder. Per docs/standards.md
+		// Rule 0: authored artifacts (locations, weather recipes, palettes,
+		// shows) live in content/, separate from src/ control plane.
+		alias: {
+			$content: 'content',
+		},
 		// Pi 5 kiosk: single JS bundle reduces concurrent connections
 		// and speeds up cold start in Chromium kiosk mode.
 		// Ref: https://svelte.dev/docs/kit/project-types#Embedded-device

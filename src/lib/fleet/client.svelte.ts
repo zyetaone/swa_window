@@ -18,7 +18,7 @@
  */
 
 import type { FleetClientModel } from '$lib/fleet/protocol';
-import { LOCATION_IDS } from '$lib/locations';
+import { LOCATION_IDS } from '$content/locations';
 import { isValidWeather, isValidDisplayMode } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';

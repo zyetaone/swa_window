@@ -12,7 +12,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import { createAeroWindow } from "$lib/model/aero-window.svelte";
 	import { AIRCRAFT } from "$lib/constants";
-	import { LOCATION_MAP } from "$lib/locations";
+	import { LOCATION_MAP } from "$content/locations";
 	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";

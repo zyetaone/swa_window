@@ -8,10 +8,10 @@
  * - toJSON() is a plain spread of the reactive tree — no manual field mapping
  *
  * SSOT defaults: constants.ts (AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS,
- * CESIUM, CESIUM_QUALITY_PRESETS). Every $state field initialises from these.
+ * CESIUM, FLIGHT_FEEL). Every $state field initialises from these.
  */
 
-import { CESIUM, CESIUM_QUALITY_PRESETS, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
+import { CESIUM, AIRCRAFT, AMBIENT, MICRO_EVENTS, WEATHER_EFFECTS, FLIGHT_FEEL } from '$lib/constants';
 import type { DeviceRole, QualityMode, WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
@@ -218,11 +218,6 @@ export const world = $state({
 	overpassRadiusMeters: 3500,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
-	msse: CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError,
-	tileCache: CESIUM_QUALITY_PRESETS.balanced.tileCacheSize,
-	preloadSiblings: CESIUM_QUALITY_PRESETS.balanced.preloadSiblings,
-	preloadAncestors: CESIUM_QUALITY_PRESETS.balanced.preloadAncestors,
-	loadingDescendantLimit: CESIUM_QUALITY_PRESETS.balanced.loadingDescendantLimit,
 });
 
 

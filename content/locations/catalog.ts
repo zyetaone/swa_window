@@ -1,9 +1,12 @@
 /**
- * Location registry — SSOT for locations, scene archetypes, and the LocationId
- * union type.
+ * Location registry — authored content.
  *
- * Adding a location here automatically widens LocationId — no need to update
- * types.ts separately.
+ * SSOT for locations, scene archetypes, and the LocationId union. Adding a
+ * location here widens LocationId automatically — no other file edits needed.
+ *
+ * Lives under `content/` per docs/standards.md Rule 0 (content vs control):
+ * this file is authored content a curator could edit. The control plane
+ * (engines, compositor, shell) imports from `$content/locations`.
  */
 
 // ─── Scene shape ─────────────────────────────────────────────────────────────

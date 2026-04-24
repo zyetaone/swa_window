@@ -14,7 +14,7 @@ import { effectiveCloudDensity } from '$lib/atmosphere/clouds/rules';
 import { nextQualityMode } from '$lib/world/auto-quality';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
-import { LOCATIONS, LOCATION_MAP } from '$lib/locations';
+import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';

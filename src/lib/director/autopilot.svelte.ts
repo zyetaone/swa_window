@@ -13,15 +13,16 @@
 
 import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
+import { AMBIENT } from '$lib/constants';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
 
 // ── Private timers ──────────────────────────────────────────────────────────
 
 let _randomizeTimer = 0;
-let _nextRandomizeTime = 120;
+let _nextRandomizeTime: number = AMBIENT.INITIAL_MIN_DELAY as number;
 
 let _directorTimer = 0;
-let _timeToNextLocation = 140;
+let _timeToNextLocation: number = AMBIENT.INITIAL_MAX_DELAY as number;
 
 // ─── Tick ───────────────────────────────────────────────────────────────────
 

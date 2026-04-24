@@ -8,7 +8,7 @@
 	 *
 	 * Output: no DOM. All rendering happens inside the Cesium canvas.
 	 */
-	import { LOCATION_MAP } from '$lib/locations';
+	import { LOCATION_MAP } from '$content/locations';
 	import { useCesiumEffect } from '$lib/world/active.svelte';
 	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/night';
 	import type { EffectProps } from '../../types';

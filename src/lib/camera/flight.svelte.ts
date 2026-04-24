@@ -8,7 +8,7 @@
 import { untrack } from 'svelte';
 import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
-import { LOCATION_MAP } from '$lib/locations';
+import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
 
 export class FlightSimEngine {

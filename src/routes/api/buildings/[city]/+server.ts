@@ -8,7 +8,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { LOCATION_MAP } from '$lib/locations';
+import { LOCATION_MAP } from '$content/locations';
 import type { RequestHandler } from './$types';
 
 const TILE_DIR = (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '');

@@ -540,8 +540,7 @@ export class CesiumManager {
 			this.tileset = await this.CesiumModule.createOsmBuildingsAsync();
 			if (this.tileset) {
 				this.tileset.show = this.model.config.world.buildingsEnabled;
-				const w = this.model.config.world;
-				this.tileset.maximumScreenSpaceError = w.msse;
+				this.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
 				// Cast + receive shadows — buildings drop long shadows across
 				// the terrain at low-sun times, grounding them in the scene.
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;

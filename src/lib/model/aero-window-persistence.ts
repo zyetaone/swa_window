@@ -1,5 +1,5 @@
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
-import { LOCATION_IDS } from '$lib/locations';
+import { LOCATION_IDS } from '$content/locations';
 
 // Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
 // Hardcoded here (one-time startup concern) to keep persistence.ts free of

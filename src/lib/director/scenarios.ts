@@ -7,7 +7,7 @@
  */
 
 import type { LocationId, SkyState, FlightScenario } from '$lib/types';
-import { LOCATION_IDS } from '$lib/locations';
+import { LOCATION_IDS } from '$content/locations';
 import { getSkyState } from '$lib/utils';
 
 // ============================================================================

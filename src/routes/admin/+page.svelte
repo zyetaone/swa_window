@@ -5,7 +5,7 @@
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
-	import { LOCATIONS } from '$lib/locations';
+	import { LOCATIONS } from '$content/locations';
 	import { onDestroy } from 'svelte';
 	import {
 		listBindings,

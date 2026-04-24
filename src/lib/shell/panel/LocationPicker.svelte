@@ -5,7 +5,7 @@
 	 * a direct lat/lon binding. Composed by SidePanel via snippet children.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { LOCATIONS } from '$lib/locations';
+	import { LOCATIONS } from '$content/locations';
 
 	const model = useAeroWindow();
 

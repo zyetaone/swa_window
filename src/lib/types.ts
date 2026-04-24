@@ -11,8 +11,8 @@
 // Re-export location types — LocationId is derived from the LOCATIONS array
 // so adding a location never requires a manual update here. Imported locally
 // because re-exports don't bring symbols into this file's scope.
-import type { LocationId } from './locations';
-export type { LocationId, Location, SceneDefaults } from './locations';
+import type { LocationId } from '$content/locations';
+export type { LocationId, Location, SceneDefaults } from '$content/locations';
 
 import type { CameraConfig, DirectorConfig } from './model/config-tree.svelte';
 export type { CameraConfig, DirectorConfig };

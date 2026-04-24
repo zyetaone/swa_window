@@ -1,6 +1,6 @@
 import type { Effect } from '../../types';
 import { Z } from '../../layers';
-import { LOCATION_MAP } from '$lib/locations';
+import { LOCATION_MAP } from '$content/locations';
 import CarLightsEffect from './CarLightsEffect.svelte';
 
 const carLights: Effect = {

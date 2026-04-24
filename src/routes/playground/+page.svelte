@@ -13,7 +13,7 @@
 	 */
 	import { onDestroy } from 'svelte';
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
-	import { LOCATIONS } from '$lib/locations';
+	import { LOCATIONS } from '$content/locations';
 	import { WEATHER_TYPES, type LocationId, type WeatherType } from '$lib/types';
 	import { WEATHER_EFFECTS } from '$lib/constants';
 	import { clamp, formatTime } from '$lib/utils';
