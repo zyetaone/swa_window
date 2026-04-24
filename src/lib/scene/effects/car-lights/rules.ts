@@ -4,8 +4,15 @@
  * Jugaad MVP: no real road data. Seed N dots in a radial cluster around a
  * center point, biased toward the middle (quadratic distribution) so the
  * density falls off naturally. Each dot gets a stable random value used to
- * pick its class (white headlight / red taillight / blue emergency flicker).
+ * pick its class (white headlight / red taillight / warm-yellow accent).
+ *
+ * The RGBA palette for each class lives in $content/palettes/car-lights —
+ * edit there, not here.
  */
+
+import { CAR_LIGHTS_PALETTE, type LightClass } from '$content/palettes';
+
+export type { LightClass };
 
 export interface LightSeed {
 	lat: number;
@@ -13,8 +20,6 @@ export interface LightSeed {
 	/** Per-dot random value in [0,1) — determines color class. */
 	rand: number;
 }
-
-export type LightClass = 'white' | 'red' | 'blue';
 
 /**
  * Generate `count` point seeds in a radial cluster around (centerLat, centerLon).
@@ -44,23 +49,16 @@ export function seedDots(
 
 /**
  * Classify a light by its rand value.
- * 70% warm white (headlights), 25% warm red (taillights), 5% warm yellow
- * accent (was "blue/emergency" — changed per user feedback to match the
- * view-from-an-aircraft aesthetic; no emergency-blue flicker).
+ * 70% white (headlights), 25% red (taillights), 5% accent (the 'blue' class
+ * label is historical; the palette maps it to warm yellow).
  */
 export function lightClass(rand: number): LightClass {
 	if (rand < 0.70) return 'white';
 	if (rand < 0.95) return 'red';
-	return 'blue'; // type label preserved for back-compat; palette is warm yellow
+	return 'blue';
 }
 
-/** RGBA byte tuple for a given class — consumed by the effect component. */
+/** RGBA byte tuple for a given class — palette lookup. */
 export function lightColorBytes(cls: LightClass): [number, number, number, number] {
-	switch (cls) {
-		case 'white': return [255, 230, 200, 220];
-		case 'red':   return [255, 60, 40, 200];
-		// Warm yellow (was cool blue). Aircraft-window aesthetic: all lights
-		// from altitude read as warm sodium amber, never emergency blue.
-		case 'blue':  return [255, 220, 150, 230];
-	}
+	return CAR_LIGHTS_PALETTE[cls];
 }
