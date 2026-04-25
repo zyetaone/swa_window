@@ -12,18 +12,8 @@
  * and polls each peer's own `/api/status` directly.
  */
 
-import type { LocationId, DisplayMode, WeatherType } from '$lib/types';
-
-export interface DeviceStatus {
-	deviceId: string;
-	hostname: string;
-	fps: number;
-	mode: DisplayMode;
-	location: LocationId;
-	weather: WeatherType;
-	uptime: number;
-	lastSeen: number;
-}
+export type { DeviceStatus } from './protocol';
+import type { DeviceStatus } from './protocol';
 
 let cached: DeviceStatus | null = null;
 

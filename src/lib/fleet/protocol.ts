@@ -75,3 +75,14 @@ export interface DeviceInfo {
 	lastSeen: number;
 	online: boolean;
 }
+
+export interface DeviceStatus {
+	deviceId: string;
+	hostname: string;
+	fps: number;
+	mode: DisplayMode;
+	location: LocationId;
+	weather: WeatherType;
+	uptime: number;
+	lastSeen: number;
+}
