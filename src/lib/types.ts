@@ -1,21 +1,18 @@
 /**
- * Domain Types — Single Source of Truth.
+ * Domain types — single source of truth.
  *
- * All domain types for display, admin, fleet, and simulation live here.
- * Runtime validation arrays derive from const arrays (DRY: type + validator in one place).
+ * Runtime-validated unions (WeatherType, DisplayMode, QualityMode,
+ * DeviceRole) are derived from `as const` arrays so the type and the
+ * validator stay in lock-step. Other types are pure domain shapes.
  *
- * Location-specific types (LocationId, Location, SceneDefaults) live in
- * locations.ts — re-exported here for convenience.
+ * `Location` / `SceneDefaults` live in `$content/locations` (Rule 0).
+ * `CameraConfig` / `DirectorConfig` are derived from the live config
+ * tree at `$lib/model/config-tree.svelte`.
  */
 
-// Re-export location types — LocationId is derived from the LOCATIONS array
-// so adding a location never requires a manual update here. Imported locally
-// because re-exports don't bring symbols into this file's scope.
 import type { LocationId } from '$content/locations';
-export type { LocationId, Location, SceneDefaults } from '$content/locations';
-
+export type { LocationId } from '$content/locations';
 import type { CameraConfig, DirectorConfig } from './model/config-tree.svelte';
-export type { CameraConfig, DirectorConfig };
 
 // ─── Const-array-derived unions (runtime + compile-time SSOT) ────────────────
 
@@ -42,12 +39,6 @@ export const DEVICE_ROLES = ['solo', 'left', 'center', 'right'] as const;
 export type DeviceRole = typeof DEVICE_ROLES[number];
 export function isValidDeviceRole(v: unknown): v is DeviceRole {
 	return typeof v === 'string' && (DEVICE_ROLES as readonly string[]).includes(v);
-}
-
-/** Safe JSON parse — returns null on failure instead of throwing. */
-export function safeParse<T = unknown>(raw: string): T | null {
-	try { return JSON.parse(raw); }
-	catch { return null; }
 }
 
 // ─── Core domain types ───────────────────────────────────────────────────────
@@ -122,7 +113,7 @@ export interface MicroEventData {
 
 // ─── Scenario types ──────────────────────────────────────────────────────────
 
-export interface Waypoint {
+interface Waypoint {
 	lat: number;
 	lon: number;
 	altitude: number;

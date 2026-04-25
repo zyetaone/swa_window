@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidWeather, isValidDisplayMode, isValidQualityMode, safeParse } from '$lib/types';
+import { isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
 
 describe('isValidWeather', () => {
 	it('accepts known weather types', () => {
@@ -42,14 +42,3 @@ describe('isValidQualityMode', () => {
 	});
 });
 
-describe('safeParse', () => {
-	it('parses valid JSON', () => {
-		expect(safeParse('{"a":1}')).toEqual({ a: 1 });
-		expect(safeParse('[1,2,3]')).toEqual([1, 2, 3]);
-	});
-	it('returns null on malformed JSON', () => {
-		expect(safeParse('not json')).toBe(null);
-		expect(safeParse('{')).toBe(null);
-		expect(safeParse('')).toBe(null);
-	});
-});
