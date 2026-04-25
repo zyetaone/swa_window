@@ -1,201 +1,229 @@
 # Architecture Codemap
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-26 (phase 11 — post-consolidation)
 
-## Layer Diagram
+## Layer diagram
 
 ```
                          DEPENDENCY LAYERS
- ════════════════════════════════════════════════════════
 
  ┌───────────────────────────────────────────────────────┐
  │  ROUTES                                               │
- │  +page.svelte — context provider + side-effects       │
- │  admin/  playground/  architecture/  api/              │
- └─────────────┬────────────────────────┬────────────────┘
-               │                        │
-               v                        v
- ┌─────────────────────┐    ┌───────────────────────────┐
- │  APP STATE           │    │  UI COMPONENTS            │
- │  app-state.svelte.ts │    │  Window, Globe, HUD,      │
- │  AeroWindow + DI    │    │  SidePanel, CloudBlobs,   │
- └───┬─────────────┬────┘    │  Weather, MicroEvent      │
-     │             │         └────────────┬──────────────┘
-     v             v                      │
- ┌─────────┐  ┌──────────┐               │
- │ ENGINE  │  │ SERVICES │               │
- │ (pure)  │  │ (I/O)    │               │
- └────┬────┘  └────┬─────┘               │
-      │            │                     │
-      v            v                     v
- ┌───────────────────────────────────────────────────────┐
- │  SHARED (leaf — no internal imports)                  │
- │  types  constants  locations  protocol  utils         │
- └───────────────────────────────────────────────────────┘
+ │  +layout.ts (ssr=false, app-wide)                    │
+ │  +page.svelte — root context + side-effects          │
+ │  admin/   playground/   api/                         │
+ └─────────────┬───────────────────────┬─────────────────┘
+               │                       │
+               v                       v
+ ┌─────────────────────────┐   ┌──────────────────────────┐
+ │  MODEL                  │   │  SHELL                   │
+ │  AeroWindow + ctx DI    │   │  Window (compositor),    │
+ │  config tree (SSOT)     │   │  HUD, SidePanel,         │
+ │  CRDT LWW store         │   │  panel/* hud/* window/*  │
+ │  frame-telemetry        │   └─────────────┬────────────┘
+ └────┬─────┬────┬─────────┘                 │
+      │     │    │                           │
+      v     v    v                           v
+ ┌────────┐┌──────────┐ ┌──────────────────────────────┐
+ │CAMERA  ││DIRECTOR  │ │ SCENE                        │
+ │flight  ││autopilot │ │ compositor + registry +      │
+ │motion  ││scenarios │ │ layers (Z SSOT) +            │
+ │        ││          │ │ effects/* + bundle/*         │
+ └────────┘└──────────┘ └──────────────┬───────────────┘
+                                       │
+                                       v
+                          ┌──────────────────────────┐
+                          │ WORLD                    │
+                          │ Cesium isolation         │
+                          │ (compose, cesium-setup,  │
+                          │ shaders, CesiumViewer)   │
+                          └──────────────────────────┘
 
- ┌───────────────────────────────────────────────────────┐
- │  SERVER (separate Bun process)                        │
- │  fleet-hub.ts — imports only shared/protocol + types  │
- └───────────────────────────────────────────────────────┘
+ Authored content        Boot baseline       Fleet (REST + SSE)
+ ┌──────────────┐        ┌────────────┐      ┌──────────────────┐
+ │ content/     │        │ show/      │      │ fleet/           │
+ │ locations/   │        │ load.ts    │      │ rest-admin       │
+ │ weather/     │        │ Show type  │      │ client (SSE)     │
+ │ palettes/    │        │ apply...() │      │ peer-sync $eff   │
+ │ shows/       │        └────────────┘      │ heartbeat (.svr) │
+ └──────────────┘                            │ device-registry  │
+                                             │ lan-peers (mDNS) │
+                                             │ lan-bundle-cache │
+                                             │ parallax (MAC)   │
+                                             │ sse-bus (.svr)   │
+                                             └──────────────────┘
+
+ Cross-cutting        Shared primitives
+ ┌──────────────┐     ┌──────────────────────────┐
+ │ night/       │     │ types  utils  game-loop  │
+ │ index.ts     │     │ http/cors  http/body     │
+ │ (rendering)  │     └──────────────────────────┘
+ └──────────────┘
 ```
 
-## Data Flow: User Action
+## The four invariants
+
+1. **Cesium isolation.** `import 'cesium'` appears in exactly two type-level imports (`world/compose.ts`, `world/cesium-setup.ts`) and one runtime `import('cesium')` (`world/CesiumViewer.svelte`). Verify with `rg "from 'cesium'" src/lib/`.
+2. **Flat DTO boundary.** Fleet protocol v1 + v2 messages cross the wire as flat shapes. v2 added `config_patch { path, value }` additively without restructuring v1.
+3. **`untrack()` in tick bodies.** Every 60 Hz tick wraps in `untrack()` so reactive dependencies don't propagate across the engine graph: `flight.svelte.ts:88`, `motion.svelte.ts:43`, `autopilot.svelte.ts:31`.
+4. **Content/control split (Rule 0).** `content/` holds the authored what-plays artifacts (locations, weather, palettes, shows). `src/lib/` holds the how-it-plays code. Imported via the `$content` alias.
+
+## Data flow: user adjusts a slider
 
 ```
-SidePanel slider → model.applyPatch({ cloudDensity: 0.8 })
-     │
-     v
-AeroWindow validates + clamps + sets $state
-     │
-     ├──→ $derived recalculates (skyState, nightFactor, effectiveCloudDensity...)
-     │
-     ├──→ Window.svelte reads derived → CSS (filterString, motionTransform)
-     │
-     └──→ CesiumManager reads model fields in postRender tick
-          → syncCamera() → syncAtmosphere() → syncImagery() → syncBuildings()
+SidePanel slider (e.g. AtmosphereControls)
+    │  bind:value={config.atmosphere.clouds.density}
+    v
+config.atmosphere.clouds.density = 0.8        // direct $state mutation
+    │
+    ├── peer-sync $effect detects change
+    │   → POST PATCH /api/config to every peer
+    │     (other Pis route through their own CRDT merge)
+    │
+    ├── ArtsyClouds.svelte $derived recomputes sprite count
+    │
+    └── Window.svelte $derived recomputes filterString
+        → CSS backdrop-filter on the window pane
 ```
 
-## Data Flow: RAF Tick Loop
+## Data flow: RAF tick
 
 ```
 game-loop.ts (RAF singleton)
-     │  subscribe(fn)
-     v
+    │  subscribe(fn)
+    v
 Window.svelte $effect → model.tick(delta)
-     │
-     ├── flight.tick(delta, ctx) → orbit/scenario/cruise state machine
-     │
-     ├── motion.tick(delta, ctx) → turbulence/banking/breathing
-     │
-     └── world.tick(delta, worldCtx) → WorldPatch
-         │  ├── atmosphere? → model.applyPatch(...)
-         │  └── nextLocation? → flight.flyTo(...)
-         │
-         ├── #tickLightning → lightningIntensity
-         ├── #tickRandomize → AtmospherePatch
-         ├── #tickEvents → microEvent
-         └── #tickDirector → LocationId (auto-pilot)
+    │
+    ├── flight.tick(delta, ctx)            untrack() → FlightPatch
+    │     (orbit, scenarios, cruise FSM)
+    │
+    ├── motionStep(delta, ctx)             untrack() → void
+    │     (turbulence, banking, breathing, vibe)
+    │
+    └── directorTick(delta, ctx)           untrack() → WorldPatch
+          early-return if !ctx.isLeader
+          ├── tickRandomize → AtmospherePatch
+          └── tickDirector  → LocationId
+                    │
+                    └── if leader: emit director_decision
+                        with transitionAtMs = now + 2.5 s
+                        → followers schedule timeout to apply at wall-clock
 ```
 
-Note: CesiumManager has its own tick via Cesium's `postRender` event — decoupled from the game loop.
+CesiumManager has its own `postRender` tick — decoupled from `game-loop.ts`.
 
-## Data Flow: Fleet Command
-
-```
-Admin dashboard → POST /api/fleet?action=scene
-     │
-     v
-fleet-hub.ts → lookup display socket by deviceId
-     │
-     v
-WebSocket → { type: 'set_scene', location: 'dubai', weather: 'clear' }
-     │
-     v
-DisplayWsClient.#handleMessage → validates → model.flight.flyTo('dubai')
-```
-
-## Component Tree
+## Data flow: fleet config write
 
 ```
-+page.svelte ─── CONTEXT BOUNDARY (createAeroWindow)
+Admin slider (or peer device's local UI)
+    │
+    v
+config.atmosphere.haze.amount = 0.12
+    │
+    ├── crdt.set(path, value, Date.now(), deviceId)
+    │     (local LWW timestamp + sourceId)
+    │
+    ├── peer-sync $effect → POST /api/config
+    │   {path, value, timestamp, sourceId}
+    │
+    v
+Peer device's POST /api/config handler
+    │
+    v
+applyConfigPatch(path, value, {timestamp, sourceId})
+    │
+    └── crdt.merge(...)
+          ├── if local timestamp newer → reject (return false)
+          ├── if equal & local sourceId greater → reject
+          └── else apply → setByPath() → reactive update
+```
+
+LWW with sourceId tiebreak guarantees deterministic convergence across peers without central coordination.
+
+## Component tree
+
+```
++page.svelte ── CONTEXT BOUNDARY (createAeroWindow)
 │
-├── Window.svelte ─── useAeroWindow(), game-loop subscription
-│   ├── Globe.svelte ── useAeroWindow(), CesiumManager lifecycle
-│   ├── CloudBlobs.svelte ── props only
-│   ├── Weather.svelte ── props only
-│   └── MicroEvent.svelte ── props only
+├── Window.svelte ── useAeroWindow(), game-loop subscription
+│   ├── CesiumViewer.svelte ── runtime import('cesium')
+│   ├── Compositor.svelte ── iterates registered Effects + bundleStore
+│   │   ├── effects/clouds (ArtsyClouds — CSS3D sprites)
+│   │   ├── effects/haze
+│   │   ├── effects/lightning
+│   │   ├── effects/micro-events
+│   │   ├── effects/car-lights (geo)
+│   │   ├── effects/sprite (factory, bundle-driven)
+│   │   └── effects/video-bg (factory, bundle-driven)
+│   ├── window/Weather (rain + frost CSS)
+│   ├── window/Glass (vignette + recess)
+│   └── window/Blind ── useBlind composable
 │
 ├── HUD.svelte ── useAeroWindow()
+│   ├── hud/TelemetryOverlay (open-state, ALT/GS/LOC)
+│   └── hud/BlindInfoCard (closed-state branding)
 │
-└── SidePanel.svelte ── useAeroWindow()
-    ├── AirlineLoader.svelte (pure)
-    ├── Toggle.svelte (props)
-    └── RangeSlider.svelte (props)
+├── SidePanel.svelte ── useAeroWindow()
+│   └── panel/* (LocationPicker, TimeControl, FlightControls,
+│       AtmosphereControls, LightingControls, WeatherPicker)
+│
+└── TelemetryPanel.svelte ── Shift+T devtools view
 ```
 
-## State Ownership
+## State ownership
 
-### AeroWindow (coordinator)
+| Owner | Responsibility |
+|-------|----------------|
+| `model/aero-window.svelte.ts` | AeroWindow class — composes engines, owns `location`/`weather`/`timeOfDay`/`flightMode`, dispatches ticks, applies show opening, holds `flight` instance, telemetry |
+| `model/config-tree.svelte.ts` | Flat `$state` namespaces: `atmosphere`, `camera`, `director`, `world`, `shell`. The default literals here are the SSOT for tuning — no `constants.ts`. |
+| `model/crdt-store.ts` | LWW register store with sourceId tiebreak. Wraps the config tree so fleet peers reach deterministic convergence. |
+| `camera/flight.svelte.ts` | FlightSimEngine class — orbit + cruise FSM. Mutable position state, exposed via `model.flight.*`. |
+| `camera/motion.svelte.ts` | Module-scope `motion` `$state` — turbulence, banking, breathing, vibe. Singleton; no class. |
+| `director/autopilot.svelte.ts` | Module-scope private timers. `directorTick()` returns `WorldPatch`. Leader-only. |
+| `scene/bundle/store.svelte.ts` | Reactive bundleStore — installed pushable bundles (sprites, video-bg). |
+| `fleet/rest-admin.svelte.ts` | RestAdminStore class — admin dashboard state (devices, connectionState). |
+| `fleet/client.svelte.ts` | DeviceClient class — SSE event source + status loop. |
+| `fleet/parallax.svelte.ts` | Module-scope persistent role bindings, MAC-fingerprint keyed. |
+| `fleet/heartbeat.svelte.ts` (`.server`) | Per-device ring buffer of heartbeat samples (server-side). |
+| `fleet/device-registry.server.ts` | Per-device live status (online + lastSeen). |
 
-| Field | Type | Range |
-|-------|------|-------|
-| location | `LocationId` | 18 cities |
-| timeOfDay | `number` | 0-24 (UTC decimal) |
-| weather | `WeatherType` | clear/cloudy/rain/overcast/storm |
-| cloudDensity, cloudSpeed, haze | `number` | 0-1, 0-2, 0-0.2 |
-| nightLightIntensity | `number` | 0-5 |
-| blindOpen, showBuildings, showClouds | `boolean` | |
-| displayMode | `DisplayMode` | flight/screensaver/video |
-| qualityMode | `QualityMode` | performance/balanced/ultra |
+## Key interfaces
 
-**Derived:** currentLocation, localTimeOfDay, skyState, sceneFog, terrainExaggeration, nightFactor, dawnDuskFactor, effectiveCloudDensity
+### `SimulationContext` (`src/lib/types.ts`)
+The per-frame snapshot every engine tick receives. Carries `time`, `delta`, `heading`, `altitude`, `weather`, `turbulenceLevel`, plus full `camera` + `director` config slices, plus `isLeader`. Pre-allocated; reused each frame.
 
-### FlightSimEngine
+### `Effect<TParams>` (`src/lib/scene/types.ts`)
+The compositor contract. `{ id, kind: 'atmo' | 'geo', z, when(model) → boolean, component }`. Effects mount/unmount via the `when` predicate. Geo effects render inside Cesium so the `z` is inert.
 
-| Field | Notes |
-|-------|-------|
-| lat, lon, altitude, heading, pitch | Position (degrees/feet) |
-| flightMode | orbit / cruise_departure / cruise_transit |
-| warpFactor | 0-1 cruise transition intensity |
-| orbitCenter/Radius/Bearing/Angle | Elliptical orbit params |
+### `Show` (`src/lib/show/load.ts`)
+The authored experience primitive. Today carries an `opening: { location, weather, timeOfDay }`. Documented growth surface: `scenes`, `cues`, `rotation`, `palette`.
 
-### MotionEngine
+### Fleet protocol v1/v2 (`src/lib/fleet/protocol.ts`)
+v1 = flat patches. v2 = path-targeted (`config_patch`, `role_assign`, `director_decision`). Coexist on the wire; receivers branch on the `v` field.
 
-| Field | Notes |
-|-------|-------|
-| motionOffsetX/Y | Turbulence pixel displacement |
-| bankAngle | Smoothed from heading delta |
-| breathingOffset | Sinusoidal cabin sway |
-| engineVibeX/Y | High-frequency vibration |
-
-### WorldEngine
-
-| Field | Notes |
-|-------|-------|
-| lightningIntensity, X, Y | Decaying flash |
-| microEvent | shooting-star / bird / contrail |
-
-## Key Interfaces
-
-### SimulationContext (`engine/types.ts`)
-Universal per-frame snapshot passed to all engine `tick()` methods. Pre-allocated object reused each frame (zero GC).
-
-### ISimulationEngine<TContext, TPatch> (`engine/types.ts`)
-Generic engine contract: `tick(delta, ctx) => TPatch`.
-
-### WorldPatch (`world-engine.svelte.ts`)
-Intention pattern — WorldEngine proposes, coordinator disposes:
-```typescript
-{ atmosphere?: AtmospherePatch; nextLocation?: LocationId | null }
-```
-
-### CesiumModelView (`cesium-manager.ts`)
-Narrow read-only interface for CesiumManager. AeroWindow satisfies structurally.
-
-### FleetClientModel (`shared/protocol.ts`)
-Narrow interface for DisplayWsClient. Decouples fleet service from concrete AeroWindow.
-
-### AeroWindowPatch (`app-state.svelte.ts`)
-Fields that `model.applyPatch()` accepts — union of fleet-pushable and UI-adjustable state.
-
-## Flight Mode State Machine
+## Flight mode FSM
 
 ```
-orbit ──flyTo()──→ cruise_departure ──(2s)──→ cruise_transit ──(2s)──→ orbit
-                   warp ramp                   teleport + arrive
-                   blind closes                blind opens
+orbit ─────flyTo()─────▶ cruise_departure ───(~2s)──▶ cruise_transit ───(~2s)──▶ orbit
+                          warp ramp                    teleport + arrive
+                          blind closes                 blind opens
+
+durations: model.config.camera.cruise.{departureDurationSec, transitDurationSec}
 ```
 
-## CSS Layer System (z-order)
+## Z-layer system
+
+The single source: `src/lib/scene/layers.ts` exports `Z` as a `const` object. Every consumer (effect registry, `Window.svelte`, `Weather.svelte`) imports from there.
 
 ```
-z:0   Cesium globe
-z:1   CloudBlobs (SVG feTurbulence)
-z:2   Weather (rain + lightning)
-z:3   Micro-events
-z:5   Frost
-z:7   Wing silhouette
-z:9   Glass vignette
-z:10  Vignette
-z:11  Glass recess rim
+z:0   Cesium canvas (terrain, buildings, VIIRS overlay, geo effects)
+z:0   atmospheric haze (DOM-stack above Cesium, below clouds)
+z:1   clouds (CSS3D sprites)
+z:2   rain + lightning
+z:3   micro-events (stars, birds, contrails)
+z:5   frost (high altitude)
+z:7   wing silhouette
+z:9   glass vignette
+z:10  outer vignette
+z:11  inner glass-recess rim
 ```

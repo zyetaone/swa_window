@@ -7,15 +7,13 @@
 | Document | Scope |
 |----------|-------|
 | [File Inventory](files.md) | Source layout — folder by folder, top files by size |
-| [Architecture](architecture.md) | Layer diagram, data flow, key interfaces (PENDING REGEN) |
-| [Scene composition](scene.md) | Effect contract, registry, z-layer SSOT (PENDING REGEN) |
+| [Architecture](architecture.md) | Layer diagram, data flow, key interfaces |
+| [Scene composition](scene.md) | Effect contract, registry, z-layer SSOT |
 | [Content API](content-api.md) | Bundle CRUD + LAN cache + remote push |
 | [Security boundaries](security.md) | Trust zones, validation, CSP, sensitive data |
 
 > The authoritative architecture lives in `CLAUDE.md` at the repo root.
-> CODEMAPS summarise per-concern slices and are regenerated from source
-> via `/update-codemaps`. Some files in this folder are tagged
-> "PENDING REGEN" until the next refresh.
+> CODEMAPS summarise per-concern slices.
 
 ## Codebase stats (live as of phase 11)
 
