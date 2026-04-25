@@ -21,9 +21,9 @@ import type {
 } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 
-export type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';
+type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';
 
-export interface FleetHealth {
+interface FleetHealth {
 	total: number;
 	online: number;
 	offline: number;
@@ -31,7 +31,7 @@ export interface FleetHealth {
 	lowFpsCount: number;
 }
 
-export interface HealthAlert {
+interface HealthAlert {
 	level: 'error' | 'warning';
 	device: string;
 	message: string;

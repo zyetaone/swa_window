@@ -36,5 +36,3 @@ export const Z = {
 	/** Inner glass-recess rim highlight */
 	glassRecess: 11,
 } as const;
-
-export type ZLayer = keyof typeof Z;

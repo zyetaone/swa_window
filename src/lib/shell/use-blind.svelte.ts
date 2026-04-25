@@ -16,7 +16,7 @@
 import { clamp } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from AeroWindow. */
-export interface BlindControl {
+interface BlindControl {
 	config: { shell: { blindOpen: boolean } };
 	applyConfigPatch: (path: string, value: unknown) => boolean;
 	flight: { isTransitioning: boolean };
@@ -26,7 +26,7 @@ export interface BlindControl {
 	flyTo(locationId: string): void;
 }
 
-export interface BlindLongPressOptions {
+interface BlindLongPressOptions {
 	enabled?: boolean;
 	/** Hold duration (ms) before long-press fires. Default 400. */
 	thresholdMs?: number;
@@ -39,7 +39,7 @@ export interface BlindLongPressOptions {
 	releaseMs?: number;
 }
 
-export interface UseBlindOptions {
+interface UseBlindOptions {
 	longPress?: BlindLongPressOptions;
 }
 

@@ -23,7 +23,7 @@ import { isValidWeather, isValidDisplayMode } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
+type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
 
 function getDeviceId(): string {
 	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');

@@ -29,7 +29,7 @@ import { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface AeroWindowPatch {
+interface AeroWindowPatch {
 	altitude: number;
 	timeOfDay: number;
 	weather: WeatherType;

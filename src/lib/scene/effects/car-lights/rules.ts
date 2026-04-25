@@ -12,9 +12,7 @@
 
 import { CAR_LIGHTS_PALETTE, type LightClass } from '$content/palettes';
 
-export type { LightClass };
-
-export interface LightSeed {
+interface LightSeed {
 	lat: number;
 	lon: number;
 	/** Per-dot random value in [0,1) — determines color class. */

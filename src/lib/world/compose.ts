@@ -62,7 +62,7 @@ const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
 	},
 };
 
-export interface CesiumModelView {
+interface CesiumModelView {
 	flight: {
 		lat: number;
 		lon: number;

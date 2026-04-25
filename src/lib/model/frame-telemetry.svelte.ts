@@ -14,27 +14,27 @@
 
 import { untrack } from 'svelte';
 
-export type TelemetryKind =
+type TelemetryKind =
 	| 'config_patch'
 	| 'fleet_in'
 	| 'fleet_out'
 	| 'error'
 	| 'info';
 
-export interface TelemetryEvent {
+interface TelemetryEvent {
 	t: number;
 	kind: TelemetryKind;
 	payload: unknown;
 }
 
-export interface TelemetryCounts {
+interface TelemetryCounts {
 	configPatches: number;
 	fleetIn: number;
 	fleetOut: number;
 	errors: number;
 }
 
-export interface TelemetrySnapshot {
+interface TelemetrySnapshot {
 	fps: { recent: number[]; p50: number; p95: number };
 	events: TelemetryEvent[];
 	counts: TelemetryCounts;

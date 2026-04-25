@@ -21,7 +21,7 @@ export interface CRDTPatch {
 	sourceId: string;
 }
 
-export interface CRDTEntry {
+interface CRDTEntry {
 	value: unknown;
 	timestamp: number;
 	sourceId: string;

@@ -85,7 +85,7 @@ export const VIEWER_OPTIONS = {
  * Imagery source configuration — captures everything CesiumManager needs to
  * construct a UrlTemplateImageryProvider (URL + max zoom + tiling scheme hint).
  */
-export interface ImageryConfig {
+interface ImageryConfig {
 	url: string;
 	maxZoom: number;
 	/** Set true for sources that use WebMercator tiling (e.g. EOX, Mapbox). */

@@ -16,7 +16,7 @@ import type { LayerKind } from '../types';
  * Bundle type — selects which factory in loader.ts processes the bundle.
  * Add a new type when adding a new parameterizable effect (see video-bg).
  */
-export type BundleType = 'video-bg' | 'sprite';
+type BundleType = 'video-bg' | 'sprite';
 
 /**
  * Declarative when-predicate. Evaluated against AeroWindow at render time.
@@ -35,7 +35,7 @@ export interface WhenPredicate {
 }
 
 /** Shared fields across all bundle types. */
-export interface BundleBase {
+interface BundleBase {
 	id: string;
 	type: BundleType;
 	kind: LayerKind;

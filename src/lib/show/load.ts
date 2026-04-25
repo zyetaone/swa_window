@@ -45,7 +45,7 @@ export interface Show {
 }
 
 /** Narrow interface — only the fields applyShowOpening actually touches. */
-export interface ShowApplyTarget {
+interface ShowApplyTarget {
 	location: LocationId;
 	weather: WeatherType;
 	timeOfDay: number;

@@ -19,7 +19,7 @@ export interface ConfigPatch {
 	value: unknown;
 }
 
-export interface RemotePollOptions {
+interface RemotePollOptions {
 	deviceId: string;
 	pushWorkerUrl: string;
 	intervalMs?: number;
@@ -29,7 +29,7 @@ export interface RemotePollOptions {
 	fetchImpl?: typeof fetch;
 }
 
-export interface RemotePollHandle {
+interface RemotePollHandle {
 	stop: () => void;
 }
 

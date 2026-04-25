@@ -14,7 +14,7 @@
 
 import type { CesiumManager } from './compose';
 
-export type CesiumCleanup = (() => void) | void;
+type CesiumCleanup = (() => void) | void;
 
 export function useCesiumEffect(
 	fn: (mgr: CesiumManager, Cesium: typeof import('cesium'), viewer: any) => CesiumCleanup
