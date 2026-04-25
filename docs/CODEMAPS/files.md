@@ -26,9 +26,9 @@ files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
 | 254 | `fleet/rest-admin.svelte.ts` | RestAdminStore — admin dashboard. |
 | 248 | `camera/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM. |
 | 198 | `shell/use-blind.svelte.ts` | Drag/snap composable. |
-| 173 | `fleet/lan-bundle-cache.server.ts` | 4-tier offline-Pi bundle ladder. |
 | 169 | `shell/window/Blind.svelte` | Pull-down shade widget. |
 | 168 | `fleet/parallax.svelte.ts` | MAC-fingerprint role bindings. |
+| 163 | `fleet/lan-peers.server.ts` | mDNS-based LAN peer registry. |
 
 ### By domain
 

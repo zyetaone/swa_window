@@ -6,12 +6,6 @@
  * Map keyed by device id. `listPeers()` returns the live set minus any
  * entries stale beyond PEER_TTL_MS.
  *
- * Extracted from `lan-proxy.server.ts` — that file did both peer
- * discovery and the 4-tier bundle fetch, which graphify flagged as a
- * double-node and the composition audit confirmed as two concerns in
- * one 334-line file. Fetch ladder now lives in `lan-bundle-cache.server.ts`
- * and imports `listPeers` from here.
- *
  * `.server.ts` suffix prevents Vite from bundling into the client; all
  * mDNS / net work stays in the Node/Bun process.
  */
@@ -54,7 +48,7 @@ function gcPeers(): void {
 	}
 }
 
-/** Snapshot of current live peers — exposed for admin UI / tests / fetch ladder. */
+/** Snapshot of current live peers — exposed for admin UI / tests. */
 export function listPeers(): readonly Peer[] {
 	gcPeers();
 	return Array.from(peers.values());
