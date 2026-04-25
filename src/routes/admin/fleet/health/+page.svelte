@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import type { HeartbeatSample } from '$lib/fleet/heartbeat.svelte';
+	import type { HeartbeatSample } from '$lib/fleet/heartbeat.server';
 
 	interface FleetSummary {
 		total: number;

@@ -9,7 +9,7 @@
 	 * own min/max SSOT.
 	 */
 	import { config } from '$lib/model/config-tree.svelte';
-	import RangeSlider from '../RangeSlider.svelte';
+	import RangeSlider from './RangeSlider.svelte';
 </script>
 
 <section>

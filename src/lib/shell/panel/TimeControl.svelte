@@ -5,8 +5,8 @@
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { formatTime } from '$lib/utils';
-	import Toggle from '../Toggle.svelte';
-	import RangeSlider from '../RangeSlider.svelte';
+	import Toggle from './Toggle.svelte';
+	import RangeSlider from './RangeSlider.svelte';
 
 	const model = useAeroWindow();
 </script>

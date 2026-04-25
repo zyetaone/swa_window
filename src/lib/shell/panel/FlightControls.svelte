@@ -4,7 +4,7 @@
 	 * Slider ranges pull from config SSOT (camera.cruise + camera.altitude).
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import RangeSlider from '../RangeSlider.svelte';
+	import RangeSlider from './RangeSlider.svelte';
 
 	const model = useAeroWindow();
 </script>

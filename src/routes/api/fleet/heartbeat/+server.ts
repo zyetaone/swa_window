@@ -22,7 +22,7 @@ import {
 	historyForDevice,
 	latestAll,
 	summarize,
-} from '$lib/fleet/heartbeat.svelte';
+} from '$lib/fleet/heartbeat.server';
 import { lanCorsHeadersFull } from '$lib/http/cors';
 
 export const OPTIONS: RequestHandler = async ({ request }) =>

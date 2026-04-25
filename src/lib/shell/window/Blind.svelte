@@ -11,7 +11,7 @@
 	 * `--frame-width` CSS custom properties — Window.svelte defines them.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { useBlind } from '../use-blind.svelte';
+	import { useBlind } from './use-blind.svelte';
 
 	const model = useAeroWindow();
 	const blind = useBlind(model);

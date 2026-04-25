@@ -5,8 +5,8 @@
 	 * the component is portable across device / admin / preview surfaces.
 	 */
 	import { config } from '$lib/model/config-tree.svelte';
-	import Toggle from '../Toggle.svelte';
-	import RangeSlider from '../RangeSlider.svelte';
+	import Toggle from './Toggle.svelte';
+	import RangeSlider from './RangeSlider.svelte';
 </script>
 
 <section>
