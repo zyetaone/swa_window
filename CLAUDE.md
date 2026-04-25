@@ -39,85 +39,93 @@ src/lib/
 │   ├── active.svelte.ts  Reactive holder — geo-effects consume here
 │   └── CesiumViewer.svelte  dynamic import('cesium') happens here
 │
-├── atmosphere/         BETWEEN the camera and the world
-│                        (each folder exports an Effect registered in scene/registry.ts)
-│   ├── clouds/         CloudBlobs (SVG turbulence 3-layer parallax) + effect wrapper
-│   ├── weather/        Weather.svelte (rain+frost) + Lightning.svelte + lightning.ts registry
-│   ├── micro-events/   MicroEvent (stars/birds/contrails) + effect wrapper
-│   └── haze/           Atmospheric haze gradient — softens LOD seams
-│
 ├── camera/             HOW we look
 │   ├── flight.svelte.ts  FlightSimEngine — orbit + cruise FSM + scenarios
-│   └── motion.svelte.ts  MotionEngine — turbulence + bank + breathing + vibe
+│   └── motion.svelte.ts  Motion module — turbulence + bank + breathing + vibe
 │
 ├── director/           WHEN things change
-│   ├── autopilot.svelte.ts  DirectorEngine — weather randomiser + location cycler
+│   ├── autopilot.svelte.ts  Director module — weather randomiser + location cycler
 │   └── scenarios.ts         Flight path waypoint data + weighted picker
 │
-├── shell/              UI surround (window frame, HUD, SidePanel, Blind, Glass)
-│   ├── Window.svelte       Layer compositor + RAF tick + long-press boost + window-frame toggle
-│   ├── HUD.svelte          Telemetry overlay (location, altitude, speed, time, cruise badge)
-│   ├── SidePanel.svelte    Location picker + all settings (binds directly to config.*)
-│   ├── TelemetryPanel.svelte  Phase 5.6 ring-buffer viewer (Shift+T)
-│   ├── Toggle.svelte       Bindable ($bindable) toggle pill
-│   ├── RangeSlider.svelte  Range slider
-│   ├── AirlineLoader.svelte  Preloader animation
-│   └── use-blind.svelte.ts  Composable — blind drag/snap controller
+├── show/               WHAT plays — authored experience primitive
+│   └── load.ts              Show interface + applyShowOpening (boot baseline)
+│
+├── shell/              UI surround (window frame, HUD, SidePanel, Blind, Glass, Weather)
+│   ├── Window.svelte       Layer compositor + RAF tick + window-frame toggle
+│   ├── HUD.svelte          Telemetry overlay
+│   ├── SidePanel.svelte    Composes panel/* sections — binds directly to config.*
+│   ├── TelemetryPanel.svelte  Ring-buffer viewer (Shift+T)
+│   ├── Toggle.svelte / RangeSlider.svelte / AirlineLoader.svelte
+│   ├── use-blind.svelte.ts Composable — blind drag/snap controller
+│   ├── window/             Blind / Glass / Weather (CSS backdrop filters on the pane)
+│   ├── hud/                BlindInfoCard (closed-state) + TelemetryOverlay (open-state)
+│   └── panel/              6 small control sections (LocationPicker, TimeControl, …)
 │
 ├── model/              STATE graph + admin-tunable config tree
-│   ├── crdt-store.ts       CRDT LWW-register store (performance.now() timestamps)
-│   ├── config-tree.svelte.ts  Flat $state config + applyConfigPatch / applyRemoteConfigPatch / crdtSnapshot / crdtRestore
-│   ├── frame-telemetry.svelte.ts  Phase 5.6 ring-buffer: FPS p50/p95, events, counters
-│   └── aero-window.svelte.ts  createAeroWindow() / useAeroWindow() — AeroWindow root
+│   ├── crdt-store.ts            CRDT LWW-register store
+│   ├── config-tree.svelte.ts    Flat $state config — SSOT for every tuning number
+│   ├── frame-telemetry.svelte.ts  Ring-buffer: FPS p50/p95, events, counters
+│   ├── aero-window.svelte.ts    createAeroWindow() / useAeroWindow() — root
+│   └── aero-window-persistence.ts  localStorage save/load
 │
 ├── scene/              Scene composition system
 │   ├── types.ts             Effect<TParams> contract + LayerKind
 │   ├── compositor.svelte    Mounts every Effect in z-order
-│   ├── registry.ts          Static effect list (cloud / weather / micro / car-lights / haze)
-│   ├── bundle/              Pushable content bundles
-│   │   ├── types.ts         VideoBgBundle | SpriteBundle + WhenPredicate
-│   │   ├── when.ts          Pure evalWhen — predicate → boolean
-│   │   ├── loader.ts        createEffectFromBundle + isContentBundle
-│   │   ├── store.svelte.ts  Reactive bundleStore (install/remove)
-│   │   ├── client.ts        hydrateFromServer / LAN bundle push
-│   │   ├── remote.ts        Phase 5.7 Cloudflare poll client
-│   │   ├── disk.server.ts   Filesystem persistence (node:fs)
-│   │   └── assets.server.ts Content-addressed asset storage
-│   └── effects/
-│       ├── car-lights/      Cesium point entities — jugaad procedural
-│       ├── video-bg/        Full-scene video from a bundle
-│       └── sprite/          Cesium billboard at lat/lon
+│   ├── layers.ts            Z-order SSOT (effect registry + Weather + Window all import this)
+│   ├── registry.ts          Static effect list (clouds, haze, lightning, micro-events, car-lights)
+│   ├── bundle/              Pushable content bundles (CRUD + 4-tier fetch)
+│   └── effects/             ALL registered effects live here
+│       ├── clouds/         ArtsyClouds (CSS3D sprites) + effectiveCloudDensity rule
+│       ├── haze/            Atmospheric haze gradient
+│       ├── lightning/       Lightning flashes
+│       ├── micro-events/    Stars / birds / contrails
+│       ├── car-lights/      Cesium point entities — geo-positioned
+│       ├── video-bg/        Full-scene video from a bundle (factory)
+│       └── sprite/          Cesium billboard at lat/lon (factory)
 │
-├── fleet/              Remote Pi fleet management (bounded context)
-│   ├── protocol.ts          v1 messages + Phase 6 v2 additive (config_patch, role_assign, director_decision)
-│   ├── transport.svelte.ts  BaseTransport — WS/SSE with $state + auto-reconnect
-│   ├── client.svelte.ts     Display → fleet connection; publishV2() for leader broadcast
-│   ├── admin.svelte.ts      Admin dashboard store
-│   ├── hub.ts               Server-side WS hub + SSE broadcast
-│   └── url.ts               Fleet endpoint resolver
+├── fleet/              Remote Pi fleet management (REST + SSE, no broker)
+│   ├── protocol.ts                 v1 + v2 messages
+│   ├── client.svelte.ts            DeviceClient — SSE in, REST POST out
+│   ├── rest-admin.svelte.ts        RestAdminStore — admin dashboard
+│   ├── peer-sync.svelte.ts         $effect → POST PATCH /api/config to every peer
+│   ├── heartbeat.svelte.ts         Server-side heartbeat ring buffer
+│   ├── parallax.svelte.ts          MAC-fingerprint role bindings
+│   ├── sse-bus.server.ts           In-process pub/sub for /api/events
+│   ├── device-registry.server.ts   Per-device live status
+│   ├── lan-peers.server.ts         mDNS discovery
+│   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
 │
-├── app-state.svelte.ts  (does not exist — use model/aero-window.svelte.ts)
-├── types.ts, utils.ts, locations.ts, validation.ts, persistence.ts, constants.ts, game-loop.ts
+├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
+├── http/               Shared HTTP helpers — cors.ts, body.ts (size-limited reads)
+│
+├── types.ts, utils.ts, game-loop.ts   Shared primitives at the root.
+
+content/                AUTHORED ARTIFACTS — what plays vs. how it plays
+├── locations/          catalog.ts + per-location scene defaults
+├── weather/            recipes.ts (WEATHER_EFFECTS)
+├── palettes/           sky.ts + car-lights.ts (per-skyState + per-class colour)
+└── shows/              default.show.ts — typed Show definitions
 
 src/routes/
-├── +page.svelte         Main display (Pi kiosk) — role init, CF push wire-up
-├── admin/               Fleet admin panel + ConfigSandbox
-├── architecture/        Architecture visualization
-├── content/             Drag-drop bundle UI (LAN only)
-├── playground/          Lean Cesium scene lab (same pipeline as /, no shell / fleet / corridor)
-└── api/                 Content + assets + tiles + buildings + fleet endpoints
+├── +layout.ts          ssr=false (app-wide; descendants inherit)
+├── +page.svelte        Main display (Pi kiosk)
+├── admin/              Fleet admin panel + ConfigSandbox + content drag-drop + fleet/health
+├── playground/         Lean Cesium scene lab (same pipeline as /, no shell)
+└── api/                content + assets + tiles + buildings + fleet endpoints + bundle peer-cache
 
 tools/
-├── tile-packager/       Pre-downloads tiles for offline Pi (Sentinel, CartoDB, Terrarium, Ion terrain, OSM buildings)
-└── aero-push-worker/    Phase 5.7 Cloudflare Worker — firmware-like OTA push
+├── tile-packager/      Pre-downloads tiles for offline Pi
+└── aero-push-worker/   Cloudflare Worker — firmware-like OTA push
 
-tests/lib/…              All tests — mirrors src/ layout; imports via $lib/*
+tests/lib/…             Mirrors src/ layout; imports via $lib/*
 
 docs/
 ├── ADR-001-offline-tile-architecture.md
 ├── ADR-002-zero-cost-caching-strategy.md
-├── CODEMAPS/            Module-level navigation docs
-├── analysis/, plans/, reference/
+├── ADR-012-html-in-canvas-defer.md
+├── standards.md        Rules 0-10 (content/control split, effect layout, named exports, …)
+├── CODEMAPS/           Module-level navigation docs
+└── reference/          Integration recipes (e.g. takram atmosphere)
 ```
 
 ## Architectural Invariants (DO NOT BREAK)
@@ -125,13 +133,13 @@ docs/
 These are the three rules the whole reorg was designed to preserve. If a future change seems to violate one, flag it.
 
 ### 1. Cesium isolation
-**Cesium is confined to `src/lib/world/`.** Only `world/compose.ts` and `world/config.ts` import `cesium` (as a type), and only `world/CesiumViewer.svelte` does the actual `import('cesium')` at runtime. Every other module (engines, scene effects, config, fleet, shell) is framework-free and unit-testable. Verify with `rg "from 'cesium'" src/lib/` — expect exactly 2 hits, both in `world/`.
+**Cesium is confined to `src/lib/world/`.** Only `world/compose.ts` and `world/cesium-setup.ts` import `cesium` (as a type), and only `world/CesiumViewer.svelte` does the actual `import('cesium')` at runtime. Every other module (engines, scene effects, config, fleet, shell) is framework-free and unit-testable. Verify with `rg "from 'cesium'" src/lib/` — expect exactly 2 hits, both in `world/`.
 
 ### 2. Flat DTO boundary
 `model.applyPatch(patch)` and the v1 fleet protocol are flat DTOs that cross the wire and `localStorage`. Phase 6 added v2 path-targeted patches (`config_patch { path, value }`) additively — v1 never changes shape. Persistence and fleet back-compat depend on this. Don't nest v1.
 
 ### 3. `untrack()` in hot paths
-Every `tick()` body (FlightSimEngine, MotionEngine, DirectorEngine) wraps its work in `untrack(() => ...)` so 60 Hz config reads don't build reactive dependencies across the graph. If you add a new engine, wrap its tick too.
+Every tick body wraps its work in `untrack(() => ...)` so 60 Hz config reads don't build reactive dependencies across the graph: `flight.svelte.ts:88`, `motion.svelte.ts:43`, `autopilot.svelte.ts:31`. If you add a new tick, wrap it too. Verify with `rg "^\s*untrack" src/lib/{camera,director}/`.
 
 ## AeroWindow — composition
 
@@ -140,8 +148,8 @@ const model = createAeroWindow();         // in +page.svelte only
 const model = useAeroWindow();            // in any descendant component
 
 // Engines (tick at 60 Hz)
-model.flight                            // FlightSimEngine
-model.motion                            // MotionEngine singleton (module-level state)
+model.flight                            // FlightSimEngine instance (class)
+model.motion                            // motion module — module-level $state, not a class
 
 // Config tree (admin-tunable; drives engines via SimulationContext)
 model.config.world.*                    // imagery + bloom + terrain + buildings + lights + qualityMode
@@ -178,7 +186,7 @@ model.measuredFps                       // live FPS (Fleet + Telemetry)
 model.applyConfigPatch(path, value)     // → _applyConfigPatch(path, value) in config-tree, also records telemetry
 
 // Multi-Pi parallax leader hook (Phase 7)
-model.setFleetBroadcast(fn)             // WS client registers on connect
+model.setFleetBroadcast(fn)             // fleet client registers on connect
 ```
 
 ## Tick pipeline
@@ -273,12 +281,15 @@ Device-side: `src/lib/scene/bundle/remote.ts` polls via `startRemotePoll()`. Opt
 
 ## CSS z-layer order
 
+Single source of truth: `src/lib/scene/layers.ts`. Effect registry, Weather.svelte, and Window.svelte all import `Z` from there.
+
 ```
 z:0   Cesium globe (terrain, buildings, night-light overlay, geo effects)
-z:1   Clouds             (atmosphere/clouds — SVG feTurbulence)
-z:2   Rain + Lightning   (atmosphere/weather)
-z:3   Micro-events       (atmosphere/micro-events)
-z:5   Frost              (atmosphere/weather)
+z:0   Atmospheric haze       (scene/effects/haze)
+z:1   Clouds                  (scene/effects/clouds — CSS3D sprites)
+z:2   Rain + Lightning        (shell/window/Weather + scene/effects/lightning)
+z:3   Micro-events            (scene/effects/micro-events)
+z:5   Frost                   (shell/window/Weather)
 z:7   Wing silhouette
 z:9   Glass vignette
 z:10  Vignette
@@ -307,9 +318,10 @@ const model = useAeroWindow();     // in any descendant
 ### `$state` flat config via `config-tree.svelte.ts`
 
 ```typescript
-// src/lib/model/config-tree.svelte.ts — one $state per namespace
-export const atmosphere = $state({ clouds: { density: 0.4, speed: 0.6, layerCount: 3 }, ... });
-export const camera = $state({ orbit: { driftRate: 0.01, major: 10, ... }, parallax: { role: 'solo', ... }, ... });
+// src/lib/model/config-tree.svelte.ts — one $state per namespace, literals
+// inline at the default. No constants.ts. The config tree IS the SSOT.
+export const atmosphere = $state({ clouds: { density: 0.85, speed: 0.6, layerCount: 3 }, ... });
+export const camera = $state({ orbit: { driftRate: 0.01, major: 0.15, ... }, parallax: { role: 'solo', ... }, ... });
 
 // Consumer binds directly
 <RangeSlider bind:value={config.atmosphere.clouds.density} />
@@ -333,7 +345,7 @@ Each effect is a self-contained Svelte component that:
 
 Compositor iterates `[...EFFECTS (static), ...bundleStore.effects (dynamic)]`.
 
-Adding a new effect: create a folder under `atmosphere/<name>/` or `scene/effects/<name>/` with `index.ts` exporting a default `Effect`, plus one line in `scene/registry.ts`.
+Adding a new effect: create a folder under `scene/effects/<name>/` with `index.ts` exporting a named `Effect`, plus one line in `scene/registry.ts`. Z-index goes in `scene/layers.ts`.
 
 ### Geo-positioned effects (Cesium-native)
 
@@ -353,21 +365,17 @@ $effect(() => {
 
 ## Routes
 
-- `/` — Main window display (Pi kiosk). Full shell: Cesium + all atmosphere layers + blind + fleet + corridor.
-- `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet / corridor. For tuning the composite in isolation.
-- `/admin` — Fleet admin panel (incl. ConfigSandbox for live $state preview).
+- `/` — Main window display (Pi kiosk). Full shell.
+- `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
+- `/admin` — Fleet admin panel (incl. ConfigSandbox for live `$state` preview).
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
-- `/admin/fleet/health` — Fleet health dashboard sub-route.
-- `/admin/architecture` — Architecture visualization (moved from `/architecture`).
-- `/api/content` — Content bundle CRUD.
-- `/api/content/[id]` — DELETE a single bundle.
-- `/api/assets` — Asset upload + serve.
-- `/api/assets/[filename]` — Serve a stored asset by name.
-- `/api/bundle/[hash]` — LAN peer-cache bundle blob (was `/lan/bundle/[hash]` pre-consolidation).
-- `/api/buildings/:city` — OSM extrusion GeoJSON (Phase 0c).
+- `/admin/fleet/health` — Fleet health dashboard.
+- `/api/content` + `/api/content/[id]` — Content bundle CRUD + delete.
+- `/api/assets` + `/api/assets/[filename]` — Asset upload + serve.
+- `/api/bundle/[hash]` — LAN peer-cache bundle blob.
+- `/api/buildings/:city` — OSM extrusion GeoJSON.
 - `/api/tiles/[...path]` — Tile proxy.
-- `/api/fleet` — Fleet server endpoint.
-- `/api/wifi` — WiFi network management (hotspot fallback — state unaudited).
+- `/api/fleet` + `/api/fleet/heartbeat` + `/api/devices` + `/api/config` + `/api/events` — REST + SSE fleet surface (no central broker).
 
 ## Environment variables
 
@@ -421,6 +429,9 @@ ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /co
 | 5.7 push | Cloudflare Worker firmware-like OTA | `909ab7c` |
 | 7 parallax | Multi-Pi yaw offset + leader/follower director | `fea557f` |
 | 5.6 observe | Ring-buffer telemetry + in-window viewer | `5d1dd16` |
-| 8 clouds css3d | ArtsyClouds (spite CSS3D) promoted to `$lib/atmosphere/clouds/` and wired as canonical cloud renderer in `effect.svelte`; `CloudBlobs` (SVG feTurbulence) retained as fallback until next commit | `970c146` |
+| 8 clouds css3d | ArtsyClouds (CSS3D sprites) promoted as canonical cloud renderer | `970c146` |
 | 8a route cleanup | `/content` → `/admin/content`; `/lan/bundle` → `/api/bundle`; `/playground2` deleted | `6dc4abc` |
-| 8b scene lab | `/playground` re-Cesiumified as lean composition lab — drops Threlte/takram/MapLibre experiment (−1,612 lines). Same `CesiumViewer` + `Compositor` as production `/`. | `970c146` |
+| 8b scene lab | `/playground` re-Cesiumified as lean composition lab (−1,612 lines) | `970c146` |
+| 9 fleet REST+SSE | WebSocket broker → REST + per-device SSE. CRDT LWW with sourceId tiebreak. Peer-sync `$effect` propagates config writes. | (Apr 23 series) |
+| 10 content split | `content/` folder for authored artifacts (locations, weather, palettes, shows) + `$content` alias. `Show` primitive (boot baseline). `docs/standards.md` codifies Rules 0-10. | (Apr 23 series) |
+| 11 consolidation | atmosphere/ → scene/effects/; constants.ts deleted (literals inline at config-tree); auto-quality.ts deleted; ssr-off hoisted to layout; admin/architecture/ deleted; dead exports demoted. | (Apr 24-26 series) |
