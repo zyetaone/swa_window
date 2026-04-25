@@ -1,94 +1,91 @@
 # File Inventory
 
-**Last Updated:** 2026-04-14  
-**Total:** ~8,100 lines across 44 files
+**Last Updated:** 2026-04-26
+**Totals:** `src/lib/` 78 files / 9,183 lines · `src/routes/` 22 / 2,782 · `content/` 8 / 316
 
-## src/lib/ — Core Library
+## src/lib/ — Domain library
 
-### app-state.svelte.ts (376 lines)
-AeroWindow class + context DI. Composes engines, owns shared reactive state, tick pipeline.
-- **Exports:** `AeroWindow`, `AeroWindowPatch`, `createAeroWindow()`, `useAeroWindow()`
-- **Imports:** shared/*, engine/*, services/persistence
+The library is organised by domain folder. Each domain owns its own
+state, logic, and (where relevant) Svelte components. There are 4 shared
+files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
+`night/index.ts` (a deliberate cross-cutting barrel for night rendering).
 
-### engine/ — Pure Simulation (zero DOM)
+### Top-15 files by size
 
-| File | Lines | Exports | Purpose |
-|------|-------|---------|---------|
-| flight-engine.svelte.ts | 255 | `FlightSimEngine`, `FlightMode`, `FlightCallbacks` | Orbit, scenarios, cruise state machine |
-| world-engine.svelte.ts | 177 | `WorldEngine`, `WorldContext`, `WorldPatch`, `MicroEventData`, `AtmospherePatch` | Lightning, weather randomization, micro-events, auto-pilot |
-| scenario-data.ts | 172 | `SCENARIOS`, `FlightScenario`, `Waypoint` | 15+ waypoint flight paths for 8 locations |
-| flight-scenarios.ts | 83 | `pickScenario()`, `pickNextLocation()` | Weighted random scenario/location selection |
-| motion-engine.svelte.ts | 76 | `MotionEngine` | Turbulence, banking, breathing, engine vibe |
-| game-loop.ts | 67 | `subscribe()` | RAF singleton with per-subscriber error tracking |
-| types.ts | 52 | `SimulationContext`, `ISimulationEngine` | Engine interface contracts |
+| LOC | File | Purpose |
+|----:|------|---------|
+| 618 | `world/compose.ts` | CesiumManager: terrain, buildings, imagery, atmosphere, post-process. Cesium isolation lives here. |
+| 457 | `shell/SidePanel.svelte` | Composes `panel/*` sections — most lines are CSS. |
+| 443 | `model/aero-window.svelte.ts` | AeroWindow class + context DI + tick pipeline. |
+| 361 | `shell/Window.svelte` | Layer compositor + RAF tick + window-frame toggle. |
+| 349 | `model/config-tree.svelte.ts` | Flat `$state` config — SSOT for every tuning number. |
+| 336 | `scene/effects/clouds/ArtsyClouds.svelte` | CSS3D cloud sprite renderer. |
+| 294 | `fleet/client.svelte.ts` | DeviceClient — SSE in, REST POST out. |
+| 265 | `shell/TelemetryPanel.svelte` | Ring-buffer viewer (Shift+T). |
+| 260 | `world/CesiumViewer.svelte` | Lone runtime `import('cesium')` site. |
+| 254 | `fleet/rest-admin.svelte.ts` | RestAdminStore — admin dashboard. |
+| 248 | `camera/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM. |
+| 198 | `shell/use-blind.svelte.ts` | Drag/snap composable. |
+| 173 | `fleet/lan-bundle-cache.server.ts` | 4-tier offline-Pi bundle ladder. |
+| 169 | `shell/window/Blind.svelte` | Pull-down shade widget. |
+| 168 | `fleet/parallax.svelte.ts` | MAC-fingerprint role bindings. |
 
-### engine/cesium/ — Globe Rendering Bridge
+### By domain
 
-| File | Lines | Exports | Purpose |
-|------|-------|---------|---------|
-| cesium-manager.ts | 404 | `CesiumManager`, `CesiumModelView` | Viewer, terrain, buildings, imagery, atmosphere, camera, post-process |
-| shaders.ts | 98 | `COLOR_GRADING_GLSL` | GLSL color grading (night lights, dawn/dusk, haze) |
-| config.ts | 48 | `getIonToken()`, `initCesiumGlobal()`, `checkLocalTileServer()`, `TILE_SERVER_URL` | Ion token, base URL, tile server health |
+| Domain | Files | Notes |
+|--------|------:|-------|
+| `model/` | 5 | aero-window, config-tree (SSOT), CRDT, persistence, frame-telemetry |
+| `fleet/` | 10 | REST + SSE; no central broker. Includes server modules (`*.server.ts`). |
+| `scene/` | ~25 | compositor, registry, layers (Z SSOT), 7 effects under `effects/`, bundle subsystem |
+| `shell/` | ~18 | Window, HUD, SidePanel, panel/* (6 controls), hud/*, window/* |
+| `world/` | 6 | Cesium isolation — compose, cesium-setup, shaders, CesiumViewer, active |
+| `camera/` | 2 | flight + motion |
+| `director/` | 2 | autopilot + scenarios |
+| `show/` | 1 | Show type + applyShowOpening |
+| `night/` | 1 | Cross-cutting barrel for the night rendering pipeline |
+| `http/` | 2 | cors + body (size-limited reads) |
+| root | 4 | types, utils, game-loop |
 
-### ui/ — Svelte Components
-
-| File | Lines | Context | Purpose |
-|------|-------|---------|---------|
-| SidePanel.svelte | 691 | useAeroWindow() | Location picker, weather sliders, settings |
-| Window.svelte | 590 | useAeroWindow() | Layer compositor, RAF tick, blind drag |
-| HUD.svelte | 269 | useAeroWindow() | Altitude/time/weather controls overlay |
-| Globe.svelte | 246 | useAeroWindow() | CesiumManager mount/destroy lifecycle |
-| CloudBlobs.svelte | 167 | props only | SVG feTurbulence cloud parallax |
-| Weather.svelte | 147 | props only | Rain, lightning flash, frost |
-| MicroEvent.svelte | 134 | props only | Shooting stars, birds, contrails |
-| RangeSlider.svelte | 102 | props only | Reusable slider control |
-| Toggle.svelte | 88 | props only | Reusable toggle switch |
-| AirlineLoader.svelte | 76 | none | Loading screen |
-
-### services/ — I/O Layer
-
-| File | Lines | Exports | Purpose |
-|------|-------|---------|---------|
-| fleet-admin.svelte.ts | 217 | `AdminStore` | Admin WS/SSE dual-transport, device registry, push commands |
-| fleet-client.svelte.ts | 156 | `DisplayWsClient`, `createWsClient()` | Display WS client, auto-connect, status heartbeat |
-| persistence.ts | 81 | `loadPersistedState()`, `savePersistedState()`, `PersistedState` | localStorage save/load with validation |
-| base-transport.ts | 51 | `BaseTransport`, `TransportState`, `TransportOptions` | Abstract reconnection logic with exponential backoff |
-
-### shared/ — SSOT Leaf
-
-| File | Lines | Exports | Purpose |
-|------|-------|---------|---------|
-| constants.ts | 246 | `AIRCRAFT`, `FLIGHT_FEEL`, `AMBIENT`, `MICRO_EVENTS`, `CESIUM`, `WEATHER_EFFECTS`, `CESIUM_QUALITY_PRESETS` | All tuning constants |
-| protocol.ts | 121 | `ServerMessage`, `DisplayMessage`, `ServerAdminMessage`, `FleetClientModel`, `DisplayConfig`, `DeviceInfo`, `DeviceCaps`, `DisplayMode` | Fleet WS protocol types |
-| utils.ts | 49 | `clamp()`, `lerp()`, `normalizeHeading()`, `getSkyState()`, `formatTime()` | Math and formatting helpers |
-| types.ts | 48 | `SkyState`, `LocationId`, `WeatherType`, `SceneDefaults`, `Location` | Domain type definitions |
-| locations.ts | 35 | `LOCATIONS`, `LOCATION_IDS`, `LOCATION_MAP` | 18 cities with lat/lon/scene defaults |
-| index.ts | 34 | barrel | Re-exports all shared modules |
-
-### server/ — Fleet Hub
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| fleet-hub.ts | 207 | Device registry, WS message routing, SSE broadcast, heartbeat |
-
-## src/routes/ — Pages & API
-
-| File | Lines | Purpose |
-|------|-------|---------|
-| +page.svelte | 252 | Main display — context provider, real-time sync, auto-save, fleet WS |
-| +page.ts | 8 | `ssr = false`, `prerender = true` |
-| +layout.svelte | 11 | Tailwind import |
-| admin/+page.svelte | 855 | Fleet admin dashboard |
-| playground/+page.svelte | ~650 | MapLibre globe lab — MotionEngine + CSS3D clouds + NightOverlay |
-| architecture/+page.svelte | 1892 | Interactive architecture documentation |
-| api/fleet/+server.ts | 56 | Fleet REST endpoints (scene, mode, config push) |
-| api/tiles/[...path]/+server.ts | 61 | Tile file proxy with path traversal guard |
-
-## Config Files
+## src/routes/
 
 | File | Purpose |
 |------|---------|
-| svelte.config.js | adapter-node, bundleStrategy:'single', CSP directives |
-| vite.config.ts | Cesium static copy, 0.0.0.0 host binding, chunk size limit |
-| tsconfig.json | Strict mode |
-| package.json | bun scripts, cesium dep, svelte 5.50+, three.js (playground only) |
+| `+layout.ts` | `ssr = false` (app-wide; descendants inherit) |
+| `+page.svelte` | Main display — root context + side-effects + role init |
+| `+page.ts` | `prerender = true` (root only) |
+| `admin/+page.svelte` | Fleet admin dashboard |
+| `admin/content/+page.svelte` | Drag-drop bundle UI (LAN-only) |
+| `admin/fleet/health/+page.svelte` | Heartbeat tile dashboard |
+| `playground/+page.svelte` | Lean Cesium scene lab |
+| `api/fleet/+server.ts` | Fleet REST surface (scene/mode/config push) |
+| `api/fleet/heartbeat/+server.ts` | POST heartbeats from devices; GET rollups |
+| `api/devices/+server.ts` | Device registry + announce |
+| `api/config/+server.ts` | Config patch endpoint |
+| `api/events/+server.ts` | SSE pub/sub stream |
+| `api/content/+server.ts` + `[id]/+server.ts` | Bundle CRUD + delete |
+| `api/assets/+server.ts` + `[filename]/+server.ts` | Asset upload + serve |
+| `api/bundle/[hash]/+server.ts` | LAN peer-cache bundle blob |
+| `api/buildings/[city]/+server.ts` | OSM extrusion GeoJSON |
+| `api/tiles/[...path]/+server.ts` | Tile proxy with path-traversal guard |
+
+## content/ — Authored artifacts (Rule 0 split)
+
+| File | Purpose |
+|------|---------|
+| `locations/catalog.ts` | 18 cities with lat/lon/scene defaults |
+| `locations/index.ts` | Barrel — Location, SceneDefaults types |
+| `weather/recipes.ts` | WEATHER_EFFECTS for 5 weather types |
+| `palettes/sky.ts` | Per-skyState background gradient + haze color |
+| `palettes/car-lights.ts` | RGBA tuples per light class (white/red/blue) |
+| `shows/default.show.ts` | Default Show — opening location/weather/timeOfDay |
+
+Imported via the `$content` alias (svelte.config.js).
+
+## Config
+
+| File | Purpose |
+|------|---------|
+| `svelte.config.js` | adapter-node, `bundleStrategy: 'single'`, CSP, `$content` alias |
+| `vite.config.ts` | Cesium static copy, 0.0.0.0 host binding |
+| `tsconfig.json` | strict mode |
+| `package.json` | bun scripts, cesium dep, svelte 5.50+ |

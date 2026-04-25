@@ -1,34 +1,75 @@
 # Aero Window Codemap
 
-**Last Updated:** 2026-04-14
+**Last Updated:** 2026-04-26
 
 ## Quick Navigation
 
 | Document | Scope |
 |----------|-------|
-| [Architecture](architecture.md) | Layer diagram, data flow, component tree, state ownership, key interfaces |
-| [File Inventory](files.md) | Every source file with line count, exports, and purpose |
-| [Security Boundaries](security.md) | Trust boundaries, validation points, auth model, CSP, sensitive data |
+| [File Inventory](files.md) | Source layout — folder by folder, top files by size |
+| [Architecture](architecture.md) | Layer diagram, data flow, key interfaces (PENDING REGEN) |
+| [Scene composition](scene.md) | Effect contract, registry, z-layer SSOT (PENDING REGEN) |
+| [Content API](content-api.md) | Bundle CRUD + LAN cache + remote push |
+| [Security boundaries](security.md) | Trust zones, validation, CSP, sensitive data |
 
-## Codebase Stats
+> The authoritative architecture lives in `CLAUDE.md` at the repo root.
+> CODEMAPS summarise per-concern slices and are regenerated from source
+> via `/update-codemaps`. Some files in this folder are tagged
+> "PENDING REGEN" until the next refresh.
 
-- **Total source files:** 44
-- **Total lines:** ~8,100
-- **Languages:** TypeScript, Svelte 5, GLSL
-- **Stack:** SvelteKit 2, Cesium.js, Tailwind CSS v4, Bun
+## Codebase stats (live as of phase 11)
 
-## Architecture at a Glance
+| Tree | Files | Lines |
+|------|------:|------:|
+| `src/lib/` | 78 | 9,183 |
+| `src/routes/` | 22 | 2,782 |
+| `content/` | 8 | 316 |
+
+## Architecture at a glance
 
 ```
-shared/          (leaf — types, constants, utils, locations, protocol)
-    |
-engine/          (pure simulation — zero DOM)
-    |
-app-state        (coordinator — AeroWindow + context DI)
-    |
-ui/ + routes/    (presentation + side-effects)
-    |
-services/        (side channel — persistence, fleet WS)
+                         DEPENDENCY LAYERS
+
+ ┌─────────────────────────────────────────────────────┐
+ │  ROUTES                                             │
+ │  +layout.ts (ssr=false) → +page.svelte → admin/    │
+ │  /playground (lean composition lab)                │
+ └──────────────┬─────────────────┬───────────────────┘
+                │                 │
+                v                 v
+ ┌─────────────────────┐  ┌──────────────────────────┐
+ │  MODEL              │  │  SHELL                   │
+ │  AeroWindow + ctx   │  │  Window (compositor)     │
+ │  config tree (SSOT) │  │  HUD, SidePanel,         │
+ │  CRDT LWW store     │  │  panel/* hud/* window/*  │
+ └───┬───────┬─────────┘  └──────────┬───────────────┘
+     │       │                       │
+     v       v                       v
+ ┌────────┐ ┌──────────┐  ┌─────────────────────────┐
+ │CAMERA  │ │DIRECTOR  │  │ SCENE                    │
+ │flight  │ │autopilot │  │ compositor + registry +  │
+ │motion  │ │scenarios │  │ layers + effects/* +     │
+ │        │ │          │  │ bundle/*                 │
+ └────────┘ └──────────┘  └────────────┬─────────────┘
+                                       │
+                                       v
+                          ┌─────────────────────┐
+                          │ WORLD               │
+                          │ Cesium isolation    │
+                          │ (compose, shaders)  │
+                          └─────────────────────┘
+
+ Authored artifacts        Boot baseline         Fleet
+ ┌──────────────┐          ┌────────────┐        ┌──────────────┐
+ │ content/     │          │ show/      │        │ fleet/       │
+ │ locations    │          │ Show type +│        │ REST + SSE,  │
+ │ weather      │          │ applyShow  │        │ CRDT sync,   │
+ │ palettes     │          │ Opening()  │        │ peer-sync    │
+ │ shows        │          └────────────┘        │ effect       │
+ └──────────────┘                                └──────────────┘
 ```
 
-All state flows through `AeroWindow`. Engines are pure. UI reads via Svelte context (`useAeroWindow()`). Fleet commands validated at the display boundary.
+State flows through `AeroWindow`. Engines and effects are reactive but
+side-effect-free outside their `untrack()` tick bodies. UI reads via
+context (`useAeroWindow()`). Fleet config writes route through the CRDT
+for last-writer-wins conflict resolution. Cesium is confined to `world/`.
