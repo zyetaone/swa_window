@@ -224,9 +224,11 @@ export const world = $state({
 	nightLightIntensity: 0.6,
 	// Bloom post-process — high contrast + negative brightness means only the
 	// top of the luminance range blooms. Sigma controls the Gaussian spread.
+	// 2.6 (was 2.2) compensates for the smaller car-lights pixelSize: with
+	// less hard pixel, we lean on bloom to carry the city-glow pooling.
 	bloomContrast: 128,
 	bloomBrightness: -0.3,
-	bloomSigma: 2.2,
+	bloomSigma: 2.6,
 	buildingsEnabled: true,
 	showClouds: true,
 	qualityMode: 'balanced' as QualityMode,
