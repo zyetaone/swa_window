@@ -5,11 +5,10 @@
  * first 2 hex chars so no directory balloons. Hash is validated as
  * 16-128 hex chars before any filesystem op (directory-traversal guard).
  *
- * NOTE — phase-11: the prior 4-tier fetch ladder (local → LAN peer →
- * Cloudflare push → origin CDN) was extracted from `lan-proxy.server.ts`
- * but never wired to a consumer. Deleted as fantasy architecture. If we
- * need it back, restore from git history (`fetchBundle` + helpers) and
- * call from `bundle/remote.ts` when receiving a bundle reference.
+ * Sole consumer: GET /api/bundle/[hash]. The blob fan-out path (peer +
+ * remote-origin tiers) was deleted in 57df5cc — not wired to anything.
+ * If the offline-Pi deployment story ever requires it, design the
+ * concrete consumer first, then build the fetch path against it.
  */
 
 import { readFile } from 'node:fs/promises';

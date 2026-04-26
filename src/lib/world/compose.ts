@@ -9,8 +9,6 @@ import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { normalizeHeading, shortestAngleDelta, lerp, smoothstep } from '$lib/utils';
-
-type WorldConfig = typeof world;
 import {
 	VIIRS_SMOOTHSTEP_FLOOR,
 	VIIRS_SMOOTHSTEP_CEIL,
@@ -26,6 +24,8 @@ import {
 	VIEWER_OPTIONS,
 	CARTODB_DARK_URL,
 } from './cesium-setup';
+
+type WorldConfig = typeof world;
 
 // Cesium tile subdivision + preload tuning per quality mode. Sole consumer
 // is this file — lives next to the CesiumManager that actually applies it.

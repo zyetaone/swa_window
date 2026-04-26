@@ -59,7 +59,10 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 	const o = input as Record<string, unknown>;
 
 	const deviceId = typeof o.deviceId === 'string' ? o.deviceId : null;
-	if (!deviceId || deviceId.length === 0 || deviceId.length > 128) return null;
+	// Hostname-shaped allowlist — closes log-injection in console.warn paths
+	// elsewhere in fleet/, and rules out shell metacharacters if a deviceId
+	// ever ends up in a script invocation.
+	if (!deviceId || !/^[a-zA-Z0-9._-]{1,64}$/.test(deviceId)) return null;
 
 	// Numeric fields — default to 0 on missing/bad input so a partially-failed
 	// health-check still gets recorded (better: "device is up but reporting 0"

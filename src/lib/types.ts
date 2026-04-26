@@ -113,6 +113,14 @@ export interface MicroEventData {
 
 // ─── Scenario types ──────────────────────────────────────────────────────────
 
+interface Waypoint {
+	lat: number;
+	lon: number;
+	altitude: number;
+	heading: number;
+	duration: number;
+}
+
 export interface FlightScenario {
 	id: string;
 	locationId: LocationId;
@@ -120,12 +128,4 @@ export interface FlightScenario {
 	waypoints: Waypoint[];
 	loop: boolean;
 	preferredTime: 'any' | 'day' | 'night' | 'dawn' | 'dusk';
-}
-
-interface Waypoint {
-	lat: number;
-	lon: number;
-	altitude: number;
-	heading: number;
-	duration: number;
 }
