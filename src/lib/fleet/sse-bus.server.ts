@@ -22,8 +22,15 @@ export interface SseEvent {
 
 const subscribers = new Set<(event: SseEvent) => void>();
 
-/** Fan out an event to every current subscriber. */
+/** Fan out an event to every current subscriber.
+ *
+ * Drops events whose `type` contains CR/LF — those bytes would let an event
+ * synthesise additional SSE frames on the wire (defence-in-depth: every
+ * current call-site uses hardcoded literal types, but a future call-site
+ * passing user input must not be able to inject events).
+ */
 export function publish(event: SseEvent): void {
+	if (/[\r\n]/.test(event.type)) return;
 	for (const fn of subscribers) {
 		try { fn(event); } catch { /* subscriber exploded — skip, don't crash others */ }
 	}
