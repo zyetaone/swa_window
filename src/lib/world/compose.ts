@@ -363,14 +363,18 @@ export class CesiumManager {
 			if (this.viirsLayer) {
 				this.viirsLayer.alpha = 0;
 				this.viirsLayer.show = false;
-				// Dark pixels → transparent so only lit cells composite over terrain.
+				// Tighter mask (was 0.12 → 0.18): only the genuinely lit pixels
+				// survive. Sub-threshold dim terrain glow disappears entirely so
+				// the VIIRS layer reads as discrete cities, not a hazy wash.
 				this.viirsLayer.colorToAlpha = C.Color.BLACK;
-				this.viirsLayer.colorToAlphaThreshold = 0.12;
+				this.viirsLayer.colorToAlphaThreshold = 0.18;
 				// Greyscale → sodium amber. hue offset + reduced saturation + boost.
+				// Brightness/contrast bumped (was 2.2 / 1.3) so what survives the
+				// tighter mask pops harder against the deeper-dim terrain.
 				this.viirsLayer.hue = 0.08;
 				this.viirsLayer.saturation = 0.55;
-				this.viirsLayer.brightness = 2.2;
-				this.viirsLayer.contrast = 1.3;
+				this.viirsLayer.brightness = 2.6;
+				this.viirsLayer.contrast = 1.5;
 			}
 		} catch (e) {
 			console.warn('[CesiumManager] VIIRS layer failed:', e);

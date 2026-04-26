@@ -33,11 +33,13 @@ export const COLOR_GRADING_GLSL = `
 		// lights come from the VIIRS ImageryLayer (NASA Black Marble), also
 		// composited by Cesium with amber hue + colorToAlpha. See compose.ts.
 		//
-		// This shader's only night-specific job now: a subtle warm pollution
-		// corona bleeding from already-bright (post-composite) pixels — the
-		// atmospheric halo you see from altitude around dense cities.
-		float pollution = smoothstep(0.35, 0.9, lum) * u_nightFactor;
-		rgb += vec3(0.15, 0.08, 0.02) * pollution * u_lightIntensity;
+		// This shader adds an additive warm corona on already-bright pixels — the
+		// atmospheric haze a viewer sees around dense cities from altitude. The
+		// smoothstep(0.28, 0.85) (was 0.35, 0.9) catches more of the mid-bright
+		// road network so glow integrates with VIIRS, not just with the brightest
+		// city cores. The colour vector is pushed warmer to match VIIRS amber.
+		float pollution = smoothstep(0.28, 0.85, lum) * u_nightFactor;
+		rgb += vec3(0.20, 0.11, 0.03) * pollution * u_lightIntensity;
 
 		// Crush shadows — max(0) prevents NaN from pow() on negative HDR values
 		// Reduce crush effect on bright pixels (sun, specular) via brightGuard
