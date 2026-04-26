@@ -161,6 +161,26 @@ describe('configSnapshot', () => {
 		expect((snap.shell as { blindOpen: boolean }).blindOpen).toBe(!orig);
 		applyConfigPatch('shell.blindOpen', orig);
 	});
+
+	it('clones nested objects so subsequent reactive mutations do not leak in', () => {
+		const before = configSnapshot();
+		const beforeDensity = (before.atmosphere as { clouds: { density: number } }).clouds.density;
+		const next = beforeDensity > 0.5 ? 0.1 : 0.9;
+		applyConfigPatch('atmosphere.clouds.density', next);
+		// snapshot taken before should still hold the prior value
+		expect((before.atmosphere as { clouds: { density: number } }).clouds.density).toBe(beforeDensity);
+		applyConfigPatch('atmosphere.clouds.density', beforeDensity);
+	});
+
+	it('clones array fields (cloudDensityRange) so range tweaks do not leak in', () => {
+		const snap = configSnapshot();
+		const range = (snap.atmosphere as { weather: { cloudDensityRange: [number, number] } }).weather.cloudDensityRange;
+		expect(Array.isArray(range)).toBe(true);
+		expect(range.length).toBe(2);
+		// mutate the snapshot copy and confirm the live state is untouched
+		range[0] = -999;
+		expect(atmosphere.weather.cloudDensityRange[0]).not.toBe(-999);
+	});
 });
 
 // ─── Namespace isolation — applyConfigPatch must not leak across layers ───
