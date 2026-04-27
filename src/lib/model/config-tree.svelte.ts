@@ -212,10 +212,13 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	// Base imagery dim at full night. 15% of day brightness so the shader's
-	// lightMask doesn't misread faint terrain as city lights.
+	// Base imagery at full night. 15% of day brightness, and saturation
+	// near-zero so the source pixel's hue (blue ocean, cyan sky, green
+	// vegetation in the satellite imagery) doesn't bleed through as a
+	// blue cast under VIIRS/CartoDB. Near-greyscale dim ground cleanly
+	// receives the amber tint applied by the layers above.
 	baseNightBrightness: 0.15,
-	baseNightSaturation: 0.25,
+	baseNightSaturation: 0.05,
 	// Night city glow overlay (CartoDB Dark) composited on the dimmed base.
 	// Brightness 1.6 keeps roads visible without blowing to pure white.
 	nightAlpha: 0.8,
