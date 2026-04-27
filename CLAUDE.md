@@ -50,8 +50,8 @@ src/lib/
 ├── show/               WHAT plays — authored experience primitive
 │   └── load.ts              Show interface + applyShowOpening (boot baseline)
 │
-├── shell/              UI surround (window frame, HUD, SidePanel, Blind, Glass, Weather)
-│   ├── Window.svelte       Layer compositor + RAF tick + window-frame toggle
+├── shell/              UI surround (airplane window pane, HUD, SidePanel, Blind, Glass, Weather)
+│   ├── Pane.svelte         Layer compositor + RAF tick + window-frame toggle
 │   ├── HUD.svelte          Telemetry overlay
 │   ├── SidePanel.svelte    Composes panel/* sections — binds directly to config.*
 │   ├── TelemetryPanel.svelte  Ring-buffer viewer (Shift+T)
@@ -192,7 +192,7 @@ model.setFleetBroadcast(fn)             // fleet client registers on connect
 ## Tick pipeline
 
 ```
-Window.svelte (RAF loop via game-loop.ts)
+Pane.svelte (RAF loop via game-loop.ts)
 └── model.tick(delta)
     ├── frameStart = performance.now()
     ├── ctx = this.#createContext()        // carries config.camera, config.director, isLeader
@@ -281,7 +281,7 @@ Device-side: `src/lib/scene/bundle/remote.ts` polls via `startRemotePoll()`. Opt
 
 ## CSS z-layer order
 
-Single source of truth: `src/lib/scene/layers.ts`. Effect registry, Weather.svelte, and Window.svelte all import `Z` from there.
+Single source of truth: `src/lib/scene/layers.ts`. Effect registry, Weather.svelte, and Pane.svelte all import `Z` from there.
 
 ```
 z:0   Cesium globe (terrain, buildings, night-light overlay, geo effects)

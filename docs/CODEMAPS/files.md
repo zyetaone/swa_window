@@ -17,7 +17,7 @@ files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
 | 618 | `world/compose.ts` | CesiumManager: terrain, buildings, imagery, atmosphere, post-process. Cesium isolation lives here. |
 | 457 | `shell/SidePanel.svelte` | Composes `panel/*` sections — most lines are CSS. |
 | 443 | `model/aero-window.svelte.ts` | AeroWindow class + context DI + tick pipeline. |
-| 361 | `shell/Window.svelte` | Layer compositor + RAF tick + window-frame toggle. |
+| 361 | `shell/Pane.svelte` | Layer compositor + RAF tick + window-frame toggle. |
 | 349 | `model/config-tree.svelte.ts` | Flat `$state` config — SSOT for every tuning number. |
 | 336 | `scene/effects/clouds/ArtsyClouds.svelte` | CSS3D cloud sprite renderer. |
 | 294 | `fleet/client.svelte.ts` | DeviceClient — SSE in, REST POST out. |
@@ -25,7 +25,7 @@ files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
 | 260 | `world/CesiumViewer.svelte` | Lone runtime `import('cesium')` site. |
 | 254 | `fleet/rest-admin.svelte.ts` | RestAdminStore — admin dashboard. |
 | 248 | `camera/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM. |
-| 198 | `shell/use-blind.svelte.ts` | Drag/snap composable. |
+| 198 | `shell/window/use-blind.svelte.ts` | Drag/snap composable. |
 | 169 | `shell/window/Blind.svelte` | Pull-down shade widget. |
 | 168 | `fleet/parallax.svelte.ts` | MAC-fingerprint role bindings. |
 | 163 | `fleet/lan-peers.server.ts` | mDNS-based LAN peer registry. |
@@ -37,7 +37,7 @@ files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
 | `model/` | 5 | aero-window, config-tree (SSOT), CRDT, persistence, frame-telemetry |
 | `fleet/` | 10 | REST + SSE; no central broker. Includes server modules (`*.server.ts`). |
 | `scene/` | ~25 | compositor, registry, layers (Z SSOT), 7 effects under `effects/`, bundle subsystem |
-| `shell/` | ~18 | Window, HUD, SidePanel, panel/* (6 controls), hud/*, window/* |
+| `shell/` | ~18 | Pane, HUD, SidePanel, panel/* (6 controls), hud/*, window/* |
 | `world/` | 6 | Cesium isolation — compose, cesium-setup, shaders, CesiumViewer, active |
 | `camera/` | 2 | flight + motion |
 | `director/` | 2 | autopilot + scenarios |

@@ -23,7 +23,7 @@ content/   → authored artifacts: locations, palettes, weather recipes,
 ### What lives in `content/` (target state)
 
 - `content/locations/*.ts` — one file per location, replaces the single `src/lib/locations.ts`
-- `content/palettes/*.ts` — sky gradients, haze colors, car-light RGB, currently scattered across `shell/Window.svelte`, `atmosphere/haze/HazeEffect.svelte`, `world/shaders.ts`, `scene/effects/car-lights/rules.ts`
+- `content/palettes/*.ts` — sky gradients, haze colors, car-light RGB, currently scattered across `shell/Pane.svelte`, `scene/effects/haze/HazeEffect.svelte`, `world/shaders.ts`, `scene/effects/car-lights/rules.ts`
 - `content/weather/*.ts` — replaces inline `WEATHER_EFFECTS` literal in `src/lib/constants.ts`
 - `content/shows/*.show.ts` — NEW primitive: a complete authored production (scene bank + cue list + defaults)
 - `content/bundles/*/` — already shipped under `data/bundles/`, relocate

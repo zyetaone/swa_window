@@ -6,7 +6,7 @@
 
 ```
 +page.svelte
-└── Window.svelte
+└── Pane.svelte
     ├── CesiumViewer.svelte           → publishes activeCesium.manager
     ├── Compositor.svelte             → iterates EFFECTS + bundleStore.effects
     │   └── for each Effect:
@@ -83,7 +83,7 @@ export const Z = {
 } as const;
 ```
 
-Every consumer imports from here: effect registry, `Window.svelte`, `Weather.svelte`, every `scene/effects/*/index.ts`. Geo effects render inside Cesium so the `z` value is informational only.
+Every consumer imports from here: effect registry, `Pane.svelte`, `Weather.svelte`, every `scene/effects/*/index.ts`. Geo effects render inside Cesium so the `z` value is informational only.
 
 ## Geo effect access pattern
 

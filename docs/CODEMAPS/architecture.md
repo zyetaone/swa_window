@@ -17,7 +17,7 @@
                v                       v
  ┌─────────────────────────┐   ┌──────────────────────────┐
  │  MODEL                  │   │  SHELL                   │
- │  AeroWindow + ctx DI    │   │  Window (compositor),    │
+ │  AeroWindow + ctx DI    │   │  Pane (compositor),      │
  │  config tree (SSOT)     │   │  HUD, SidePanel,         │
  │  CRDT LWW store         │   │  panel/* hud/* window/*  │
  │  frame-telemetry        │   └─────────────┬────────────┘
@@ -82,7 +82,7 @@ config.atmosphere.clouds.density = 0.8        // direct $state mutation
     │
     ├── ArtsyClouds.svelte $derived recomputes sprite count
     │
-    └── Window.svelte $derived recomputes filterString
+    └── Pane.svelte $derived recomputes filterString
         → CSS backdrop-filter on the window pane
 ```
 
@@ -92,7 +92,7 @@ config.atmosphere.clouds.density = 0.8        // direct $state mutation
 game-loop.ts (RAF singleton)
     │  subscribe(fn)
     v
-Window.svelte $effect → model.tick(delta)
+Pane.svelte $effect → model.tick(delta)
     │
     ├── flight.tick(delta, ctx)            untrack() → FlightPatch
     │     (orbit, scenarios, cruise FSM)
@@ -145,7 +145,7 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 ```
 +page.svelte ── CONTEXT BOUNDARY (createAeroWindow)
 │
-├── Window.svelte ── useAeroWindow(), game-loop subscription
+├── Pane.svelte ── useAeroWindow(), game-loop subscription
 │   ├── CesiumViewer.svelte ── runtime import('cesium')
 │   ├── Compositor.svelte ── iterates registered Effects + bundleStore
 │   │   ├── effects/clouds (ArtsyClouds — CSS3D sprites)
@@ -213,7 +213,7 @@ durations: model.config.camera.cruise.{departureDurationSec, transitDurationSec}
 
 ## Z-layer system
 
-The single source: `src/lib/scene/layers.ts` exports `Z` as a `const` object. Every consumer (effect registry, `Window.svelte`, `Weather.svelte`) imports from there.
+The single source: `src/lib/scene/layers.ts` exports `Z` as a `const` object. Every consumer (effect registry, `Pane.svelte`, `Weather.svelte`) imports from there.
 
 ```
 z:0   Cesium canvas (terrain, buildings, VIIRS overlay, geo effects)

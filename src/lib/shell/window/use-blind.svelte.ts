@@ -2,7 +2,7 @@
  * useBlind — composable for the airplane window blind drag/snap controller.
  *
  * Encapsulates all blind state, derived values, and pointer/keyboard handlers.
- * Window.svelte binds `blind.clipEl` and wires the returned handlers directly.
+ * Pane.svelte binds `blind.clipEl` and wires the returned handlers directly.
  *
  * Optional long-press acceleration (SWA corridor, Day 5):
  *   Pass `{ longPress: { enabled, thresholdMs, speedMultiplier, releaseMs } }`

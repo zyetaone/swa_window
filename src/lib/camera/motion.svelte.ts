@@ -8,7 +8,7 @@
  *
  * AeroWindow.motion returns this module's `motion` object (a getter, not
  * a field), keeping `model.motion.x` callsites untouched across
- * Window.svelte + compose.ts.
+ * Pane.svelte + compose.ts.
  *
  * All feel parameters are read from `ctx.camera.motion` (CameraConfig.MotionConfig).
  */

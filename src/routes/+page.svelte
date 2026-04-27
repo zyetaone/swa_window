@@ -23,7 +23,7 @@
 		type ContentBundle,
 		type ConfigPatch,
 	} from "$lib/scene/bundle/remote";
-	import Window from "$lib/shell/Window.svelte";
+	import Pane from "$lib/shell/Pane.svelte";
 	import Controls from "$lib/shell/HUD.svelte";
 	import SidePanel from "$lib/shell/SidePanel.svelte";
 	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
@@ -190,7 +190,7 @@
 		<div class="cabin-texture"></div>
 
 		<!-- The window -->
-		<Window />
+		<Pane />
 
 		<!-- Rivets/details around window -->
 		<div class="cabin-details">
@@ -370,7 +370,7 @@
 	/* Window-frame on/off (Phase 5b).
 	   When toggled off via config.shell.windowFrame=false, the cabin wall,
 	   texture, and rivets disappear so the Cesium canvas reads edge-to-edge.
-	   Window.svelte handles its own inner shell in the .no-frame scope. */
+	   Pane.svelte handles its own inner shell in the .no-frame scope. */
 	.app.no-frame .cabin-wall {
 		background: #000;
 		box-shadow: none;

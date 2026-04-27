@@ -1,13 +1,15 @@
 <script lang="ts">
 	/**
-	 * Window - Layer compositor + game loop
+	 * Pane — the airplane window pane.
 	 *
-	 * Owns the RAF tick loop (single game clock).
-	 * Composes: Cesium (terrain) + CSS clouds + CSS effect overlays.
+	 * Owns the RAF tick loop (single game clock) and composes everything
+	 * the cabin occupant sees: Cesium globe (terrain, buildings, lights),
+	 * scene effects (clouds, lightning, micro-events), pane widgets
+	 * (Weather backdrop, Glass vignette, Blind shade), and the wing
+	 * silhouette.
 	 *
-	 * Z-order is declared in $lib/scene/layers.ts (one source of truth,
-	 * shared with the effect registry, Weather.svelte, and every atmo/*
-	 * effect index). Read Z.* there.
+	 * Z-order SSOT: $lib/scene/layers.ts. Imported by the effect registry,
+	 * Weather.svelte, and this file.
 	 */
 	import { untrack } from "svelte";
 	import { Z } from "$lib/scene/layers";

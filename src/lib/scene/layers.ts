@@ -2,11 +2,11 @@
  * Z-layer ordering — single source of truth.
  *
  * Previously triplicated: registry.ts inline z:N values, Weather.svelte
- * hardcoded z-index, Window.svelte doc-comment table, CLAUDE.md table.
+ * hardcoded z-index, Pane.svelte doc-comment table, CLAUDE.md table.
  * They had already drifted (CLAUDE.md documented z:3 micro-events and
- * z:11 glass-recess which Window.svelte's comment omitted).
+ * z:11 glass-recess which Pane.svelte's comment omitted).
  *
- * Every call site — effect registry, Weather.svelte, Window.svelte,
+ * Every call site — effect registry, Weather.svelte, Pane.svelte,
  * atmosphere/*, scene/effects/* — imports from here.
  */
 
