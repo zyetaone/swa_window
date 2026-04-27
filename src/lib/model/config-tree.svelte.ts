@@ -240,7 +240,10 @@ export const world = $state({
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
 export const shell = $state({
-	windowFrame: true,
+	// Window frame off by default — edge-to-edge Cesium fills the viewport.
+	// Toggle on for the airplane-cabin oval-mask + metallic rim look. Blind
+	// works in either mode; drag-snap composable doesn't depend on shape.
+	windowFrame: false,
 	blindOpen: true,
 	hudVisible: true,
 	sidePanelOpen: false,

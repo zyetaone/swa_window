@@ -352,6 +352,22 @@
 	.window-container.no-frame .wing-silhouette {
 		visibility: hidden;
 	}
+	.window-container.no-frame {
+		/* Full-bleed: no oval, no metallic rim, no aspect cap. The Cesium
+		   canvas + atmosphere fill the entire viewport. Blind still works
+		   (drag-snap composable doesn't depend on the oval shape). */
+		top: 0;
+		left: 0;
+		transform: none;
+		width: 100vw;
+		height: 100vh;
+		max-width: none;
+		max-height: none;
+		aspect-ratio: auto;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
 	.window-container.no-frame .window-viewport {
 		border-radius: 0 !important;
 		box-shadow: none !important;
