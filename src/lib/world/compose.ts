@@ -273,7 +273,6 @@ export class CesiumManager {
 				fragmentShader: glsl,
 				uniforms: {
 					u_nightFactor: () => this.model.nightFactor,
-					u_dawnDuskFactor: () => this.model.dawnDuskFactor,
 					u_lightIntensity: () => this.model.nightLightScale,
 				},
 			});
@@ -455,10 +454,20 @@ export class CesiumManager {
 			v.scene.globe.baseColor = C.Color.fromBytes(Math.round(r), Math.round(g), Math.round(b), 255);
 		}
 
-		const satShift = lerp(0, -0.8, nf) + dd * 0.2;
+		// Cesium skyAtmosphere — kill the cyan-blue limb at dawn/dusk by
+		// pushing saturationShift HARDER negative when dawnDuskFactor peaks.
+		// (Earlier code did `+ dd * 0.2` which REDUCED the desat exactly when
+		// the band was most visible — that was the bug.) brightnessShift dims
+		// the limb at the same time so the transition reads as a softer warm
+		// glow instead of a vivid cyan stripe.
+		const satShift = lerp(0, -0.8, nf) - dd * 0.5;
+		const brShift = lerp(0, -0.3, nf) - dd * 0.2;
 		if (Math.abs(satShift - this.lastSkySatShift) > 0.01) {
 			this.lastSkySatShift = satShift;
-			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.saturationShift = satShift;
+			if (v.scene.skyAtmosphere) {
+				v.scene.skyAtmosphere.saturationShift = satShift;
+				v.scene.skyAtmosphere.brightnessShift = brShift;
+			}
 		}
 
 		const fog = m.sceneFog;
