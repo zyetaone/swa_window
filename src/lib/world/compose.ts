@@ -362,6 +362,13 @@ export class CesiumManager {
 			if (this.viirsLayer) {
 				this.viirsLayer.alpha = 0;
 				this.viirsLayer.show = false;
+				// Day/night separation. globe.enableLighting=true would otherwise
+				// MULTIPLY VIIRS by the sun-direction terminator shading, dimming
+				// the lit-cities data on the night side — exactly the opposite of
+				// what we want. dayAlpha=0 hides VIIRS on the lit hemisphere;
+				// nightAlpha=1 keeps it full-bright on the dark hemisphere.
+				this.viirsLayer.dayAlpha = 0;
+				this.viirsLayer.nightAlpha = 1;
 				// Dark pixels → transparent so only lit cells composite over terrain.
 				this.viirsLayer.colorToAlpha = C.Color.BLACK;
 				this.viirsLayer.colorToAlphaThreshold = 0.12;

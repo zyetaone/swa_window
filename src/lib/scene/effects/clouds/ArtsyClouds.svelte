@@ -68,11 +68,11 @@ interface Cloud {
 }
 
 const textureSets: Record<string, readonly string[]> = {
-	clear: ['/cloud.png'],
-	cloudy: ['/cloud.png', '/cloud.png'],
-	rain: ['/cloud.png', '/cloud-dark.png'],
-	overcast: ['/cloud-dark.png', '/cloud-smoke.png'],
-	storm: ['/cloud-dark.png', '/cloud-smoke.png'],
+	clear: ['/cloud.webp'],
+	cloudy: ['/cloud.webp', '/cloud.webp'],
+	rain: ['/cloud.webp', '/cloud-dark.webp'],
+	overcast: ['/cloud-dark.webp', '/cloud-smoke.webp'],
+	storm: ['/cloud-dark.webp', '/cloud-smoke.webp'],
 };
 
 function rand(min: number, max: number) { return min + Math.random() * (max - min); }

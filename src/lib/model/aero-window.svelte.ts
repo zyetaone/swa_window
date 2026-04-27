@@ -27,6 +27,8 @@ import {
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
+const TRANSITION_DELAY_MS = 2500;
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface AeroWindowPatch {
@@ -362,7 +364,7 @@ export class AeroWindow {
 					locationId: directorPatch.nextLocation,
 					weather: this.weather,
 					decidedAtMs: now,
-					transitionAtMs: now + 2500,
+					transitionAtMs: now + TRANSITION_DELAY_MS,
 				});
 			}
 			this.flight.flyTo(directorPatch.nextLocation);
