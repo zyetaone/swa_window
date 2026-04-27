@@ -212,26 +212,21 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	// Base imagery dim at full night. 0.10 (was 0.15) — deeper terrain crush
-	// so VIIRS amber + CartoDB road grid pop harder against the dark ground.
-	// Composite math: Cesium imagery layers alpha-blend, so the only way to
-	// make lit areas "glow" is to deepen the unlit floor underneath.
-	baseNightBrightness: 0.10,
-	baseNightSaturation: 0.18,
+	// Base imagery dim at full night. 15% of day brightness so the shader's
+	// lightMask doesn't misread faint terrain as city lights.
+	baseNightBrightness: 0.15,
+	baseNightSaturation: 0.25,
 	// Night city glow overlay (CartoDB Dark) composited on the dimmed base.
 	// Brightness 1.6 keeps roads visible without blowing to pure white.
 	nightAlpha: 0.8,
 	nightBrightness: 1.6,
 	nightContrast: 1.6,
 	nightLightIntensity: 0.6,
-	// Bloom post-process — sigma sets Gaussian spread, contrast sets the
-	// luminance threshold above which pixels contribute. Wider sigma + lower
-	// contrast = softer, broader glow — lit roads pool into city haze rather
-	// than reading as discrete pin-pricks. Negative brightness keeps dim
-	// terrain from contributing.
-	bloomContrast: 100,
+	// Bloom post-process — high contrast + negative brightness means only the
+	// top of the luminance range blooms. Sigma controls the Gaussian spread.
+	bloomContrast: 128,
 	bloomBrightness: -0.3,
-	bloomSigma: 3.4,
+	bloomSigma: 2.2,
 	buildingsEnabled: true,
 	showClouds: true,
 	qualityMode: 'balanced' as QualityMode,

@@ -30,18 +30,9 @@
 				position: Cesium.Cartesian3.fromDegrees(seed.lon, seed.lat),
 				point: {
 					color: Cesium.Color.fromBytes(r, g, b, a),
-					// Smaller hard pixel — the bloom post-process widens these
-					// into soft halos that pool with VIIRS. A small bright dot
-					// lets bloom dominate the visual; a big dot reads pixelated.
-					pixelSize: 1.6,
+					pixelSize: 2.5,
 					heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-					// Sharper near→far ramp: scale up close (a moving plane
-					// sees pin-sharp lights right below) and shrink hard at
-					// distance so the far city dissolves into VIIRS wash.
-					scaleByDistance: new Cesium.NearFarScalar(1500, 3.0, 60000, 0.25),
-					// Translucency falloff doubles up with scale so distant
-					// dots fade entirely instead of compressing into shimmer.
-					translucencyByDistance: new Cesium.NearFarScalar(1500, 1.0, 60000, 0.0),
+					scaleByDistance: new Cesium.NearFarScalar(2000, 2.5, 80000, 0.4),
 					disableDepthTestDistance: Number.POSITIVE_INFINITY,
 				},
 			});

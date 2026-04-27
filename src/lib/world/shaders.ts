@@ -27,30 +27,17 @@ export const COLOR_GRADING_GLSL = `
 		// night crush effects.
 		float brightGuard = smoothstep(0.75, 0.95, lum);
 
-		// --- Night composite mask ("overlay") ---
-		// Cesium ImageryLayers alpha-blend; they cannot multiply. So at night the
-		// dimmed-but-still-blue base imagery + dim CartoDB ocean leak a blue
-		// neon-cast where VIIRS hasn't masked. Run a per-pixel "overlay mask"
-		// here: pixels that are dim AND cool (high blue, low warmth) get
-		// multiplied toward true black, while warm-or-bright pixels (VIIRS amber,
-		// car-lights, road glow, sky) pass through.
+		// --- Night rendering ---
+		// Night darkening is handled by the CartoDB dark ImageryLayer (composited
+		// over the base by Cesium before this shader sees the pixel). Night city
+		// lights come from the VIIRS ImageryLayer (NASA Black Marble), also
+		// composited by Cesium with amber hue + colorToAlpha. See compose.ts.
 		//
-		//   coolness = how much the pixel leans blue vs. warm
-		//   litness  = luminance × (1 + warmth)  — lit roads beat dim blue
-		//
-		// At u_nightFactor=1, dim+blue pixels approach 5% × original.
-		float coolness = clamp(rgb.b - (rgb.r + rgb.g) * 0.5, 0.0, 1.0);
-		float warmth = clamp((rgb.r - rgb.b), 0.0, 1.0);
-		float litness = lum * (1.0 + warmth * 2.0);
-		float overlayMask = (1.0 - smoothstep(0.05, 0.30, litness)) * (0.4 + coolness * 0.6);
-		rgb *= mix(vec3(1.0), vec3(0.05, 0.05, 0.07), overlayMask * u_nightFactor);
-
-		// --- Warm pollution corona ---
-		// Additive haze on already-bright pixels post-overlay-crush. With cool
-		// terrain killed above, smoothstep(0.20, 0.80) catches the surviving
-		// VIIRS amber + car-light cores and softens them into a halo.
-		float pollution = smoothstep(0.20, 0.80, lum) * u_nightFactor;
-		rgb += vec3(0.20, 0.11, 0.03) * pollution * u_lightIntensity;
+		// This shader's only night-specific job now: a subtle warm pollution
+		// corona bleeding from already-bright (post-composite) pixels — the
+		// atmospheric halo you see from altitude around dense cities.
+		float pollution = smoothstep(0.35, 0.9, lum) * u_nightFactor;
+		rgb += vec3(0.15, 0.08, 0.02) * pollution * u_lightIntensity;
 
 		// Crush shadows — max(0) prevents NaN from pow() on negative HDR values
 		// Reduce crush effect on bright pixels (sun, specular) via brightGuard
