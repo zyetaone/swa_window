@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Aero Dynamic Window is a **circadian-aware digital airplane window display** for office wellbeing. It renders a realistic airplane window view using Cesium for terrain + CSS effect layers, syncing with real time of day. Designed for Raspberry Pi 5 fleet deployment with headless Chromium kiosk mode. Supports multi-Pi panorama rigs (three devices side-by-side forming one continuous window) via the Phase 7 parallax system.
+Aero Dynamic Window is a **circadian-aware digital airplane window display** for office wellbeing. It renders a realistic airplane window view synced to time of day, designed for Raspberry Pi 5 fleet deployment with headless Chromium kiosk mode.
+
+**Active branch:** `playground/maplibre-app` — v2 open-source rewrite using MapLibre GL + PMTiles + Takram three-geospatial. Cesium is **deprecated** (isolated to `src/lib/world/` for reference; all new work uses MapLibre). Deployment target: SWA Hyderabad (SATTVA Knowledge Park), end of May 2026.
 
 ## Commands
 
@@ -20,8 +22,9 @@ bun x vitest run     # Run unit/integration tests
 ## Tech Stack
 
 - **Framework**: SvelteKit 2 with Svelte 5 runes (`$state`, `$derived`, `$effect`, `$bindable()`, `createContext` on 5.40+)
-- **Terrain**: Cesium.js — the *only* framework isolated to one file (`src/lib/world/compose.ts`). Every other module is Cesium-free and independently testable.
-- **Imagery**: EOX Sentinel-2 Cloudless (default, no auth) → Mapbox Satellite (token-gated) → ESRI World Imagery (fallback).
+- **Terrain**: MapLibre GL + PMTiles (open-source, v2 stack). Cesium is deprecated — isolated in `src/lib/world/`, do not extend.
+- **3D/Atmosphere**: `@takram/three-atmosphere`, `@takram/three-clouds`, `@takram/three-geospatial` via Threlte.
+- **Imagery**: PMTiles offline tiles (primary) → EOX Sentinel-2 Cloudless (fallback).
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
 - **State**: Flat reactive `$state` objects in `src/lib/model/config-tree.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
