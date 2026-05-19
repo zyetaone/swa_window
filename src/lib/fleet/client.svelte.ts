@@ -18,8 +18,8 @@
  */
 
 import type { FleetClientModel } from '$lib/fleet/protocol';
-import { LOCATION_IDS } from '$content/locations';
-import { isValidWeather, isValidDisplayMode } from '$lib/types';
+import { isValidLocation } from '$content/locations';
+import { isValidWeather, isValidDisplayMode, isValidDeviceRole } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 
@@ -209,14 +209,9 @@ export class DeviceClient {
 
 		switch (msg.type) {
 			case 'set_scene': {
-				const location = msg.location as string;
-				const weather = msg.weather;
-				if (LOCATION_IDS.has(location as never)) {
-					this.#model.applyScene(
-						location as never,
-						isValidWeather(weather) ? (weather as never) : undefined,
-					);
-				}
+				if (!isValidLocation(msg.location)) break;
+				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
+				this.#model.applyScene(msg.location, weather);
 				break;
 			}
 			case 'set_mode': {
@@ -236,9 +231,11 @@ export class DeviceClient {
 				break;
 			}
 			case 'role_assign': {
-				const role = msg.role;
-				if (typeof role === 'string') {
-					setParallaxRoleWithSync(role as never);
+				// Validate against the DeviceRole union — earlier we accepted any
+				// string, which let a malformed fleet message land bogus values
+				// straight into the CRDT + camera config.
+				if (isValidDeviceRole(msg.role)) {
+					setParallaxRoleWithSync(msg.role);
 				}
 				if (typeof msg.headingOffsetDeg === 'number') {
 					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);
@@ -249,16 +246,16 @@ export class DeviceClient {
 				break;
 			}
 			case 'director_decision': {
-				const loc = msg.locationId as string;
-				if (!LOCATION_IDS.has(loc as never)) break;
-				const weather = isValidWeather(msg.weather) ? (msg.weather as never) : undefined;
+				if (!isValidLocation(msg.locationId)) break;
+				const loc = msg.locationId;
+				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
 				const transitionAtMs = typeof msg.transitionAtMs === 'number' ? msg.transitionAtMs : Date.now();
 				const delay = transitionAtMs - Date.now();
 				if (delay < -50) {
 					console.warn(`[fleet] director_decision arrived ${-delay}ms late; applying immediately`);
-					this.#model.applyScene(loc as never, weather);
+					this.#model.applyScene(loc, weather);
 				} else {
-					setTimeout(() => this.#model.applyScene(loc as never, weather), Math.max(0, delay));
+					setTimeout(() => this.#model.applyScene(loc, weather), Math.max(0, delay));
 				}
 				break;
 			}

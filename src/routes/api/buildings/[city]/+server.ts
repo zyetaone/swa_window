@@ -8,7 +8,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { LOCATION_MAP } from '$content/locations';
+import { isValidLocation } from '$content/locations';
 import type { RequestHandler } from './$types';
 
 const TILE_DIR = (process.env.TILE_DIR || '/opt/zyeta-aero/tiles').replace(/\/$/, '');
@@ -19,7 +19,7 @@ const LOCAL_BUILDINGS_DIR = resolve(process.cwd(), 'data', 'buildings');
 
 export const GET: RequestHandler = async ({ params }) => {
 	const city = params.city;
-	if (!city || !LOCATION_MAP.has(city as never)) {
+	if (!isValidLocation(city)) {
 		return new Response('Unknown city', { status: 404 });
 	}
 	const filePath = resolve(BUILDINGS_DIR, `${city}.geojson`);

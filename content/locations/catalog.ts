@@ -119,3 +119,13 @@ export type LocationId = (typeof LOCATIONS_DATA)[number]['id'];
 export const LOCATIONS = LOCATIONS_DATA as ReadonlyArray<Location>;
 export const LOCATION_IDS = new Set<LocationId>(LOCATIONS_DATA.map((l) => l.id));
 export const LOCATION_MAP = new Map<LocationId, Location>(LOCATIONS_DATA.map((l) => [l.id, l as Location]));
+
+/**
+ * Runtime type guard — mirrors isValidWeather / isValidDisplayMode in
+ * $lib/types. Use at the trust boundary (fleet messages, URL params,
+ * HTTP route params) instead of casting strings to LocationId via
+ * `as never`.
+ */
+export function isValidLocation(v: unknown): v is LocationId {
+	return typeof v === 'string' && (LOCATION_IDS as ReadonlySet<string>).has(v);
+}

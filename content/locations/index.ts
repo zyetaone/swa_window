@@ -11,6 +11,7 @@ export {
 	LOCATIONS,
 	LOCATION_IDS,
 	LOCATION_MAP,
+	isValidLocation,
 	type Location,
 	type LocationId,
 	type SceneDefaults,
