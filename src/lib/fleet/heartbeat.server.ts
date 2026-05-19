@@ -39,6 +39,14 @@ export interface HeartbeatSample {
 const MAX_SAMPLES_PER_DEVICE = 500;
 
 /**
+ * Hostname-shaped allowlist used by both POST (recordHeartbeat) and the
+ * route's GET ?deviceId= query validation. Single source of truth — the
+ * GET path must never accept an id that POST would have rejected, or the
+ * dashboard could look up entries that the store never wrote.
+ */
+export const DEVICE_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
+
+/**
  * Per-device ring buffer. Oldest samples drop off once we hit
  * MAX_SAMPLES_PER_DEVICE. We use a plain array rather than a circular
  * buffer because 500 elements is tiny and the dashboard wants
@@ -59,10 +67,10 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 	const o = input as Record<string, unknown>;
 
 	const deviceId = typeof o.deviceId === 'string' ? o.deviceId : null;
-	// Hostname-shaped allowlist — closes log-injection in console.warn paths
-	// elsewhere in fleet/, and rules out shell metacharacters if a deviceId
-	// ever ends up in a script invocation.
-	if (!deviceId || !/^[a-zA-Z0-9._-]{1,64}$/.test(deviceId)) return null;
+	// DEVICE_ID_PATTERN closes log-injection in console.warn paths elsewhere
+	// in fleet/, and rules out shell metacharacters if a deviceId ever ends
+	// up in a script invocation.
+	if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) return null;
 
 	// Numeric fields — default to 0 on missing/bad input so a partially-failed
 	// health-check still gets recorded (better: "device is up but reporting 0"

@@ -22,13 +22,9 @@ import {
 	historyForDevice,
 	latestAll,
 	summarize,
+	DEVICE_ID_PATTERN,
 } from '$lib/fleet/heartbeat.server';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
-
-// Same shape as the deviceId allowlist in heartbeat.server.recordHeartbeat —
-// keeps GET-by-id queries consistent with what POST will accept, and avoids
-// trusting an arbitrary string for a Map.get on the server side.
-const DEVICE_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
