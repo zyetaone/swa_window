@@ -84,8 +84,13 @@ export class DeviceClient {
 		// with the right sourceId for cross-device LWW tiebreaks.
 		setCRDTDeviceId(this.#deviceId);
 		this.connect();
-		this.#startStatusUpdates();
-		this.#startPeerRefresh();
+		// Status heartbeat every 5 s, peer-list refresh every 30 s to match
+		// mDNS ANNOUNCE_INTERVAL_MS. Both run for the lifetime of the
+		// client; disconnect() clears them.
+		this.#sendStatus();
+		this.#statusInterval = setInterval(() => this.#sendStatus(), 5000);
+		void this.#refreshPeers();
+		this.#peerInterval = setInterval(() => void this.#refreshPeers(), 30_000);
 	}
 
 	connect(): void {
@@ -116,8 +121,8 @@ export class DeviceClient {
 	}
 
 	disconnect(): void {
-		this.#stopStatusUpdates();
-		this.#stopPeerRefresh();
+		if (this.#statusInterval) { clearInterval(this.#statusInterval); this.#statusInterval = null; }
+		if (this.#peerInterval) { clearInterval(this.#peerInterval); this.#peerInterval = null; }
 		this.#eventSource?.close();
 		this.#eventSource = null;
 		this.#state = 'disconnected';
@@ -161,49 +166,22 @@ export class DeviceClient {
 		} catch { /* mDNS not populated yet or offline — try again next tick */ }
 	}
 
-	#startPeerRefresh(): void {
-		this.#stopPeerRefresh();
-		// Seed immediately so the first director_decision has a list,
-		// then refresh every 30s to match mDNS ANNOUNCE_INTERVAL_MS.
-		void this.#refreshPeers();
-		this.#peerInterval = setInterval(() => void this.#refreshPeers(), 30_000);
-	}
-
-	#stopPeerRefresh(): void {
-		if (this.#peerInterval) {
-			clearInterval(this.#peerInterval);
-			this.#peerInterval = null;
-		}
-	}
-
-	#startStatusUpdates(): void {
-		this.#stopStatusUpdates();
-		const send = () => {
-			if (this.#destroyed) return;
-			fetch('/api/status', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					deviceId: this.#deviceId,
-					hostname: this.#deviceId,
-					fps: this.#model.measuredFps,
-					mode: this.#model.displayMode,
-					location: this.#model.location,
-					weather: this.#model.weather,
-					uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
-					lastSeen: Date.now(),
-				}),
-			}).catch(() => { /* heartbeat best-effort — don't pollute console */ });
-		};
-		send();
-		this.#statusInterval = setInterval(send, 5000);
-	}
-
-	#stopStatusUpdates(): void {
-		if (this.#statusInterval) {
-			clearInterval(this.#statusInterval);
-			this.#statusInterval = null;
-		}
+	#sendStatus(): void {
+		if (this.#destroyed) return;
+		fetch('/api/status', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				deviceId: this.#deviceId,
+				hostname: this.#deviceId,
+				fps: this.#model.measuredFps,
+				mode: this.#model.displayMode,
+				location: this.#model.location,
+				weather: this.#model.weather,
+				uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
+				lastSeen: Date.now(),
+			}),
+		}).catch(() => { /* heartbeat best-effort — don't pollute console */ });
 	}
 
 	#handleConfigPatch(ev: MessageEvent): void {
