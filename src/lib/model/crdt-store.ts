@@ -14,6 +14,14 @@
 
 import { setByPath } from '$lib/utils';
 
+/**
+ * Sanity floor — reject any timestamp before 2024-01-01T00:00:00Z.
+ * Protects against Pi devices with dead RTC batteries booting into 1970
+ * and blanking the fleet config with "oldest" timestamps.
+ * 1704067200000 = Date.UTC(2024, 0, 1)
+ */
+const MIN_SANE_TIMESTAMP = 1704067200000;
+
 export interface CRDTPatch {
 	path: string;
 	value: unknown;
@@ -44,9 +52,18 @@ export class CRDTStore {
 	 * device id. Wall-clock is comparable across devices; NTP drift is
 	 * an accepted risk. For LWW on concurrent admin pushes, this is the
 	 * right primitive — lamport/vector clocks would be overkill.
+	 *
+	 * If Date.now() is below MIN_SANE_TIMESTAMP the write still stamps —
+	 * a console.error fires but we don't block the local user (better a
+	 * mis-stamped local write than a frozen UI). NTP will fix the clock
+	 * shortly and subsequent stamps will be healthy.
 	 */
 	set(path: string, value: unknown): boolean {
-		this.#timestamps.set(path, { value, timestamp: Date.now(), sourceId: _deviceId });
+		const ts = Date.now();
+		if (ts < MIN_SANE_TIMESTAMP) {
+			console.error(`[crdt] System clock appears incorrect (${ts} < ${MIN_SANE_TIMESTAMP}). Local writes will lose CRDT races until NTP syncs.`);
+		}
+		this.#timestamps.set(path, { value, timestamp: ts, sourceId: _deviceId });
 		setByPath(this.#root, path, value);
 		return true;
 	}
@@ -55,8 +72,12 @@ export class CRDTStore {
 	 * Tiebreak on equal timestamps by sourceId (lexicographic). Ensures
 	 * two devices receiving the same pair of concurrent writes in
 	 * different orders converge to the same winner.
+	 *
+	 * Patches with timestamps below MIN_SANE_TIMESTAMP are rejected —
+	 * they indicate a peer with a dead RTC or unset clock.
 	 */
 	canMerge(patch: CRDTPatch): boolean {
+		if (patch.timestamp < MIN_SANE_TIMESTAMP) return false;
 		const local = this.#timestamps.get(patch.path);
 		if (!local) return true;
 		if (patch.timestamp > local.timestamp) return true;
