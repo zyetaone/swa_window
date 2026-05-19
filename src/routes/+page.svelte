@@ -256,21 +256,24 @@
 		height: 100%;
 		max-width: 3840px;
 		max-height: 2160px;
-		/* Cabin wall color - warm gray plastic */
-		background: linear-gradient(
-			180deg,
-			#d8d5d0 0%,
-			#e0ddd8 20%,
-			#e5e2dd 50%,
-			#e0ddd8 80%,
-			#d5d2cd 100%
-		);
+		/* Premium cabin wall — cool pearl white with subtle blue warmth */
+		background:
+			radial-gradient(ellipse at 50% 0%, rgba(48, 76, 178, 0.04) 0%, transparent 60%),
+			linear-gradient(
+				180deg,
+				#eceef2 0%,
+				#f0f2f5 15%,
+				#f4f5f8 50%,
+				#f0f2f5 85%,
+				#e8eaee 100%
+			);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		box-shadow:
-			inset 0 0 100px rgba(0, 0, 0, 0.1),
-			0 0 50px rgba(0, 0, 0, 0.3);
+			inset 0 0 120px rgba(48, 76, 178, 0.04),
+			inset 0 -2px 0 rgba(48, 76, 178, 0.08),
+			0 0 60px rgba(0, 0, 0, 0.25);
 	}
 
 	.cabin-texture {
@@ -278,26 +281,24 @@
 		inset: 0;
 		pointer-events: none;
 		background:
-			/* Horizontal panel seams */
+			/* Fine horizontal panel seams */
 			repeating-linear-gradient(
 				0deg,
 				transparent 0px,
-				transparent 150px,
-				rgba(0, 0, 0, 0.03) 150px,
-				rgba(0, 0, 0, 0.03) 152px,
-				transparent 152px
+				transparent 180px,
+				rgba(48, 76, 178, 0.025) 180px,
+				rgba(48, 76, 178, 0.025) 181px,
+				transparent 181px
 			),
 			/* Vertical panel seams */
-				repeating-linear-gradient(
-					90deg,
-					transparent 0px,
-					transparent 200px,
-					rgba(0, 0, 0, 0.02) 200px,
-					rgba(0, 0, 0, 0.02) 202px,
-					transparent 202px
-				),
-			/* Subtle noise texture */
-				url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+			repeating-linear-gradient(
+				90deg,
+				transparent 0px,
+				transparent 240px,
+				rgba(0, 0, 0, 0.015) 240px,
+				rgba(0, 0, 0, 0.015) 241px,
+				transparent 241px
+			);
 	}
 
 	.cabin-details {
@@ -308,30 +309,31 @@
 
 	.rivet {
 		position: absolute;
-		width: 6px;
-		height: 6px;
-		background: radial-gradient(circle at 30% 30%, #e5e5e5, #a0a0a0);
+		width: 7px;
+		height: 7px;
+		background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(48, 76, 178, 0.3) 60%, rgba(30, 55, 140, 0.6));
 		border-radius: 50%;
 		box-shadow:
-			inset 0 1px 2px rgba(255, 255, 255, 0.5),
-			0 1px 2px rgba(0, 0, 0, 0.3);
+			inset 0 1px 2px rgba(255, 255, 255, 0.8),
+			0 1px 3px rgba(0, 0, 0, 0.25),
+			0 0 0 1px rgba(48, 76, 178, 0.15);
 	}
 
 	.rivet-tl {
-		top: 15%;
-		left: 20%;
+		top: 12%;
+		left: 18%;
 	}
 	.rivet-tr {
-		top: 15%;
-		right: 20%;
+		top: 12%;
+		right: 18%;
 	}
 	.rivet-bl {
-		bottom: 15%;
-		left: 20%;
+		bottom: 12%;
+		left: 18%;
 	}
 	.rivet-br {
-		bottom: 15%;
-		right: 20%;
+		bottom: 12%;
+		right: 18%;
 	}
 
 	/* Kiosk-only: hide cursor everywhere when html has the .kiosk class

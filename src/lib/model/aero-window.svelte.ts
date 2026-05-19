@@ -95,7 +95,7 @@ export class AeroWindow {
 	}
 
 	// ── Core state ────────────────────────────────────────────────────────────
-	location     = $state<LocationId>('dubai');
+	location     = $state<LocationId>('hyderabad');
 	timeOfDay    = $state(12);
 	syncToRealTime = $state(true);
 
@@ -388,7 +388,7 @@ export class AeroWindow {
 	#ctx: SimulationContext = {
 		time: 0, lat: 0, lon: 0, altitude: 0, heading: 0, pitch: 0, bankAngle: 0,
 		weather: 'cloudy', skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
-		locationId: 'dubai', userAdjustingAltitude: false, userAdjustingTime: false,
+		locationId: 'hyderabad', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
 		turbulenceLevel: 'light',
 		camera: _config.camera,

@@ -240,10 +240,10 @@ export const world = $state({
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
 export const shell = $state({
-	// Window frame off by default — edge-to-edge Cesium fills the viewport.
-	// Toggle on for the airplane-cabin oval-mask + metallic rim look. Blind
-	// works in either mode; drag-snap composable doesn't depend on shape.
-	windowFrame: false,
+	// Window frame on by default — shows the full airplane-cabin oval experience.
+	// The Pi kiosk deployment overrides via show/bundle config for wall-mount.
+	// Toggle F on keyboard for full-bleed mode.
+	windowFrame: true,
 	blindOpen: true,
 	hudVisible: true,
 	sidePanelOpen: false,
