@@ -263,14 +263,14 @@ const edgeShadowFilter = $derived(`drop-shadow(0 3px 12px ${edgeColor})`);
 	style:--edge-shadow={edgeShadowFilter}
 	aria-hidden="true"
 >
-	{#each clouds as cloud, ci (ci)}
+	{#each clouds as cloud (cloud)}
 		<div
 			class="cloud-base"
 			style:left="{cloud.x}%"
 			style:top="{cloud.y}%"
 			style:transform="translateZ({cloud.z}px)"
 		>
-			{#each cloud.sprites as s, si (si)}
+			{#each cloud.sprites as s (s)}
 				<img
 					class="cloud-sprite"
 					src={s.texture}

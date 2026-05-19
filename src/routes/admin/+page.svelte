@@ -366,7 +366,7 @@
 					<p class="bindings-caption">Known bindings (this browser)</p>
 					<ul class="bindings-list">
 						{#each bindings as entry (entry.fingerprint)}
-							<li class="bindings-row" class:me={entry.fingerprint === myFingerprint}>
+							<li class={['bindings-row', entry.fingerprint === myFingerprint && 'me']}>
 								<code class="bindings-fp-small" title={entry.fingerprint}>{entry.fingerprint.slice(0, 8)}</code>
 								<select
 									class="select"

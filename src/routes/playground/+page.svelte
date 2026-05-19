@@ -46,15 +46,14 @@
 	</div>
 
 	<button
-		class="drawer-toggle"
-		class:open={drawerOpen}
+		class={['drawer-toggle', drawerOpen && 'open']}
 		onclick={() => (drawerOpen = !drawerOpen)}
 		aria-label="Toggle settings"
 	>
 		{drawerOpen ? '✕' : '⚙'}
 	</button>
 
-	<aside class="drawer" class:open={drawerOpen} aria-hidden={!drawerOpen}>
+	<aside class={['drawer', drawerOpen && 'open']} aria-hidden={!drawerOpen}>
 		<header>
 			<h2>Scene Lab</h2>
 			<p class="hint">Cesium composite · tune visuals here, ship from /</p>
@@ -87,7 +86,7 @@
 				{#each WEATHER_TYPES as w (w)}
 					<button
 						type="button"
-						class:active={model.weather === w}
+						class={[model.weather === w && 'active']}
 						onclick={() => (model.weather = w as WeatherType)}
 					>
 						{w}

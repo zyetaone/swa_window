@@ -14,7 +14,9 @@
 	import type { FleetSummary } from '$lib/fleet/protocol';
 	import { formatUptime } from '$lib/utils';
 
-	let samples = $state<HeartbeatSample[]>([]);
+	// $state.raw — samples is replaced wholesale on each poll response,
+	// never mutated in place. Skip the per-element proxy traversal.
+	let samples = $state.raw<HeartbeatSample[]>([]);
 	let summary = $state<FleetSummary>({
 		total: 0, online: 0, offline: 0, avgFps: 0, maxTempC: 0, totalCrashes: 0,
 	});
@@ -81,7 +83,7 @@
 
 	<section class="tiles">
 		{#each samples as s (s.deviceId)}
-			<article class="tile" class:offline={!isOnline(s)}>
+			<article class={['tile', !isOnline(s) && 'offline']}>
 				<header>
 					<span class="id">{s.deviceId}</span>
 					<span class="role">{s.role} · {s.groupId}</span>

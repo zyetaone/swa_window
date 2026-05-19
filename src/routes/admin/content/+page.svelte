@@ -14,8 +14,10 @@
 	import type { AssetInfo } from '$lib/scene/bundle/assets.server';
 	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
 
-	let bundles = $state<ContentBundle[]>([]);
-	let assets = $state<AssetInfo[]>([]);
+	// $state.raw — both arrays are only ever reassigned wholesale from fetch
+	// responses; never mutated in place. Avoids the proxy traversal cost.
+	let bundles = $state.raw<ContentBundle[]>([]);
+	let assets = $state.raw<AssetInfo[]>([]);
 	let toast = $state<{ kind: 'ok' | 'err'; msg: string } | null>(null);
 	let dragging = $state(false);
 	let busy = $state(false);

@@ -64,9 +64,12 @@ function adminSourceId(): string {
 }
 
 export class RestAdminStore {
-	devices = $state<DeviceInfo[]>([]);
+	// $state.raw on the array references: every update is a full
+	// reassignment (this.devices = this.devices.map(...)) — fine-grained
+	// proxy reactivity buys nothing and costs traversal overhead.
+	devices = $state.raw<DeviceInfo[]>([]);
 	fleetHealth = $state<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
-	alerts = $state<HealthAlert[]>([]);
+	alerts = $state.raw<HealthAlert[]>([]);
 	serverUptime = 0;
 
 	#peers: DiscoveredPeer[] = [];

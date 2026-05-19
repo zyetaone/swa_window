@@ -105,7 +105,7 @@
 		<section class="events">
 			<h4>Recent events ({recentEvents.length})</h4>
 			<ul>
-				{#each recentEvents as evt, i (i)}
+				{#each recentEvents as evt (evt)}
 					<li class="evt kind-{evt.kind}">
 						<span class="t">{formatTime(evt.t)}</span>
 						<span class="kind">{evt.kind}</span>
