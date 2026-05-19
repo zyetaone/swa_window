@@ -11,15 +11,8 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import type { HeartbeatSample } from '$lib/fleet/heartbeat.server';
-
-	interface FleetSummary {
-		total: number;
-		online: number;
-		offline: number;
-		avgFps: number;
-		maxTempC: number;
-		totalCrashes: number;
-	}
+	import type { FleetSummary } from '$lib/fleet/protocol';
+	import { formatUptime } from '$lib/utils';
 
 	let samples = $state<HeartbeatSample[]>([]);
 	let summary = $state<FleetSummary>({
@@ -45,13 +38,6 @@
 	poll();
 	const interval = setInterval(poll, 5_000);
 	onDestroy(() => clearInterval(interval));
-
-	function formatUptime(sec: number): string {
-		if (sec <= 0) return '-';
-		const h = Math.floor(sec / 3600);
-		const m = Math.floor((sec % 3600) / 60);
-		return `${h}h ${m}m`;
-	}
 
 	function isOnline(s: HeartbeatSample): boolean {
 		return Date.now() - s.receivedAt < ONLINE_MS;
@@ -103,7 +89,7 @@
 				<dl>
 					<div><dt>FPS</dt><dd style:color={fpsColor(s.fps)}>{s.fps.toFixed(0)}</dd></div>
 					<div><dt>Temp</dt><dd style:color={tempColor(s.temp)}>{s.temp}°C</dd></div>
-					<div><dt>Uptime</dt><dd>{formatUptime(s.uptime)}</dd></div>
+					<div><dt>Uptime</dt><dd>{s.uptime > 0 ? formatUptime(s.uptime) : '—'}</dd></div>
 					<div><dt>Crashes</dt><dd>{s.crashCount}</dd></div>
 				</dl>
 				<footer>

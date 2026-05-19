@@ -129,14 +129,7 @@ function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
  * Compute basic rollups across the whole fleet — the dashboard header uses
  * these. Online count, average FPS across online devices, hottest CPU, etc.
  */
-interface FleetSummary {
-	total: number;
-	online: number;
-	offline: number;
-	avgFps: number;
-	maxTempC: number;
-	totalCrashes: number;
-}
+import type { FleetSummary } from './protocol';
 
 export function summarize(now: number = Date.now()): FleetSummary {
 	const all = latestAll();

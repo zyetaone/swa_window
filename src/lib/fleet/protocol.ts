@@ -86,3 +86,13 @@ export interface DeviceStatus {
 	uptime: number;
 	lastSeen: number;
 }
+
+/** Returned by GET /api/fleet/heartbeat?summary — rollup across the fleet. */
+export interface FleetSummary {
+	total: number;
+	online: number;
+	offline: number;
+	avgFps: number;
+	maxTempC: number;
+	totalCrashes: number;
+}

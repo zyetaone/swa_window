@@ -2,6 +2,7 @@
 	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
 	import { config } from '$lib/model/config-tree.svelte';
+	import { formatTime, formatUptime } from '$lib/utils';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
@@ -47,13 +48,7 @@
 
 	// Derived display labels for scene sliders
 	const altitudeLabel = $derived(`${(scene.altitude / 1000).toFixed(0)}k ft`);
-	const timeLabel = $derived.by(() => {
-		const h = Math.floor(scene.timeOfDay);
-		const m = Math.floor((scene.timeOfDay % 1) * 60);
-		const period = h >= 12 ? 'PM' : 'AM';
-		const h12 = h % 12 || 12;
-		return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
-	});
+	const timeLabel = $derived(formatTime(scene.timeOfDay));
 	const speedLabel = $derived(`${scene.flightSpeed.toFixed(1)}x`);
 
 	function getTargets(): string[] {
@@ -110,14 +105,6 @@
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		selectedDevices = next;
-	}
-
-	function formatUptime(seconds: number): string {
-		if (seconds < 60) return `${Math.floor(seconds)}s`;
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		return `${h}h ${m}m`;
 	}
 
 	function timeSince(timestamp: number): string {

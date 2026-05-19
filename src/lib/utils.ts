@@ -130,3 +130,17 @@ export function formatTime(time: number): string {
 	const h = hours % 12 || 12;
 	return `${h}:${minutes.toString().padStart(2, '0')} ${period}`;
 }
+
+/**
+ * Format an uptime in seconds as a compact human-readable duration.
+ * `90` → `"1m"`, `7270` → `"2h 1m"`, `42` → `"42s"`.
+ * Caller handles the zero/negative case (e.g. show "—" when the device
+ * hasn't reported yet).
+ */
+export function formatUptime(seconds: number): string {
+	if (seconds < 60) return `${Math.floor(seconds)}s`;
+	if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	return `${h}h ${m}m`;
+}

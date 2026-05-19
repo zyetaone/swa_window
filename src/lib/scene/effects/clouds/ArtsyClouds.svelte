@@ -67,12 +67,15 @@ interface Cloud {
 	sprites: CloudSprite[];
 }
 
+// Per-weather texture pool. cloudy/clear use the soft white sprite only;
+// rain mixes white + dark; overcast/storm share the dark+smoke pool.
+const HEAVY = ['/cloud-dark.webp', '/cloud-smoke.webp'] as const;
 const textureSets: Record<string, readonly string[]> = {
 	clear: ['/cloud.webp'],
-	cloudy: ['/cloud.webp', '/cloud.webp'],
+	cloudy: ['/cloud.webp'],
 	rain: ['/cloud.webp', '/cloud-dark.webp'],
-	overcast: ['/cloud-dark.webp', '/cloud-smoke.webp'],
-	storm: ['/cloud-dark.webp', '/cloud-smoke.webp'],
+	overcast: HEAVY,
+	storm: HEAVY,
 };
 
 function rand(min: number, max: number) { return min + Math.random() * (max - min); }
