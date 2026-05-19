@@ -33,6 +33,7 @@
 
 export { getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 export { COLOR_GRADING_GLSL } from '$lib/world/shaders';
+export { T } from './thresholds';
 
 // ── Thresholds (single source of truth) ─────────────────────────────────────
 

@@ -4,6 +4,7 @@
  */
 
 import type { SkyState } from './types';
+import { T } from './night/thresholds';
 
 /**
  * Clamp a value between min and max.
@@ -54,9 +55,9 @@ export function shortestAngleDelta(from: number, to: number): number {
  * Derive sky state from decimal time of day.
  */
 export function getSkyState(timeOfDay: number): SkyState {
-	if (timeOfDay < 5 || timeOfDay >= 21) return 'night';
-	if (timeOfDay < 7) return 'dawn';
-	if (timeOfDay >= 18) return 'dusk';
+	if (timeOfDay < T.DAWN_START || timeOfDay >= T.DUSK_END) return 'night';
+	if (timeOfDay < T.DAY_START) return 'dawn';
+	if (timeOfDay >= T.DAY_END) return 'dusk';
 	return 'day';
 }
 
@@ -65,10 +66,10 @@ export function getSkyState(timeOfDay: number): SkyState {
  * 0 = full day, 1 = full night.
  */
 export function nightFactor(timeOfDay: number): number {
-	if (timeOfDay >= 7 && timeOfDay <= 18) return 0;
-	if (timeOfDay < 5 || timeOfDay > 22) return 1;
-	if (timeOfDay < 7) return 1 - (timeOfDay - 5) / 2;
-	return (timeOfDay - 18) / 4;
+	if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) return 0;
+	if (timeOfDay < T.DAWN_START || timeOfDay > T.DEEP_NIGHT) return 1;
+	if (timeOfDay < T.DAY_START) return 1 - (timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START);
+	return (timeOfDay - T.DAY_END) / (T.DEEP_NIGHT - T.DAY_END);
 }
 
 /**
@@ -78,11 +79,10 @@ export function nightFactor(timeOfDay: number): number {
  * toward warm amber at the terminator.
  */
 export function dawnDuskFactor(timeOfDay: number): number {
-	if (timeOfDay >= 7 && timeOfDay <= 18) return 0;
-	if (timeOfDay < 5 || timeOfDay > 22) return 0;
-	if (timeOfDay < 7) return (timeOfDay - 5) / 2;
-	if (timeOfDay > 18) return (22 - timeOfDay) / 4;
-	return 0;
+	if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) return 0;
+	if (timeOfDay < T.DAWN_START || timeOfDay > T.DEEP_NIGHT) return 0;
+	if (timeOfDay < T.DAY_START) return (timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START);
+	return (T.DEEP_NIGHT - timeOfDay) / (T.DEEP_NIGHT - T.DAY_END);
 }
 
 /**

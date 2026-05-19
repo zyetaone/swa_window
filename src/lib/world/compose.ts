@@ -15,6 +15,7 @@ import {
 	VIIRS_MAX_ALPHA,
 	NIGHT_MAP_SMOOTHSTEP_FLOOR,
 	NIGHT_MAP_SMOOTHSTEP_CEIL,
+	T,
 } from '$lib/night';
 import {
 	getIonToken,
@@ -439,7 +440,7 @@ export class CesiumManager {
 		const nf = m.nightFactor;
 		const dd = m.dawnDuskFactor;
 
-		const isSunVisible = m.timeOfDay > 6 && m.timeOfDay < 21;
+		const isSunVisible = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 		if (this.lastTimeOfDay !== m.timeOfDay) {
 			this.lastTimeOfDay = m.timeOfDay;
 			if (v.scene.sun) v.scene.sun.show = isSunVisible;

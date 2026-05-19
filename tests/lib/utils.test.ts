@@ -89,12 +89,14 @@ describe('getSkyState', () => {
 		expect(getSkyState(12)).toBe('day');
 		expect(getSkyState(17.9)).toBe('day');
 	});
-	it('returns dusk 6-8pm', () => {
+	it('returns dusk 6pm-9pm (blue hour included)', () => {
 		expect(getSkyState(18)).toBe('dusk');
 		expect(getSkyState(19.9)).toBe('dusk');
+		expect(getSkyState(20)).toBe('dusk');
+		expect(getSkyState(20.9)).toBe('dusk');
 	});
-	it('returns night after 8pm', () => {
-		expect(getSkyState(20)).toBe('night');
+	it('returns night after 9pm', () => {
+		expect(getSkyState(21)).toBe('night');
 		expect(getSkyState(23.5)).toBe('night');
 	});
 });
