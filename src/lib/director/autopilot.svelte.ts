@@ -16,15 +16,19 @@ import { clamp, randomBetween, pickRandom } from '$lib/utils';
 import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
 
 // ── Private timers ──────────────────────────────────────────────────────────
-// Initial seeds use the same window as the config tree's autopilot defaults
-// (initialMinDelay=120, initialMaxDelay=300). Subsequent re-seeds read live
-// from ctx.director.autopilot.*, so admin tuning propagates within one cycle.
+// Both intervals are seeded on the FIRST tick from the live config's
+// initialMin/MaxDelay window (lazy init — config may not be admin-tuned by
+// the time module is loaded). Earlier this pinned to a hardcoded 120 / 300
+// which meant every leader booted, ticked for exactly 120s, then fired its
+// first randomise event simultaneously across the fleet — a behaviour at
+// odds with the "subsequentMinDelay..subsequentMaxDelay" jitter that kicks
+// in on every cycle after the first.
 
 let _randomizeTimer = 0;
-let _nextRandomizeTime = 120;
+let _nextRandomizeTime: number | null = null;
 
 let _directorTimer = 0;
-let _timeToNextLocation = 300;
+let _timeToNextLocation: number | null = null;
 
 // ─── Tick ───────────────────────────────────────────────────────────────────
 
@@ -58,12 +62,16 @@ export function directorReset(ctx: SimulationContext): void {
 // ─── Weather randomisation ──────────────────────────────────────────────────
 
 function tickRandomize(delta: number, ctx: SimulationContext): AtmospherePatch | null {
+	const ap = ctx.director.autopilot;
+	const am = ctx.director.ambient;
+
+	if (_nextRandomizeTime === null) {
+		_nextRandomizeTime = randomBetween(ap.initialMinDelay, ap.initialMaxDelay);
+		return null;
+	}
 	_randomizeTimer += delta;
 	if (_randomizeTimer < _nextRandomizeTime) return null;
 	if (ctx.userAdjustingAtmosphere) return null;
-
-	const ap = ctx.director.autopilot;
-	const am = ctx.director.ambient;
 
 	_randomizeTimer = 0;
 	_nextRandomizeTime = randomBetween(ap.subsequentMinDelay, ap.subsequentMaxDelay);
@@ -92,15 +100,18 @@ function tickRandomize(delta: number, ctx: SimulationContext): AtmospherePatch |
 // ─── Auto-pilot director ────────────────────────────────────────────────────
 
 function tickDirector(delta: number, ctx: SimulationContext): LocationId | null {
+	const ap = ctx.director.autopilot;
+
+	if (_timeToNextLocation === null) {
+		_timeToNextLocation = randomBetween(ap.initialMinDelay, ap.initialMaxDelay);
+		return null;
+	}
 	if (ctx.userAdjustingAltitude || ctx.userAdjustingTime) { _directorTimer = 0; return null; }
 
 	_directorTimer += delta;
 	if (_directorTimer > _timeToNextLocation) {
 		_directorTimer = 0;
-		_timeToNextLocation = randomBetween(
-			ctx.director.autopilot.directorMinInterval,
-			ctx.director.autopilot.directorMaxInterval,
-		);
+		_timeToNextLocation = randomBetween(ap.directorMinInterval, ap.directorMaxInterval);
 		return ctx.pickNextLocation!();
 	}
 	return null;
