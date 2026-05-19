@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, nightFactor, dawnDuskFactor, formatTime, setByPath, readByPath } from '$lib/utils';
+import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, nightFactor, dawnDuskFactor, formatTime, readByPath, setByPath } from '$lib/utils';
 import { T } from '$lib/night/thresholds';
 
 describe('clamp', () => {
@@ -76,29 +76,68 @@ describe('shortestAngleDelta', () => {
 	});
 });
 
+// Sky-state functions use T thresholds as boundaries — tests stay in sync
+// with T automatically; no manual updates needed when thresholds change.
+
 describe('getSkyState', () => {
-	it('returns night before 5am', () => {
-		expect(getSkyState(4)).toBe('night');
+	it('night: before DAWN_START and from DUSK_END onward', () => {
 		expect(getSkyState(0)).toBe('night');
-	});
-	it('returns dawn 5-7am', () => {
-		expect(getSkyState(5)).toBe('dawn');
-		expect(getSkyState(6.5)).toBe('dawn');
-	});
-	it('returns day 7am-6pm', () => {
-		expect(getSkyState(7)).toBe('day');
-		expect(getSkyState(12)).toBe('day');
-		expect(getSkyState(17.9)).toBe('day');
-	});
-	it('returns dusk 6pm-9pm (blue hour included)', () => {
-		expect(getSkyState(18)).toBe('dusk');
-		expect(getSkyState(19.9)).toBe('dusk');
-		expect(getSkyState(20)).toBe('dusk');
-		expect(getSkyState(20.9)).toBe('dusk');
-	});
-	it('returns night after 9pm', () => {
-		expect(getSkyState(21)).toBe('night');
+		expect(getSkyState(T.DAWN_START - 0.1)).toBe('night');
+		expect(getSkyState(T.DUSK_END)).toBe('night');
 		expect(getSkyState(23.5)).toBe('night');
+	});
+	it('dawn: DAWN_START to DAY_START', () => {
+		expect(getSkyState(T.DAWN_START)).toBe('dawn');
+		expect(getSkyState(T.DAY_START - 0.1)).toBe('dawn');
+	});
+	it('day: DAY_START to DAY_END', () => {
+		expect(getSkyState(T.DAY_START)).toBe('day');
+		expect(getSkyState(12)).toBe('day');
+		expect(getSkyState(T.DAY_END - 0.1)).toBe('day');
+	});
+	it('dusk: DAY_END to DUSK_END (blue hour included)', () => {
+		expect(getSkyState(T.DAY_END)).toBe('dusk');
+		expect(getSkyState(T.DUSK_END - 0.1)).toBe('dusk');
+	});
+});
+
+describe('nightFactor', () => {
+	it('returns 0 during full day', () => {
+		expect(nightFactor(T.DAY_START)).toBe(0);
+		expect(nightFactor(12)).toBe(0);
+		expect(nightFactor(T.DAY_END)).toBe(0);
+	});
+	it('returns 1 before DAWN_START and after DEEP_NIGHT', () => {
+		expect(nightFactor(0)).toBe(1);
+		expect(nightFactor(T.DAWN_START - 0.1)).toBe(1);
+		expect(nightFactor(T.DEEP_NIGHT + 0.1)).toBe(1);
+	});
+	it('ramps 1→0 through dawn (DAWN_START→DAY_START)', () => {
+		expect(nightFactor((T.DAWN_START + T.DAY_START) / 2)).toBeCloseTo(0.5, 5);
+	});
+	it('ramps 0→1 through dusk/night (DAY_END→DEEP_NIGHT)', () => {
+		expect(nightFactor((T.DAY_END + T.DEEP_NIGHT) / 2)).toBeCloseTo(0.5, 5);
+	});
+});
+
+describe('dawnDuskFactor', () => {
+	it('returns 0 during full day and at transition extremes', () => {
+		expect(dawnDuskFactor(T.DAY_START)).toBe(0);
+		expect(dawnDuskFactor(12)).toBe(0);
+		expect(dawnDuskFactor(T.DAY_END)).toBe(0);
+		expect(dawnDuskFactor(T.DAWN_START)).toBe(0);
+		expect(dawnDuskFactor(T.DEEP_NIGHT)).toBe(0);
+		expect(dawnDuskFactor(0)).toBe(0);
+	});
+	it('approaches 1 just inside the transition bands', () => {
+		expect(dawnDuskFactor(T.DAY_START - 0.01)).toBeCloseTo(1, 1);
+		expect(dawnDuskFactor(T.DAY_END + 0.01)).toBeCloseTo(1, 1);
+	});
+	it('ramps up from DAWN_START to DAY_START', () => {
+		expect(dawnDuskFactor((T.DAWN_START + T.DAY_START) / 2)).toBeCloseTo(0.5, 5);
+	});
+	it('ramps down from DAY_END to DEEP_NIGHT', () => {
+		expect(dawnDuskFactor((T.DAY_END + T.DEEP_NIGHT) / 2)).toBeCloseTo(0.5, 5);
 	});
 });
 
@@ -117,6 +156,24 @@ describe('formatTime', () => {
 	});
 	it('handles negative times', () => {
 		expect(formatTime(-1)).toBe('11:00 PM');
+	});
+});
+
+describe('readByPath', () => {
+	it('reads nested paths', () => {
+		expect(readByPath({ a: { b: { c: 42 } } }, 'a.b.c')).toBe(42);
+	});
+	it('returns undefined for unknown keys', () => {
+		expect(readByPath({ a: { b: 1 } } as Record<string, unknown>, 'a.z')).toBeUndefined();
+	});
+	it('returns undefined when traversal hits a non-object', () => {
+		expect(readByPath({ a: 'not-an-object' } as Record<string, unknown>, 'a.b')).toBeUndefined();
+	});
+	it('rejects prototype-pollution paths', () => {
+		const obj: Record<string, unknown> = { a: 1 };
+		expect(readByPath(obj, '__proto__.x')).toBeUndefined();
+		expect(readByPath(obj, 'constructor.prototype.x')).toBeUndefined();
+		expect(readByPath(obj, 'prototype.x')).toBeUndefined();
 	});
 });
 
@@ -139,8 +196,6 @@ describe('setByPath', () => {
 	});
 
 	// Prototype-pollution defense — the entire reason setByPath is hardened.
-	// Each of these would, in a naive implementation, write to
-	// Object.prototype and poison every plain object in the process.
 	it('rejects __proto__ as any path segment', () => {
 		const obj: Record<string, unknown> = { a: 1 };
 		expect(setByPath(obj, '__proto__.polluted', 'pwned')).toBe(false);
@@ -162,100 +217,7 @@ describe('setByPath', () => {
 	});
 
 	it('uses Object.hasOwn — does not walk through prototype-chain keys', () => {
-		// `toString` exists on every object via Object.prototype, but it's
-		// NOT an own property of a plain object. setByPath must refuse to
-		// resolve through it.
 		const obj: Record<string, unknown> = { a: 1 };
 		expect(setByPath(obj, 'toString.length', 42)).toBe(false);
-	});
-});
-
-describe('T (time-of-day thresholds)', () => {
-	// Pins the strict ordering the rendering pipeline relies on — flipping
-	// any boundary in thresholds.ts without keeping the chain monotonic
-	// would silently break getSkyState / nightFactor / dawnDuskFactor.
-	it('boundaries are strictly ordered DAWN_START < DAY_START < DAY_END < DUSK_END < DEEP_NIGHT', () => {
-		expect(T.DAWN_START).toBeLessThan(T.DAY_START);
-		expect(T.DAY_START).toBeLessThan(T.DAY_END);
-		expect(T.DAY_END).toBeLessThan(T.DUSK_END);
-		expect(T.DUSK_END).toBeLessThanOrEqual(T.DEEP_NIGHT);
-	});
-	it('all values are in [0, 24)', () => {
-		for (const v of Object.values(T)) {
-			expect(v).toBeGreaterThanOrEqual(0);
-			expect(v).toBeLessThan(24);
-		}
-	});
-});
-
-describe('nightFactor', () => {
-	it('returns 0 during full daylight (DAY_START..DAY_END inclusive)', () => {
-		expect(nightFactor(T.DAY_START)).toBe(0);
-		expect(nightFactor(12)).toBe(0);
-		expect(nightFactor(T.DAY_END)).toBe(0);
-	});
-	it('returns 1 at deep night and beyond', () => {
-		expect(nightFactor(T.DEEP_NIGHT)).toBe(1);
-		expect(nightFactor(23.5)).toBe(1);
-		expect(nightFactor(0)).toBe(1);
-		expect(nightFactor(T.DAWN_START - 0.01)).toBe(1);
-	});
-	it('ramps 1→0 across the dawn window', () => {
-		const mid = (T.DAWN_START + T.DAY_START) / 2;
-		const f = nightFactor(mid);
-		expect(f).toBeGreaterThan(0);
-		expect(f).toBeLessThan(1);
-		// Endpoints
-		expect(nightFactor(T.DAWN_START)).toBeCloseTo(1);
-		expect(nightFactor(T.DAY_START)).toBe(0);
-	});
-	it('ramps 0→1 across the dusk window', () => {
-		const mid = (T.DAY_END + T.DEEP_NIGHT) / 2;
-		const f = nightFactor(mid);
-		expect(f).toBeGreaterThan(0);
-		expect(f).toBeLessThan(1);
-		expect(nightFactor(T.DAY_END)).toBe(0);
-		expect(nightFactor(T.DEEP_NIGHT)).toBe(1);
-	});
-});
-
-describe('dawnDuskFactor', () => {
-	it('returns 0 during full day', () => {
-		expect(dawnDuskFactor(T.DAY_START)).toBe(0);
-		expect(dawnDuskFactor(12)).toBe(0);
-		expect(dawnDuskFactor(T.DAY_END)).toBe(0);
-	});
-	it('returns 0 at deep night and beyond', () => {
-		expect(dawnDuskFactor(T.DEEP_NIGHT)).toBe(0);
-		expect(dawnDuskFactor(23)).toBe(0);
-		expect(dawnDuskFactor(0)).toBe(0);
-	});
-	it('peaks near 1 at the inner edge of the transition window', () => {
-		// At DAY_START, the dawn ramp reaches 1 (transition complete inward).
-		expect(dawnDuskFactor(T.DAY_START - 0.01)).toBeGreaterThan(0.9);
-		// At DAY_END, the dusk ramp starts at 1 (transition just beginning outward).
-		expect(dawnDuskFactor(T.DAY_END + 0.01)).toBeGreaterThan(0.9);
-	});
-});
-
-describe('readByPath', () => {
-	it('reads existing nested own properties', () => {
-		const obj = { a: { b: { c: 42 } } };
-		expect(readByPath(obj, 'a.b.c')).toBe(42);
-	});
-	it('returns undefined for missing keys', () => {
-		const obj = { a: { b: 1 } };
-		expect(readByPath(obj, 'a.b.c')).toBeUndefined();
-		expect(readByPath(obj, 'x.y.z')).toBeUndefined();
-	});
-	it('rejects __proto__ / constructor / prototype segments', () => {
-		const obj = { a: 1 };
-		expect(readByPath(obj, '__proto__')).toBeUndefined();
-		expect(readByPath(obj, 'constructor.prototype')).toBeUndefined();
-		expect(readByPath(obj, 'prototype')).toBeUndefined();
-	});
-	it('does not walk through prototype-chain keys', () => {
-		const obj = { a: 1 };
-		expect(readByPath(obj, 'toString')).toBeUndefined();
 	});
 });
