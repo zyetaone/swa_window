@@ -124,8 +124,9 @@ export class AeroWindow {
 	get qualityMode() { return this.config.world.qualityMode; }
 	get autoQuality() { return this.config.world.autoQuality; }
 
-	// High-frequency animation time (not reactive — updated via untrack in game loop)
-	time = 0;
+	// High-frequency animation time (not reactive — updated each tick).
+	// Read internally via #createContext to feed engines; no external consumer.
+	#time = 0;
 
 	// Private perf counters
 	#frameCount    = 0;
@@ -173,8 +174,7 @@ export class AeroWindow {
 
 		if (typeof window !== 'undefined') {
 			this.#fpsLastTime = performance.now();
-			const now = new Date();
-			this.timeOfDay = now.getHours() + now.getMinutes() / 60;
+			this.updateTimeFromSystem();
 		}
 	}
 
@@ -188,23 +188,31 @@ export class AeroWindow {
 		if (saved.location) this.setLocation(saved.location);
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
 		if (saved.weather) { this.weather = saved.weather; this.#syncWeatherConfig(); }
-		if (saved.cloudDensity !== undefined) this.config.atmosphere.clouds.density = saved.cloudDensity;
-		if (saved.buildingsEnabled !== undefined) this.config.world.buildingsEnabled = saved.buildingsEnabled;
-		if (saved.showClouds !== undefined) this.config.world.showClouds = saved.showClouds;
+		// Config-tree restores go through applyConfigPatch so the CRDT timestamp
+		// index reflects the restored value — keeps the LWW comparison honest
+		// when an admin push lands milliseconds later.
+		if (saved.cloudDensity !== undefined) this.applyConfigPatch('atmosphere.clouds.density', saved.cloudDensity);
+		if (saved.buildingsEnabled !== undefined) this.applyConfigPatch('world.buildingsEnabled', saved.buildingsEnabled);
+		if (saved.showClouds !== undefined) this.applyConfigPatch('world.showClouds', saved.showClouds);
 		this.syncToRealTime = saved.syncToRealTime ?? true;
 	}
 
 	// ── Actions ───────────────────────────────────────────────────────────────
 
-		setLocation(id: LocationId): void {
+	setLocation(id: LocationId): void {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
 		const scene = this.currentLocation.scene;
 		const jitter = (base: number, amp: number, lo: number, hi: number) =>
 			clamp(base + (Math.random() - 0.5) * amp, lo, hi);
-		this.config.atmosphere.clouds.density = jitter(scene.clouds.density, 0.24, 0.1, 1.0);
-		this.config.atmosphere.clouds.speed = jitter(scene.clouds.speed, 0.24, 0.2, 1.6);
-		this.config.atmosphere.haze.amount = jitter(this.config.atmosphere.haze.amount, 0.03, 0, 0.18);
+		// Route through applyConfigPatch so the CRDT stamps the writer + the
+		// new value lands in the timestamp index. Earlier this wrote
+		// config.atmosphere.* directly, which propagated to peers via the
+		// peer-sync $effect but left the originator's CRDT timestamp stale —
+		// any subsequent admin push (with timestamp > 0) would silently win.
+		this.applyConfigPatch('atmosphere.clouds.density', jitter(scene.clouds.density, 0.24, 0.1, 1.0));
+		this.applyConfigPatch('atmosphere.clouds.speed', jitter(scene.clouds.speed, 0.24, 0.2, 1.6));
+		this.applyConfigPatch('atmosphere.haze.amount', jitter(this.config.atmosphere.haze.amount, 0.03, 0, 0.18));
 	}
 
 	setAltitude(alt: number): void {
@@ -226,7 +234,14 @@ export class AeroWindow {
 	}
 
 	setFlightSpeed(n: number): void {
-		this.flight.flightSpeed = clamp(n, 0.1, 5);
+		// Honor the cruise bounds defined in the config tree (admin-tunable
+		// SSOT). Earlier this hard-coded (0.1, 5) which contradicted the
+		// admin UI's slider max of 3.0 — fleet PATCHes could land speeds
+		// above the slider ceiling. The warp transient in
+		// flight.svelte.ts:#tickDeparture still bypasses this clamp
+		// (sets ~100x during the 2 s departure burst), which is intentional.
+		const { minSpeed, maxSpeed } = this.config.camera.cruise;
+		this.flight.flightSpeed = clamp(n, minSpeed, maxSpeed);
 	}
 
 	updateTimeFromSystem(): void {
@@ -313,23 +328,13 @@ export class AeroWindow {
 		};
 	}
 
-	reportFrame(): void {
-		this.#frameCount++;
-		const now = performance.now();
-		const elapsed = now - this.#fpsLastTime;
-		if (elapsed >= 1000) {
-			this.measuredFps = Math.round((this.#frameCount * 1000) / elapsed);
-			this.#frameCount = 0;
-			this.#fpsLastTime = now;
-		}
-	}
-
 	// ── Tick pipeline ─────────────────────────────────────────────────────────
 
 	tick(delta: number): void {
 		if (!Number.isFinite(delta) || delta <= 0 || delta > 0.1) return;
 		const frameStart = performance.now();
-		this.time = (this.time + delta) % 3600;
+		this.#time = (this.#time + delta) % 3600;
+		this.#reportFrame(frameStart);
 
 		const ctx = this.#createContext();
 
@@ -388,7 +393,7 @@ export class AeroWindow {
 
 	#createContext(): SimulationContext {
 		const c = this.#ctx;
-		c.time                  = this.time;
+		c.time                  = this.#time;
 		c.lat                   = this.flight.lat;
 		c.lon                   = this.flight.lon;
 		c.altitude              = this.flight.altitude;
@@ -410,6 +415,16 @@ export class AeroWindow {
 		c.camera                = _config.camera;
 		c.director              = _config.director;
 		return c;
+	}
+
+	#reportFrame(now: number): void {
+		this.#frameCount++;
+		const elapsed = now - this.#fpsLastTime;
+		if (elapsed >= 1000) {
+			this.measuredFps = Math.round((this.#frameCount * 1000) / elapsed);
+			this.#frameCount = 0;
+			this.#fpsLastTime = now;
+		}
 	}
 
 	#tickAutoQuality(delta: number): void {

@@ -39,10 +39,7 @@
 	// the game loop, silently doubling tick frequency until the next subscribe.
 	$effect(() =>
 		subscribe((dt: number) => {
-			untrack(() => {
-				model.tick(dt);
-				model.reportFrame();
-			});
+			untrack(() => model.tick(dt));
 		}),
 	);
 

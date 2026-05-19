@@ -27,7 +27,7 @@
 
 	// RAF tick — model.tick drives the full simulation (flight, motion, director).
 	import { subscribe } from '$lib/game-loop';
-	$effect(() => subscribe((dt) => { model.tick(dt); model.reportFrame(); }));
+	$effect(() => subscribe((dt) => model.tick(dt)));
 
 	// Weather derivations (same shape as production /).
 	const weatherFx = $derived(WEATHER_EFFECTS[model.weather]);
