@@ -1,5 +1,5 @@
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
-import { LOCATION_IDS } from '$content/locations';
+import { isValidLocation } from '$content/locations';
 
 // Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
 // Hardcoded here (one-time startup concern) to keep persistence.ts free of
@@ -48,10 +48,8 @@ export function loadPersistedState(): Partial<PersistedState> {
 		if (parsed.cloudDensity !== undefined) {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.7, 0, 1);
 		}
-		if (parsed.location !== undefined) {
-			if (typeof parsed.location !== 'string' || !LOCATION_IDS.has(parsed.location)) {
-				delete parsed.location;
-			}
+		if (parsed.location !== undefined && !isValidLocation(parsed.location)) {
+			delete parsed.location;
 		}
 		if (parsed.weather !== undefined) {
 			if (!isValidWeather(parsed.weather)) {
