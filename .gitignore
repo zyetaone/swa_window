@@ -30,8 +30,8 @@ static/cesium/
 # Project management symlink (sidecar, not part of repo)
 _project
 
-# Claude Code worktrees
-.claude/worktrees/
+# Claude Code session state — worktrees + agent memory are local only
+.claude/
 
 # Tile packages (downloaded, not source)
 tile-packager/*.lock
