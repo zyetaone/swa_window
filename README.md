@@ -35,7 +35,7 @@ bun run dev
 
 - `src/` — app state, simulation engines, routes, and UI
 - `static/` — runtime assets such as models, textures, and the service worker
-- `docs/` — ADRs, analysis snapshots, reference notes, plans, and codemaps
+- `docs/` — ADRs, codemaps, standards, and reference notes
 - `deploy/` — Raspberry Pi provisioning and updater scripts
 - `scripts/` — one-off local asset and offline tile helper scripts
 - `server.ts` — Bun runtime entrypoint for production/fleet use
@@ -45,6 +45,7 @@ bun run dev
 
 - `CHANGELOG.md` — repo-level release history
 - `docs/ADR-001-offline-tile-architecture.md` — offline tile architecture decision record
-- `docs/analysis/PROJECT.md` — broad system analysis and deployment context
+- `docs/standards.md` — Rules 0-10 (content/control split, named exports, effect layout, …)
+- `docs/CODEMAPS/INDEX.md` — module-level navigation map
 - `deploy/README.md` — current Pi provisioning status and caveats
 - `CLAUDE.md` — architecture and workflow guidance for coding agents
