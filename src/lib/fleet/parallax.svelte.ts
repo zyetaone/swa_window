@@ -15,7 +15,7 @@
  * localStorage key so a device keeps its binding across browser restarts even
  * when MAC / LAN changes (e.g. kiosk re-image).
  */
-import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
+import { isValidDeviceRole, type DeviceRole } from '$lib/types';
 export type { DeviceRole };
 
 export interface DeviceBinding {
@@ -26,8 +26,6 @@ export interface DeviceBinding {
 const STORAGE_KEY_BINDINGS = 'aero.device.bindings'; // map: fingerprint → binding
 const STORAGE_KEY_SELF = 'aero.device.binding';      // resolved binding for THIS device
 const STORAGE_KEY_FP = 'aero.device.fingerprint';
-
-const VALID_ROLES = new Set<DeviceRole>(DEVICE_ROLES);
 
 /** Simple djb2 hash — stable across page reloads, no crypto overhead. */
 function djb2(input: string): string {
@@ -68,9 +66,6 @@ function writeBindingsMap(map: Record<string, DeviceBinding>): void {
 	window.localStorage.setItem(STORAGE_KEY_BINDINGS, JSON.stringify(map));
 }
 
-function isRole(v: unknown): v is DeviceRole {
-	return typeof v === 'string' && VALID_ROLES.has(v as DeviceRole);
-}
 
 /**
  * Resolve this device's binding. Pure function — safe to call from $effect or
@@ -84,7 +79,7 @@ export function resolveBinding(): DeviceBinding {
 	const params = new URLSearchParams(window.location.search);
 	const urlRole = params.get('role');
 	const urlGroup = params.get('group');
-	if (isRole(urlRole)) {
+	if (isValidDeviceRole(urlRole)) {
 		const binding: DeviceBinding = { role: urlRole, groupId: urlGroup || 'default' };
 		window.localStorage.setItem(STORAGE_KEY_SELF, JSON.stringify(binding));
 		// Also remember by fingerprint so admin-assigned bindings survive.
@@ -97,14 +92,14 @@ export function resolveBinding(): DeviceBinding {
 	// 2. fingerprint-keyed map (admin-assigned bindings survive reboots).
 	const map = readBindingsMap();
 	const fpBinding = map[getDeviceFingerprint()];
-	if (fpBinding && isRole(fpBinding.role)) return fpBinding;
+	if (fpBinding && isValidDeviceRole(fpBinding.role)) return fpBinding;
 
 	// 3. Single self-binding (older path, kept for back-compat).
 	try {
 		const raw = window.localStorage.getItem(STORAGE_KEY_SELF);
 		if (raw) {
 			const parsed = JSON.parse(raw) as Partial<DeviceBinding>;
-			if (isRole(parsed.role)) {
+			if (isValidDeviceRole(parsed.role)) {
 				return { role: parsed.role, groupId: parsed.groupId || 'default' };
 			}
 		}
@@ -119,7 +114,7 @@ export function resolveBinding(): DeviceBinding {
  */
 export function saveBinding(fingerprint: string, binding: DeviceBinding): void {
 	if (typeof window === 'undefined') return;
-	if (!isRole(binding.role)) return;
+	if (!isValidDeviceRole(binding.role)) return;
 	const map = readBindingsMap();
 	map[fingerprint] = binding;
 	writeBindingsMap(map);
