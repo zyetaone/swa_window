@@ -99,6 +99,9 @@ src/lib/
 │   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
 │
 ├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
+│   └── thresholds.ts   T constants — SSOT for DAWN_START/DAY_START/DAY_END/DUSK_END/DEEP_NIGHT
+│                        All four sky-state consumers (getSkyState, nightFactor, dawnDuskFactor,
+│                        isSunVisible) import T. Edit one constant to shift the dusk window.
 ├── http/               Shared HTTP helpers — cors.ts, body.ts (size-limited reads)
 │
 ├── types.ts, utils.ts, game-loop.ts   Shared primitives at the root.
@@ -120,7 +123,7 @@ tools/
 ├── tile-packager/      Pre-downloads tiles for offline Pi
 └── aero-push-worker/   Cloudflare Worker — firmware-like OTA push
 
-tests/lib/…             Mirrors src/ layout; imports via $lib/*
+tests/lib/…             Mirrors src/ layout; imports via $lib/* — 250 tests, 21 files
 
 docs/
 ├── ADR-001-offline-tile-architecture.md
@@ -447,3 +450,5 @@ AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endp
 | 10 content split | `content/` folder for authored artifacts (locations, weather, palettes, shows) + `$content` alias. `Show` primitive (boot baseline). `docs/standards.md` codifies Rules 0-10. | (Apr 23 series) |
 | 11 consolidation | atmosphere/ → scene/effects/; constants.ts deleted (literals inline at config-tree); auto-quality.ts deleted; ssr-off hoisted to layout; admin/architecture/ deleted; dead exports demoted. | (Apr 24-26 series) |
 | 12 night look + Pane rename | `shell/Window.svelte` → `shell/Pane.svelte` (case-collision with `shell/window/` gone). VIIRS `dayAlpha=0`/`nightAlpha=1` so terminator shading no longer dims night-lit cities. baseNightSaturation 0.25 → 0.05 (kills blue cast at deep night). skyAtmosphere `saturationShift`/`brightnessShift` lerped HARDER negative as `dawnDuskFactor` peaks (fixes inverted-sign bug). Shader's horizon-haze + dawn-rim blocks deleted (duplicates of HazeEffect + skyAtmosphere). Clouds PNG → WebP (-61% bytes). `shell.windowFrame: false` default — full-bleed Cesium fills the viewport; blind still works in either mode. Softer car-light dots (1.4 px + sharper falloff + translucencyByDistance). | (Apr 27 series) |
+| 13 SSOT sweep | Four duplicated literals → SSOT homes: fleet timings → `fleet/timings.ts`; peer URL → `fleet/peer-url.ts`; bundle ID pattern → `bundle/loader.ts`. Night time-of-day boundaries → `night/thresholds.ts` (`T` constants). All sky consumers (getSkyState, nightFactor, dawnDuskFactor, isSunVisible) share T. | 4d20c47 + c134ee9 |
+| 14 demo mode (SWA inaug.) | Default location=hyderabad, windowFrame=true. Dusk palette: warm amber arc (no purple mid-tone). satShift dd contrib -0.5→-0.08 (preserves Cesium warm sunset scatter). Globe dusk correction dd*0.3→dd*0.15. Dusk skyState window 18→21h (blue hour). 250/250 tests. | eb7bde0–112fa8a |
