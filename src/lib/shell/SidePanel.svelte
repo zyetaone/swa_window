@@ -443,6 +443,43 @@
 		margin: 0.4rem 0;
 	}
 
+	/* Shared picker styling — used by LocationPicker, WeatherPicker, and any
+	   other panel section that needs a wrap-grid of toggleable buttons.
+	   Children apply .picker-grid to the wrapper and .picker-btn to each
+	   button; .active marks the current selection. */
+	.panel :global(.picker-grid) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.panel :global(.picker-btn) {
+		padding: 0.45rem 0.75rem;
+		font-size: 0.75rem;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 5px;
+		color: rgba(255, 255, 255, 0.85);
+		cursor: pointer;
+		text-align: center;
+		transition: all 0.15s;
+	}
+	.panel :global(.picker-btn:hover) {
+		background: rgba(255, 255, 255, 0.15);
+		border-color: rgba(255, 255, 255, 0.25);
+		color: white;
+	}
+	.panel :global(.picker-btn.active) {
+		background: rgba(48, 76, 178, 0.45);
+		border-color: var(--sw-blue);
+		color: white;
+		font-weight: 500;
+		box-shadow: 0 0 8px rgba(48, 76, 178, 0.4);
+	}
+
 	/* --- Settings wrapper spacing --- */
 
 	.settings {
