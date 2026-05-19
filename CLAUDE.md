@@ -168,7 +168,7 @@ model.config.camera.parallax.*          // role, headingOffsetDeg, fovDeg, panor
 model.config.director.daylight.*        // syncToRealTime, manualTimeOfDay, syncIntervalMs
 model.config.director.autopilot.*       // intervals, weather pool, director cycle
 model.config.director.ambient.*         // drift magnitudes per randomisation cycle
-model.config.shell.windowFrame         // master on/off for oval mask + rivets + glass
+model.config.shell.windowFrame         // master on/off for oval mask + rivets + glass (default: false — full-bleed Cesium)
 model.config.shell.blindOpen           // live blind drag position (up=open)
 model.config.shell.hudVisible
 model.config.shell.sidePanelOpen
@@ -438,3 +438,4 @@ ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /co
 | 9 fleet REST+SSE | WebSocket broker → REST + per-device SSE. CRDT LWW with sourceId tiebreak. Peer-sync `$effect` propagates config writes. | (Apr 23 series) |
 | 10 content split | `content/` folder for authored artifacts (locations, weather, palettes, shows) + `$content` alias. `Show` primitive (boot baseline). `docs/standards.md` codifies Rules 0-10. | (Apr 23 series) |
 | 11 consolidation | atmosphere/ → scene/effects/; constants.ts deleted (literals inline at config-tree); auto-quality.ts deleted; ssr-off hoisted to layout; admin/architecture/ deleted; dead exports demoted. | (Apr 24-26 series) |
+| 12 night look + Pane rename | `shell/Window.svelte` → `shell/Pane.svelte` (case-collision with `shell/window/` gone). VIIRS `dayAlpha=0`/`nightAlpha=1` so terminator shading no longer dims night-lit cities. baseNightSaturation 0.25 → 0.05 (kills blue cast at deep night). skyAtmosphere `saturationShift`/`brightnessShift` lerped HARDER negative as `dawnDuskFactor` peaks (fixes inverted-sign bug). Shader's horizon-haze + dawn-rim blocks deleted (duplicates of HazeEffect + skyAtmosphere). Clouds PNG → WebP (-61% bytes). `shell.windowFrame: false` default — full-bleed Cesium fills the viewport; blind still works in either mode. Softer car-light dots (1.4 px + sharper falloff + translucencyByDistance). | (Apr 27 series) |
