@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aero Dynamic Window is a **circadian-aware digital airplane window display** for office wellbeing. It renders a realistic airplane window view synced to time of day, designed for Raspberry Pi 5 fleet deployment with headless Chromium kiosk mode.
 
-**Active branch:** `playground/maplibre-app` — v2 open-source rewrite using MapLibre GL + PMTiles + Takram three-geospatial. Cesium is **deprecated** (isolated to `src/lib/world/` for reference; all new work uses MapLibre). Deployment target: SWA Hyderabad (SATTVA Knowledge Park), end of May 2026.
+**Active branch:** `playground/maplibre-app`. Ship-stack is **Cesium v1** — globe, terrain, buildings, VIIRS night-lights, and the post-process color-grade pipeline all live in `src/lib/world/` and are the production renderer for the SWA Hyderabad install (SATTVA Knowledge Park, end of May 2026). The MapLibre + PMTiles + Takram three-geospatial path explored earlier on this branch is **archived** — the takram recipe survives in `docs/reference/takram-atmosphere-recipe.md` for future revisit. Cesium remains isolated to `src/lib/world/` (only two files import the package; the rest of the codebase is framework-free and unit-testable).
 
 ## Commands
 
@@ -22,9 +22,8 @@ bun x vitest run     # Run unit/integration tests
 ## Tech Stack
 
 - **Framework**: SvelteKit 2 with Svelte 5 runes (`$state`, `$derived`, `$effect`, `$bindable()`, `createContext` on 5.40+)
-- **Terrain**: MapLibre GL + PMTiles (open-source, v2 stack). Cesium is deprecated — isolated in `src/lib/world/`, do not extend.
-- **3D/Atmosphere**: `@takram/three-atmosphere`, `@takram/three-clouds`, `@takram/three-geospatial` via Threlte.
-- **Imagery**: PMTiles offline tiles (primary) → EOX Sentinel-2 Cloudless (fallback).
+- **Terrain + globe**: Cesium (production). Confined to `src/lib/world/`; only `compose.ts`/`cesium-setup.ts` import the package as a type, only `CesiumViewer.svelte` does the runtime `import('cesium')`.
+- **Imagery**: EOX Sentinel-2 Cloudless (day) + CartoDB Dark + NASA VIIRS Black Marble (night) — all pre-packaged offline via `tools/tile-packager/` into `TILE_DIR`. Falls back to remote sources only on cache miss.
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
 - **State**: Flat reactive `$state` objects in `src/lib/model/config-tree.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
