@@ -43,6 +43,7 @@ interface AeroWindowPatch {
 	syncToRealTime: boolean;
 	showClouds: boolean;
 	showBuildings?: boolean;
+	qualityMode?: QualityMode;
 }
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -268,7 +269,7 @@ export class AeroWindow {
 	}
 
 	setQualityMode(mode: QualityMode): void {
-		this.config.world.qualityMode = mode;
+		this.applyConfigPatch('world.qualityMode', mode);
 	}
 
 	/**
@@ -312,6 +313,9 @@ export class AeroWindow {
 		}
 		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') {
 			this.applyConfigPatch('world.buildingsEnabled', patch.showBuildings);
+		}
+		if (patch.qualityMode !== undefined) {
+			this.setQualityMode(patch.qualityMode);
 		}
 	}
 
@@ -432,7 +436,10 @@ export class AeroWindow {
 		this.#qualityCheckTimer += delta;
 		if (this.#qualityCheckTimer < 5) return;
 		this.#qualityCheckTimer = 0;
-		this.config.world.qualityMode = nextQualityMode(this.measuredFps, this.config.world.qualityMode);
+		const next = nextQualityMode(this.measuredFps, this.config.world.qualityMode);
+		if (next !== this.config.world.qualityMode) {
+			this.applyConfigPatch('world.qualityMode', next);
+		}
 	}
 
 	destroy(): void {
