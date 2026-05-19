@@ -379,7 +379,7 @@ $effect(() => {
 - `/api/buildings/:city` — OSM extrusion GeoJSON.
 - `/api/tiles/[...path]` — Tile proxy.
 - `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker).
-- `/api/wifi/reset` — Pi-only: purge saved WiFi + reboot to captive-portal mode. **No auth yet — LAN-only assumption; gate behind a shared secret before commercial release.**
+- `/api/wifi/reset` — Pi-only: purge saved WiFi + reboot to captive-portal mode. Gated by `Authorization: Bearer $AERO_WIFI_RESET_TOKEN`; returns 503 if the env var is unset (fail closed).
 
 ## Environment variables
 
@@ -394,6 +394,8 @@ AERO_ASSETS_DIR=...           Server-side, default ./data/assets
 TILE_DIR=...                  Server-side, default /opt/zyeta-aero/tiles
 CESIUM_ION_TOKEN=...          Build-time only, for tile-packager Ion terrain download
 ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /configs
+AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endpoint
+                              returns 503 when unset (fail closed). Set on Pi only.
 ```
 
 ## Build configuration

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
+import { isValidLocation, LOCATIONS } from '$content/locations';
 
 describe('isValidWeather', () => {
 	it('accepts known weather types', () => {
@@ -39,6 +40,26 @@ describe('isValidQualityMode', () => {
 	});
 	it('rejects unknown', () => {
 		expect(isValidQualityMode('low')).toBe(false);
+	});
+});
+
+describe('isValidLocation', () => {
+	it('accepts every id from the locations catalog', () => {
+		for (const loc of LOCATIONS) {
+			expect(isValidLocation(loc.id)).toBe(true);
+		}
+	});
+	it('rejects unknown strings', () => {
+		expect(isValidLocation('atlantis')).toBe(false);
+		expect(isValidLocation('')).toBe(false);
+		// URL-param style — lowercasing is the caller's job, the guard doesn't normalize.
+		expect(isValidLocation('DUBAI')).toBe(false);
+	});
+	it('rejects non-strings', () => {
+		expect(isValidLocation(42)).toBe(false);
+		expect(isValidLocation(null)).toBe(false);
+		expect(isValidLocation(undefined)).toBe(false);
+		expect(isValidLocation({ id: 'dubai' })).toBe(false);
 	});
 });
 
