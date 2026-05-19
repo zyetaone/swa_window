@@ -27,16 +27,18 @@ export interface SkyPaletteEntry {
 
 export const SKY_PALETTE: Record<SkyState, SkyPaletteEntry> = {
 	night: {
-		background: 'linear-gradient(180deg, #0a0a1e 0%, #1a1a2e 50%, #0d0d20 100%)',
-		haze: 'rgba(20, 28, 50, 0.55)', // deep navy — screen blend preserves stars
+		background: 'linear-gradient(180deg, #07071a 0%, #0d1030 40%, #121528 80%, #0a0d22 100%)',
+		haze: 'rgba(20, 28, 55, 0.50)', // deep navy — screen blend preserves stars
 	},
 	dawn: {
-		background: 'linear-gradient(180deg, #1a1a3a 0%, #4a3060 30%, #d08060 70%, #e0a070 100%)',
-		haze: 'rgba(220, 150, 110, 0.22)', // warm amber
+		background: 'linear-gradient(180deg, #0e1432 0%, #1d2f5e 22%, #8b3820 52%, #d47030 78%, #e89850 100%)',
+		haze: 'rgba(235, 140, 60, 0.28)', // warm amber
 	},
 	dusk: {
-		background: 'linear-gradient(180deg, #1a1a3a 0%, #503050 30%, #c07050 70%, #d09060 100%)',
-		haze: 'rgba(200, 110, 90, 0.24)', // warm coral
+		// Deep blue zenith → indigo → rust-orange terminator → warm amber horizon.
+		// No purple mid-tone — from altitude, dusk is a clean warm-to-deep-blue arc.
+		background: 'linear-gradient(180deg, #0e1432 0%, #1a2550 22%, #7c2e18 52%, #c85e28 76%, #e07840 100%)',
+		haze: 'rgba(240, 118, 45, 0.30)', // deep warm amber, screen blend adds glow
 	},
 	day: {
 		background: 'linear-gradient(180deg, #4a7ab5 0%, #6a9ad0 40%, #8cb8e0 70%, #a0c8e8 100%)',

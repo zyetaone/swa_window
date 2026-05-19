@@ -454,21 +454,22 @@ export class CesiumManager {
 			(v.scene.skyBox as any).show = true;
 
 		let r = lerp(140, 25, nf); let g = lerp(170, 25, nf); let b = lerp(200, 40, nf);
-		r = lerp(r, 100, dd * 0.3); g = lerp(g, 80, dd * 0.3); b = lerp(b, 70, dd * 0.3);
+		// Gentle dusk correction — softer than 0.3 to avoid overly brownish globe.
+		r = lerp(r, 110, dd * 0.15); g = lerp(g, 90, dd * 0.15); b = lerp(b, 80, dd * 0.15);
 		const colorKey = `${r},${g},${b}`;
 		if (colorKey !== this.lastGlobeColor) {
 			this.lastGlobeColor = colorKey;
 			v.scene.globe.baseColor = C.Color.fromBytes(Math.round(r), Math.round(g), Math.round(b), 255);
 		}
 
-		// Cesium skyAtmosphere — kill the cyan-blue limb at dawn/dusk by
-		// pushing saturationShift HARDER negative when dawnDuskFactor peaks.
-		// (Earlier code did `+ dd * 0.2` which REDUCED the desat exactly when
-		// the band was most visible — that was the bug.) brightnessShift dims
-		// the limb at the same time so the transition reads as a softer warm
-		// glow instead of a vivid cyan stripe.
-		const satShift = lerp(0, -0.8, nf) - dd * 0.5;
-		const brShift = lerp(0, -0.3, nf) - dd * 0.2;
+		// Cesium skyAtmosphere — nudge saturation slightly at dawn/dusk to
+		// reduce any residual cyan limb banding. Earlier code used -dd*0.5
+		// which over-desaturated the atmosphere exactly when warm sunset colors
+		// should be most vivid (Cesium's own sun-position scatter produces the
+		// orange/amber glow — crushing saturation by 0.5+ killed it). The small
+		// -dd*0.08 correction handles the cyan edge case without destroying warmth.
+		const satShift = lerp(0, -0.8, nf) - dd * 0.08;
+		const brShift = lerp(0, -0.3, nf) - dd * 0.02;
 		if (Math.abs(satShift - this.lastSkySatShift) > 0.01) {
 			this.lastSkySatShift = satShift;
 			if (v.scene.skyAtmosphere) {
