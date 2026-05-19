@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, formatTime, setByPath } from '$lib/utils';
+import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, nightFactor, dawnDuskFactor, formatTime, setByPath, readByPath } from '$lib/utils';
+import { T } from '$lib/night/thresholds';
 
 describe('clamp', () => {
 	it('returns value within range', () => {
@@ -166,5 +167,95 @@ describe('setByPath', () => {
 		// resolve through it.
 		const obj: Record<string, unknown> = { a: 1 };
 		expect(setByPath(obj, 'toString.length', 42)).toBe(false);
+	});
+});
+
+describe('T (time-of-day thresholds)', () => {
+	// Pins the strict ordering the rendering pipeline relies on — flipping
+	// any boundary in thresholds.ts without keeping the chain monotonic
+	// would silently break getSkyState / nightFactor / dawnDuskFactor.
+	it('boundaries are strictly ordered DAWN_START < DAY_START < DAY_END < DUSK_END < DEEP_NIGHT', () => {
+		expect(T.DAWN_START).toBeLessThan(T.DAY_START);
+		expect(T.DAY_START).toBeLessThan(T.DAY_END);
+		expect(T.DAY_END).toBeLessThan(T.DUSK_END);
+		expect(T.DUSK_END).toBeLessThanOrEqual(T.DEEP_NIGHT);
+	});
+	it('all values are in [0, 24)', () => {
+		for (const v of Object.values(T)) {
+			expect(v).toBeGreaterThanOrEqual(0);
+			expect(v).toBeLessThan(24);
+		}
+	});
+});
+
+describe('nightFactor', () => {
+	it('returns 0 during full daylight (DAY_START..DAY_END inclusive)', () => {
+		expect(nightFactor(T.DAY_START)).toBe(0);
+		expect(nightFactor(12)).toBe(0);
+		expect(nightFactor(T.DAY_END)).toBe(0);
+	});
+	it('returns 1 at deep night and beyond', () => {
+		expect(nightFactor(T.DEEP_NIGHT)).toBe(1);
+		expect(nightFactor(23.5)).toBe(1);
+		expect(nightFactor(0)).toBe(1);
+		expect(nightFactor(T.DAWN_START - 0.01)).toBe(1);
+	});
+	it('ramps 1→0 across the dawn window', () => {
+		const mid = (T.DAWN_START + T.DAY_START) / 2;
+		const f = nightFactor(mid);
+		expect(f).toBeGreaterThan(0);
+		expect(f).toBeLessThan(1);
+		// Endpoints
+		expect(nightFactor(T.DAWN_START)).toBeCloseTo(1);
+		expect(nightFactor(T.DAY_START)).toBe(0);
+	});
+	it('ramps 0→1 across the dusk window', () => {
+		const mid = (T.DAY_END + T.DEEP_NIGHT) / 2;
+		const f = nightFactor(mid);
+		expect(f).toBeGreaterThan(0);
+		expect(f).toBeLessThan(1);
+		expect(nightFactor(T.DAY_END)).toBe(0);
+		expect(nightFactor(T.DEEP_NIGHT)).toBe(1);
+	});
+});
+
+describe('dawnDuskFactor', () => {
+	it('returns 0 during full day', () => {
+		expect(dawnDuskFactor(T.DAY_START)).toBe(0);
+		expect(dawnDuskFactor(12)).toBe(0);
+		expect(dawnDuskFactor(T.DAY_END)).toBe(0);
+	});
+	it('returns 0 at deep night and beyond', () => {
+		expect(dawnDuskFactor(T.DEEP_NIGHT)).toBe(0);
+		expect(dawnDuskFactor(23)).toBe(0);
+		expect(dawnDuskFactor(0)).toBe(0);
+	});
+	it('peaks near 1 at the inner edge of the transition window', () => {
+		// At DAY_START, the dawn ramp reaches 1 (transition complete inward).
+		expect(dawnDuskFactor(T.DAY_START - 0.01)).toBeGreaterThan(0.9);
+		// At DAY_END, the dusk ramp starts at 1 (transition just beginning outward).
+		expect(dawnDuskFactor(T.DAY_END + 0.01)).toBeGreaterThan(0.9);
+	});
+});
+
+describe('readByPath', () => {
+	it('reads existing nested own properties', () => {
+		const obj = { a: { b: { c: 42 } } };
+		expect(readByPath(obj, 'a.b.c')).toBe(42);
+	});
+	it('returns undefined for missing keys', () => {
+		const obj = { a: { b: 1 } };
+		expect(readByPath(obj, 'a.b.c')).toBeUndefined();
+		expect(readByPath(obj, 'x.y.z')).toBeUndefined();
+	});
+	it('rejects __proto__ / constructor / prototype segments', () => {
+		const obj = { a: 1 };
+		expect(readByPath(obj, '__proto__')).toBeUndefined();
+		expect(readByPath(obj, 'constructor.prototype')).toBeUndefined();
+		expect(readByPath(obj, 'prototype')).toBeUndefined();
+	});
+	it('does not walk through prototype-chain keys', () => {
+		const obj = { a: 1 };
+		expect(readByPath(obj, 'toString')).toBeUndefined();
 	});
 });
