@@ -439,7 +439,7 @@ export class CesiumManager {
 		const nf = m.nightFactor;
 		const dd = m.dawnDuskFactor;
 
-		const isSunVisible = m.timeOfDay > 6 && m.timeOfDay < 20;
+		const isSunVisible = m.timeOfDay > 6 && m.timeOfDay < 21;
 		if (this.lastTimeOfDay !== m.timeOfDay) {
 			this.lastTimeOfDay = m.timeOfDay;
 			if (v.scene.sun) v.scene.sun.show = isSunVisible;
