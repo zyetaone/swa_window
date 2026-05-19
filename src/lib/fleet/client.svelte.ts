@@ -17,7 +17,7 @@
  * schedule the applyScene at transitionAtMs so all Pis flip together.
  */
 
-import type { FleetClientModel } from '$lib/fleet/protocol';
+import type { FleetClientModel, DisplayConfig } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidDeviceRole } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
@@ -221,12 +221,13 @@ export class DeviceClient {
 			}
 			case 'set_config': {
 				// Flat DisplayConfig coming from admin via /api/command. Routed
-				// through the DTO adapter (applyPatch) — fields decompose into
-				// typed setters + applyConfigPatch internally.
+				// through the DTO adapter (applyPatch), which validates each
+				// field via the typed setters internally — so a partial /
+				// malformed patch is safe here. Per-field guards live in
+				// model.applyPatch.
 				const patch = msg.patch;
-				if (patch && typeof patch === 'object') {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					this.#model.applyPatch(patch as any);
+				if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
+					this.#model.applyPatch(patch as Partial<DisplayConfig>);
 				}
 				break;
 			}
