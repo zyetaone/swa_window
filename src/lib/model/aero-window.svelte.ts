@@ -51,11 +51,11 @@ interface AeroWindowPatch {
 const OVERRIDE_COOLDOWN_MS = 8000;
 const _overrides = $state({ altitude: 0, time: 0, atmosphere: 0 });
 
-export function trackOverride(kind: keyof typeof _overrides): void {
+function trackOverride(kind: keyof typeof _overrides): void {
 	_overrides[kind] = performance.now() + OVERRIDE_COOLDOWN_MS;
 }
 
-export function hasActiveOverride(kind: keyof typeof _overrides): boolean {
+function hasActiveOverride(kind: keyof typeof _overrides): boolean {
 	return performance.now() < _overrides[kind];
 }
 

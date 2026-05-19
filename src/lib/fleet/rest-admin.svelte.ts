@@ -248,7 +248,3 @@ export class RestAdminStore {
 	}
 }
 
-/** Factory — same export surface as the old AdminStore constructor. */
-export function createAdminStore(): RestAdminStore {
-	return new RestAdminStore();
-}
