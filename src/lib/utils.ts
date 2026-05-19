@@ -103,16 +103,28 @@ export function smoothstep(t: number): number {
  * Used by the config tree dispatcher AND the CRDT store — extracted here to
  * break the circular import those two modules used to have.
  */
+// Prototype-pollution defense: any segment naming a JS built-in (the chain
+// reachable via Object.prototype) would let setByPath('__proto__.x', ...) or
+// setByPath('constructor.prototype.x', ...) write to Object.prototype — global
+// poisoning of every plain object in the process. Reject unconditionally.
+const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
 	const segments = path.split('.');
+	for (const segment of segments) {
+		if (FORBIDDEN_SEGMENTS.has(segment)) return false;
+	}
 	let current: Record<string, unknown> = obj;
 	for (let i = 0; i < segments.length - 1; i++) {
+		// Object.hasOwn instead of `in` so we never resolve through the
+		// prototype chain even if a forbidden-segment guard somehow misses.
+		if (!Object.hasOwn(current, segments[i])) return false;
 		const next = current[segments[i]];
 		if (typeof next !== 'object' || next === null) return false;
 		current = next as Record<string, unknown>;
 	}
 	const key = segments[segments.length - 1];
-	if (!(key in current)) return false;
+	if (!Object.hasOwn(current, key)) return false;
 	current[key] = value;
 	return true;
 }

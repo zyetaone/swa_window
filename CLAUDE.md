@@ -378,7 +378,8 @@ $effect(() => {
 - `/api/bundle/[hash]` — LAN peer-cache bundle blob.
 - `/api/buildings/:city` — OSM extrusion GeoJSON.
 - `/api/tiles/[...path]` — Tile proxy.
-- `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker).
+- `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker). `/api/config` PATCH validates the path against a namespace allowlist (`atmosphere|camera|director|world|shell`) before publishing, blocking `__proto__` / `constructor.prototype` style writes at the wire.
+- `/api/content` POST + `/api/content/[id]` DELETE + `/api/assets` POST — admin-only mutating routes. Require `Authorization: Bearer $AERO_ADMIN_TOKEN`; return 503 if the env var is unset (fail closed). GET routes remain unauthenticated. Admin UI at `/admin/content` prompts for the token and caches in `sessionStorage`.
 - `/api/wifi/reset` — Pi-only: purge saved WiFi + reboot to captive-portal mode. Gated by `Authorization: Bearer $AERO_WIFI_RESET_TOKEN`; returns 503 if the env var is unset (fail closed).
 
 ## Environment variables
@@ -394,6 +395,10 @@ AERO_ASSETS_DIR=...           Server-side, default ./data/assets
 TILE_DIR=...                  Server-side, default /opt/zyeta-aero/tiles
 CESIUM_ION_TOKEN=...          Build-time only, for tile-packager Ion terrain download
 ADMIN_TOKEN=...               CF Worker bearer auth for POST /bundles + POST /configs
+AERO_ADMIN_TOKEN=...           Pi-side bearer auth for POST /api/content, DELETE
+                              /api/content/[id], POST /api/assets. Routes return 503
+                              when unset (fail closed). Set on Pi; the admin UI at
+                              /admin/content prompts for it on first use.
 AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endpoint
                               returns 503 when unset (fail closed). Set on Pi only.
 ```

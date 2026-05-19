@@ -5,11 +5,14 @@
 	 * Lists installed bundles and uploaded assets. Drop a `.json` file on the
 	 * page → POST /api/content. Drop an `.mp4` / `.png` → POST /api/assets.
 	 *
-	 * LAN-only by design. No auth.
+	 * Mutating routes require `Authorization: Bearer $AERO_ADMIN_TOKEN`.
+	 * sessionStorage caches the token after first prompt; on 401 we clear
+	 * and re-prompt.
 	 */
 	import { onMount } from 'svelte';
 	import type { ContentBundle } from '$lib/scene/bundle/types';
 	import type { AssetInfo } from '$lib/scene/bundle/assets.server';
+	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
 
 	let bundles = $state<ContentBundle[]>([]);
 	let assets = $state<AssetInfo[]>([]);
@@ -35,15 +38,24 @@
 		}
 	}
 
+	/** 401 → clear cached token, tell the operator. Caller decides whether to retry. */
+	function handle401(label: string): void {
+		clearAdminToken();
+		flash('err', `${label}: 401 — token rejected. Re-enter on next attempt.`);
+	}
+
 	async function uploadBundle(text: string) {
+		const token = ensureAdminToken();
+		if (!token) { flash('err', 'bundle: token required'); return; }
 		busy = true;
 		try {
 			const parsed = JSON.parse(text);
 			const res = await fetch('/api/content', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...adminAuthHeader(token) },
 				body: JSON.stringify(parsed),
 			});
+			if (res.status === 401) { handle401('bundle'); return; }
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({ message: res.statusText }));
 				flash('err', `bundle: ${err.message ?? res.status}`);
@@ -60,11 +72,18 @@
 	}
 
 	async function uploadAsset(file: File) {
+		const token = ensureAdminToken();
+		if (!token) { flash('err', 'asset: token required'); return; }
 		busy = true;
 		try {
 			const fd = new FormData();
 			fd.append('file', file);
-			const res = await fetch('/api/assets', { method: 'POST', body: fd });
+			const res = await fetch('/api/assets', {
+				method: 'POST',
+				headers: adminAuthHeader(token),
+				body: fd,
+			});
+			if (res.status === 401) { handle401('asset'); return; }
 			if (!res.ok) {
 				const err = await res.json().catch(() => ({ message: res.statusText }));
 				flash('err', `asset: ${err.message ?? res.status}`);
@@ -83,7 +102,13 @@
 
 	async function deleteBundle(id: string) {
 		if (!confirm(`Remove bundle "${id}"?`)) return;
-		const res = await fetch(`/api/content/${encodeURIComponent(id)}`, { method: 'DELETE' });
+		const token = ensureAdminToken();
+		if (!token) { flash('err', 'delete: token required'); return; }
+		const res = await fetch(`/api/content/${encodeURIComponent(id)}`, {
+			method: 'DELETE',
+			headers: adminAuthHeader(token),
+		});
+		if (res.status === 401) { handle401('delete'); return; }
 		if (res.ok) {
 			flash('ok', `removed: ${id}`);
 			await refresh();

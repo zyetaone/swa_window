@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, formatTime } from '$lib/utils';
+import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, formatTime, setByPath } from '$lib/utils';
 
 describe('clamp', () => {
 	it('returns value within range', () => {
@@ -114,5 +114,55 @@ describe('formatTime', () => {
 	});
 	it('handles negative times', () => {
 		expect(formatTime(-1)).toBe('11:00 PM');
+	});
+});
+
+describe('setByPath', () => {
+	it('writes nested paths that exist as own properties', () => {
+		const obj = { a: { b: { c: 1 } } };
+		expect(setByPath(obj, 'a.b.c', 42)).toBe(true);
+		expect(obj.a.b.c).toBe(42);
+	});
+
+	it('returns false for unknown leaves (does not create new keys)', () => {
+		const obj = { a: { b: { c: 1 } } };
+		expect(setByPath(obj, 'a.b.newkey', 42)).toBe(false);
+		expect('newkey' in obj.a.b).toBe(false);
+	});
+
+	it('returns false when traversal hits a non-object', () => {
+		const obj = { a: { b: 'not-an-object' } };
+		expect(setByPath(obj, 'a.b.c', 42)).toBe(false);
+	});
+
+	// Prototype-pollution defense — the entire reason setByPath is hardened.
+	// Each of these would, in a naive implementation, write to
+	// Object.prototype and poison every plain object in the process.
+	it('rejects __proto__ as any path segment', () => {
+		const obj: Record<string, unknown> = { a: 1 };
+		expect(setByPath(obj, '__proto__.polluted', 'pwned')).toBe(false);
+		expect(setByPath(obj, 'a.__proto__.polluted', 'pwned')).toBe(false);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		expect(({} as any).polluted).toBeUndefined();
+	});
+
+	it('rejects constructor.prototype paths', () => {
+		const obj: Record<string, unknown> = { a: 1 };
+		expect(setByPath(obj, 'constructor.prototype.polluted', 'pwned')).toBe(false);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		expect(({} as any).polluted).toBeUndefined();
+	});
+
+	it('rejects bare prototype segment', () => {
+		const obj: Record<string, unknown> = { a: 1 };
+		expect(setByPath(obj, 'prototype.x', 'pwned')).toBe(false);
+	});
+
+	it('uses Object.hasOwn — does not walk through prototype-chain keys', () => {
+		// `toString` exists on every object via Object.prototype, but it's
+		// NOT an own property of a plain object. setByPath must refuse to
+		// resolve through it.
+		const obj: Record<string, unknown> = { a: 1 };
+		expect(setByPath(obj, 'toString.length', 42)).toBe(false);
 	});
 });

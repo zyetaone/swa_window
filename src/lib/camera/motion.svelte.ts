@@ -32,9 +32,14 @@ export const motion = $state({
 
 let _prevHeading = 0;
 let _bumpTimer = 0;
-// First-bump seed only. Subsequent bumps re-seed inside the tick from
-// ctx.camera.motion.bumpMin/MaxInterval, which is the live config tree.
-let _nextBump = randomBetween(30, 120);
+// Lazy-init on first tick from ctx.camera.motion.bumpMin/MaxInterval (live
+// config). Earlier this was seeded at module load with hardcoded (30, 120) —
+// same fleet-sync class of bug as the autopilot init seeds: every Pi
+// imported the module at roughly the same boot moment and (V8's RNG aside)
+// could pick correlated first-bump times. Now sampled on first real tick
+// against the live config window, so admin tuning is honored and every
+// device picks its own.
+let _nextBump: number | null = null;
 let _bumpElapsed = -1;
 let _bumpSign = 1;
 
@@ -60,6 +65,10 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 		+ Math.sin(t * 3.7 * Math.PI * 2) * 0.02) * turbMult;
 	const chatterX = (Math.sin(t * 2.1 * Math.PI * 2) * 0.01
 		+ Math.sin(t * 3.3 * Math.PI * 2) * 0.008) * turbMult;
+
+	if (_nextBump === null) {
+		_nextBump = randomBetween(m.bumpMinInterval, m.bumpMaxInterval) / turbMult;
+	}
 
 	let bumpValue = 0;
 	_bumpTimer += delta;

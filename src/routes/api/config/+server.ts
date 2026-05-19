@@ -26,6 +26,22 @@ interface ConfigPatchBody {
 	sourceId?: string;
 }
 
+// Allowlist of namespaces that a remote PATCH may write to. Mirrors the
+// NAMESPACES map in $lib/model/config-tree.svelte. Server-side check is
+// belt-and-braces alongside setByPath's __proto__/constructor/prototype
+// rejection on the browser — even if a future setByPath change weakens
+// the defense, this gate stops the dangerous path-prefix at the wire.
+const ALLOWED_NAMESPACES = new Set(['atmosphere', 'camera', 'director', 'world', 'shell']);
+
+function isAllowedPath(path: string): boolean {
+	if (path.length === 0 || path.length > 200) return false;
+	// Segments must be ASCII identifier-shaped — no separators, no exotic
+	// keys ("__proto__" included by virtue of the leading underscores).
+	if (!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$/.test(path)) return false;
+	const ns = path.slice(0, path.indexOf('.'));
+	return ALLOWED_NAMESPACES.has(ns);
+}
+
 export const OPTIONS: RequestHandler = corsPreflight('PATCH, OPTIONS');
 
 export const PATCH: RequestHandler = async ({ request }) => {
@@ -34,6 +50,9 @@ export const PATCH: RequestHandler = async ({ request }) => {
 
 	if (!body || typeof body.path !== 'string') {
 		throw error(400, 'invalid config patch body');
+	}
+	if (!isAllowedPath(body.path)) {
+		throw error(400, 'config path rejected: must match `<namespace>.<key>[…]` with namespace in (atmosphere, camera, director, world, shell)');
 	}
 
 	publish({

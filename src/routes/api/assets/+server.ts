@@ -3,14 +3,20 @@
  *
  * GET  → list installed assets ({ filename, size, url })
  * POST → multipart/form-data upload, returns { ok, asset } with the URL the
- *        bundle author should reference.
+ *        bundle author should reference. Requires bearer auth.
  *
  * Files are content-addressed (SHA-256), so duplicate uploads are deduped.
+ *
+ * Auth: POST requires `Authorization: Bearer $AERO_ADMIN_TOKEN`. Returns 503
+ * when the env var is unset (fail closed). The token is verified BEFORE the
+ * multipart body is parsed so an unauthed attacker can't blow the Node
+ * process's body-buffering budget with crafted uploads.
  */
 
 import { json, error } from '@sveltejs/kit';
 import { listAssets, saveAsset, isAllowedExtension } from '$lib/scene/bundle/assets.server';
 import { readLimitedBlob } from '$lib/http/body';
+import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB cap per upload
@@ -21,6 +27,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
+	requireAdminToken(request);
 	// Early-reject via Content-Length header when present — avoids reading the
 	// multipart body at all for obviously oversized requests.
 	const declaredLen = Number(request.headers.get('content-length') ?? 0);

@@ -54,7 +54,6 @@ export interface DeviceCaps {
 export interface DisplayConfig {
 	altitude?: number;
 	timeOfDay?: number;
-	heading?: number;
 	weather?: WeatherType;
 	cloudDensity?: number;
 	flightSpeed?: number;

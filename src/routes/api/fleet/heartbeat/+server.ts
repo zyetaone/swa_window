@@ -25,6 +25,11 @@ import {
 } from '$lib/fleet/heartbeat.server';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
 
+// Same shape as the deviceId allowlist in heartbeat.server.recordHeartbeat —
+// keeps GET-by-id queries consistent with what POST will accept, and avoids
+// trusting an arbitrary string for a Map.get on the server side.
+const DEVICE_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
+
 export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -49,6 +54,9 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	}
 	const deviceId = url.searchParams.get('deviceId');
 	if (deviceId) {
+		if (!DEVICE_ID_PATTERN.test(deviceId)) {
+			return json({ error: 'invalid deviceId' }, { status: 400, headers: cors });
+		}
 		return json(historyForDevice(deviceId), { headers: cors });
 	}
 	return json(latestAll(), { headers: cors });

@@ -1,15 +1,20 @@
 /**
  * DELETE /api/content/[id] — remove a single installed bundle.
  * 404 if the id isn't currently installed.
+ *
+ * Auth: requires `Authorization: Bearer $AERO_ADMIN_TOKEN`. Returns 503
+ * when the env var is unset (fail closed).
  */
 
 import { json, error } from '@sveltejs/kit';
 import { deleteBundle } from '$lib/scene/bundle/disk.server';
+import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';
 
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, request }) => {
+	requireAdminToken(request);
 	const id = params.id;
 	if (!id || !ID_PATTERN.test(id)) error(400, 'invalid id');
 	const ok = await deleteBundle(id);

@@ -1,19 +1,20 @@
 /**
  * /api/content — content bundle management.
  *
- * GET  → list all installed bundles
- * POST → install/replace a bundle (JSON body = ContentBundle)
+ * GET  → list all installed bundles (read-only, no auth)
+ * POST → install/replace a bundle (JSON body = ContentBundle, requires bearer)
  *
  * DELETE is handled at /api/content/[id] so clients can scope deletions.
  *
- * Auth: none for now (LAN device). Phase 4 can add a shared-secret header
- * before the device is sold as a standalone product.
+ * Auth: POST requires `Authorization: Bearer $AERO_ADMIN_TOKEN`. Returns 503
+ * if the env var is unset (fail closed) — admin must explicitly opt in.
  */
 
 import { json, error } from '@sveltejs/kit';
 import { listBundles, saveBundle } from '$lib/scene/bundle/disk.server';
 import { isContentBundle } from '$lib/scene/bundle/loader';
 import { readLimitedJson } from '$lib/http/body';
+import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';
 
 const ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -25,6 +26,7 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async ({ request }) => {
+	requireAdminToken(request);
 	// readLimitedJson counts actual bytes received — covers the content-length
 	// bypass (chunked transfer encoding) because it enforces the cap mid-stream
 	// before any JSON parsing occurs.
