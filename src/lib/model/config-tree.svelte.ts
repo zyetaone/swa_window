@@ -15,7 +15,7 @@ import { WEATHER_EFFECTS } from '$content/weather';
 import { QUALITY_MODES, type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
-import { setByPath } from '$lib/utils';
+import { setByPath, readByPath } from '$lib/utils';
 
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
 
@@ -290,8 +290,15 @@ export function applyConfigPatch(
 	const root = NAMESPACES[ns];
 	if (!root) return false;
 
+	// Idempotency: when the value is already what we're being asked to set,
+	// skip the CRDT stamp + setByPath. Saves a per-keystroke peer-sync PATCH
+	// on slider snap-back, a telemetry event, and the downstream $effect
+	// invalidations. Object.is so NaN-vs-NaN counts as "unchanged."
+	const rootRec = root as unknown as Record<string, unknown>;
+	if (Object.is(readByPath(rootRec, rest), value)) return true;
+
 	crdt.set(path, value);
-	return setByPath(root as unknown as Record<string, unknown>, rest, value);
+	return setByPath(rootRec, rest, value);
 }
 
 /**

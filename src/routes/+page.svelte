@@ -64,8 +64,8 @@
 	// broadcast fan-out for Phase 7 leader→follower director_decision.
 	// Always connects so the Pi is discoverable and responsive to admin
 	// PATCHes even if Cesium/WebGL fails downstream.
-	$effect(() => {
-		if (typeof window === "undefined") return;
+	// onMount, not $effect: no reactive deps, runs once per page lifecycle.
+	onMount(() => {
 		const client = createDeviceClient(model);
 		// Phase 7 — register the leader-broadcast hook so the director can
 		// emit director_decision messages when this device is a panorama
@@ -88,8 +88,7 @@
 	// Opt-in via VITE_PUSH_WORKER_URL. Silent no-op if unset.
 	//   onBundles: install each into bundleStore — picked up reactively by the compositor.
 	//   onConfigs: feed each { path, value } through model.applyConfigPatch (RootConfig path-targeted).
-	$effect(() => {
-		if (typeof window === "undefined") return;
+	onMount(() => {
 		const url = import.meta.env.VITE_PUSH_WORKER_URL;
 		if (!url) return;
 		const handle = startRemotePoll({

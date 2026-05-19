@@ -109,6 +109,27 @@ export function smoothstep(t: number): number {
 // poisoning of every plain object in the process. Reject unconditionally.
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/**
+ * Read a dotted-path value from a plain object. Mirrors setByPath's guard
+ * shape (forbidden segments, own-property only) so callers can pair the two
+ * — e.g. "skip the write when readByPath returns the same value." Returns
+ * undefined if any traversal step fails.
+ */
+export function readByPath(obj: Record<string, unknown>, path: string): unknown {
+	const segments = path.split('.');
+	for (const segment of segments) {
+		if (FORBIDDEN_SEGMENTS.has(segment)) return undefined;
+	}
+	let current: unknown = obj;
+	for (const segment of segments) {
+		if (typeof current !== 'object' || current === null) return undefined;
+		const rec = current as Record<string, unknown>;
+		if (!Object.hasOwn(rec, segment)) return undefined;
+		current = rec[segment];
+	}
+	return current;
+}
+
 export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
 	const segments = path.split('.');
 	for (const segment of segments) {

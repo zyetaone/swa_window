@@ -1,23 +1,30 @@
 /**
- * Bearer-token gate for mutating admin endpoints.
+ * Bearer-token gate for admin-mutating endpoints.
  *
- * Reads `AERO_ADMIN_TOKEN` from env. If unset, the endpoint fails closed
- * with 503 (no accidental admin writes on Pis that didn't opt in). If set,
- * requires `Authorization: Bearer <token>` with constant-time compare so
- * response timing doesn't leak the secret byte-by-byte.
+ * Two callers today:
+ *   requireAdminToken(req)    — generic admin routes (AERO_ADMIN_TOKEN)
+ *   /api/wifi/reset           — uses requireBearerToken(req, 'AERO_WIFI_RESET_TOKEN', 'wifi reset')
  *
- * Same shape as $lib/http/cors helpers — drop a single call at the top of
- * each gated route handler. /api/wifi/reset uses an endpoint-specific token
- * (AERO_WIFI_RESET_TOKEN); everything else gated should use this helper.
+ * The split is operational, not technical: the wifi-reset token is held by
+ * field techs, the admin token by the SWA admin. Same gate shape.
+ *
+ * Fail-closed semantics: when the env var is unset the route returns 503
+ * (no accidental admin writes on Pis that didn't opt in). Set + wrong → 401.
+ * Constant-time compare so response timing doesn't leak the secret.
  */
 
 import { error } from '@sveltejs/kit';
 
-/** Throws 503 if AERO_ADMIN_TOKEN is unset, 401 if header missing/wrong. */
-export function requireAdminToken(request: Request): void {
-	const expected = process.env.AERO_ADMIN_TOKEN;
+/**
+ * Reads `process.env[envVar]` and validates `Authorization: Bearer <token>`
+ * against it. `label` is interpolated into the 503 error message so the
+ * operator sees which endpoint refused (useful when several gates coexist).
+ * Throws 503 if env unset, 401 if header missing/malformed/wrong.
+ */
+export function requireBearerToken(request: Request, envVar: string, label: string): void {
+	const expected = process.env[envVar];
 	if (!expected) {
-		throw error(503, 'admin endpoint disabled: AERO_ADMIN_TOKEN not set');
+		throw error(503, `${label} disabled: ${envVar} not set`);
 	}
 
 	const header = request.headers.get('authorization') ?? '';
@@ -27,6 +34,11 @@ export function requireAdminToken(request: Request): void {
 	if (!presented || !timingSafeEqual(presented, expected)) {
 		throw error(401, 'invalid bearer token');
 	}
+}
+
+/** Shorthand for the generic admin gate. Equivalent to requireBearerToken(req, 'AERO_ADMIN_TOKEN', 'admin endpoint'). */
+export function requireAdminToken(request: Request): void {
+	requireBearerToken(request, 'AERO_ADMIN_TOKEN', 'admin endpoint');
 }
 
 /**

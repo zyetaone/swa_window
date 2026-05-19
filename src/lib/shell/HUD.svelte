@@ -14,21 +14,16 @@
 
 	const model = useAeroWindow();
 
-	// aria-live tracking — plain var (prev-state memoisation, not reactive).
-	let prevTransitioning = false;
-	let liveAnnouncement = $state('');
-
-	$effect(() => {
-		const transitioning = model.flight.isTransitioning;
-		const destination = model.flight.cruiseDestinationName;
-
-		if (transitioning && destination && !prevTransitioning) {
-			liveAnnouncement = `Flying to ${destination}`;
-		} else if (!transitioning && prevTransitioning) {
-			liveAnnouncement = `Arrived at ${model.currentLocation.name}`;
+	// Screen-reader announcement reflecting current flight phase. Was an
+	// $effect with prev-state memoisation — Svelte 5 anti-pattern (effect
+	// writing $state we already had the inputs for). Derived from the same
+	// reactive sources directly; aria-live="polite" handles boundary
+	// announcements via text-change detection, no edge tracking needed.
+	const liveAnnouncement = $derived.by(() => {
+		if (model.flight.isTransitioning && model.flight.cruiseDestinationName) {
+			return `Flying to ${model.flight.cruiseDestinationName}`;
 		}
-
-		prevTransitioning = transitioning;
+		return `Arrived at ${model.currentLocation.name}`;
 	});
 </script>
 

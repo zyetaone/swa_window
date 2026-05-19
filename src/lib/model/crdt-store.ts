@@ -70,29 +70,6 @@ export class CRDTStore {
 		setByPath(this.#root, patch.path, patch.value);
 		return true;
 	}
-
-	mergeBatch(patches: CRDTPatch[]): number {
-		let applied = 0;
-		for (const patch of patches) {
-			if (this.merge(patch)) applied++;
-		}
-		return applied;
-	}
-
-	snapshot(): Record<string, CRDTEntry> {
-		return Object.fromEntries(this.#timestamps);
-	}
-
-	restore(snap: Record<string, CRDTEntry>): void {
-		for (const [path, entry] of Object.entries(snap)) {
-			this.#timestamps.set(path, entry as CRDTEntry);
-			setByPath(this.#root, path, entry.value);
-		}
-	}
-
-	reset(): void {
-		this.#timestamps.clear();
-	}
 }
 
 let _deviceId = 'local';

@@ -19,6 +19,7 @@
 import { untrack } from 'svelte';
 import type { EffectProps } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$content/weather';
+import { subscribe } from '$lib/game-loop';
 
 // Effect-component signature — compositor passes { model }. The wrapper
 // that used to unpack model into explicit props (CloudsEffect.svelte) is
@@ -162,14 +163,12 @@ $effect(() => {
 });
 
 // ── Animation loop ───────────────────────────────────────────────────
-$effect(() => {
-	let raf: number;
-	let last = performance.now();
-
-	const loop = (now: number) => {
-		const dt = Math.min((now - last) / 1000, 0.1);
-		last = now;
-
+// Subscribe to the shared game-loop RAF — same source the rest of the
+// scene effects use. Earlier this owned its own requestAnimationFrame
+// which meant two concurrent RAF loops on the Pi 5 GPU. The dt now comes
+// from the game-loop's tab-visibility-aware clock for free.
+$effect(() =>
+	subscribe((dt) =>
 		untrack(() => {
 			const drift = Math.cos((heading + 180) * Math.PI / 180);
 			const dir = Math.abs(drift) > 0.15 ? drift : (drift >= 0 ? 0.2 : -0.2);
@@ -195,13 +194,9 @@ $effect(() => {
 					s.rot += s.speed * speed;
 				}
 			}
-		});
-
-		raf = requestAnimationFrame(loop);
-	};
-	raf = requestAnimationFrame(loop);
-	return () => cancelAnimationFrame(raf);
-});
+		}),
+	),
+);
 
 // ── Altitude + environment ───────────────────────────────────────────
 const CLOUD_DECK = 28000;
