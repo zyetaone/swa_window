@@ -20,6 +20,8 @@ import type {
 	DeviceCaps,
 } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
+import { urlFor } from '$lib/fleet/peer-url';
+import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 
 type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';
 
@@ -42,14 +44,6 @@ interface DiscoveredPeer {
 	host: string;
 	port: number;
 	self?: boolean;
-}
-
-/** Build the base URL for a discovered device. Prefers same-origin for self. */
-function urlFor(peer: DiscoveredPeer): string {
-	if (peer.self && typeof window !== 'undefined') return window.location.origin;
-	// Try http:// (LAN). Bump to same protocol as current page if possible.
-	const proto = typeof window !== 'undefined' ? window.location.protocol : 'http:';
-	return `${proto}//${peer.host}:${peer.port}`;
 }
 
 function adminSourceId(): string {
@@ -92,8 +86,8 @@ export class RestAdminStore {
 		//   discovery    — every 30 s, re-read /api/devices so new Pis appear
 		//                  without a manual page refresh. Matches mDNS
 		//                  ANNOUNCE_INTERVAL_MS — no point polling faster.
-		this.#statusInterval = setInterval(() => this.#pollStatus(), 5000);
-		this.#discoveryInterval = setInterval(() => this.refresh(), 30000);
+		this.#statusInterval = setInterval(() => this.#pollStatus(), STATUS_INTERVAL_MS);
+		this.#discoveryInterval = setInterval(() => this.refresh(), PEER_REFRESH_INTERVAL_MS);
 	}
 
 	destroy(): void {

@@ -22,6 +22,8 @@ import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidDeviceRole } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
+import { urlFor } from '$lib/fleet/peer-url';
+import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
 
@@ -88,9 +90,9 @@ export class DeviceClient {
 		// mDNS ANNOUNCE_INTERVAL_MS. Both run for the lifetime of the
 		// client; disconnect() clears them.
 		this.#sendStatus();
-		this.#statusInterval = setInterval(() => this.#sendStatus(), 5000);
+		this.#statusInterval = setInterval(() => this.#sendStatus(), STATUS_INTERVAL_MS);
 		void this.#refreshPeers();
-		this.#peerInterval = setInterval(() => void this.#refreshPeers(), 30_000);
+		this.#peerInterval = setInterval(() => void this.#refreshPeers(), PEER_REFRESH_INTERVAL_MS);
 	}
 
 	connect(): void {
@@ -148,7 +150,7 @@ export class DeviceClient {
 		if (this.#peers.length === 0) return;
 		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
 		for (const peer of this.#peers) {
-			void fetch(`http://${peer.host}:${peer.port}/api/command`, {
+			void fetch(`${urlFor(peer)}/api/command`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(msg),

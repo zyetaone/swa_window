@@ -41,3 +41,11 @@ export function isContentBundle(value: unknown): value is ContentBundle {
 	if (typeof v.z !== 'number') return false;
 	return true;
 }
+
+/**
+ * Allowed bundle-id alphabet. Shared by POST /api/content and
+ * DELETE /api/content/[id] so the two routes can never drift apart on
+ * what "valid id" means. ASCII alnum + dash + underscore, 1..64 chars —
+ * safe as a filename segment without escaping.
+ */
+export const BUNDLE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;

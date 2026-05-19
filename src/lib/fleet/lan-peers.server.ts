@@ -11,11 +11,13 @@
  */
 
 import mdns from 'multicast-dns';
+import { PEER_REFRESH_INTERVAL_MS } from './timings';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const SERVICE_TYPE = '_aero-bundle._tcp.local';
-const ANNOUNCE_INTERVAL_MS = 30_000;
+/** Re-announce on the same cadence the browser-side clients poll /api/devices. */
+const ANNOUNCE_INTERVAL_MS = PEER_REFRESH_INTERVAL_MS;
 /** Peer announcement is considered stale after this many ms without a refresh. */
 const PEER_TTL_MS = 90_000;
 
