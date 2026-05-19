@@ -95,7 +95,7 @@ src/lib/
 │   ├── parallax.svelte.ts          MAC-fingerprint role bindings
 │   ├── sse-bus.server.ts           In-process pub/sub for /api/events
 │   ├── device-registry.server.ts   Per-device live status
-│   ├── lan-peers.server.ts         mDNS discovery
+│   ├── lan-peers.server.ts         mDNS discovery (started ONLY in `bun run server.ts`; `bun run dev` skips it so `/api/devices` shows only self)
 │   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
 │
 ├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
@@ -112,7 +112,7 @@ content/                AUTHORED ARTIFACTS — what plays vs. how it plays
 src/routes/
 ├── +layout.ts          ssr=false (app-wide; descendants inherit)
 ├── +page.svelte        Main display (Pi kiosk)
-├── admin/              Fleet admin panel + ConfigSandbox + content drag-drop + fleet/health
+├── admin/              Fleet admin panel + content drag-drop + fleet/health
 ├── playground/         Lean Cesium scene lab (same pipeline as /, no shell)
 └── api/                content + assets + tiles + buildings + fleet endpoints + bundle peer-cache
 
@@ -370,7 +370,7 @@ $effect(() => {
 
 - `/` — Main window display (Pi kiosk). Full shell.
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
-- `/admin` — Fleet admin panel (incl. ConfigSandbox for live `$state` preview).
+- `/admin` — Fleet admin panel.
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard.
 - `/api/content` + `/api/content/[id]` — Content bundle CRUD + delete.
@@ -378,7 +378,8 @@ $effect(() => {
 - `/api/bundle/[hash]` — LAN peer-cache bundle blob.
 - `/api/buildings/:city` — OSM extrusion GeoJSON.
 - `/api/tiles/[...path]` — Tile proxy.
-- `/api/fleet` + `/api/fleet/heartbeat` + `/api/devices` + `/api/config` + `/api/events` — REST + SSE fleet surface (no central broker).
+- `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker).
+- `/api/wifi/reset` — Pi-only: purge saved WiFi + reboot to captive-portal mode. **No auth yet — LAN-only assumption; gate behind a shared secret before commercial release.**
 
 ## Environment variables
 
