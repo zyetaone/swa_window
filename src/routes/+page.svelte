@@ -11,8 +11,8 @@
 
 	import { onDestroy, onMount } from "svelte";
 	import { createAeroWindow } from "$lib/model/aero-window.svelte";
-	import { LOCATION_MAP } from "$content/locations";
-	import { isValidDeviceRole, type LocationId, type DeviceRole } from "$lib/types";
+	import { isValidLocation } from "$content/locations";
+	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import { hydrateFromServer } from "$lib/scene/bundle/client";
@@ -126,10 +126,8 @@
 	if (typeof window !== "undefined") {
 		const params = new URLSearchParams(window.location.search);
 
-		const locationParam = params.get("location")?.toLowerCase() as
-			| LocationId
-			| undefined;
-		if (locationParam && LOCATION_MAP.has(locationParam)) {
+		const locationParam = params.get("location")?.toLowerCase();
+		if (isValidLocation(locationParam)) {
 			model.setLocation(locationParam);
 		}
 
