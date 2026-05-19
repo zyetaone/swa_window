@@ -1,38 +1,50 @@
-# sv
+# Aero Dynamic Window
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Circadian-aware digital airplane window display built with SvelteKit, Cesium, and CSS effect layers for Raspberry Pi kiosk deployments.
 
-## Creating a project
+## Quick start
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+```bash
+bun install
+cp .env.example .env
+bun run dev
 ```
 
-## Developing
+## Commands
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+| Command | Purpose |
+| --- | --- |
+| `bun run dev` | Start the Vite dev server on the LAN |
+| `bun run check` | Run `svelte-check` |
+| `bun run test` | Run Vitest unit tests |
+| `bun run build` | Build the production client/server bundle |
+| `bun run preview` | Preview the production build |
+| `bun run serve` | Run the custom Bun server from `server.ts` |
+| `bun run start` | Build, then run the custom Bun server |
 
-```sh
-npm run dev
+## Environment
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `VITE_CESIUM_ION_TOKEN` | Yes | Cesium terrain and Ion-backed assets |
+| `VITE_MAPBOX_TOKEN` | No | Mapbox Satellite imagery override |
+| `VITE_TILE_SERVER_URL` | No | Local offline tile server for Pi deployments |
+| `VITE_SENTINEL2` | No | Experimental Sentinel-2 imagery mode (requires a tiling proxy) |
 
-## Building
+## Root layout
 
-To create a production version of your app:
+- `src/` — app state, simulation engines, routes, and UI
+- `static/` — runtime assets such as models, textures, and the service worker
+- `docs/` — ADRs, analysis snapshots, reference notes, plans, and codemaps
+- `deploy/` — Raspberry Pi provisioning and updater scripts
+- `scripts/` — one-off local asset and offline tile helper scripts
+- `server.ts` — Bun runtime entrypoint for production/fleet use
+- `CLAUDE.md`, `.agent/`, `.jules/`, `.serena/` — repo-local automation and agent metadata
 
-```sh
-npm run build
-```
+## Key docs
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+- `CHANGELOG.md` — repo-level release history
+- `docs/ADR-001-offline-tile-architecture.md` — offline tile architecture decision record
+- `docs/analysis/PROJECT.md` — broad system analysis and deployment context
+- `deploy/README.md` — current Pi provisioning status and caveats
+- `CLAUDE.md` — architecture and workflow guidance for coding agents

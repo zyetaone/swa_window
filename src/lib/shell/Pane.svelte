@@ -1,0 +1,376 @@
+<script lang="ts">
+	/**
+	 * Pane — the airplane window pane.
+	 *
+	 * Owns the RAF tick loop (single game clock) and composes everything
+	 * the cabin occupant sees: Cesium globe (terrain, buildings, lights),
+	 * scene effects (clouds, lightning, micro-events), pane widgets
+	 * (Weather backdrop, Glass vignette, Blind shade), and the wing
+	 * silhouette.
+	 *
+	 * Z-order SSOT: $lib/scene/layers.ts. Imported by the effect registry,
+	 * Weather.svelte, and this file.
+	 */
+	import { untrack } from "svelte";
+	import { Z } from "$lib/scene/layers";
+	import { useAeroWindow } from "$lib/model/aero-window.svelte";
+	import { SKY_PALETTE } from "$content/palettes";
+	import { clamp } from "$lib/utils";
+	import { subscribe } from "$lib/game-loop";
+	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
+	import Glass from "./window/Glass.svelte";
+	import Blind from "./window/Blind.svelte";
+	import Weather from './window/Weather.svelte';
+	import Compositor from '$lib/scene/compositor.svelte';
+	const model = useAeroWindow();
+
+	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
+	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
+	// simply disappear when false.
+	const frameVisible = $derived(model.config.shell.windowFrame);
+
+	// ========================================================================
+	// GAME LOOP — single RAF driving model.tick()
+	// ========================================================================
+
+	// Tick body wrapped in untrack() so 60 Hz reads of config/flight/weather
+	// state inside model.tick() don't build a reactive dependency from this
+	// effect back onto AeroWindow — otherwise any config change re-subscribes
+	// the game loop, silently doubling tick frequency until the next subscribe.
+	$effect(() =>
+		subscribe((dt: number) => {
+			untrack(() => model.tick(dt));
+		}),
+	);
+
+	// ========================================================================
+	// DERIVED — presentation values
+	// ========================================================================
+	//
+	// One gesture, one meaning: pull the blind down → fly somewhere new.
+	// Wiring lives in useBlind.svelte (the composable that already owns the
+	// drag + keyboard machinery). The window viewport itself is not a button —
+	// taps and long-presses no longer do anything. If someone wants to tweak
+	// speed, the admin panel slider handles it.
+
+	// --- Sky ---
+
+	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
+
+	// --- Atmospheric effects ---
+
+	const frostAmount = $derived.by(() => {
+		const start = model.config.atmosphere.weather.frostStartAltitude;
+		const max   = model.config.atmosphere.weather.frostMaxAltitude;
+		return clamp((model.flight.altitude - start) / (max - start), 0, 1);
+	});
+
+	const filterString = $derived.by(() => {
+		const timeBrightness =
+			model.skyState === "night"
+				? 1.0
+				: model.skyState === "dawn" || model.skyState === "dusk"
+					? 0.95
+					: 1.0;
+		const hazeContrast = 1 - model.config.atmosphere.haze.amount * 0.08;
+		const hazeSaturate = 1 - model.config.atmosphere.haze.amount * 0.1;
+		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
+		const w = model.flight.warpFactor;
+		const baseBlur = 0.35;
+		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)}) blur(${baseBlur}px)`;
+		if (w < 0.01) return base;
+		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
+	});
+
+	// --- Weather ---
+	const rainOpacity = $derived(model.config.atmosphere.weather.rainOpacity);
+	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
+
+	// --- Motion (unified from 4 independent layers) ---
+
+	// Turbulence shakes the window (shell/frame) — but the translation is
+	// kept light on the scene-content so it doesn't briefly cancel the
+	// Cesium camera's forward motion and make the plane "appear to stop"
+	// during bumps. Bank rotation and breathing still carry full effect.
+	const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
+	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
+	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
+	const breathingY = $derived(
+		model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude,
+	);
+	const bankDegrees = $derived(model.motion.bankAngle);
+
+	const motionTransform = $derived.by(() => {
+		const x = turbulenceX + model.motion.engineVibeX;
+		const y = turbulenceY + breathingY + model.motion.engineVibeY;
+		const rotate = turbulenceRotate + bankDegrees;
+		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg)`;
+	});
+
+
+	// --- Wing silhouette (dark gradient at bottom-left, shifting with bank) ---
+
+	const wingTransform = $derived(
+		`rotate(${(-2 + model.motion.bankAngle * 0.3).toFixed(2)}deg)`,
+	);
+
+	// --- Glass ---
+
+	const glassVignetteOpacity = $derived(
+		model.skyState === "night" ? 0.3 : model.skyState === "day" ? 0.1 : 0.2,
+	);
+
+	// --- Timed click-hint (touch kiosks have no :hover) ---
+	let showHint = $state(false);
+	$effect(() => {
+		if (model.config.shell.blindOpen && !model.flight.isTransitioning) {
+			const showTimer = setTimeout(() => { showHint = true; }, 3000);
+			const hideTimer = setTimeout(() => { showHint = false; }, 8000);
+			return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+		}
+		showHint = false;
+		return undefined;
+	});
+
+	// ========================================================================
+	// BLIND LOGIC — see useBlind composable
+	// ========================================================================
+
+</script>
+
+<div
+	class={['window-container', !frameVisible && 'no-frame']}
+	role="region"
+	aria-roledescription="airplane window"
+	aria-label="Window Viewport"
+>
+	<!-- The oval window. Passive surface — user gestures live on the Blind. -->
+	<div
+		class="window-viewport"
+		style:background={skyBackground}
+	>
+		<!-- Scene content — shifts with turbulence/bank, clipped by the fixed viewport -->
+		<div
+			class="scene-content"
+			style:transform={motionTransform}
+			style:filter={filterString}
+		>
+			<!-- Cesium terrain/buildings/city light billboards -->
+			<div class="render-layer" style:z-index={Z.cesium}>
+				<CesiumViewer />
+			</div>
+
+			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
+			<Compositor />
+
+			<!-- Rain + frost -->
+			<Weather {rainOpacity} {windAngle} {frostAmount} />
+
+			<!-- Wing silhouette (bottom-left, shifts with bank) -->
+			<div
+				class="wing-silhouette"
+				style:z-index={Z.wing}
+				style:transform={wingTransform}
+			></div>
+		</div>
+
+		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
+		     vignette + recess rim, z:9–11. See shell/window/Glass.svelte. -->
+		<Glass {glassVignetteOpacity} />
+
+		<!-- UI overlays — timed reveal (no :hover on touch kiosks) -->
+		{#if showHint}
+			<div class="click-hint visible">
+				<span>Pull the blind down to fly somewhere new</span>
+			</div>
+		{/if}
+	</div>
+
+	<!-- Blind — pull-down shade with slats + pull-tab + from→to chevrons.
+	     Uses useBlind() composable internally; styles own their CSS. -->
+	<Blind />
+</div>
+
+<style>
+	.window-container {
+		/* Shape tokens — shared by container, viewport, blind */
+		--frame-width: 24px; /* Thicker, more substantial rim */
+		--window-radius: 160px; /* Fixed stadium curvature */
+		--inner-radius: 136px; /* 160px - 24px = 136px (Exact concentric fit) */
+
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+
+		/* Maximize size - Expansive View */
+		height: 82vh; /* Primary size driver */
+		width: auto; /* Derived from aspect */
+		aspect-ratio: 2 / 3; /* Classic aircraft oval */
+		max-width: 85vw; /* Mobile safety constraint */
+
+		border-radius: var(--window-radius);
+		overflow: hidden;
+		z-index: 10;
+
+		/* Metallic frame — visible in the gap between container and viewport */
+		background: linear-gradient(
+			135deg,
+			#d8d8dd 0%,
+			#b0b0b5 50%,
+			#909098 100%
+		);
+
+		/* Deep embedded shadow - Symmetrical (No directional offsets) */
+		box-shadow:
+			inset 0 0 30px rgba(0, 0, 0, 0.6),
+			/* Inner depth */ inset 0 0 4px rgba(0, 0, 0, 0.3),
+			/* Sharp rim */ 0 0 40px rgba(0, 0, 0, 0.5); /* Outer wall drop shadow */
+	}
+
+	@media (orientation: portrait) {
+		.window-container {
+			width: 85vw;
+			height: auto;
+			max-height: 85vh;
+		}
+	}
+
+	@media (orientation: landscape) {
+		.window-container {
+			height: 88vh;
+			width: auto;
+		}
+	}
+
+	.window-viewport {
+		display: block;
+		position: absolute;
+		inset: var(--frame-width);
+		border-radius: var(--inner-radius);
+		overflow: hidden;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+
+		transition: background 1s ease;
+	}
+
+	.window-viewport:disabled {
+		cursor: not-allowed;
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	/* Scene content — moves with turbulence, slightly oversized to prevent edge gaps */
+	.scene-content {
+		position: absolute;
+		inset: -4px;
+		will-change: transform;
+	}
+
+	.render-layer {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.render-layer > :global(*) {
+		position: absolute !important;
+		inset: 0 !important;
+		width: 100% !important;
+		height: 100% !important;
+	}
+
+	/* Glass recess rim — on TOP of everything, creates the depth illusion */
+	/* --- Wing silhouette --- */
+
+	.wing-silhouette {
+		position: absolute;
+		bottom: -5%;
+		left: -15%;
+		width: 75%;
+		height: 35%;
+		pointer-events: none;
+		transform-origin: 80% 100%;
+		background: linear-gradient(
+			25deg,
+			rgba(20, 20, 25, 0.7) 0%,
+			rgba(30, 30, 35, 0.5) 20%,
+			rgba(40, 40, 50, 0.25) 40%,
+			transparent 60%
+		);
+	}
+
+	/* --- UI overlays --- */
+
+	.click-hint {
+		position: absolute;
+		bottom: 10%;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 20;
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.8s ease;
+	}
+
+	.click-hint.visible {
+		opacity: 1;
+	}
+
+	.click-hint span {
+		background: var(--sw-blue);
+		color: white;
+		padding: 10px 20px;
+		border-radius: 20px;
+		font-size: 13px;
+		white-space: nowrap;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	/* Blind styles live inside window/Blind.svelte. */
+
+	/* ─── Window frame on/off ────────────────────────────────────────────────
+	   When config.shell.windowFrame = false, all cabin-style chrome
+	   disappears and the oval clip becomes a full rectangle — edge-to-edge
+	   Cesium render. The blind still works (its clip rect goes square too)
+	   so the user can still pull it down across the whole viewport. Mode
+	   used for the 3-Pi panorama where the oval would break the seam.
+
+	   Glass.svelte + Blind.svelte elements are in child-component scope, so
+	   we reach into them via :global(). Wing silhouette stays inside
+	   scene-content and is local to this file. */
+	.window-container.no-frame :global(.glass-surface),
+	.window-container.no-frame :global(.vignette),
+	.window-container.no-frame :global(.glass-recess),
+	.window-container.no-frame .wing-silhouette {
+		visibility: hidden;
+	}
+	.window-container.no-frame {
+		/* Full-bleed: no oval, no metallic rim, no aspect cap. The Cesium
+		   canvas + atmosphere fill the entire viewport. Blind still works
+		   (drag-snap composable doesn't depend on the oval shape). */
+		top: 0;
+		left: 0;
+		transform: none;
+		width: 100vw;
+		height: 100vh;
+		max-width: none;
+		max-height: none;
+		aspect-ratio: auto;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+	.window-container.no-frame .window-viewport {
+		border-radius: 0 !important;
+		box-shadow: none !important;
+	}
+	.window-container.no-frame :global(.blind-clip),
+	.window-container.no-frame :global(.blind-overlay) {
+		border-radius: 0;
+	}
+</style>

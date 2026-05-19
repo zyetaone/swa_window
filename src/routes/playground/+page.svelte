@@ -1,241 +1,212 @@
 <script lang="ts">
 	/**
-	 * Playground — live sandbox for rendering experiments.
+	 * /playground — lean Cesium scene lab.
 	 *
-	 * Isolated from the main window so we can tweak cloud logic,
-	 * test perspective transforms, and wire plane-movement-to-clouds
-	 * without breaking the production display route.
+	 * Cesium handles sky, ocean post-process (native waterMask + normals),
+	 * terrain color-by-mood, and night lights. Everything else (clouds,
+	 * weather, haze, micro-events) mounts via the shared scene Compositor.
+	 * No shell widgets — no blind, no fleet sync, no corridor, no window
+	 * frame. Just the composite, so we can tune visuals in isolation.
 	 *
-	 * Sliders control everything. No WindowModel — raw values only.
+	 * Production `/` uses the exact same CesiumViewer + Compositor; the
+	 * only difference is `/` adds the installation shell on top.
 	 */
+	import { onDestroy } from 'svelte';
+	import { createAeroWindow } from '$lib/model/aero-window.svelte';
+	import { LOCATIONS } from '$content/locations';
+	import { WEATHER_TYPES, type LocationId, type WeatherType } from '$lib/types';
+	import { WEATHER_EFFECTS } from '$content/weather';
+	import { clamp, formatTime } from '$lib/utils';
+	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
+	import Compositor from '$lib/scene/compositor.svelte';
+	import Weather from '$lib/shell/window/Weather.svelte';
 
-	import type { SkyState } from '$lib/shared/types';
-	import CloudBlobs from '$lib/components/CloudBlobs.svelte';
+	const model = createAeroWindow();
 
-	// Simulation state — all controlled by sliders
-	let density = $state(0.6);
-	let speed = $state(1.0);
-	let skyState = $state<SkyState>('day');
-	let time = $state(0);
+	let drawerOpen = $state(false);
 
-	// Plane movement — these will drive cloud parallax
-	let heading = $state(90);     // degrees, 0=N, 90=E
-	let planeSpeed = $state(1.0); // multiplier
-	let altitude = $state(30000); // feet
-	let windAngle = $state(88);   // degrees, matches WEATHER_EFFECTS.clear.windAngle
+	// RAF tick — model.tick drives the full simulation (flight, motion, director).
+	import { subscribe } from '$lib/game-loop';
+	$effect(() => subscribe((dt) => model.tick(dt)));
 
-	// Tick: advance time continuously
-	let raf: number;
-	$effect(() => {
-		let last = performance.now();
-		function loop(now: number) {
-			const dt = (now - last) / 1000;
-			last = now;
-			time += dt * planeSpeed;
-			raf = requestAnimationFrame(loop);
-		}
-		raf = requestAnimationFrame(loop);
-		return () => cancelAnimationFrame(raf);
-	});
+	// Weather derivations (same shape as production /).
+	const weatherFx = $derived(WEATHER_EFFECTS[model.weather]);
+	const frostAmount = $derived(clamp((model.flight.altitude - 25000) / 15000, 0, 1));
 
-	// Sky presets
-	const skyOptions: SkyState[] = ['day', 'dawn', 'dusk', 'night'];
-
-	// Background gradient based on sky state
-	const bgGradient = $derived.by(() => {
-		switch (skyState) {
-			case 'night': return 'linear-gradient(180deg, #0a0a1a 0%, #1a1a2e 50%, #0d0d0d 100%)';
-			case 'dawn': return 'linear-gradient(180deg, #2d1b4e 0%, #e07050 40%, #dda060 60%, #3d5a3d 100%)';
-			case 'dusk': return 'linear-gradient(180deg, #1a1a3e 0%, #c06040 35%, #ddaa70 55%, #2d3d2d 100%)';
-			default: return 'linear-gradient(180deg, #4488cc 0%, #88bbee 30%, #aaddff 50%, #667744 70%, #556633 100%)';
-		}
+	onDestroy(() => {
+		// Model cleanup handled by createAeroWindow lifecycle.
 	});
 </script>
 
 <div class="playground">
-	<div class="viewport" style:background={bgGradient}>
-		<CloudBlobs
-			{density}
-			{speed}
-			{skyState}
-			{time}
-			{heading}
-			{altitude}
-			{windAngle}
-		/>
-		<div class="horizon-line"></div>
-		<div class="hud">
-			<span>HDG {heading.toFixed(0)}</span>
-			<span>ALT {(altitude / 1000).toFixed(0)}k</span>
-			<span>SPD {planeSpeed.toFixed(1)}x</span>
-			<span>T {time.toFixed(0)}s</span>
-			<span>{skyState.toUpperCase()}</span>
-		</div>
+	<div class="globe-pane">
+		<CesiumViewer />
+		<Compositor />
+		<Weather rainOpacity={weatherFx.rainOpacity} windAngle={weatherFx.windAngle} {frostAmount} />
 	</div>
 
-	<div class="controls">
-		<h2>Cloud Playground</h2>
-		<p class="hint">Tweak values live. Clouds respond instantly via HMR.</p>
+	<button
+		class={['drawer-toggle', drawerOpen && 'open']}
+		onclick={() => (drawerOpen = !drawerOpen)}
+		aria-label="Toggle settings"
+	>
+		{drawerOpen ? '✕' : '⚙'}
+	</button>
+
+	<aside class={['drawer', drawerOpen && 'open']} aria-hidden={!drawerOpen}>
+		<header>
+			<h2>Scene Lab</h2>
+			<p class="hint">Cesium composite · tune visuals here, ship from /</p>
+		</header>
+
+		<fieldset>
+			<legend>Location</legend>
+			<select
+				class="select"
+				value={model.location}
+				onchange={(e) => model.applyScene((e.currentTarget as HTMLSelectElement).value as LocationId)}
+			>
+				{#each LOCATIONS as loc (loc.id)}
+					<option value={loc.id}>{loc.name}</option>
+				{/each}
+			</select>
+		</fieldset>
+
+		<fieldset>
+			<legend>Time of day</legend>
+			<label>
+				{formatTime(model.timeOfDay)}
+				<input type="range" bind:value={model.timeOfDay} min="0" max="24" step="0.1" />
+			</label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Weather</legend>
+			<div class="chip-row">
+				{#each WEATHER_TYPES as w (w)}
+					<button
+						type="button"
+						class={[model.weather === w && 'active']}
+						onclick={() => (model.weather = w as WeatherType)}
+					>
+						{w}
+					</button>
+				{/each}
+			</div>
+		</fieldset>
 
 		<fieldset>
 			<legend>Clouds</legend>
 			<label>
-				Density: {(density * 100).toFixed(0)}%
-				<input type="range" bind:value={density} min="0" max="1" step="0.01" />
+				Density <span class="val">{(model.config.atmosphere.clouds.density * 100).toFixed(0)}%</span>
+				<input
+					type="range"
+					bind:value={model.config.atmosphere.clouds.density}
+					min="0"
+					max="1"
+					step="0.01"
+				/>
 			</label>
 			<label>
-				Drift Speed: {speed.toFixed(1)}x
-				<input type="range" bind:value={speed} min="0.1" max="3" step="0.1" />
+				Drift speed <span class="val">{model.config.atmosphere.clouds.speed.toFixed(1)}×</span>
+				<input
+					type="range"
+					bind:value={model.config.atmosphere.clouds.speed}
+					min="0.1"
+					max="3"
+					step="0.1"
+				/>
 			</label>
 		</fieldset>
-
-		<fieldset>
-			<legend>Plane</legend>
-			<label>
-				Heading: {heading.toFixed(0)} deg
-				<input type="range" bind:value={heading} min="0" max="360" step="1" />
-			</label>
-			<label>
-				Speed: {planeSpeed.toFixed(1)}x
-				<input type="range" bind:value={planeSpeed} min="0.1" max="5" step="0.1" />
-			</label>
-			<label>
-				Altitude: {(altitude / 1000).toFixed(0)}k ft
-				<input type="range" bind:value={altitude} min="5000" max="45000" step="1000" />
-			</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Wind</legend>
-			<label>
-				Wind Angle: {windAngle.toFixed(0)} deg
-				<input type="range" bind:value={windAngle} min="60" max="120" step="1" />
-			</label>
-		</fieldset>
-
-		<fieldset>
-			<legend>Sky</legend>
-			<div class="sky-buttons">
-				{#each skyOptions as opt (opt)}
-					<button
-						class:active={skyState === opt}
-						onclick={() => skyState = opt}
-					>{opt}</button>
-				{/each}
-			</div>
-		</fieldset>
-	</div>
+	</aside>
 </div>
 
 <style>
 	.playground {
-		display: grid;
-		grid-template-columns: 1fr 320px;
-		height: 100vh;
-		background: #111;
-		color: #eee;
-		font-family: system-ui, -apple-system, sans-serif;
-	}
-
-	.viewport {
-		position: relative;
+		position: fixed;
+		inset: 0;
 		overflow: hidden;
-		border-right: 1px solid #333;
+		background: #04060d;
+		color: #eee;
+		font-family: system-ui, sans-serif;
 	}
+	.globe-pane { position: absolute; inset: 0; }
 
-	.horizon-line {
-		position: absolute;
-		top: 45%;
-		left: 0;
-		right: 0;
-		height: 1px;
-		background: rgba(255, 255, 255, 0.15);
-		pointer-events: none;
-	}
-
-	.hud {
+	.drawer-toggle {
 		position: absolute;
 		top: 12px;
 		right: 12px;
-		display: flex;
-		gap: 16px;
-		font: 11px/1 monospace;
-		color: rgba(255, 255, 255, 0.5);
-		pointer-events: none;
+		z-index: 30;
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		background: rgba(10, 10, 15, 0.8);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		color: #eee;
+		font-size: 16px;
+		cursor: pointer;
 	}
+	.drawer-toggle.open { background: rgba(30, 30, 40, 0.9); }
 
-	.controls {
-		padding: 20px;
+	.drawer {
+		position: absolute;
+		top: 0; right: 0; bottom: 0;
+		width: 320px;
+		background: rgba(10, 10, 15, 0.94);
+		border-left: 1px solid rgba(255, 255, 255, 0.12);
+		padding: 64px 16px 16px;
 		overflow-y: auto;
-		background: #1a1a1a;
+		transform: translateX(100%);
+		transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+		z-index: 25;
 	}
+	.drawer.open { transform: translateX(0); }
 
-	.controls h2 {
-		margin: 0 0 4px;
-		font-size: 18px;
-		font-weight: 600;
-	}
-
-	.hint {
-		margin: 0 0 20px;
-		font-size: 12px;
-		color: #666;
-	}
+	.drawer header h2 { font-size: 16px; margin: 0 0 4px; color: #fff; }
+	.drawer header .hint { margin: 0 0 16px; font-size: 11px; color: #888; }
 
 	fieldset {
-		border: 1px solid #333;
-		border-radius: 8px;
-		padding: 12px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 12px;
 		margin: 0 0 16px;
+		padding: 12px;
 	}
-
-	legend {
-		font-size: 11px;
+	fieldset legend {
+		font-size: 10px;
 		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: #888;
-		padding: 0 6px;
+		letter-spacing: 1px;
+		color: #666;
+		padding: 0 8px;
 	}
+	label { display: block; font-size: 12px; color: #ccc; margin: 8px 0; }
+	label .val { float: right; color: #7faeff; font-family: ui-monospace, monospace; font-size: 11px; }
 
-	label {
-		display: block;
-		font-size: 13px;
-		margin-bottom: 10px;
-		color: #ccc;
-	}
-
-	input[type="range"] {
-		display: block;
+	.select,
+	select {
 		width: 100%;
-		margin-top: 4px;
-		accent-color: #4488cc;
-	}
-
-	.sky-buttons {
-		display: flex;
-		gap: 8px;
-	}
-
-	.sky-buttons button {
-		flex: 1;
-		padding: 8px;
-		background: #2a2a2a;
-		border: 1px solid #444;
+		background: rgba(0, 0, 0, 0.3);
+		color: #eee;
+		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 6px;
-		color: #ccc;
+		padding: 6px 8px;
 		font-size: 12px;
-		text-transform: capitalize;
+	}
+
+	.chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+	.chip-row button {
+		padding: 4px 10px;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		color: #aaa;
+		font-size: 11px;
 		cursor: pointer;
-		transition: all 0.15s;
 	}
-
-	.sky-buttons button:hover {
-		background: #333;
-	}
-
-	.sky-buttons button.active {
-		background: #335577;
-		border-color: #4488cc;
+	.chip-row button.active {
+		background: rgba(127, 174, 255, 0.2);
+		border-color: rgba(127, 174, 255, 0.5);
 		color: #fff;
 	}
+
+	input[type='range'] { width: 100%; margin: 8px 0; }
 </style>

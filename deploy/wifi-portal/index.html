@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>Sky Portal — Setup</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<main>
+			<header>
+				<svg viewBox="0 0 64 64" class="logo" aria-hidden="true">
+					<path d="M32 6 L28 26 L8 36 L28 32 L26 54 L32 50 L38 54 L36 32 L56 36 L36 26 Z" fill="currentColor"/>
+				</svg>
+				<h1>Sky Portal</h1>
+				<p class="subtitle">Connect your display to Wi-Fi</p>
+			</header>
+
+			<form id="setup-form">
+				<section>
+					<label for="ssid">Network</label>
+					<select id="ssid" name="ssid" required>
+						<option value="" disabled selected>Loading networks…</option>
+					</select>
+				</section>
+
+				<section>
+					<label for="passphrase">Password</label>
+					<input
+						id="passphrase"
+						name="passphrase"
+						type="password"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="Wi-Fi password"
+					/>
+					<button type="button" id="toggle-pw" class="link" aria-label="Show password">show</button>
+				</section>
+
+				<button type="submit" id="connect">Connect</button>
+
+				<p class="hint" id="status">Pick your Wi-Fi network and enter the password.</p>
+			</form>
+
+			<footer>
+				<small>Aero Dynamic Window · Setup Mode</small>
+			</footer>
+		</main>
+
+		<script src="app.js" defer></script>
+	</body>
+</html>

@@ -1,0 +1,27 @@
+[Unit]
+Description=Aero Window X Server
+Documentation=https://github.com/zyetaone/z-aero-window
+After=systemd-user-sessions.service
+# Kiosk depends on this — fail the kiosk cleanly if X cannot start.
+Before=aero-kiosk.service
+
+[Service]
+Type=simple
+User=__AERO_USER__
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+
+# Plain X (no desktop) — the kiosk unit provides the single Chromium window.
+# `-nolisten tcp` hides the X server from the LAN.
+# `vt1` binds to tty1 so the console is owned by X for the kiosk session.
+ExecStart=/usr/bin/xinit /bin/bash -c 'sleep infinity' -- :0 -nolisten tcp vt1 -nocursor
+
+# Clean shutdown — systemd sends SIGTERM, xinit tears down X cleanly.
+# No ExecStop / SIGKILL — we want graceful unit teardown.
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

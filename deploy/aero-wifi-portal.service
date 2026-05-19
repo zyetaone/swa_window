@@ -1,0 +1,17 @@
+[Unit]
+Description=Aero Window WiFi Setup Portal (when no WiFi is configured)
+# Run before the kiosk boots so the customer sees the portal page if needed.
+Before=aero-app.service aero-kiosk.service
+Wants=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+ExecStart=/home/pi/aero-window/deploy/aero-wifi-portal.sh
+# wifi-connect needs root for hostapd/dnsmasq/nmcli operations.
+User=root
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

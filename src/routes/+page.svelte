@@ -9,56 +9,124 @@
 	 * - Cabin interior context
 	 */
 
-	import { createAppState, LOCATION_MAP, AIRCRAFT } from "$lib/context";
-	import type { LocationId } from "$lib/context";
-	import { savePersistedState } from "$lib/services/persistence";
-	import { createWsClient } from "$lib/services/fleet-client.svelte";
-	import Window from "$lib/components/Window.svelte";
-	import Controls from "$lib/components/HUD.svelte";
-	import SidePanel from "$lib/components/SidePanel.svelte";
+	import { onDestroy, onMount } from "svelte";
+	import { createAeroWindow } from "$lib/model/aero-window.svelte";
+	import { isValidLocation } from "$content/locations";
+	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
+	import { savePersistedState } from "$lib/model/aero-window-persistence";
+	import { createDeviceClient } from "$lib/fleet/client.svelte";
+	import { hydrateFromServer } from "$lib/scene/bundle/client";
+	import { bundleStore } from "$lib/scene/bundle/store.svelte";
+	import {
+		startRemotePoll,
+		resolveDeviceId,
+		type ContentBundle,
+		type ConfigPatch,
+	} from "$lib/scene/bundle/remote";
+	import Pane from "$lib/shell/Pane.svelte";
+	import Controls from "$lib/shell/HUD.svelte";
+	import SidePanel from "$lib/shell/SidePanel.svelte";
+	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
+	import { setParallaxRole } from "$lib/model/config-tree.svelte";
+	// Composed panel sections — page picks the set + order it wants.
+	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
+	import TimeControl from "$lib/shell/panel/TimeControl.svelte";
+	import FlightControls from "$lib/shell/panel/FlightControls.svelte";
+	import AtmosphereControls from "$lib/shell/panel/AtmosphereControls.svelte";
+	import LightingControls from "$lib/shell/panel/LightingControls.svelte";
+	import WeatherPicker from "$lib/shell/panel/WeatherPicker.svelte";
 
 	// Create unified app state (provides context to all child components)
-	// All state is reactive via $state/$derived in WindowModel
-	const model = createAppState();
+	// All state is reactive via $state/$derived in AeroWindow
+	const model = createAeroWindow();
 
-	// Real-time sync (moved out of WindowModel for testability)
+	// Real-time sync (moved out of AeroWindow for testability)
 	$effect(() => {
 		if (model.syncToRealTime && typeof window !== "undefined") {
 			const update = () => model.updateTimeFromSystem();
 			const interval = setInterval(
 				update,
-				AIRCRAFT.REAL_TIME_SYNC_INTERVAL,
+				model.config.director.daylight.syncIntervalMs,
 			);
 			return () => clearInterval(interval);
 		}
 		return undefined;
 	});
 
-	// Debounced auto-save (moved out of WindowModel for testability)
+	// Debounced auto-save (moved out of AeroWindow for testability)
 	$effect(() => {
 		const data = model.getPersistedSnapshot();
 		const timeout = setTimeout(() => savePersistedState(data), 2000);
 		return () => clearTimeout(timeout);
 	});
 
-	// Fleet server connection — receives admin push (location, weather, config).
-	// createWsClient reads ?server= URL param or VITE_FLEET_SERVER env internally,
-	// falls back to ws://hostname:3001. Always connects so the Pi registers
-	// with the fleet server even if Cesium/WebGL fails downstream.
-	$effect(() => {
-		if (typeof window === "undefined") return;
-		const client = createWsClient(model);
-		return () => client.destroy();
+	// Fleet connection — SSE subscriber to own server's /api/events + peer
+	// broadcast fan-out for Phase 7 leader→follower director_decision.
+	// Always connects so the Pi is discoverable and responsive to admin
+	// PATCHes even if Cesium/WebGL fails downstream.
+	// onMount, not $effect: no reactive deps, runs once per page lifecycle.
+	onMount(() => {
+		const client = createDeviceClient(model);
+		// Phase 7 — register the leader-broadcast hook so the director can
+		// emit director_decision messages when this device is a panorama
+		// leader. Solo devices set the hook too; it's harmless (nobody
+		// receives the emits unless a group is configured server-side).
+		model.setFleetBroadcast((msg) => client.publishV2(msg));
+		return () => {
+			model.setFleetBroadcast(null);
+			client.destroy();
+		};
 	});
+
+	// Pull any bundles the server has persisted to disk. Silent-fail if the
+	// endpoint is unreachable — stock effects always render regardless.
+	onMount(() => {
+		void hydrateFromServer();
+	});
+
+	// Phase 5.7 — Cloudflare Push Worker poll (over-the-internet bundle/config push).
+	// Opt-in via VITE_PUSH_WORKER_URL. Silent no-op if unset.
+	//   onBundles: install each into bundleStore — picked up reactively by the compositor.
+	//   onConfigs: feed each { path, value } through model.applyConfigPatch (RootConfig path-targeted).
+	onMount(() => {
+		const url = import.meta.env.VITE_PUSH_WORKER_URL;
+		if (!url) return;
+		const handle = startRemotePoll({
+			deviceId: resolveDeviceId(),
+			pushWorkerUrl: url,
+			onBundles: (bundles: ContentBundle[]) => {
+				for (const bundle of bundles) bundleStore.install(bundle);
+			},
+			onConfigs: (patches: ConfigPatch[]) => {
+				for (const { path, value } of patches) {
+					model.applyConfigPatch(path, value);
+				}
+			},
+		});
+		return () => handle.stop();
+	});
+
+	// Clean up model timers on page teardown
+	onDestroy(() => model.destroy());
+
+	// "F" keyboard toggle for window frame (designer spec — Phase 5b).
+	// Only captures when no other text-entry element has focus so we don't
+	// fight the time slider / weather dropdown / SidePanel inputs.
+	// Handler used by <svelte:window onkeydown> below — idiomatic over
+	// addEventListener inside $effect per Svelte 5 best practices.
+	function handleKey(e: KeyboardEvent) {
+		if (e.key !== "f" && e.key !== "F") return;
+		const t = e.target as HTMLElement;
+		if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+		model.config.shell.windowFrame = !model.config.shell.windowFrame;
+	}
 
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
 	if (typeof window !== "undefined") {
 		const params = new URLSearchParams(window.location.search);
 
-		const locationParam = params.get("location")?.toLowerCase() as
-			| LocationId
-			| undefined;
-		if (locationParam && LOCATION_MAP.has(locationParam)) {
+		const locationParam = params.get("location")?.toLowerCase();
+		if (isValidLocation(locationParam)) {
 			model.setLocation(locationParam);
 		}
 
@@ -67,11 +135,31 @@
 			const alt = Number(altitudeParam);
 			if (
 				Number.isFinite(alt) &&
-				alt >= AIRCRAFT.MIN_ALTITUDE &&
-				alt <= AIRCRAFT.MAX_ALTITUDE
+				alt >= model.config.camera.altitude.min &&
+				alt <= model.config.camera.altitude.max
 			) {
 				model.setAltitude(alt);
 			}
+		}
+
+		// Phase 7 — multi-Pi parallax role. URL wins over localStorage wins
+		// over 'solo' default. When URL param is set, persist it so the role
+		// survives reload without the query string. Non-solo roles also auto-
+		// hide the window frame since three oval frames tile poorly.
+		const ROLE_KEY = "aero.device.role";
+		const roleParam = params.get("role")?.toLowerCase();
+
+		const fromUrl = isValidDeviceRole(roleParam) ? roleParam : null;
+		const stored = localStorage.getItem(ROLE_KEY);
+		const fromStorage = isValidDeviceRole(stored) ? stored : null;
+		const chosenRole: DeviceRole = fromUrl ?? fromStorage ?? "solo";
+
+		if (chosenRole !== "solo") {
+			setParallaxRole(chosenRole);
+			model.config.shell.windowFrame = false;
+		}
+		if (fromUrl) {
+			localStorage.setItem(ROLE_KEY, fromUrl);
 		}
 	}
 </script>
@@ -90,14 +178,16 @@
 	/>
 </svelte:head>
 
-<main class="app">
+<svelte:window onkeydown={handleKey} />
+
+<main class={["app", !model.config.shell.windowFrame && "no-frame"]}>
 	<!-- Cabin wall with texture -->
 	<div class="cabin-wall">
 		<!-- Panel lines texture -->
 		<div class="cabin-texture"></div>
 
 		<!-- The window -->
-		<Window />
+		<Pane />
 
 		<!-- Rivets/details around window -->
 		<div class="cabin-details">
@@ -112,7 +202,22 @@
 	<Controls />
 
 	<!-- Side panel (location picker + settings) -->
-	<SidePanel />
+	<SidePanel>
+		<LocationPicker />
+		<div class="divider"></div>
+		<TimeControl />
+		<div class="divider"></div>
+		<FlightControls />
+		<div class="divider"></div>
+		<AtmosphereControls />
+		<div class="divider"></div>
+		<LightingControls />
+		<div class="divider"></div>
+		<WeatherPicker />
+	</SidePanel>
+
+	<!-- Observability viewer (Shift+T to toggle) -->
+	<TelemetryPanel />
 </main>
 
 <style>
@@ -151,21 +256,24 @@
 		height: 100%;
 		max-width: 3840px;
 		max-height: 2160px;
-		/* Cabin wall color - warm gray plastic */
-		background: linear-gradient(
-			180deg,
-			#d8d5d0 0%,
-			#e0ddd8 20%,
-			#e5e2dd 50%,
-			#e0ddd8 80%,
-			#d5d2cd 100%
-		);
+		/* Premium cabin wall — cool pearl white with subtle blue warmth */
+		background:
+			radial-gradient(ellipse at 50% 0%, rgba(48, 76, 178, 0.04) 0%, transparent 60%),
+			linear-gradient(
+				180deg,
+				#eceef2 0%,
+				#f0f2f5 15%,
+				#f4f5f8 50%,
+				#f0f2f5 85%,
+				#e8eaee 100%
+			);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		box-shadow:
-			inset 0 0 100px rgba(0, 0, 0, 0.1),
-			0 0 50px rgba(0, 0, 0, 0.3);
+			inset 0 0 120px rgba(48, 76, 178, 0.04),
+			inset 0 -2px 0 rgba(48, 76, 178, 0.08),
+			0 0 60px rgba(0, 0, 0, 0.25);
 	}
 
 	.cabin-texture {
@@ -173,26 +281,24 @@
 		inset: 0;
 		pointer-events: none;
 		background:
-			/* Horizontal panel seams */
+			/* Fine horizontal panel seams */
 			repeating-linear-gradient(
 				0deg,
 				transparent 0px,
-				transparent 150px,
-				rgba(0, 0, 0, 0.03) 150px,
-				rgba(0, 0, 0, 0.03) 152px,
-				transparent 152px
+				transparent 180px,
+				rgba(48, 76, 178, 0.025) 180px,
+				rgba(48, 76, 178, 0.025) 181px,
+				transparent 181px
 			),
 			/* Vertical panel seams */
-				repeating-linear-gradient(
-					90deg,
-					transparent 0px,
-					transparent 200px,
-					rgba(0, 0, 0, 0.02) 200px,
-					rgba(0, 0, 0, 0.02) 202px,
-					transparent 202px
-				),
-			/* Subtle noise texture */
-				url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+			repeating-linear-gradient(
+				90deg,
+				transparent 0px,
+				transparent 240px,
+				rgba(0, 0, 0, 0.015) 240px,
+				rgba(0, 0, 0, 0.015) 241px,
+				transparent 241px
+			);
 	}
 
 	.cabin-details {
@@ -203,30 +309,40 @@
 
 	.rivet {
 		position: absolute;
-		width: 6px;
-		height: 6px;
-		background: radial-gradient(circle at 30% 30%, #e5e5e5, #a0a0a0);
+		width: 7px;
+		height: 7px;
+		background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(48, 76, 178, 0.3) 60%, rgba(30, 55, 140, 0.6));
 		border-radius: 50%;
 		box-shadow:
-			inset 0 1px 2px rgba(255, 255, 255, 0.5),
-			0 1px 2px rgba(0, 0, 0, 0.3);
+			inset 0 1px 2px rgba(255, 255, 255, 0.8),
+			0 1px 3px rgba(0, 0, 0, 0.25),
+			0 0 0 1px rgba(48, 76, 178, 0.15);
 	}
 
 	.rivet-tl {
-		top: 15%;
-		left: 20%;
+		top: 12%;
+		left: 18%;
 	}
 	.rivet-tr {
-		top: 15%;
-		right: 20%;
+		top: 12%;
+		right: 18%;
 	}
 	.rivet-bl {
-		bottom: 15%;
-		left: 20%;
+		bottom: 12%;
+		left: 18%;
 	}
 	.rivet-br {
-		bottom: 15%;
-		right: 20%;
+		bottom: 12%;
+		right: 18%;
+	}
+
+	/* Kiosk-only: hide cursor everywhere when html has the .kiosk class
+	   (set by app.html based on hostname=localhost). Dev/admin reaching the
+	   Pi via its LAN hostname or IP keeps a normal pointer for interaction. */
+	:global(html.kiosk),
+	:global(html.kiosk *),
+	:global(html.kiosk *:hover) {
+		cursor: none !important;
 	}
 
 	/* Accessibility: focus indicators */
@@ -235,12 +351,31 @@
 		outline-offset: 2px;
 	}
 
-	/* Accessibility: reduced motion */
+	/* Accessibility: reduce motion for DECORATIVE hint animations only.
+	   Scene animations (cloud drift, warp, breathing) are the product, not
+	   shell, so they keep running regardless of this preference. The old
+	   blanket :global(*) rule silently froze the cloud deck on any OS with
+	   reduce-motion enabled. */
 	@media (prefers-reduced-motion: reduce) {
-		:global(*) {
-			animation-duration: 0.01ms !important;
-			animation-iteration-count: 1 !important;
+		:global(.click-hint),
+		:global(.blind-overlay.discoverable::after) {
+			animation: none !important;
+		}
+		:global(.blind-overlay) {
 			transition-duration: 0.01ms !important;
 		}
+	}
+
+	/* Window-frame on/off (Phase 5b).
+	   When toggled off via config.shell.windowFrame=false, the cabin wall,
+	   texture, and rivets disappear so the Cesium canvas reads edge-to-edge.
+	   Pane.svelte handles its own inner shell in the .no-frame scope. */
+	.app.no-frame .cabin-wall {
+		background: #000;
+		box-shadow: none;
+	}
+	.app.no-frame :global(.cabin-texture),
+	.app.no-frame :global(.cabin-details) {
+		visibility: hidden;
 	}
 </style>

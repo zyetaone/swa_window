@@ -1,0 +1,38 @@
+{
+  // Aero Push Worker — over-the-internet bundle + config push channel.
+  // See README.md for setup instructions.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aero-push-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Observability (free tier — keeps logs for ~3 days)
+  "observability": {
+    "enabled": true
+  },
+
+  // KV namespaces — REPLACE the ids below with the values returned from
+  //   wrangler kv namespace create BUNDLES
+  //   wrangler kv namespace create CONFIGS
+  // (the `preview_id` values come from the `--preview` variants).
+  "kv_namespaces": [
+    {
+      "binding": "BUNDLES",
+      "id": "e29f43869a5c4660b0c3d04cd6e2f9ff",
+      "preview_id": "d760a1679fb9478087b848c89bdaface"
+    },
+    {
+      "binding": "CONFIGS",
+      "id": "5dc2081b65b44225930743ea1aab2937",
+      "preview_id": "aef927ca6bcc41bb8fe5b524b3580c47"
+    }
+  ],
+
+  // ADMIN_TOKEN must be set as a SECRET, not committed here:
+  //   wrangler secret put ADMIN_TOKEN
+  // Anything in `vars` IS committed and visible — only put public values here.
+  "vars": {
+    "WORKER_VERSION": "0.1.0"
+  }
+}

@@ -1,59 +1,55 @@
 <script lang="ts">
-	import { AdminStore, type Transport } from '$lib/services/fleet-admin.svelte';
-	import type { LocationId, WeatherType, DisplayMode, DisplayConfig } from '$lib/shared';
-	import { LOCATIONS, type QualityMode } from '$lib/shared';
+	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
+	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
+	import { config } from '$lib/model/config-tree.svelte';
+	import { formatTime, formatUptime } from '$lib/utils';
+	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
+	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
+	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
+	import { LOCATIONS } from '$content/locations';
 	import { onDestroy } from 'svelte';
+	import {
+		listBindings,
+		saveBinding,
+		getDeviceFingerprint,
+		resolveBinding,
+		type DeviceRole,
+		type DeviceBinding,
+	} from '$lib/fleet/parallax.svelte';
 
-	// Read config from URL params: ?server=ws://...&transport=sse
-	const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-	const serverParam = params?.get('server') || undefined;
-	const transportParam = (params?.get('transport') as Transport) || undefined;
-	const store = new AdminStore(serverParam, transportParam);
-	onDestroy(() => store.destroy());
+	// Admin is a view into the global config rune. Slider sliders bind directly
+	// to `config.*` (module-scope $state — single instance per process). A $effect
+	// inside startPeerSync watches those fields and POSTs PATCH /api/config to
+	// every peer in `store.peers`, so edits propagate without an explicit push.
+	//
+	// Scene-level state (location/weather/altitude/time/flightSpeed) stays in
+	// local `scene` state because it's a one-shot command ("go there"), not an
+	// ambient config value. The "Push Scene" button dispatches on demand.
+	const store = new RestAdminStore();
+	const stopPeerSync = startPeerSync(store);
+	onDestroy(() => { stopPeerSync(); store.destroy(); });
 
 	// Selection state
 	let selectedDevices = $state<Set<string>>(new Set());
-	let sceneLocation = $state<LocationId>('dallas');
-	let sceneWeather = $state<WeatherType>('clear');
 	let pushMode = $state<DisplayMode>('flight');
 	let videoUrl = $state('');
 
-	// Config controls — fine-grained display overrides
-	// These push live to selected devices on change (debounced 200ms)
-	let cfgAltitude = $state(35000);
-	let cfgTimeOfDay = $state(12);
-	let cfgFlightSpeed = $state(1.0);
-	let cfgCloudDensity = $state(0.7);
-	let cfgNightLightIntensity = $state(0.6);
-	let cfgSyncToRealTime = $state(true);
-	let cfgShowClouds = $state(true);
-	let cfgQualityMode = $state<QualityMode>('balanced');
-
-	// Derived display labels for sliders
-	const altitudeLabel = $derived(`${(cfgAltitude / 1000).toFixed(0)}k ft`);
-	const timeLabel = $derived.by(() => {
-		const h = Math.floor(cfgTimeOfDay);
-		const m = Math.floor((cfgTimeOfDay % 1) * 60);
-		const period = h >= 12 ? 'PM' : 'AM';
-		const h12 = h % 12 || 12;
-		return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
+	// One-shot scene builder — what to command devices to be (not ambient config).
+	// Shadow state is justified here because admin authors a DRAFT before pushing;
+	// the device's actual location/time/weather is elsewhere (its own simulation).
+	let scene = $state({
+		location: 'dallas' as LocationId,
+		weather: 'clear' as WeatherType,
+		altitude: 35000,
+		timeOfDay: 12,
+		flightSpeed: 1.0,
+		syncToRealTime: true,
 	});
-	const speedLabel = $derived(`${cfgFlightSpeed.toFixed(1)}x`);
-	const cloudLabel = $derived(`${Math.round(cfgCloudDensity * 100)}%`);
-	const nightLabel = $derived(cfgNightLightIntensity.toFixed(1));
 
-	// Live push: debounced config sync on slider change
-	let livePushTimeout: ReturnType<typeof setTimeout> | null = null;
-	let livePushEnabled = $state(true);
-
-	function pushConfigLive(partial: DisplayConfig) {
-		if (!livePushEnabled) return;
-		if (livePushTimeout) clearTimeout(livePushTimeout);
-		livePushTimeout = setTimeout(async () => {
-			const targets = getTargets();
-			await Promise.all(targets.map(id => store.pushConfig(id, partial)));
-		}, 200);
-	}
+	// Derived display labels for scene sliders
+	const altitudeLabel = $derived(`${(scene.altitude / 1000).toFixed(0)}k ft`);
+	const timeLabel = $derived(formatTime(scene.timeOfDay));
+	const speedLabel = $derived(`${scene.flightSpeed.toFixed(1)}x`);
 
 	function getTargets(): string[] {
 		return selectedDevices.size > 0
@@ -65,30 +61,35 @@
 	async function handlePushScene() {
 		const targets = getTargets();
 		if (targets.length === store.devices.length && store.devices.length > 0) {
-			await store.broadcastScene(sceneLocation, sceneWeather);
+			await store.broadcastScene(scene.location, scene.weather);
 		} else {
-			await Promise.all(targets.map(id => store.pushScene(id, sceneLocation, sceneWeather)));
+			await Promise.all(targets.map(id => store.pushScene(id, scene.location, scene.weather)));
 		}
 	}
 
 	async function handlePushMode() {
 		const targets = getTargets();
-		const payload = pushMode === 'video' ? videoUrl : undefined;
+		let payload: string | undefined;
+		if (pushMode === 'video' && videoUrl) {
+			try { const u = new URL(videoUrl); if (!['http:', 'https:'].includes(u.protocol)) return; } catch { return; }
+			payload = videoUrl;
+		}
 		await Promise.all(targets.map(id => store.pushMode(id, pushMode, payload)));
 	}
 
-	async function handlePushConfig() {
+	async function handlePushScene_Full() {
+		// One-shot push of the whole scene draft. Ambient config (clouds, haze,
+		// lights, quality, showClouds) propagates continuously via peer-sync,
+		// so it isn't included here — only scene-level overrides.
 		const targets = getTargets();
-		const config: DisplayConfig = {
-			altitude: cfgAltitude,
-			timeOfDay: cfgTimeOfDay,
-			flightSpeed: cfgFlightSpeed,
-			cloudDensity: cfgCloudDensity,
-			nightLightIntensity: cfgNightLightIntensity,
-			syncToRealTime: cfgSyncToRealTime,
-			showClouds: cfgShowClouds,
+		const patch = {
+			altitude: scene.altitude,
+			timeOfDay: scene.timeOfDay,
+			flightSpeed: scene.flightSpeed,
+			syncToRealTime: scene.syncToRealTime,
+			weather: scene.weather,
 		};
-		await Promise.all(targets.map(id => store.pushConfig(id, config)));
+		await Promise.all(targets.map(id => store.pushSceneFull(id, patch)));
 	}
 
 	function toggleSelectAll() {
@@ -104,14 +105,6 @@
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
 		selectedDevices = next;
-	}
-
-	function formatUptime(seconds: number): string {
-		if (seconds < 60) return `${Math.floor(seconds)}s`;
-		if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		return `${h}h ${m}m`;
 	}
 
 	function timeSince(timestamp: number): string {
@@ -131,6 +124,55 @@
 		{ value: 'screensaver', label: 'Screensaver' },
 		{ value: 'video', label: 'Video' },
 	];
+
+	// ─── Device Bindings (SWA corridor Day 5) ─────────────────────────────────
+	// Persistent fingerprint → (role, groupId) map. Admin edits this locally in
+	// the browser running the admin panel — each physical display's binding is
+	// authored by visiting /admin on that device. Also reflects this admin's
+	// own current binding so the operator can sanity-check which pane they're on.
+	const ROLE_OPTIONS: DeviceRole[] = ['solo', 'left', 'center', 'right'];
+	let bindings = $state<Array<{ fingerprint: string; binding: DeviceBinding }>>([]);
+	let myFingerprint = $state('');
+	let myBinding = $state<DeviceBinding>({ role: 'solo', groupId: 'default' });
+
+	// Form state for "assign this device" form.
+	let formRole = $state<DeviceRole>('solo');
+	let formGroup = $state('default');
+
+	function refreshBindings() {
+		if (typeof window === 'undefined') return;
+		myFingerprint = getDeviceFingerprint();
+		myBinding = resolveBinding();
+		bindings = listBindings();
+		formRole = myBinding.role;
+		formGroup = myBinding.groupId;
+	}
+
+	if (typeof window !== 'undefined') refreshBindings();
+
+	function handleSaveMyBinding() {
+		if (!formGroup.trim()) return;
+		saveBinding(myFingerprint, { role: formRole, groupId: formGroup.trim() });
+		refreshBindings();
+	}
+
+	function handleSetBinding(fp: string, role: DeviceRole, groupId: string) {
+		if (!groupId.trim()) return;
+		saveBinding(fp, { role, groupId: groupId.trim() });
+		refreshBindings();
+	}
+
+	function handleDeleteBinding(fp: string) {
+		if (typeof window === 'undefined') return;
+		const raw = window.localStorage.getItem('aero.device.bindings');
+		if (!raw) return;
+		try {
+			const map = JSON.parse(raw) as Record<string, DeviceBinding>;
+			delete map[fp];
+			window.localStorage.setItem('aero.device.bindings', JSON.stringify(map));
+		} catch { /* ignore */ }
+		refreshBindings();
+	}
 </script>
 
 <div class="dashboard">
@@ -141,8 +183,8 @@
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
-			<span class="connection-badge" class:online={store.connectionState === 'connected'}>
-				{store.connectionState === 'connected' ? store.transportType.toUpperCase() : 'Disconnected'}
+			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
+				{store.connectionState === 'connected' ? 'REST' : store.connectionState}
 			</span>
 			<span class="device-count">
 				{onlineCount}/{totalCount} online
@@ -173,8 +215,8 @@
 			</div>
 			{#if store.alerts.length > 0}
 				<div class="alerts">
-					{#each store.alerts as alert}
-						<span class="alert-badge" class:error={alert.level === 'error'} class:warning={alert.level === 'warning'}>
+					{#each store.alerts as alert (alert.device + '|' + alert.message)}
+						<span class={['alert-badge', alert.level === 'error' && 'error', alert.level === 'warning' && 'warning']}>
 							{alert.message}
 						</span>
 					{/each}
@@ -187,10 +229,10 @@
 		<!-- Control Panel -->
 		<aside class="controls">
 			<section class="control-section">
-				<h3>Scene</h3>
+				<h3>Location + Weather</h3>
 				<label>
 					<span>Location</span>
-					<select bind:value={sceneLocation}>
+					<select bind:value={scene.location}>
 						{#each LOCATIONS as loc (loc.id)}
 							<option value={loc.id}>{loc.name}</option>
 						{/each}
@@ -198,14 +240,14 @@
 				</label>
 				<label>
 					<span>Weather</span>
-					<select bind:value={sceneWeather}>
+					<select bind:value={scene.weather}>
 						{#each WEATHER_OPTIONS as w (w)}
 							<option value={w}>{w[0].toUpperCase() + w.slice(1)}</option>
 						{/each}
 					</select>
 				</label>
 				<button class="btn btn-primary" onclick={handlePushScene}>
-					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
+					Fly There {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
 
@@ -214,8 +256,7 @@
 				<div class="mode-buttons">
 					{#each MODE_OPTIONS as opt (opt.value)}
 						<button
-							class="btn btn-mode"
-							class:active={pushMode === opt.value}
+							class={['btn', 'btn-mode', pushMode === opt.value && 'active']}
 							onclick={() => pushMode = opt.value}
 						>
 							{opt.label}
@@ -237,77 +278,59 @@
 
 			<section class="control-section">
 				<h3>
-					Display Config
-					<label class="live-toggle">
-						<input type="checkbox" bind:checked={livePushEnabled} />
-						<span>Live</span>
-					</label>
+					Ambient <span class="hint-muted">— auto-syncs to fleet</span>
 				</h3>
+				<!-- Shared components with device SidePanel. They bind directly to the
+				     module-scope config rune — editing here is identical to editing
+				     on-device. peer-sync (above) propagates to peers. -->
+				<AtmosphereControls />
+				<LightingControls />
+				<label>
+					<div class="slider-header">
+						<span>Quality</span>
+						<span class="slider-value">{config.world.qualityMode}</span>
+					</div>
+					<select bind:value={config.world.qualityMode} class="select">
+						<option value="performance">Performance (Pi/Raspberry)</option>
+						<option value="balanced">Balanced (default)</option>
+						<option value="ultra">Ultra (high-end)</option>
+					</select>
+				</label>
+				<label class="toggle-label">
+					<input type="checkbox" bind:checked={config.world.showClouds} />
+					<span>Show Clouds</span>
+				</label>
+			</section>
+
+			<section class="control-section">
+				<h3>Scene — one-shot push</h3>
 				<label>
 					<div class="slider-header">
 						<span>Altitude</span>
 						<span class="slider-value">{altitudeLabel}</span>
 					</div>
-					<input type="range" min="5000" max="48000" step="1000" bind:value={cfgAltitude}
-						oninput={() => pushConfigLive({ altitude: cfgAltitude })} class="range" />
+					<input type="range" min="5000" max="48000" step="1000" bind:value={scene.altitude} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Time of Day</span>
 						<span class="slider-value">{timeLabel}</span>
 					</div>
-					<input type="range" min="0" max="24" step="0.25" bind:value={cfgTimeOfDay}
-						oninput={() => pushConfigLive({ timeOfDay: cfgTimeOfDay })} class="range" />
+					<input type="range" min="0" max="24" step="0.25" bind:value={scene.timeOfDay} class="range" />
 				</label>
 				<label>
 					<div class="slider-header">
 						<span>Flight Speed</span>
 						<span class="slider-value">{speedLabel}</span>
 					</div>
-					<input type="range" min="0.1" max="5" step="0.1" bind:value={cfgFlightSpeed}
-						oninput={() => pushConfigLive({ flightSpeed: cfgFlightSpeed })} class="range" />
+					<input type="range" min="0.1" max="5" step="0.1" bind:value={scene.flightSpeed} class="range" />
 				</label>
-				<label>
-					<div class="slider-header">
-						<span>Cloud Density</span>
-						<span class="slider-value">{cloudLabel}</span>
-					</div>
-					<input type="range" min="0" max="1" step="0.05" bind:value={cfgCloudDensity}
-						oninput={() => pushConfigLive({ cloudDensity: cfgCloudDensity })} class="range" />
+				<label class="toggle-label">
+					<input type="checkbox" bind:checked={scene.syncToRealTime} />
+					<span>Sync to Real Time</span>
 				</label>
-				<label>
-					<div class="slider-header">
-						<span>Night Lights</span>
-						<span class="slider-value">{nightLabel}</span>
-					</div>
-					<input type="range" min="0" max="5" step="0.1" bind:value={cfgNightLightIntensity}
-						oninput={() => pushConfigLive({ nightLightIntensity: cfgNightLightIntensity })} class="range" />
-				</label>
-				<label>
-					<div class="slider-header">
-						<span>Quality</span>
-						<span class="slider-value">{cfgQualityMode}</span>
-					</div>
-					<select bind:value={cfgQualityMode} onchange={() => pushConfigLive({ qualityMode: cfgQualityMode })} class="select">
-						<option value="performance">Performance (Pi/Raspberry)</option>
-						<option value="balanced">Balanced (default)</option>
-						<option value="ultra">Ultra (high-end)</option>
-					</select>
-				</label>
-				<div class="toggle-row">
-					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgSyncToRealTime}
-							onchange={() => pushConfigLive({ syncToRealTime: cfgSyncToRealTime })} />
-						<span>Sync to Real Time</span>
-					</label>
-					<label class="toggle-label">
-						<input type="checkbox" bind:checked={cfgShowClouds}
-							onchange={() => pushConfigLive({ showClouds: cfgShowClouds })} />
-						<span>Show Clouds</span>
-					</label>
-				</div>
-				<button class="btn btn-primary" onclick={handlePushConfig}>
-					Push All Config {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
+				<button class="btn btn-primary" onclick={handlePushScene_Full}>
+					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
 
@@ -319,6 +342,58 @@
 						: 'Select All'}
 				</button>
 			</section>
+
+			<section class="control-section">
+				<h3>Device Bindings</h3>
+				<div class="bindings-my">
+					<p class="bindings-caption">This device</p>
+					<code class="bindings-fp" title={myFingerprint}>{myFingerprint}</code>
+					<div class="bindings-form">
+						<select bind:value={formRole} class="select">
+							{#each ROLE_OPTIONS as r (r)}
+								<option value={r}>{r}</option>
+							{/each}
+						</select>
+						<input type="text" class="input" bind:value={formGroup} placeholder="groupId" />
+						<button class="btn btn-secondary" onclick={handleSaveMyBinding}>Save</button>
+					</div>
+					<p class="bindings-hint">
+						Current: <strong>{myBinding.role}</strong> / <strong>{myBinding.groupId}</strong>
+						<br /><span class="muted">Applies on next playground load. Visit /admin on each pane to bind.</span>
+					</p>
+				</div>
+				{#if bindings.length > 0}
+					<p class="bindings-caption">Known bindings (this browser)</p>
+					<ul class="bindings-list">
+						{#each bindings as entry (entry.fingerprint)}
+							<li class={['bindings-row', entry.fingerprint === myFingerprint && 'me']}>
+								<code class="bindings-fp-small" title={entry.fingerprint}>{entry.fingerprint.slice(0, 8)}</code>
+								<select
+									class="select"
+									value={entry.binding.role}
+									onchange={(e) => handleSetBinding(entry.fingerprint, (e.currentTarget as HTMLSelectElement).value as DeviceRole, entry.binding.groupId)}
+								>
+									{#each ROLE_OPTIONS as r (r)}
+										<option value={r}>{r}</option>
+									{/each}
+								</select>
+								<input
+									type="text"
+									class="input input-sm"
+									value={entry.binding.groupId}
+									onchange={(e) => handleSetBinding(entry.fingerprint, entry.binding.role, (e.currentTarget as HTMLInputElement).value)}
+								/>
+								<button
+									class="btn-x"
+									aria-label="Delete binding"
+									onclick={() => handleDeleteBinding(entry.fingerprint)}
+								>✕</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+
 		</aside>
 
 		<!-- Device Grid -->
@@ -337,14 +412,11 @@
 					{#each store.devices as device (device.deviceId)}
 						{@const selected = selectedDevices.has(device.deviceId)}
 						<button
-							class="device-card"
-							class:online={device.online}
-							class:offline={!device.online}
-							class:selected
+							class={['device-card', device.online ? 'online' : 'offline', selected && 'selected']}
 							onclick={() => toggleDevice(device.deviceId)}
 						>
 							<div class="card-header">
-								<span class="status-dot" class:online={device.online}></span>
+								<span class={['status-dot', device.online && 'online']}></span>
 								<span class="hostname">{device.hostname || device.deviceId.slice(0, 8)}</span>
 							</div>
 
@@ -360,7 +432,7 @@
 								<div class="stat-row">
 									<div class="stat">
 										<span class="stat-label">FPS</span>
-										<span class="stat-value" class:fps-warn={device.fps < 30} class:fps-good={device.fps >= 30}>
+										<span class={['stat-value', device.fps < 30 ? 'fps-warn' : 'fps-good']}>
 											{device.fps > 0 ? device.fps.toFixed(0) : '—'}
 										</span>
 									</div>
@@ -541,23 +613,12 @@
 		align-items: center;
 	}
 
-	.live-toggle {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		gap: 4px;
+	.hint-muted {
 		font-size: 10px;
 		color: #52525b;
 		text-transform: none;
 		letter-spacing: normal;
-		margin-bottom: 0;
-		cursor: pointer;
-	}
-
-	.live-toggle input {
-		width: 12px;
-		height: 12px;
-		accent-color: #22c55e;
+		font-weight: 400;
 	}
 
 	label {
@@ -681,13 +742,6 @@
 	}
 
 	/* Toggles */
-	.toggle-row {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		margin-bottom: 10px;
-	}
-
 	.toggle-label {
 		display: flex;
 		flex-direction: row;
@@ -852,4 +906,81 @@
 		font-size: 14px;
 		color: #52525b;
 	}
+
+	/* Device bindings (SWA corridor) */
+	.bindings-my {
+		background: #0f1117;
+		border: 1px solid #27272a;
+		border-radius: 6px;
+		padding: 10px;
+		margin-bottom: 12px;
+	}
+	.bindings-caption {
+		font-size: 10px;
+		color: #71717a;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin-bottom: 6px;
+	}
+	.bindings-fp {
+		display: inline-block;
+		font-size: 11px;
+		color: #93c5fd;
+		background: #111827;
+		padding: 2px 6px;
+		border-radius: 3px;
+		margin-bottom: 8px;
+		font-family: ui-monospace, Menlo, monospace;
+	}
+	.bindings-form {
+		display: flex;
+		gap: 6px;
+		margin-bottom: 8px;
+	}
+	.bindings-form .select { flex: 0 0 80px; padding: 6px 8px; font-size: 12px; }
+	.bindings-form .input { flex: 1; padding: 6px 8px; font-size: 12px; }
+	.bindings-form .btn { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
+	.bindings-hint { font-size: 11px; color: #71717a; margin: 0; }
+	.bindings-hint strong { color: #e4e4e7; }
+	.bindings-hint .muted { color: #52525b; }
+	.bindings-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.bindings-row {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+	}
+	.bindings-row.me {
+		outline: 1px solid #1e3a5f;
+		border-radius: 4px;
+		padding: 2px;
+	}
+	.bindings-fp-small {
+		font-size: 10px;
+		color: #93c5fd;
+		font-family: ui-monospace, Menlo, monospace;
+		flex: 0 0 60px;
+	}
+	.bindings-row .select { flex: 0 0 70px; padding: 4px 6px; font-size: 11px; }
+	.input-sm { padding: 4px 6px; font-size: 11px; flex: 1; min-width: 0; }
+	.btn-x {
+		background: transparent;
+		border: 1px solid #3f3f46;
+		color: #71717a;
+		border-radius: 4px;
+		width: 22px;
+		height: 22px;
+		cursor: pointer;
+		font-size: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.btn-x:hover { border-color: #7f1d1d; color: #fca5a5; }
 </style>

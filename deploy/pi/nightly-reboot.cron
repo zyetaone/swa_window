@@ -1,0 +1,12 @@
+# Aero Window — nightly reboot (4 AM local).
+# Installed to /etc/cron.d/aero-nightly-reboot by deploy/pi/install.sh.
+#
+# Rationale:
+#   - Chromium leaks a few MB per hour of WebGL use; a fresh Chromium avoids
+#     GPU-context starvation after ~72h.
+#   - systemd + the kiosk service brings the app back up in <30s.
+#   - 04:00 is after the dim-schedule fires at 02:00 and before the
+#     bright-schedule at 06:00, so the reboot happens while the display is dim.
+#
+# Format: m h dom mon dow user command
+0 4 * * * root /sbin/shutdown -r now

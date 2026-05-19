@@ -64,7 +64,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Threlte plugin system (`daynight.svelte.ts`, `selectiveBloom.svelte.ts`, `turbulence.svelte.ts`)
 - GLSL shader modules and shader barrel export
 - `app.css` global stylesheet (replaced by Tailwind)
-- `EnvironmentSystem.ts` (functionality merged into WindowModel)
+- `EnvironmentSystem.ts` (functionality merged into AeroWindow)
 - `math-utils.ts` and `time-utils.ts` (consolidated into `utils.ts`)
 
 ## [0.3.0] - 2026-01-26
@@ -74,7 +74,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Destination local time and sky state display in Controls HUD
 - Auto-altitude adjustment at night (48k ft) and dawn/dusk (42k ft) for optimal city light viewing
 - Night cloud density boost (30% increase during night and dusk)
-- `nightAltitudeTarget` derived property on WindowModel
+- `nightAltitudeTarget` derived property on AeroWindow
 - `effectiveCloudDensity` derived from weather state, user setting, and time-of-day
 
 ### Changed
@@ -83,7 +83,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Clouds now drift sideways (front-to-back) simulating a side window perspective
 - Scale caching on cloud meshes to avoid unnecessary matrix updates
 - Updated ARCHITECTURE.md for Cesium + Three.js hybrid documentation
-- Rewrote STATE_API_REFERENCE.md to document the WindowModel API
+- Rewrote STATE_API_REFERENCE.md to document the AeroWindow API
 
 ### Fixed
 - Lightning timer floating-point comparison bug (`< 0.01` instead of `=== 0`)
@@ -127,8 +127,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.1.0] - 2025-12-22
 
 ### Added
-- WindowModel as Single Source of Truth for all simulation state
-- Context-based state management with `createAppState`/`useAppState` (Svelte 5 `setContext`/`getContext`)
+- AeroWindow as Single Source of Truth for all simulation state
+- Context-based state management with `createAeroWindow`/`useAeroWindow` (Svelte 5 `setContext`/`getContext`)
 - Threlte plugins: turbulence (camera shake), daynight (lighting transitions), selectiveBloom (HDR city glow)
 - Flight drift movement with layered noise for natural, organic motion
 - CityLights component with HDR colors optimized for selective bloom
@@ -141,9 +141,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Reduced default haze for clearer terrain visibility
 
 ### Removed
-- `FlightSimulation.svelte.ts` (merged into WindowModel)
-- `MotionSystem.svelte.ts` (merged into WindowModel)
-- `state.svelte.ts` (replaced by WindowModel)
+- `FlightSimulation.svelte.ts` (merged into AeroWindow)
+- `MotionSystem.svelte.ts` (merged into AeroWindow)
+- `state.svelte.ts` (replaced by AeroWindow)
 - `MotionUpdater.svelte` (obsolete with new tick architecture)
 
 ## [0.0.1] - 2025-12-16

@@ -17,6 +17,7 @@ DEVICE_NAME="${1:-aero-display-$(hostname)}"
 APP_PORT=5173
 INSTALL_DIR="/opt/zyeta-aero"
 DISPLAY_URL="http://localhost:${APP_PORT}?device=${DEVICE_NAME}"
+BUN_BIN="/home/kiosk/.bun/bin/bun"
 
 echo "============================================"
 echo "  Zyeta Aero — Pi 5 Kiosk Provisioner"
@@ -42,6 +43,7 @@ apt-get install -y -qq \
     unclutter \
     fonts-noto \
     fonts-noto-color-emoji \
+    curl \
     git
 
 # ─── 3. Configure GPU ────────────────────────────────────────────────────────
@@ -73,20 +75,22 @@ fi
 # ─── 4. Install Bun ──────────────────────────────────────────────────────────
 
 echo "[4/6] Installing Bun runtime..."
-if ! command -v bun &>/dev/null; then
-    curl -fsSL https://bun.sh/install | bash
-fi
-export PATH="$HOME/.bun/bin:$PATH"
-
-# ─── 5. Create Kiosk User + Config ───────────────────────────────────────────
-
-echo "[5/6] Setting up kiosk..."
 if ! id -u kiosk &>/dev/null; then
     useradd -m -s /bin/bash kiosk
     usermod -aG video,render,input kiosk
 fi
+if [[ ! -x "${BUN_BIN}" ]]; then
+    su - kiosk -c 'curl -fsSL https://bun.sh/install | bash'
+fi
 
+# ─── 5. Create Kiosk User + Config ───────────────────────────────────────────
+
+echo "[5/6] Setting up kiosk..."
 mkdir -p "${INSTALL_DIR}"
+
+# Install the updater alongside the deployed app so the timer unit has a stable path.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+install -m 755 "${SCRIPT_DIR}/aero-updater.sh" "${INSTALL_DIR}/aero-updater.sh"
 
 # Kiosk config
 cat > "${INSTALL_DIR}/config.env" <<EOF
