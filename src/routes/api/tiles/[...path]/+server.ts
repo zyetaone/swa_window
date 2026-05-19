@@ -21,7 +21,7 @@ import { resolve, dirname } from 'node:path';
 import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
-import { lanCorsHeaders } from '$lib/http/cors';
+import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 
 // Resolve TILE_DIR from project root (five levels up from this route file).
 // Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
@@ -39,10 +39,7 @@ const MIME: Record<string, string> = {
 	'.terrain': 'application/vnd.quantized-mesh', '.json': 'application/json',
 };
 
-export const OPTIONS: RequestHandler = async ({ request }) => {
-	const cors = { ...lanCorsHeaders(request.headers.get('Origin')), 'Access-Control-Allow-Methods': 'GET, OPTIONS' };
-	return new Response(null, { status: 204, headers: cors });
-};
+export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');
 
 function safeResolve(subPath: string): { filePath: string; notFound: boolean; forbidden: boolean } {
 	const filePath = resolve(TILE_DIR, subPath);

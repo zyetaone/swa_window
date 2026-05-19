@@ -10,15 +10,10 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
-import { lanCorsHeaders, lanCorsHeadersFull } from '$lib/http/cors';
+import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { getDeviceStatus, setDeviceStatus, type DeviceStatus } from '$lib/fleet/device-registry.server';
 
-export const OPTIONS: RequestHandler = ({ request }) => {
-	return new Response(null, {
-		status: 204,
-		headers: lanCorsHeadersFull(request.headers.get('origin'), 'GET, POST, OPTIONS'),
-	});
-};
+export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
 export const GET: RequestHandler = ({ request }) => {
 	const origin = request.headers.get('origin');

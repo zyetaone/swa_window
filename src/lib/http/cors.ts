@@ -57,3 +57,17 @@ export function lanCorsHeadersFull(
 		'Access-Control-Allow-Headers': 'Content-Type',
 	};
 }
+
+/**
+ * Build a SvelteKit RequestHandler that answers CORS preflight with the
+ * supplied methods. Eliminates the 5-line OPTIONS boilerplate at every
+ * mutating API route.
+ *
+ *   export const OPTIONS = corsPreflight('PATCH, OPTIONS');
+ */
+export function corsPreflight(methods: string): (event: { request: Request }) => Response {
+	return ({ request }) => new Response(null, {
+		status: 204,
+		headers: lanCorsHeadersFull(request.headers.get('origin'), methods),
+	});
+}

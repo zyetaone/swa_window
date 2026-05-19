@@ -23,13 +23,9 @@ import {
 	latestAll,
 	summarize,
 } from '$lib/fleet/heartbeat.server';
-import { lanCorsHeadersFull } from '$lib/http/cors';
+import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
 
-export const OPTIONS: RequestHandler = async ({ request }) =>
-	new Response(null, {
-		status: 204,
-		headers: lanCorsHeadersFull(request.headers.get('Origin')),
-	});
+export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
 	const cors = lanCorsHeadersFull(request.headers.get('Origin'));

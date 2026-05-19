@@ -18,15 +18,10 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
-import { lanCorsHeaders, lanCorsHeadersFull } from '$lib/http/cors';
+import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { publish } from '$lib/fleet/sse-bus.server';
 
-export const OPTIONS: RequestHandler = ({ request }) => {
-	return new Response(null, {
-		status: 204,
-		headers: lanCorsHeadersFull(request.headers.get('origin'), 'POST, OPTIONS'),
-	});
-};
+export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
 	const origin = request.headers.get('origin');
