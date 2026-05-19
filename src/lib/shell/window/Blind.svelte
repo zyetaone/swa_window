@@ -8,7 +8,7 @@
 	 * the user first interacts.
 	 *
 	 * Depends on parent `.window-container` exposing `--inner-radius` and
-	 * `--frame-width` CSS custom properties — Window.svelte defines them.
+	 * `--frame-width` CSS custom properties — Pane.svelte defines them.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { useBlind } from './use-blind.svelte';
@@ -17,7 +17,7 @@
 	const blind = useBlind(model);
 </script>
 
-<div class="blind-clip" bind:this={blind.clipEl}>
+<div class="blind-clip" {@attach blind.attach}>
 	<div
 		class={['blind-overlay', !model.config.shell.blindOpen && !blind.hasAnimated && 'discoverable']}
 		onanimationend={() => { blind.hasAnimated = true; }}

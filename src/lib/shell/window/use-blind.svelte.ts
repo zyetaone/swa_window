@@ -1,8 +1,10 @@
 /**
  * useBlind — composable for the airplane window blind drag/snap controller.
  *
- * Encapsulates all blind state, derived values, and pointer/keyboard handlers.
- * Pane.svelte binds `blind.clipEl` and wires the returned handlers directly.
+ * Encapsulates all blind state, derived values, and pointer/keyboard
+ * handlers. Consumer mounts the controller via `{@attach blind.attach}` on
+ * the clip element (replaces the old bind:this dance) and wires the pointer
+ * handlers on the draggable overlay.
  *
  * Optional long-press acceleration (SWA corridor, Day 5):
  *   Pass `{ longPress: { enabled, thresholdMs, speedMultiplier, releaseMs } }`
@@ -13,6 +15,7 @@
  *   over `releaseMs`.
  */
 
+import type { Attachment } from 'svelte/attachments';
 import { clamp } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from AeroWindow. */
@@ -48,7 +51,10 @@ const OPEN_Y = -105;
 const CLOSED_Y = 0;
 
 export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
-	let clipEl: HTMLDivElement | undefined = $state();
+	// Clip element is set by the `attach` attachment when the .blind-clip div
+	// mounts. Plain ref (not $state) — we only read offsetHeight from it at
+	// pointer-down, never reactively.
+	let clipEl: HTMLDivElement | null = null;
 	let isDragging = $state(false);
 	let hasAnimated = $state(false);
 	let dragY = $state(model.config.shell.blindOpen ? OPEN_Y : CLOSED_Y);
@@ -59,6 +65,11 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	let dragStartY = 0;
 	let dragStartPointerY = 0;
 	let dragStartPointerX = 0;
+
+	const attach: Attachment<HTMLDivElement> = (node) => {
+		clipEl = node;
+		return () => { clipEl = null; };
+	};
 
 	// Long-press machinery.
 	const lp = options.longPress ?? {};
@@ -181,8 +192,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	}
 
 	return {
-		get clipEl() { return clipEl; },
-		set clipEl(v: HTMLDivElement | undefined) { clipEl = v; },
+		attach,
 		get transform() { return transform; },
 		get transition() { return transition; },
 		get hasAnimated() { return hasAnimated; },

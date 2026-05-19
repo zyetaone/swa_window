@@ -13,6 +13,7 @@
 	 * without touching this shell.
 	 */
 	import type { Snippet } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
@@ -24,7 +25,8 @@
 	let panelOpen = $state(false);
 	let closing = $state(false);
 
-	let panelEl: HTMLDivElement | undefined = $state();
+	// Tab button: kept as bind:this because closePanel() needs to refocus it
+	// AFTER the panel unmounts (no live element to dispatch from at that point).
 	let tabButtonEl: HTMLButtonElement | undefined = $state();
 
 	function openPanel() {
@@ -42,50 +44,42 @@
 	}
 
 	function togglePanel() {
-		if (panelOpen) {
-			closePanel();
-		} else {
-			openPanel();
-		}
+		if (panelOpen) closePanel();
+		else openPanel();
 	}
 
-	// Focus trap: when panel opens, focus the first interactive element
-	$effect(() => {
-		if (panelOpen && !closing && panelEl) {
-			const firstFocusable = panelEl.querySelector<HTMLElement>(
-				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-			);
-			firstFocusable?.focus();
-		}
-	});
+	const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-	function handlePanelKeydown(e: KeyboardEvent) {
-		if (e.key === "Escape") {
-			closePanel();
-			return;
-		}
+	/**
+	 * Focus trap + Escape + Tab-cycle attachment for the modal panel. Replaces
+	 * the earlier bind:this + $effect + onkeydown trio: lifecycle (mount/
+	 * unmount), focus-first-element, and keyboard handling all live in one
+	 * place tied to the element's own lifetime.
+	 */
+	const focusTrap: Attachment<HTMLDivElement> = (node) => {
+		node.querySelector<HTMLElement>(FOCUSABLE)?.focus();
 
-		if (e.key !== "Tab" || !panelEl) return;
+		const onKeydown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") { closePanel(); return; }
+			if (e.key !== "Tab") return;
 
-		const focusable = Array.from(
-			panelEl.querySelectorAll<HTMLElement>(
-				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-			),
-		);
+			const focusable = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
+			if (focusable.length === 0) return;
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
 
-		if (focusable.length === 0) return;
+			if (e.shiftKey && document.activeElement === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && document.activeElement === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
 
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault();
-			last.focus();
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault();
-			first.focus();
-		}
-	}
+		node.addEventListener("keydown", onKeydown);
+		return () => node.removeEventListener("keydown", onKeydown);
+	};
 </script>
 
 <!-- Tab button (always visible on right edge) -->
@@ -121,14 +115,12 @@
 		tabindex="-1"
 	></button>
 
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
-		bind:this={panelEl}
 		class={['panel', closing && 'closing']}
 		role="dialog"
 		aria-label="Settings panel"
 		tabindex="-1"
-		onkeydown={handlePanelKeydown}
+		{@attach focusTrap}
 	>
 		<header>
 			<h2>Sky Portal</h2>
