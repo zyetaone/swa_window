@@ -402,23 +402,10 @@
 		color: var(--sw-yellow);
 	}
 
-	/* --- Divider --- */
-
-	.divider {
-		height: 1px;
-		background: linear-gradient(
-			90deg,
-			transparent,
-			rgba(255, 255, 255, 0.2),
-			transparent
-		);
-	}
-
-	/* Child panel sections live in their own components and use scoped
-	   section + h4 + .divider markup. Since Svelte's style scoping is
-	   per-file, we reach across via :global on these shared structural
-	   elements only — individual widget styling stays local to its
-	   section component. */
+	/* Shared structural elements — apply to both this file's markup and
+	   child-component sections. Svelte's style scoping is per-file, so we
+	   reach across via :global. Individual widget styling stays local to
+	   its section component. */
 	.panel :global(section) {
 		margin-bottom: 0.2rem;
 	}
