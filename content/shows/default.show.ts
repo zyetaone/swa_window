@@ -12,10 +12,16 @@ import type { Show } from '$lib/show/load';
 export const defaultShow: Show = {
 	id: 'default',
 	name: 'Default',
-	description: 'Out-of-the-box opening: Hyderabad at local noon, cloudy (SWA inauguration default).',
+	description:
+		'Out-of-the-box opening: dawn over Hyderabad (06:30 local, clear sky). ' +
+		'Council Q2 (2026-05-20) chose this single hand-tuned hero frame over a ' +
+		'choreographed timed sequence — let the autopilot wander from a thoughtful ' +
+		'opening rather than scripting beats. Per Q5 council and Experience Designer ' +
+		'guidance, the moment is intended to be held long enough to land (15-20s) ' +
+		'before the autopilot first decision lands.',
 	opening: {
 		location: 'hyderabad',
-		weather: 'cloudy',
-		timeOfDay: 12,
+		weather: 'clear',
+		timeOfDay: 6.5,
 	},
 };
