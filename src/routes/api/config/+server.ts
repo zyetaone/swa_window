@@ -17,6 +17,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
+import { requireAdminToken } from '$lib/http/auth';
 import { publish } from '$lib/fleet/sse-bus.server';
 
 interface ConfigPatchBody {
@@ -45,6 +46,7 @@ function isAllowedPath(path: string): boolean {
 export const OPTIONS: RequestHandler = corsPreflight('PATCH, OPTIONS');
 
 export const PATCH: RequestHandler = async ({ request }) => {
+	requireAdminToken(request);
 	const origin = request.headers.get('origin');
 	const body = await readLimitedJson<ConfigPatchBody>(request, 4096);
 

@@ -22,6 +22,7 @@ import type {
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 import { urlFor } from '$lib/fleet/peer-url';
 import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
+import { peerAuthHeader } from '$lib/http/peer-token';
 
 type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';
 
@@ -229,9 +230,10 @@ export class RestAdminStore {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
 		try {
+			const authHeader = await peerAuthHeader();
 			const res = await fetch(`${urlFor(peer)}/api/config`, {
 				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...authHeader },
 				body: JSON.stringify({ path, value, timestamp: Date.now(), sourceId: this.#sourceId }),
 			});
 			if (!res.ok) console.warn(`[admin] config PATCH to ${peer.deviceId} failed: ${res.status}`);

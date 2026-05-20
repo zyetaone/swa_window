@@ -9,7 +9,7 @@
  * publish() so the test stays purely about route gating.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // vi.mock factories are hoisted above imports; vi.hoisted lets the spy
 // reference survive that hoisting.
@@ -22,10 +22,15 @@ vi.mock('$lib/fleet/sse-bus.server', () => ({
 
 import { PATCH } from '../../../../src/routes/api/config/+server';
 
+const TOKEN = 'admin-test-token';
+
 function call(body: unknown): Promise<Response> {
 	const req = new Request('http://x.local/api/config', {
 		method: 'PATCH',
-		headers: { 'content-type': 'application/json' },
+		headers: {
+			'content-type': 'application/json',
+			authorization: `Bearer ${TOKEN}`,
+		},
 		body: JSON.stringify(body),
 	});
 	return PATCH({ request: req } as unknown as Parameters<typeof PATCH>[0]) as Promise<Response>;
@@ -33,6 +38,11 @@ function call(body: unknown): Promise<Response> {
 
 beforeEach(() => {
 	publishSpy.mockClear();
+	process.env.AERO_ADMIN_TOKEN = TOKEN;
+});
+
+afterEach(() => {
+	delete process.env.AERO_ADMIN_TOKEN;
 });
 
 describe('PATCH /api/config — path allowlist', () => {
@@ -81,5 +91,23 @@ describe('PATCH /api/config — path allowlist', () => {
 	it('rejects non-string path (400)', async () => {
 		await expect(call({ path: 42, value: 1 })).rejects.toMatchObject({ status: 400 });
 		await expect(call({ value: 1 })).rejects.toMatchObject({ status: 400 });
+	});
+
+	it('rejects unauthenticated requests (401) — bearer gate runs before path validation', async () => {
+		const req = new Request('http://x.local/api/config', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ path: 'atmosphere.clouds.density', value: 1 }),
+		});
+		await expect(
+			PATCH({ request: req } as unknown as Parameters<typeof PATCH>[0]) as Promise<Response>,
+		).rejects.toMatchObject({ status: 401 });
+		expect(publishSpy).not.toHaveBeenCalled();
+	});
+
+	it('fails closed (503) when AERO_ADMIN_TOKEN is unset', async () => {
+		delete process.env.AERO_ADMIN_TOKEN;
+		await expect(call({ path: 'atmosphere.clouds.density', value: 1 })).rejects.toMatchObject({ status: 503 });
+		expect(publishSpy).not.toHaveBeenCalled();
 	});
 });
