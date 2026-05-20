@@ -15,6 +15,19 @@ unclutter -idle 0.1 -root &
 
 mkdir -p /home/pi/.cache/aero-tiles
 
+# --no-sandbox: required on Pi 5 Bookworm with Chromium's default AppArmor
+# profile, which denies the user-namespace sandbox. The kiosk browses only
+# localhost (the Bun server on :5173) with no user-facing keyboard/mouse
+# beyond the shift-T telemetry toggle — attack surface is the LAN-posted
+# admin REST endpoints (authenticated).
+#
+# Mitigations:
+#   - Network-isolate the Pi VLAN if the physical environment permits.
+#   - On Pi OS releases where user namespaces are enabled, remove this flag
+#     and test Cesium rendering (WebGL may need --enable-webgl + --ignore-gpu-blocklist).
+#   - Ensure AERO_ADMIN_TOKEN is set in /opt/zyeta-aero/config.env.
+#
+# Refs: https://chromium.googlesource.com/chromium/src/+/main/docs/linux/sandboxing.md
 exec /usr/bin/chromium \
   --kiosk \
   --noerrdialogs --disable-infobars \

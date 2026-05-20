@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { publish, subscribe, subscriberCount, type SseEvent } from '$lib/fleet/sse-bus.server';
+import { publish, subscribe, subscriberCount, replayTo, bufferSize, clearBuffer, type SseEvent } from '$lib/fleet/sse-bus.server';
 
 describe('sse-bus', () => {
 	// The bus is module-scope, shared across tests. Each test cleans up its
@@ -7,6 +7,7 @@ describe('sse-bus', () => {
 	// exported (and we don't want one: the subscriber set IS the truth).
 	beforeEach(() => {
 		expect(subscriberCount()).toBe(0);
+		clearBuffer();
 	});
 
 	it('publish with no subscribers is a no-op', () => {
@@ -61,5 +62,60 @@ describe('sse-bus', () => {
 		expect(bReceived).toHaveLength(2);
 
 		unsubB();
+	});
+
+	describe('event buffer', () => {
+		beforeEach(() => clearBuffer());
+
+		it('buffers config_patch events', () => {
+			publish({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			expect(bufferSize()).toBe(1);
+		});
+
+		it('buffers command events', () => {
+			publish({ type: 'command', data: { type: 'set_scene', location: 'dubai' } });
+			expect(bufferSize()).toBe(1);
+		});
+
+		it('does not buffer non-replayable events', () => {
+			publish({ type: 'ping', data: null });
+			expect(bufferSize()).toBe(0);
+		});
+
+		it('replayTo delivers buffered events in insertion order', () => {
+			publish({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			publish({ type: 'command', data: { type: 'set_scene' } });
+			publish({ type: 'config_patch', data: { path: 'b', value: 2 } });
+
+			const received: SseEvent[] = [];
+			replayTo((ev) => received.push(ev));
+
+			expect(received).toHaveLength(3);
+			expect(received[0]).toEqual({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			expect(received[1]).toEqual({ type: 'command', data: { type: 'set_scene' } });
+			expect(received[2]).toEqual({ type: 'config_patch', data: { path: 'b', value: 2 } });
+		});
+
+		it('ring buffer evicts oldest when capacity exceeded', () => {
+			// Fill past BUFFER_SIZE (32).
+			for (let i = 0; i < 40; i++) {
+				publish({ type: 'config_patch', data: { path: 'x', value: i } });
+			}
+			expect(bufferSize()).toBe(32);
+
+			// First 8 should have been evicted; buffer holds 8..39.
+			const received: SseEvent[] = [];
+			replayTo((ev) => received.push(ev));
+			expect(received).toHaveLength(32);
+			expect((received[0].data as { value: number }).value).toBe(8);
+			expect((received[31].data as { value: number }).value).toBe(39);
+		});
+
+		it('clearBuffer empties the buffer', () => {
+			publish({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			expect(bufferSize()).toBe(1);
+			clearBuffer();
+			expect(bufferSize()).toBe(0);
+		});
 	});
 });

@@ -42,3 +42,4 @@ data/
 
 # graphify knowledge-graph output (regenerable)
 graphify-out/
+src/graphify-out/

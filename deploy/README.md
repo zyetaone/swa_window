@@ -47,7 +47,7 @@ sudo systemctl start aero-xserver aero-app aero-kiosk
 1. `provision-pi.sh` does **not** clone the repo. The checkout still needs to exist at `/opt/zyeta-aero/app` before provisioning.
 2. `provision-pi.sh` does **not** build the app. If `build/handler.js` is missing, `server.ts` falls back to WebSocket-only mode and the kiosk page will not render.
 3. Bun installation still needs a follow-up pass: the provisioner installs Bun for the invoking user, while `aero-app.service` currently expects `/home/kiosk/.bun/bin/bun`.
-4. Chromium is launched with `--no-sandbox`. Review that before using these scripts outside a trusted kiosk environment.
+4. Chromium is launched with `--no-sandbox`. Required on Pi 5 Bookworm where the default AppArmor profile denies user namespaces. Mitigations: (a) network-isolate the Pi VLAN, (b) always set `AERO_ADMIN_TOKEN` in `/opt/zyeta-aero/config.env`, (c) on future Pi OS releases that enable user namespaces, test Cesium rendering without the flag and remove it. The kiosk browses only localhost; admin endpoints are bearer-auth gated.
 5. Fleet update reporting is best-effort only; the updater swallows network failures when `AERO_FLEET_SERVER` is set.
 
 ## Tile tooling status

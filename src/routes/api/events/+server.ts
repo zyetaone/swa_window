@@ -11,7 +11,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { subscribe, type SseEvent } from '$lib/fleet/sse-bus.server';
+import { subscribe, replayTo, type SseEvent } from '$lib/fleet/sse-bus.server';
 
 export const GET: RequestHandler = () => {
 	let unsubscribe: (() => void) | null = null;
@@ -27,6 +27,13 @@ export const GET: RequestHandler = () => {
 
 			// Open the stream with a connected event so EventSource.onopen fires.
 			write(`event: connected\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
+
+			// Replay buffered events from before the browser connected.
+			// Covers the page-reload gap where REST endpoints published
+			// config_patch / command events with no subscriber attached.
+			replayTo((ev: SseEvent) => {
+				write(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);
+			});
 
 			unsubscribe = subscribe((ev: SseEvent) => {
 				write(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);

@@ -64,6 +64,7 @@ export function subscribe(fn: Callback): () => void {
 
 	return () => {
 		subscribers.delete(fn);
+		errorCounts.delete(fn); // prevent stale entries from lingering
 		if (subscribers.size === 0) stop();
 	};
 }
