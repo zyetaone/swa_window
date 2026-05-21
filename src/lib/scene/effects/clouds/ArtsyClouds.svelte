@@ -235,10 +235,15 @@ const altitudeShift = $derived.by(() => {
 	return Math.max(-15, Math.min(12, shift));
 });
 
-// Environment-responsive color filter
+// Environment-responsive color filter.
+// Phase 15.5 retune: saturate dropped from 0.4 → 0.05 at deep night. The
+// Phase 15.5 navy-backdrop shader made the previous hue-rotate(210deg) +
+// saturate(0.4) combo read as visible violet/magenta blobs over lit
+// terrain. Keeping a slight 200° rotation preserves the cool-moonlight
+// intent without saturating into purple.
 const envFilter = $derived.by(() => {
-	if (nightFactor > 0.6) return 'brightness(0.35) saturate(0.4) hue-rotate(210deg)';
-	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.5}) saturate(${1 - nightFactor * 0.25}) hue-rotate(${nightFactor * 30}deg)`;
+	if (nightFactor > 0.6) return 'brightness(0.3) saturate(0.05) hue-rotate(200deg)';
+	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.5}) saturate(${(1 - nightFactor * 0.25) * 0.3}) hue-rotate(${nightFactor * 12}deg)`;
 	// Golden hour: push warm strongly. Dawn skews yellow-gold; dusk skews
 	// orange-red. Sepia + hue-rotate together give a painterly glow rather
 	// than a flat tint wash.
