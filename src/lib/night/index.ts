@@ -63,24 +63,10 @@ export const T = {
  */
 export const CAR_LIGHTS_NIGHT_THRESHOLD = 0.2;
 
-/**
- * VIIRS night-lights alpha is gated by smoothstep(FLOOR, CEIL, nightFactor).
- * FLOOR=0.55 means pre-dawn/dusk nightFactor values (0.3..0.55 range)
- * keep VIIRS fully zero, avoiding magenta leak through colorToAlpha on
- * bright city cores. CEIL=0.9 reaches full VIIRS alpha at deep night.
- */
-export const VIIRS_SMOOTHSTEP_FLOOR = 0.55;
-export const VIIRS_SMOOTHSTEP_CEIL = 0.9;
-
-/**
- * Cap on VIIRS alpha even at deep night. The NASA Black Marble tiles are
- * blocky and would paint a uniform amber wash at 1.0 — capping at 0.5
- * keeps them reading as "lit terrain" on top of the CartoDB dark base.
- */
-export const VIIRS_MAX_ALPHA = 0.5;
-
-// (Phase 15.5: NIGHT_MAP_SMOOTHSTEP_FLOOR/CEIL removed — the CartoDB Dark
-//  imagery overlay they gated is now a shader mix() in COLOR_GRADING_GLSL.
-//  The 0.45→0.9 ramp lives inline in that shader so the "atmospheric
-//  darkening 30+ min before city lights" beat is preserved without a
-//  duplicated constant.)
+// (Phase 11: VIIRS_MAX_ALPHA + smoothstep thresholds + the palette globe
+//  colour + sky shifts + exposure / atmosphereLight day anchors all moved
+//  to $content/compositions/night.ts — the night targets now live in one
+//  authored table. compose.ts reads from NIGHT_PALETTE rather than from
+//  scattered constants here.)
+// (Phase 15.5: CartoDB Dark imagery overlay gates were also dropped —
+//  shader's mix() in COLOR_GRADING_GLSL carries that ramp now.)

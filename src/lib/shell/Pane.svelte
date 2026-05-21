@@ -15,6 +15,7 @@
 	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
+	import { NIGHT_PALETTE } from "$content/compositions/night";
 	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
@@ -185,9 +186,9 @@
 						model.nightFactor
 						* model.nightLightScale
 						* model.currentLocation.scene.nightLightDensity
-						* 0.55,
+						* NIGHT_PALETTE.warmGlow.peak,
 						0,
-						0.55,
+						NIGHT_PALETTE.warmGlow.peak,
 					)}
 				></div>
 			</div>

@@ -9,12 +9,8 @@ import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { normalizeHeading, shortestAngleDelta, lerp, smoothstep, clamp } from '$lib/utils';
-import {
-	VIIRS_SMOOTHSTEP_FLOOR,
-	VIIRS_SMOOTHSTEP_CEIL,
-	VIIRS_MAX_ALPHA,
-	T,
-} from '$lib/night';
+import { T } from '$lib/night';
+import { NIGHT_PALETTE } from '$content/compositions/night';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -508,25 +504,28 @@ export class CesiumManager {
 		if (v.scene.skyBox)
 			(v.scene.skyBox as any).show = true;
 
-		let r = lerp(140, 25, nf); let g = lerp(170, 25, nf); let b = lerp(200, 40, nf);
-		// Gentle dusk correction — softer than 0.3 to avoid overly brownish globe.
-		r = lerp(r, 110, dd * 0.15); g = lerp(g, 90, dd * 0.15); b = lerp(b, 80, dd * 0.15);
+		// Globe color: lerp day → night by nightFactor, then bias toward
+		// duskBias proportional to dawnDuskFactor × duskWeight. Targets live
+		// in $content/compositions/night.ts — edit there, not here.
+		const G = NIGHT_PALETTE.globeColor;
+		let r = lerp(lerp(G.day[0], G.night[0], nf), G.duskBias[0], dd * G.duskWeight);
+		let g = lerp(lerp(G.day[1], G.night[1], nf), G.duskBias[1], dd * G.duskWeight);
+		let b = lerp(lerp(G.day[2], G.night[2], nf), G.duskBias[2], dd * G.duskWeight);
 		const colorKey = `${r},${g},${b}`;
 		if (colorKey !== this.lastGlobeColor) {
 			this.lastGlobeColor = colorKey;
 			v.scene.globe.baseColor = C.Color.fromBytes(Math.round(r), Math.round(g), Math.round(b), 255);
 		}
 
-		// Cesium skyAtmosphere — nudge saturation slightly at dawn/dusk to
-		// reduce any residual cyan limb banding. Earlier code used -dd*0.5
-		// which over-desaturated the atmosphere exactly when warm sunset colors
-		// should be most vivid (Cesium's own sun-position scatter produces the
-		// orange/amber glow — crushing saturation by 0.5+ killed it). The small
-		// -dd*0.08 correction handles the cyan edge case without destroying warmth.
-		const satShift = lerp(0, -0.8, nf) - dd * 0.08;
-		// Phase 9 skyDarken — multiplies the base -0.3 × nf curve so operators
-		// can darken sky further on-site (default 1.6 = 60% deeper than prod).
-		const brShift = (lerp(0, -0.3, nf) * this.model.config.world.skyDarken) - dd * 0.02;
+		// Cesium skyAtmosphere — saturation + brightness shift. Lerps day →
+		// night by nightFactor, then ADDS dawn/dusk bias (negative — pulls
+		// saturation slightly down to cancel cyan limb banding, brightness
+		// slightly down for the blue-hour beat). brightness ALSO scaled by
+		// world.skyDarken (operator on-site knob). Targets in NIGHT_PALETTE.
+		const S = NIGHT_PALETTE.skyAtmosphere;
+		const satShift = lerp(S.satShift.day, S.satShift.night, nf) + dd * S.satShift.duskBias;
+		const brShift = (lerp(S.brShift.day, S.brShift.night, nf) * this.model.config.world.skyDarken)
+			+ dd * S.brShift.duskBias;
 		if (Math.abs(satShift - this.lastSkySatShift) > 0.01) {
 			this.lastSkySatShift = satShift;
 			if (v.scene.skyAtmosphere) {
@@ -608,14 +607,15 @@ export class CesiumManager {
 			}
 		}
 
-		// Exposure lerp: day-neutral 1.0 → world.nightExposure as nf increases.
+		// Exposure + atmosphereLight lerps. Day anchors live in NIGHT_PALETTE;
+		// night targets are operator-tunable so we read from world config.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(v.scene.postProcessStages as any).exposure = 1.0 + (w.nightExposure - 1.0) * nf;
-
-		// AtmosphereLight lerp: Cesium default 10.0 → world.atmosphereLight as
-		// nf increases. Tames the bright horizon bleed at deep night.
+		(v.scene.postProcessStages as any).exposure
+			= NIGHT_PALETTE.scene.exposureDay + (w.nightExposure - NIGHT_PALETTE.scene.exposureDay) * nf;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(v.scene.globe as any).atmosphereLightIntensity = 10.0 + (w.atmosphereLight - 10.0) * nf;
+		(v.scene.globe as any).atmosphereLightIntensity
+			= NIGHT_PALETTE.scene.atmosphereLightDay
+			+ (w.atmosphereLight - NIGHT_PALETTE.scene.atmosphereLightDay) * nf;
 	}
 
 	private syncTerrainExaggeration(): void {
@@ -663,8 +663,9 @@ export class CesiumManager {
 		// produced on bright city cores at early dusk. Thresholds + cap live
 		// in $lib/night for discoverability.
 		if (this.viirsLayer) {
+			const V = NIGHT_PALETTE.viirs;
 			const viirsEase = smoothstep(
-				(nf - VIIRS_SMOOTHSTEP_FLOOR) / (VIIRS_SMOOTHSTEP_CEIL - VIIRS_SMOOTHSTEP_FLOOR),
+				(nf - V.smoothstepFloor) / (V.smoothstepCeil - V.smoothstepFloor),
 			);
 			// Phase 6 (altitude-gate VIIRS): smoothstep gate fades VIIRS to
 			// zero below 5kft so the building emissive (Phase 3) and future
@@ -678,7 +679,7 @@ export class CesiumManager {
 			// night map punches through the navy-mix that the new shader's
 			// lightMask still gates. Lerped by nf so day = no boost.
 			const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
-			const viirsAlpha = Math.min(VIIRS_MAX_ALPHA * viirsEase * scale * altGate * boost, 1.0);
+			const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0);
 			this.viirsLayer.show = (show || firstNight) && viirsAlpha > 0.001;
 			this.viirsLayer.alpha = viirsAlpha;
 			// Phase 10 — viirsBrightness rewritten per-frame so the admin
