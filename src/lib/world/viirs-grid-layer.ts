@@ -23,9 +23,10 @@
 import type * as CesiumType from 'cesium';
 
 const CANVAS_SIZE = 2048;             // higher res so blocks read crisp from cruise altitude
-const GRID = 96;                       // cells per axis — perceptual block density
-const RECT_RADIUS_DEG = 1.2;           // half-extent of the rectangle in degrees (smaller = blocks read smaller)
-const BLOCK_WIDTH_FRACTION = 0.4;      // narrow stripes — leave gaps between buildings
+const GRID = 48;                       // cells per axis — fewer + bigger = discrete blocks read better at distance
+const RECT_RADIUS_DEG = 1.5;           // half-extent of the rectangle in degrees
+const BLOCK_WIDTH_FRACTION = 0.35;     // narrow stripes — leave gaps between buildings
+const COLOR_HDR_GAIN = 1.6;            // canvas paints bright cells; ACES tonemap maps overshoot to glow
 
 /**
  * Paint the city-block intensity field into the given canvas. Deterministic
@@ -42,6 +43,13 @@ function paintGrid(canvas: HTMLCanvasElement, lat: number, lon: number, density:
 	ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 	if (density < 0.02) return;
 
+	// Additive blend INSIDE the canvas — overlapping blocks brighten each
+	// other (rare with our grid, but the more important effect is that
+	// transparent background stays transparent: only painted cells contribute
+	// to the texture, so Cesium's alpha blend treats unlit cells as
+	// fully-skip rather than as dim-tint.
+	ctx.globalCompositeOperation = 'lighter';
+
 	const cellW = CANVAS_SIZE / GRID;
 	const cellH = CANVAS_SIZE / GRID;
 
@@ -56,7 +64,7 @@ function paintGrid(canvas: HTMLCanvasElement, lat: number, lon: number, density:
 			) * 43758.5453;
 			const r = seed - Math.floor(seed);
 			const intensity = Math.pow(r, 2.2) * density;
-			if (intensity < 0.1) continue;
+			if (intensity < 0.15) continue;   // raised threshold — fewer, more deliberate cells
 
 			// 3-stop warm palette — sodium → amber → warm-white. Mirrors the
 			// shader so the procedural tiles + shader palette + VIIRS raster
@@ -74,20 +82,21 @@ function paintGrid(canvas: HTMLCanvasElement, lat: number, lon: number, density:
 				B = Math.round(51 + (102 - 51) * t);
 			}
 
-			const alpha = Math.min(1, intensity * 1.2);
+			// Full alpha — additive composite means alpha is the contribution
+			// strength, and we want lit cells fully present. Intensity drives
+			// COLOR brightness rather than alpha.
 			const x = cx * cellW;
 			const y = cy * cellH;
 			const w = cellW * BLOCK_WIDTH_FRACTION;
-			// Y-dynamic block height — intensity drives how tall the stripe is.
 			const h = cellH * (0.25 + intensity * 0.85);
 
-			// Sharp blocks, no canvas shadow blur — at cruise altitude any
-			// shadow smudges the grid into a wash. The shader's bloom pass
-			// will halo bright pixels in post.
-			ctx.fillStyle = `rgba(${R}, ${G}, ${B}, ${alpha.toFixed(2)})`;
+			ctx.fillStyle = `rgba(${R}, ${G}, ${B}, 1)`;
 			ctx.fillRect(x, y, w, h);
 		}
 	}
+
+	// Restore default composite for next paint cycle.
+	ctx.globalCompositeOperation = 'source-over';
 }
 
 export class ViirsGridLayer {
@@ -137,16 +146,25 @@ export class ViirsGridLayer {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const C = this.C as any;
 
+		// HDR color multiplier — push the brightness above 1.0 so painted
+		// cells overshoot into HDR, which the ACES tonemap in compose.ts maps
+		// to glow rather than clipping. Without this, full-bright canvas
+		// cells (255 amber) render at the same brightness as the underlying
+		// terrain at 255 — no perceptual additive effect.
+		const colorR = COLOR_HDR_GAIN;
+		const colorG = COLOR_HDR_GAIN;
+		const colorB = COLOR_HDR_GAIN;
+
 		if (!this.entity) {
 			// First mount — create the dataSource + entity once. Subsequent
-			// updates just move the rectangle and toggle show/alpha.
+			// updates just move the rectangle, swap material (cheap), or
+			// toggle show.
 			//
 			// Why NOT classificationType: TERRAIN — Cesium classification
 			// only supports a small set of material types (Color, mostly).
 			// ImageMaterialProperty isn't on the list and throws RuntimeError
 			// at construction. We accept that the rectangle sits at ground
-			// altitude (0) instead of draping onto terrain bumps; the lat/lon
-			// footprint is what matters for the look anyway.
+			// altitude (0) instead of draping onto terrain bumps.
 			this.dataSource = new C.CustomDataSource('viirs-grid');
 			this.viewer.dataSources.add(this.dataSource);
 			this.entity = this.dataSource.entities.add({
@@ -160,10 +178,7 @@ export class ViirsGridLayer {
 					material: new C.ImageMaterialProperty({
 						image: this.canvas,
 						transparent: true,
-						// Per-image alpha multiplier — saturates with the
-						// canvas's own alpha values, so the warm cells'
-						// per-pixel alpha is preserved.
-						color: new C.Color(1, 1, 1, alpha),
+						color: new C.Color(colorR, colorG, colorB, alpha),
 					}),
 					height: 0,
 				},
@@ -179,11 +194,10 @@ export class ViirsGridLayer {
 					lat + RECT_RADIUS_DEG,
 				);
 			}
-			// Always update alpha — cheap, no texture re-upload.
 			this.entity.rectangle.material = new C.ImageMaterialProperty({
 				image: this.canvas,
 				transparent: true,
-				color: new C.Color(1, 1, 1, alpha),
+				color: new C.Color(colorR, colorG, colorB, alpha),
 			});
 		}
 	}

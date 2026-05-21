@@ -13,6 +13,7 @@ import { T } from '$lib/night';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { ViirsGridLayer } from './viirs-grid-layer';
 import { LightningStage } from './lightning-stage';
+import { CloudBillboardLayer } from './cloud-billboard-layer';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -78,6 +79,7 @@ interface CesiumModelView {
 		world: WorldConfig;
 		atmosphere: {
 			haze: { amount: number };
+			clouds: { density: number; speed: number; layerCount: number };
 			weather: {
 				hasLightning: boolean;
 				lightningDecayRate: number;
@@ -146,6 +148,10 @@ export class CesiumManager {
 	// pane. The stage decides scene-wide brightness; the composition picker
 	// still authors timing / intensity / strike-position recipes.
 	private lightningStage: LightningStage | null = null;
+	// Path 1 cloud migration — Cesium-native billboard clouds behind the
+	// world.useCesiumClouds flag. Default OFF; the existing CSS3D clouds
+	// keep shipping until billboards look right.
+	private cloudBillboardLayer: CloudBillboardLayer | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
@@ -256,6 +262,8 @@ export class CesiumManager {
 		this.viirsGridLayer = new ViirsGridLayer(C, v);
 		this.lightningStage = new LightningStage(C, v);
 		this.lightningStage.mount();
+		this.cloudBillboardLayer = new CloudBillboardLayer(C, v);
+		this.cloudBillboardLayer.mount();
 
 		// Set Cesium clock to model time on first frame so sun position is
 		// right from the start (otherwise we render with wall-clock UTC
@@ -469,9 +477,28 @@ export class CesiumManager {
 		this.syncTerrainExaggeration();
 		this.syncImagery();
 		this.syncViirsGrid();
+		this.syncCloudBillboards();
 		this.syncLightning(dt);
 		this.syncBuildings();
 		this.syncQuality();
+	}
+
+	/**
+	 * Drive the Cesium-native cloud billboards. No-op when
+	 * world.useCesiumClouds is false (the default). Repaints only when
+	 * (location|weather|density|altitude-bucket) crosses a step.
+	 */
+	private syncCloudBillboards(): void {
+		if (!this.cloudBillboardLayer) return;
+		const m = this.model;
+		this.cloudBillboardLayer.update(
+			m.flight.lat,
+			m.flight.lon,
+			m.weather,
+			m.config.atmosphere.clouds.density,
+			m.flight.altitude,
+			m.config.world.useCesiumClouds,
+		);
 	}
 
 	/**
@@ -854,6 +881,10 @@ export class CesiumManager {
 		if (this.lightningStage) {
 			this.lightningStage.destroy();
 			this.lightningStage = null;
+		}
+		if (this.cloudBillboardLayer) {
+			this.cloudBillboardLayer.destroy();
+			this.cloudBillboardLayer = null;
 		}
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {

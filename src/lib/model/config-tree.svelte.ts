@@ -275,6 +275,11 @@ export const world = $state({
 	viirsAltGateLowFt: 5000,
 	viirsAltGateHighFt: 15000,
 	showClouds: true,
+	// Phase 11c (path 1 of Earth/Sky/Pane migration): cloud billboards
+	// as Cesium primitives instead of CSS3D DOM sprites. Default OFF so
+	// the existing artsy DOM clouds keep shipping until the billboards
+	// look right side-by-side; flip to true to test.
+	useCesiumClouds: false,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
 });
