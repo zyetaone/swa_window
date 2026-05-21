@@ -220,13 +220,8 @@ export const world = $state({
 	// the shader's COLOR_GRADING_GLSL handles all darkening via mix(rgb,
 	// navy, smoothstep(0.45, 0.9, nf) * 0.85).
 	baseNightSaturation: 0.05,
-	// (CartoDB Dark imagery overlay removed in Phase 15.5. nightAlpha,
-	// nightBrightness, nightContrast were the per-frame knobs that gated
-	// it — orphaned. Slated for removal in Phase 7. Kept for one commit
-	// to avoid breaking any in-flight admin payloads referencing them.)
-	nightAlpha: 0.8,
-	nightBrightness: 1.6,
-	nightContrast: 1.6,
+	// nightLightIntensity multiplies VIIRS alpha (and the shader's pollution
+	// corona) — the operator's "how lit do cities feel" knob.
 	nightLightIntensity: 0.6,
 	// Bloom post-process — high contrast + negative brightness means only the
 	// top of the luminance range blooms. Sigma controls the Gaussian spread.
