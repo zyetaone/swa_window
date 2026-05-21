@@ -17,12 +17,13 @@
  * schedule the applyScene at transitionAtMs so all Pis flip together.
  */
 
-import type { FleetClientModel, DisplayConfig } from '$lib/fleet/protocol';
+import type { FleetClientModel } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
-import { isValidWeather, isValidDisplayMode, isValidDeviceRole } from '$lib/types';
+import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType, type QualityMode } from '$lib/types';
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor } from '$lib/fleet/peer-url';
+import { clamp } from '$lib/utils';
 import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
@@ -222,14 +223,21 @@ export class DeviceClient {
 				break;
 			}
 			case 'set_config': {
-				// Flat DisplayConfig coming from admin via /api/command. Routed
-				// through the DTO adapter (applyPatch), which validates each
-				// field via the typed setters internally — so a partial /
-				// malformed patch is safe here. Per-field guards live in
-				// model.applyPatch.
-				const patch = msg.patch;
-				if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
-					this.#model.applyPatch(patch as Partial<DisplayConfig>);
+				// Legacy flat DisplayConfig → decomposed into typed setter calls
+				// (altitude/time/weather/flightSpeed have side effects) and
+				// path-targeted patches (cloud density, haze, lights, etc.).
+				const p = msg.patch;
+				if (p && typeof p === 'object' && !Array.isArray(p)) {
+					const d = p as Record<string, unknown>;
+					if (typeof d.altitude === 'number') this.#model.setAltitude(d.altitude);
+					if (typeof d.timeOfDay === 'number') this.#model.setTime(d.timeOfDay);
+					if (typeof d.weather === 'string') this.#model.applyScene(this.#model.location, d.weather as WeatherType);
+					if (typeof d.flightSpeed === 'number') this.#model.setFlightSpeed(d.flightSpeed);
+					if (typeof d.syncToRealTime === 'boolean') this.#model.syncToRealTime = d.syncToRealTime;
+					if (typeof d.cloudDensity === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
+					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
+					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
+					if (typeof d.qualityMode === 'string') this.#model.setQualityMode(d.qualityMode as QualityMode);
 				}
 				break;
 			}

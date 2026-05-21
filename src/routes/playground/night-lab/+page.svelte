@@ -1,11 +1,11 @@
 <script lang="ts">
 	/**
 	 * /playground/night-lab — visual A/B comparison harness for night-light
-	 * rendering variants.
+	 * rendering variants with LIVE TUNABLE SETTINGS.
 	 *
 	 * Camera is pinned over Hyderabad at 22:00, autopilot off, full-bleed.
-	 * Toggle through five variants live to compare bloom + emissive strategies
-	 * against the production baseline. No shell, no fleet, no commit.
+	 * Toggle through five variants live, and tweak per-variant parameters
+	 * in real-time. No shell, no fleet, no commit.
 	 *
 	 * IMPORTANT: This route MUST NOT mutate production renderer code. All
 	 * variant logic is confined here. Building tileset access is via primitive
@@ -16,7 +16,8 @@
 	import { subscribe } from '$lib/game-loop';
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import { activeCesium } from '$lib/world/active.svelte';
-	import { clamp, smoothstep } from '$lib/utils';
+	import { clamp } from '$lib/utils';
+	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
 
 	type VariantId = 'A' | 'B' | 'C' | 'D' | 'E';
 
@@ -72,10 +73,122 @@
 
 	let variant = $state<VariantId>('A');
 
+	// ─── Global tunables (always visible) ─────────────────────────────────────
+
+	const GLOBAL_DEFAULTS = { timeOfDay: 22.0, altitude: 28000 };
+	const globals = $state({ ...GLOBAL_DEFAULTS });
+
+	// Push globals → model when they change.
+	$effect(() => {
+		const tod = globals.timeOfDay;
+		untrack(() => {
+			model.applyConfigPatch('director.daylight.manualTimeOfDay', tod);
+			model.timeOfDay = tod;
+		});
+	});
+	$effect(() => {
+		const alt = globals.altitude;
+		untrack(() => {
+			model.flight.altitude = alt;
+		});
+	});
+
+	// ─── Variant-specific tunables ────────────────────────────────────────────
+
+	const A_DEFAULTS = {
+		bloomContrast: 128,
+		bloomBrightness: -0.3,
+		bloomSigma: 2.2,
+		nightLightIntensity: 0.6,
+		baseNightBrightness: 0.15,
+		baseNightSaturation: 0.05,
+	};
+	const tunablesA = $state({ ...A_DEFAULTS });
+
+	const B_DEFAULTS = {
+		luminanceThreshold: 0.5,
+		bloomIntensity: 1.0,
+		tapRadius: 2,
+	};
+	const tunablesB = $state({ ...B_DEFAULTS });
+
+	const C_DEFAULTS = {
+		sigma: 4.5,
+		contrast: 96,
+		brightness: -0.3,
+	};
+	const tunablesC = $state({ ...C_DEFAULTS });
+
+	const D_DEFAULTS = {
+		emissiveIntensity: 0.6,
+		emissiveR: 255,
+		emissiveG: 180,
+		emissiveB: 90,
+	};
+	const tunablesD = $state({ ...D_DEFAULTS });
+
+	const E_DEFAULTS = {
+		lowAltitudeFt: 15000,
+		highAltitudeFt: 25000,
+		viirsDimMin: 0.3,
+		buildingEmissiveMax: 0.6,
+	};
+	const tunablesE = $state({ ...E_DEFAULTS });
+
+	// Variant A drives prod config values directly via applyConfigPatch.
+	// Push tunablesA → world config whenever they change AND variant is A.
+	$effect(() => {
+		if (variant !== 'A') return;
+		// Reactive reads on every tunable
+		const c = tunablesA.bloomContrast;
+		const b = tunablesA.bloomBrightness;
+		const s = tunablesA.bloomSigma;
+		const nli = tunablesA.nightLightIntensity;
+		const bnb = tunablesA.baseNightBrightness;
+		const bns = tunablesA.baseNightSaturation;
+		untrack(() => {
+			model.applyConfigPatch('world.bloomContrast', c);
+			model.applyConfigPatch('world.bloomBrightness', b);
+			model.applyConfigPatch('world.bloomSigma', s);
+			model.applyConfigPatch('world.nightLightIntensity', nli);
+			model.applyConfigPatch('world.baseNightBrightness', bnb);
+			model.applyConfigPatch('world.baseNightSaturation', bns);
+		});
+	});
+
 	// Reset camera helper — re-pins to defaults if it drifts (orbit still runs).
 	function resetCamera(): void {
 		model.setLocation('hyderabad');
-		model.flight.altitude = 28000;
+		globals.altitude = GLOBAL_DEFAULTS.altitude;
+	}
+
+	function resetVariantDefaults(): void {
+		switch (variant) {
+			case 'A':
+				Object.assign(tunablesA, A_DEFAULTS);
+				break;
+			case 'B':
+				Object.assign(tunablesB, B_DEFAULTS);
+				break;
+			case 'C':
+				Object.assign(tunablesC, C_DEFAULTS);
+				break;
+			case 'D':
+				Object.assign(tunablesD, D_DEFAULTS);
+				break;
+			case 'E':
+				Object.assign(tunablesE, E_DEFAULTS);
+				break;
+		}
+	}
+
+	function resetAll(): void {
+		Object.assign(globals, GLOBAL_DEFAULTS);
+		Object.assign(tunablesA, A_DEFAULTS);
+		Object.assign(tunablesB, B_DEFAULTS);
+		Object.assign(tunablesC, C_DEFAULTS);
+		Object.assign(tunablesD, D_DEFAULTS);
+		Object.assign(tunablesE, E_DEFAULTS);
 	}
 
 	// ─── Variant application via $effect ───────────────────────────────────────
@@ -138,16 +251,25 @@
 
 		if (v === 'A') {
 			// Baseline — restore everything to prod defaults (no-op beyond cleanup
-			// of any prior variant).
+			// of any prior variant). The Variant-A $effect above pushes the
+			// tunable values directly to the world config tree.
 		}
 
 		if (v === 'B') {
 			// Disable Cesium built-in bloom; add additive custom bloom AFTER aero-color-grade.
 			if (bloom) bloom.enabled = false;
 
+			// tapRadius is read as a float in the shader for simplicity; we step
+			// in integers via the slider (step:1) so casting to int inside GLSL
+			// would also work. Float-with-uniform is the lighter-touch path —
+			// less branching in the shader, and the offsets array indexing stays
+			// the same regardless.
 			const FS_BLOOM_AFTER_GRADE = `
 				uniform sampler2D colorTexture;
 				uniform float u_nightFactor;
+				uniform float u_luminanceThreshold;
+				uniform float u_bloomIntensity;
+				uniform float u_tapRadius;
 				in vec2 v_textureCoordinates;
 
 				void main() {
@@ -155,13 +277,13 @@
 					vec4 base = texture(colorTexture, uv);
 					vec2 px = vec2(1.0) / vec2(textureSize(colorTexture, 0));
 
-					// 9-tap star pattern at ±1, ±2, ±3 pixels along both axes.
+					// 9-tap star pattern at ±r, ±2r, ±3r pixels (r = u_tapRadius).
 					vec3 acc = vec3(0.0);
 					float wsum = 0.0;
-					float offsets[3] = float[3](1.0, 2.0, 3.0);
+					float scale = max(u_tapRadius, 1.0);
 					float weights[3] = float[3](0.4, 0.25, 0.12);
 					for (int i = 0; i < 3; ++i) {
-						float o = offsets[i];
+						float o = float(i + 1) * scale * 0.5;
 						float w = weights[i];
 						vec3 sH1 = texture(colorTexture, uv + vec2( o, 0.0) * px).rgb;
 						vec3 sH2 = texture(colorTexture, uv + vec2(-o, 0.0) * px).rgb;
@@ -172,12 +294,12 @@
 					}
 					vec3 blur = acc / max(wsum, 0.001);
 
-					// Threshold: luminance > 0.5 contributes.
+					// Threshold gate — lum > u_luminanceThreshold contributes.
 					float lum = dot(blur, vec3(0.2126, 0.7152, 0.0722));
-					float thresh = smoothstep(0.5, 0.8, lum);
+					float thresh = smoothstep(u_luminanceThreshold, min(u_luminanceThreshold + 0.3, 1.0), lum);
 					vec3 bloomColor = blur * thresh;
 
-					vec3 outRgb = base.rgb + bloomColor * 0.9 * u_nightFactor;
+					vec3 outRgb = base.rgb + bloomColor * u_bloomIntensity * u_nightFactor;
 					out_FragColor = vec4(outRgb, base.a);
 				}
 			`;
@@ -187,6 +309,10 @@
 					fragmentShader: FS_BLOOM_AFTER_GRADE,
 					uniforms: {
 						u_nightFactor: () => model.nightFactor,
+						u_luminanceThreshold: () => tunablesB.luminanceThreshold,
+						u_bloomIntensity: () => tunablesB.bloomIntensity,
+						// tapRadius is passed as float; GLSL multiplies into pixel offsets.
+						u_tapRadius: () => tunablesB.tapRadius,
 					},
 				});
 				viewer.scene.postProcessStages.add(stage);
@@ -197,13 +323,19 @@
 		}
 
 		if (v === 'C') {
-			// Wider Gaussian — softer broader halos.
+			// Wider Gaussian — softer broader halos. Live-tunable via tunablesC.
 			if (bloom) {
 				bloom.enabled = true;
-				if (bloom.uniforms) {
-					bloom.uniforms.sigma = 4.5;
-					bloom.uniforms.contrast = 96;
-				}
+				const updateBloomC = () => {
+					if (!bloom.uniforms) return;
+					bloom.uniforms.sigma = tunablesC.sigma;
+					bloom.uniforms.contrast = tunablesC.contrast;
+					bloom.uniforms.brightness = tunablesC.brightness;
+				};
+				updateBloomC();
+				const cb = () => updateBloomC();
+				viewer.scene.postRender.addEventListener(cb);
+				tickCallbacks.push(cb);
 			}
 		}
 
@@ -213,21 +345,44 @@
 				(tileset as { colorBlendMode?: unknown }).colorBlendMode =
 					Cesium.Cesium3DTileColorBlendMode.HIGHLIGHT;
 
+				// Track last-applied values to avoid rebuilding Cesium3DTileStyle
+				// every frame when nothing changed.
+				let lastEmissiveAlpha = -1;
+				let lastR = -1;
+				let lastG = -1;
+				let lastB = -1;
+
 				const updateStyle = () => {
 					const nf = model.nightFactor;
 					let emissiveAlpha: number;
+					let r: number;
+					let g: number;
+					let b: number;
 					if (v === 'D') {
-						emissiveAlpha = 0.6 * nf;
+						emissiveAlpha = tunablesD.emissiveIntensity * nf;
+						r = tunablesD.emissiveR;
+						g = tunablesD.emissiveG;
+						b = tunablesD.emissiveB;
 					} else {
-						const altBlend = clamp(
-							smoothstep((model.flight.altitude - 15000) / 10000),
-							0,
-							1,
-						);
-						emissiveAlpha = 0.6 * nf * (1 - altBlend);
+						const lo = tunablesE.lowAltitudeFt;
+						const hi = tunablesE.highAltitudeFt;
+						const altBlend = clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
+						emissiveAlpha = tunablesE.buildingEmissiveMax * nf * (1 - altBlend);
+						// E uses the prod warm amber; not separately tunable.
+						r = 255;
+						g = 180;
+						b = 90;
 					}
+					if (
+						Math.abs(emissiveAlpha - lastEmissiveAlpha) < 0.001 &&
+						r === lastR && g === lastG && b === lastB
+					) {
+						return;
+					}
+					lastEmissiveAlpha = emissiveAlpha;
+					lastR = r; lastG = g; lastB = b;
 					(tileset as { style?: unknown }).style = new Cesium.Cesium3DTileStyle({
-						color: `color("rgb(255, 180, 90)", ${emissiveAlpha.toFixed(3)})`,
+						color: `color("rgb(${r}, ${g}, ${b})", ${emissiveAlpha.toFixed(3)})`,
 					});
 				};
 
@@ -240,20 +395,15 @@
 			}
 
 			if (v === 'E') {
-				// Dim VIIRS at low altitude (alt × VIIRS, building × (1-alt)).
-				// We cannot easily reach viirsLayer (private). Instead, scale
-				// model.config.world.nightLightIntensity which CesiumManager
-				// reads as `nightLightScale` → multiplies VIIRS alpha. Save
-				// + restore the user's prior value.
+				// Dim VIIRS at low altitude via nightLightIntensity (which CesiumManager
+				// reads as nightLightScale → multiplies VIIRS alpha). Save + restore.
 				const priorIntensity = model.config.world.nightLightIntensity;
 				const updateNightIntensity = () => {
-					const altBlend = clamp(
-						smoothstep((model.flight.altitude - 15000) / 10000),
-						0,
-						1,
-					);
-					// VIIRS alpha × lerp(0.3, 1.0, altBlend) — feed through nightLightIntensity.
-					const target = 0.3 + 0.7 * altBlend;
+					const lo = tunablesE.lowAltitudeFt;
+					const hi = tunablesE.highAltitudeFt;
+					const dimMin = tunablesE.viirsDimMin;
+					const altBlend = clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
+					const target = dimMin + (1.0 - dimMin) * altBlend;
 					if (Math.abs(model.config.world.nightLightIntensity - target) > 0.01) {
 						model.applyConfigPatch('world.nightLightIntensity', target);
 					}
@@ -329,9 +479,53 @@
 	const altitudeFt = $derived(Math.round(model.flight.altitude));
 	const nfPct = $derived(Math.round(model.nightFactor * 100));
 
+	// Variant E readout: live altitudeBlend.
+	const altitudeBlend = $derived.by(() => {
+		if (variant !== 'E') return 0;
+		const lo = tunablesE.lowAltitudeFt;
+		const hi = tunablesE.highAltitudeFt;
+		return clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
+	});
+
 	onDestroy(() => {
 		// Model cleanup is handled by createAeroWindow lifecycle.
 	});
+
+	// ─── Slider input helpers ─────────────────────────────────────────────────
+	// RangeSlider passes back the raw input event; we read currentTarget.value.
+
+	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) {
+		globals.timeOfDay = parseFloat(e.currentTarget.value);
+	}
+	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) {
+		globals.altitude = parseFloat(e.currentTarget.value);
+	}
+
+	function setA<K extends keyof typeof tunablesA>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesA[k] = parseFloat(e.currentTarget.value) as (typeof tunablesA)[K];
+		};
+	}
+	function setB<K extends keyof typeof tunablesB>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesB[k] = parseFloat(e.currentTarget.value) as (typeof tunablesB)[K];
+		};
+	}
+	function setC<K extends keyof typeof tunablesC>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesC[k] = parseFloat(e.currentTarget.value) as (typeof tunablesC)[K];
+		};
+	}
+	function setD<K extends keyof typeof tunablesD>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesD[k] = parseFloat(e.currentTarget.value) as (typeof tunablesD)[K];
+		};
+	}
+	function setE<K extends keyof typeof tunablesE>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesE[k] = parseFloat(e.currentTarget.value) as (typeof tunablesE)[K];
+		};
+	}
 </script>
 
 <div class="lab">
@@ -342,9 +536,33 @@
 	<aside class="panel" aria-label="Variant comparison">
 		<header>
 			<h2>Night Lab</h2>
-			<p class="hint">Hyderabad · 22:00 · autopilot off · ultra quality</p>
+			<p class="hint">Hyderabad · autopilot off · ultra quality</p>
 		</header>
 
+		<!-- ── Global controls ──────────────────────────────────────────── -->
+		<fieldset class="globals">
+			<legend>Global</legend>
+			<RangeSlider
+				label="Time of day"
+				value={globals.timeOfDay}
+				min={15.0}
+				max={24.0}
+				step={0.25}
+				formatValue={(v) => `${v.toFixed(2)}h`}
+				oninput={onGlobalTime}
+			/>
+			<RangeSlider
+				label="Altitude"
+				value={globals.altitude}
+				min={10000}
+				max={65000}
+				step={500}
+				formatValue={(v) => `${Math.round(v).toLocaleString()} ft`}
+				oninput={onGlobalAlt}
+			/>
+		</fieldset>
+
+		<!-- ── Variant picker ───────────────────────────────────────────── -->
 		<fieldset class="variants" role="radiogroup" aria-label="Rendering variant">
 			<legend>Variant</legend>
 			{#each VARIANTS as v (v.id)}
@@ -365,11 +583,218 @@
 			{/each}
 		</fieldset>
 
+		<!-- ── Variant-specific tunables ────────────────────────────────── -->
+		<fieldset class="tunables">
+			<legend>Variant {variant} tunables</legend>
+
+			{#if variant === 'A'}
+				<RangeSlider
+					label="Bloom contrast"
+					value={tunablesA.bloomContrast}
+					min={32}
+					max={256}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setA('bloomContrast')}
+				/>
+				<RangeSlider
+					label="Bloom brightness"
+					value={tunablesA.bloomBrightness}
+					min={-1.0}
+					max={1.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setA('bloomBrightness')}
+				/>
+				<RangeSlider
+					label="Bloom sigma"
+					value={tunablesA.bloomSigma}
+					min={0.5}
+					max={8.0}
+					step={0.1}
+					formatValue={(v) => v.toFixed(1)}
+					oninput={setA('bloomSigma')}
+				/>
+				<RangeSlider
+					label="Night light intensity"
+					value={tunablesA.nightLightIntensity}
+					min={0.0}
+					max={2.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setA('nightLightIntensity')}
+				/>
+				<RangeSlider
+					label="Base night brightness"
+					value={tunablesA.baseNightBrightness}
+					min={0.0}
+					max={0.5}
+					step={0.01}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setA('baseNightBrightness')}
+				/>
+				<RangeSlider
+					label="Base night saturation"
+					value={tunablesA.baseNightSaturation}
+					min={0.0}
+					max={0.5}
+					step={0.01}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setA('baseNightSaturation')}
+				/>
+			{:else if variant === 'B'}
+				<RangeSlider
+					label="Luminance threshold"
+					value={tunablesB.luminanceThreshold}
+					min={0.0}
+					max={1.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setB('luminanceThreshold')}
+				/>
+				<RangeSlider
+					label="Bloom intensity"
+					value={tunablesB.bloomIntensity}
+					min={0.0}
+					max={3.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setB('bloomIntensity')}
+				/>
+				<RangeSlider
+					label="Tap radius"
+					value={tunablesB.tapRadius}
+					min={1}
+					max={5}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setB('tapRadius')}
+				/>
+			{:else if variant === 'C'}
+				<RangeSlider
+					label="Sigma"
+					value={tunablesC.sigma}
+					min={1.0}
+					max={8.0}
+					step={0.1}
+					formatValue={(v) => v.toFixed(1)}
+					oninput={setC('sigma')}
+				/>
+				<RangeSlider
+					label="Contrast"
+					value={tunablesC.contrast}
+					min={32}
+					max={256}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setC('contrast')}
+				/>
+				<RangeSlider
+					label="Brightness"
+					value={tunablesC.brightness}
+					min={-1.0}
+					max={1.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setC('brightness')}
+				/>
+			{:else if variant === 'D'}
+				<RangeSlider
+					label="Emissive intensity"
+					value={tunablesD.emissiveIntensity}
+					min={0.0}
+					max={1.5}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setD('emissiveIntensity')}
+				/>
+				<RangeSlider
+					label="Emissive R"
+					value={tunablesD.emissiveR}
+					min={0}
+					max={255}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setD('emissiveR')}
+				/>
+				<RangeSlider
+					label="Emissive G"
+					value={tunablesD.emissiveG}
+					min={0}
+					max={255}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setD('emissiveG')}
+				/>
+				<RangeSlider
+					label="Emissive B"
+					value={tunablesD.emissiveB}
+					min={0}
+					max={255}
+					step={1}
+					formatValue={(v) => v.toFixed(0)}
+					oninput={setD('emissiveB')}
+				/>
+				<div class="swatch" style="background: rgb({tunablesD.emissiveR}, {tunablesD.emissiveG}, {tunablesD.emissiveB})">
+					emissive preview
+				</div>
+			{:else if variant === 'E'}
+				<RangeSlider
+					label="Low altitude (ft)"
+					value={tunablesE.lowAltitudeFt}
+					min={5000}
+					max={20000}
+					step={500}
+					formatValue={(v) => `${Math.round(v).toLocaleString()}`}
+					oninput={setE('lowAltitudeFt')}
+				/>
+				<RangeSlider
+					label="High altitude (ft)"
+					value={tunablesE.highAltitudeFt}
+					min={20000}
+					max={40000}
+					step={500}
+					formatValue={(v) => `${Math.round(v).toLocaleString()}`}
+					oninput={setE('highAltitudeFt')}
+				/>
+				<RangeSlider
+					label="VIIRS dim min"
+					value={tunablesE.viirsDimMin}
+					min={0.0}
+					max={1.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setE('viirsDimMin')}
+				/>
+				<RangeSlider
+					label="Building emissive max"
+					value={tunablesE.buildingEmissiveMax}
+					min={0.0}
+					max={1.5}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setE('buildingEmissiveMax')}
+				/>
+			{/if}
+
+			<div class="reset-row">
+				<button class="reset small" type="button" onclick={resetVariantDefaults}>
+					Reset variant
+				</button>
+				<button class="reset small" type="button" onclick={resetAll}>Reset all</button>
+			</div>
+		</fieldset>
+
+		<!-- ── Readouts ─────────────────────────────────────────────────── -->
 		<div class="readout">
 			<div><span class="k">FPS</span><span class="v">{fps || '–'}</span></div>
 			<div><span class="k">Altitude</span><span class="v">{altitudeFt.toLocaleString()} ft</span></div>
+			<div><span class="k">Time</span><span class="v">{globals.timeOfDay.toFixed(2)}h</span></div>
 			<div><span class="k">Night factor</span><span class="v">{nfPct}%</span></div>
 			<div><span class="k">Active</span><span class="v">{currentVariant.id}</span></div>
+			{#if variant === 'E'}
+				<div><span class="k">Alt blend</span><span class="v">{(altitudeBlend * 100).toFixed(0)}%</span></div>
+			{/if}
 		</div>
 
 		<button class="reset" type="button" onclick={resetCamera}>Reset camera</button>
@@ -440,6 +865,11 @@
 		padding: 0 6px;
 	}
 
+	.globals :global(.control),
+	.tunables :global(.control) {
+		margin-bottom: 8px;
+	}
+
 	.variants .row {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -472,6 +902,24 @@
 		font-size: 10px;
 		color: #777;
 		line-height: 1.4;
+	}
+
+	.swatch {
+		margin-top: 8px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		font-size: 10px;
+		color: rgba(0, 0, 0, 0.7);
+		font-family: ui-monospace, monospace;
+		letter-spacing: 0.5px;
+		text-align: center;
+	}
+
+	.reset-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px;
+		margin-top: 10px;
 	}
 
 	.readout {
@@ -511,6 +959,10 @@
 	}
 	.reset:hover {
 		background: rgba(127, 174, 255, 0.22);
+	}
+	.reset.small {
+		padding: 6px;
+		font-size: 11px;
 	}
 
 	footer {
