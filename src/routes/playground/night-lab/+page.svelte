@@ -19,7 +19,7 @@
 	import { clamp } from '$lib/utils';
 	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
 
-	type VariantId = 'A' | 'B' | 'C' | 'D' | 'E';
+	type VariantId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 
 	interface VariantMeta {
 		id: VariantId;
@@ -33,7 +33,91 @@
 		{ id: 'C', label: 'Wider bloom sigma', hint: 'Cesium bloom σ=4.5, contrast=96' },
 		{ id: 'D', label: 'Building emissive (flat)', hint: 'OSM buildings glow amber × nightFactor' },
 		{ id: 'E', label: 'Altitude-aware emissive', hint: 'building × (1-alt), VIIRS × alt' },
+		{ id: 'F', label: 'Vector roads (OSM)', hint: 'Hyderabad road network as glowing polylines' },
 	];
+
+	// ─── Variant F — OSM roads (Overpass) ────────────────────────────────────
+	// Hardcoded to Hyderabad bbox 78.2,17.3,78.6,17.6 for spike.
+	// Module-level cache so re-toggling F doesn't refetch.
+	type RoadClass =
+		| 'motorway'
+		| 'trunk'
+		| 'primary'
+		| 'secondary'
+		| 'tertiary'
+		| 'residential';
+
+	interface OverpassWay {
+		type: 'way';
+		id: number;
+		geometry?: Array<{ lat: number; lon: number }>;
+		tags?: { highway?: string };
+	}
+	interface OverpassResponse {
+		elements: OverpassWay[];
+	}
+	type RoadGeoJson = {
+		type: 'FeatureCollection';
+		features: Array<{
+			type: 'Feature';
+			geometry: { type: 'LineString'; coordinates: [number, number][] };
+			properties: { highway: RoadClass };
+		}>;
+	};
+
+	const ROAD_CLASS_STYLE: Record<
+		RoadClass,
+		{ r: number; g: number; b: number; baseWidth: number; baseGlow: number; classBoostKey?: 'motorwayBoost' | 'residentialBoost' }
+	> = {
+		motorway: { r: 255, g: 175, b: 80, baseWidth: 6, baseGlow: 3.5, classBoostKey: 'motorwayBoost' },
+		trunk: { r: 255, g: 165, b: 95, baseWidth: 5, baseGlow: 3 },
+		primary: { r: 255, g: 195, b: 120, baseWidth: 4, baseGlow: 2.5 },
+		secondary: { r: 255, g: 215, b: 150, baseWidth: 3, baseGlow: 2 },
+		tertiary: { r: 255, g: 220, b: 170, baseWidth: 2.5, baseGlow: 1.5 },
+		residential: { r: 255, g: 220, b: 170, baseWidth: 1.5, baseGlow: 0.5, classBoostKey: 'residentialBoost' },
+	};
+
+	// Module-level (re-toggle persistence).
+	let roadsCache: RoadGeoJson | null = null;
+	let roadsFetchPromise: Promise<RoadGeoJson> | null = null;
+
+	const OVERPASS_QUERY =
+		'[out:json][timeout:25];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"](17.3,78.2,17.6,78.6);out geom;';
+
+	async function fetchHyderabadRoads(): Promise<RoadGeoJson> {
+		if (roadsCache) return roadsCache;
+		if (roadsFetchPromise) return roadsFetchPromise;
+		const url =
+			'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(OVERPASS_QUERY);
+		roadsFetchPromise = (async () => {
+			const res = await fetch(url);
+			if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
+			const text = await res.text();
+			roadsDownloadedBytes = text.length;
+			const json = JSON.parse(text) as OverpassResponse;
+			const features: RoadGeoJson['features'] = [];
+			for (const el of json.elements ?? []) {
+				if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
+				const hw = el.tags?.highway;
+				if (!hw || !(hw in ROAD_CLASS_STYLE)) continue;
+				const coords: [number, number][] = el.geometry.map((p) => [p.lon, p.lat]);
+				features.push({
+					type: 'Feature',
+					geometry: { type: 'LineString', coordinates: coords },
+					properties: { highway: hw as RoadClass },
+				});
+			}
+			const fc: RoadGeoJson = { type: 'FeatureCollection', features };
+			roadsCache = fc;
+			return fc;
+		})();
+		try {
+			return await roadsFetchPromise;
+		} catch (e) {
+			roadsFetchPromise = null;
+			throw e;
+		}
+	}
 
 	// ─── App state setup ──────────────────────────────────────────────────────
 
@@ -47,8 +131,7 @@
 		untrack(() => {
 			// Time: deep night (22:00) — VIIRS + bloom fully active.
 			model.applyConfigPatch('director.daylight.syncToRealTime', false);
-			model.applyConfigPatch('director.daylight.manualTimeOfDay', 22);
-			model.timeOfDay = 22;
+			globals.timeOfDay = 22;
 
 			// Disable autopilot so location/weather stay pinned.
 			model.applyConfigPatch('director.autopilot.enabled', false);
@@ -63,8 +146,10 @@
 			// Defeat the auto-quality stepper so it can't downgrade mid-test.
 			model.applyConfigPatch('world.autoQuality', false);
 
-			// Camera: Hyderabad, mid altitude so variant E shows a real lerp.
-			model.setLocation('hyderabad');
+			// Camera: Hyderabad, mid altitude. Use setLocationWithSky to skip
+			// the cruise-departure warp — the lab opens with a pinned view.
+			model.location = 'hyderabad';
+			model.flight.setLocationWithSky('hyderabad', 'night');
 			model.flight.altitude = 28000;
 		});
 	});
@@ -80,11 +165,7 @@
 
 	// Push globals → model when they change.
 	$effect(() => {
-		const tod = globals.timeOfDay;
-		untrack(() => {
-			model.applyConfigPatch('director.daylight.manualTimeOfDay', tod);
-			model.timeOfDay = tod;
-		});
+		untrack(() => { model.timeOfDay = globals.timeOfDay; });
 	});
 	$effect(() => {
 		const alt = globals.altitude;
@@ -135,6 +216,19 @@
 	};
 	const tunablesE = $state({ ...E_DEFAULTS });
 
+	const F_DEFAULTS = {
+		intensity: 1.0,
+		glowWidth: 2.5,
+		viirsDim: 0.5,
+		motorwayBoost: 1.0,
+		residentialBoost: 1.0,
+	};
+	const tunablesF = $state({ ...F_DEFAULTS });
+	let roadsLoading = $state(false);
+	let roadsError = $state<string | null>(null);
+	let roadsFeatureCount = $state(0);
+	let roadsDownloadedBytes = $state(0);
+
 	// Variant A drives prod config values directly via applyConfigPatch.
 	// Push tunablesA → world config whenever they change AND variant is A.
 	$effect(() => {
@@ -158,7 +252,7 @@
 
 	// Reset camera helper — re-pins to defaults if it drifts (orbit still runs).
 	function resetCamera(): void {
-		model.setLocation('hyderabad');
+		model.flight.setLocationWithSky('hyderabad', 'night');
 		globals.altitude = GLOBAL_DEFAULTS.altitude;
 	}
 
@@ -179,6 +273,9 @@
 			case 'E':
 				Object.assign(tunablesE, E_DEFAULTS);
 				break;
+			case 'F':
+				Object.assign(tunablesF, F_DEFAULTS);
+				break;
 		}
 	}
 
@@ -189,6 +286,7 @@
 		Object.assign(tunablesC, C_DEFAULTS);
 		Object.assign(tunablesD, D_DEFAULTS);
 		Object.assign(tunablesE, E_DEFAULTS);
+		Object.assign(tunablesF, F_DEFAULTS);
 	}
 
 	// ─── Variant application via $effect ───────────────────────────────────────
@@ -209,16 +307,8 @@
 		function findBuildingTileset(): unknown | null {
 			const prims = viewer.scene.primitives;
 			for (let i = 0; i < prims.length; i++) {
-				const p = prims.get(i) as unknown;
-				if (p && (p as { isCesium3DTileset?: boolean }).isCesium3DTileset) return p;
-				// Older Cesium versions lack isCesium3DTileset — duck-type on `style`+`tileVisible`.
-				if (
-					p &&
-					typeof (p as { tileVisible?: unknown }).tileVisible === 'object' &&
-					'style' in (p as object)
-				) {
-					return p;
-				}
+				const p = prims.get(i) as Record<string, unknown> | null;
+				if (p && p.isCesium3DTileset) return p;
 			}
 			return null;
 		}
@@ -420,6 +510,84 @@
 			}
 		}
 
+		// ── Variant F — vector roads from Overpass ──────────────────────────
+		let roadDataSource:
+			| (object & { entities?: { values?: unknown[] } })
+			| null = null;
+		let priorNightLightIntensityF: number | null = null;
+		let fCancelled = false;
+		if (v === 'F') {
+			roadsError = null;
+			const useCached = roadsCache !== null;
+			roadsLoading = !useCached;
+
+			// Dim VIIRS on activation (single-shot patch — cleanup restores).
+			priorNightLightIntensityF = model.config.world.nightLightIntensity;
+			const dimmedTarget = priorNightLightIntensityF * tunablesF.viirsDim;
+			model.applyConfigPatch('world.nightLightIntensity', dimmedTarget);
+
+			const buildAndAdd = (fc: RoadGeoJson): void => {
+				if (fCancelled) return;
+				roadsFeatureCount = fc.features.length;
+				try {
+					const ds = new Cesium.GeoJsonDataSource('night-lab-roads');
+					ds.load(fc, { clampToGround: true }).then(() => {
+						if (fCancelled) return;
+						const entities = ds.entities.values;
+						const intensity = tunablesF.intensity;
+						const gwMult = tunablesF.glowWidth / 2.5; // normalize so default=1
+						const mwBoost = tunablesF.motorwayBoost;
+						const rsBoost = tunablesF.residentialBoost;
+						const nf = model.nightFactor;
+						const alphaBase = clamp((nf - 0.45) / 0.45, 0, 1) * intensity;
+						for (const ent of entities) {
+							const e = ent as {
+								polyline?: {
+									material?: unknown;
+									width?: unknown;
+									clampToGround?: unknown;
+								};
+								properties?: { getValue?: (t?: unknown) => { highway?: RoadClass } };
+							};
+							if (!e.polyline) continue;
+							const props = e.properties?.getValue?.() ?? { highway: undefined };
+							const hw = (props.highway ?? 'residential') as RoadClass;
+							const style = ROAD_CLASS_STYLE[hw];
+							let alpha = alphaBase;
+							if (hw === 'motorway') alpha *= mwBoost;
+							else if (hw === 'residential') alpha *= 0.5 * rsBoost;
+							alpha = clamp(alpha, 0, 1);
+							const color = Cesium.Color.fromBytes(style.r, style.g, style.b, Math.round(alpha * 255));
+							e.polyline.material = new Cesium.PolylineGlowMaterialProperty({
+								color,
+								glowPower: 0.25,
+								taperPower: 1.0,
+							});
+							e.polyline.width = style.baseWidth * style.baseGlow * gwMult;
+							e.polyline.clampToGround = true;
+						}
+						viewer.dataSources.add(ds);
+						roadDataSource = ds as typeof roadDataSource;
+						roadsLoading = false;
+					});
+				} catch (e) {
+					roadsError = e instanceof Error ? e.message : String(e);
+					roadsLoading = false;
+				}
+			};
+
+			if (useCached && roadsCache) {
+				buildAndAdd(roadsCache);
+			} else {
+				fetchHyderabadRoads()
+					.then((fc) => buildAndAdd(fc))
+					.catch((err) => {
+						roadsError = err instanceof Error ? err.message : String(err);
+						roadsLoading = false;
+					});
+			}
+		}
+
 		// ── Cleanup ──────────────────────────────────────────────────────────
 		return () => {
 			// Restore bloom defaults.
@@ -469,7 +637,83 @@
 				// reapply its own style on the next frame anyway.
 				(tileset as { style?: unknown }).style = defaultTilesetStyle ?? undefined;
 			}
+
+			// Variant F cleanup — remove road data-source + restore VIIRS dim.
+			fCancelled = true;
+			if (roadDataSource) {
+				try {
+					viewer.dataSources.remove(
+						roadDataSource as Parameters<typeof viewer.dataSources.remove>[0],
+						true,
+					);
+				} catch {
+					// noop — viewer may already be torn down
+				}
+				roadDataSource = null;
+			}
+			if (priorNightLightIntensityF !== null) {
+				model.applyConfigPatch('world.nightLightIntensity', priorNightLightIntensityF);
+				priorNightLightIntensityF = null;
+			}
+			roadsLoading = false;
 		};
+	});
+
+	// Variant F live-restyle — on F-tunable change, re-apply per-entity material.
+	// PolylineGlowMaterialProperty does NOT accept callbacks for color, so we
+	// rebuild materials when tunables change rather than per-frame.
+	$effect(() => {
+		if (variant !== 'F') return;
+		// Reactive deps — intensity / glowWidth / class boosts re-style on change.
+		// viirsDim only applies on activation (see main effect).
+		const intensity = tunablesF.intensity;
+		const glowWidth = tunablesF.glowWidth;
+		const mwBoost = tunablesF.motorwayBoost;
+		const rsBoost = tunablesF.residentialBoost;
+		const nf = model.nightFactor;
+
+		untrack(() => {
+			const mgr = activeCesium.manager;
+			if (!mgr) return;
+			const Cesium = mgr.getCesium();
+			const viewer = mgr.getViewer();
+			const list = viewer.dataSources as {
+				length: number;
+				get: (i: number) => { name?: string; entities?: { values: unknown[] } };
+			};
+			let ds: { entities?: { values: unknown[] } } | null = null;
+			for (let i = 0; i < list.length; i++) {
+				const d = list.get(i);
+				if (d?.name === 'night-lab-roads') {
+					ds = d;
+					break;
+				}
+			}
+			if (!ds || !ds.entities) return;
+			const gwMult = glowWidth / 2.5;
+			const alphaBase = clamp((nf - 0.45) / 0.45, 0, 1) * intensity;
+			for (const ent of ds.entities.values) {
+				const e = ent as {
+					polyline?: { material?: unknown; width?: unknown };
+					properties?: { getValue?: () => { highway?: RoadClass } };
+				};
+				if (!e.polyline) continue;
+				const props = e.properties?.getValue?.() ?? { highway: undefined };
+				const hw = (props.highway ?? 'residential') as RoadClass;
+				const style = ROAD_CLASS_STYLE[hw];
+				let alpha = alphaBase;
+				if (hw === 'motorway') alpha *= mwBoost;
+				else if (hw === 'residential') alpha *= 0.5 * rsBoost;
+				alpha = clamp(alpha, 0, 1);
+				const color = Cesium.Color.fromBytes(style.r, style.g, style.b, Math.round(alpha * 255));
+				e.polyline.material = new Cesium.PolylineGlowMaterialProperty({
+					color,
+					glowPower: 0.25,
+					taperPower: 1.0,
+				});
+				e.polyline.width = style.baseWidth * style.baseGlow * gwMult;
+			}
+		});
 	});
 
 	// ─── Readouts ─────────────────────────────────────────────────────────────
@@ -524,6 +768,11 @@
 	function setE<K extends keyof typeof tunablesE>(k: K) {
 		return (e: Event & { currentTarget: HTMLInputElement }) => {
 			tunablesE[k] = parseFloat(e.currentTarget.value) as (typeof tunablesE)[K];
+		};
+	}
+	function setF<K extends keyof typeof tunablesF>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => {
+			tunablesF[k] = parseFloat(e.currentTarget.value) as (typeof tunablesF)[K];
 		};
 	}
 </script>
@@ -775,6 +1024,59 @@
 					formatValue={(v) => v.toFixed(2)}
 					oninput={setE('buildingEmissiveMax')}
 				/>
+			{:else if variant === 'F'}
+				{#if roadsLoading}
+					<p class="status">loading roads…</p>
+				{:else if roadsError}
+					<p class="status err">Overpass unavailable: {roadsError}</p>
+				{:else if roadsFeatureCount > 0}
+					<p class="status ok">{roadsFeatureCount.toLocaleString()} ways loaded ({Math.round(roadsDownloadedBytes / 1024)} KB)</p>
+				{/if}
+				<RangeSlider
+					label="Intensity"
+					value={tunablesF.intensity}
+					min={0.0}
+					max={2.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setF('intensity')}
+				/>
+				<RangeSlider
+					label="Glow width"
+					value={tunablesF.glowWidth}
+					min={0.0}
+					max={6.0}
+					step={0.5}
+					formatValue={(v) => v.toFixed(1)}
+					oninput={setF('glowWidth')}
+				/>
+				<RangeSlider
+					label="VIIRS dim (on activation)"
+					value={tunablesF.viirsDim}
+					min={0.0}
+					max={1.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setF('viirsDim')}
+				/>
+				<RangeSlider
+					label="Motorway boost"
+					value={tunablesF.motorwayBoost}
+					min={0.0}
+					max={2.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setF('motorwayBoost')}
+				/>
+				<RangeSlider
+					label="Residential boost"
+					value={tunablesF.residentialBoost}
+					min={0.0}
+					max={2.0}
+					step={0.05}
+					formatValue={(v) => v.toFixed(2)}
+					oninput={setF('residentialBoost')}
+				/>
 			{/if}
 
 			<div class="reset-row">
@@ -902,6 +1204,24 @@
 		font-size: 10px;
 		color: #777;
 		line-height: 1.4;
+	}
+
+	.status {
+		margin: 0 0 8px;
+		padding: 6px 8px;
+		border-radius: 6px;
+		font-size: 10px;
+		font-family: ui-monospace, monospace;
+		background: rgba(127, 174, 255, 0.08);
+		color: #cdddff;
+	}
+	.status.err {
+		background: rgba(255, 100, 100, 0.12);
+		color: #ffb4b4;
+	}
+	.status.ok {
+		background: rgba(127, 255, 174, 0.08);
+		color: #c5ffe0;
 	}
 
 	.swatch {
