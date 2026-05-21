@@ -687,13 +687,6 @@
 		letter-spacing: -0.3px;
 	}
 
-	.h2-sub {
-		font-size: 14px;
-		font-weight: 400;
-		color: #5568a0;
-		margin-left: 10px;
-	}
-
 	h3 {
 		font-size: 18px;
 		font-weight: 600;
