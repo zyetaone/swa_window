@@ -14,6 +14,7 @@ import { NIGHT_PALETTE } from '$content/compositions/night';
 import { ViirsGridLayer } from './viirs-grid-layer';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
+import { RoadLayer } from './road-layer';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -152,6 +153,7 @@ export class CesiumManager {
 	// world.useCesiumClouds flag. Default OFF; the existing CSS3D clouds
 	// keep shipping until billboards look right.
 	private cloudBillboardLayer: CloudBillboardLayer | null = null;
+	private roadLayer: RoadLayer | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
@@ -264,6 +266,8 @@ export class CesiumManager {
 		this.lightningStage.mount();
 		this.cloudBillboardLayer = new CloudBillboardLayer(C, v);
 		this.cloudBillboardLayer.mount();
+		this.roadLayer = new RoadLayer(C, v);
+		this.roadLayer.mount();
 
 		// Set Cesium clock to model time on first frame so sun position is
 		// right from the start (otherwise we render with wall-clock UTC
@@ -478,6 +482,7 @@ export class CesiumManager {
 		this.syncImagery();
 		this.syncViirsGrid();
 		this.syncCloudBillboards();
+		this.syncRoads();
 		this.syncLightning(dt);
 		this.syncBuildings();
 		this.syncQuality();
@@ -498,6 +503,21 @@ export class CesiumManager {
 			m.config.atmosphere.clouds.density,
 			m.flight.altitude,
 			m.config.world.useCesiumClouds,
+		);
+	}
+
+	private syncRoads(): void {
+		if (!this.roadLayer) return;
+		const m = this.model;
+		const w = m.config.world;
+		void this.roadLayer.update(
+			m.flight.lat,
+			m.flight.lon,
+			w.roadsEnabled,
+			w.roadsIntensity * m.nightFactor,
+			w.roadsGlowWidth,
+			w.roadsMotorwayBoost,
+			w.roadsResidentialBoost,
 		);
 	}
 

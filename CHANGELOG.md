@@ -6,6 +6,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-22
+
+### Added
+- **Phase 11c: Cesium-native Clouds** — GPU-batched BillboardCollection clouds (parallel implementation behind `useCesiumClouds` flag).
+- **Phase 9/10: Night Rendering v2** — Apr-15 hash-palette shader with per-pixel sodium/amber variance + traffic-red sparks.
+- **Phase 5/6: Vector Roads** — Real-time OSM road network fetching (Overpass API) rendered as glowing billboard polylines.
+- **Phase 15.5: Night Pipeline Simplification** — 3 imagery layers reduced to 2; 5 shader ops reduced to 3; base darkening moved to shader mix().
+- **Fleet v2 Protocol** — Path-targeted config patches (`config_patch`) with CRDT LWW-register synchronization.
+- **Phase 7: Multi-Pi Parallax** — Role-based yaw offsets for panoramic 3-window installs with leader/follower sync.
+- **Phase 5.6: Observability** — Ring-buffer telemetry with FPS p50/p95 tracking and event logging (Shift+T to toggle).
+- **Phase 5.7: Remote Push** — Cloudflare Worker integration for OTA bundle and config delivery.
+- **Phase 3: Altitude-aware Buildings** — Emissive buildings that glow at passenger altitudes and fade at cruise.
+
+### Changed
+- **Architecture**: Consolidated `atmosphere/` into `scene/effects/`; moved engine tuning literals into `$state` namespaces in `config-tree.svelte.ts`.
+- **Night Look**: VIIRS additive blend mode (globalCompositeOperation = 'lighter') for cleaner, brighter city lights.
+- **Visuals**: Desaturated night clouds to kill purple bloom; softer car-light dots with translucencyByDistance.
+- **Defaults**: Window frame OFF by default (full-bleed kiosk mode); hyderabad/night as boot baseline.
+
+### Fixed
+- Reversed skyAtmosphere saturationShift sign bug in dawn/dusk transitions.
+- Fixed Cesium SkyBox star textures in production builds via static-asset copy.
+- Resolved type errors and unused state in night-lab playground.
+- Improved bearer-token security for localhost peer-sync routes.
+
 ## [0.5.0] - 2026-02-15
 
 ### Added

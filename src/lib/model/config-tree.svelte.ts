@@ -280,6 +280,14 @@ export const world = $state({
 	// the existing artsy DOM clouds keep shipping until the billboards
 	// look right side-by-side; flip to true to test.
 	useCesiumClouds: false,
+	// Phase 5/6 (Variant F OSM Roads productionized): glowing vector roads
+	// fetched from Overpass API. Default OFF — expensive to fetch and
+	// visually dense.
+	roadsEnabled: false,
+	roadsIntensity: 5.0,
+	roadsGlowWidth: 7.0,
+	roadsMotorwayBoost: 2.5,
+	roadsResidentialBoost: 1.5,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
 });

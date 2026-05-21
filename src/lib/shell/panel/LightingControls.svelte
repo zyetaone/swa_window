@@ -74,6 +74,12 @@
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
+	<Toggle label="Cesium Clouds (Beta)" bind:checked={config.world.useCesiumClouds} />
+	<Toggle label="Vector Roads (OSM)" bind:checked={config.world.roadsEnabled} />
+	{#if config.world.roadsEnabled}
+		<RangeSlider id="roadsIntensity" label="Road Intensity" min={0.1} max={10.0} step={0.1} bind:value={config.world.roadsIntensity} formatValue={(v) => v.toFixed(1)} />
+		<RangeSlider id="roadsGlow" label="Road Glow Width" min={0.5} max={12.0} step={0.1} bind:value={config.world.roadsGlowWidth} formatValue={(v) => v.toFixed(1)} />
+	{/if}
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
 	<Toggle label="Touch (Demo Mode)" bind:checked={config.shell.touchEnabled} />
 	<Toggle label="Cursor Parallax" bind:checked={config.shell.mouseParallax} />
