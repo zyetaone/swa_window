@@ -26,11 +26,13 @@ export const motion = $state({
 	breathingOffset: 0,
 	engineVibeX: 0,
 	engineVibeY: 0,
+	warpZoom: 0,
 });
 
 // ── Internal timer state (not reactive) ─────────────────────────────────────
 
 let _prevHeading = 0;
+let _rawBankAngle = 0;
 let _bumpTimer = 0;
 // Lazy-init on first tick from ctx.camera.motion.bumpMin/MaxInterval (live
 // config). Earlier this was seeded at module load with hardcoded (30, 120) —
@@ -50,7 +52,7 @@ export function motionStep(delta: number, ctx: SimulationContext): void {
 }
 
 function tickInternal(delta: number, ctx: SimulationContext): void {
-	const { time: t, heading, altitude, turbulenceLevel, camera } = ctx;
+	const { time: t, heading, altitude, turbulenceLevel, camera, warpFactor } = ctx;
 	const m = camera.motion;
 	const turbMult = m.turbulenceMultipliers[turbulenceLevel];
 
@@ -58,13 +60,28 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 		? clamp(1 - (altitude - 40000) / 10000, 0.05, 1)
 		: 1;
 
-	const baseTurbY = (Math.sin(t * 0.5) * 0.1 + Math.sin(t * 1.1) * 0.08) * turbMult;
-	const baseTurbX = (Math.sin(t * 0.37) * 0.08 + Math.sin(t * 0.83) * 0.06) * turbMult;
+	// Multi-octave sin noise for organic turbulence feel
+	const noiseY = (
+		Math.sin(t * 0.53) * 0.10 +
+		Math.sin(t * 1.17) * 0.07 +
+		Math.sin(t * 2.31) * 0.03
+	) * turbMult;
 
-	const chatterY = (Math.sin(t * 2.5 * Math.PI * 2) * 0.03
-		+ Math.sin(t * 3.7 * Math.PI * 2) * 0.02) * turbMult;
-	const chatterX = (Math.sin(t * 2.1 * Math.PI * 2) * 0.01
-		+ Math.sin(t * 3.3 * Math.PI * 2) * 0.008) * turbMult;
+	const noiseX = (
+		Math.sin(t * 0.41) * 0.08 +
+		Math.sin(t * 0.97) * 0.05 +
+		Math.sin(t * 1.83) * 0.02
+	) * turbMult;
+
+	const chatterY = (
+		Math.sin(t * 15.7) * 0.03 +
+		Math.sin(t * 23.3) * 0.02
+	) * turbMult;
+
+	const chatterX = (
+		Math.sin(t * 13.2) * 0.01 +
+		Math.sin(t * 20.7) * 0.008
+	) * turbMult;
 
 	if (_nextBump === null) {
 		_nextBump = randomBetween(m.bumpMinInterval, m.bumpMaxInterval) / turbMult;
@@ -75,12 +92,6 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 
 	if (_bumpElapsed >= 0) {
 		_bumpElapsed += delta;
-		// Phase 10b — soft onset envelope (1 - exp(-8t)) reaches ~80% at 200ms
-		// and ~95% at 370ms. Without it, the bump's first sin-peak (at t ≈
-		// π/(2*ringFreq) ≈ 220ms) lands at full amplitude and reads as a JERK
-		// rather than a swell. With the envelope, peak energy arrives just as
-		// the envelope reaches ~85%, giving a smoother rise even at the same
-		// peak amplitude.
 		const onset = 1 - Math.exp(-8 * _bumpElapsed);
 		bumpValue = _bumpSign * m.bumpAmplitude * turbMult
 			* Math.exp(-m.bumpDecay * _bumpElapsed)
@@ -94,17 +105,21 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 		_nextBump = randomBetween(m.bumpMinInterval, m.bumpMaxInterval) / turbMult;
 	}
 
-	motion.motionOffsetY = (baseTurbY * m.turbulenceOffsetY + chatterY + bumpValue) * altFactor;
-	motion.motionOffsetX = (baseTurbX * m.turbulenceOffsetY * 0.3 + chatterX) * altFactor;
+	motion.motionOffsetY = (noiseY * m.turbulenceOffsetY + chatterY + bumpValue) * altFactor;
+	motion.motionOffsetX = (noiseX * m.turbulenceOffsetY * 0.3 + chatterX) * altFactor;
 
 	const hDelta = shortestAngleDelta(_prevHeading, heading);
 	const turnRate = delta > 0 ? hDelta / delta : 0;
 	const targetBank = clamp(turnRate * 0.3, -m.bankAngleMax, m.bankAngleMax);
-	motion.bankAngle += (targetBank - motion.bankAngle) * Math.min(m.bankSmoothing * delta, 1);
+	_rawBankAngle += (targetBank - _rawBankAngle) * Math.min(m.bankSmoothing * delta, 1);
+	motion.bankAngle = _rawBankAngle;
 	_prevHeading = heading;
 
 	motion.breathingOffset = Math.sin(t * (2 * Math.PI / m.breathingPeriod));
 
 	motion.engineVibeX = Math.sin(t * m.engineVibeFreqX) * m.engineVibeAmp;
 	motion.engineVibeY = Math.sin(t * m.engineVibeFreqY) * m.engineVibeAmp;
+
+	// Cinematic warp zoom — subtle push-in as speed ramps
+	motion.warpZoom = warpFactor * 0.05;
 }

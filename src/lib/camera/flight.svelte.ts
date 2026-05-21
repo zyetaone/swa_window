@@ -12,12 +12,22 @@ import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
 
 export class FlightSimEngine {
-	// --- Position (reactive) ---
+	// --- Position (raw simulation state) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
 	altitude = $state<number>(35_000);
 	heading = $state(45);
 	pitch = $state(75);
+
+	// --- Smoothed Camera (SSOT for rendering) ---
+	// These values lerp toward the raw state above to provide "heavy camera"
+	// feel and absorb teleports/jitters. SSOT for Cesium + DOM.
+	camLat = $state(25.2048);
+	camLon = $state(55.2708);
+	camAlt = $state(35_000);
+	camHeading = $state(45);
+	camPitch = $state(75);
+	#camInitialized = false;
 
 	// --- Flight mode (reactive) ---
 	flightMode = $state<FlightMode>('orbit');
@@ -99,6 +109,8 @@ export class FlightSimEngine {
 				this.#tickFlightPath(delta, ctx);
 			}
 			this.#tickAltitude(delta, ctx);
+
+			this.#tickSmoothing(delta);
 		});
 		return patch;
 	}
@@ -106,6 +118,26 @@ export class FlightSimEngine {
 	// ====================================================================
 	// PRIVATE
 	// ====================================================================
+
+	#tickSmoothing(delta: number): void {
+		if (!this.#camInitialized) {
+			this.camLat = this.lat; this.camLon = this.lon; this.camAlt = this.altitude;
+			this.camHeading = this.heading; this.camPitch = this.pitch;
+			this.#camInitialized = true;
+			return;
+		}
+
+		// Heavy camera feel: lerp toward logical state.
+		// k = 0.12s time constant (same as previous Cesium lerp for continuity).
+		const k = Math.min(1 - Math.exp(-delta / 0.12), 0.3);
+
+		this.camLat += (this.lat - this.camLat) * k;
+		this.camLon += (this.lon - this.camLon) * k;
+		this.camAlt += (this.altitude - this.camAlt) * k;
+
+		this.camHeading = normalizeHeading(this.camHeading + shortestAngleDelta(this.camHeading, this.heading) * k);
+		this.camPitch += (this.pitch - this.camPitch) * k;
+	}
 
 	#tickDeparture(delta: number, patch: FlightPatch, ctx: SimulationContext): void {
 		this.#cruiseElapsed += delta;

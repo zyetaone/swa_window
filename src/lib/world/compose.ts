@@ -8,7 +8,7 @@
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
-import { normalizeHeading, shortestAngleDelta, lerp, smoothstep, clamp } from '$lib/utils';
+import { lerp, smoothstep, clamp } from '$lib/utils';
 import { T } from '$lib/night';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { ViirsGridLayer } from './viirs-grid-layer';
@@ -68,6 +68,11 @@ interface CesiumModelView {
 		altitude: number;
 		heading: number;
 		pitch: number;
+		camLat: number;
+		camLon: number;
+		camAlt: number;
+		camHeading: number;
+		camPitch: number;
 	};
 	motion: {
 		bankAngle: number;
@@ -107,17 +112,8 @@ export class CesiumManager {
 	private readonly model: CesiumModelView;
 	private readonly viewer: CesiumType.Viewer;
 
-	// Camera lerp state
-	private camLat = 0;
-	private camLon = 0;
-	private camAlt: number = 35_000;
-	private camHeading = 45;
-	private camPitch = 75;
-	private camBank = 0;
-	private camInitialized = false;
+	// Camera lerp state (REMOVED — now SSOT in model.flight.cam*)
 	private lastPostRenderTime = performance.now();
-	private readonly LERP_T = 0.12;
-	private readonly MAX_K = 0.3;
 
 	// Asset state
 	private tileset: CesiumType.Cesium3DTileset | null = null;
@@ -562,38 +558,23 @@ export class CesiumManager {
 		this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
-	private syncCamera(dt: number): void {
+	private syncCamera(_dt: number): void {
 		const f = this.model.flight;
 		const mot = this.model.motion;
-
-		if (!this.camInitialized) {
-			this.camLat = f.lat; this.camLon = f.lon; this.camAlt = f.altitude;
-			this.camHeading = f.heading; this.camPitch = f.pitch; this.camBank = mot.bankAngle;
-			this.camInitialized = true;
-		}
-
-		const k = Math.min(1 - Math.exp(-dt / this.LERP_T), this.MAX_K);
-
-		this.camLat += (f.lat - this.camLat) * k;
-		this.camLon += (f.lon - this.camLon) * k;
-		this.camAlt += (f.altitude - this.camAlt) * k;
-
-		this.camHeading = normalizeHeading(this.camHeading + shortestAngleDelta(this.camHeading, f.heading) * k);
-		this.camPitch += (f.pitch - this.camPitch) * k;
-		this.camBank += (mot.bankAngle - this.camBank) * k;
 
 		// Phase 7 — multi-Pi parallax. For solo role (default), parallax
 		// offset is 0 and this is a no-op. For left/center/right in a
 		// panorama, the per-device yaw shifts the view so three Pis tile
 		// into a continuous horizon band from the same shared flight state.
-		const parallaxHeading = this.model.config.camera.effectiveHeading(this.camHeading);
+		// Uses model.flight.camHeading (SSOT smoothed).
+		const parallaxHeading = this.model.config.camera.effectiveHeading(f.camHeading);
 
 		this.viewer.camera.setView({
-			destination: this.CesiumModule.Cartesian3.fromDegrees(this.camLon, this.camLat, this.camAlt * 0.3048),
+			destination: this.CesiumModule.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048),
 			orientation: {
 				heading: this.CesiumModule.Math.toRadians((parallaxHeading + 90) % 360),
-				pitch: this.CesiumModule.Math.toRadians(this.camPitch - 90),
-				roll: this.CesiumModule.Math.toRadians(-this.camBank),
+				pitch: this.CesiumModule.Math.toRadians(f.camPitch - 90),
+				roll: this.CesiumModule.Math.toRadians(-mot.bankAngle),
 			},
 		});
 	}

@@ -119,7 +119,8 @@
 		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
 		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
 		const rotate = turbulenceRotate + bankDegrees;
-		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg)`;
+		const scale = 1 + model.motion.warpZoom;
+		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
 	});
 
 

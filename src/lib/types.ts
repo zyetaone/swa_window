@@ -67,6 +67,7 @@ export interface SimulationContext {
 	cloudDensity: number;
 	cloudSpeed: number;
 	haze: number;
+	warpFactor: number;
 	turbulenceLevel: 'light' | 'moderate' | 'severe';
 	/** Populated by AeroWindow so engines can read CameraConfig without importing it. */
 	camera: CameraConfig;

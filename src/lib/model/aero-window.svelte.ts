@@ -358,6 +358,7 @@ export class AeroWindow {
 		weather: 'cloudy', skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
 		locationId: 'hyderabad', userAdjustingAltitude: false, userAdjustingTime: false,
 		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
+		warpFactor: 0,
 		turbulenceLevel: 'light',
 		camera: _config.camera,
 		director: _config.director,
@@ -383,6 +384,7 @@ export class AeroWindow {
 		c.cloudDensity = this.config.atmosphere.clouds.density;
 		c.cloudSpeed   = this.config.atmosphere.clouds.speed;
 		c.haze         = this.config.atmosphere.haze.amount;
+		c.warpFactor   = this.flight.warpFactor;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		c.camera                = _config.camera;
 		c.director              = _config.director;
