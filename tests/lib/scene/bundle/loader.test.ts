@@ -7,7 +7,7 @@ describe('isContentBundle', () => {
 		const bundle: VideoBgBundle = {
 			id: 'demo-video',
 			type: 'video-bg',
-			kind: 'atmo',
+			kind: 'sky',
 			z: 0.5,
 			asset: '/videos/demo.mp4',
 		};
@@ -22,19 +22,19 @@ describe('isContentBundle', () => {
 	});
 
 	it('rejects missing id', () => {
-		expect(isContentBundle({ type: 'video-bg', kind: 'atmo', z: 0 })).toBe(false);
+		expect(isContentBundle({ type: 'video-bg', kind: 'sky', z: 0 })).toBe(false);
 	});
 
 	it('rejects empty id', () => {
-		expect(isContentBundle({ id: '', type: 'video-bg', kind: 'atmo', z: 0 })).toBe(false);
+		expect(isContentBundle({ id: '', type: 'video-bg', kind: 'sky', z: 0 })).toBe(false);
 	});
 
 	it('rejects missing type', () => {
-		expect(isContentBundle({ id: 'x', kind: 'atmo', z: 0 })).toBe(false);
+		expect(isContentBundle({ id: 'x', kind: 'sky', z: 0 })).toBe(false);
 	});
 
 	it('rejects non-numeric z', () => {
-		expect(isContentBundle({ id: 'x', type: 'video-bg', kind: 'atmo', z: '0' })).toBe(false);
+		expect(isContentBundle({ id: 'x', type: 'video-bg', kind: 'sky', z: '0' })).toBe(false);
 	});
 });
 
@@ -43,7 +43,7 @@ describe('createEffectFromBundle', () => {
 		const bundle: VideoBgBundle = {
 			id: 'aurora-loop',
 			type: 'video-bg',
-			kind: 'atmo',
+			kind: 'sky',
 			z: 0.5,
 			asset: '/videos/aurora.mp4',
 			opacity: 0.8,
@@ -52,7 +52,7 @@ describe('createEffectFromBundle', () => {
 		const effect = createEffectFromBundle(bundle);
 		expect(effect).not.toBeNull();
 		expect(effect!.id).toBe('aurora-loop');
-		expect(effect!.kind).toBe('atmo');
+		expect(effect!.kind).toBe('sky');
 		expect(effect!.z).toBe(0.5);
 		expect(effect!.when).toBeTypeOf('function');
 		expect(effect!.component).toBeDefined();
@@ -62,7 +62,7 @@ describe('createEffectFromBundle', () => {
 		const bundle: VideoBgBundle = {
 			id: 'b',
 			type: 'video-bg',
-			kind: 'atmo',
+			kind: 'sky',
 			z: 0,
 			asset: '/v.mp4',
 			fit: 'contain',
@@ -82,7 +82,7 @@ describe('createEffectFromBundle', () => {
 		const bundle: SpriteBundle = {
 			id: 'santa-2026',
 			type: 'sprite',
-			kind: 'geo',
+			kind: 'earth',
 			z: 5,
 			image: '/api/assets/santa.png',
 			lat: 25.2,
@@ -94,7 +94,7 @@ describe('createEffectFromBundle', () => {
 		const effect = createEffectFromBundle(bundle);
 		expect(effect).not.toBeNull();
 		expect(effect!.id).toBe('santa-2026');
-		expect(effect!.kind).toBe('geo');
+		expect(effect!.kind).toBe('earth');
 		expect(effect!.params).toEqual({
 			image: '/api/assets/santa.png',
 			lat: 25.2,
@@ -109,7 +109,7 @@ describe('createEffectFromBundle', () => {
 		const bundle: VideoBgBundle = {
 			id: 'b',
 			type: 'video-bg',
-			kind: 'atmo',
+			kind: 'sky',
 			z: 0,
 			asset: '/v.mp4',
 			when: { location: ['dubai'] },

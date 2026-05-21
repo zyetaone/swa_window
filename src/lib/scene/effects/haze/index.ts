@@ -4,7 +4,7 @@ import HazeEffect from './HazeEffect.svelte';
 
 const atmosphericHaze: Effect = {
 	id: 'atmospheric-haze',
-	kind: 'atmo',
+	kind: 'sky',
 	z: Z.haze,
 	component: HazeEffect,
 };

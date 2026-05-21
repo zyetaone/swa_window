@@ -5,7 +5,7 @@ import CarLightsEffect from './CarLightsEffect.svelte';
 
 const carLights: Effect = {
 	id: 'car-lights',
-	kind: 'geo',
+	kind: 'earth',
 	z: Z.geo,
 	when: (model) => {
 		if (model.nightFactor < 0.15) return false;

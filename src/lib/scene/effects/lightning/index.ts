@@ -4,7 +4,7 @@ import Component from './Lightning.svelte';
 
 const lightning: Effect = {
 	id: 'lightning',
-	kind: 'atmo',
+	kind: 'sky',
 	z: Z.lightning,
 	when: (model) => model.config.atmosphere.weather.hasLightning,
 	component: Component,

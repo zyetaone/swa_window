@@ -15,16 +15,13 @@ export const Z = {
 	cesium: 0,
 	/** Geo-positioned effects (car-lights). Renders inside Cesium; value inert */
 	geo: 0,
-	/** VIIRS CSS grid blocks — procedural city-block overlay above Cesium.
-	 *  Y-dynamic blocks colored by VIIRS-like intensity per cell, gated by
-	 *  nightFactor + location.scene.nightLightDensity. Sits ABOVE Cesium's
-	 *  base imagery and VIIRS raster, BELOW clouds + haze. Adds DOM-rendered
-	 *  procedural detail where the raster VIIRS only gives broad amber wash.
-	 *  Phase 11b — user direction "update css to be grid blocks y dynamic". */
-	viirsGrid: 0,
 	/** CSS3D cloud sprites (ArtsyClouds) — Phase 10: moved BEHIND haze per user
 	 *  direction "move clouds to bg". Now sits between Cesium and haze, reading
-	 *  as a deep background layer rather than a midground overlay. */
+	 *  as a deep background layer rather than a midground overlay.
+	 *
+	 *  Reframe note: clouds are SKY-kind, should be Cesium primitives. The DOM
+	 *  z-slot is interim — slated to disappear once CloudCollection migration
+	 *  lands. */
 	clouds: 0,
 	/** Atmospheric haze (horizon band, softens LOD seams) — now on TOP of clouds */
 	haze: 1,

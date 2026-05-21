@@ -4,7 +4,7 @@ import MicroEventsEffect from './MicroEventsEffect.svelte';
 
 const microEvents: Effect = {
 	id: 'micro-events',
-	kind: 'atmo',
+	kind: 'sky',
 	z: Z.microEvents,
 	component: MicroEventsEffect,
 };

@@ -20,15 +20,35 @@ import type { Component } from 'svelte';
 import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 /**
- * Conceptual layer the effect belongs to.
- * Used for reasoning and future ordering; not enforced at runtime.
+ * Conceptual layer the effect belongs to. The three-layer mental model:
  *
- * - geo    : positioned in world coordinates (e.g. car lights, passing plane)
- * - atmo   : between camera and world (clouds, lightning, contrails, aurora)
- * - window : on the glass (frost, raindrops, bug splats)
- * - frame  : cockpit/window structure (wing, vignette — usually static)
+ *   EARTH — what's below us. Terrain, buildings, ground-level imagery,
+ *           car lights anchored at street level. These MUST live as
+ *           Cesium primitives or imagery layers; they need world
+ *           coordinates, occlusion, and lighting participation.
+ *
+ *   SKY   — what's between us and the earth. Clouds, lightning,
+ *           atmosphere haze, stars, birds, contrails. These also MUST
+ *           live as Cesium primitives — anchored at altitude in 3D
+ *           space, depth-tested, parallax-correct. A DOM "sky effect"
+ *           is a contradiction in terms: it can't be hidden by a
+ *           mountain, it doesn't tilt with the cabin, it ignores
+ *           Cesium's lighting.
+ *
+ *   PANE  — the airplane cabin between viewer and world. Oval mask,
+ *           blind, glass vignette, recess rim, wing silhouette,
+ *           on-glass frost. These ARE DOM — they're physically
+ *           anchored to the kiosk frame, not the world. Mouse parallax
+ *           and turbulence shimmies belong here.
+ *
+ * Reframe (2026-05-22): the previous values (geo / atmo / window /
+ * frame) blurred the earth↔sky split and let DOM "atmo" effects sneak
+ * into the pane layer. Earth/Sky/Pane is the simpler model and makes
+ * the architectural invariant enforceable: earth + sky effects use
+ * Cesium primitives; pane effects are DOM. If you're tempted to ship
+ * a CSS cloud, you're wrong — clouds are Sky, Sky is Cesium.
  */
-export type LayerKind = 'geo' | 'atmo' | 'window' | 'frame';
+export type LayerKind = 'earth' | 'sky' | 'pane';
 
 /**
  * Effect props — every effect component receives exactly this.

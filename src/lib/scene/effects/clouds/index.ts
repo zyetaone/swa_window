@@ -7,7 +7,7 @@ import Clouds from './ArtsyClouds.svelte';
 
 const clouds: Effect = {
 	id: 'clouds',
-	kind: 'atmo',
+	kind: 'sky',
 	z: Z.clouds,
 	when: (model) => model.config.world.showClouds,
 	component: Clouds,

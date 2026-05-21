@@ -11,6 +11,7 @@ import { world } from '$lib/model/config-tree.svelte';
 import { normalizeHeading, shortestAngleDelta, lerp, smoothstep, clamp } from '$lib/utils';
 import { T } from '$lib/night';
 import { NIGHT_PALETTE } from '$content/compositions/night';
+import { ViirsGridLayer } from './viirs-grid-layer';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -85,6 +86,8 @@ interface CesiumModelView {
 	weather: WeatherType;
 	sceneFog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
 	terrainExaggeration: number;
+	/** location.scene — used by syncViirsGrid for nightLightDensity. */
+	currentLocation: { scene: { nightLightDensity: number } };
 }
 
 export class CesiumManager {
@@ -124,6 +127,11 @@ export class CesiumManager {
 	private baseDaySaturation = 1.0;
 	private baseDayContrast = 1.0;
 	private viirsLayer: CesiumType.ImageryLayer | null = null;
+	// Reframe 2026-05-22: VIIRS grid is now a WORLD-anchored procedural
+	// imagery layer instead of a screen-anchored DOM effect. Owns its own
+	// canvas + Cesium SingleTileImageryProvider. Updated when location +
+	// nightFactor + density cross thresholds; otherwise per-frame free.
+	private viirsGridLayer: ViirsGridLayer | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
@@ -231,6 +239,7 @@ export class CesiumManager {
 		await this.setupTerrain();
 		await this.setupImagery();
 		await this.setupBuildings();
+		this.viirsGridLayer = new ViirsGridLayer(C, v);
 
 		// Set Cesium clock to model time on first frame so sun position is
 		// right from the start (otherwise we render with wall-clock UTC
@@ -443,8 +452,28 @@ export class CesiumManager {
 		this.syncAtmosphere();
 		this.syncTerrainExaggeration();
 		this.syncImagery();
+		this.syncViirsGrid();
 		this.syncBuildings();
 		this.syncQuality();
+	}
+
+	/**
+	 * Drive the procedural VIIRS grid imagery layer. The ViirsGridLayer
+	 * itself caches against a coarse lat/lon/density key so per-frame
+	 * calls are essentially free unless one of those crossed a step.
+	 *
+	 * Alpha = nightFactor × nightLightScale × density × 0.9 — same
+	 * mental model as the warm-glow CSS dome it partially replaces,
+	 * but now the FALLOFF is geometric (the tile is anchored to a
+	 * lat/lon rectangle around the location, not the viewport).
+	 */
+	private syncViirsGrid(): void {
+		if (!this.viirsGridLayer) return;
+		const m = this.model;
+		const density = m.currentLocation.scene.nightLightDensity;
+		const alpha = Math.min(0.95, m.nightFactor * m.config.world.nightLightIntensity * density * 0.9);
+		// Fire-and-forget — the layer manages its own concurrency.
+		void this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
 	private syncCamera(dt: number): void {
@@ -776,6 +805,10 @@ export class CesiumManager {
 	}
 
 	destroy(): void {
+		if (this.viirsGridLayer) {
+			this.viirsGridLayer.destroy();
+			this.viirsGridLayer = null;
+		}
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {
 				this.viewer.scene.postRender.removeEventListener(this.#boundTick);

@@ -30,7 +30,7 @@ afterEach(async () => {
 const sample = (id: string): VideoBgBundle => ({
 	id,
 	type: 'video-bg',
-	kind: 'atmo',
+	kind: 'sky',
 	z: 0.5,
 	asset: `/videos/${id}.mp4`,
 });
