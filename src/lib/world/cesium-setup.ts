@@ -11,8 +11,6 @@ import type * as CesiumType from 'cesium';
 export const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || null;
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 
-/** CartoDB Dark basemap — dark vector tiles with crisp road + building edge detail. */
-export const CARTODB_DARK_URL = 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
 
 /**
  * EOX Sentinel-2 Cloudless 2024 — natural-color cloudless composite from

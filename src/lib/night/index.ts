@@ -33,7 +33,26 @@
 
 export { getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 export { COLOR_GRADING_GLSL } from '$lib/world/shaders';
-export { T } from './thresholds';
+
+// ── Time-of-day thresholds (SSOT for all night consumers) ──────────────────
+
+/**
+ * Time-of-day thresholds for the night/dawn/dusk rendering pipeline.
+ * All values are decimal hours in local time (same space as model.timeOfDay).
+ * Editing one value here keeps all consumers aligned automatically.
+ */
+export const T = {
+	/** Night ends; dawn transition begins. */
+	DAWN_START:  5,
+	/** Dawn ends; full daylight. */
+	DAY_START:   7,
+	/** Full daylight ends; dusk transition begins. */
+	DAY_END:    18,
+	/** Dusk ends; night begins (blue hour is included in dusk). */
+	DUSK_END:   21,
+	/** dawnDusk factors reach zero; nightFactor reaches one. */
+	DEEP_NIGHT: 22,
+} as const;
 
 // ── Thresholds (single source of truth) ─────────────────────────────────────
 
@@ -60,15 +79,8 @@ export const VIIRS_SMOOTHSTEP_CEIL = 0.9;
  */
 export const VIIRS_MAX_ALPHA = 0.5;
 
-/**
- * CartoDB dark-overlay gate. Linear lerp from nightFactor=0.01 meant
- * morning terrain (nf ~0.25 at 6:30 AM Dubai) got ~15% dark wash, which
- * leaves fresh EOX imagery looking pre-dimmed. Floor=0.45 keeps visible
- * morning (nf < 0.45) fully clean; atmospheric darkening fades in
- * through late-dusk/early-night before the city lights do.
- *
- * Intentionally gentler than the VIIRS curve — sky darkening naturally
- * precedes visible city lights by 30+ minutes.
- */
-export const NIGHT_MAP_SMOOTHSTEP_FLOOR = 0.45;
-export const NIGHT_MAP_SMOOTHSTEP_CEIL = 0.9;
+// (Phase 15.5: NIGHT_MAP_SMOOTHSTEP_FLOOR/CEIL removed — the CartoDB Dark
+//  imagery overlay they gated is now a shader mix() in COLOR_GRADING_GLSL.
+//  The 0.45→0.9 ramp lives inline in that shader so the "atmospheric
+//  darkening 30+ min before city lights" beat is preserved without a
+//  duplicated constant.)

@@ -2,11 +2,15 @@
  * Post-process color grading shader.
  *
  * Pixel-level finishing pass that runs after Cesium has composited the
- * imagery layers + bloom. Three jobs:
+ * imagery layers + bloom. Four jobs (Phase 15.5 P2 simplification):
  *
- *   1. brightGuard — protect sun disc / specular highlights from crush
- *   2. pollution   — subtle warm corona on already-bright pixels at night
- *   3. shadowCrush + contrast — push the dark end darker at night for pop
+ *   1. baseDarken  — sky/ocean/ground push toward navy-dark at night.
+ *                    Replaces the CartoDB Dark imagery layer's atmospheric
+ *                    function with a 3-line shader mix(). Gated by
+ *                    brightGuard so VIIRS amber + sky stars survive.
+ *   2. brightGuard — protect sun disc / specular highlights from crush
+ *   3. pollution   — subtle warm corona on already-bright pixels at night
+ *   4. shadowCrush + contrast — push the dark end darker at night for pop
  *
  * What this shader does NOT do (and why):
  *   - Horizon haze       → painted by `scene/effects/haze/HazeEffect.svelte`
@@ -32,8 +36,17 @@ export const COLOR_GRADING_GLSL = `
 		vec3 rgb = color.rgb;
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
-		// Preserve sun disc + specular highlights from night crush below.
+		// Preserve sun disc + specular highlights from night crush + base darkening.
 		float brightGuard = smoothstep(0.75, 0.95, lum);
+
+		// Base darkening — replaces CartoDB Dark imagery overlay with shader
+		// math. Smoothstep(0.45, 0.9) matches the old NIGHT_MAP_SMOOTHSTEP
+		// curve so the "atmospheric darkening starts before city lights"
+		// blue-hour beat survives. brightGuard keeps VIIRS amber cores + sun
+		// disc + bloom halos un-darkened. Navy tint reads as deep-blue-dark,
+		// not pure black — keeps the unlit ground atmospheric, not void.
+		float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.85;
+		rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - brightGuard));
 
 		// Subtle warm pollution corona on already-bright (post-composite)
 		// pixels — the atmospheric halo around dense cities seen from altitude.

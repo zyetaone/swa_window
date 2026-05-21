@@ -13,8 +13,6 @@ import {
 	VIIRS_SMOOTHSTEP_FLOOR,
 	VIIRS_SMOOTHSTEP_CEIL,
 	VIIRS_MAX_ALPHA,
-	NIGHT_MAP_SMOOTHSTEP_FLOOR,
-	NIGHT_MAP_SMOOTHSTEP_CEIL,
 	T,
 } from '$lib/night';
 import {
@@ -23,7 +21,6 @@ import {
 	TILE_SERVER_URL,
 	getSatelliteImagery,
 	VIEWER_OPTIONS,
-	CARTODB_DARK_URL,
 } from './cesium-setup';
 
 type WorldConfig = typeof world;
@@ -118,9 +115,9 @@ export class CesiumManager {
 	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
 	//   as night falls. The vivid day EOX boost is kept via baseDay* caches so
 	//   we can lerp between day-vivid and night-dark.
-	// nightLayer: CartoDB Dark — composited over base at night. Its dark
-	//   background darkens; its lit road grid punches through as warm city
-	//   light after the GLSL shader's additive pass.
+	// (Phase 15.5 P2: CartoDB Dark imagery layer dropped. Its atmospheric
+	//   darkening function is now a 3-line mix() in COLOR_GRADING_GLSL. Saves
+	//   one Cesium imagery layer per fragment, plus ~180MB tile cache.)
 	// viirsLayer: NASA VIIRS Black Marble night lights — real satellite
 	//   nightlight imagery (z3-z8, 500m/px). Replaces the procedural
 	//   hash-palette the shader used to invent. ColorToAlpha hides dark
@@ -129,7 +126,6 @@ export class CesiumManager {
 	private baseLayer: CesiumType.ImageryLayer | null = null;
 	private baseDaySaturation = 1.0;
 	private baseDayContrast = 1.0;
-	private nightLayer: CesiumType.ImageryLayer | null = null;
 	private viirsLayer: CesiumType.ImageryLayer | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
@@ -141,7 +137,6 @@ export class CesiumManager {
 	private lastLightIntensity = -1;
 	private lastSkySatShift = 999;
 	private lastTimeOfDay = -1;
-	private lastNightAlpha = -1;
 	private lastBuildingNightFactor = -1;
 	private lastTerrainExaggeration = -1;
 
@@ -346,34 +341,12 @@ export class CesiumManager {
 			this.baseLayer.brightness = 1.0;
 		}
 
-		// Night layer — CartoDB Dark. Route through local cache when available.
-		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
-		const cartoUrl = tileBase
-			? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
-			: CARTODB_DARK_URL;
+		// (CartoDB Dark imagery overlay removed in Phase 15.5. Atmospheric
+		// darkening is now a 3-line mix() in COLOR_GRADING_GLSL gated by the
+		// same 0.45→0.9 smoothstep curve. -1 Cesium imagery layer, -1 GPU
+		// texture sample per fragment, ~180MB tile cache reclaimed.)
 
-		// Single dark overlay — the approach that worked before the dual-layer
-		// experiment. The tile background is nearly-black with lit road pixels;
-		// composited at alpha ~0.7 it covers the bright day base (darkening the
-		// whole scene), while the shader's additive light pass amplifies the
-		// lit pixels into warm city glow. No colorToAlpha — we WANT the dark
-		// part of the tile to do the darkening.
-		try {
-			this.nightLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({
-					url: cartoUrl,
-					maximumLevel: 18,
-					minimumLevel: 0,
-					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-				}),
-			);
-			if (this.nightLayer) {
-				this.nightLayer.alpha = 0;
-				this.nightLayer.show = false;
-			}
-		} catch (e) {
-			console.warn('[CesiumManager] Night layer failed:', e);
-		}
+		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
 
 		// VIIRS night lights layer — NASA Black Marble via tile-packager cache.
 		// Greyscale input → tinted amber via hue + saturation. ColorToAlpha
@@ -549,42 +522,29 @@ export class CesiumManager {
 		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
 		this.lastNightFactor = nf;
 
-		// Both base-layer tonemap AND CartoDB overlay use the same night-map
-		// smoothstep curve. Previously linear lerp left morning (nf ~0.25)
-		// with 79% base brightness AND ~15% dark overlay — EOX imagery
-		// looked pre-dimmed before sunrise finished. Gated curve keeps
-		// visible morning at full vibrance; darkening fades in through
-		// late dusk before city lights appear (see $lib/night).
-		const nightEase = smoothstep(
-			(nf - NIGHT_MAP_SMOOTHSTEP_FLOOR) / (NIGHT_MAP_SMOOTHSTEP_CEIL - NIGHT_MAP_SMOOTHSTEP_FLOOR),
-		);
+		// Base imagery tonemap — desaturate + darken EOX as night falls so the
+		// vivid green-yellow Sentinel-2 colors don't bleed through as a hue
+		// cast under the shader's navy tint. Same 0.45→0.9 smoothstep curve
+		// the (removed) CartoDB overlay used so the "blue hour" beat — sky
+		// commits to darkness before city lights ignite — survives.
+		const baseEase = smoothstep((nf - 0.45) / (0.9 - 0.45));
 
 		const w = this.model.config.world;
 		if (this.baseLayer) {
-			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, nightEase);
-			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, nightEase);
-		}
-
-		if (!this.nightLayer) return;
-		this.nightLayer.show = (show || firstNight) && nightEase > 0.001;
-		const alpha = w.nightAlpha * nightEase * scale;
-		if (Math.abs(alpha - this.lastNightAlpha) > 0.001) {
-			this.lastNightAlpha = alpha;
-			this.nightLayer.alpha = alpha;
-			this.nightLayer.brightness = lerp(1, w.nightBrightness, nightEase) * scale;
-			this.nightLayer.contrast = lerp(1, w.nightContrast, nightEase);
+			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, baseEase);
+			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, baseEase);
 		}
 
 		// VIIRS lights fade in at night. Cap at 0.5 (was 0.9) so the amber
 		// overlay reads as "lit terrain" rather than washing the whole
-		// surface with VIIRS colour. The underlying CartoDB dark layer
-		// carries the sky/ocean darkness; VIIRS is an additive accent
+		// surface with VIIRS colour. The shader-driven base darkening now
+		// carries the sky/ocean dim load; VIIRS is the additive accent
 		// confined to the lit cells by colorToAlpha.
 		//
-		// Smoothstep curve (VIIRS_SMOOTHSTEP_FLOOR..CEIL). Linear lerp left
-		// VIIRS at 15–25% alpha through dawn/dusk, where hue+saturation
-		// tints leaked through colorToAlpha as magenta on city cores.
-		// Thresholds + cap live in $lib/night for discoverability.
+		// Smoothstep curve (VIIRS_SMOOTHSTEP_FLOOR..CEIL = 0.55..0.9). Floor
+		// at 0.55 prevents the "magenta leak" that hue-rotated colorToAlpha
+		// produced on bright city cores at early dusk. Thresholds + cap live
+		// in $lib/night for discoverability.
 		if (this.viirsLayer) {
 			const viirsEase = smoothstep(
 				(nf - VIIRS_SMOOTHSTEP_FLOOR) / (VIIRS_SMOOTHSTEP_CEIL - VIIRS_SMOOTHSTEP_FLOOR),
