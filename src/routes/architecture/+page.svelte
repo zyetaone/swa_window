@@ -397,6 +397,89 @@
 		</div>
 	</section>
 
+	<!-- ═══════════════════════════════════════════════════════════════ TRADE-OFFS -->
+	<section>
+		<h2>Trade-offs — The Decisions Behind the Design</h2>
+		<p class="hidden-blurb">Every architectural choice is a rejection of alternatives. These are the key decisions that shaped the codebase — what was chosen, what was rejected, and why.</p>
+		<div class="tradeoff-table">
+			<div class="tradeoff-row header">
+				<span>Decision</span><span>Chosen</span><span>Rejected</span><span>Why</span>
+			</div>
+			<div class="tradeoff-row"><span>Timestep</span><span>Variable dt (RAF)</span><span>Fixed accumulator</span><span>Pi kiosk runs locked refresh; simplicity wins</span></div>
+			<div class="tradeoff-row"><span>CRDT clock</span><span>Wall-clock Date.now()</span><span>Vector clocks / HLC</span><span>6 Pis on same LAN with NTP; drift risk accepted</span></div>
+			<div class="tradeoff-row"><span>Transport</span><span>SSE + REST</span><span>WebSocket <span class="tr-note">(removed post-WS)</span></span><span>SSE is standard, debuggable, no custom framing</span></div>
+			<div class="tradeoff-row"><span>State</span><span>Flat $state tree</span><span>Redux / stores</span><span>Svelte 5 runes are the reactivity primitive</span></div>
+			<div class="tradeoff-row"><span>Rendering</span><span>CSS effects over WebGL</span><span>All-WebGL</span><span>CSS is lighter on Pi GPU; compositor thread is free</span></div>
+			<div class="tradeoff-row"><span>Fleet</span><span>mDNS + LAN REST</span><span>Central server</span><span>Offline-first; no internet dependency</span></div>
+			<div class="tradeoff-row"><span>Config sync</span><span>CRDT LWW per-path</span><span>OT / state machine</span><span>LWW is simple, path-granular, no server</span></div>
+			<div class="tradeoff-row"><span>Auth</span><span>Bearer token, constant-time compare</span><span>JWT / OAuth</span><span>Pi may lack clock sync at boot; dead-simple</span></div>
+			<div class="tradeoff-row"><span>Content</span><span>TypeScript union files</span><span>JSON / YAML / CMS</span><span>TypeScript narrows LocationId union automatically</span></div>
+		</div>
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════ CONSTRAINTS -->
+	<section>
+		<h2>Constraints — The Box the Architecture Fits In</h2>
+		<div class="constraint-grid">
+			<div class="constraint-card">
+				<h4>Hardware</h4>
+				<p>Raspberry Pi 5, 8 GB RAM. Chromium kiosk mode. Single 1080p or 4K display. No dedicated GPU — WebGL runs on the VideoCore VII.</p>
+			</div>
+			<div class="constraint-card">
+				<h4>Network</h4>
+				<p>LAN-only fleet — 6 Pis on a private VLAN. No internet dependency except Cesium terrain tiles. mDNS for discovery. REST for admin. Offline-capable with pre-cached tiles.</p>
+			</div>
+			<div class="constraint-card">
+				<h4>Deployment</h4>
+				<p>Single-bundle output (SvelteKit <code>bundleStrategy: 'single'</code>). No service worker. No CDN. Kiosk boots directly into Chromium pointed at localhost:5173.</p>
+			</div>
+			<div class="constraint-card">
+				<h4>Interaction</h4>
+				<p>Touch-only kiosk — no keyboard, no mouse. Cursor hidden globally. One passenger gesture (blind drag). Admin access via LAN browser on a laptop.</p>
+			</div>
+			<div class="constraint-card">
+				<h4>Content</h4>
+				<p>Curated by non-engineers. Adding a location must not touch control-plane code. TypeScript unions widen automatically. Shows are the curation primitive.</p>
+			</div>
+			<div class="constraint-card">
+				<h4>Reliability</h4>
+				<p>Runs 24/7 on a corridor wall. Must survive power cycles, NTP desync, LAN partitions, browser crashes. Emergency reload after 10 consecutive RAF errors.</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════ OMISSIONS -->
+	<section>
+		<h2>Deliberately Not Built</h2>
+		<p class="hidden-blurb">What a codebase doesn't build is as architectural as what it does. These are explicit omissions — rejected with intent, not overlooked.</p>
+		<div class="omission-list">
+			<div class="omission-item">
+				<h4>No ECS</h4>
+				<p>Entity-Component-System is overkill for a single-entity product. The window IS the entity. There is no second entity to justify the pattern.</p>
+			</div>
+			<div class="omission-item">
+				<h4>No event queue</h4>
+				<p>The RAF tick is synchronous — flight, motion, director, and rendering run in lockstep each frame. No deferred events, no message bus between systems. Simplicity over flexibility.</p>
+			</div>
+			<div class="omission-item">
+				<h4>No server authority</h4>
+				<p>State is browser-side ($state). The Bun server is a relay — it forwards REST patches to the local browser via SSE, but has no state of its own beyond the peer registry. No database. No session store.</p>
+			</div>
+			<div class="omission-item">
+				<h4>No WebSocket</h4>
+				<p>Deliberately removed in the post-WS cleanup. Replaced with SSE (server → browser) + REST (admin → device). Fewer lines, standard protocols, no custom framing, no reconnect state machine.</p>
+			</div>
+			<div class="omission-item">
+				<h4>No WebRTC</h4>
+				<p>Peer-to-peer between Pis was considered and rejected. Admin is the natural hub — a laptop on the LAN pushing config patches via REST. P2P adds NAT traversal complexity for zero gain.</p>
+			</div>
+			<div class="omission-item">
+				<h4>No service worker</h4>
+				<p>Single-bundle output makes SW caching unnecessary — there's one JS file to load. Offline tile caching is filesystem-based (PMTiles), not SW-based. Kiosk never navigates away from /.</p>
+			</div>
+		</div>
+	</section>
+
 	<!-- ═══════════════════════════════════════════════════════════════ HIDDEN PILLARS -->
 	<section>
 		<h2>The Hidden Pillars — Time + Networking</h2>
@@ -439,7 +522,7 @@
 		<p class="audio-note">Day 6 hardening adds the first watchdog here: <code>MIN_SANE_TIMESTAMP</code> gate on fleet connect, NTP-drift echo in heartbeat, frame-budget watchdog that auto-downgrades quality.</p>
 
 		<h3 class="hidden-h3">Hidden Pillar 9 — Networking</h3>
-		<p class="hidden-blurb">REST + SSE + CRDT + mDNS + peer-sync = <code>src/lib/fleet/</code> (10+ files). The v1 framing rolls it under State's CRDT bullet — that describes the merge semantics, not the transport. Naming Networking makes field-failure modes first-class architectural concerns rather than footnotes.</p>
+		<p class="hidden-blurb">REST + SSE + CRDT + mDNS + peer-sync = <code>src/lib/fleet/</code> (12 files). The v1 framing rolls it under State's CRDT bullet — that describes the merge semantics, not the transport. Naming Networking makes field-failure modes first-class architectural concerns rather than footnotes.</p>
 		<div class="audio-map">
 			<div class="audio-pair">
 				<span class="audio-source">client.svelte.ts</span>
@@ -514,7 +597,7 @@
 		</div>
 		<div class="verdict-body">
 			<p><strong>Seven pillars stand.</strong> The architecture is clean — single RAF, single flat state tree, single compositor, single Z-source. The content pipeline is authorable by non-engineers. CRDT syncs 6 Pis without a central server.</p>
-			<p><strong>Two more pillars are hiding in plain sight.</strong> Time has six consumers and no owner — every smoothstep night gate reads it, the triptych sync depends on it, no module owns it. Networking is buried under State's CRDT bullet, but it's 10+ files of fleet code with their own failure modes — LAN partition, mDNS race, NTP drift. Naming them is the v1.1 patch this architecture needs before the SWA install lands.</p>
+			<p><strong>Two more pillars are hiding in plain sight.</strong> Time has six consumers and no owner — every smoothstep night gate reads it, the triptych sync depends on it, no module owns it. Networking is buried under State's CRDT bullet, but it's 12 files of fleet code with their own failure modes — LAN partition, mDNS race, NTP drift. Naming them is the v1.1 patch this architecture needs before the SWA install lands.</p>
 			<p><strong>Audio is a v2 feature, not the missing pillar.</strong> Interesting, but not load-bearing.</p>
 		</div>
 	</section>
@@ -602,6 +685,13 @@
 		margin: 0 0 28px;
 		color: #c8d0e8;
 		letter-spacing: -0.3px;
+	}
+
+	.h2-sub {
+		font-size: 14px;
+		font-weight: 400;
+		color: #5568a0;
+		margin-left: 10px;
 	}
 
 	h3 {
@@ -1288,6 +1378,106 @@
 	.arch-footer-sub {
 		font-size: 11px !important;
 		color: #404868 !important;
+	}
+
+	/* ── Trade-off Table ───────────────────────────────────────────── */
+
+	.tradeoff-table {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 10px;
+		overflow: hidden;
+		margin-bottom: 8px;
+	}
+
+	.tradeoff-row {
+		display: grid;
+		grid-template-columns: 100px 1fr 1fr 1.6fr;
+		gap: 8px;
+		padding: 10px 14px;
+		font-size: 12px;
+		color: #8890b0;
+		border-bottom: 1px solid rgba(255,255,255,0.03);
+		align-items: center;
+	}
+
+	.tradeoff-row:last-child { border-bottom: none; }
+
+	.tradeoff-row.header {
+		background: rgba(48,76,178,0.1);
+		font-weight: 700;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: #6080cc;
+	}
+
+	.tradeoff-row span:first-child {
+		font-weight: 600;
+		color: #b0b8d0;
+	}
+
+	.tr-note {
+		font-size: 10px;
+		color: #667090;
+		font-style: italic;
+	}
+
+	/* ── Constraint Grid ──────────────────────────────────────────── */
+
+	.constraint-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: 12px;
+	}
+
+	.constraint-card {
+		background: rgba(255,255,255,0.03);
+		border: 1px solid rgba(255,255,255,0.06);
+		border-radius: 10px;
+		padding: 16px;
+	}
+
+	.constraint-card h4 {
+		margin-bottom: 6px;
+	}
+
+	.constraint-card p {
+		font-size: 13px;
+		color: #7780a0;
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	/* ── Omission List ────────────────────────────────────────────── */
+
+	.omission-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+		gap: 12px;
+	}
+
+	.omission-item {
+		background: rgba(213,21,46,0.03);
+		border: 1px solid rgba(213,21,46,0.08);
+		border-left: 3px solid rgba(213,21,46,0.2);
+		border-radius: 0 8px 8px 0;
+		padding: 14px;
+	}
+
+	.omission-item h4 {
+		font-size: 13px;
+		color: #d07080;
+		margin-bottom: 4px;
+	}
+
+	.omission-item p {
+		font-size: 12px;
+		color: #8890b0;
+		margin: 0;
+		line-height: 1.5;
 	}
 
 	/* ── Responsive ────────────────────────────────────────────────── */
