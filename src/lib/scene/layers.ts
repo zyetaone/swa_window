@@ -27,8 +27,6 @@ export const Z = {
 	haze: 1,
 	/** Rain streaks */
 	rain: 2,
-	/** Lightning flashes */
-	lightning: 2,
 	/** Micro-events: birds, contrails, stars */
 	microEvents: 3,
 	/** Frost overlay (high-altitude) */

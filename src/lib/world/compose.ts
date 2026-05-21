@@ -12,6 +12,7 @@ import { normalizeHeading, shortestAngleDelta, lerp, smoothstep, clamp } from '$
 import { T } from '$lib/night';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { ViirsGridLayer } from './viirs-grid-layer';
+import { LightningStage } from './lightning-stage';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -75,7 +76,15 @@ interface CesiumModelView {
 			effectiveHeading(baseHeading: number): number;
 		};
 		world: WorldConfig;
-		atmosphere: { haze: { amount: number } };
+		atmosphere: {
+			haze: { amount: number };
+			weather: {
+				hasLightning: boolean;
+				lightningDecayRate: number;
+				lightningMinInterval: number;
+				lightningMaxInterval: number;
+			};
+		};
 	};
 	timeOfDay: number;
 	nightFactor: number;
@@ -132,6 +141,11 @@ export class CesiumManager {
 	// canvas + Cesium SingleTileImageryProvider. Updated when location +
 	// nightFactor + density cross thresholds; otherwise per-frame free.
 	private viirsGridLayer: ViirsGridLayer | null = null;
+	// Reframe 2026-05-22: lightning is now a Cesium PostProcessStage that
+	// runs over the whole scene image, not a DOM gradient layered over the
+	// pane. The stage decides scene-wide brightness; the composition picker
+	// still authors timing / intensity / strike-position recipes.
+	private lightningStage: LightningStage | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
@@ -240,6 +254,8 @@ export class CesiumManager {
 		await this.setupImagery();
 		await this.setupBuildings();
 		this.viirsGridLayer = new ViirsGridLayer(C, v);
+		this.lightningStage = new LightningStage(C, v);
+		this.lightningStage.mount();
 
 		// Set Cesium clock to model time on first frame so sun position is
 		// right from the start (otherwise we render with wall-clock UTC
@@ -453,8 +469,27 @@ export class CesiumManager {
 		this.syncTerrainExaggeration();
 		this.syncImagery();
 		this.syncViirsGrid();
+		this.syncLightning(dt);
 		this.syncBuildings();
 		this.syncQuality();
+	}
+
+	/**
+	 * Drive the lightning post-process stage. Composition picker fires
+	 * a strike, the stage's flash uniform decays. Falls back to weather
+	 * config when no composition is active (e.g. hasLightning was true
+	 * at boot before the picker rolled).
+	 */
+	private syncLightning(dt: number): void {
+		if (!this.lightningStage) return;
+		const w = this.model.config.atmosphere.weather;
+		this.lightningStage.tick(
+			dt,
+			w.hasLightning,
+			w.lightningDecayRate,
+			w.lightningMinInterval,
+			w.lightningMaxInterval,
+		);
 	}
 
 	/**
@@ -471,7 +506,9 @@ export class CesiumManager {
 		if (!this.viirsGridLayer) return;
 		const m = this.model;
 		const density = m.currentLocation.scene.nightLightDensity;
-		const alpha = Math.min(0.95, m.nightFactor * m.config.world.nightLightIntensity * density * 0.9);
+		// Alpha tuned 0.9 → 0.45 — at cruise altitude the rectangle still
+		// covers the whole foreground, so dominance must be tempered.
+		const alpha = Math.min(0.75, m.nightFactor * m.config.world.nightLightIntensity * density * 0.45);
 		this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
@@ -570,13 +607,16 @@ export class CesiumManager {
 			if (v.scene.fog) {
 				v.scene.fog.enabled = targetDensity > 0.00001;
 				v.scene.fog.density = targetDensity;
-				// Phase 10 (Council researcher catch): visualDensityScalar adds
-				// aerial-perspective haze on the horizon WITHOUT increasing
-				// tile-cull density (which would cause pop-in). At cruise we
-				// want thick visible haze + normal LOD. Lerp 1.0 (day) → 2.5
-				// (deep night) for stronger atmospheric depth at night.
+				// Phase 10 / 11b — visualDensityScalar adds aerial-perspective
+				// haze on the horizon without increasing tile-cull density
+				// (no pop-in). Bumped 1.5→2.4 after the DOM HazeEffect was
+				// deleted so Cesium fog alone carries the horizon-band haze
+				// that the screen-anchored gradient used to provide.
+				// Also picks up the per-location haze multiplier
+				// (atmosphere.haze.intensity) so mountain locations get
+				// crisper air, ocean locations get thicker.
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				(v.scene.fog as any).visualDensityScalar = 1.0 + 1.5 * nf;
+				(v.scene.fog as any).visualDensityScalar = 1.0 + 2.4 * nf + m.config.atmosphere.haze.amount * 4;
 			}
 		}
 		if (Math.abs(targetBrightness - this.lastFogBrightness) > 0.01) {
@@ -807,6 +847,10 @@ export class CesiumManager {
 		if (this.viirsGridLayer) {
 			this.viirsGridLayer.destroy();
 			this.viirsGridLayer = null;
+		}
+		if (this.lightningStage) {
+			this.lightningStage.destroy();
+			this.lightningStage = null;
 		}
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {

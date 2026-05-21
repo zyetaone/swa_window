@@ -22,10 +22,10 @@
 
 import type * as CesiumType from 'cesium';
 
-const CANVAS_SIZE = 1024;
-const GRID = 64;                       // cells per axis — perceptual block density
-const RECT_RADIUS_DEG = 3;             // half-extent of the rectangle in degrees
-const BLOCK_WIDTH_FRACTION = 0.55;     // narrow stripes read as buildings, not full cells
+const CANVAS_SIZE = 2048;             // higher res so blocks read crisp from cruise altitude
+const GRID = 96;                       // cells per axis — perceptual block density
+const RECT_RADIUS_DEG = 1.2;           // half-extent of the rectangle in degrees (smaller = blocks read smaller)
+const BLOCK_WIDTH_FRACTION = 0.4;      // narrow stripes — leave gaps between buildings
 
 /**
  * Paint the city-block intensity field into the given canvas. Deterministic
@@ -81,17 +81,11 @@ function paintGrid(canvas: HTMLCanvasElement, lat: number, lon: number, density:
 			// Y-dynamic block height — intensity drives how tall the stripe is.
 			const h = cellH * (0.25 + intensity * 0.85);
 
-			// Pre-pass: soft glow via canvas shadow for the brightest cells.
-			if (intensity > 0.4) {
-				ctx.shadowColor = `rgba(${R}, ${G}, ${B}, ${(intensity * 0.6).toFixed(2)})`;
-				ctx.shadowBlur = 4 + intensity * 10;
-				ctx.fillStyle = `rgba(${R}, ${G}, ${B}, ${alpha.toFixed(2)})`;
-				ctx.fillRect(x, y, w, h);
-				ctx.shadowBlur = 0;
-			} else {
-				ctx.fillStyle = `rgba(${R}, ${G}, ${B}, ${alpha.toFixed(2)})`;
-				ctx.fillRect(x, y, w, h);
-			}
+			// Sharp blocks, no canvas shadow blur — at cruise altitude any
+			// shadow smudges the grid into a wash. The shader's bloom pass
+			// will halo bright pixels in post.
+			ctx.fillStyle = `rgba(${R}, ${G}, ${B}, ${alpha.toFixed(2)})`;
+			ctx.fillRect(x, y, w, h);
 		}
 	}
 }
