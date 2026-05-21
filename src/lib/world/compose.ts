@@ -506,9 +506,12 @@ export class CesiumManager {
 		if (!this.viirsGridLayer) return;
 		const m = this.model;
 		const density = m.currentLocation.scene.nightLightDensity;
-		// Alpha tuned 0.9 → 0.45 — at cruise altitude the rectangle still
-		// covers the whole foreground, so dominance must be tempered.
-		const alpha = Math.min(0.75, m.nightFactor * m.config.world.nightLightIntensity * density * 0.45);
+		// Alpha tuned 0.45 → 0.22 — at cruise altitude the rectangle covers
+		// the whole foreground, so the grid should read as an ACCENT on the
+		// raster VIIRS underneath, not a replacement. Building emissive (at
+		// 15-25kft) is the dominant low-altitude light source; the grid is
+		// for mid-distance city footprint.
+		const alpha = Math.min(0.4, m.nightFactor * m.config.world.nightLightIntensity * density * 0.22);
 		this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
