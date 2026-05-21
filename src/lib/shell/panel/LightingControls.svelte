@@ -23,4 +23,5 @@
 	/>
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
+	<Toggle label="Touch (Demo Mode)" bind:checked={config.shell.touchEnabled} />
 </section>

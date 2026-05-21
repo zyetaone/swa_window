@@ -20,7 +20,7 @@ import { clamp } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from AeroWindow. */
 interface BlindControl {
-	config: { shell: { blindOpen: boolean } };
+	config: { shell: { blindOpen: boolean; touchEnabled: boolean } };
 	applyConfigPatch: (path: string, value: unknown) => boolean;
 	flight: { isTransitioning: boolean };
 	/** Pick a next-location id based on current state. */
@@ -134,11 +134,18 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		dragStartPointerX = e.clientX;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-		if (lpEnabled) {
+		// Long-press acceleration is OPERATOR/DEMO behavior — gated behind
+		// config.shell.touchEnabled per Q3 council. Read at pointer-down so the
+		// admin toggle takes effect on the next gesture. The basic blind drag
+		// itself (above) is always active regardless — it's the curtain metaphor.
+		if (lpEnabled && model.config.shell.touchEnabled) {
 			clearPressTimer();
 			cancelRelease();
 			pressTimer = setTimeout(() => {
 				pressTimer = null;
+				// Re-check the gate inside the callback: if touch was disabled
+				// mid-press, don't accelerate.
+				if (!model.config.shell.touchEnabled) return;
 				accelerated = true;
 				speedMultiplier = lpSpeed;
 			}, lpThreshold);

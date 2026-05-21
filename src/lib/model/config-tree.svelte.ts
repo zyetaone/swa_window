@@ -248,6 +248,13 @@ export const shell = $state({
 	hudVisible: true,
 	sidePanelOpen: false,
 	showWing: true,
+	// Touch-contract gate (Q3 council 2026-05-20). false = passenger mode: basic
+	// blind drag is the ONLY touch interaction — the curtain metaphor. true =
+	// demo/operator mode: long-press acceleration + future multi-touch gestures
+	// become live. Lobby installs ship with false; operator iPad PATCHes shell.
+	// touchEnabled=true via /api/config for guided demos. Auto-revert timer
+	// (10-min) is a v1.1 follow-up; for v1 the toggle is sticky.
+	touchEnabled: false,
 });
 
 
