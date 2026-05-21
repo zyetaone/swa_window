@@ -127,13 +127,20 @@ function createHorizonSprites(count: number, textures: readonly string[]): Cloud
 
 function createHorizonCloud(): Cloud {
 	const textures = textureSets[weather] ?? textureSets.clear;
+	// Phase 10b (user direction): horizon clouds hug the VISIBLE horizon line
+	// (~y 42-50% at default cruise pitch -75°) rather than floating high in
+	// the sky band (6-22%). This is the "fake clouds at horizon behind the
+	// Earth" effect — the deep negative z (-1600..-700) plus the mask in
+	// css3d-clouds keeps them feeling far away, while the y-band lands them
+	// right above the Earth silhouette where VIIRS city lights are visible.
+	// Counts widened so the horizon strip actually reads as a cloud bank.
 	return {
 		x: rand(-30, 130),
-		y: rand(6, 22),
-		z: rand(-1400, -600),
-		vx: rand(0.5, 1.8),
-		baseScale: rand(1.8, 3.2),  // wide but translucent
-		sprites: createHorizonSprites(8 + Math.floor(Math.random() * 5), textures),
+		y: rand(28, 44),
+		z: rand(-1600, -700),
+		vx: rand(0.4, 1.6),
+		baseScale: rand(2.0, 3.6),  // wide but translucent
+		sprites: createHorizonSprites(10 + Math.floor(Math.random() * 6), textures),
 	};
 }
 
@@ -151,8 +158,12 @@ function createCloud(idx: number, total: number): Cloud {
 	};
 }
 
-const horizonCount = $derived(Math.max(4, Math.round(effectiveDensity * 8)));
-const midCount = $derived(Math.max(3, Math.round(effectiveDensity * 10)));
+// Phase 10b — horizon count bumped 8→14 so the visible-horizon cloud bank
+// reads as continuous when density is high. Mid count slightly lowered
+// because horizon clouds now occupy the band mid-clouds previously bled
+// into; keep total scene complexity similar.
+const horizonCount = $derived(Math.max(6, Math.round(effectiveDensity * 14)));
+const midCount = $derived(Math.max(3, Math.round(effectiveDensity * 8)));
 
 let clouds = $state<Cloud[]>([]);
 $effect(() => {

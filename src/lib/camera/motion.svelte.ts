@@ -75,9 +75,17 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 
 	if (_bumpElapsed >= 0) {
 		_bumpElapsed += delta;
+		// Phase 10b — soft onset envelope (1 - exp(-8t)) reaches ~80% at 200ms
+		// and ~95% at 370ms. Without it, the bump's first sin-peak (at t ≈
+		// π/(2*ringFreq) ≈ 220ms) lands at full amplitude and reads as a JERK
+		// rather than a swell. With the envelope, peak energy arrives just as
+		// the envelope reaches ~85%, giving a smoother rise even at the same
+		// peak amplitude.
+		const onset = 1 - Math.exp(-8 * _bumpElapsed);
 		bumpValue = _bumpSign * m.bumpAmplitude * turbMult
 			* Math.exp(-m.bumpDecay * _bumpElapsed)
-			* Math.sin(m.bumpRingFreq * _bumpElapsed);
+			* Math.sin(m.bumpRingFreq * _bumpElapsed)
+			* onset;
 		if (_bumpElapsed > 1.5) _bumpElapsed = -1;
 	} else if (_bumpTimer > _nextBump) {
 		_bumpTimer = 0;

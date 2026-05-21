@@ -130,8 +130,12 @@ const _camera: CameraShape = {
 		maxSpeed: 3.0,
 	},
 	motion: {
-		// Banking — horizon tilt during orbit turns.
-		bankAngleMax: 6.0,
+		// Banking — horizon tilt during orbit turns. Phase 10b (user direction
+		// "improve tilt on plane rotation, to the left more sky to the right
+		// more ground"): bumped 6→10 for a more dramatic horizon roll when the
+		// scene rotates. The motion.svelte.ts tick still ramps softly via
+		// bankSmoothing — visible cabin tilt, not a snap.
+		bankAngleMax: 10.0,
 		bankSmoothing: 2.5,
 		// Pitch breathing — slow nose up/down oscillation.
 		breathingPeriod: 22,
@@ -140,18 +144,17 @@ const _camera: CameraShape = {
 		engineVibeFreqX: 7,     // Hz
 		engineVibeFreqY: 11,    // Hz (different to avoid Lissajous lock)
 		engineVibeAmp: 0.35,    // pixels
-		// Turbulence bumps — occasional jolts. Phase 10 (user direction):
-		// SMOOTHED — defaults softened (amplitude 3→1.4, multipliers halved,
-		// offsetY 0.05→0.025). Office-install context wants gentle ambient
-		// motion, not turbulent flight. Operators can crank via admin if
-		// they want a more dramatic ride.
-		bumpMinInterval: 45,        // longer gaps between bumps
-		bumpMaxInterval: 180,
-		bumpDecay: 10,              // faster decay = shorter-lived
-		bumpRingFreq: 12,           // gentler oscillation
-		bumpAmplitude: 1.4,         // was 3 — half the jolt
-		turbulenceMultipliers: { severe: 1.5, moderate: 0.8, light: 0.5 }, // all halved
-		turbulenceOffsetY: 0.025,   // was 0.05 — half the chatter range
+		// Turbulence bumps — occasional jolts. Phase 10b (user direction
+		// "reduce turbulence jerks"): amplitudes pulled below the Phase-10
+		// numbers and a soft-onset envelope added in motion.svelte.ts. Office
+		// install context wants AMBIENT motion, not turbulent flight.
+		bumpMinInterval: 60,        // longer gaps between bumps
+		bumpMaxInterval: 220,
+		bumpDecay: 6,               // slower decay reads as a softer wash
+		bumpRingFreq: 7,            // lower osc freq → less rapid wobble
+		bumpAmplitude: 0.7,         // was 1.4 — half the jolt again
+		turbulenceMultipliers: { severe: 0.9, moderate: 0.5, light: 0.3 },
+		turbulenceOffsetY: 0.015,   // chatter range halved
 	},
 	altitude: {
 		default: 35000,         // feet
