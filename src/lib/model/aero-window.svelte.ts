@@ -29,23 +29,6 @@ import { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
 const TRANSITION_DELAY_MS = 2500;
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface AeroWindowPatch {
-	altitude: number;
-	timeOfDay: number;
-	weather: WeatherType;
-	cloudDensity: number;
-	cloudSpeed: number;
-	haze: number;
-	nightLightIntensity: number;
-	flightSpeed: number;
-	syncToRealTime: boolean;
-	showClouds: boolean;
-	showBuildings?: boolean;
-	qualityMode?: QualityMode;
-}
-
 // ─── User override state ──────────────────────────────────────────────────────
 
 /** Expiry timestamps (performance.now()) per override kind. 0 = inactive. */
@@ -166,12 +149,29 @@ export class AeroWindow {
 		// Precedence at boot:
 		//   1. Show opening (baseline — from $content/shows/default.show.ts)
 		//   2. Persisted localStorage (user's last session, wins over show)
-		//   3. Real-time wall-clock (if syncToRealTime, overrides timeOfDay
+		//   3. Dev-mode night override (only if no persisted state AND import.meta.env.DEV)
+		//   4. Real-time wall-clock (if syncToRealTime, overrides timeOfDay
 		//      to current wall-clock below)
 		// URL params and admin pushes come later in the page lifecycle.
 		applyShowOpening(this, defaultShow);
-		this.#applyPersisted(loadPersistedState());
+		const persisted = loadPersistedState();
+		this.#applyPersisted(persisted);
 		this.#syncWeatherConfig();
+
+		// Dev-mode: when iterating in `bun run dev` with nothing persisted yet,
+		// default to deep night (22:00) instead of the show's dawn opening, so
+		// the night-light pipeline (VIIRS / shader / warm glow) is visible by
+		// default while developing. Production install ships with the show's
+		// dawn opening; this branch is gated on import.meta.env.DEV so it never
+		// reaches the Pi.
+		if (
+			typeof window !== 'undefined'
+			&& import.meta.env.DEV
+			&& Object.keys(persisted).length === 0
+		) {
+			this.syncToRealTime = false;
+			this.timeOfDay = 22;
+		}
 
 		if (typeof window !== 'undefined') {
 			this.#fpsLastTime = performance.now();
@@ -282,43 +282,6 @@ export class AeroWindow {
 		return _applyConfigPatch(path, value);
 	}
 
-	/**
-	 * Flat-DTO adapter. NOT a parallel writer — every field delegates to a
-	 * typed setter (for behaviours that need side effects like bounds clamp
-	 * or user-interaction tracking) or to applyConfigPatch (for pure config
-	 * tree values). Two callers remain: (a) director returns AtmospherePatch
-	 * through this adapter; (b) fleet v1 `set_config` handler until admin
-	 * panel migrates to v2 path patches.
-	 *
-	 * Direct panel callers (WeatherPicker, TimeControl, FlightControls)
-	 * should use the typed setters instead.
-	 */
-	applyPatch(patch: Partial<AeroWindowPatch>): void {
-		if (patch.altitude !== undefined)            this.setAltitude(patch.altitude);
-		if (patch.timeOfDay !== undefined)           this.setTime(patch.timeOfDay);
-		if (patch.weather !== undefined)             this.setWeather(patch.weather as WeatherType);
-		if (patch.flightSpeed !== undefined)         this.setFlightSpeed(patch.flightSpeed);
-		if (patch.syncToRealTime !== undefined && typeof patch.syncToRealTime === 'boolean') {
-			this.syncToRealTime = patch.syncToRealTime;
-		}
-		if (patch.cloudDensity !== undefined) {
-			this.applyConfigPatch('atmosphere.clouds.density', clamp(patch.cloudDensity, 0, 1));
-			this.onUserInteraction('atmosphere');
-		}
-		if (patch.cloudSpeed !== undefined)          this.applyConfigPatch('atmosphere.clouds.speed', clamp(patch.cloudSpeed, 0, 2));
-		if (patch.haze !== undefined)                this.applyConfigPatch('atmosphere.haze.amount', clamp(patch.haze, 0, 0.2));
-		if (patch.nightLightIntensity !== undefined) this.applyConfigPatch('world.nightLightIntensity', clamp(patch.nightLightIntensity, 0, 5));
-		if (patch.showClouds !== undefined && typeof patch.showClouds === 'boolean') {
-			this.applyConfigPatch('world.showClouds', patch.showClouds);
-		}
-		if (patch.showBuildings !== undefined && typeof patch.showBuildings === 'boolean') {
-			this.applyConfigPatch('world.buildingsEnabled', patch.showBuildings);
-		}
-		if (patch.qualityMode !== undefined) {
-			this.setQualityMode(patch.qualityMode);
-		}
-	}
-
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
 		trackOverride(type);
 	}
@@ -357,7 +320,12 @@ export class AeroWindow {
 		ctx.isLeader = role === 'solo' || role === 'center';
 		const directorPatch = directorTick(delta, ctx);
 
-		if (directorPatch.atmosphere) this.applyPatch(directorPatch.atmosphere);
+		if (directorPatch.configs) {
+			for (const { path, value } of directorPatch.configs) {
+				if (path === 'weather') this.setWeather(value as WeatherType);
+				else this.applyConfigPatch(path, value);
+			}
+		}
 		if (directorPatch.nextLocation) {
 			// Phase 7 — if we're a panorama leader with connected followers,
 			// broadcast the decision BEFORE flying locally. transitionAtMs is

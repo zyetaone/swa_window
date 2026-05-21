@@ -124,9 +124,18 @@
 
 
 	// --- Wing silhouette (dark gradient at bottom-left, shifting with bank) ---
-
+	//
+	// Phase 11 (wing-audit agent): two-line delta to give the silhouette a
+	// felt connection to the cabin. Was: pure rotate by bankAngle×0.3. Now:
+	//   - bank coefficient 0.3 → 0.55 so a 6° bank visibly rolls the wing
+	//   - translateY tracks motionOffsetY (turbulence + bumps) so a cabin
+	//     shake also bobs the wing 2-3px instead of leaving it floating
+	//     decoupled from the fuselage
+	//   - engineVibeY adds a tiny constant shimmer so the wing reads as
+	//     "vibrating along with the engines" at rest
+	const wingFlex = $derived(model.motion.motionOffsetY * 0.45 + model.motion.engineVibeY * 0.6);
 	const wingTransform = $derived(
-		`rotate(${(-2 + model.motion.bankAngle * 0.3).toFixed(2)}deg)`,
+		`translateY(${wingFlex.toFixed(2)}px) rotate(${(-2 + model.motion.bankAngle * 0.55).toFixed(2)}deg)`,
 	);
 
 	// --- Glass ---

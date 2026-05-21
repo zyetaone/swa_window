@@ -234,9 +234,13 @@ export const world = $state({
 	nightLightIntensity: 0.6,
 	// Bloom post-process — high contrast + negative brightness means only the
 	// top of the luminance range blooms. Sigma controls the Gaussian spread.
+	// Phase 11b (user "increase additive light and bloom"): brightness
+	// threshold raised slightly (-0.3 → -0.2 — a bit more of the dim range
+	// gets bloom) and sigma widened (2.2 → 3.0) so halos pool across more
+	// pixels and the lit-city look reads as glow, not pinpricks.
 	bloomContrast: 128,
-	bloomBrightness: -0.3,
-	bloomSigma: 2.2,
+	bloomBrightness: -0.2,
+	bloomSigma: 3.0,
 	buildingsEnabled: true,
 	// Phase 3 (variant E productionized) — buildings glow amber at low altitude
 	// (passenger-window mode) and fade above cruise altitude. The blend is on
@@ -252,15 +256,15 @@ export const world = $state({
 	// ambient) feed COLOR_GRADING_GLSL; the 6 scene uniforms (moonlight /
 	// exposure / atmosphere / sky / viirs) drive compose.ts scene-lighting.
 	paletteSpread: 0.25,        // hash range — per-pixel palette variance
-	additiveStrength: 7.0,      // emissive boost on lit pixels (calm-amber)
+	additiveStrength: 11.0,     // emissive boost — bumped 7→11 per user "increase additive light"
 	redSparkRate: 0.03,         // fraction of lit pixels going traffic-red
 	darkVoidStrength: 0.3,      // crush unlit terrain toward black at night
 	envLight: 0.5,              // ambient warm moonlight floor (DOM-side)
 	viirsMaskStrength: 0.85,    // chroma gate — restrict palette to warm pixels
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
-	nightExposure: 0.85,        // postProcessStages.exposure at deep night (1.0 day)
-	atmosphereLight: 3.0,       // globe.atmosphereLightIntensity at night (Cesium default 10)
-	skyDarken: 1.6,             // multiplier on skyAtmosphere.brightnessShift
+	nightExposure: 0.7,         // exposure at deep night (was 0.85) — darker mid/highlights
+	atmosphereLight: 2.0,       // globe.atmosphereLightIntensity at night (was 3.0)
+	skyDarken: 2.4,             // sky brightness multiplier — bumped 1.6→2.4 per user "sky is white"
 	viirsBrightness: 1.5,       // multiplier on viirsLayer.brightness (set at setup)
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
 	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
