@@ -236,6 +236,24 @@ export const world = $state({
 	buildingEmissiveLowAltFt: 15000,
 	buildingEmissiveHighAltFt: 25000,
 	buildingEmissiveMax: 0.6,
+	// Phase 9 (Apr-15 hash palette + Cesium API knobs productionized from
+	// night-lab Variants G + H). Defaults below were tuned in the lab against
+	// Hyderabad night view; operators can adjust via admin panel for on-site
+	// fine-tune. The 6 shader uniforms (palette / chroma / dark void / env /
+	// ambient) feed COLOR_GRADING_GLSL; the 6 scene uniforms (moonlight /
+	// exposure / atmosphere / sky / viirs) drive compose.ts scene-lighting.
+	paletteSpread: 0.25,        // hash range — per-pixel palette variance
+	additiveStrength: 7.0,      // emissive boost on lit pixels (calm-amber)
+	redSparkRate: 0.03,         // fraction of lit pixels going traffic-red
+	darkVoidStrength: 0.3,      // crush unlit terrain toward black at night
+	envLight: 0.5,              // ambient warm moonlight floor (DOM-side)
+	viirsMaskStrength: 0.85,    // chroma gate — restrict palette to warm pixels
+	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
+	nightExposure: 0.85,        // postProcessStages.exposure at deep night (1.0 day)
+	atmosphereLight: 3.0,       // globe.atmosphereLightIntensity at night (Cesium default 10)
+	skyDarken: 1.6,             // multiplier on skyAtmosphere.brightnessShift
+	viirsBrightness: 1.5,       // multiplier on viirsLayer.brightness (set at setup)
+	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
 	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
 	// it doesn't compete with the building emissive at passenger-window
 	// altitudes. At cruise (>15kft) VIIRS is full strength; below 5kft VIIRS

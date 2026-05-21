@@ -1,39 +1,54 @@
 /**
- * Post-process color grading shader.
+ * Post-process color grading shader — Phase 9 (Apr-15 hash palette
+ * productionized from night-lab Variant G).
  *
- * Pixel-level finishing pass that runs after Cesium has composited the
- * imagery layers + bloom. Three jobs (Phase 15.5 P2 simplification):
+ * Pixel-level finishing pass after Cesium has composited imagery + bloom.
+ * Six jobs in render order:
  *
- *   1. brightGuard — protect VIIRS amber + sun disc from base darkening
- *   2. baseDarken  — replaces the CartoDB Dark imagery overlay's
- *                    atmospheric function with a 3-line mix() to navy.
- *                    Smoothstep(0.45, 0.9) matches the old CartoDB
- *                    ramp so the blue-hour beat survives.
- *   3. pollution   — subtle warm corona on already-bright pixels at night
+ *   1. lightMask    — widened `smoothstep(0.08, 0.65, lum)` (was brightGuard
+ *                     0.75-0.95). Catches VIIRS-lit pixels + spill so the
+ *                     navy mix below doesn't crush amber city lights.
+ *   2. chroma gate  — clamp lightMask by red-bias `rgb.r - rgb.b` so the
+ *                     hash palette only paints warm pixels (VIIRS amber) and
+ *                     not cool atmospheric haze / water glint / snow.
+ *   3. hash palette — 3-stop warm (sodium → amber → warm-white) blended by
+ *                     `lum + (hash - 0.5) × paletteSpread`. Per-pixel UV hash
+ *                     gives organic colour variance — cities read painterly
+ *                     instead of uniformly amber. 3% of lit pixels go traffic
+ *                     red for beacon/taillight character.
+ *   4. baseDarken   — Phase 15.5 navy mix, but gated by `(1 - lightMask)`
+ *                     instead of `(1 - brightGuard)`. Lit pixels survive the
+ *                     darkening; only unlit terrain pushes toward navy.
+ *   5. dark void    — push lum < 0.2 toward true black at deep night so
+ *                     cities pop as islands of light.
+ *   6. pollution    — Phase 15.5 warm corona on already-bright pixels.
+ *   7. ambient      — neutral-warm moonlight floor so terrain isn't pure void.
  *
- * What this shader USED to do but no longer does (and why):
- *   - shadow crush + contrast → 90% redundant with Cesium's HDR tonemap
- *                                and bloom. The base mix() already pushes
- *                                darks toward navy; pow()-based crush on
- *                                top compounded the darkening without
- *                                adding legibility. Dropped in Phase 15.5
- *                                per council (game-dev + exp-dev voices).
- *   - horizon haze       → painted by `scene/effects/haze/HazeEffect.svelte`
- *                          via `mix-blend-mode: screen` on the DOM, palette
- *                          driven from `$content/palettes/sky.ts`. Single
- *                          source of horizon haze.
- *   - dawn/dusk rim      → Cesium's own `skyAtmosphere` carries the warm
- *                          horizon glow at sunrise/sunset (sun-position
- *                          dependent). The shader's earlier "warm from left
- *                          edge" approximation didn't match the real sun
- *                          direction at our -75° camera pitch, and stacked
- *                          on top of skyAtmosphere produced the cyan band.
+ * Authored design: night should read calm-amber, geographically accurate
+ * (VIIRS provides the footprint), painterly (palette variance), and lifted
+ * (moonlight floor + ACES tonemap in compose.ts). All at zero cost when
+ * `nightFactor = 0`.
+ *
+ * History: this shader resurrects commit e4a9525 (Apr 15, 2026) "emissive
+ * city lights — per-pixel palette variance + bloom" with three changes:
+ *   • palette reduced 5→3 stops (cool/blue stops removed for SWA calm-amber
+ *     brand — they bled violet on the Phase 15.5 navy backdrop)
+ *   • new chroma-bias VIIRS gate prevents palette from landing on cool
+ *     atmosphere pixels (would also bleed violet)
+ *   • lightMask now guards the navy darken (Phase 15.5's brightGuard 0.75
+ *     was too tight, crushed most VIIRS amber)
  */
 
 export const COLOR_GRADING_GLSL = `
 	uniform sampler2D colorTexture;
 	uniform float u_nightFactor;
 	uniform float u_lightIntensity;
+	uniform float u_paletteSpread;
+	uniform float u_additiveStrength;
+	uniform float u_redSparkRate;
+	uniform float u_darkVoidStrength;
+	uniform float u_envLight;
+	uniform float u_viirsMaskStrength;
 	in vec2 v_textureCoordinates;
 
 	void main() {
@@ -41,24 +56,63 @@ export const COLOR_GRADING_GLSL = `
 		vec3 rgb = color.rgb;
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
-		// Preserve VIIRS amber + sun disc from base darkening below.
 		float brightGuard = smoothstep(0.75, 0.95, lum);
 
-		// Base darkening — replaces the (removed) CartoDB Dark imagery
-		// overlay. Smoothstep(0.45, 0.9) matches the old CartoDB ramp so
-		// the "atmospheric darkening starts before city lights" blue-hour
-		// beat survives. Navy tint reads deep-blue-dark, not pure black —
-		// the unlit ground feels atmospheric, not void.
-		float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.85;
-		rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - brightGuard));
+		// Widened lightMask — pixels between lit roads pick up 20-30% of warm
+		// treatment, reading as spill rather than dark gaps.
+		float lightMask = smoothstep(0.08, 0.65, lum);
 
-		// Subtle warm pollution corona on already-bright pixels — the
-		// atmospheric halo around dense cities seen from altitude. Clamp
-		// prevents additive blow-out at high u_lightIntensity on already-
-		// bloomed city cores (otherwise hue-shifts yellow once a channel
-		// saturates).
-		float pollution = smoothstep(0.35, 0.9, lum) * u_nightFactor;
-		rgb = min(rgb + vec3(0.15, 0.08, 0.02) * pollution * u_lightIntensity, vec3(1.0));
+		// Chroma-bias VIIRS gate — amber pixels have rgb.r > rgb.b. Water
+		// glint, snow, cool atmosphere have rgb.r ≈ rgb.b. Gate lightMask by
+		// red-bias so palette only paints warm (VIIRS-like) pixels.
+		float redBias = clamp(rgb.r - rgb.b, 0.0, 1.0);
+		float viirsLikely = smoothstep(0.05, 0.3, redBias);
+		lightMask *= mix(1.0, viirsLikely, u_viirsMaskStrength);
+
+		// Desat under lights — kills blue-base / amber-light → purple bleed.
+		vec3 grayBase = vec3(lum);
+		rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
+
+		// Per-pixel UV hash for palette variance.
+		float hash = fract(sin(dot(v_textureCoordinates * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
+		float paletteLum = clamp(lum + (hash - 0.5) * u_paletteSpread, 0.0, 1.0);
+
+		// 3-stop warm palette (sodium → amber → warm-white). Calm-amber brand.
+		vec3 sodium   = vec3(1.0, 0.6, 0.2);
+		vec3 amber    = vec3(1.0, 0.8, 0.4);
+		vec3 warmWht  = vec3(1.0, 0.95, 0.85);
+		vec3 trafficRed = vec3(1.0, 0.15, 0.05);
+
+		vec3 lightColor = mix(sodium, amber, smoothstep(0.15, 0.5, paletteLum));
+		lightColor = mix(lightColor, warmWht, smoothstep(0.5, 0.9, paletteLum));
+
+		// 3% red sparks for beacon/taillight texture.
+		float redSpark = step(1.0 - u_redSparkRate, fract(hash * 7.3));
+		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
+
+		// Additive emissive — clamped at 4.0 for HDR headroom (ACES tonemap
+		// in compose.ts maps the wider range).
+		rgb += lightColor * lum * u_additiveStrength * u_nightFactor;
+		rgb = min(rgb, vec3(4.0));
+
+		// Phase 15.5 base darkening — guarded by lightMask (not brightGuard)
+		// so VIIRS amber survives the navy mix. The Phase 9 win.
+		float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.85;
+		rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
+
+		// Dark void crush — push lum < 0.2 toward black so cities pop.
+		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
+		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * u_darkVoidStrength * (1.0 - brightGuard));
+
+		// Phase 15.5 pollution corona — broadened footprint for visible amber dome.
+		float pollution = smoothstep(0.10, 0.5, lum) * u_nightFactor;
+		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
+
+		// Neutral-warm ambient moonlight floor — applied LAST so dark-void
+		// can't push terrain to pure void. Aligns with calm-amber brand
+		// (cool floor would stack to violet against navy backdrop).
+		vec3 ambient = vec3(0.025, 0.022, 0.018) * u_envLight * u_nightFactor;
+		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}

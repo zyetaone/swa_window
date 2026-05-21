@@ -131,6 +131,23 @@ export class CesiumManager {
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
+	// Phase 9: moonlight DirectionalLight that replaces scene.light at deep
+	// night. Snapshot the original SunLight so we can swap back at dawn.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private moonlight: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private originalSunLight: any = null;
+	private isUsingMoonlight = false;
+	// Reusable Cartesian3s for moon-phase math (no per-frame allocation)
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private _sunPos: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private _moonPos: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private _earthToMoon: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private _moonToSun: any = null;
+
 	// Effect sync caches
 	private lastGlobeColor = '';
 	private lastFogDensity = -1;
@@ -171,6 +188,14 @@ export class CesiumManager {
 		v.scene.logarithmicDepthBuffer = true;
 		v.scene.highDynamicRange = true;
 		v.scene.postProcessStages.fxaa.enabled = true;
+		// Phase 9: ACES tonemap delivers richer blacks and brighter highlights
+		// than the default PBR_NEUTRAL — punches the calm-amber direction.
+		// Exposure starts neutral (1.0) and gets lerped by nightFactor in tick()
+		// toward world.nightExposure. Zero GPU cost vs. PBR_NEUTRAL default.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(v.scene.postProcessStages as any).tonemapper = (C as any).Tonemapper.ACES;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(v.scene.postProcessStages as any).exposure = 1.0;
 		// Globe lighting ON — terminator (day/night boundary) now renders on
 		// the globe, and terrain/buildings cast real shadows when the sun is
 		// low. Sun position is driven by syncClock (local-at-longitude UTC).
@@ -188,6 +213,20 @@ export class CesiumManager {
 			(v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		if (v.scene.moon) v.scene.moon.show = true;
+
+		// Phase 9: snapshot the default SunLight so we can swap back at dawn,
+		// pre-build the warm moonlight DirectionalLight (no per-frame alloc),
+		// pre-allocate the Cartesian3s for moon-phase math.
+		this.originalSunLight = v.scene.light;
+		this.moonlight = new C.DirectionalLight({
+			direction: new C.Cartesian3(0, 0, -1),
+			color: new C.Color(0.95, 0.88, 0.78, 1.0),
+			intensity: 0.0,
+		});
+		this._sunPos = new C.Cartesian3();
+		this._moonPos = new C.Cartesian3();
+		this._earthToMoon = new C.Cartesian3();
+		this._moonToSun = new C.Cartesian3();
 
 		this.#boundTick = this.tick.bind(this);
 		v.scene.postRender.addEventListener(this.#boundTick);
@@ -275,6 +314,13 @@ export class CesiumManager {
 					uniforms: {
 						u_nightFactor: () => this.model.nightFactor,
 						u_lightIntensity: () => this.model.nightLightScale,
+						// Phase 9 — Apr-15 hash palette uniforms from world config.
+						u_paletteSpread: () => this.model.config.world.paletteSpread,
+						u_additiveStrength: () => this.model.config.world.additiveStrength,
+						u_redSparkRate: () => this.model.config.world.redSparkRate,
+						u_darkVoidStrength: () => this.model.config.world.darkVoidStrength,
+						u_envLight: () => this.model.config.world.envLight,
+						u_viirsMaskStrength: () => this.model.config.world.viirsMaskStrength,
 					},
 				});
 				v.scene.postProcessStages.add(stage);
@@ -381,7 +427,9 @@ export class CesiumManager {
 				// Greyscale → sodium amber. hue offset + reduced saturation + boost.
 				this.viirsLayer.hue = 0.08;
 				this.viirsLayer.saturation = 0.55;
-				this.viirsLayer.brightness = 2.2;
+				// Phase 9 — VIIRS brightness × world.viirsBrightness so operators
+				// can punch the night map. Base 2.2 × default 1.5 = 3.3.
+				this.viirsLayer.brightness = 2.2 * this.model.config.world.viirsBrightness;
 				this.viirsLayer.contrast = 1.3;
 			}
 		} catch (e) {
@@ -476,7 +524,9 @@ export class CesiumManager {
 		// orange/amber glow — crushing saturation by 0.5+ killed it). The small
 		// -dd*0.08 correction handles the cyan edge case without destroying warmth.
 		const satShift = lerp(0, -0.8, nf) - dd * 0.08;
-		const brShift = lerp(0, -0.3, nf) - dd * 0.02;
+		// Phase 9 skyDarken — multiplies the base -0.3 × nf curve so operators
+		// can darken sky further on-site (default 1.6 = 60% deeper than prod).
+		const brShift = (lerp(0, -0.3, nf) * this.model.config.world.skyDarken) - dd * 0.02;
 		if (Math.abs(satShift - this.lastSkySatShift) > 0.01) {
 			this.lastSkySatShift = satShift;
 			if (v.scene.skyAtmosphere) {
@@ -500,11 +550,59 @@ export class CesiumManager {
 			if (v.scene.fog) v.scene.fog.minimumBrightness = targetBrightness;
 		}
 
-		const targetIntensity = lerp(1.0, 0.02, nf);
-		if (Math.abs(targetIntensity - this.lastLightIntensity) > 0.01) {
-			this.lastLightIntensity = targetIntensity;
-			if (v.scene.light) v.scene.light.intensity = targetIntensity;
+		// Phase 9 scene-lighting: at deep night swap to a warm moonlight
+		// DirectionalLight, modulated by computed lunar phase. Outside deep
+		// night, restore SunLight (whose direction is sun-position-driven).
+		// Skipping when isLeader=false won't matter (this fn is camera-side).
+		const w = this.model.config.world;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const Cany = C as any;
+
+		// Compute moon phase from real planetary positions.
+		let moonPhase = 1.0;
+		try {
+			const julianDate = v.clock.currentTime;
+			Cany.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(julianDate, this._sunPos);
+			Cany.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(julianDate, this._moonPos);
+			C.Cartesian3.normalize(this._moonPos, this._earthToMoon);
+			C.Cartesian3.subtract(this._sunPos, this._moonPos, this._moonToSun);
+			C.Cartesian3.normalize(this._moonToSun, this._moonToSun);
+			const cosPhase = C.Cartesian3.dot(this._earthToMoon, this._moonToSun);
+			moonPhase = (1.0 - cosPhase) * 0.5;
+		} catch {
+			// phase = 1.0 fallback
 		}
+		const phaseFactor = 0.7 + 0.3 * moonPhase;
+		const moonlightIntensity = nf > 0.01 ? Math.max(w.moonlightIntensity * nf * phaseFactor, 0.035) : 0;
+
+		// Swap light source at the day↔night boundary (hysteresis to prevent
+		// flapping at the threshold).
+		if (nf > 0.85 && !this.isUsingMoonlight) {
+			v.scene.light = this.moonlight;
+			this.isUsingMoonlight = true;
+		} else if (nf < 0.65 && this.isUsingMoonlight) {
+			v.scene.light = this.originalSunLight;
+			this.isUsingMoonlight = false;
+		}
+
+		if (this.isUsingMoonlight && this.moonlight) {
+			this.moonlight.intensity = moonlightIntensity;
+		} else {
+			const targetIntensity = lerp(1.0, 0.02, nf);
+			if (Math.abs(targetIntensity - this.lastLightIntensity) > 0.01) {
+				this.lastLightIntensity = targetIntensity;
+				if (v.scene.light) v.scene.light.intensity = targetIntensity;
+			}
+		}
+
+		// Exposure lerp: day-neutral 1.0 → world.nightExposure as nf increases.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(v.scene.postProcessStages as any).exposure = 1.0 + (w.nightExposure - 1.0) * nf;
+
+		// AtmosphereLight lerp: Cesium default 10.0 → world.atmosphereLight as
+		// nf increases. Tames the bright horizon bleed at deep night.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(v.scene.globe as any).atmosphereLightIntensity = 10.0 + (w.atmosphereLight - 10.0) * nf;
 	}
 
 	private syncTerrainExaggeration(): void {
@@ -563,7 +661,11 @@ export class CesiumManager {
 				(this.model.flight.altitude - w.viirsAltGateLowFt) /
 					Math.max(w.viirsAltGateHighFt - w.viirsAltGateLowFt, 1),
 			);
-			const viirsAlpha = VIIRS_MAX_ALPHA * viirsEase * scale * altGate;
+			// Phase 9 viirsAlphaBoost — multiplies the post-Phase-6 alpha so the
+			// night map punches through the navy-mix that the new shader's
+			// lightMask still gates. Lerped by nf so day = no boost.
+			const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
+			const viirsAlpha = Math.min(VIIRS_MAX_ALPHA * viirsEase * scale * altGate * boost, 1.0);
 			this.viirsLayer.show = (show || firstNight) && viirsAlpha > 0.001;
 			this.viirsLayer.alpha = viirsAlpha;
 		}
