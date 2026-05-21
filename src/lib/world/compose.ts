@@ -531,7 +531,12 @@ export class CesiumManager {
 
 		const w = this.model.config.world;
 		if (this.baseLayer) {
-			this.baseLayer.brightness = lerp(1.0, w.baseNightBrightness, baseEase);
+			// Brightness lerp removed in Phase 15.5: the shader's mix() to navy
+			// (in COLOR_GRADING_GLSL) already darkens the scene at night. Keeping
+			// the imagery-layer brightness lerp would double-darken — visible as
+			// a too-dark navy floor with no detail. Saturation lerp stays —
+			// removes the green Sentinel-2 hue cast so the shader's navy tint
+			// reads cleanly. baseLayer.brightness stays at its day value of 1.0.
 			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, baseEase);
 		}
 

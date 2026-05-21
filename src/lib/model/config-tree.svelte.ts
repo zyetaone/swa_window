@@ -214,15 +214,16 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	// Base imagery at full night. 15% of day brightness, and saturation
-	// near-zero so the source pixel's hue (blue ocean, cyan sky, green
-	// vegetation in the satellite imagery) doesn't bleed through as a
-	// blue cast under VIIRS/CartoDB. Near-greyscale dim ground cleanly
-	// receives the amber tint applied by the layers above.
-	baseNightBrightness: 0.15,
+	// Base imagery night-time saturation. Near-zero so the green Sentinel-2
+	// vegetation + blue water don't bleed through as a hue cast under the
+	// shader's navy mix. baseNightBrightness was removed in Phase 15.5 —
+	// the shader's COLOR_GRADING_GLSL handles all darkening via mix(rgb,
+	// navy, smoothstep(0.45, 0.9, nf) * 0.85).
 	baseNightSaturation: 0.05,
-	// Night city glow overlay (CartoDB Dark) composited on the dimmed base.
-	// Brightness 1.6 keeps roads visible without blowing to pure white.
+	// (CartoDB Dark imagery overlay removed in Phase 15.5. nightAlpha,
+	// nightBrightness, nightContrast were the per-frame knobs that gated
+	// it — orphaned. Slated for removal in Phase 7. Kept for one commit
+	// to avoid breaking any in-flight admin payloads referencing them.)
 	nightAlpha: 0.8,
 	nightBrightness: 1.6,
 	nightContrast: 1.6,
