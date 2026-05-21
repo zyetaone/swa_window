@@ -472,8 +472,7 @@ export class CesiumManager {
 		const m = this.model;
 		const density = m.currentLocation.scene.nightLightDensity;
 		const alpha = Math.min(0.95, m.nightFactor * m.config.world.nightLightIntensity * density * 0.9);
-		// Fire-and-forget — the layer manages its own concurrency.
-		void this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
+		this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
 	private syncCamera(dt: number): void {

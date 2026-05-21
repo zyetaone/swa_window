@@ -1,18 +1,23 @@
 /**
  * VIIRS grid imagery layer — procedural city-block texture rendered into
- * a canvas and added to Cesium as a SingleTileImageryProvider covering a
- * lat/lon rectangle around the current location.
+ * a canvas, mapped onto a Cesium Rectangle entity around the current
+ * location.
  *
  * Reframe context (2026-05-22): replaces the prior CSS-DOM
  * ViirsGridEffect, which was screen-anchored and didn't parallax with
  * the camera, ignored depth/occlusion, and read as "tint on the glass"
  * rather than "city blocks on the ground." This is the same intensity
- * field, painted into a tile that lives IN THE MAP — world-anchored,
+ * field, painted into a canvas that lives IN THE MAP — world-anchored,
  * occluded by terrain, lit by Cesium's scene, parallax-correct on bank.
  *
+ * Implementation chose Entity + RectangleGraphics + ImageMaterialProperty
+ * over SingleTileImageryProvider.fromUrl because:
+ *   - synchronous (no blob URL round-trip, no Promise races on hot reload)
+ *   - the canvas IS the texture — repainting updates Cesium automatically
+ *   - rectangle classifies onto terrain naturally, occlusion just works
+ *
  * Cost: one canvas paint per location change (~3 ms for 1024×1024 at
- * 64×64 cells), one blob conversion (~5 ms), then Cesium owns the
- * GPU texture. No per-frame work.
+ * 64×64 cells). Cesium owns the GPU texture; no DOM compositing.
  */
 
 import type * as CesiumType from 'cesium';
@@ -91,30 +96,13 @@ function paintGrid(canvas: HTMLCanvasElement, lat: number, lon: number, density:
 	}
 }
 
-/**
- * Convert canvas → blob URL. Some Pi-deployed Chromium builds choke on
- * dataURL paths for SingleTileImageryProvider; blob: URLs work universally.
- */
-function canvasToBlobUrl(canvas: HTMLCanvasElement): Promise<string> {
-	return new Promise((resolve, reject) => {
-		canvas.toBlob((blob) => {
-			if (!blob) {
-				reject(new Error('canvas.toBlob returned null'));
-				return;
-			}
-			resolve(URL.createObjectURL(blob));
-		}, 'image/png');
-	});
-}
-
 export class ViirsGridLayer {
 	private canvas: HTMLCanvasElement;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private layer: any = null;
-	private lastBlobUrl: string | null = null;
+	private entity: any = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private dataSource: any = null;
 	private lastKey = '';
-	private generation = 0;
-	private updating = false;
 
 	constructor(
 		private C: typeof CesiumType,
@@ -126,90 +114,91 @@ export class ViirsGridLayer {
 	}
 
 	/**
-	 * Update (or remove) the imagery layer based on current state. Throttled
-	 * via a coarse cache key so per-frame calls are essentially free unless
+	 * Update (or hide) the imagery based on current state. Throttled via a
+	 * coarse cache key so per-frame calls are essentially free unless
 	 * something material changed.
 	 *
 	 * @param lat     current view latitude
 	 * @param lon     current view longitude
 	 * @param density location.scene.nightLightDensity (0..1)
-	 * @param alpha   final layer alpha (already gated by nightFactor)
+	 * @param alpha   final alpha (already gated by nightFactor)
 	 */
-	async update(lat: number, lon: number, density: number, alpha: number): Promise<void> {
+	update(lat: number, lon: number, density: number, alpha: number): void {
 		if (alpha < 0.005 || density < 0.02) {
-			this.remove();
+			if (this.entity) this.entity.show = false;
 			this.lastKey = '';
 			return;
 		}
 
 		// Coarse cache key — re-render only when one of these crosses a step.
-		// Lat/lon rounded to 0.5° (~55 km bucket — far below the 3° rectangle
-		// half-extent, so we re-render long before the rectangle drifts off
-		// the visible area).
+		// Lat/lon rounded to 0.5° (~55 km bucket).
 		const key = `${Math.round(lat * 2)}|${Math.round(lon * 2)}|${density.toFixed(2)}`;
-		if (key === this.lastKey) {
-			// Just adjust alpha — no re-paint needed.
-			if (this.layer) this.layer.alpha = alpha;
-			return;
-		}
-
-		if (this.updating) return;       // skip overlapping calls
-		this.updating = true;
-		const gen = ++this.generation;
+		const repaint = key !== this.lastKey;
 		this.lastKey = key;
 
-		try {
+		if (repaint) {
 			paintGrid(this.canvas, lat, lon, density);
-			const url = await canvasToBlobUrl(this.canvas);
+		}
 
-			// If another update started while we were awaiting toBlob, bail
-			// without leaking the layer.
-			if (gen !== this.generation) {
-				URL.revokeObjectURL(url);
-				return;
-			}
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const C = this.C as any;
 
-			const rect = this.C.Rectangle.fromDegrees(
-				lon - RECT_RADIUS_DEG,
-				lat - RECT_RADIUS_DEG,
-				lon + RECT_RADIUS_DEG,
-				lat + RECT_RADIUS_DEG,
-			);
-
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const provider: any = await (this.C as any).SingleTileImageryProvider.fromUrl(url, {
-				rectangle: rect,
+		if (!this.entity) {
+			// First mount — create the dataSource + entity once. Subsequent
+			// updates just move the rectangle and toggle show/alpha.
+			//
+			// Why NOT classificationType: TERRAIN — Cesium classification
+			// only supports a small set of material types (Color, mostly).
+			// ImageMaterialProperty isn't on the list and throws RuntimeError
+			// at construction. We accept that the rectangle sits at ground
+			// altitude (0) instead of draping onto terrain bumps; the lat/lon
+			// footprint is what matters for the look anyway.
+			this.dataSource = new C.CustomDataSource('viirs-grid');
+			this.viewer.dataSources.add(this.dataSource);
+			this.entity = this.dataSource.entities.add({
+				rectangle: {
+					coordinates: C.Rectangle.fromDegrees(
+						lon - RECT_RADIUS_DEG,
+						lat - RECT_RADIUS_DEG,
+						lon + RECT_RADIUS_DEG,
+						lat + RECT_RADIUS_DEG,
+					),
+					material: new C.ImageMaterialProperty({
+						image: this.canvas,
+						transparent: true,
+						// Per-image alpha multiplier — saturates with the
+						// canvas's own alpha values, so the warm cells'
+						// per-pixel alpha is preserved.
+						color: new C.Color(1, 1, 1, alpha),
+					}),
+					height: 0,
+				},
 			});
-
-			// Remove the old layer + blob AFTER the new provider resolved so
-			// there's no on-screen gap during the swap.
-			const oldLayer = this.layer;
-			const oldUrl = this.lastBlobUrl;
-
-			this.layer = this.viewer.imageryLayers.addImageryProvider(provider);
-			this.layer.alpha = alpha;
-			this.lastBlobUrl = url;
-
-			if (oldLayer) this.viewer.imageryLayers.remove(oldLayer, false);
-			if (oldUrl) URL.revokeObjectURL(oldUrl);
-		} finally {
-			this.updating = false;
-		}
-	}
-
-	remove(): void {
-		if (this.layer) {
-			this.viewer.imageryLayers.remove(this.layer, false);
-			this.layer = null;
-		}
-		if (this.lastBlobUrl) {
-			URL.revokeObjectURL(this.lastBlobUrl);
-			this.lastBlobUrl = null;
+		} else {
+			this.entity.show = true;
+			// Move the rectangle if location moved.
+			if (repaint) {
+				this.entity.rectangle.coordinates = C.Rectangle.fromDegrees(
+					lon - RECT_RADIUS_DEG,
+					lat - RECT_RADIUS_DEG,
+					lon + RECT_RADIUS_DEG,
+					lat + RECT_RADIUS_DEG,
+				);
+			}
+			// Always update alpha — cheap, no texture re-upload.
+			this.entity.rectangle.material = new C.ImageMaterialProperty({
+				image: this.canvas,
+				transparent: true,
+				color: new C.Color(1, 1, 1, alpha),
+			});
 		}
 	}
 
 	destroy(): void {
-		this.remove();
-		this.generation = -1;        // poison any in-flight update
+		if (this.dataSource) {
+			this.viewer.dataSources.remove(this.dataSource, true);
+			this.dataSource = null;
+			this.entity = null;
+		}
 	}
 }
