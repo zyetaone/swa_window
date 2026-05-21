@@ -4,7 +4,7 @@
  */
 
 import type { SkyState } from './types';
-import { T } from './night/thresholds';
+import { T } from './night';
 
 /**
  * Clamp a value between min and max.
@@ -109,6 +109,15 @@ export function smoothstep(t: number): number {
 // poisoning of every plain object in the process. Reject unconditionally.
 const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/** Split and validate a dotted path. Returns segments or null if any segment is forbidden. */
+function validatePath(path: string): string[] | null {
+	const segments = path.split('.');
+	for (const s of segments) {
+		if (FORBIDDEN_SEGMENTS.has(s)) return null;
+	}
+	return segments;
+}
+
 /**
  * Read a dotted-path value from a plain object. Mirrors setByPath's guard
  * shape (forbidden segments, own-property only) so callers can pair the two
@@ -116,10 +125,8 @@ const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
  * undefined if any traversal step fails.
  */
 export function readByPath(obj: Record<string, unknown>, path: string): unknown {
-	const segments = path.split('.');
-	for (const segment of segments) {
-		if (FORBIDDEN_SEGMENTS.has(segment)) return undefined;
-	}
+	const segments = validatePath(path);
+	if (!segments) return undefined;
 	let current: unknown = obj;
 	for (const segment of segments) {
 		if (typeof current !== 'object' || current === null) return undefined;
@@ -131,10 +138,8 @@ export function readByPath(obj: Record<string, unknown>, path: string): unknown 
 }
 
 export function setByPath(obj: Record<string, unknown>, path: string, value: unknown): boolean {
-	const segments = path.split('.');
-	for (const segment of segments) {
-		if (FORBIDDEN_SEGMENTS.has(segment)) return false;
-	}
+	const segments = validatePath(path);
+	if (!segments) return false;
 	let current: Record<string, unknown> = obj;
 	for (let i = 0; i < segments.length - 1; i++) {
 		// Object.hasOwn instead of `in` so we never resolve through the

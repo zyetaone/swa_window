@@ -91,15 +91,9 @@ export interface FlightPatch {
 	resetDirector?: boolean;
 }
 
-export interface AtmospherePatch {
-	cloudDensity?: number;
-	cloudSpeed?: number;
-	haze?: number;
-	weather?: WeatherType;
-}
-
 export interface WorldPatch {
-	atmosphere?: AtmospherePatch;
+	/** Path-targeted config patches from the director (clouds, haze, weather). */
+	configs?: Array<{ path: string; value: unknown }>;
 	nextLocation?: LocationId | null;
 }
 

@@ -1,15 +1,11 @@
 <script lang="ts">
 	/**
 	 * /playground/night-lab — visual A/B comparison harness for night-light
-	 * rendering variants with LIVE TUNABLE SETTINGS.
+	 * rendering variants. 6 forks: 5 aesthetic philosophies + vector roads.
 	 *
-	 * Camera is pinned over Hyderabad at 22:00, autopilot off, full-bleed.
-	 * Toggle through five variants live, and tweak per-variant parameters
-	 * in real-time. No shell, no fleet, no commit.
-	 *
-	 * IMPORTANT: This route MUST NOT mutate production renderer code. All
-	 * variant logic is confined here. Building tileset access is via primitive
-	 * iteration (no getter added to CesiumManager).
+	 * Camera pinned over Hyderabad at 22:00, autopilot off, full-bleed.
+	 * Variants represent genuinely different aesthetic choices, not
+	 * parameter tweaks on the same idea.
 	 */
 	import { onDestroy, untrack } from 'svelte';
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
@@ -19,7 +15,7 @@
 	import { clamp } from '$lib/utils';
 	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
 
-	type VariantId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+	type VariantId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 
 	interface VariantMeta {
 		id: VariantId;
@@ -28,133 +24,35 @@
 	}
 
 	const VARIANTS: VariantMeta[] = [
-		{ id: 'A', label: 'Baseline', hint: 'current production renderer' },
-		{ id: 'B', label: 'Bloom-after-grade', hint: 'custom additive bloom post color-grade' },
-		{ id: 'C', label: 'Wider bloom sigma', hint: 'Cesium bloom σ=4.5, contrast=96' },
-		{ id: 'D', label: 'Building emissive (flat)', hint: 'OSM buildings glow amber × nightFactor' },
-		{ id: 'E', label: 'Altitude-aware emissive', hint: 'building × (1-alt), VIIRS × alt' },
+		{ id: 'A', label: 'Baseline', hint: 'current production — warm, atmospheric bloom' },
+		{ id: 'B', label: 'Cinematic', hint: 'heavy bloom, crushed blacks — movie poster' },
+		{ id: 'C', label: 'Crisp Map', hint: 'no bloom, neutral greyscale — read the city grid' },
+		{ id: 'D', label: 'Cool Moonlight', hint: 'blue-tinted, wide soft bloom — 2 AM feel' },
+		{ id: 'E', label: 'Altitude Drama', hint: 'buildings glow up close, VIIRS takes over at distance' },
 		{ id: 'F', label: 'Vector roads (OSM)', hint: 'Hyderabad road network as glowing polylines' },
+		{ id: 'G', label: 'Apr-15 hash palette', hint: '3-stop warm palette (sodium/amber/warm-white) + 3% red sparks — replaces aero-color-grade' },
 	];
 
-	// ─── Variant F — OSM roads (Overpass) ────────────────────────────────────
-	// Hardcoded to Hyderabad bbox 78.2,17.3,78.6,17.6 for spike.
-	// Module-level cache so re-toggling F doesn't refetch.
-	type RoadClass =
-		| 'motorway'
-		| 'trunk'
-		| 'primary'
-		| 'secondary'
-		| 'tertiary'
-		| 'residential';
-
-	interface OverpassWay {
-		type: 'way';
-		id: number;
-		geometry?: Array<{ lat: number; lon: number }>;
-		tags?: { highway?: string };
-	}
-	interface OverpassResponse {
-		elements: OverpassWay[];
-	}
-	type RoadGeoJson = {
-		type: 'FeatureCollection';
-		features: Array<{
-			type: 'Feature';
-			geometry: { type: 'LineString'; coordinates: [number, number, number][] };
-			properties: { highway: RoadClass };
-		}>;
-	};
-
-	const ROAD_CLASS_STYLE: Record<
-		RoadClass,
-		{ r: number; g: number; b: number; baseWidth: number; baseGlow: number; classBoostKey?: 'motorwayBoost' | 'residentialBoost' }
-	> = {
-		motorway: { r: 255, g: 175, b: 80, baseWidth: 6, baseGlow: 3.5, classBoostKey: 'motorwayBoost' },
-		trunk: { r: 255, g: 165, b: 95, baseWidth: 5, baseGlow: 3 },
-		primary: { r: 255, g: 195, b: 120, baseWidth: 4, baseGlow: 2.5 },
-		secondary: { r: 255, g: 215, b: 150, baseWidth: 3, baseGlow: 2 },
-		tertiary: { r: 255, g: 220, b: 170, baseWidth: 2.5, baseGlow: 1.5 },
-		residential: { r: 255, g: 220, b: 170, baseWidth: 1.5, baseGlow: 0.5, classBoostKey: 'residentialBoost' },
-	};
-
-	// Module-level (re-toggle persistence).
-	let roadsCache: RoadGeoJson | null = null;
-	let roadsFetchPromise: Promise<RoadGeoJson> | null = null;
-
-	const OVERPASS_QUERY =
-		'[out:json][timeout:25];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"](17.3,78.2,17.6,78.6);out geom;';
-
-	async function fetchHyderabadRoads(): Promise<RoadGeoJson> {
-		if (roadsCache) return roadsCache;
-		if (roadsFetchPromise) return roadsFetchPromise;
-		const url =
-			'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(OVERPASS_QUERY);
-		roadsFetchPromise = (async () => {
-			const res = await fetch(url);
-			if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-			const text = await res.text();
-			roadsDownloadedBytes = text.length;
-			const json = JSON.parse(text) as OverpassResponse;
-			const features: RoadGeoJson['features'] = [];
-			for (const el of json.elements ?? []) {
-				if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
-				const hw = el.tags?.highway;
-				if (!hw || !(hw in ROAD_CLASS_STYLE)) continue;
-				// Lift coords to a fixed altitude above terrain. PolylineGlowMaterial
-				// is incompatible with Cesium's GroundPolylinePrimitive (which is what
-				// clampToGround=true uses), so glow lines drawn that way render invisibly.
-				// Hyderabad terrain sits at ~500m; 1500m places the polylines safely
-				// above any terrain rise, and from cruise altitude (8500m+ camera) the
-				// 1km offset reads as ground-level. Trade: polylines don't drape
-				// elevation contours — fine for a city at cruise.
-				const coords: [number, number, number][] = el.geometry.map((p) => [p.lon, p.lat, 1500]);
-				features.push({
-					type: 'Feature',
-					geometry: { type: 'LineString', coordinates: coords },
-					properties: { highway: hw as RoadClass },
-				});
-			}
-			const fc: RoadGeoJson = { type: 'FeatureCollection', features };
-			roadsCache = fc;
-			return fc;
-		})();
-		try {
-			return await roadsFetchPromise;
-		} catch (e) {
-			roadsFetchPromise = null;
-			throw e;
-		}
-	}
+	// Stackable add-on (NOT a radio variant). Applies on top of whichever base
+	// variant is selected. Can pair with G (hash palette) or A (baseline) or any.
+	let stackH = $state(true);
 
 	// ─── App state setup ──────────────────────────────────────────────────────
 
 	const model = createAeroWindow();
 
-	// RAF — drives sim (flight tick is required so altitude/time/etc. update).
 	$effect(() => subscribe((dt) => model.tick(dt)));
 
-	// Pin to known-good test conditions on mount.
 	$effect(() => {
 		untrack(() => {
-			// Time: deep night (22:00) — VIIRS + bloom fully active.
 			model.applyConfigPatch('director.daylight.syncToRealTime', false);
 			globals.timeOfDay = 22;
-
-			// Disable autopilot so location/weather stay pinned.
 			model.applyConfigPatch('director.autopilot.enabled', false);
-
-			// Full-bleed + chrome off.
 			model.applyConfigPatch('shell.windowFrame', false);
 			model.applyConfigPatch('shell.hudVisible', false);
 			model.applyConfigPatch('shell.sidePanelOpen', false);
-
-			// High quality — every variant should see the best-case pipeline.
 			model.applyConfigPatch('world.qualityMode', 'ultra');
-			// Defeat the auto-quality stepper so it can't downgrade mid-test.
 			model.applyConfigPatch('world.autoQuality', false);
-
-			// Camera: Hyderabad, mid altitude. Use setLocationWithSky to skip
-			// the cruise-departure warp — the lab opens with a pinned view.
 			model.location = 'hyderabad';
 			model.flight.setLocationWithSky('hyderabad', 'night');
 			model.flight.altitude = 28000;
@@ -165,125 +63,195 @@
 
 	let variant = $state<VariantId>('A');
 
-	// ─── Global tunables (always visible) ─────────────────────────────────────
+	// ─── Global tunables ──────────────────────────────────────────────────────
 
 	const GLOBAL_DEFAULTS = { timeOfDay: 22.0, altitude: 28000 };
 	const globals = $state({ ...GLOBAL_DEFAULTS });
 
-	// Push globals → model when they change.
-	$effect(() => {
-		untrack(() => { model.timeOfDay = globals.timeOfDay; });
-	});
-	$effect(() => {
-		const alt = globals.altitude;
-		untrack(() => {
-			model.flight.altitude = alt;
-		});
-	});
+	$effect(() => { untrack(() => { model.timeOfDay = globals.timeOfDay; }); });
+	$effect(() => { untrack(() => { model.flight.altitude = globals.altitude; }); });
 
-	// ─── Variant-specific tunables ────────────────────────────────────────────
+	// ─── Variant tunables ─────────────────────────────────────────────────────
 
 	const A_DEFAULTS = {
-		bloomContrast: 128,
-		bloomBrightness: -0.3,
-		bloomSigma: 2.2,
-		nightLightIntensity: 0.6,
-		baseNightBrightness: 0.15,
-		baseNightSaturation: 0.05,
+		bloomSigma: 2.2, bloomContrast: 128, bloomBrightness: -0.3,
+		nightLightIntensity: 0.6, baseNightBrightness: 0.15, baseNightSaturation: 0.05,
 	};
 	const tunablesA = $state({ ...A_DEFAULTS });
 
-	const B_DEFAULTS = {
-		luminanceThreshold: 0.5,
-		bloomIntensity: 1.0,
-		tapRadius: 2,
-	};
+	const B_DEFAULTS = { sigma: 6.0, contrast: 64, brightness: -0.5, nightLightIntensity: 1.2 };
 	const tunablesB = $state({ ...B_DEFAULTS });
 
-	const C_DEFAULTS = {
-		sigma: 4.5,
-		contrast: 96,
-		brightness: -0.3,
-	};
+	const C_DEFAULTS = { viirsBrightness: 1.8, cartoAlpha: 0.35 };
 	const tunablesC = $state({ ...C_DEFAULTS });
 
-	const D_DEFAULTS = {
-		emissiveIntensity: 0.6,
-		emissiveR: 255,
-		emissiveG: 180,
-		emissiveB: 90,
-	};
+	const D_DEFAULTS = { viirsHue: -0.5, viirsSaturation: 0.3, sigma: 5.0, contrast: 80 };
 	const tunablesD = $state({ ...D_DEFAULTS });
 
 	const E_DEFAULTS = {
-		lowAltitudeFt: 15000,
-		highAltitudeFt: 25000,
-		viirsDimMin: 0.3,
-		buildingEmissiveMax: 0.6,
+		lowAltitudeFt: 15000, highAltitudeFt: 25000,
+		viirsDimMin: 0.3, buildingEmissiveMax: 0.6,
 	};
 	const tunablesE = $state({ ...E_DEFAULTS });
 
-	const F_DEFAULTS = {
-		intensity: 1.0,
-		glowWidth: 2.5,
-		viirsDim: 0.5,
-		motorwayBoost: 1.0,
-		residentialBoost: 1.0,
+	// Variant G — Apr-15 hash-palette resurrection (commit e4a9525). 5-colour
+	// per-pixel palette (sodium / amber / warm-white / cool-white / blue-white)
+	// driven by a UV hash so neighbouring lit pixels land in different palette
+	// buckets — gives cities visible texture instead of flat amber. Plus 3%
+	// traffic-red sparks for beacon/taillight character. Replaces (not stacks
+	// on) aero-color-grade while G is active so it runs on the raw bloomed
+	// scene; restored on cleanup.
+	const G_DEFAULTS = {
+		paletteSpread: 0.25,    // tightened from 0.30 — less hash variance, more coherent amber clusters
+		additiveStrength: 7.0,  // pushed hard per user — punchy emissive on lit pixels (was 2.5)
+		redSparkRate: 0.03,     // fraction of lit pixels that become traffic-red
+		darkVoidStrength: 0.3,
+		envLight: 0.5,          // ambient warm floor — keeps terrain from pure black
+		viirsMaskStrength: 0.85, // stricter VIIRS-only gate to prevent palette landing on cool atmosphere pixels
 	};
-	const tunablesF = $state({ ...F_DEFAULTS });
-	let roadsLoading = $state(false);
-	let roadsError = $state<string | null>(null);
-	let roadsFeatureCount = $state(0);
-	let roadsDownloadedBytes = $state(0);
+	const tunablesG = $state({ ...G_DEFAULTS });
 
-	// Variant A drives prod config values directly via applyConfigPatch.
-	// Push tunablesA → world config whenever they change AND variant is A.
+	const G_SHADER = `
+		uniform sampler2D colorTexture;
+		uniform float u_nightFactor;
+		uniform float u_lightIntensity;
+		uniform float u_paletteSpread;
+		uniform float u_additiveStrength;
+		uniform float u_redSparkRate;
+		uniform float u_darkVoidStrength;
+		uniform float u_envLight;
+		uniform float u_viirsMaskStrength;
+		in vec2 v_textureCoordinates;
+
+		void main() {
+			vec4 color = texture(colorTexture, v_textureCoordinates);
+			vec3 rgb = color.rgb;
+			float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+
+			float brightGuard = smoothstep(0.75, 0.95, lum);
+
+			// Widened lightMask (0.08 → 0.65) — pixels between lit roads pick up
+			// 20-30% of warm treatment, reading as spill rather than dark gaps.
+			float lightMask = smoothstep(0.08, 0.65, lum);
+
+			// Chroma-bias VIIRS gate — VIIRS amber pixels have red > blue cast.
+			// Water glint, snow, blue atmospheric haze have rgb.r ≈ rgb.b. Use
+			// red-blue diff as a heuristic for "VIIRS-like" and gate lightMask
+			// to those pixels. u_viirsMaskStrength=0 → all bright pixels qualify
+			// (pre-mask behaviour). u_viirsMaskStrength=1 → only warm pixels.
+			float redBias = clamp(rgb.r - rgb.b, 0.0, 1.0);
+			float viirsLikely = smoothstep(0.05, 0.3, redBias);
+			lightMask *= mix(1.0, viirsLikely, u_viirsMaskStrength);
+
+			// Desat under lights — kills the blue-base / amber-light → purple bleed.
+			vec3 grayBase = vec3(lum);
+			rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
+
+			// Per-pixel UV hash for palette variance.
+			float hash = fract(sin(dot(v_textureCoordinates * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
+			float paletteLum = clamp(lum + (hash - 0.5) * u_paletteSpread, 0.0, 1.0);
+
+			// 3-stop calm-amber palette (was 5-stop incl. cool-white + blue-white,
+			// which created violet bleed on hash-misses over the navy backdrop).
+			// SWA brand is warm sodium → amber → warm-white only. The cooler LED
+			// stops were a Cyberpunk-vibe holdover from Apr-15, not Hyderabad calm.
+			vec3 sodium   = vec3(1.0, 0.6, 0.2);
+			vec3 amber    = vec3(1.0, 0.8, 0.4);
+			vec3 warmWht  = vec3(1.0, 0.95, 0.85);
+			vec3 trafficRed = vec3(1.0, 0.15, 0.05);
+
+			vec3 lightColor = mix(sodium, amber, smoothstep(0.15, 0.5, paletteLum));
+			lightColor = mix(lightColor, warmWht, smoothstep(0.5, 0.9, paletteLum));
+
+			float redSpark = step(1.0 - u_redSparkRate, fract(hash * 7.3));
+			lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
+
+			// Additive emissive blend — clamped to prevent HDR blow-out. Clamp
+			// at 4.0 (was 2.0 in Apr-15) since shadow crush was removed in
+			// Phase 1.5b and we now push additiveStrength up to 7+. HDR pipeline
+			// + ACES tonemap (if Variant H stack is on) handles the wider range.
+			rgb += lightColor * lum * u_additiveStrength * u_nightFactor;
+			rgb = min(rgb, vec3(4.0));
+
+			// Phase 15.5 base darkening — uses lightMask as guard so cities survive.
+			float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.85;
+			rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
+
+			// Dark void crush — gentler than Feb (0.3 default) so terrain texture
+			// survives but unlit ocean/desert pushes toward black.
+			float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
+			rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * u_darkVoidStrength * (1.0 - brightGuard));
+
+			// Pollution corona — broadened footprint for visible amber dome.
+			float pollution = smoothstep(0.10, 0.5, lum) * u_nightFactor;
+			rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
+
+			// Ambient floor — applied LAST so even after void crush there's a
+			// hint of illumination. NEUTRAL-WARM tint (not the cool moonlight
+			// it was originally) — calm-amber brand reads warmer everywhere,
+			// and the previous cool R<G<B ratio compounded with bloom halos to
+			// produce visible violet over the navy backdrop.
+			vec3 ambient = vec3(0.025, 0.022, 0.018) * u_envLight * u_nightFactor;
+			rgb = max(rgb, ambient);
+
+			out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
+		}
+	`;
+
+	// Stackable H — pure Cesium API switches that apply on top of whichever
+	// base variant (A-G) is selected. All values are MULTIPLIED BY nightFactor
+	// per frame, so they ramp in at dusk and ramp out at dawn — no manual
+	// scheduling. Moon-phase is computed from Cesium's Simon1994 planetary
+	// positions and modulates moonlight intensity (full moon = bright, new
+	// moon = dark) so the night actually changes night-to-night.
+	const H_DEFAULTS = {
+		moonlightIntensity: 0.08,    // slider value — multiplied by nightFactor × moonPhase
+		nightExposure: 0.85,         // lerp(1.0, this, nightFactor) — at day, no exposure change
+		atmosphereLight: 3.0,        // lerp(10.0, this, nightFactor) — Cesium default 10
+		skyDarken: 1.6,              // multiplier on skyAtmosphere.brightnessShift (darken sky further at night)
+		viirsBrightness: 1.5,
+		viirsAlphaBoost: 1.4,
+	};
+	const tunablesH = $state({ ...H_DEFAULTS });
+
+	// Live readouts from the postRender tick — surface what the dynamic
+	// modulation is actually doing this frame.
+	let moonPhaseLive = $state(0);
+	let effectiveMoonlightLive = $state(0);
+
+	// variant F kept as-is below
+
+	// ─── Variant A pushes to prod config ──────────────────────────────────────
+
 	$effect(() => {
 		if (variant !== 'A') return;
-		// Reactive reads on every tunable
-		const c = tunablesA.bloomContrast;
-		const b = tunablesA.bloomBrightness;
-		const s = tunablesA.bloomSigma;
-		const nli = tunablesA.nightLightIntensity;
-		const bnb = tunablesA.baseNightBrightness;
-		const bns = tunablesA.baseNightSaturation;
+		const { bloomSigma, bloomContrast, bloomBrightness, nightLightIntensity, baseNightBrightness, baseNightSaturation } = tunablesA;
 		untrack(() => {
-			model.applyConfigPatch('world.bloomContrast', c);
-			model.applyConfigPatch('world.bloomBrightness', b);
-			model.applyConfigPatch('world.bloomSigma', s);
-			model.applyConfigPatch('world.nightLightIntensity', nli);
-			model.applyConfigPatch('world.baseNightBrightness', bnb);
-			model.applyConfigPatch('world.baseNightSaturation', bns);
+			model.applyConfigPatch('world.bloomSigma', bloomSigma);
+			model.applyConfigPatch('world.bloomContrast', bloomContrast);
+			model.applyConfigPatch('world.bloomBrightness', bloomBrightness);
+			model.applyConfigPatch('world.nightLightIntensity', nightLightIntensity);
+			model.applyConfigPatch('world.baseNightBrightness', baseNightBrightness);
+			model.applyConfigPatch('world.baseNightSaturation', baseNightSaturation);
 		});
 	});
 
-	// Reset camera helper — re-pins to defaults if it drifts (orbit still runs).
+	// ─── Helpers ─────────────────────────────────────────────────────────────
+
 	function resetCamera(): void {
 		model.flight.setLocationWithSky('hyderabad', 'night');
 		globals.altitude = GLOBAL_DEFAULTS.altitude;
 	}
 
 	function resetVariantDefaults(): void {
-		switch (variant) {
-			case 'A':
-				Object.assign(tunablesA, A_DEFAULTS);
-				break;
-			case 'B':
-				Object.assign(tunablesB, B_DEFAULTS);
-				break;
-			case 'C':
-				Object.assign(tunablesC, C_DEFAULTS);
-				break;
-			case 'D':
-				Object.assign(tunablesD, D_DEFAULTS);
-				break;
-			case 'E':
-				Object.assign(tunablesE, E_DEFAULTS);
-				break;
-			case 'F':
-				Object.assign(tunablesF, F_DEFAULTS);
-				break;
-		}
+		const map: Record<string, object> = { A: A_DEFAULTS, B: B_DEFAULTS, C: C_DEFAULTS, D: D_DEFAULTS, E: E_DEFAULTS, F: F_DEFAULTS, G: G_DEFAULTS };
+		const src = map[variant];
+		const target = variant === 'A' ? tunablesA : variant === 'B' ? tunablesB : variant === 'C' ? tunablesC : variant === 'D' ? tunablesD : variant === 'E' ? tunablesE : variant === 'F' ? tunablesF : tunablesG;
+		if (src) Object.assign(target, src);
+	}
+
+	function resetStackH(): void {
+		Object.assign(tunablesH, H_DEFAULTS);
 	}
 
 	function resetAll(): void {
@@ -294,434 +262,493 @@
 		Object.assign(tunablesD, D_DEFAULTS);
 		Object.assign(tunablesE, E_DEFAULTS);
 		Object.assign(tunablesF, F_DEFAULTS);
+		Object.assign(tunablesG, G_DEFAULTS);
+		Object.assign(tunablesH, H_DEFAULTS);
 	}
 
-	// ─── Variant application via $effect ───────────────────────────────────────
-	//
-	// All Cesium-side mutation happens here. Each variant runs cleanup of the
-	// previous via the returned destructor before applying its own changes.
-	// We capture the activeCesium.manager when it's mounted, plus react when
-	// variant changes.
+	// ─── Layer accessors (no modification to CesiumManager) ──────────────────
+
+	function findViirsLayer(viewer: any): unknown | null {
+		const layers = viewer.imageryLayers;
+		for (let i = 0; i < layers.length; i++) {
+			const l = layers.get(i) as Record<string, unknown> | null;
+			if (l && l.colorToAlpha !== undefined) return l;
+		}
+		return null;
+	}
+
+	function findCartoLayer(viewer: any): unknown | null {
+		const layers = viewer.imageryLayers;
+		for (let i = 0; i < layers.length; i++) {
+			const l = layers.get(i) as Record<string, unknown> | null;
+			// CartoDB is the only layer with alpha=0 at day — VIIRS also has alpha=0
+			// but has colorToAlpha. Distinguish: CartoDB has no colorToAlpha.
+			if (l && l.alpha !== undefined && l.colorToAlpha === undefined && l.imageryProvider) {
+				const prov = l.imageryProvider as Record<string, unknown>;
+				if (prov.url && typeof prov.url === 'string' && (prov.url as string).includes('cartocdn')) return l;
+			}
+		}
+		return null;
+	}
+
+	function findBuildingTileset(viewer: any): Record<string, unknown> | null {
+		const prims = viewer.scene.primitives;
+		for (let i = 0; i < prims.length; i++) {
+			const p = prims.get(i) as Record<string, unknown> | null;
+			if (p && p.isCesium3DTileset) return p;
+		}
+		return null;
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant B — Cinematic: heavy bloom + crushed blacks
+	// ═══════════════════════════════════════════════════════════════════════════
 
 	$effect(() => {
+		if (variant !== 'B') return;
+		const bloom = activeCesium.manager?.getViewer().scene.postProcessStages?.bloom;
+		if (!bloom?.uniforms) return;
+		const sigma = tunablesB.sigma;
+		const contrast = tunablesB.contrast;
+		const brightness = tunablesB.brightness;
+		const nli = tunablesB.nightLightIntensity;
+		const prevNI = model.config.world.nightLightIntensity;
+		const prevEnabled = bloom.enabled;
+		const prevSigma = bloom.uniforms.sigma;
+		const prevContrast = bloom.uniforms.contrast;
+		const prevBrightness = bloom.uniforms.brightness;
+		bloom.enabled = true;
+		bloom.uniforms.sigma = sigma;
+		bloom.uniforms.contrast = contrast;
+		bloom.uniforms.brightness = brightness;
+		model.applyConfigPatch('world.nightLightIntensity', nli);
+		return () => {
+			bloom.enabled = prevEnabled;
+			bloom.uniforms.sigma = prevSigma;
+			bloom.uniforms.contrast = prevContrast;
+			bloom.uniforms.brightness = prevBrightness;
+			model.applyConfigPatch('world.nightLightIntensity', prevNI);
+		};
+	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant C — Crisp Map: no bloom, neutral VIIRS
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	$effect(() => {
+		if (variant !== 'C') return;
+		const viewer = activeCesium.manager?.getViewer();
+		const bloom = viewer?.scene.postProcessStages?.bloom;
+		const viirs = findViirsLayer(viewer!) as Record<string, number> | null;
+		const carto = findCartoLayer(viewer!) as Record<string, number> | null;
+		if (!bloom || !viirs) return;
+		const prevBloomEnabled = bloom.enabled;
+		const prevHue = viirs.hue;
+		const prevSat = viirs.saturation;
+		const prevBright = viirs.brightness;
+		const prevCartoAlpha = carto?.alpha ?? 0;
+		bloom.enabled = false;
+		viirs.hue = 0;
+		viirs.saturation = 1.0;
+		viirs.brightness = tunablesC.viirsBrightness;
+		if (carto) carto.alpha = tunablesC.cartoAlpha;
+		return () => {
+			bloom.enabled = prevBloomEnabled;
+			viirs.hue = prevHue;
+			viirs.saturation = prevSat;
+			viirs.brightness = prevBright;
+			if (carto) carto.alpha = prevCartoAlpha;
+		};
+	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant D — Cool Moonlight: blue VIIRS, wide bloom
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	$effect(() => {
+		if (variant !== 'D') return;
+		const viewer = activeCesium.manager?.getViewer();
+		const bloom = viewer?.scene.postProcessStages?.bloom;
+		const viirs = findViirsLayer(viewer!) as Record<string, number> | null;
+		if (!bloom?.uniforms || !viirs) return;
+		const prevEnabled = bloom.enabled;
+		const prevSigma = bloom.uniforms.sigma;
+		const prevContrast = bloom.uniforms.contrast;
+		const prevHue = viirs.hue;
+		const prevSat = viirs.saturation;
+		bloom.enabled = true;
+		bloom.uniforms.sigma = tunablesD.sigma;
+		bloom.uniforms.contrast = tunablesD.contrast;
+		viirs.hue = tunablesD.viirsHue;
+		viirs.saturation = tunablesD.viirsSaturation;
+		return () => {
+			bloom.enabled = prevEnabled;
+			bloom.uniforms.sigma = prevSigma;
+			bloom.uniforms.contrast = prevContrast;
+			viirs.hue = prevHue;
+			viirs.saturation = prevSat;
+		};
+	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant E — Altitude Drama: building emissive + altitude-aware VIIRS
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	$effect(() => {
+		if (variant !== 'E') return;
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		const Cesium = mgr.getCesium();
+		const viewer = mgr.getViewer();
+		const tileset = findBuildingTileset(viewer);
+		const prevNI = model.config.world.nightLightIntensity;
+		const prevBlendMode = tileset?.colorBlendMode ?? null;
+		const prevStyle = tileset?.style ?? null;
+
+		if (tileset) {
+			(tileset as Record<string, unknown>).colorBlendMode = Cesium.Cesium3DTileColorBlendMode.HIGHLIGHT;
+		}
+
+		// Per-frame tick for altitude-dependent values (these change with flight altitude, not sliders)
+		const tick = () => {
+			const lo = tunablesE.lowAltitudeFt;
+			const hi = tunablesE.highAltitudeFt;
+			const altBlend = clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
+
+			// Building emissive
+			if (tileset) {
+				const alpha = tunablesE.buildingEmissiveMax * model.nightFactor * (1 - altBlend);
+				(tileset as Record<string, unknown>).style = new Cesium.Cesium3DTileStyle({
+					color: `color("rgb(255, 180, 90)", ${alpha.toFixed(3)})`,
+				});
+			}
+
+			// VIIRS dims at low altitude
+			const target = tunablesE.viirsDimMin + (1.0 - tunablesE.viirsDimMin) * altBlend;
+			if (Math.abs(model.config.world.nightLightIntensity - target) > 0.01) {
+				model.applyConfigPatch('world.nightLightIntensity', target);
+			}
+		};
+		tick();
+		viewer.scene.postRender.addEventListener(tick);
+
+		return () => {
+			viewer.scene.postRender.removeEventListener(tick);
+			model.applyConfigPatch('world.nightLightIntensity', prevNI);
+			if (tileset) {
+				if (prevBlendMode !== null) (tileset as Record<string, unknown>).colorBlendMode = prevBlendMode;
+				(tileset as Record<string, unknown>).style = prevStyle ?? undefined;
+			}
+		};
+	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant F — OSM Vector Roads
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	$effect(() => {
+		if (variant !== 'F') return;
 		const mgr = activeCesium.manager;
 		if (!mgr) return;
 		const Cesium = mgr.getCesium();
 		const viewer = mgr.getViewer();
 
-		// Find the OSM buildings tileset by iterating primitives. CesiumManager
-		// owns it but does not expose it; we avoid modifying compose.ts.
-		function findBuildingTileset(): unknown | null {
-			const prims = viewer.scene.primitives;
-			for (let i = 0; i < prims.length; i++) {
-				const p = prims.get(i) as Record<string, unknown> | null;
-				if (p && p.isCesium3DTileset) return p;
-			}
-			return null;
-		}
+		let billboards: unknown = null;
+		let active = true;
 
-		// Snapshot defaults so we can restore on cleanup.
-		const bloom = viewer.scene.postProcessStages?.bloom;
-		const defaultBloomEnabled = bloom?.enabled ?? false;
-		const defaultBloomSigma = bloom?.uniforms?.sigma;
-		const defaultBloomContrast = bloom?.uniforms?.contrast;
-		const defaultBloomBrightness = bloom?.uniforms?.brightness;
-
-		const tileset = findBuildingTileset() as
-			| (object & { style?: unknown; colorBlendMode?: unknown })
-			| null;
-		const defaultTilesetStyle = tileset?.style ?? null;
-		const defaultColorBlendMode = tileset?.colorBlendMode ?? null;
-
-		// Track stages added by this variant so we can remove them on cleanup.
-		const addedStages: unknown[] = [];
-
-		// Tick callbacks registered on viewer.scene.postRender for live updates
-		// (e.g. variant D/E need nightFactor + altitude every frame).
-		const tickCallbacks: Array<() => void> = [];
-
-		// Read current variant inside untrack — we react to the dependency
-		// explicitly below so the cleanup runs before the new variant applies.
-		const v = variant;
-
-		// ── Variant application ──────────────────────────────────────────────
-
-		if (v === 'A') {
-			// Baseline — restore everything to prod defaults (no-op beyond cleanup
-			// of any prior variant). The Variant-A $effect above pushes the
-			// tunable values directly to the world config tree.
-		}
-
-		if (v === 'B') {
-			// Disable Cesium built-in bloom; add additive custom bloom AFTER aero-color-grade.
-			if (bloom) bloom.enabled = false;
-
-			// tapRadius is read as a float in the shader for simplicity; we step
-			// in integers via the slider (step:1) so casting to int inside GLSL
-			// would also work. Float-with-uniform is the lighter-touch path —
-			// less branching in the shader, and the offsets array indexing stays
-			// the same regardless.
-			const FS_BLOOM_AFTER_GRADE = `
-				uniform sampler2D colorTexture;
-				uniform float u_nightFactor;
-				uniform float u_luminanceThreshold;
-				uniform float u_bloomIntensity;
-				uniform float u_tapRadius;
-				in vec2 v_textureCoordinates;
-
-				void main() {
-					vec2 uv = v_textureCoordinates;
-					vec4 base = texture(colorTexture, uv);
-					vec2 px = vec2(1.0) / vec2(textureSize(colorTexture, 0));
-
-					// 9-tap star pattern at ±r, ±2r, ±3r pixels (r = u_tapRadius).
-					vec3 acc = vec3(0.0);
-					float wsum = 0.0;
-					float scale = max(u_tapRadius, 1.0);
-					float weights[3] = float[3](0.4, 0.25, 0.12);
-					for (int i = 0; i < 3; ++i) {
-						float o = float(i + 1) * scale * 0.5;
-						float w = weights[i];
-						vec3 sH1 = texture(colorTexture, uv + vec2( o, 0.0) * px).rgb;
-						vec3 sH2 = texture(colorTexture, uv + vec2(-o, 0.0) * px).rgb;
-						vec3 sV1 = texture(colorTexture, uv + vec2(0.0,  o) * px).rgb;
-						vec3 sV2 = texture(colorTexture, uv + vec2(0.0, -o) * px).rgb;
-						acc += w * (sH1 + sH2 + sV1 + sV2);
-						wsum += 4.0 * w;
-					}
-					vec3 blur = acc / max(wsum, 0.001);
-
-					// Threshold gate — lum > u_luminanceThreshold contributes.
-					float lum = dot(blur, vec3(0.2126, 0.7152, 0.0722));
-					float thresh = smoothstep(u_luminanceThreshold, min(u_luminanceThreshold + 0.3, 1.0), lum);
-					vec3 bloomColor = blur * thresh;
-
-					vec3 outRgb = base.rgb + bloomColor * u_bloomIntensity * u_nightFactor;
-					out_FragColor = vec4(outRgb, base.a);
-				}
-			`;
+		void (async () => {
 			try {
-				const stage = new Cesium.PostProcessStage({
-					name: 'night-lab-bloom-after-grade',
-					fragmentShader: FS_BLOOM_AFTER_GRADE,
-					uniforms: {
-						u_nightFactor: () => model.nightFactor,
-						u_luminanceThreshold: () => tunablesB.luminanceThreshold,
-						u_bloomIntensity: () => tunablesB.bloomIntensity,
-						// tapRadius is passed as float; GLSL multiplies into pixel offsets.
-						u_tapRadius: () => tunablesB.tapRadius,
-					},
-				});
-				viewer.scene.postProcessStages.add(stage);
-				addedStages.push(stage);
-			} catch (e) {
-				console.warn('[night-lab] variant B stage failed:', e);
-			}
-		}
-
-		if (v === 'C') {
-			// Wider Gaussian — softer broader halos. Live-tunable via tunablesC.
-			if (bloom) {
-				bloom.enabled = true;
-				const updateBloomC = () => {
-					if (!bloom.uniforms) return;
-					bloom.uniforms.sigma = tunablesC.sigma;
-					bloom.uniforms.contrast = tunablesC.contrast;
-					bloom.uniforms.brightness = tunablesC.brightness;
-				};
-				updateBloomC();
-				const cb = () => updateBloomC();
-				viewer.scene.postRender.addEventListener(cb);
-				tickCallbacks.push(cb);
-			}
-		}
-
-		if (v === 'D' || v === 'E') {
-			// Building emissive — flat (D) or altitude-aware (E).
-			if (tileset) {
-				(tileset as { colorBlendMode?: unknown }).colorBlendMode =
-					Cesium.Cesium3DTileColorBlendMode.HIGHLIGHT;
-
-				// Track last-applied values to avoid rebuilding Cesium3DTileStyle
-				// every frame when nothing changed.
-				let lastEmissiveAlpha = -1;
-				let lastR = -1;
-				let lastG = -1;
-				let lastB = -1;
-
-				const updateStyle = () => {
-					const nf = model.nightFactor;
-					let emissiveAlpha: number;
-					let r: number;
-					let g: number;
-					let b: number;
-					if (v === 'D') {
-						emissiveAlpha = tunablesD.emissiveIntensity * nf;
-						r = tunablesD.emissiveR;
-						g = tunablesD.emissiveG;
-						b = tunablesD.emissiveB;
-					} else {
-						const lo = tunablesE.lowAltitudeFt;
-						const hi = tunablesE.highAltitudeFt;
-						const altBlend = clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
-						emissiveAlpha = tunablesE.buildingEmissiveMax * nf * (1 - altBlend);
-						// E uses the prod warm amber; not separately tunable.
-						r = 255;
-						g = 180;
-						b = 90;
-					}
-					if (
-						Math.abs(emissiveAlpha - lastEmissiveAlpha) < 0.001 &&
-						r === lastR && g === lastG && b === lastB
-					) {
-						return;
-					}
-					lastEmissiveAlpha = emissiveAlpha;
-					lastR = r; lastG = g; lastB = b;
-					(tileset as { style?: unknown }).style = new Cesium.Cesium3DTileStyle({
-						color: `color("rgb(${r}, ${g}, ${b})", ${emissiveAlpha.toFixed(3)})`,
-					});
-				};
-
-				updateStyle();
-				const cb = () => updateStyle();
-				viewer.scene.postRender.addEventListener(cb);
-				tickCallbacks.push(cb);
-			} else {
-				console.warn('[night-lab] OSM building tileset not found — variant', v, 'partial');
-			}
-
-			if (v === 'E') {
-				// Dim VIIRS at low altitude via nightLightIntensity (which CesiumManager
-				// reads as nightLightScale → multiplies VIIRS alpha). Save + restore.
-				const priorIntensity = model.config.world.nightLightIntensity;
-				const updateNightIntensity = () => {
-					const lo = tunablesE.lowAltitudeFt;
-					const hi = tunablesE.highAltitudeFt;
-					const dimMin = tunablesE.viirsDimMin;
-					const altBlend = clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
-					const target = dimMin + (1.0 - dimMin) * altBlend;
-					if (Math.abs(model.config.world.nightLightIntensity - target) > 0.01) {
-						model.applyConfigPatch('world.nightLightIntensity', target);
-					}
-				};
-				updateNightIntensity();
-				const cb = () => updateNightIntensity();
-				viewer.scene.postRender.addEventListener(cb);
-				tickCallbacks.push(cb);
-
-				// Restore on cleanup.
-				addedStages.push({
-					__restoreNightIntensity: priorIntensity,
-				} as unknown);
-			}
-		}
-
-		// ── Variant F — vector roads from Overpass ──────────────────────────
-		let roadDataSource:
-			| (object & { entities?: { values?: unknown[] } })
-			| null = null;
-		let priorNightLightIntensityF: number | null = null;
-		let fCancelled = false;
-		if (v === 'F') {
-			roadsError = null;
-			const useCached = roadsCache !== null;
-			roadsLoading = !useCached;
-
-			// Dim VIIRS on activation (single-shot patch — cleanup restores).
-			priorNightLightIntensityF = model.config.world.nightLightIntensity;
-			const dimmedTarget = priorNightLightIntensityF * tunablesF.viirsDim;
-			model.applyConfigPatch('world.nightLightIntensity', dimmedTarget);
-
-			const buildAndAdd = (fc: RoadGeoJson): void => {
-				if (fCancelled) return;
+				const fc = await getRoads();
+				if (!active) return;
 				roadsFeatureCount = fc.features.length;
-				try {
-					const ds = new Cesium.GeoJsonDataSource('night-lab-roads');
-					ds.load(fc, { clampToGround: false }).then(() => {
-						if (fCancelled) return;
-						const entities = ds.entities.values;
-						const intensity = tunablesF.intensity;
-						const gwMult = tunablesF.glowWidth / 2.5; // normalize so default=1
-						const mwBoost = tunablesF.motorwayBoost;
-						const rsBoost = tunablesF.residentialBoost;
-						const nf = model.nightFactor;
-						const alphaBase = clamp((nf - 0.45) / 0.45, 0, 1) * intensity;
-						for (const ent of entities) {
-							const e = ent as {
-								polyline?: {
-									material?: unknown;
-									width?: unknown;
-									clampToGround?: unknown;
-								};
-								properties?: { getValue?: (t?: unknown) => { highway?: RoadClass } };
-							};
-							if (!e.polyline) continue;
-							const props = e.properties?.getValue?.() ?? { highway: undefined };
-							const hw = (props.highway ?? 'residential') as RoadClass;
-							const style = ROAD_CLASS_STYLE[hw];
-							let alpha = alphaBase;
-							if (hw === 'motorway') alpha *= mwBoost;
-							else if (hw === 'residential') alpha *= 0.5 * rsBoost;
-							alpha = clamp(alpha, 0, 1);
-							const color = Cesium.Color.fromBytes(style.r, style.g, style.b, Math.round(alpha * 255));
-							e.polyline.material = new Cesium.PolylineGlowMaterialProperty({
-								color,
-								glowPower: 0.25,
-								taperPower: 1.0,
-							});
-							e.polyline.width = style.baseWidth * style.baseGlow * gwMult;
-							e.polyline.clampToGround = false;
-						}
-						viewer.dataSources.add(ds);
-						roadDataSource = ds as typeof roadDataSource;
-						roadsLoading = false;
-					});
-				} catch (e) {
-					roadsError = e instanceof Error ? e.message : String(e);
-					roadsLoading = false;
+
+				const collection = new Cesium.BillboardCollection();
+				viewer.scene.primitives.add(collection);
+				billboards = collection;
+
+				// Use Cesium.buildModuleUrl for the maki circle — the proper
+				// path is 'Assets/Textures/maki/circle.png' (verified in node_modules).
+				const circleUrl = Cesium.buildModuleUrl('Assets/Textures/maki/circle.png');
+
+				for (const feat of fc.features) {
+					const hw = feat.properties.highway;
+					const [r, g, b] = ROAD_COLORS[hw];
+					const width = ROAD_WIDTHS[hw] * tunablesF.glowWidth;
+					const boost = hw === 'motorway' ? tunablesF.motorwayBoost : hw === 'residential' ? tunablesF.residentialBoost : 1.0;
+					for (const [lon, lat] of feat.geometry.coordinates) {
+						collection.add({
+							position: Cesium.Cartesian3.fromDegrees(lon, lat),
+							image: circleUrl,
+							color: Cesium.Color.fromBytes(r, g, b, 255).withAlpha(Math.min(tunablesF.intensity * boost, 1.0)),
+							scale: width * 0.035,
+							scaleByDistance: new Cesium.NearFarScalar(1000, 1.0, 500000, 0.1),
+						});
+					}
 				}
-			};
-
-			if (useCached && roadsCache) {
-				buildAndAdd(roadsCache);
-			} else {
-				fetchHyderabadRoads()
-					.then((fc) => buildAndAdd(fc))
-					.catch((err) => {
-						roadsError = err instanceof Error ? err.message : String(err);
-						roadsLoading = false;
-					});
+			} catch (e) {
+				if (!active) return;
+				console.error('Roads fetch failed:', e);
 			}
-		}
+		})();
 
-		// ── Cleanup ──────────────────────────────────────────────────────────
 		return () => {
-			// Restore bloom defaults.
-			if (bloom) {
-				bloom.enabled = defaultBloomEnabled;
-				if (bloom.uniforms && defaultBloomSigma !== undefined) {
-					bloom.uniforms.sigma = defaultBloomSigma;
-				}
-				if (bloom.uniforms && defaultBloomContrast !== undefined) {
-					bloom.uniforms.contrast = defaultBloomContrast;
-				}
-				if (bloom.uniforms && defaultBloomBrightness !== undefined) {
-					bloom.uniforms.brightness = defaultBloomBrightness;
-				}
+			active = false;
+			if (billboards) {
+				try { viewer.scene.primitives.remove(billboards as object); } catch { /* noop */ }
 			}
-
-			// Remove any custom post-process stages we added.
-			for (const s of addedStages) {
-				if (s && typeof s === 'object' && '__restoreNightIntensity' in s) {
-					const prior = (s as { __restoreNightIntensity: number }).__restoreNightIntensity;
-					model.applyConfigPatch('world.nightLightIntensity', prior);
-					continue;
-				}
-				try {
-					viewer.scene.postProcessStages.remove(s as Parameters<typeof viewer.scene.postProcessStages.remove>[0]);
-				} catch {
-					// stage may have already been removed (e.g. on viewer destroy)
-				}
-			}
-
-			// Unregister tick callbacks.
-			for (const cb of tickCallbacks) {
-				try {
-					viewer.scene.postRender.removeEventListener(cb);
-				} catch {
-					// noop — viewer may already be torn down
-				}
-			}
-
-			// Restore tileset.
-			if (tileset) {
-				if (defaultColorBlendMode !== null) {
-					(tileset as { colorBlendMode?: unknown }).colorBlendMode = defaultColorBlendMode;
-				}
-				// Restore prior style — null means "no style" which is the
-				// pre-syncBuildings state. CesiumManager.syncBuildings will
-				// reapply its own style on the next frame anyway.
-				(tileset as { style?: unknown }).style = defaultTilesetStyle ?? undefined;
-			}
-
-			// Variant F cleanup — remove road data-source + restore VIIRS dim.
-			fCancelled = true;
-			if (roadDataSource) {
-				try {
-					viewer.dataSources.remove(
-						roadDataSource as Parameters<typeof viewer.dataSources.remove>[0],
-						true,
-					);
-				} catch {
-					// noop — viewer may already be torn down
-				}
-				roadDataSource = null;
-			}
-			if (priorNightLightIntensityF !== null) {
-				model.applyConfigPatch('world.nightLightIntensity', priorNightLightIntensityF);
-				priorNightLightIntensityF = null;
-			}
-			roadsLoading = false;
 		};
 	});
 
-	// Variant F live-restyle — on F-tunable change, re-apply per-entity material.
-	// PolylineGlowMaterialProperty does NOT accept callbacks for color, so we
-	// rebuild materials when tunables change rather than per-frame.
-	$effect(() => {
-		if (variant !== 'F') return;
-		// Reactive deps — intensity / glowWidth / class boosts re-style on change.
-		// viirsDim only applies on activation (see main effect).
-		const intensity = tunablesF.intensity;
-		const glowWidth = tunablesF.glowWidth;
-		const mwBoost = tunablesF.motorwayBoost;
-		const rsBoost = tunablesF.residentialBoost;
-		const nf = model.nightFactor;
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant G — Feb-25 hybrid: sodium palette tint + dark void crush
+	// ═══════════════════════════════════════════════════════════════════════════
 
-		untrack(() => {
-			const mgr = activeCesium.manager;
-			if (!mgr) return;
-			const Cesium = mgr.getCesium();
-			const viewer = mgr.getViewer();
-			const list = viewer.dataSources as {
-				length: number;
-				get: (i: number) => { name?: string; entities?: { values: unknown[] } };
-			};
-			let ds: { entities?: { values: unknown[] } } | null = null;
-			for (let i = 0; i < list.length; i++) {
-				const d = list.get(i);
-				if (d?.name === 'night-lab-roads') {
-					ds = d;
-					break;
+	$effect(() => {
+		if (variant !== 'G') return;
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		const Cesium = mgr.getCesium();
+		const viewer = mgr.getViewer();
+		const stages = viewer.scene.postProcessStages;
+
+		// Find the prod aero-color-grade stage and DISABLE it while G is active
+		// — otherwise G's input would be the navy-mixed output and lightMask
+		// would gate out most lit pixels. Restored on cleanup.
+		let aeroStage: { enabled: boolean } | null = null;
+		const prevAeroEnabled = (() => {
+			for (let i = 0; i < stages.length; i++) {
+				const s = stages.get(i) as { name?: string; enabled?: boolean } | null;
+				if (s && s.name === 'aero-color-grade') {
+					aeroStage = s as { enabled: boolean };
+					const wasEnabled = aeroStage.enabled;
+					aeroStage.enabled = false;
+					return wasEnabled;
 				}
 			}
-			if (!ds || !ds.entities) return;
-			const gwMult = glowWidth / 2.5;
-			const alphaBase = clamp((nf - 0.45) / 0.45, 0, 1) * intensity;
-			for (const ent of ds.entities.values) {
-				const e = ent as {
-					polyline?: { material?: unknown; width?: unknown };
-					properties?: { getValue?: () => { highway?: RoadClass } };
-				};
-				if (!e.polyline) continue;
-				const props = e.properties?.getValue?.() ?? { highway: undefined };
-				const hw = (props.highway ?? 'residential') as RoadClass;
-				const style = ROAD_CLASS_STYLE[hw];
-				let alpha = alphaBase;
-				if (hw === 'motorway') alpha *= mwBoost;
-				else if (hw === 'residential') alpha *= 0.5 * rsBoost;
-				alpha = clamp(alpha, 0, 1);
-				const color = Cesium.Color.fromBytes(style.r, style.g, style.b, Math.round(alpha * 255));
-				e.polyline.material = new Cesium.PolylineGlowMaterialProperty({
-					color,
-					glowPower: 0.25,
-					taperPower: 1.0,
-				});
-				e.polyline.width = style.baseWidth * style.baseGlow * gwMult;
-			}
+			return true;
+		})();
+
+		const stage = new Cesium.PostProcessStage({
+			name: 'night-lab-feb-hybrid',
+			fragmentShader: G_SHADER,
+			uniforms: {
+				u_nightFactor: () => model.nightFactor,
+				u_lightIntensity: () => model.nightLightScale,
+				u_paletteSpread: () => tunablesG.paletteSpread,
+				u_additiveStrength: () => tunablesG.additiveStrength,
+				u_redSparkRate: () => tunablesG.redSparkRate,
+				u_darkVoidStrength: () => tunablesG.darkVoidStrength,
+				u_envLight: () => tunablesG.envLight,
+				u_viirsMaskStrength: () => tunablesG.viirsMaskStrength,
+			},
 		});
+		stages.add(stage);
+
+		return () => {
+			if (!viewer.isDestroyed()) {
+				stages.remove(stage);
+				if (aeroStage) aeroStage.enabled = prevAeroEnabled;
+			}
+		};
 	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant H — Cesium API knobs (no shader work)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	$effect(() => {
+		if (!stackH) return;
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		const Cesium = mgr.getCesium();
+		const viewer = mgr.getViewer();
+		const scene = viewer.scene;
+		const stages = scene.postProcessStages;
+		const globe = scene.globe;
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const stagesAny = stages as any;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const globeAny = globe as any;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const CesiumAny = Cesium as any;
+
+		const prevLight = scene.light;
+		const prevTonemapper = stagesAny.tonemapper;
+		const prevExposure = stagesAny.exposure;
+		const prevAtmosphereLight = globeAny.atmosphereLightIntensity;
+
+		// Find VIIRS layer + snapshot prior brightness for restore.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const viirsLayer = findViirsLayer(viewer) as any;
+		const prevViirsBrightness = viirsLayer?.brightness;
+
+		// Static once-only setters with sensible initial values matching what
+		// the tick will produce at nf=0 (day). This prevents a single black
+		// frame before the first postRender tick fires.
+		stagesAny.tonemapper = CesiumAny.Tonemapper.ACES;
+		stagesAny.exposure = 1.0; // day-neutral; tick will lerp toward nightExposure
+		globeAny.atmosphereLightIntensity = 10.0; // Cesium default
+
+		// Create the moonlight DirectionalLight at slider intensity so even
+		// before the first tick fires, the globe has illumination. Tick will
+		// modulate by nightFactor × moonPhase per frame after that.
+		const moonlight = new Cesium.DirectionalLight({
+			direction: new Cesium.Cartesian3(0, 0, -1),
+			color: new Cesium.Color(0.95, 0.88, 0.78, 1.0),
+			intensity: tunablesH.moonlightIntensity,
+		});
+		scene.light = moonlight;
+
+		// VIIRS brightness — compose.ts sets this once at setup. Direct multiplier.
+		if (viirsLayer && typeof prevViirsBrightness === 'number') {
+			viirsLayer.brightness = prevViirsBrightness * tunablesH.viirsBrightness;
+		}
+
+		// Per-frame tick:
+		// - Compute moon phase from real planetary positions
+		// - Modulate moonlight by nightFactor × moonPhase
+		// - Lerp exposure/atmosphereLight from neutral toward slider value by nightFactor
+		// - Multiply skyAtmosphere brightness shift by skyDarken (compose.ts already
+		//   lerps brightnessShift = lerp(0, -0.3, nf); we add the multiplier)
+		// - VIIRS alpha boost (scaled by nightFactor — no boost during day)
+		// All compose.ts writes happen BEFORE this tick (we're registered after).
+		const skyAtmosphere = scene.skyAtmosphere as unknown as { brightnessShift: number } | undefined;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const Simon = CesiumAny.Simon1994PlanetaryPositions;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const Cartesian3 = CesiumAny.Cartesian3;
+		const _sunPos = new Cartesian3();
+		const _moonPos = new Cartesian3();
+		const _earthToMoon = new Cartesian3();
+		const _moonToSun = new Cartesian3();
+
+		const tick = () => {
+			const nf = model.nightFactor;
+
+			// Moon phase: angle between Earth→Moon and Moon→Sun vectors.
+			// cosPhase = 1  → moon between Earth & Sun (new moon, dark)
+			// cosPhase = -1 → moon opposite Sun (full moon, bright)
+			let moonPhase = 1.0;
+			try {
+				const julianDate = viewer.clock.currentTime;
+				Simon.computeSunPositionInEarthInertialFrame(julianDate, _sunPos);
+				Simon.computeMoonPositionInEarthInertialFrame(julianDate, _moonPos);
+				Cartesian3.normalize(_moonPos, _earthToMoon);
+				Cartesian3.subtract(_sunPos, _moonPos, _moonToSun);
+				Cartesian3.normalize(_moonToSun, _moonToSun);
+				const cosPhase = Cartesian3.dot(_earthToMoon, _moonToSun);
+				moonPhase = (1.0 - cosPhase) * 0.5; // 0 = new, 1 = full
+				moonPhaseLive = moonPhase;
+			} catch {
+				// fall through with phase = 1.0
+			}
+
+			// Moonlight: slider × nightFactor × phaseFactor.
+			// phaseFactor lerps 0.7 (new moon) → 1.0 (full moon) — gentle variation
+			// for visible night-to-night difference without breaking visibility.
+			// Floored at 0.035 per user direction. Zero at day (nf=0).
+			const phaseFactor = 0.7 + 0.3 * moonPhase;
+			const baseTarget = tunablesH.moonlightIntensity * nf * phaseFactor;
+			const moonlightTarget = nf > 0.01 ? Math.max(baseTarget, 0.035) : 0;
+			(moonlight as unknown as { intensity: number }).intensity = moonlightTarget;
+			effectiveMoonlightLive = moonlightTarget;
+
+			// Exposure: at day nf=0 → 1.0 (neutral). At night nf=1 → slider value.
+			stagesAny.exposure = 1.0 + (tunablesH.nightExposure - 1.0) * nf;
+
+			// AtmosphereLight: at day → 10.0 (Cesium default). At night → slider.
+			globeAny.atmosphereLightIntensity = 10.0 + (tunablesH.atmosphereLight - 10.0) * nf;
+
+			// SkyDarken: compose.ts writes brightnessShift = lerp(0, -0.3, nf).
+			// We OVERWRITE with our multiplier: brightnessShift = -0.3 * nf * skyDarken
+			if (skyAtmosphere) {
+				skyAtmosphere.brightnessShift = -0.3 * nf * tunablesH.skyDarken;
+			}
+
+			// VIIRS alpha boost — scale by nightFactor so day = no boost.
+			if (viirsLayer && viirsLayer.alpha > 0) {
+				const boost = 1.0 + (tunablesH.viirsAlphaBoost - 1.0) * nf;
+				viirsLayer.alpha = Math.min(viirsLayer.alpha * boost, 1.0);
+			}
+		};
+		viewer.scene.postRender.addEventListener(tick);
+
+		return () => {
+			if (!viewer.isDestroyed()) {
+				scene.light = prevLight;
+				stagesAny.tonemapper = prevTonemapper;
+				stagesAny.exposure = prevExposure;
+				globeAny.atmosphereLightIntensity = prevAtmosphereLight;
+				viewer.scene.postRender.removeEventListener(tick);
+				if (viirsLayer && typeof prevViirsBrightness === 'number') {
+					viirsLayer.brightness = prevViirsBrightness;
+				}
+				// alpha: compose.ts owns it, will overwrite on next frame anyway
+			}
+		};
+	});
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Variant F — OSM roads (keep as-is from original)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	type RoadClass = 'motorway' | 'trunk' | 'primary' | 'secondary' | 'tertiary' | 'residential';
+	interface RoadFeature {
+		type: 'Feature';
+		geometry: { type: 'LineString'; coordinates: [number, number][] };
+		properties: { highway: RoadClass };
+	}
+	interface RoadGeoJson { type: 'FeatureCollection'; features: RoadFeature[] }
+
+	const ROAD_COLORS: Record<RoadClass, [number, number, number]> = {
+		motorway: [255, 220, 100], trunk: [255, 200, 80], primary: [255, 180, 70],
+		secondary: [220, 160, 60], tertiary: [180, 140, 50], residential: [140, 120, 40],
+	};
+	const ROAD_WIDTHS: Record<RoadClass, number> = {
+		motorway: 3.0, trunk: 2.5, primary: 2.0, secondary: 1.5, tertiary: 1.0, residential: 0.6,
+	};
+
+	let roadsCache: RoadGeoJson | null = null;
+	let roadsFetchPromise: Promise<RoadGeoJson> | null = null;
+
+	async function getRoads(): Promise<RoadGeoJson> {
+		if (roadsCache) return roadsCache;
+		if (roadsFetchPromise) return roadsFetchPromise;
+		roadsFetchPromise = (async () => {
+			const bbox = '78.2,17.3,78.6,17.6';
+			const query = `[out:json][bbox:${bbox}];(way[highway~"^(motorway|trunk|primary|secondary|tertiary|residential)$"];);out geom;`;
+			const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+			const text = await resp.text();
+			const data = JSON.parse(text);
+			const fc: RoadGeoJson = { type: 'FeatureCollection', features: [] };
+			for (const el of data.elements as Array<{ type: string; geometry?: { lat: number; lon: number }[] }>) {
+				if (el.type === 'way' && el.geometry && (el as Record<string, unknown>).tags) {
+					const tags = (el as Record<string, { highway?: string }>).tags;
+					const hw = tags?.highway;
+					if (hw && hw in ROAD_COLORS) {
+						fc.features.push({ type: 'Feature',
+							geometry: { type: 'LineString', coordinates: el.geometry!.map((pt: { lat: number; lon: number }) => [pt.lon, pt.lat]) },
+							properties: { highway: hw as RoadClass },
+						});
+					}
+				}
+			}
+			roadsCache = fc;
+			roadsFeatureCount = fc.features.length;
+			return fc;
+		})();
+		try { return await roadsFetchPromise; }
+		finally { roadsFetchPromise = null; }
+	}
+
+	const F_DEFAULTS = { intensity: 5.0, glowWidth: 7.0, viirsDim: 0.5, motorwayBoost: 2.5, residentialBoost: 1.5 };
+	const tunablesF = $state({ ...F_DEFAULTS });
+	let roadsFeatureCount = $state(0);
+
+	// Variant F application handled inline in the main $effect below (too
+	// complex to extract — uses async road fetch + BillboardCollection).
+	// Re-reading the variant on change triggers its section.
 
 	// ─── Readouts ─────────────────────────────────────────────────────────────
 
@@ -729,58 +756,41 @@
 	const fps = $derived(Math.round(model.measuredFps));
 	const altitudeFt = $derived(Math.round(model.flight.altitude));
 	const nfPct = $derived(Math.round(model.nightFactor * 100));
-
-	// Variant E readout: live altitudeBlend.
 	const altitudeBlend = $derived.by(() => {
 		if (variant !== 'E') return 0;
-		const lo = tunablesE.lowAltitudeFt;
-		const hi = tunablesE.highAltitudeFt;
-		return clamp((model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
+		return clamp((model.flight.altitude - tunablesE.lowAltitudeFt) / Math.max(tunablesE.highAltitudeFt - tunablesE.lowAltitudeFt, 1), 0, 1);
 	});
 
-	onDestroy(() => {
-		// Model cleanup is handled by createAeroWindow lifecycle.
-	});
+	onDestroy(() => {});
 
-	// ─── Slider input helpers ─────────────────────────────────────────────────
-	// RangeSlider passes back the raw input event; we read currentTarget.value.
+	// ─── Slider helpers ───────────────────────────────────────────────────────
 
-	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) {
-		globals.timeOfDay = parseFloat(e.currentTarget.value);
-	}
-	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) {
-		globals.altitude = parseFloat(e.currentTarget.value);
-	}
+	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) { globals.timeOfDay = parseFloat(e.currentTarget.value); }
+	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) { globals.altitude = parseFloat(e.currentTarget.value); }
 
 	function setA<K extends keyof typeof tunablesA>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesA[k] = parseFloat(e.currentTarget.value) as (typeof tunablesA)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesA as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 	function setB<K extends keyof typeof tunablesB>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesB[k] = parseFloat(e.currentTarget.value) as (typeof tunablesB)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesB as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 	function setC<K extends keyof typeof tunablesC>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesC[k] = parseFloat(e.currentTarget.value) as (typeof tunablesC)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesC as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 	function setD<K extends keyof typeof tunablesD>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesD[k] = parseFloat(e.currentTarget.value) as (typeof tunablesD)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesD as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 	function setE<K extends keyof typeof tunablesE>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesE[k] = parseFloat(e.currentTarget.value) as (typeof tunablesE)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesE as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 	function setF<K extends keyof typeof tunablesF>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => {
-			tunablesF[k] = parseFloat(e.currentTarget.value) as (typeof tunablesF)[K];
-		};
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesF as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
+	}
+	function setG<K extends keyof typeof tunablesG>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesG as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
+	}
+	function setH<K extends keyof typeof tunablesH>(k: K) {
+		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesH as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
 	}
 </script>
 
@@ -795,306 +805,99 @@
 			<p class="hint">Hyderabad · autopilot off · ultra quality</p>
 		</header>
 
-		<!-- ── Global controls ──────────────────────────────────────────── -->
 		<fieldset class="globals">
 			<legend>Global</legend>
-			<RangeSlider
-				label="Time of day"
-				value={globals.timeOfDay}
-				min={15.0}
-				max={24.0}
-				step={0.25}
-				formatValue={(v) => `${v.toFixed(2)}h`}
-				oninput={onGlobalTime}
-			/>
-			<RangeSlider
-				label="Altitude"
-				value={globals.altitude}
-				min={10000}
-				max={65000}
-				step={500}
-				formatValue={(v) => `${Math.round(v).toLocaleString()} ft`}
-				oninput={onGlobalAlt}
-			/>
+			<RangeSlider label="Time of day" value={globals.timeOfDay} min={15.0} max={24.0} step={0.25}
+				formatValue={(v) => `${v.toFixed(2)}h`} oninput={onGlobalTime} />
+			<RangeSlider label="Altitude" value={globals.altitude} min={10000} max={65000} step={500}
+				formatValue={(v) => `${Math.round(v).toLocaleString()} ft`} oninput={onGlobalAlt} />
 		</fieldset>
 
-		<!-- ── Variant picker ───────────────────────────────────────────── -->
 		<fieldset class="variants" role="radiogroup" aria-label="Rendering variant">
 			<legend>Variant</legend>
 			{#each VARIANTS as v (v.id)}
 				<label class="row">
-					<input
-						type="radio"
-						name="variant"
-						value={v.id}
-						checked={variant === v.id}
-						onchange={() => (variant = v.id)}
-					/>
-					<span class="row-label">
-						<strong>{v.id}.</strong>
-						{v.label}
-					</span>
+					<input type="radio" name="variant" value={v.id} checked={variant === v.id} onchange={() => (variant = v.id)} />
+					<span class="row-label"><strong>{v.id}.</strong>{v.label}</span>
 					<span class="row-hint">{v.hint}</span>
 				</label>
 			{/each}
 		</fieldset>
 
-		<!-- ── Variant-specific tunables ────────────────────────────────── -->
 		<fieldset class="tunables">
 			<legend>Variant {variant} tunables</legend>
 
 			{#if variant === 'A'}
-				<RangeSlider
-					label="Bloom contrast"
-					value={tunablesA.bloomContrast}
-					min={32}
-					max={256}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setA('bloomContrast')}
-				/>
-				<RangeSlider
-					label="Bloom brightness"
-					value={tunablesA.bloomBrightness}
-					min={-1.0}
-					max={1.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setA('bloomBrightness')}
-				/>
-				<RangeSlider
-					label="Bloom sigma"
-					value={tunablesA.bloomSigma}
-					min={0.5}
-					max={8.0}
-					step={0.1}
-					formatValue={(v) => v.toFixed(1)}
-					oninput={setA('bloomSigma')}
-				/>
-				<RangeSlider
-					label="Night light intensity"
-					value={tunablesA.nightLightIntensity}
-					min={0.0}
-					max={2.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setA('nightLightIntensity')}
-				/>
-				<RangeSlider
-					label="Base night brightness"
-					value={tunablesA.baseNightBrightness}
-					min={0.0}
-					max={0.5}
-					step={0.01}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setA('baseNightBrightness')}
-				/>
-				<RangeSlider
-					label="Base night saturation"
-					value={tunablesA.baseNightSaturation}
-					min={0.0}
-					max={0.5}
-					step={0.01}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setA('baseNightSaturation')}
-				/>
+				<RangeSlider label="Bloom sigma" value={tunablesA.bloomSigma} min={0.5} max={8.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setA('bloomSigma')} />
+				<RangeSlider label="Bloom contrast" value={tunablesA.bloomContrast} min={32} max={256} step={1} formatValue={(v) => v.toFixed(0)} oninput={setA('bloomContrast')} />
+				<RangeSlider label="Bloom brightness" value={tunablesA.bloomBrightness} min={-1.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setA('bloomBrightness')} />
+				<RangeSlider label="Night light intensity" value={tunablesA.nightLightIntensity} min={0.0} max={2.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setA('nightLightIntensity')} />
+				<RangeSlider label="Base night brightness" value={tunablesA.baseNightBrightness} min={0.0} max={0.5} step={0.01} formatValue={(v) => v.toFixed(2)} oninput={setA('baseNightBrightness')} />
+				<RangeSlider label="Base night saturation" value={tunablesA.baseNightSaturation} min={0.0} max={0.5} step={0.01} formatValue={(v) => v.toFixed(2)} oninput={setA('baseNightSaturation')} />
 			{:else if variant === 'B'}
-				<RangeSlider
-					label="Luminance threshold"
-					value={tunablesB.luminanceThreshold}
-					min={0.0}
-					max={1.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setB('luminanceThreshold')}
-				/>
-				<RangeSlider
-					label="Bloom intensity"
-					value={tunablesB.bloomIntensity}
-					min={0.0}
-					max={3.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setB('bloomIntensity')}
-				/>
-				<RangeSlider
-					label="Tap radius"
-					value={tunablesB.tapRadius}
-					min={1}
-					max={5}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setB('tapRadius')}
-				/>
+				<RangeSlider label="Sigma" value={tunablesB.sigma} min={2.0} max={10.0} step={0.5} formatValue={(v) => v.toFixed(1)} oninput={setB('sigma')} />
+				<RangeSlider label="Contrast" value={tunablesB.contrast} min={16} max={256} step={1} formatValue={(v) => v.toFixed(0)} oninput={setB('contrast')} />
+				<RangeSlider label="Brightness" value={tunablesB.brightness} min={-1.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setB('brightness')} />
+				<RangeSlider label="Night light intensity" value={tunablesB.nightLightIntensity} min={0.0} max={3.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setB('nightLightIntensity')} />
 			{:else if variant === 'C'}
-				<RangeSlider
-					label="Sigma"
-					value={tunablesC.sigma}
-					min={1.0}
-					max={8.0}
-					step={0.1}
-					formatValue={(v) => v.toFixed(1)}
-					oninput={setC('sigma')}
-				/>
-				<RangeSlider
-					label="Contrast"
-					value={tunablesC.contrast}
-					min={32}
-					max={256}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setC('contrast')}
-				/>
-				<RangeSlider
-					label="Brightness"
-					value={tunablesC.brightness}
-					min={-1.0}
-					max={1.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setC('brightness')}
-				/>
+				<RangeSlider label="VIIRS brightness" value={tunablesC.viirsBrightness} min={0.5} max={4.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setC('viirsBrightness')} />
+				<RangeSlider label="CartoDB alpha" value={tunablesC.cartoAlpha} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setC('cartoAlpha')} />
 			{:else if variant === 'D'}
-				<RangeSlider
-					label="Emissive intensity"
-					value={tunablesD.emissiveIntensity}
-					min={0.0}
-					max={1.5}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setD('emissiveIntensity')}
-				/>
-				<RangeSlider
-					label="Emissive R"
-					value={tunablesD.emissiveR}
-					min={0}
-					max={255}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setD('emissiveR')}
-				/>
-				<RangeSlider
-					label="Emissive G"
-					value={tunablesD.emissiveG}
-					min={0}
-					max={255}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setD('emissiveG')}
-				/>
-				<RangeSlider
-					label="Emissive B"
-					value={tunablesD.emissiveB}
-					min={0}
-					max={255}
-					step={1}
-					formatValue={(v) => v.toFixed(0)}
-					oninput={setD('emissiveB')}
-				/>
-				<div class="swatch" style="background: rgb({tunablesD.emissiveR}, {tunablesD.emissiveG}, {tunablesD.emissiveB})">
-					emissive preview
-				</div>
+				<RangeSlider label="VIIRS hue" value={tunablesD.viirsHue} min={-1.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setD('viirsHue')} />
+				<RangeSlider label="VIIRS saturation" value={tunablesD.viirsSaturation} min={0.0} max={1.5} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setD('viirsSaturation')} />
+				<RangeSlider label="Sigma" value={tunablesD.sigma} min={2.0} max={10.0} step={0.5} formatValue={(v) => v.toFixed(1)} oninput={setD('sigma')} />
+				<RangeSlider label="Contrast" value={tunablesD.contrast} min={16} max={256} step={1} formatValue={(v) => v.toFixed(0)} oninput={setD('contrast')} />
 			{:else if variant === 'E'}
-				<RangeSlider
-					label="Low altitude (ft)"
-					value={tunablesE.lowAltitudeFt}
-					min={5000}
-					max={20000}
-					step={500}
-					formatValue={(v) => `${Math.round(v).toLocaleString()}`}
-					oninput={setE('lowAltitudeFt')}
-				/>
-				<RangeSlider
-					label="High altitude (ft)"
-					value={tunablesE.highAltitudeFt}
-					min={20000}
-					max={40000}
-					step={500}
-					formatValue={(v) => `${Math.round(v).toLocaleString()}`}
-					oninput={setE('highAltitudeFt')}
-				/>
-				<RangeSlider
-					label="VIIRS dim min"
-					value={tunablesE.viirsDimMin}
-					min={0.0}
-					max={1.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setE('viirsDimMin')}
-				/>
-				<RangeSlider
-					label="Building emissive max"
-					value={tunablesE.buildingEmissiveMax}
-					min={0.0}
-					max={1.5}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setE('buildingEmissiveMax')}
-				/>
+				<RangeSlider label="Low altitude (ft)" value={tunablesE.lowAltitudeFt} min={5000} max={20000} step={500} formatValue={(v) => `${Math.round(v).toLocaleString()}`} oninput={setE('lowAltitudeFt')} />
+				<RangeSlider label="High altitude (ft)" value={tunablesE.highAltitudeFt} min={20000} max={40000} step={500} formatValue={(v) => `${Math.round(v).toLocaleString()}`} oninput={setE('highAltitudeFt')} />
+				<RangeSlider label="VIIRS dim min" value={tunablesE.viirsDimMin} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setE('viirsDimMin')} />
+				<RangeSlider label="Building emissive max" value={tunablesE.buildingEmissiveMax} min={0.0} max={1.5} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setE('buildingEmissiveMax')} />
 			{:else if variant === 'F'}
-				{#if roadsLoading}
-					<p class="status">loading roads…</p>
-				{:else if roadsError}
-					<p class="status err">Overpass unavailable: {roadsError}</p>
-				{:else if roadsFeatureCount > 0}
-					<p class="status ok">{roadsFeatureCount.toLocaleString()} ways loaded ({Math.round(roadsDownloadedBytes / 1024)} KB)</p>
-				{/if}
-				<RangeSlider
-					label="Intensity"
-					value={tunablesF.intensity}
-					min={0.0}
-					max={2.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setF('intensity')}
-				/>
-				<RangeSlider
-					label="Glow width"
-					value={tunablesF.glowWidth}
-					min={0.0}
-					max={6.0}
-					step={0.5}
-					formatValue={(v) => v.toFixed(1)}
-					oninput={setF('glowWidth')}
-				/>
-				<RangeSlider
-					label="VIIRS dim (on activation)"
-					value={tunablesF.viirsDim}
-					min={0.0}
-					max={1.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setF('viirsDim')}
-				/>
-				<RangeSlider
-					label="Motorway boost"
-					value={tunablesF.motorwayBoost}
-					min={0.0}
-					max={2.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setF('motorwayBoost')}
-				/>
-				<RangeSlider
-					label="Residential boost"
-					value={tunablesF.residentialBoost}
-					min={0.0}
-					max={2.0}
-					step={0.05}
-					formatValue={(v) => v.toFixed(2)}
-					oninput={setF('residentialBoost')}
-				/>
+				<RangeSlider label="Intensity" value={tunablesF.intensity} min={0.1} max={10.0} step={0.1} formatValue={(v) => v.toFixed(2)} oninput={setF('intensity')} />
+				<RangeSlider label="Glow width" value={tunablesF.glowWidth} min={0.5} max={12.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setF('glowWidth')} />
+				<RangeSlider label="VIIRS dim" value={tunablesF.viirsDim} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setF('viirsDim')} />
+				<RangeSlider label="Motorway boost" value={tunablesF.motorwayBoost} min={0.1} max={6.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setF('motorwayBoost')} />
+				<RangeSlider label="Residential boost" value={tunablesF.residentialBoost} min={0.1} max={6.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setF('residentialBoost')} />
+			{:else if variant === 'G'}
+				<RangeSlider label="Palette spread" value={tunablesG.paletteSpread} min={0.0} max={0.6} step={0.02} formatValue={(v) => v.toFixed(2)} oninput={setG('paletteSpread')} />
+				<RangeSlider label="Additive strength" value={tunablesG.additiveStrength} min={0.0} max={15.0} step={0.25} formatValue={(v) => v.toFixed(1)} oninput={setG('additiveStrength')} />
+				<RangeSlider label="Red spark rate" value={tunablesG.redSparkRate} min={0.0} max={0.15} step={0.005} formatValue={(v) => v.toFixed(3)} oninput={setG('redSparkRate')} />
+				<RangeSlider label="Dark void strength" value={tunablesG.darkVoidStrength} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setG('darkVoidStrength')} />
+				<RangeSlider label="Env light" value={tunablesG.envLight} min={0.0} max={2.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setG('envLight')} />
+				<RangeSlider label="VIIRS mask strength" value={tunablesG.viirsMaskStrength} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setG('viirsMaskStrength')} />
 			{/if}
 
 			<div class="reset-row">
-				<button class="reset small" type="button" onclick={resetVariantDefaults}>
-					Reset variant
-				</button>
+				<button class="reset small" type="button" onclick={resetVariantDefaults}>Reset variant</button>
 				<button class="reset small" type="button" onclick={resetAll}>Reset all</button>
 			</div>
 		</fieldset>
 
-		<!-- ── Readouts ─────────────────────────────────────────────────── -->
+		<fieldset class="stack-h">
+			<legend>Stack: Cesium API knobs (H)</legend>
+			<label class="row stack-toggle">
+				<input type="checkbox" bind:checked={stackH} />
+				<span class="row-label">Apply on top of variant {variant}</span>
+				<span class="row-hint">ACES tonemap + DirectionalLight moonlight + atmosphereLightIntensity + VIIRS punch — scene-level, free, stacks on any base variant.</span>
+			</label>
+
+			{#if stackH}
+				<RangeSlider label="Moonlight intensity (peak)" value={tunablesH.moonlightIntensity} min={0.035} max={0.3} step={0.005} formatValue={(v) => v.toFixed(3)} oninput={setH('moonlightIntensity')} />
+				<RangeSlider label="Night exposure" value={tunablesH.nightExposure} min={0.4} max={1.5} step={0.025} formatValue={(v) => v.toFixed(2)} oninput={setH('nightExposure')} />
+				<RangeSlider label="Atmosphere light" value={tunablesH.atmosphereLight} min={0.0} max={10.0} step={0.25} formatValue={(v) => v.toFixed(1)} oninput={setH('atmosphereLight')} />
+				<RangeSlider label="Sky darken ×" value={tunablesH.skyDarken} min={0.5} max={4.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setH('skyDarken')} />
+				<RangeSlider label="VIIRS brightness ×" value={tunablesH.viirsBrightness} min={0.5} max={3.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setH('viirsBrightness')} />
+				<RangeSlider label="VIIRS alpha ×" value={tunablesH.viirsAlphaBoost} min={0.5} max={2.5} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setH('viirsAlphaBoost')} />
+				<div class="readout" style="margin-top: 10px;">
+					<div><span class="k">Moon phase</span><span class="v">{(moonPhaseLive * 100).toFixed(0)}%</span></div>
+					<div><span class="k">Effective moonlight</span><span class="v">{effectiveMoonlightLive.toFixed(3)}</span></div>
+				</div>
+				<div class="reset-row">
+					<button class="reset small" type="button" onclick={resetStackH}>Reset H defaults</button>
+				</div>
+			{/if}
+		</fieldset>
+
 		<div class="readout">
 			<div><span class="k">FPS</span><span class="v">{fps || '–'}</span></div>
 			<div><span class="k">Altitude</span><span class="v">{altitudeFt.toLocaleString()} ft</span></div>
@@ -1104,210 +907,43 @@
 			{#if variant === 'E'}
 				<div><span class="k">Alt blend</span><span class="v">{(altitudeBlend * 100).toFixed(0)}%</span></div>
 			{/if}
+			{#if variant === 'F'}
+				<div><span class="k">Roads</span><span class="v">{roadsFeatureCount || '—'}</span></div>
+			{/if}
 		</div>
 
 		<button class="reset" type="button" onclick={resetCamera}>Reset camera</button>
 
 		<footer>
-			<p class="note">
-				Variants A–C: post-process. D–E: building emissive via Cesium3DTileStyle.
-				Variant E uses <code>nightLightIntensity</code> to dim VIIRS at low altitude.
-			</p>
+			<p class="note">A-G: base variants (radio, pick one). H: stackable add-on (checkbox, applies on top). H+G = hash palette + ACES tonemap + moonlight + VIIRS punch combined.</p>
 		</footer>
 	</aside>
 </div>
 
 <style>
-	.lab {
-		position: fixed;
-		inset: 0;
-		overflow: hidden;
-		background: #04060d;
-		color: #eee;
-		font-family: system-ui, sans-serif;
-	}
-	.globe-pane {
-		position: absolute;
-		inset: 0;
-	}
-
-	.panel {
-		position: absolute;
-		top: 16px;
-		left: 16px;
-		width: 320px;
-		max-height: calc(100vh - 32px);
-		overflow-y: auto;
-		background: rgba(10, 10, 15, 0.92);
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 12px;
-		padding: 16px;
-		z-index: 30;
-		backdrop-filter: blur(8px);
-	}
-
-	.panel header h2 {
-		font-size: 14px;
-		margin: 0 0 4px;
-		color: #fff;
-		letter-spacing: 0.5px;
-	}
-	.panel header .hint {
-		margin: 0 0 12px;
-		font-size: 10px;
-		color: #888;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-	}
-
-	fieldset {
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 10px;
-		margin: 0 0 12px;
-		padding: 8px 10px;
-	}
-	fieldset legend {
-		font-size: 10px;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-		color: #666;
-		padding: 0 6px;
-	}
-
-	.globals :global(.control),
-	.tunables :global(.control) {
-		margin-bottom: 8px;
-	}
-
-	.variants .row {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 8px;
-		align-items: baseline;
-		padding: 6px 4px;
-		border-radius: 6px;
-		cursor: pointer;
-		transition: background 0.15s ease;
-	}
-	.variants .row:hover {
-		background: rgba(255, 255, 255, 0.04);
-	}
-	.variants .row input[type='radio'] {
-		grid-row: 1 / span 2;
-		margin: 4px 0 0;
-		accent-color: #7faeff;
-	}
-	.variants .row-label {
-		font-size: 12px;
-		color: #ddd;
-	}
-	.variants .row-label strong {
-		color: #7faeff;
-		font-family: ui-monospace, monospace;
-		margin-right: 4px;
-	}
-	.variants .row-hint {
-		grid-column: 2;
-		font-size: 10px;
-		color: #777;
-		line-height: 1.4;
-	}
-
-	.status {
-		margin: 0 0 8px;
-		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 10px;
-		font-family: ui-monospace, monospace;
-		background: rgba(127, 174, 255, 0.08);
-		color: #cdddff;
-	}
-	.status.err {
-		background: rgba(255, 100, 100, 0.12);
-		color: #ffb4b4;
-	}
-	.status.ok {
-		background: rgba(127, 255, 174, 0.08);
-		color: #c5ffe0;
-	}
-
-	.swatch {
-		margin-top: 8px;
-		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 10px;
-		color: rgba(0, 0, 0, 0.7);
-		font-family: ui-monospace, monospace;
-		letter-spacing: 0.5px;
-		text-align: center;
-	}
-
-	.reset-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px;
-		margin-top: 10px;
-	}
-
-	.readout {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 4px 12px;
-		padding: 8px 10px;
-		background: rgba(0, 0, 0, 0.25);
-		border-radius: 8px;
-		font-family: ui-monospace, monospace;
-		font-size: 11px;
-		margin-bottom: 12px;
-	}
-	.readout > div {
-		display: flex;
-		justify-content: space-between;
-	}
-	.readout .k {
-		color: #666;
-	}
-	.readout .v {
-		color: #7faeff;
-	}
-
-	.reset {
-		display: block;
-		width: 100%;
-		padding: 8px;
-		background: rgba(127, 174, 255, 0.12);
-		border: 1px solid rgba(127, 174, 255, 0.3);
-		border-radius: 6px;
-		color: #cdddff;
-		font-size: 12px;
-		font-family: system-ui, sans-serif;
-		cursor: pointer;
-		transition: background 0.2s ease;
-	}
-	.reset:hover {
-		background: rgba(127, 174, 255, 0.22);
-	}
-	.reset.small {
-		padding: 6px;
-		font-size: 11px;
-	}
-
-	footer {
-		margin-top: 12px;
-		padding-top: 12px;
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
-	}
-	footer .note {
-		margin: 0;
-		font-size: 10px;
-		color: #666;
-		line-height: 1.4;
-	}
-	footer code {
-		font-family: ui-monospace, monospace;
-		color: #888;
-		background: rgba(255, 255, 255, 0.06);
-		padding: 1px 4px;
-		border-radius: 3px;
-	}
+	.lab { position: fixed; inset: 0; overflow: hidden; background: #04060d; color: #eee; font-family: system-ui, sans-serif; }
+	.globe-pane { position: absolute; inset: 0; }
+	.panel { position: absolute; top: 16px; left: 16px; width: 320px; max-height: calc(100vh - 32px); overflow-y: auto; background: rgba(10, 10, 15, 0.92); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 16px; z-index: 30; backdrop-filter: blur(8px); }
+	.panel header h2 { font-size: 14px; margin: 0 0 4px; color: #fff; letter-spacing: 0.5px; }
+	.panel header .hint { margin: 0 0 12px; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+	fieldset { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; margin: 0 0 12px; padding: 8px 10px; }
+	fieldset legend { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #666; padding: 0 6px; }
+	.globals :global(.control), .tunables :global(.control) { margin-bottom: 8px; }
+	.variants .row { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; padding: 6px 4px; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; }
+	.variants .row:hover { background: rgba(255, 255, 255, 0.04); }
+	.variants .row input[type='radio'] { grid-row: 1 / span 2; margin: 4px 0 0; accent-color: #7faeff; }
+	.variants .row-label { font-size: 12px; color: #ddd; }
+	.variants .row-label strong { color: #7faeff; font-family: ui-monospace, monospace; margin-right: 4px; }
+	.variants .row-hint { grid-column: 2; font-size: 10px; color: #777; line-height: 1.4; }
+	.reset-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+	.readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; padding: 8px 10px; background: rgba(0, 0, 0, 0.25); border-radius: 8px; font-family: ui-monospace, monospace; font-size: 11px; margin-bottom: 12px; }
+	.readout > div { display: flex; justify-content: space-between; }
+	.readout .k { color: #666; }
+	.readout .v { color: #7faeff; }
+	.reset { display: block; width: 100%; padding: 8px; background: rgba(127, 174, 255, 0.12); border: 1px solid rgba(127, 174, 255, 0.3); border-radius: 6px; color: #cdddff; font-size: 12px; font-family: system-ui, sans-serif; cursor: pointer; transition: background 0.2s ease; }
+	.reset:hover { background: rgba(127, 174, 255, 0.22); }
+	.reset.small { padding: 6px; font-size: 11px; }
+	footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+	footer .note { margin: 0; font-size: 10px; color: #666; line-height: 1.4; }
+	footer code { font-family: ui-monospace, monospace; color: #888; background: rgba(255, 255, 255, 0.06); padding: 1px 4px; border-radius: 3px; }
 </style>

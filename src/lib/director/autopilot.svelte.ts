@@ -13,7 +13,7 @@
 
 import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
-import type { LocationId, SimulationContext, AtmospherePatch, WorldPatch } from '$lib/types';
+import type { LocationId, SimulationContext, WorldPatch } from '$lib/types';
 
 // ── Private timers ──────────────────────────────────────────────────────────
 // Both intervals are seeded on the FIRST tick from the live config's
@@ -42,8 +42,8 @@ export function directorTick(delta: number, ctx: SimulationContext): WorldPatch 
 		// each pick a different random scenario.
 		if (!ctx.isLeader) return;
 
-		const atmospherePatch = tickRandomize(delta, ctx);
-		if (atmospherePatch) patch.atmosphere = atmospherePatch;
+		const configs = tickRandomize(delta, ctx);
+		if (configs) patch.configs = configs;
 
 		if (ctx.isOrbitMode) {
 			const nextLoc = tickDirector(delta, ctx);
@@ -61,7 +61,7 @@ export function directorReset(ctx: SimulationContext): void {
 
 // ─── Weather randomisation ──────────────────────────────────────────────────
 
-function tickRandomize(delta: number, ctx: SimulationContext): AtmospherePatch | null {
+function tickRandomize(delta: number, ctx: SimulationContext): Array<{ path: string; value: unknown }> | null {
 	const ap = ctx.director.autopilot;
 	const am = ctx.director.ambient;
 
@@ -76,25 +76,25 @@ function tickRandomize(delta: number, ctx: SimulationContext): AtmospherePatch |
 	_randomizeTimer = 0;
 	_nextRandomizeTime = randomBetween(ap.subsequentMinDelay, ap.subsequentMaxDelay);
 
-	const patch: AtmospherePatch = {};
-	patch.cloudDensity = clamp(
+	const configs: Array<{ path: string; value: unknown }> = [];
+	configs.push({ path: 'atmosphere.clouds.density', value: clamp(
 		ctx.cloudDensity + (Math.random() - 0.5) * am.cloudDensityShift,
 		am.cloudDensityMin, am.cloudDensityMax,
-	);
-	patch.cloudSpeed = clamp(
+	) });
+	configs.push({ path: 'atmosphere.clouds.speed', value: clamp(
 		ctx.cloudSpeed + (Math.random() - 0.5) * am.cloudSpeedShift,
 		am.cloudSpeedMin, am.cloudSpeedMax,
-	);
-	patch.haze = clamp(
+	) });
+	configs.push({ path: 'atmosphere.haze.amount', value: clamp(
 		ctx.haze + (Math.random() - 0.5) * am.hazeShift,
 		am.hazeMin, am.hazeMax,
-	);
+	) });
 
 	if (Math.random() < ap.weatherChangeChance) {
-		patch.weather = pickRandom(ap.weatherPool);
+		configs.push({ path: 'weather', value: pickRandom(ap.weatherPool) });
 	}
 
-	return patch;
+	return configs;
 }
 
 // ─── Auto-pilot director ────────────────────────────────────────────────────

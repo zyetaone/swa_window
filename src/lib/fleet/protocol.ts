@@ -7,9 +7,8 @@
  *
  * What stays:
  *   FleetClientModel — narrow interface the device's SSE client needs
- *                      from AeroWindow (applyPatch DTO adapter, etc.).
- *   DisplayConfig    — flat admin-pushable override DTO. Still used by
- *                      admin panel UI + device applyPatch adapter.
+ *                      from AeroWindow.
+ *   DisplayConfig    — flat admin-pushable override DTO (legacy v1).
  *   DeviceCaps       — browser-reported capabilities (used in rest-admin
  *                      typing, though we no longer send it as a register
  *                      message — device /api/status could expose a subset
@@ -26,13 +25,16 @@ export interface FleetClientModel {
 	location: LocationId;
 	weather: WeatherType;
 	qualityMode: QualityMode;
+	syncToRealTime: boolean;
 	/** Navigate to a location, optionally setting weather. */
 	applyScene(location: LocationId, weather?: WeatherType): void;
 	setDisplayMode(mode: DisplayMode, payload?: string): void;
 	setQualityMode(mode: QualityMode): void;
-	applyPatch(patch: Partial<DisplayConfig>): void;
+	setAltitude(alt: number): void;
+	setTime(t: number): void;
+	setFlightSpeed(n: number): void;
 	/**
-	 * Path-targeted patch — applied through RootConfig.applyPatch.
+	 * Path-targeted patch — applied through RootConfig.applyConfigPatch.
 	 * Returns true if the path was recognised. Optional so test stubs and
 	 * older models remain valid; the SSE client feature-tests.
 	 */
@@ -50,7 +52,7 @@ export interface DeviceCaps {
 	userAgent: string;
 }
 
-/** Flat admin-pushable config DTO. Applied on the device via model.applyPatch. */
+/** Flat admin-pushable config DTO (legacy v1). Decomposed into typed setter calls in the fleet client. */
 export interface DisplayConfig {
 	altitude?: number;
 	timeOfDay?: number;
