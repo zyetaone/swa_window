@@ -1,7 +1,8 @@
 # Ship Readiness — SWA Hyderabad
 
-> Triage as of 2026-05-20. Install: SATTVA Knowledge Park, end of May 2026.
+> Triage as of 2026-05-21 (Day 1 commits landed). Install: SATTVA Knowledge Park, end of May 2026.
 > This doc survives `/compact` and is the agenda for the next council session.
+> Tagged `pre-ship-v1` after Day 1.
 
 ---
 
@@ -48,7 +49,10 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 - ✅ Pane / HUD / SidePanel / Blind / Glass / Weather
 - ✅ Blind drag composable + accessibility
 - ✅ Telemetry panel (Shift+T)
+- ✅ `shell.touchEnabled` gate (Day 1 commit `210eff9`) — passenger mode default; long-press accel + extras gated behind operator toggle
 - ⚠ Touch gestures untested on real capacitive touchscreen
+- ⏳ Corner-PIN gesture unlock + 10-min auto-revert (v1.1 deferred from Q3 council)
+- ⏳ inputMode FSM (locked/armed/cooldown) cleanup — Day 6 task #62 (drag-during-cruise_transit silent swallow + multi-touch race)
 
 ### Fleet (multi-Pi)
 - ✅ REST + per-device SSE (no broker)
@@ -62,15 +66,16 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 - ✅ 14 locations including Hyderabad (set as inauguration default)
 - ✅ Weather recipes (5 types)
 - ✅ Sky palettes per `SkyState`
-- ✅ Scenarios catalog with flight paths
-- ❓ **Is there a "Hyderabad inauguration" show that prioritizes Hyderabad → Dubai → Mumbai progression?** Currently we have one generic default show.
+- ✅ 21 scenarios in catalog with flight paths
+- ✅ **`defaultShow` opens with dawn over Hyderabad (06:30, clear sky)** — Council Q2 (`557ad90`). Single hand-tuned hero frame, autopilot wanders from there. Choreographed multi-beat `hyderabad-launch.show.ts` rejected by the council; can be added post-validation if Day 2 GO completes with margin.
 - ❓ Enough scenario variety for an unsupervised 8-hour day?
 
 ### Admin
 - ✅ Fleet health dashboard
 - ✅ Content drag-drop UI
-- ✅ Bearer-gated mutating routes
-- ❓ **Token distribution path**: who hands `AERO_ADMIN_TOKEN` to Zyeta ops? How do they store it?
+- ✅ Bearer-gated mutating routes — now includes `/api/config` PATCH (Day 1 commit `77f244f`, Option B peer-token model)
+- ✅ `/api/internal/peer-token` localhost-only route — kiosk Pi browser gets token without baking it in the bundle
+- ❓ **Token distribution path**: who hands `AERO_ADMIN_TOKEN` to Zyeta ops? How do they store it? — **Day 7 task**
 - ❓ **Recovery path** when a Pi wedges and the on-site operator is non-engineer
 
 ### Deploy
@@ -112,30 +117,48 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 
 ---
 
-## 5. Questions for the council (post-compact)
+## 5. Questions for the council
 
-These need **creative-technologist** thinking, not engineering grinding. Each is a "the codebase can answer the WHAT, but we need to figure out the WHY/HOW":
+**Resolved on 2026-05-20** (full memory: `~/.claude/projects/.../memory/project_council_q3_q5_q6_decisions.md`):
 
-1. **The 3-pane panorama seam.** Three Pis, 1m apart, showing yaw-offset slices of the same scene. The math works. But does it READ as one window, or as three coordinated displays? The answer is probably bezel-aware (do we matte the edges? do we exaggerate the parallax angle to FEEL more like one fuselage?).
+2. ✅ **Inauguration experience.** `defaultShow` amended to dawn over Hyderabad (06:30 / clear / 6.5). Single hand-tuned hero frame, not a choreographed timed sequence. Per Q2 council. Reversal criterion: if Day 2 GO completes with margin, optional 2–4hr Show authoring session for a richer opening hold (15–20s before autopilot first decision).
 
-2. **The "inauguration" experience.** The first 60 seconds someone sees the SWA window at launch event. What plays? Currently we drop into "Hyderabad at local noon, cloudy" — fine but unscripted. Could this be a CHOREOGRAPHED show that ramps from dawn-over-Hyderabad → through clouds → into the day, timed to the inauguration ceremony? This is a content question, not a code question.
+3. ✅ **Touch contract.** Off by default; blind drag preserved as the one curtain-metaphor gesture. Operator unlocks demo mode via `shell.touchEnabled = true` (side panel toggle today; corner-PIN deferred to v1.1).
 
-3. **The touch contract.** Currently: blind drag = fly to next location. The composable is solid. But what if touch is the wrong primitive for an office lobby — should the install be touch-disabled by default and only enable on a key combo from an operator iPad? "Look but don't touch" might be the right product call.
+5. ✅ **Failure modes.** Never break the fiction. 7-layer graceful degradation ladder authored in Day 6 hardening tasks (#58–63): hold last good frame, vignette pulse, cloud-cover overlay, `lastKnownGood` persistence, FSM watchdog, 3mm operator-only health dot, NEVER show error UI to audience.
 
-4. **The autopilot rhythm.** Currently the director picks a new scene every 100-160 seconds (per autopilot config). Is that the right cadence for an OFFICE LOBBY (people glance for 5-30s and move on) versus a single-viewer kiosk? Calibration question.
+6. ✅ **MapLibre fallback.** DROPPED. 3-of-4 council voices: untested hedges are theater. If Day 2 NO-GO fires, response is aggressive in-engine Cesium downgrade (`qualityMode: performance` + terrain off + 30fps cap). Catastrophic fallback only: pre-rendered MP4 loop. Not a renderer swap.
 
-5. **What does "broken" look like?** When the install inevitably hiccups — a Pi loses LAN, Cesium hangs a frame, the touchscreen drifts — what's the FAILURE MODE we want? Black screen with logo? Frozen last frame? Cycling between known-good cached imagery? The fallback experience is the experience under stress.
+**Still open:**
 
-6. **The MapLibre v2 question.** We archived it. Was that the right call? The Cesium-on-Pi-5 risk is real; MapLibre + PMTiles ships smaller and is OSS-pure. If physical validation reveals Cesium can't hold 60fps, do we have a 2-day path to MapLibre fallback or is that a re-write?
+1. **The 3-pane panorama seam.** Three Pis, 1m apart, showing yaw-offset slices of the same scene. The math works. But does it READ as one window, or as three coordinated displays? The answer is probably bezel-aware (do we matte the edges? do we exaggerate the parallax angle to FEEL more like one fuselage?). **→ Day 3 council session B.**
+
+4. **The autopilot rhythm.** Currently the director picks a new scene every 100-160 seconds. Is that the right cadence for an OFFICE LOBBY (people glance for 5-30s and move on) versus a single-viewer kiosk? Calibration question. **→ Day 4 council session C.** (Note from Q3 game-designer lens: per-second motion beat at ~8s interval matters more than scene cadence for glancers; verify on hardware.)
 
 ---
 
-## 6. What the council session should produce
+## 6. What landed Day 1 (2026-05-21)
 
-- Decisions on questions 1–6 above
-- A `hyderabad-launch.show.ts` if #2 lands as "yes, choreograph it"
-- A written install runbook
-- A Pi 5 firmware version we commit to (and pin)
-- Token distribution mechanism (encrypted envelope? operator iPad?)
+5 commits + `pre-ship-v1` tag pushed to origin/main:
 
-The codebase is ship-ready. The PRODUCT around the codebase has the open questions now.
+| Commit | What |
+|---|---|
+| `013e151` | SSE ring-buffer replay + Pi 5 `--no-sandbox` rationale documented |
+| `77f244f` | `/api/config` PATCH bearer-gated (Option B); localhost-only `/api/internal/peer-token` route; peer-sync auth wired; 258→274 tests |
+| `557ad90` | `defaultShow` → dawn over Hyderabad (Council Q2) |
+| `af3b97d` | `/architecture` page v1.1 — Time + Networking as hidden pillars; v1 voice preserved in `docs/ARCHITECTURE-original-framing.md` |
+| `210eff9` | `shell.touchEnabled` gate — passenger mode default (Council Q3) |
+| `1e74a63` | Stale numeric stats on architecture page fixed (14 locations / 21 scenarios / 108 files) |
+
+**Day 6/7 hardening queued** from architect ultrathink + Q5 council (tasks #58–63):
+- Frame-budget watchdog auto-downgrade
+- `MIN_SANE_TIMESTAMP` gate on fleet connect
+- NTP-drift echo in heartbeat → admin/fleet/health
+- `lastKnownGood.svelte.ts` snapshot + FSM watchdog
+- Failure-mode visual ladder (hold frame + cloud cover + vignette pulse + health dot)
+- inputMode FSM cleanup (multi-touch race + cruise_transit drag swallow)
+- Static fleet peer override (bypass mDNS for hotel LANs) — Day 7
+
+**Next: Day 2 = Pi 5 hardware GO/NO-GO gate.** Flash a Pi, boot `pre-ship-v1`, run Shift+T telemetry for 30 min, decide GO if p95 ≤ 20ms over Cesium + bloom + clouds.
+
+The codebase is ship-ready. The PRODUCT around the codebase has 2 open council questions (Q1 panorama seam, Q4 autopilot cadence — both Day 3/4) and one big remaining unknown: real Pi 5 hardware.

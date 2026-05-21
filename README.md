@@ -26,10 +26,13 @@ bun run dev
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `VITE_CESIUM_ION_TOKEN` | Yes | Cesium terrain and Ion-backed assets |
+| `VITE_CESIUM_ION_TOKEN` | Build-time | Cesium terrain and Ion-backed assets. Stays on the build machine; never shipped to Pis. |
 | `VITE_MAPBOX_TOKEN` | No | Mapbox Satellite imagery override |
 | `VITE_TILE_SERVER_URL` | No | Local offline tile server for Pi deployments |
 | `VITE_SENTINEL2` | No | Experimental Sentinel-2 imagery mode (requires a tiling proxy) |
+| `AERO_ADMIN_TOKEN` | Pi runtime | Bearer-token gate for mutating admin routes (`/api/config` PATCH, `/api/content` POST, `/api/assets` POST, `/api/content/[id]` DELETE). Set per-Pi via `/opt/zyeta-aero/config.env`. Routes return 503 when unset (fail-closed). |
+| `AERO_WIFI_RESET_TOKEN` | Pi runtime | Bearer-token gate for `POST /api/wifi/reset`. Same fail-closed pattern. |
+| `AERO_PUSH_WORKER_URL` | No | Optional Cloudflare Worker URL for OTA bundle/config push |
 
 ## Root layout
 
@@ -43,6 +46,9 @@ bun run dev
 
 ## Key docs
 
+- `/architecture` route — living visual documentation of the 7+2 pillars (Game Loop, State, Rendering, Camera, Input, Content, Night, plus hidden Time + Networking). Reachable in the running app.
+- `docs/SHIP-READINESS.md` — current install triage; status marks (✅ done / ⚠ untested / ❓ open / 🔴 risky) by feature
+- `docs/ARCHITECTURE-original-framing.md` — v1 architecture framing, preserved for posterity
 - `CHANGELOG.md` — repo-level release history
 - `docs/ADR-001-offline-tile-architecture.md` — offline tile architecture decision record
 - `docs/standards.md` — Rules 0-10 (content/control split, named exports, effect layout, …)
