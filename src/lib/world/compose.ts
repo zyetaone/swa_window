@@ -681,6 +681,10 @@ export class CesiumManager {
 			const viirsAlpha = Math.min(VIIRS_MAX_ALPHA * viirsEase * scale * altGate * boost, 1.0);
 			this.viirsLayer.show = (show || firstNight) && viirsAlpha > 0.001;
 			this.viirsLayer.alpha = viirsAlpha;
+			// Phase 10 — viirsBrightness rewritten per-frame so the admin
+			// SidePanel slider takes effect live. Compose.ts originally set
+			// it once at setup; that meant slider changes required reload.
+			this.viirsLayer.brightness = 2.2 * w.viirsBrightness;
 		}
 	}
 
