@@ -23,7 +23,7 @@ bun x vitest run     # Run unit/integration tests
 
 - **Framework**: SvelteKit 2 with Svelte 5 runes (`$state`, `$derived`, `$effect`, `$bindable()`, `createContext` on 5.40+)
 - **Terrain + globe**: Cesium (production). Confined to `src/lib/world/`; only `compose.ts`/`cesium-setup.ts` import the package as a type, only `CesiumViewer.svelte` does the runtime `import('cesium')`.
-- **Imagery**: EOX Sentinel-2 Cloudless (day) + CartoDB Dark + NASA VIIRS Black Marble (night) — all pre-packaged offline via `tools/tile-packager/` into `TILE_DIR`. Falls back to remote sources only on cache miss.
+- **Imagery**: EOX Sentinel-2 Cloudless (day) + NASA VIIRS Black Marble (night). The CartoDB Dark overlay was dropped in Phase 15.5 — the post-process shader's `mix()` to navy now carries the atmospheric darkening the CartoDB layer used to provide. Pre-packaged offline via `tools/tile-packager/` into `TILE_DIR`. Falls back to remote sources only on cache miss.
 - **Atmosphere**: SVG feTurbulence clouds, CSS rain/frost/lightning, procedural micro-events.
 - **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
 - **State**: Flat reactive `$state` objects in `src/lib/model/config-tree.svelte.ts` — one per namespace (atmosphere, camera, director, world, shell). No class-per-namespace. Fleet v2 protocol routes path-targeted patches through `model.applyConfigPatch(path, value)`.
@@ -259,7 +259,7 @@ Zero-cost product vision. Every external tile source is **cached locally at buil
 
 Cached sources (via `tools/tile-packager/`):
 - `eox-sentinel2` — daytime imagery (z3-12)
-- `cartodb-dark` — night overlay (z3-14, `dark_nolabels` variant)
+- ~~`cartodb-dark`~~ — **dropped Phase 15.5**. Shader's `mix()` to navy now carries the atmospheric darkening.
 - `cesium-terrain` — Ion quantized-mesh (requires `CESIUM_ION_TOKEN` at build only)
 - `terrarium` — AWS PNG heightmap fallback
 - `viirs-night-lights` — packaged but not currently wired into the app
@@ -454,3 +454,4 @@ AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endp
 | 13 SSOT sweep | Four duplicated literals → SSOT homes: fleet timings → `fleet/timings.ts`; peer URL → `fleet/peer-url.ts`; bundle ID pattern → `bundle/loader.ts`. Night time-of-day boundaries → `night/thresholds.ts` (`T` constants). All sky consumers (getSkyState, nightFactor, dawnDuskFactor, isSunVisible) share T. | 4d20c47 + c134ee9 |
 | 14 demo mode (SWA inaug.) | Default location=hyderabad, windowFrame=true. Dusk palette: warm amber arc (no purple mid-tone). satShift dd contrib -0.5→-0.08 (preserves Cesium warm sunset scatter). Globe dusk correction dd*0.3→dd*0.15. Dusk skyState window 18→21h (blue hour). 250/250 tests. | eb7bde0–112fa8a |
 | 15 Day-1 ship prep (SWA) | Council on Q2/Q3/Q5/Q6 with game/experience lenses. defaultShow → dawn over Hyderabad (clear/06:30). `/api/config` PATCH bearer-gated (Option B: localhost-only `/api/internal/peer-token` route + browser cache + peer-sync bearer header injection). `shell.touchEnabled` gate (passenger mode default; long-press accel + extras behind operator toggle). SSE ring-buffer replay (config_patch + command events survive browser reload). `/architecture` page authored (7+2 pillars: Time + Networking promoted from "hidden inside State" to first-class). 274/274 tests, `pre-ship-v1` tag. | 013e151–eadcf9c |
+| 15.5 night pipeline simplification | 4-lens council (game-design/game-dev/exp-design/exp-dev) voted P2 (3-of-1). Phases LANDED: (1) shader-driven base darkening replaces CartoDB layer's atmospheric ramp via `mix(rgb, navy, smoothstep(0.45,0.9,nf)*0.85*(1-brightGuard))`; (2) drop CartoDB Dark imagery layer entirely; (1.5a) drop redundant base-imagery brightness lerp; (1.5b) drop shader shadow-crush + contrast (~90% redundant with HDR tonemap + bloom); (1.5c) collapse 3 glass DOM layers (z:9+10+11) into one element with stacked gradients + inset box-shadow + `@property`-registered CSS var for rim transitions; (7) drop orphan night config fields (`nightAlpha`, `nightBrightness`, `nightContrast`, `baseNightBrightness`). Result: 3 imagery layers → 2, 5 shader ops → 3, 11 DOM compositor layers → 9, 7 admin night sliders → 4. Council Phases 3-6 (productionize variant E altitude-aware buildings emissive + variant F vector OSM roads + altitude-gate VIIRS) queued for post-hardware-validation. See `docs/ADR-003-night-pipeline-simplification.md`. | 51f4290–a8b3fe5 |

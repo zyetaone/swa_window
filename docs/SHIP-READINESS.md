@@ -162,3 +162,26 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 **Next: Day 2 = Pi 5 hardware GO/NO-GO gate.** Flash a Pi, boot `pre-ship-v1`, run Shift+T telemetry for 30 min, decide GO if p95 ≤ 20ms over Cesium + bloom + clouds.
 
 The codebase is ship-ready. The PRODUCT around the codebase has 2 open council questions (Q1 panorama seam, Q4 autopilot cadence — both Day 3/4) and one big remaining unknown: real Pi 5 hardware.
+
+---
+
+## 7. Phase 15.5 — Night pipeline simplification (2026-05-21, post Day 1)
+
+After Day 1, ran a 4-lens council (game-design + game-dev + experience-design + experience-development) on the night render pipeline. Verdict: **3-of-4 lenses voted P2** (drop CartoDB, keep VIIRS at altitude, prepare F+E for low altitude). The dissent was on TIMING, not architectural direction — the user explicitly lifted the timing constraint ("we have some time"), so we proceeded with the subtractive cuts that need no new infrastructure.
+
+**Cumulative reductions after Phase 15.5 landed phases:**
+- 3 imagery layers → **2** (one fewer texture sample per night fragment)
+- 5 shader ops → **3** (one fewer pow() call per pixel)
+- 11 DOM compositor layers → **9** (collapsed glass to one element)
+- 7 admin night sliders → **4** (orphan CartoDB-era knobs dropped)
+- ~180MB tile cache reclaimable once tile-packager source-list is updated
+
+**Phases LANDED:** Phase 1+2 (shader-driven base darken replaces CartoDB), 1.5a (drop redundant brightness lerp), 1.5b (drop shader shadow crush + contrast), 1.5c (collapse 3 glass DOM layers into 1 via `@property`), 7 (drop orphan night sliders). Commits `51f4290`, `75ce250`, `a8b3fe5`.
+
+**Phases QUEUED for post-hardware-validation:** Phase 3 (productionize variant E — altitude-aware buildings emissive), Phase 4 (`/api/roads/:city` route + tile-packager pre-bake), Phase 5 (productionize variant F — vector OSM roads), Phase 6 (altitude-gate VIIRS to fade below 5km). These adopt the F+E paradigm (buildings + roads as light SOURCES, not light-on-ground), which Experience Designer flagged as the right reference: "the passenger window, not the satellite."
+
+**Full rationale, preserved invariants, reversal criteria:** `docs/ADR-003-night-pipeline-simplification.md`.
+
+**Reversibility:** All landed phases revert cleanly if Pi 5 visual inspection reveals "too flat" / "too dark" / "muddy" — tune the navy shader color or restore the brightness lerp before reverting the CartoDB layer itself. Glass collapse reverts with confidence (`@property` is supported in modern Chromium kiosk builds; JS-driven opacity is the fallback).
+
+The night pipeline is now simpler than at any point since the original 3-layer composite. Same blue-hour beat, same VIIRS terminator-awareness, same 3-pane panorama protocol, same sun-disc / amber protection — measurable subtraction without audience-visible loss.

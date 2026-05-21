@@ -347,33 +347,34 @@
 	<!-- ═══════════════════════════════════════════════════════════════ NIGHT -->
 	<section>
 		<h2>Pillar 7 — The Night Pipeline</h2>
+		<p class="hidden-blurb">Simplified Phase 15.5 (2026-05-21). The CartoDB Dark imagery overlay was dropped — the post-process shader's <code>mix()</code> to navy now carries the atmospheric darkening that layer used to provide. Three imagery layers → two; five shader ops → three. Same blue-hour beat, same VIIRS terminator-awareness, fewer moving parts. See <code>docs/ADR-003-night-pipeline-simplification.md</code>.</p>
 		<div class="night-stages">
 			<div class="night-stage">
 				<span class="stage-num">1</span>
 				<div>
-					<h4>Base Darkening</h4>
-					<p>EOX satellite imagery → 15% brightness, 5% saturation. Near-greyscale — no blue ocean bleeding through at night.</p>
+					<h4>Base Saturation Lerp</h4>
+					<p>EOX satellite imagery saturation lerped 1.4 → 0.05 at night. Brightness lerp dropped — the shader's mix() does the darkening now. Near-greyscale prevents green hue cast at deep night.</p>
 				</div>
 			</div>
 			<div class="night-stage">
 				<span class="stage-num">2</span>
 				<div>
-					<h4>CartoDB Dark Overlay</h4>
-					<p>Smoothstep gate at nightFactor 0.45. Sky darkens 30+ minutes before city lights appear — natural atmospheric order.</p>
+					<h4>VIIRS Black Marble</h4>
+					<p>NASA city lights smoothstep in at 0.55–0.9, capped at 50% alpha. Terminator-aware (<code>dayAlpha=0</code> / <code>nightAlpha=1</code>) so lit cities stay lit. City-by-city reveal as night deepens.</p>
 				</div>
 			</div>
 			<div class="night-stage">
 				<span class="stage-num">3</span>
 				<div>
-					<h4>VIIRS Black Marble</h4>
-					<p>NASA city lights smoothstep in at 0.55–0.9, capped at 50% alpha. City-by-city reveal as night deepens. Warm amber corona on bright pixels.</p>
+					<h4>Cesium HDR + Bloom</h4>
+					<p>Built-in tonemap (contrast 128, brightness −0.3, sigma 2.2). Handles the shadow crush + contrast that the shader used to do redundantly.</p>
 				</div>
 			</div>
 			<div class="night-stage">
 				<span class="stage-num">4</span>
 				<div>
-					<h4>Post-Process GLSL</h4>
-					<p>Shadow crush. Horizon haze tinted amber at dawn/dusk terminator. Warm pollution corona. Runs after the full scene composite.</p>
+					<h4>Post-Process Shader (3 ops)</h4>
+					<p><strong>brightGuard</strong> protects VIIRS amber + sun disc. <strong>Base mix to navy</strong> via smoothstep(0.45, 0.9) — replaces the dropped CartoDB layer's atmospheric ramp. <strong>Pollution corona</strong> on bright pixels for the warm city halo. That's it.</p>
 				</div>
 			</div>
 			<div class="night-stage">
@@ -390,8 +391,17 @@
 				<ul>
 					<li>Smoothstep gates — linear interpolation would reveal banding; smoothstep hides the transition</li>
 					<li>VIIRS floor at 0.55 prevents "magenta leak" from colorToAlpha on bright city cores at early dusk</li>
-					<li>CartoDB gate at 0.45 — atmospheric darkening naturally precedes visible city lights by 30+ min</li>
+					<li>Shader gate at 0.45 — atmospheric darkening naturally precedes visible city lights by 30+ min (same beat the CartoDB layer used to provide, now inline)</li>
 					<li>Viewer never sees a transition — they just notice the city lights are on</li>
+				</ul>
+			</div>
+			<div class="detail-box good">
+				<h4>↗ Queued for post-hardware-validation</h4>
+				<ul>
+					<li><strong>Phase 3</strong> — altitude-aware buildings emissive (Cesium3DTileColorBlendMode.HIGHLIGHT)</li>
+					<li><strong>Phase 4–5</strong> — vector OSM roads as night light source (`/api/roads/:city` + pre-bake + GeoJsonDataSource + PolylineGlow)</li>
+					<li><strong>Phase 6</strong> — altitude-gate VIIRS to fade below 5km so vector roads own the city-light load at low altitude</li>
+					<li>Reference: "the passenger window, not the satellite" — buildings + roads as light SOURCES, not light-on-ground</li>
 				</ul>
 			</div>
 		</div>
@@ -486,7 +496,7 @@
 		<p class="hidden-intro">An earlier framing of this document named Audio as the missing pillar. An ultrathink audit (2026-05-20) showed the real missing pillars sit closer to the load-bearing centre — they're not absent, they're hiding inside other pillars, doing real work with no owner. The v1 framing is preserved at <code>docs/ARCHITECTURE-original-framing.md</code>.</p>
 
 		<h3 class="hidden-h3">Hidden Pillar 8 — Time</h3>
-		<p class="hidden-blurb">Six consumers, no owner. A <code>$state(12)</code> field plus thresholds in <code>night/thresholds.ts</code>. Every smoothstep night gate is a function of <code>timeOfDay</code>. The triptych sync between three Pis depends on three independent <code>Date.now()</code> readings, padded by 2.5s to absorb drift. Promoting Time to its own module is the cheapest structural fix in the codebase.</p>
+		<p class="hidden-blurb">Six consumers, no owner. A <code>$state(12)</code> field plus thresholds in <code>night/index.ts</code>. Every smoothstep night gate is a function of <code>timeOfDay</code>. The triptych sync between three Pis depends on three independent <code>Date.now()</code> readings, padded by 2.5s to absorb drift. Promoting Time to its own module is the cheapest structural fix in the codebase.</p>
 		<div class="audio-map">
 			<div class="audio-pair">
 				<span class="audio-source">Director</span>
