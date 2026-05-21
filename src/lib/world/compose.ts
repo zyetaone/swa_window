@@ -555,8 +555,17 @@ export class CesiumManager {
 			const viirsEase = smoothstep(
 				(nf - VIIRS_SMOOTHSTEP_FLOOR) / (VIIRS_SMOOTHSTEP_CEIL - VIIRS_SMOOTHSTEP_FLOOR),
 			);
-			this.viirsLayer.show = (show || firstNight) && viirsEase > 0.001;
-			this.viirsLayer.alpha = VIIRS_MAX_ALPHA * viirsEase * scale;
+			// Phase 6 (altitude-gate VIIRS): smoothstep gate fades VIIRS to
+			// zero below 5kft so the building emissive (Phase 3) and future
+			// vector roads (Phase 5) own the city-light load at low altitude
+			// without VIIRS' photoreal aggregate overpainting them.
+			const altGate = smoothstep(
+				(this.model.flight.altitude - w.viirsAltGateLowFt) /
+					Math.max(w.viirsAltGateHighFt - w.viirsAltGateLowFt, 1),
+			);
+			const viirsAlpha = VIIRS_MAX_ALPHA * viirsEase * scale * altGate;
+			this.viirsLayer.show = (show || firstNight) && viirsAlpha > 0.001;
+			this.viirsLayer.alpha = viirsAlpha;
 		}
 	}
 

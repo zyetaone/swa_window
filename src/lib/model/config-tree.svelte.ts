@@ -236,6 +236,13 @@ export const world = $state({
 	buildingEmissiveLowAltFt: 15000,
 	buildingEmissiveHighAltFt: 25000,
 	buildingEmissiveMax: 0.6,
+	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
+	// it doesn't compete with the building emissive at passenger-window
+	// altitudes. At cruise (>15kft) VIIRS is full strength; below 5kft VIIRS
+	// is fully off. Pairs with the building emissive band (15-25kft) so the
+	// city-light load smoothly crossfades between sources during ascent.
+	viirsAltGateLowFt: 5000,
+	viirsAltGateHighFt: 15000,
 	showClouds: true,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
