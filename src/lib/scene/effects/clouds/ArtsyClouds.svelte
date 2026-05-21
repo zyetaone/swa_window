@@ -19,6 +19,7 @@
 import { untrack } from 'svelte';
 import type { EffectProps } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$content/weather';
+import { pickCloudComposition, type CloudComposition } from '$content/compositions/clouds';
 import { subscribe } from '$lib/game-loop';
 
 // Effect-component signature — compositor passes { model }. The wrapper
@@ -80,96 +81,80 @@ const textureSets: Record<string, readonly string[]> = {
 };
 
 function rand(min: number, max: number) { return min + Math.random() * (max - min); }
-
-function createSprites(count: number, textures: readonly string[]): CloudSprite[] {
-	const sprites: CloudSprite[] = [];
-	for (let i = 0; i < count; i++) {
-		const y = rand(-5, 5);
-		sprites.push({
-			x: rand(-8, 8),          // vw units — relative to viewport
-			y,
-			z: rand(-100, 100),
-			rot: rand(0, 360),
-			scale: rand(0.5, 1.4),
-			speed: rand(0.015, 0.08),
-			texture: textures[Math.floor(Math.random() * textures.length)],
-			opacity: rand(0.55, 0.92),
-			// Bottom sprites darker (gray underside), top sprites bright (sunlit)
-			brightness: 0.7 + (y + 5) / 10 * 0.35,
-		});
-	}
-	return sprites;
+function randRange(r: readonly [number, number]) { return rand(r[0], r[1]); }
+function randCount(r: readonly [number, number]) {
+	return Math.floor(r[0] + Math.random() * (r[1] - r[0] + 1));
 }
 
-// Horizon clouds — translucent haze band at the far horizon (6-22%).
-// Lower opacity than mid/foreground so terrain shows THROUGH them,
-// not BEHIND them. Real clouds at 30k ft are ABOVE terrain — they
-// don't occlude foreground terrain, they BLEND with the sky.
-function createHorizonSprites(count: number, textures: readonly string[]): CloudSprite[] {
+function createSprites(
+	count: number,
+	textures: readonly string[],
+	isHorizon: boolean,
+): CloudSprite[] {
 	const sprites: CloudSprite[] = [];
 	for (let i = 0; i < count; i++) {
 		const y = rand(-5, 5);
 		sprites.push({
 			x: rand(-8, 8),
 			y,
-			z: rand(-80, 80),
+			z: isHorizon ? rand(-80, 80) : rand(-100, 100),
 			rot: rand(0, 360),
-			scale: rand(0.5, 1.3),
-			speed: rand(0.01, 0.05),
+			scale: isHorizon ? rand(0.5, 1.3) : rand(0.5, 1.4),
+			speed: isHorizon ? rand(0.01, 0.05) : rand(0.015, 0.08),
 			texture: textures[Math.floor(Math.random() * textures.length)],
-			// KEY: low opacity so terrain shows through — horizon is a haze, not a wall
-			opacity: rand(0.18, 0.38),
-			brightness: 0.8 + (y + 5) / 10 * 0.2,
+			// Horizon sprites lower opacity so terrain shows through (haze, not wall)
+			opacity: isHorizon ? rand(0.18, 0.38) : rand(0.55, 0.92),
+			brightness: isHorizon ? 0.8 + (y + 5) / 10 * 0.2 : 0.7 + (y + 5) / 10 * 0.35,
 		});
 	}
 	return sprites;
 }
 
-function createHorizonCloud(): Cloud {
-	const textures = textureSets[weather] ?? textureSets.clear;
-	// Phase 10b (user direction): horizon clouds hug the VISIBLE horizon line
-	// (~y 42-50% at default cruise pitch -75°) rather than floating high in
-	// the sky band (6-22%). This is the "fake clouds at horizon behind the
-	// Earth" effect — the deep negative z (-1600..-700) plus the mask in
-	// css3d-clouds keeps them feeling far away, while the y-band lands them
-	// right above the Earth silhouette where VIIRS city lights are visible.
-	// Counts widened so the horizon strip actually reads as a cloud bank.
+// Phase 11 — composition-driven cloud generation. Picker chooses a recipe
+// from $content/compositions/clouds on weather change; the recipe controls
+// horizon + mid band counts, y-bands, scales, speeds, and sprites-per-cloud.
+// Replaces the hardcoded "8-14 sprites at y=28-44" defaults that made every
+// clear day look identical.
+function createCloudFromBand(
+	band: CloudComposition['horizon'],
+	textures: readonly string[],
+	isHorizon: boolean,
+): Cloud {
 	return {
 		x: rand(-30, 130),
-		y: rand(28, 44),
-		z: rand(-1600, -700),
-		vx: rand(0.4, 1.6),
-		baseScale: rand(2.0, 3.6),  // wide but translucent
-		sprites: createHorizonSprites(10 + Math.floor(Math.random() * 6), textures),
+		y: randRange(band.yRange),
+		z: isHorizon ? rand(-1600, -700) : rand(-400, -60),
+		vx: randRange(band.speedRange),
+		baseScale: randRange(band.scaleRange),
+		sprites: createSprites(randCount(band.spritesPerCloud), textures, isHorizon),
 	};
 }
 
-// Mid/foreground clouds — scattered below the horizon deck.
-function createCloud(idx: number, total: number): Cloud {
-	const textures = textureSets[weather] ?? textureSets.clear;
-	const yBand = idx < total * 0.5 ? rand(25, 50) : rand(50, 82);
-	return {
-		x: rand(-20, 120),
-		y: yBand,
-		z: rand(-400, -60),
-		vx: rand(2, 7),
-		baseScale: rand(0.7, 1.5),
-		sprites: createSprites(8 + Math.floor(Math.random() * 7), textures),
-	};
-}
+const composition = $derived.by<CloudComposition>(() => {
+	void weather;
+	return pickCloudComposition(weather);
+});
 
-// Phase 10b — horizon count bumped 8→14 so the visible-horizon cloud bank
-// reads as continuous when density is high. Mid count slightly lowered
-// because horizon clouds now occupy the band mid-clouds previously bled
-// into; keep total scene complexity similar.
-const horizonCount = $derived(Math.max(6, Math.round(effectiveDensity * 14)));
-const midCount = $derived(Math.max(3, Math.round(effectiveDensity * 8)));
+const horizonCount = $derived(
+	Math.max(composition.horizon.countMin, Math.round(effectiveDensity * composition.horizon.countMul)),
+);
+const midCount = $derived(
+	Math.max(composition.mid.countMin, Math.round(effectiveDensity * composition.mid.countMul)),
+);
 
 let clouds = $state<Cloud[]>([]);
 $effect(() => {
-	void weather;
-	const horizon = Array.from({ length: horizonCount }, () => createHorizonCloud());
-	const mid = Array.from({ length: midCount }, (_, i) => createCloud(i, midCount));
+	// Re-roll cloud layout when weather changes OR composition picker
+	// returns a new recipe (also triggered by weather change). Reading
+	// composition.id here is what binds the effect to the picker.
+	void composition.id;
+	const textures = textureSets[weather] ?? textureSets.clear;
+	const horizon = Array.from({ length: horizonCount }, () =>
+		createCloudFromBand(composition.horizon, textures, true),
+	);
+	const mid = Array.from({ length: midCount }, () =>
+		createCloudFromBand(composition.mid, textures, false),
+	);
 	clouds = [...horizon, ...mid];
 });
 
