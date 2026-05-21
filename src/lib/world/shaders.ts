@@ -37,8 +37,11 @@ export const COLOR_GRADING_GLSL = `
 
 		// Subtle warm pollution corona on already-bright (post-composite)
 		// pixels — the atmospheric halo around dense cities seen from altitude.
+		// Clamped to vec3(1.0) to prevent additive blow-out at high
+		// u_lightIntensity (>1.0) on already-bright bloomed city cores, which
+		// would otherwise hue-shift toward yellow once one channel saturated.
 		float pollution = smoothstep(0.35, 0.9, lum) * u_nightFactor;
-		rgb += vec3(0.15, 0.08, 0.02) * pollution * u_lightIntensity;
+		rgb = min(rgb + vec3(0.15, 0.08, 0.02) * pollution * u_lightIntensity, vec3(1.0));
 
 		// Shadow crush at night. max(0) guards against NaN from pow() on
 		// negative HDR values; brightGuard keeps the sun out of the crush.

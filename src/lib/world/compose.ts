@@ -131,6 +131,8 @@ export class CesiumManager {
 	private baseDayContrast = 1.0;
 	private nightLayer: CesiumType.ImageryLayer | null = null;
 	private viirsLayer: CesiumType.ImageryLayer | null = null;
+	private colorGradeStage: CesiumType.PostProcessStage | null = null;
+	private lastQualityMode: QualityMode | null = null;
 
 	// Effect sync caches
 	private lastGlobeColor = '';
@@ -268,19 +270,48 @@ export class CesiumManager {
 
 		try {
 			const existing = (v.scene.postProcessStages as any).find?.((s: any) => s.name === 'aero-color-grade');
-			if (existing) { existing.enabled = true; return; }
-			const stage = new this.CesiumModule.PostProcessStage({
-				name: 'aero-color-grade',
-				fragmentShader: glsl,
-				uniforms: {
-					u_nightFactor: () => this.model.nightFactor,
-					u_lightIntensity: () => this.model.nightLightScale,
-				},
-			});
-			v.scene.postProcessStages.add(stage);
+			if (existing) {
+				this.colorGradeStage = existing as CesiumType.PostProcessStage;
+			} else {
+				const stage = new this.CesiumModule.PostProcessStage({
+					name: 'aero-color-grade',
+					fragmentShader: glsl,
+					uniforms: {
+						u_nightFactor: () => this.model.nightFactor,
+						u_lightIntensity: () => this.model.nightLightScale,
+					},
+				});
+				v.scene.postProcessStages.add(stage);
+				this.colorGradeStage = stage;
+			}
 		} catch (e) {
 			console.warn('[CesiumManager] Post-process failed:', e);
 		}
+		// Apply initial enable state to bloom + color-grade based on qualityMode.
+		this.syncQuality();
+	}
+
+	/**
+	 * Keep post-process stage enable-state in sync with `config.world.qualityMode`.
+	 *
+	 * `performance` mode disables bloom AND the color-grade shader — these are
+	 * the two GPU-heavy post-process stages and the autoQuality system flips
+	 * here when Pi 5 frame budget can't keep up. The night look degrades to
+	 * VIIRS + CartoDB + skyAtmosphere only; still legible, just without the
+	 * pollution corona / shadow crush / contrast boost layered on top.
+	 *
+	 * Called from tick() every frame but no-ops unless `qualityMode` has
+	 * changed since the last sync — Cesium tolerates per-frame writes to
+	 * `stage.enabled` but we skip them anyway to keep the hot path clean.
+	 */
+	private syncQuality(): void {
+		const mode = this.model.config.world.qualityMode;
+		if (mode === this.lastQualityMode) return;
+		this.lastQualityMode = mode;
+		const allow = mode !== 'performance';
+		const bloom = this.viewer?.scene.postProcessStages?.bloom;
+		if (bloom) bloom.enabled = allow;
+		if (this.colorGradeStage) this.colorGradeStage.enabled = allow;
 	}
 
 	// ─── Imagery Setup ───────────────────────────────────────────────────────
@@ -395,6 +426,7 @@ export class CesiumManager {
 		this.syncTerrainExaggeration();
 		this.syncImagery();
 		this.syncBuildings();
+		this.syncQuality();
 	}
 
 	private syncCamera(dt: number): void {
