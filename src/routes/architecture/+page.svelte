@@ -58,7 +58,7 @@
 			<div class="pillar-card built">
 				<span class="pillar-num">6</span>
 				<h3>Content</h3>
-				<p>Authorable by non-engineers. 12 locations. 23 scenarios.</p>
+				<p>Authorable by non-engineers. 14 locations. 21 scenarios.</p>
 				<span class="badge">built</span>
 			</div>
 			<div class="pillar-card built">
@@ -322,9 +322,9 @@
 			<div class="content-side authored">
 				<h3>content/ — Authored Artifacts</h3>
 				<div class="file-tree">
-					<div class="ft-item">locations/ — 12 cities + natural wonders</div>
+					<div class="ft-item">locations/ — 14 cities + natural wonders</div>
 					<div class="ft-item">weather/ — 5 recipes (clear→storm)</div>
-					<div class="ft-item">scenarios/ — 23 hand-crafted flight paths</div>
+					<div class="ft-item">scenarios/ — 21 hand-crafted flight paths</div>
 					<div class="ft-item">palettes/ — Sky + car-light color tables</div>
 					<div class="ft-item">shows/ — Opening experience</div>
 				</div>
@@ -492,7 +492,7 @@
 				<span class="stat-label">pillars (built / hidden)</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">105</span>
+				<span class="big-num">108</span>
 				<span class="stat-label">source files</span>
 			</div>
 			<div class="verdict-stat">
@@ -500,11 +500,11 @@
 				<span class="stat-label">tests passing</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">12</span>
+				<span class="big-num">14</span>
 				<span class="stat-label">locations</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">23</span>
+				<span class="big-num">21</span>
 				<span class="stat-label">flight scenarios</span>
 			</div>
 			<div class="verdict-stat">
@@ -639,6 +639,7 @@
 	.pillar-card.built { border-left: 3px solid #304cb2; }
 	.pillar-card.hidden { border-left: 3px solid #c084fc; background: rgba(192, 132, 252, 0.04); }
 	.pillar-card.hidden .badge { background: rgba(192, 132, 252, 0.15); color: #c084fc; }
+	.pillar-card.hidden .pillar-num { color: #a078d8; }
 
 	.hidden-intro {
 		font-size: 14px;
@@ -1137,9 +1138,47 @@
 		color: #b0b8d0;
 	}
 
+	.hidden-intro {
+		font-size: 14px;
+		color: #8890b0;
+		max-width: 720px;
+		margin: 0 0 32px;
+		padding: 16px 20px;
+		border-left: 3px solid #c084fc;
+		background: rgba(192, 132, 252, 0.04);
+		border-radius: 0 6px 6px 0;
+	}
+	.hidden-h3 {
+		font-size: 18px;
+		font-weight: 600;
+		color: #e0e0e8;
+		margin: 40px 0 8px;
+	}
+	.hidden-blurb {
+		font-size: 14px;
+		color: #a8b0c8;
+		margin: 0 0 16px;
+		max-width: 760px;
+	}
+
 	.audio-note {
 		font-size: 13px;
 		color: #667090;
+		font-style: italic;
+	}
+
+	/* Inline code */
+	:global(code) {
+		font-family: "JetBrains Mono", monospace;
+		font-size: 12px;
+		background: rgba(255,255,255,0.06);
+		padding: 1px 6px;
+		border-radius: 4px;
+		color: #a0b0d0;
+	}
+
+	:global(em) {
+		color: #c0c8e0;
 		font-style: italic;
 	}
 
@@ -1244,6 +1283,11 @@
 	.arch-footer p {
 		font-size: 12px;
 		color: #556080;
+		margin: 0 0 4px;
+	}
+	.arch-footer-sub {
+		font-size: 11px !important;
+		color: #404868 !important;
 	}
 
 	/* ── Responsive ────────────────────────────────────────────────── */
