@@ -58,7 +58,7 @@
 			<div class="pillar-card built">
 				<span class="pillar-num">6</span>
 				<h3>Content</h3>
-				<p>Authorable by non-engineers. 14 locations. 21 scenarios.</p>
+				<p>Authorable by non-engineers. 12 locations. 21 scenarios.</p>
 				<span class="badge">built</span>
 			</div>
 			<div class="pillar-card built">
@@ -583,7 +583,7 @@
 				<span class="stat-label">tests passing</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">14</span>
+				<span class="big-num">12</span>
 				<span class="stat-label">locations</span>
 			</div>
 			<div class="verdict-stat">

@@ -63,7 +63,7 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 - ⚠ NTP drift assumption (±200ms) — theoretical, not measured
 
 ### Content (authored)
-- ✅ 14 locations including Hyderabad (set as inauguration default)
+- ✅ 12 locations including Hyderabad (set as inauguration default)
 - ✅ Weather recipes (5 types)
 - ✅ Sky palettes per `SkyState`
 - ✅ 21 scenarios in catalog with flight paths
