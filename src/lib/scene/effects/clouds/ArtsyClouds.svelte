@@ -113,17 +113,30 @@ function createSprites(
 // Phase 11 — composition-driven cloud generation. Picker chooses a recipe
 // from $content/compositions/clouds on weather change; the recipe controls
 // horizon + mid band counts, y-bands, scales, speeds, and sprites-per-cloud.
-// Replaces the hardcoded "8-14 sprites at y=28-44" defaults that made every
-// clear day look identical.
+//
+// Z-depth tracks Y: higher in the sky = deeper (farther). Without this
+// correlation every horizon cloud sits at the same z-range and the bank
+// reads as a flat wall. With it, the y=6 puffs sit at z≈-1600 (far back)
+// and the y=44 horizon-line clouds at z≈-700 (closer) — three perceptual
+// depths across one band, which is the perspective the user asked for.
 function createCloudFromBand(
 	band: CloudComposition['horizon'],
 	textures: readonly string[],
 	isHorizon: boolean,
 ): Cloud {
+	const y = randRange(band.yRange);
+	// Lerp z by y position within the band so perspective reads.
+	const yMin = band.yRange[0];
+	const yMax = band.yRange[1];
+	const t = yMax === yMin ? 0 : (y - yMin) / (yMax - yMin);
+	const zNear = isHorizon ? -700 : -60;
+	const zFar = isHorizon ? -1600 : -400;
+	// High y (deeper in band) reads as closer, so lerp from far → near as t grows.
+	const z = zFar + (zNear - zFar) * t + rand(-80, 80);
 	return {
 		x: rand(-30, 130),
-		y: randRange(band.yRange),
-		z: isHorizon ? rand(-1600, -700) : rand(-400, -60),
+		y,
+		z,
 		vx: randRange(band.speedRange),
 		baseScale: randRange(band.scaleRange),
 		sprites: createSprites(randCount(band.spritesPerCloud), textures, isHorizon),

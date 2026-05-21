@@ -47,49 +47,56 @@ export interface CloudComposition {
 	};
 }
 
+// Phase 11 (user direction "the previous cloud logic was great, I wanted MORE
+// in perspective"): restored wide y-bands across both layers so high-sky
+// distant clouds (y 6-22, the original pre-Phase-10b range) coexist with the
+// horizon-line band (y 28-44). Three perceptual depths now read in every
+// composition: high sky, horizon line, foreground. Count multipliers bumped
+// across the board so density actually fills the perspective gradient.
 const COMPOSITIONS: readonly CloudComposition[] = [
-	// Default scattered — historical behaviour: balanced bands, medium count.
+	// Default scattered — restored to the previous full-range behaviour, with
+	// MORE clouds for richer perspective. Horizon spans high sky AND the
+	// visible horizon line; mid spans the foreground band below.
 	{
 		id: 'scattered',
 		weatherCompat: ['clear', 'cloudy'],
-		horizon: { countMul: 8, countMin: 4, yRange: [28, 44], scaleRange: [2.0, 3.6], speedRange: [0.4, 1.6], spritesPerCloud: [10, 16] },
-		mid:     { countMul: 8, countMin: 3, yRange: [25, 82], scaleRange: [0.7, 1.5], speedRange: [2.0, 7.0], spritesPerCloud: [8, 14] },
+		horizon: { countMul: 16, countMin: 8, yRange: [6, 44],  scaleRange: [1.6, 3.6], speedRange: [0.4, 1.8], spritesPerCloud: [10, 16] },
+		mid:     { countMul: 14, countMin: 6, yRange: [25, 82], scaleRange: [0.7, 1.6], speedRange: [2.0, 7.0], spritesPerCloud: [8, 14] },
 	},
-	// Mackerel — many small puffs high in the sky, sparse mid.
+	// Mackerel — many small puffs across the full sky range, sparse mid.
 	{
 		id: 'mackerel',
 		weatherCompat: ['clear', 'cloudy'],
-		horizon: { countMul: 14, countMin: 8, yRange: [22, 38], scaleRange: [1.2, 2.2], speedRange: [0.5, 1.4], spritesPerCloud: [5, 8] },
-		mid:     { countMul: 4,  countMin: 2, yRange: [40, 60], scaleRange: [0.5, 0.9], speedRange: [3.0, 6.0], spritesPerCloud: [4, 7] },
+		horizon: { countMul: 22, countMin: 12, yRange: [6, 42], scaleRange: [1.0, 2.2], speedRange: [0.5, 1.6], spritesPerCloud: [5, 8] },
+		mid:     { countMul: 6,  countMin: 3,  yRange: [40, 65], scaleRange: [0.5, 0.9], speedRange: [3.0, 6.0], spritesPerCloud: [4, 7] },
 	},
-	// Solitary giants — few large clouds, low, dramatic shadows.
+	// Solitary giants — few large clouds, but spread across all depths.
 	{
 		id: 'solitary-giants',
 		weatherCompat: ['clear'],
-		horizon: { countMul: 4, countMin: 2, yRange: [30, 42], scaleRange: [3.2, 4.5], speedRange: [0.3, 0.9], spritesPerCloud: [14, 20] },
-		mid:     { countMul: 3, countMin: 2, yRange: [45, 78], scaleRange: [1.6, 2.4], speedRange: [1.5, 3.5], spritesPerCloud: [12, 16] },
+		horizon: { countMul: 8,  countMin: 4, yRange: [8, 42],  scaleRange: [2.8, 4.5], speedRange: [0.3, 1.2], spritesPerCloud: [14, 20] },
+		mid:     { countMul: 5,  countMin: 3, yRange: [45, 78], scaleRange: [1.4, 2.4], speedRange: [1.5, 3.5], spritesPerCloud: [12, 16] },
 	},
-	// Wall — heavy bank, denser one side. The compositor picks side via x-bias
-	// at render time (left/right band roll), but the density itself is huge.
+	// Wall — heavy bank, dense across all depths.
 	{
 		id: 'wall',
 		weatherCompat: ['cloudy', 'rain', 'overcast'],
-		horizon: { countMul: 16, countMin: 10, yRange: [26, 46], scaleRange: [2.4, 3.8], speedRange: [0.6, 1.8], spritesPerCloud: [12, 18] },
-		mid:     { countMul: 12, countMin: 6,  yRange: [30, 75], scaleRange: [1.0, 1.8], speedRange: [2.5, 5.5], spritesPerCloud: [10, 14] },
+		horizon: { countMul: 22, countMin: 14, yRange: [6, 46], scaleRange: [2.0, 3.8], speedRange: [0.6, 2.0], spritesPerCloud: [12, 18] },
+		mid:     { countMul: 18, countMin: 10, yRange: [28, 80], scaleRange: [1.0, 1.8], speedRange: [2.5, 5.5], spritesPerCloud: [10, 14] },
 	},
-	// Stratus deck — uniform horizon band, no scattered mid. Overcast feel.
+	// Stratus deck — dense horizon-anchored band, lighter mid.
 	{
 		id: 'stratus-deck',
 		weatherCompat: ['overcast', 'rain'],
-		horizon: { countMul: 16, countMin: 12, yRange: [32, 48], scaleRange: [2.8, 4.0], speedRange: [0.4, 1.0], spritesPerCloud: [14, 18] },
-		mid:     { countMul: 6,  countMin: 4,  yRange: [50, 70], scaleRange: [1.2, 1.8], speedRange: [1.5, 3.0], spritesPerCloud: [10, 14] },
+		horizon: { countMul: 22, countMin: 16, yRange: [10, 48], scaleRange: [2.4, 4.0], speedRange: [0.4, 1.2], spritesPerCloud: [14, 18] },
+		mid:     { countMul: 10, countMin: 6,  yRange: [48, 75], scaleRange: [1.2, 1.8], speedRange: [1.5, 3.0], spritesPerCloud: [10, 14] },
 	},
-	// Tower — one cumulonimbus tower dominates mid, scattered around.
+	// Tower — vertical drama across all depths.
 	{
 		id: 'tower',
 		weatherCompat: ['storm', 'rain'],
-		horizon: { countMul: 12, countMin: 8, yRange: [28, 44], scaleRange: [2.6, 3.6], speedRange: [0.5, 1.4], spritesPerCloud: [12, 16] },
-		mid:     { countMul: 16, countMin: 8, yRange: [25, 80], scaleRange: [1.4, 2.8], speedRange: [2.0, 4.0], spritesPerCloud: [14, 20] },
+		horizon: { countMul: 18, countMin: 10, yRange: [6, 44],  scaleRange: [2.2, 3.6], speedRange: [0.5, 1.6], spritesPerCloud: [12, 16] },
+		mid:     { countMul: 20, countMin: 12, yRange: [22, 80], scaleRange: [1.2, 2.8], speedRange: [2.0, 4.5], spritesPerCloud: [14, 20] },
 	},
 ] as const;
 

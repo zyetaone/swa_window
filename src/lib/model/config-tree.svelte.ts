@@ -144,17 +144,19 @@ const _camera: CameraShape = {
 		engineVibeFreqX: 7,     // Hz
 		engineVibeFreqY: 11,    // Hz (different to avoid Lissajous lock)
 		engineVibeAmp: 0.35,    // pixels
-		// Turbulence bumps — occasional jolts. Phase 10b (user direction
-		// "reduce turbulence jerks"): amplitudes pulled below the Phase-10
-		// numbers and a soft-onset envelope added in motion.svelte.ts. Office
-		// install context wants AMBIENT motion, not turbulent flight.
-		bumpMinInterval: 60,        // longer gaps between bumps
-		bumpMaxInterval: 220,
+		// Turbulence bumps — occasional jolts. Phase 11 (user direction
+		// "turbulence to be lower"): cut amplitude and multipliers in half
+		// AGAIN after the Phase-10b softening. Office install reads as a
+		// floating cabin, not "we're hitting weather". The soft-onset
+		// envelope in motion.svelte.ts handles the perceptual jerk; these
+		// numbers handle the perceptual presence.
+		bumpMinInterval: 75,        // longer gaps between bumps
+		bumpMaxInterval: 260,
 		bumpDecay: 6,               // slower decay reads as a softer wash
 		bumpRingFreq: 7,            // lower osc freq → less rapid wobble
-		bumpAmplitude: 0.7,         // was 1.4 — half the jolt again
-		turbulenceMultipliers: { severe: 0.9, moderate: 0.5, light: 0.3 },
-		turbulenceOffsetY: 0.015,   // chatter range halved
+		bumpAmplitude: 0.35,        // was 0.7 — halved again
+		turbulenceMultipliers: { severe: 0.55, moderate: 0.3, light: 0.18 },
+		turbulenceOffsetY: 0.008,   // chatter range halved again
 	},
 	altitude: {
 		default: 35000,         // feet
