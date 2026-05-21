@@ -170,15 +170,25 @@
 			style:filter={filterString}
 		>
 			<!-- Cesium terrain/buildings/city light billboards.
-			     Phase 10: warm-glow city dome lives INSIDE this same .render-layer
-			     container (sibling of CesiumViewer) so it's bound to the MAP
-			     IMAGE LAYER bounds, not the screen/window. Env-falloff via
-			     nightLightScale: strong over cities, fades over oceans. -->
+			     Phase 10 (user direction "css derived from viirs density + map
+			     mixture as env falloff, not constant"): warm-glow city dome
+			     lives INSIDE .render-layer (sibling of CesiumViewer) so it's
+			     bound to the MAP IMAGE LAYER bounds, not the screen/window.
+			     Opacity = nightFactor (when) × nightLightScale (slider) ×
+			     location.scene.nightLightDensity (where — VIIRS-style env
+			     falloff: 0.95 over cities, 0 over open ocean). -->
 			<div class="render-layer" style:z-index={Z.cesium}>
 				<CesiumViewer />
 				<div
 					class="map-warm-glow"
-					style:opacity={clamp(model.nightFactor * model.nightLightScale * 0.55, 0, 0.55)}
+					style:opacity={clamp(
+						model.nightFactor
+						* model.nightLightScale
+						* model.currentLocation.scene.nightLightDensity
+						* 0.55,
+						0,
+						0.55,
+					)}
 				></div>
 			</div>
 

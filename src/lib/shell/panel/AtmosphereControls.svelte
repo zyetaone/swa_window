@@ -20,9 +20,8 @@
 		min={0}
 		max={1.0}
 		step={0.05}
-		value={config.atmosphere.clouds.density}
+		bind:value={config.atmosphere.clouds.density}
 		formatValue={(v) => Math.round(v * 100) + '%'}
-		oninput={(e) => (config.atmosphere.clouds.density = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="cloudSpeed"
@@ -30,9 +29,8 @@
 		min={config.director.ambient.cloudSpeedMin}
 		max={config.director.ambient.cloudSpeedMax}
 		step={0.1}
-		value={config.atmosphere.clouds.speed}
+		bind:value={config.atmosphere.clouds.speed}
 		formatValue={(v) => v.toFixed(1) + 'x'}
-		oninput={(e) => (config.atmosphere.clouds.speed = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="haze"
@@ -40,8 +38,7 @@
 		min={config.atmosphere.haze.min}
 		max={config.atmosphere.haze.max}
 		step={0.005}
-		value={config.atmosphere.haze.amount}
+		bind:value={config.atmosphere.haze.amount}
 		formatValue={(v) => Math.round(v * 100) + '%'}
-		oninput={(e) => (config.atmosphere.haze.amount = parseFloat(e.currentTarget.value))}
 	/>
 </section>

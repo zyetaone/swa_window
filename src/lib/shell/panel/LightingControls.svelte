@@ -8,8 +8,9 @@
 	 * config-tree.svelte.ts as aesthetic constants — change via admin code
 	 * push if ever needed, not via slider.
 	 *
-	 * Binds directly to the module-scope config rune so the component is
-	 * portable across device / admin / preview surfaces.
+	 * Binds directly to the module-scope config rune via bind:value (now that
+	 * RangeSlider exposes value as $bindable). One source of truth — no
+	 * oninput callback duplication.
 	 */
 	import { config } from '$lib/model/config-tree.svelte';
 	import Toggle from './Toggle.svelte';
@@ -24,9 +25,8 @@
 		min={0}
 		max={5.0}
 		step={0.1}
-		value={config.world.nightLightIntensity}
+		bind:value={config.world.nightLightIntensity}
 		formatValue={(v) => v.toFixed(1)}
-		oninput={(e) => (config.world.nightLightIntensity = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="additiveStrength"
@@ -34,9 +34,8 @@
 		min={0}
 		max={15}
 		step={0.25}
-		value={config.world.additiveStrength}
+		bind:value={config.world.additiveStrength}
 		formatValue={(v) => v.toFixed(1)}
-		oninput={(e) => (config.world.additiveStrength = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="moonlightIntensity"
@@ -44,9 +43,8 @@
 		min={0.035}
 		max={0.3}
 		step={0.005}
-		value={config.world.moonlightIntensity}
+		bind:value={config.world.moonlightIntensity}
 		formatValue={(v) => v.toFixed(3)}
-		oninput={(e) => (config.world.moonlightIntensity = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="skyDarken"
@@ -54,9 +52,8 @@
 		min={0.5}
 		max={4.0}
 		step={0.05}
-		value={config.world.skyDarken}
+		bind:value={config.world.skyDarken}
 		formatValue={(v) => v.toFixed(2)}
-		oninput={(e) => (config.world.skyDarken = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="nightExposure"
@@ -64,9 +61,8 @@
 		min={0.4}
 		max={1.5}
 		step={0.025}
-		value={config.world.nightExposure}
+		bind:value={config.world.nightExposure}
 		formatValue={(v) => v.toFixed(2)}
-		oninput={(e) => (config.world.nightExposure = parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
 		id="viirsBrightness"
@@ -74,9 +70,8 @@
 		min={0.5}
 		max={3.0}
 		step={0.05}
-		value={config.world.viirsBrightness}
+		bind:value={config.world.viirsBrightness}
 		formatValue={(v) => v.toFixed(2)}
-		oninput={(e) => (config.world.viirsBrightness = parseFloat(e.currentTarget.value))}
 	/>
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />

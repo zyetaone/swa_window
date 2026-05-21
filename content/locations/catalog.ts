@@ -22,6 +22,18 @@ export interface SceneDefaults {
 	 * - >1.0 = thicker air (humid coast, sea moisture)
 	 */
 	haze: { intensity: number };
+	/**
+	 * Approximate VIIRS night-light density for this archetype (0..1).
+	 * Drives the env-falloff of the warm city-glow CSS dome on .render-layer.
+	 * - 0.95 city  → dense lit cells, full pollution dome
+	 * - 0.60 cloud → overflying lit terrain, partially occluded
+	 * - 0.10 desert → sparse oases
+	 * - 0.05 mountain → near-zero
+	 * - 0.00 ocean → no city light
+	 * Editing here keeps the CSS warm-glow consistent with what the user
+	 * actually sees in the satellite imagery beneath.
+	 */
+	nightLightDensity: number;
 }
 
 export interface Location {
@@ -57,6 +69,7 @@ const CITY_SCENE = {
 	clouds: { density: 0.5, speed: 0.4 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 1.0 },
+	nightLightDensity: 0.95,
 } as const;
 
 const MOUNTAIN_SCENE = {
@@ -64,6 +77,7 @@ const MOUNTAIN_SCENE = {
 	clouds: { density: 0.3, speed: 0.3 },
 	terrain: { exaggeration: 1.5 },
 	haze: { intensity: 0.55 },
+	nightLightDensity: 0.05,
 } as const;
 
 const OCEAN_SCENE = {
@@ -71,6 +85,7 @@ const OCEAN_SCENE = {
 	clouds: { density: 0.6, speed: 0.5 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 1.3 },
+	nightLightDensity: 0.0,
 } as const;
 
 const DESERT_SCENE = {
@@ -78,6 +93,7 @@ const DESERT_SCENE = {
 	clouds: { density: 0.2, speed: 0.2 },
 	terrain: { exaggeration: 1.3 },
 	haze: { intensity: 0.5 },
+	nightLightDensity: 0.10,
 } as const;
 
 const CLOUDS_SCENE = {
@@ -85,6 +101,7 @@ const CLOUDS_SCENE = {
 	clouds: { density: 0.8, speed: 0.6 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 0.35 },
+	nightLightDensity: 0.60,
 } as const;
 
 // ─── Locations ───────────────────────────────────────────────────────────────
