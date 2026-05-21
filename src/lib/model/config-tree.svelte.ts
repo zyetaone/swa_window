@@ -75,6 +75,7 @@ interface CameraShape {
 	cruise: {
 		departureDurationSec: number;
 		transitDurationSec: number;
+		arrivalHoldMs: number;
 		defaultSpeed: number;
 		minSpeed: number;
 		maxSpeed: number;
@@ -123,6 +124,7 @@ const _camera: CameraShape = {
 	cruise: {
 		departureDurationSec: 2.0,
 		transitDurationSec: 2.0,
+		arrivalHoldMs: 8000,
 		defaultSpeed: 1.4,
 		minSpeed: 0.1,
 		maxSpeed: 3.0,
@@ -190,7 +192,7 @@ export const director = $state({
 		subsequentMinDelay: 180,
 		subsequentMaxDelay: 480,
 		weatherChangeChance: 0.2,
-		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast']) as readonly WeatherType[],
+		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
 		directorMinInterval: 100,      // 1:40
 		directorMaxInterval: 160,      // 2:40
 	},
@@ -248,6 +250,12 @@ export const shell = $state({
 	hudVisible: true,
 	sidePanelOpen: false,
 	showWing: true,
+	// Auto-close the side panel after N ms of inactivity (no pointer move
+	// inside the panel). 15000 is the Game Designer's "non-demo reading-and-
+	// deciding threshold." 0 disables — on-site techs flip to 0 while
+	// debugging so the panel stays open. Activity = pointermove inside the
+	// panel; opening always resets the timer. Per v2 council (2026-05-21).
+	sidePanelAutoCloseMs: 15000,
 	// Touch-contract gate (Q3 council 2026-05-20). false = passenger mode: basic
 	// blind drag is the ONLY touch interaction — the curtain metaphor. true =
 	// demo/operator mode: long-press acceleration + future multi-touch gestures

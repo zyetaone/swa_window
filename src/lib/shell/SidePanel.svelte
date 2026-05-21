@@ -15,6 +15,7 @@
 	import type { Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
+	import { config } from "$lib/model/config-tree.svelte";
 	import { formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
@@ -24,6 +25,20 @@
 
 	let panelOpen = $state(false);
 	let closing = $state(false);
+	let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function resetDismissTimer() {
+		if (dismissTimer) clearTimeout(dismissTimer);
+		// 0 disables auto-close — on-site techs flip to 0 in the side panel so
+		// the panel stays open while they debug. Read once per reset; admin
+		// changes take effect on the next reset (next open / next activity).
+		const ms = config.shell.sidePanelAutoCloseMs;
+		if (ms > 0) dismissTimer = setTimeout(() => closePanel(), ms);
+	}
+
+	function clearDismissTimer() {
+		if (dismissTimer) { clearTimeout(dismissTimer); dismissTimer = null; }
+	}
 
 	// Tab button: kept as bind:this because closePanel() needs to refocus it
 	// AFTER the panel unmounts (no live element to dispatch from at that point).
@@ -31,10 +46,12 @@
 
 	function openPanel() {
 		panelOpen = true;
+		resetDismissTimer();
 	}
 
 	function closePanel() {
 		if (closing) return;
+		clearDismissTimer();
 		closing = true;
 		setTimeout(() => {
 			panelOpen = false;
@@ -120,6 +137,7 @@
 		role="dialog"
 		aria-label="Settings panel"
 		tabindex="-1"
+		onpointermove={resetDismissTimer}
 		{@attach focusTrap}
 	>
 		<header>

@@ -25,6 +25,12 @@
 		}
 		return `Arrived at ${model.currentLocation.name}`;
 	});
+
+	// Arrival pause (v2 council Q3): when the FSM is in arrival_hold, dim the
+	// HUD so the eye lands on the terrain that just resolved. Experience
+	// Designer called this "non-negotiable" — without it 8 s of held position
+	// reads as a freeze. CSS transition makes the dim itself a soft fade.
+	const isArrivalHold = $derived(model.flight.flightMode === 'arrival_hold');
 </script>
 
 <!-- Screen-reader announcement for flight transitions -->
@@ -32,11 +38,13 @@
 	{liveAnnouncement}
 </div>
 
-{#if model.config.shell.blindOpen}
-	<TelemetryOverlay />
-{:else}
-	<BlindInfoCard />
-{/if}
+<div class={['hud-frame', isArrivalHold && 'dim']}>
+	{#if model.config.shell.blindOpen}
+		<TelemetryOverlay />
+	{:else}
+		<BlindInfoCard />
+	{/if}
+</div>
 
 <style>
 	.sr-only {
@@ -48,5 +56,19 @@
 		overflow: hidden;
 		clip: rect(0, 0, 0, 0);
 		border: 0;
+	}
+
+	/* Wrapper is a 0-height block; opacity cascades to its absolute-
+	   positioned descendants (TelemetryOverlay / BlindInfoCard).
+	   display: contents would cleanly fall out of layout but does not
+	   honor opacity — CSS-quirk, well-known. Default block is fine
+	   because the wrapper produces no layout box of its own beyond what
+	   the children declare. */
+	.hud-frame {
+		transition: opacity 0.6s ease-out;
+	}
+
+	.hud-frame.dim {
+		opacity: 0.35;
 	}
 </style>

@@ -83,7 +83,7 @@ export interface SimulationContext {
 
 // ─── Engine patch types ──────────────────────────────────────────────────────
 
-export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit';
+export type FlightMode = 'orbit' | 'cruise_departure' | 'cruise_transit' | 'arrival_hold';
 
 export interface FlightPatch {
 	blindOpen?: boolean;

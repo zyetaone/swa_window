@@ -35,13 +35,15 @@ export class FlightSimEngine {
 
 	// --- Internal state (#private) ---
 	#cruiseElapsed = 0;
+	#arrivalHoldElapsed = 0;
+	#arrivalHoldTargetSec = 8;
 	#preWarpSpeed = 1.0;
 	#currentScenario: FlightScenario | null = null;
 	#scenarioWaypointIndex = 0;
 	#scenarioProgress = 0;
 
 	// --- Derived ---
-	isTransitioning = $derived(this.flightMode !== 'orbit');
+	isTransitioning = $derived(this.flightMode !== 'orbit' && this.flightMode !== 'arrival_hold');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
 	);
@@ -91,6 +93,8 @@ export class FlightSimEngine {
 				this.#tickFlightPath(delta, ctx);
 			} else if (this.flightMode === 'cruise_transit') {
 				this.#tickTransit(delta, patch, ctx);
+			} else if (this.flightMode === 'arrival_hold') {
+				this.#tickArrivalHold(delta, patch);
 			} else {
 				this.#tickFlightPath(delta, ctx);
 			}
@@ -127,12 +131,22 @@ export class FlightSimEngine {
 		if (this.#cruiseElapsed > ctx.camera.cruise.transitDurationSec && this.cruiseTargetId) {
 			const arrivedAt = this.cruiseTargetId;
 			this.cruiseTargetId = null;
-			this.flightMode = 'orbit';
+			this.flightMode = 'arrival_hold';
+			this.#arrivalHoldElapsed = 0;
+			this.#arrivalHoldTargetSec = (ctx.camera.cruise.arrivalHoldMs ?? 8000) / 1000;
 			this.warpFactor = 0;
 			this.flightSpeed = this.#preWarpSpeed;
 			patch.locationArrived = arrivedAt;
 			patch.blindOpen = true;
 			patch.resetDirector = true;
+		}
+	}
+
+	#tickArrivalHold(delta: number, _patch: FlightPatch): void {
+		this.#arrivalHoldElapsed += delta;
+		if (this.#arrivalHoldElapsed >= this.#arrivalHoldTargetSec) {
+			this.flightMode = 'orbit';
+			this.#arrivalHoldElapsed = 0;
 		}
 	}
 
