@@ -60,7 +60,7 @@
 		type: 'FeatureCollection';
 		features: Array<{
 			type: 'Feature';
-			geometry: { type: 'LineString'; coordinates: [number, number][] };
+			geometry: { type: 'LineString'; coordinates: [number, number, number][] };
 			properties: { highway: RoadClass };
 		}>;
 	};
@@ -100,7 +100,14 @@
 				if (el.type !== 'way' || !el.geometry || el.geometry.length < 2) continue;
 				const hw = el.tags?.highway;
 				if (!hw || !(hw in ROAD_CLASS_STYLE)) continue;
-				const coords: [number, number][] = el.geometry.map((p) => [p.lon, p.lat]);
+				// Lift coords to a fixed altitude above terrain. PolylineGlowMaterial
+				// is incompatible with Cesium's GroundPolylinePrimitive (which is what
+				// clampToGround=true uses), so glow lines drawn that way render invisibly.
+				// Hyderabad terrain sits at ~500m; 1500m places the polylines safely
+				// above any terrain rise, and from cruise altitude (8500m+ camera) the
+				// 1km offset reads as ground-level. Trade: polylines don't drape
+				// elevation contours — fine for a city at cruise.
+				const coords: [number, number, number][] = el.geometry.map((p) => [p.lon, p.lat, 1500]);
 				features.push({
 					type: 'Feature',
 					geometry: { type: 'LineString', coordinates: coords },
@@ -531,7 +538,7 @@
 				roadsFeatureCount = fc.features.length;
 				try {
 					const ds = new Cesium.GeoJsonDataSource('night-lab-roads');
-					ds.load(fc, { clampToGround: true }).then(() => {
+					ds.load(fc, { clampToGround: false }).then(() => {
 						if (fCancelled) return;
 						const entities = ds.entities.values;
 						const intensity = tunablesF.intensity;
@@ -564,7 +571,7 @@
 								taperPower: 1.0,
 							});
 							e.polyline.width = style.baseWidth * style.baseGlow * gwMult;
-							e.polyline.clampToGround = true;
+							e.polyline.clampToGround = false;
 						}
 						viewer.dataSources.add(ds);
 						roadDataSource = ds as typeof roadDataSource;
