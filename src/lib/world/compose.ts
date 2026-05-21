@@ -8,7 +8,7 @@
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
-import { normalizeHeading, shortestAngleDelta, lerp, smoothstep } from '$lib/utils';
+import { normalizeHeading, shortestAngleDelta, lerp, smoothstep, clamp } from '$lib/utils';
 import {
 	VIIRS_SMOOTHSTEP_FLOOR,
 	VIIRS_SMOOTHSTEP_CEIL,
@@ -110,6 +110,7 @@ export class CesiumManager {
 
 	// Asset state
 	private tileset: CesiumType.Cesium3DTileset | null = null;
+	private lastBuildingAltBlend = -1;
 	private lastNightFactor = -1;
 	// Imagery Layers
 	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
@@ -595,6 +596,11 @@ export class CesiumManager {
 				// Cast + receive shadows — buildings drop long shadows across
 				// the terrain at low-sun times, grounding them in the scene.
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
+				// Phase 3 (variant E productionized): HIGHLIGHT blend multiplies
+				// the source pixel by the style color (amber), so glow rides on
+				// top of the per-face shading rather than overpainting it. This
+				// is also Cesium's default, set explicitly for clarity.
+				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
 				this.viewer.scene.primitives.add(this.tileset);
 			}
 		} catch (e) { console.warn('[CesiumBuildings] OSM buildings unavailable:', (e as Error).message); }
@@ -603,13 +609,30 @@ export class CesiumManager {
 	private syncBuildings(): void {
 		if (!this.tileset) return;
 		this.tileset.show = this.model.config.world.buildingsEnabled;
+
+		// Phase 3 (variant E productionized): amber emissive at low altitude,
+		// fades above cruise. altBlend = 0 below low, 1 above high; alpha pinned
+		// to nightFactor so daytime falls out naturally.
+		const w = this.model.config.world;
+		const lo = w.buildingEmissiveLowAltFt;
+		const hi = w.buildingEmissiveHighAltFt;
+		const altBlend = clamp((this.model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
 		const nf = this.model.nightFactor;
-		if (Math.abs(nf - this.lastBuildingNightFactor) < 0.01) return;
+
+		// Throttle: re-style only when either knob has moved a perceptible step.
+		// Altitude bobs ~±100ft during cruise turbulence — the 0.02 altBlend
+		// threshold maps to ~200ft of climb/descent, well above turbulence noise.
+		if (
+			Math.abs(nf - this.lastBuildingNightFactor) < 0.01 &&
+			Math.abs(altBlend - this.lastBuildingAltBlend) < 0.02
+		) return;
 		this.lastBuildingNightFactor = nf;
-		const r = Math.round(lerp(240, 80, nf));
-		const g = Math.round(lerp(220, 75, nf));
-		const b = Math.round(lerp(200, 60, nf));
-		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({ color: `rgba(${r}, ${g}, ${b}, 0.9)` });
+		this.lastBuildingAltBlend = altBlend;
+
+		const alpha = w.buildingEmissiveMax * nf * (1 - altBlend);
+		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
+			color: `color("rgb(255, 180, 90)", ${alpha.toFixed(3)})`,
+		});
 	}
 
 	applyQualityMode(mode: QualityMode): void {

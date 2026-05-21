@@ -229,6 +229,13 @@ export const world = $state({
 	bloomBrightness: -0.3,
 	bloomSigma: 2.2,
 	buildingsEnabled: true,
+	// Phase 3 (variant E productionized) — buildings glow amber at low altitude
+	// (passenger-window mode) and fade above cruise altitude. The blend is on
+	// raw flight.altitude in feet so it tracks descent/climb naturally during
+	// cruise→orbit transitions. Defaults from night-lab E_DEFAULTS.
+	buildingEmissiveLowAltFt: 15000,
+	buildingEmissiveHighAltFt: 25000,
+	buildingEmissiveMax: 0.6,
 	showClouds: true,
 	qualityMode: 'balanced' as QualityMode,
 	autoQuality: true,
