@@ -39,12 +39,31 @@
 			1,
 		),
 	);
+
+	// Phase 10 (user direction "css layer over the maps"): warm-glow bottom
+	// band overlay simulating the city-light dome rising from below.
+	//
+	// DERIVED from BOTH VIIRS density AND map content via nightLightScale —
+	// not a constant tint. nightLightScale is the same factor compose.ts uses
+	// to modulate VIIRS layer alpha (high over cities, near-zero over oceans/
+	// mountains), giving environment-aware falloff: warm dome glows strongly
+	// over Hyderabad / Mumbai / Tokyo, fades to nothing over Pacific Ocean.
+	//
+	// Multiplied by nightFactor so it's also gated by time-of-day.
+	const warmGlowOpacity = $derived(
+		clamp(model.nightFactor * model.nightLightScale * 0.55, 0, 0.55),
+	);
 </script>
 
 <div
 	class="haze"
 	style:background={`linear-gradient(to bottom, ${hazeColor} 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,0) 100%)`}
 	style:opacity={intensity}
+></div>
+
+<div
+	class="warm-glow"
+	style:opacity={warmGlowOpacity}
 ></div>
 
 <style>
@@ -54,5 +73,23 @@
 		pointer-events: none;
 		mix-blend-mode: screen;
 		transition: background 1.5s ease, opacity 1.5s ease;
+	}
+	.warm-glow {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		/* SCREEN (additive) blend — reads as light EMANATING from the map
+		   below, not as a tint applied to the window. The gradient anchors
+		   below the frame so the glow appears to rise FROM the ground up
+		   toward the camera. This is the atmospheric pollution-dome look
+		   visible in real night-aerial photos over major cities. */
+		mix-blend-mode: screen;
+		background: radial-gradient(
+			ellipse 75% 45% at 50% 100%,
+			rgba(255, 140, 50, 0.55) 0%,
+			rgba(220, 90, 30, 0.30) 35%,
+			rgba(0, 0, 0, 0) 75%
+		);
+		transition: opacity 1.5s ease;
 	}
 </style>

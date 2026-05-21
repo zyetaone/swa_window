@@ -90,9 +90,15 @@ export const COLOR_GRADING_GLSL = `
 		float redSpark = step(1.0 - u_redSparkRate, fract(hash * 7.3));
 		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
 
-		// Additive emissive — clamped at 4.0 for HDR headroom (ACES tonemap
-		// in compose.ts maps the wider range).
-		rgb += lightColor * lum * u_additiveStrength * u_nightFactor;
+		// Phase 10 (user direction): VIIRS-contrast-driven density amplification.
+		// Pixels with strong VIIRS amber chroma (high viirsLikely) get MORE
+		// emissive boost, dim VIIRS pixels less. Makes city cores punch
+		// dramatically vs. uniform amber wash. Power curve compresses mid-tones.
+		float viirsContrastBoost = 1.0 + pow(viirsLikely, 0.7) * 0.6;
+
+		// Additive emissive — VIIRS-contrast-weighted. Clamped at 4.0 for HDR
+		// headroom (ACES tonemap in compose.ts maps the wider range).
+		rgb += lightColor * lum * u_additiveStrength * u_nightFactor * viirsContrastBoost;
 		rgb = min(rgb, vec3(4.0));
 
 		// Phase 15.5 base darkening — guarded by lightMask (not brightGuard)
@@ -107,6 +113,18 @@ export const COLOR_GRADING_GLSL = `
 		// Phase 15.5 pollution corona — broadened footprint for visible amber dome.
 		float pollution = smoothstep(0.10, 0.5, lum) * u_nightFactor;
 		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
+
+		// Phase 10 — Aerial perspective radial falloff. At cruise altitude
+		// (-75° pitch), distant terrain reads in the UPPER portion of frame.
+		// Lerp those pixels toward atmospheric haze color to create depth.
+		// At day: cool blue-grey haze. At night: warm pollution-dome amber.
+		// 4 lines of GLSL, biggest perceptual realism gain per line of shader.
+		float aerialDistance = clamp((0.55 - v_textureCoordinates.y) * 1.8, 0.0, 1.0);
+		aerialDistance = pow(aerialDistance, 1.4);
+		vec3 dayHaze = vec3(0.55, 0.62, 0.72);
+		vec3 nightHaze = vec3(0.22, 0.16, 0.10);  // warm pollution dome
+		vec3 hazeColor = mix(dayHaze, nightHaze, u_nightFactor);
+		rgb = mix(rgb, hazeColor, aerialDistance * 0.35);
 
 		// Neutral-warm ambient moonlight floor — applied LAST so dark-void
 		// can't push terrain to pure void. Aligns with calm-amber brand

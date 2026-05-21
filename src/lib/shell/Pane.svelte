@@ -59,11 +59,15 @@
 
 	// --- Atmospheric effects ---
 
-	const frostAmount = $derived.by(() => {
+	// Phase 10: frostAmount derivation kept for easy re-enable, but Weather
+	// is now passed 0 directly (see <Weather/> below). Underscore prefix
+	// silences the unused-var lint without removing the computation.
+	const _frostAmount = $derived.by(() => {
 		const start = model.config.atmosphere.weather.frostStartAltitude;
 		const max   = model.config.atmosphere.weather.frostMaxAltitude;
 		return clamp((model.flight.altitude - start) / (max - start), 0, 1);
 	});
+	void _frostAmount;
 
 	const filterString = $derived.by(() => {
 		const timeBrightness =
@@ -82,8 +86,11 @@
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
 
-	// --- Weather ---
-	const rainOpacity = $derived(model.config.atmosphere.weather.rainOpacity);
+	// --- Weather --- Phase 10: rainOpacity kept for easy re-enable, currently
+	// passed 0 to Weather below. windAngle still used (it's the only one
+	// Weather reads when rainOpacity > 0; harmless when 0).
+	const _rainOpacity = $derived(model.config.atmosphere.weather.rainOpacity);
+	void _rainOpacity;
 	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 
 	// --- Motion (unified from 4 independent layers) ---
@@ -163,8 +170,11 @@
 			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
 			<Compositor />
 
-			<!-- Rain + frost -->
-			<Weather {rainOpacity} {windAngle} {frostAmount} />
+			<!-- Rain + frost — Phase 10 (user direction): weather effects pulled
+			     off the glass for the SWA install. Code kept in place; passing
+			     0/0 means Weather's `{#if > 0}` guards prevent any DOM render.
+			     To re-enable: pass {rainOpacity} {frostAmount} below instead. -->
+			<Weather rainOpacity={0} {windAngle} frostAmount={0} />
 
 			<!-- Wing silhouette (bottom-left, shifts with bank) -->
 			<div

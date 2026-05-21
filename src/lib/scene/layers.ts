@@ -15,10 +15,12 @@ export const Z = {
 	cesium: 0,
 	/** Geo-positioned effects (car-lights). Renders inside Cesium; value inert */
 	geo: 0,
-	/** Atmospheric haze (horizon band, softens LOD seams) */
-	haze: 0,
-	/** CSS3D cloud sprites (ArtsyClouds) + SVG cloud overlay */
-	clouds: 1,
+	/** CSS3D cloud sprites (ArtsyClouds) — Phase 10: moved BEHIND haze per user
+	 *  direction "move clouds to bg". Now sits between Cesium and haze, reading
+	 *  as a deep background layer rather than a midground overlay. */
+	clouds: 0,
+	/** Atmospheric haze (horizon band, softens LOD seams) — now on TOP of clouds */
+	haze: 1,
 	/** Rain streaks */
 	rain: 2,
 	/** Lightning flashes */

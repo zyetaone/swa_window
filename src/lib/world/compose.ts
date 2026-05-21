@@ -543,6 +543,13 @@ export class CesiumManager {
 			if (v.scene.fog) {
 				v.scene.fog.enabled = targetDensity > 0.00001;
 				v.scene.fog.density = targetDensity;
+				// Phase 10 (Council researcher catch): visualDensityScalar adds
+				// aerial-perspective haze on the horizon WITHOUT increasing
+				// tile-cull density (which would cause pop-in). At cruise we
+				// want thick visible haze + normal LOD. Lerp 1.0 (day) → 2.5
+				// (deep night) for stronger atmospheric depth at night.
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(v.scene.fog as any).visualDensityScalar = 1.0 + 1.5 * nf;
 			}
 		}
 		if (Math.abs(targetBrightness - this.lastFogBrightness) > 0.01) {
@@ -587,6 +594,12 @@ export class CesiumManager {
 
 		if (this.isUsingMoonlight && this.moonlight) {
 			this.moonlight.intensity = moonlightIntensity;
+			// Phase 10 (Council Critic catch): we already compute the real moon
+			// position via Simon1994 above. Use it as the DirectionalLight
+			// direction instead of the hardcoded (0,0,-1) "straight down" — gives
+			// physically-correct moon-angle shadows on buildings + terrain.
+			// Light direction is FROM moon TO Earth, so negate _earthToMoon.
+			C.Cartesian3.negate(this._earthToMoon, this.moonlight.direction);
 		} else {
 			const targetIntensity = lerp(1.0, 0.02, nf);
 			if (Math.abs(targetIntensity - this.lastLightIntensity) > 0.01) {
