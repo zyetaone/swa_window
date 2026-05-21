@@ -274,14 +274,23 @@ export const world = $state({
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
 export const shell = $state({
-	// Window frame on by default — shows the full airplane-cabin oval experience.
-	// The Pi kiosk deployment overrides via show/bundle config for wall-mount.
-	// Toggle F on keyboard for full-bleed mode.
-	windowFrame: true,
+	// Phase 10 (user direction): window frame OFF by default — full-bleed
+	// Cesium fills the viewport, the airplane-cabin oval is opt-in via the
+	// SidePanel toggle. Reverses the Phase 14 default. Show/bundle configs
+	// can still override for specific install presentations.
+	windowFrame: false,
 	blindOpen: true,
 	hudVisible: true,
 	sidePanelOpen: false,
 	showWing: true,
+	// Phase 10 interactivity prototype — cursor parallax. When true and a
+	// mouse is present (kiosk with hidden cursor effectively has none),
+	// scene-content gets a subtle ~12px max offset based on cursor position
+	// from viewport center. Smoothed via RAF lerp. Default ON in dev (we
+	// strip html.kiosk in dev), default ON in prod too — Chromium kiosk has
+	// no real mouse so behavior is unchanged. Operator can disable via
+	// SidePanel. The "look around" feel borrowed from Three.js demos.
+	mouseParallax: true,
 	// Auto-close the side panel after N ms of inactivity (no pointer move
 	// inside the panel). 15000 is the Game Designer's "non-demo reading-and-
 	// deciding threshold." 0 disables — on-site techs flip to 0 while

@@ -22,6 +22,7 @@
 	import Blind from "./window/Blind.svelte";
 	import Weather from './window/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
+	import { useMouseParallax } from './use-mouse-parallax.svelte';
 	const model = useAeroWindow();
 
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
@@ -107,9 +108,15 @@
 	);
 	const bankDegrees = $derived(model.motion.bankAngle);
 
+	// Phase 10 — cursor parallax (game-engine-style "look around" interactivity).
+	// Adds a subtle DOM translate on .scene-content based on cursor position
+	// from viewport center. Gated by config.shell.mouseParallax. Smoothed via
+	// internal RAF lerp in the composable so it doesn't fight turbulence.
+	const parallax = useMouseParallax();
+
 	const motionTransform = $derived.by(() => {
-		const x = turbulenceX + model.motion.engineVibeX;
-		const y = turbulenceY + breathingY + model.motion.engineVibeY;
+		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
+		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
 		const rotate = turbulenceRotate + bankDegrees;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg)`;
 	});
