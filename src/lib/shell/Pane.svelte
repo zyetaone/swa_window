@@ -169,9 +169,17 @@
 			style:transform={motionTransform}
 			style:filter={filterString}
 		>
-			<!-- Cesium terrain/buildings/city light billboards -->
+			<!-- Cesium terrain/buildings/city light billboards.
+			     Phase 10: warm-glow city dome lives INSIDE this same .render-layer
+			     container (sibling of CesiumViewer) so it's bound to the MAP
+			     IMAGE LAYER bounds, not the screen/window. Env-falloff via
+			     nightLightScale: strong over cities, fades over oceans. -->
 			<div class="render-layer" style:z-index={Z.cesium}>
 				<CesiumViewer />
+				<div
+					class="map-warm-glow"
+					style:opacity={clamp(model.nightFactor * model.nightLightScale * 0.55, 0, 0.55)}
+				></div>
 			</div>
 
 			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
@@ -298,6 +306,24 @@
 		inset: 0 !important;
 		width: 100% !important;
 		height: 100% !important;
+	}
+
+	/* Phase 10 — warm city-glow dome painted ONTO the map image (sibling of
+	   Cesium canvas inside .render-layer, NOT a screen-level overlay).
+	   `mix-blend-mode: screen` reads as light emanating from below; the
+	   radial anchor at 50% 100% means the glow rises FROM the bottom edge
+	   of the map upward. Bound to the same DOM box as Cesium canvas so
+	   it can't bleed onto window-frame / glass / chrome. */
+	.map-warm-glow {
+		pointer-events: none;
+		mix-blend-mode: screen;
+		background: radial-gradient(
+			ellipse 75% 45% at 50% 100%,
+			rgba(255, 140, 50, 0.55) 0%,
+			rgba(220, 90, 30, 0.30) 35%,
+			rgba(0, 0, 0, 0) 75%
+		);
+		transition: opacity 1.5s ease;
 	}
 
 	/* Glass recess rim — on TOP of everything, creates the depth illusion */
