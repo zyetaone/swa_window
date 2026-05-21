@@ -170,11 +170,12 @@ model.config.camera.parallax.*          // role, headingOffsetDeg, fovDeg, panor
 model.config.director.daylight.*        // syncToRealTime, manualTimeOfDay, syncIntervalMs
 model.config.director.autopilot.*       // intervals, weather pool, director cycle
 model.config.director.ambient.*         // drift magnitudes per randomisation cycle
-model.config.shell.windowFrame         // master on/off for oval mask + rivets + glass (default: false — full-bleed Cesium)
+model.config.shell.windowFrame         // master on/off for oval mask + rivets + glass (default: true — Phase 14 SWA demo)
 model.config.shell.blindOpen           // live blind drag position (up=open)
 model.config.shell.hudVisible
 model.config.shell.sidePanelOpen
 model.config.shell.showWing
+model.config.shell.touchEnabled        // false default — gate for long-press accel + extras; basic blind drag is always on regardless (Council Q3, Phase 15)
 
 // Observability
 model.telemetry                         // Phase 5.6 — recordFrame / recordEvent / toJSON
@@ -380,8 +381,9 @@ $effect(() => {
 - `/api/bundle/[hash]` — LAN peer-cache bundle blob.
 - `/api/buildings/:city` — OSM extrusion GeoJSON.
 - `/api/tiles/[...path]` — Tile proxy.
-- `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker). `/api/config` PATCH validates the path against a namespace allowlist (`atmosphere|camera|director|world|shell`) before publishing, blocking `__proto__` / `constructor.prototype` style writes at the wire.
+- `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker). `/api/config` PATCH validates the path against a namespace allowlist (`atmosphere|camera|director|world|shell`) before publishing, blocking `__proto__` / `constructor.prototype` style writes at the wire. **Bearer-gated since Phase 15 (Day 1, commit `77f244f`)** — `requireAdminToken(request)` runs first; the kiosk browser fetches its own token via the localhost-only `/api/internal/peer-token` route.
 - `/api/content` POST + `/api/content/[id]` DELETE + `/api/assets` POST — admin-only mutating routes. Require `Authorization: Bearer $AERO_ADMIN_TOKEN`; return 503 if the env var is unset (fail closed). GET routes remain unauthenticated. Admin UI at `/admin/content` prompts for the token and caches in `sessionStorage`.
+- `/api/internal/peer-token` GET — localhost-only (rejects requests where `getClientAddress()` is not `127.0.0.1` or `::1`). Returns `{ token: process.env.AERO_ADMIN_TOKEN }` so the kiosk Pi's browser can include a bearer header on peer-sync's PATCH `/api/config` calls without baking the secret into the JS bundle. 403 cross-origin / 503 if env unset (fail closed). Browser-side helper at `src/lib/http/peer-token.ts` caches in module memory.
 - `/api/wifi/reset` — Pi-only: purge saved WiFi + reboot to captive-portal mode. Gated by `Authorization: Bearer $AERO_WIFI_RESET_TOKEN`; returns 503 if the env var is unset (fail closed).
 
 ## Environment variables
@@ -451,3 +453,4 @@ AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endp
 | 12 night look + Pane rename | `shell/Window.svelte` → `shell/Pane.svelte` (case-collision with `shell/window/` gone). VIIRS `dayAlpha=0`/`nightAlpha=1` so terminator shading no longer dims night-lit cities. baseNightSaturation 0.25 → 0.05 (kills blue cast at deep night). skyAtmosphere `saturationShift`/`brightnessShift` lerped HARDER negative as `dawnDuskFactor` peaks (fixes inverted-sign bug). Shader's horizon-haze + dawn-rim blocks deleted (duplicates of HazeEffect + skyAtmosphere). Clouds PNG → WebP (-61% bytes). `shell.windowFrame: false` default — full-bleed Cesium fills the viewport; blind still works in either mode. Softer car-light dots (1.4 px + sharper falloff + translucencyByDistance). | (Apr 27 series) |
 | 13 SSOT sweep | Four duplicated literals → SSOT homes: fleet timings → `fleet/timings.ts`; peer URL → `fleet/peer-url.ts`; bundle ID pattern → `bundle/loader.ts`. Night time-of-day boundaries → `night/thresholds.ts` (`T` constants). All sky consumers (getSkyState, nightFactor, dawnDuskFactor, isSunVisible) share T. | 4d20c47 + c134ee9 |
 | 14 demo mode (SWA inaug.) | Default location=hyderabad, windowFrame=true. Dusk palette: warm amber arc (no purple mid-tone). satShift dd contrib -0.5→-0.08 (preserves Cesium warm sunset scatter). Globe dusk correction dd*0.3→dd*0.15. Dusk skyState window 18→21h (blue hour). 250/250 tests. | eb7bde0–112fa8a |
+| 15 Day-1 ship prep (SWA) | Council on Q2/Q3/Q5/Q6 with game/experience lenses. defaultShow → dawn over Hyderabad (clear/06:30). `/api/config` PATCH bearer-gated (Option B: localhost-only `/api/internal/peer-token` route + browser cache + peer-sync bearer header injection). `shell.touchEnabled` gate (passenger mode default; long-press accel + extras behind operator toggle). SSE ring-buffer replay (config_patch + command events survive browser reload). `/architecture` page authored (7+2 pillars: Time + Networking promoted from "hidden inside State" to first-class). 274/274 tests, `pre-ship-v1` tag. | 013e151–eadcf9c |
