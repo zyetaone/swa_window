@@ -58,21 +58,14 @@ export const COLOR_GRADING_GLSL = `
 
 		float brightGuard = smoothstep(0.75, 0.95, lum);
 
-		// Widened lightMask — pixels between lit roads pick up 20-30% of warm
-		// treatment, reading as spill rather than dark gaps.
-		// Phase 16: lowered floor 0.08 → 0.05 to pick up desaturated lights.
-		float lightMask = smoothstep(0.05, 0.60, lum);
+		// Phase 16: Sharpened lightMask and red-bias gate. City lights (even
+		// grayscale ones) now reach 1.0 mask much earlier (lum=0.25).
+		// red-bias gate now treats anything >= -0.02 as 1.0 likely, which
+		// catches grayscale (0.0) fully while excluding navy (-0.06).
+		float lightMask = smoothstep(0.02, 0.25, lum);
 
-		// Chroma-bias VIIRS gate — amber pixels have rgb.r > rgb.b. Water
-		// glint, snow, cool atmosphere have rgb.r ≈ rgb.b. Gate lightMask by
-		// red-bias so palette only paints warm (VIIRS-like) pixels.
-		//
-		// Phase 16: relaxed gate to allow desaturated (grayscale) VIIRS
-		// lights through. Grayscale is redBias=0; navy is redBias < -0.05.
-		// Reduced the smoothstep bottom so grayscale lights (0.0) are
-		// caught more strongly as "likely" city lights.
 		float redBias = rgb.r - rgb.b;
-		float viirsLikely = smoothstep(-0.15, 0.1, redBias);
+		float viirsLikely = smoothstep(-0.12, -0.02, redBias);
 		lightMask *= mix(1.0, viirsLikely, u_viirsMaskStrength);
 
 		// Desat under lights — kills blue-base / amber-light → purple bleed.

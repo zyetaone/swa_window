@@ -70,7 +70,7 @@ export const NIGHT_PALETTE = {
 	 * targets sit in one file.
 	 */
 	viirs: {
-		maxAlpha:         0.5,
+		maxAlpha:         0.8,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 	},
