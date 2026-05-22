@@ -255,12 +255,7 @@ export const world = $state({
 	// fine-tune. The 6 shader uniforms (palette / chroma / dark void / env /
 	// ambient) feed COLOR_GRADING_GLSL; the 6 scene uniforms (moonlight /
 	// exposure / atmosphere / sky / viirs) drive compose.ts scene-lighting.
-	paletteSpread: 0.25,        // hash range — per-pixel palette variance
-	additiveStrength: 11.0,     // emissive boost — bumped 7→11 per user "increase additive light"
-	redSparkRate: 0.03,         // fraction of lit pixels going traffic-red
-	darkVoidStrength: 0.3,      // crush unlit terrain toward black at night
-	envLight: 0.5,              // ambient warm moonlight floor (DOM-side)
-	viirsMaskStrength: 0.85,    // chroma gate — restrict palette to warm pixels
+	additiveStrength: 2.5,      // emissive boost on lit pixels (Feb 15 baseline value)
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
 	nightExposure: 0.88,        // exposure at deep night — terrain visible, mids only mildly dimmed
 	atmosphereLight: 4.5,       // globe.atmosphereLightIntensity at night (was 2.0 — terrain went black)

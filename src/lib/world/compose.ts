@@ -334,13 +334,7 @@ export class CesiumManager {
 					uniforms: {
 						u_nightFactor: () => this.model.nightFactor,
 						u_lightIntensity: () => this.model.nightLightScale,
-						// Phase 9 — Apr-15 hash palette uniforms from world config.
-						u_paletteSpread: () => this.model.config.world.paletteSpread,
 						u_additiveStrength: () => this.model.config.world.additiveStrength,
-						u_redSparkRate: () => this.model.config.world.redSparkRate,
-						u_darkVoidStrength: () => this.model.config.world.darkVoidStrength,
-						u_envLight: () => this.model.config.world.envLight,
-						u_viirsMaskStrength: () => this.model.config.world.viirsMaskStrength,
 					},
 				});
 				v.scene.postProcessStages.add(stage);
