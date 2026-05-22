@@ -60,7 +60,8 @@ export const COLOR_GRADING_GLSL = `
 
 		// Widened lightMask — pixels between lit roads pick up 20-30% of warm
 		// treatment, reading as spill rather than dark gaps.
-		float lightMask = smoothstep(0.08, 0.65, lum);
+		// Phase 16: lowered floor 0.08 → 0.05 to pick up desaturated lights.
+		float lightMask = smoothstep(0.05, 0.60, lum);
 
 		// Chroma-bias VIIRS gate — amber pixels have rgb.r > rgb.b. Water
 		// glint, snow, cool atmosphere have rgb.r ≈ rgb.b. Gate lightMask by
@@ -130,7 +131,8 @@ export const COLOR_GRADING_GLSL = `
 		// Neutral-warm ambient moonlight floor — applied LAST so dark-void
 		// can't push terrain to pure void. Aligns with calm-amber brand
 		// (cool floor would stack to violet against navy backdrop).
-		vec3 ambient = vec3(0.025, 0.022, 0.018) * u_envLight * u_nightFactor;
+		// Phase 16: boosted floor slightly 0.025 → 0.035.
+		vec3 ambient = vec3(0.035, 0.032, 0.028) * u_envLight * u_nightFactor;
 		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);

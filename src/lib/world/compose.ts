@@ -452,18 +452,17 @@ export class CesiumManager {
 				this.viirsLayer.nightAlpha = 1;
 				// Dark pixels → transparent so only lit cells composite over terrain.
 				this.viirsLayer.colorToAlpha = C.Color.BLACK;
-				this.viirsLayer.colorToAlphaThreshold = 0.12;
-				// Phase 16: desaturate VIIRS raster. Treating it as a grayscale
+				// Phase 16: desaturate VIIRS raster. Treating it as a grayscale-ish
 				// light-intensity mask. The post-process shader picks up these
-				// bright grayscale spots and paints them with the high-res hash-
-				// palette. This removes 'double ambering' and hides blockiness
-				// by using the shader's per-pixel variance for the final color.
+				// bright spots and paints them with the high-res hash-palette.
+				// Kept 0.1 saturation so the shader's red-bias gate has a signal.
 				this.viirsLayer.hue = 0.0;
-				this.viirsLayer.saturation = 0.0;
-				// Phase 9 — VIIRS brightness × world.viirsBrightness so operators
-				// can punch the night map. Base 2.2 × default 1.5 = 3.3.
-				this.viirsLayer.brightness = 2.2 * this.model.config.world.viirsBrightness;
-				this.viirsLayer.contrast = 1.3;
+				this.viirsLayer.saturation = 0.1;
+				// Phase 16: boosted brightness + lowered threshold so more dim
+				// light spots survive the mask stage to be amplified by shader.
+				this.viirsLayer.brightness = 3.5 * this.model.config.world.viirsBrightness;
+				this.viirsLayer.contrast = 1.4;
+				this.viirsLayer.colorToAlphaThreshold = 0.08;
 			}
 		} catch (e) {
 			console.warn('[CesiumManager] VIIRS layer failed:', e);
