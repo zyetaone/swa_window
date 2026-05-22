@@ -65,8 +65,11 @@ export const COLOR_GRADING_GLSL = `
 		// Chroma-bias VIIRS gate — amber pixels have rgb.r > rgb.b. Water
 		// glint, snow, cool atmosphere have rgb.r ≈ rgb.b. Gate lightMask by
 		// red-bias so palette only paints warm (VIIRS-like) pixels.
-		float redBias = clamp(rgb.r - rgb.b, 0.0, 1.0);
-		float viirsLikely = smoothstep(0.05, 0.3, redBias);
+		//
+		// Phase 16: relaxed gate to allow desaturated (grayscale) VIIRS
+		// lights through. Grayscale is redBias=0; navy is redBias < -0.05.
+		float redBias = rgb.r - rgb.b;
+		float viirsLikely = smoothstep(-0.05, 0.1, redBias);
 		lightMask *= mix(1.0, viirsLikely, u_viirsMaskStrength);
 
 		// Desat under lights — kills blue-base / amber-light → purple bleed.
@@ -90,11 +93,9 @@ export const COLOR_GRADING_GLSL = `
 		float redSpark = step(1.0 - u_redSparkRate, fract(hash * 7.3));
 		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
 
-		// Phase 10 (user direction): VIIRS-contrast-driven density amplification.
-		// Pixels with strong VIIRS amber chroma (high viirsLikely) get MORE
-		// emissive boost, dim VIIRS pixels less. Makes city cores punch
-		// dramatically vs. uniform amber wash. Power curve compresses mid-tones.
-		float viirsContrastBoost = 1.0 + pow(viirsLikely, 0.7) * 0.6;
+		// Phase 16: increased VIIRS-contrast-driven density amplification.
+		// Makes city cores punch even harder.
+		float viirsContrastBoost = 1.0 + pow(viirsLikely, 0.6) * 0.8;
 
 		// Additive emissive — VIIRS-contrast-weighted. Clamped at 4.0 for HDR
 		// headroom (ACES tonemap in compose.ts maps the wider range).

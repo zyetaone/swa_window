@@ -30,6 +30,8 @@ const ROAD_WIDTHS: Record<RoadClass, number> = {
 	residential: 1.0,
 };
 
+const HDR_GAIN = 1.8;
+
 export class RoadLayer {
 	private collection: any = null;
 	private mounted = false;
@@ -89,9 +91,14 @@ export class RoadLayer {
 
 			for (const [lon, lat] of feat.geometry.coordinates) {
 				this.collection.add({
-					position: C.Cartesian3.fromDegrees(lon, lat),
+					position: C.Cartesian3.fromDegrees(lon, lat, 2.0),
 					image: circleUrl,
-					color: C.Color.fromBytes(color[0], color[1], color[2], 255).withAlpha(Math.min(intensity * boost, 1.0)),
+					color: new C.Color(
+						(color[0] / 255) * HDR_GAIN,
+						(color[1] / 255) * HDR_GAIN,
+						(color[2] / 255) * HDR_GAIN,
+						Math.min(intensity * boost, 1.0),
+					),
 					scale: baseWidth * glowWidth * 0.035,
 					scaleByDistance: new C.NearFarScalar(1000, 1.0, 500000, 0.1),
 					// Custom tag for syncTunables
@@ -110,8 +117,13 @@ export class RoadLayer {
 			const color = ROAD_COLORS[hw] || [255, 255, 255];
 			const baseWidth = ROAD_WIDTHS[hw] || 1.0;
 			const boost = hw === 'motorway' ? motorwayBoost : hw === 'residential' ? residentialBoost : 1.0;
-			
-			b.color = C.Color.fromBytes(color[0], color[1], color[2], 255).withAlpha(Math.min(intensity * boost, 1.0));
+
+			b.color = new C.Color(
+				(color[0] / 255) * HDR_GAIN,
+				(color[1] / 255) * HDR_GAIN,
+				(color[2] / 255) * HDR_GAIN,
+				Math.min(intensity * boost, 1.0),
+			);
 			b.scale = baseWidth * glowWidth * 0.035;
 		}
 	}

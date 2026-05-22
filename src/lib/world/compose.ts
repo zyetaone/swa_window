@@ -453,9 +453,13 @@ export class CesiumManager {
 				// Dark pixels → transparent so only lit cells composite over terrain.
 				this.viirsLayer.colorToAlpha = C.Color.BLACK;
 				this.viirsLayer.colorToAlphaThreshold = 0.12;
-				// Greyscale → sodium amber. hue offset + reduced saturation + boost.
-				this.viirsLayer.hue = 0.08;
-				this.viirsLayer.saturation = 0.55;
+				// Phase 16: desaturate VIIRS raster. Treating it as a grayscale
+				// light-intensity mask. The post-process shader picks up these
+				// bright grayscale spots and paints them with the high-res hash-
+				// palette. This removes 'double ambering' and hides blockiness
+				// by using the shader's per-pixel variance for the final color.
+				this.viirsLayer.hue = 0.0;
+				this.viirsLayer.saturation = 0.0;
 				// Phase 9 — VIIRS brightness × world.viirsBrightness so operators
 				// can punch the night map. Base 2.2 × default 1.5 = 3.3.
 				this.viirsLayer.brightness = 2.2 * this.model.config.world.viirsBrightness;
@@ -857,11 +861,21 @@ export class CesiumManager {
 		this.lastBuildingNightFactor = nf;
 		this.lastBuildingAltBlend = altBlend;
 
-		const alpha = w.buildingEmissiveMax * nf * (1 - altBlend);
+		const alphaValue = (w.buildingEmissiveMax * nf * (1 - altBlend)).toFixed(3);
+
+		// Phase 16: height-based falloff. Buildings glow amber at street
+		// level and fade to dark as they go up. Creates a more realistic
+		// "lit city" look from a plane window. 250m is a typical tall-building
+		// height for the transition.
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
-			color: `color("rgb(255, 180, 90)", ${alpha.toFixed(3)})`,
+			color: {
+				conditions: [
+					['true', 'color("rgb(255, 180, 90)", (1.0 - clamp(${height} / 250.0, 0.0, 1.0)) * ' + alphaValue + ')'],
+				],
+			},
 		});
 	}
+
 
 	applyQualityMode(mode: QualityMode): void {
 		const p = CESIUM_QUALITY_PRESETS[mode];
