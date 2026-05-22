@@ -13,6 +13,7 @@ import { T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
+import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -115,6 +116,12 @@ export class CesiumManager {
 
 	// Asset state
 	private tileset: CesiumType.Cesium3DTileset | null = null;
+	// Procedural building shader — restored Feb-15 recipe. Per-fragment
+	// lit windows via model-space grid math. Owns 4 uniforms that we
+	// update from syncBuildings(). null if Ion token missing.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private buildingsShader: any = null;
+	private buildingsTime = 0;
 	private lastBuildingAltBlend = -1;
 	private lastNightFactor = -1;
 	// Imagery Layers
@@ -802,19 +809,44 @@ export class CesiumManager {
 	// ─── Building Setup & Sync ────────────────────────────────────────────────
 	private async setupBuildings(): Promise<void> {
 		if (!getIonToken()) { console.warn('[CesiumBuildings] Ion token missing — buildings disabled'); return; }
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const C: any = this.CesiumModule;
 		try {
 			this.tileset = await this.CesiumModule.createOsmBuildingsAsync();
 			if (this.tileset) {
 				this.tileset.show = this.model.config.world.buildingsEnabled;
 				this.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
-				// Cast + receive shadows — buildings drop long shadows across
-				// the terrain at low-sun times, grounding them in the scene.
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
-				// Phase 3 (variant E productionized): HIGHLIGHT blend multiplies
-				// the source pixel by the style color (amber), so glow rides on
-				// top of the per-face shading rather than overpainting it. This
-				// is also Cesium's default, set explicitly for clarity.
 				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
+				// Procedural lit-window shader — restored Feb 15 recipe via
+				// Cesium CustomShader API. Per-fragment grid math, no
+				// per-feature property dependency. Uniforms updated each
+				// frame in syncBuildings.
+				try {
+					this.buildingsShader = new C.CustomShader({
+						mode: C.CustomShaderMode.MODIFY_MATERIAL,
+						lightingModel: C.LightingModel.UNLIT,
+						uniforms: {
+							u_nightFactor:    { type: C.UniformType.FLOAT, value: 0.0 },
+							u_lightIntensity: { type: C.UniformType.FLOAT, value: 1.0 },
+							u_windowDensity:  { type: C.UniformType.FLOAT, value: 0.0 },
+							u_time:           { type: C.UniformType.FLOAT, value: 0.0 },
+						},
+						// Model-space normal isn't available in the fragment
+						// stage in modern Cesium; pass it through as a varying.
+						varyings: {
+							v_normalMC: C.VaryingType.VEC3,
+						},
+						vertexShaderText: BUILDING_VERTEX_GLSL,
+						fragmentShaderText: BUILDING_SHADER_GLSL,
+					});
+					this.tileset.customShader = this.buildingsShader;
+				} catch (e) {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const msg = (e as any)?.message ?? String(e);
+					console.warn('[CesiumBuildings] Custom shader failed; falling back to uniform amber style:', msg);
+					this.buildingsShader = null;
+				}
 				this.viewer.scene.primitives.add(this.tileset);
 			}
 		} catch (e) { console.warn('[CesiumBuildings] OSM buildings unavailable:', (e as Error).message); }
@@ -824,36 +856,35 @@ export class CesiumManager {
 		if (!this.tileset) return;
 		this.tileset.show = this.model.config.world.buildingsEnabled;
 
-		// Phase 3 (variant E productionized): amber emissive at low altitude,
-		// fades above cruise. altBlend = 0 below low, 1 above high; alpha pinned
-		// to nightFactor so daytime falls out naturally.
 		const w = this.model.config.world;
 		const lo = w.buildingEmissiveLowAltFt;
 		const hi = w.buildingEmissiveHighAltFt;
 		const altBlend = clamp((this.model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
 		const nf = this.model.nightFactor;
+		const scale = this.model.nightLightScale;
 
-		// Throttle: re-style only when either knob has moved a perceptible step.
-		// Altitude bobs ~±100ft during cruise turbulence — the 0.02 altBlend
-		// threshold maps to ~200ft of climb/descent, well above turbulence noise.
+		// Procedural shader path — update uniforms each frame. The shader
+		// composes window emission internally; we only drive the time +
+		// global gates here. Cheap; the shader handles the rest.
+		if (this.buildingsShader) {
+			this.buildingsTime += 1 / 60;        // approximate; ok for AC-hum flicker
+			this.buildingsShader.setUniform('u_nightFactor', nf);
+			this.buildingsShader.setUniform('u_lightIntensity', scale);
+			// Window density tapers as altitude rises — at cruise we don't
+			// need full per-window granularity, just a glow signature.
+			this.buildingsShader.setUniform('u_windowDensity', nf * 0.4 * scale * (1 - altBlend));
+			this.buildingsShader.setUniform('u_time', this.buildingsTime);
+			return;
+		}
+
+		// Fallback path when custom shader unavailable — uniform amber.
 		if (
 			Math.abs(nf - this.lastBuildingNightFactor) < 0.01 &&
 			Math.abs(altBlend - this.lastBuildingAltBlend) < 0.02
 		) return;
 		this.lastBuildingNightFactor = nf;
 		this.lastBuildingAltBlend = altBlend;
-
 		const alphaValue = (w.buildingEmissiveMax * nf * (1 - altBlend)).toFixed(3);
-
-		// Uniform amber emissive across all building features. Earlier the
-		// expression tried a height-based falloff via ${height} / 250.0 —
-		// that crashed Cesium ("undefined / 250") for OSM features that
-		// don't carry a height property, taking the whole renderer down
-		// (Unable to load terrain, blank canvas). Cesium 3DTileStyle's
-		// expression language also doesn't support defined() to guard
-		// against missing properties. If we want a height falloff back, do
-		// it via a per-feature pass at tileset-load time, not in the style
-		// expression.
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
 			color: `color("rgb(255, 180, 90)", ${alphaValue})`,
 		});
