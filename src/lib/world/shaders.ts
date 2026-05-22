@@ -127,8 +127,10 @@ export const COLOR_GRADING_GLSL = `
 		// Neutral-warm ambient moonlight floor — applied LAST so dark-void
 		// can't push terrain to pure void. Aligns with calm-amber brand
 		// (cool floor would stack to violet against navy backdrop).
-		// Phase 16: boosted floor slightly 0.035 → 0.045.
-		vec3 ambient = vec3(0.045, 0.042, 0.038) * u_envLight * u_nightFactor;
+		// Phase 16: 0.035 → 0.045; Phase 17 (user "can't see the map"):
+		// 0.045 → 0.085 so terrain detail survives the aggressive
+		// skyDarken + dark-void combo at deep night.
+		vec3 ambient = vec3(0.085, 0.08, 0.072) * u_envLight * u_nightFactor;
 		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);

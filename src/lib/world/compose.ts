@@ -869,16 +869,17 @@ export class CesiumManager {
 
 		const alphaValue = (w.buildingEmissiveMax * nf * (1 - altBlend)).toFixed(3);
 
-		// Phase 16: height-based falloff. Buildings glow amber at street
-		// level and fade to dark as they go up. Creates a more realistic
-		// "lit city" look from a plane window. 250m is a typical tall-building
-		// height for the transition.
+		// Uniform amber emissive across all building features. Earlier the
+		// expression tried a height-based falloff via ${height} / 250.0 —
+		// that crashed Cesium ("undefined / 250") for OSM features that
+		// don't carry a height property, taking the whole renderer down
+		// (Unable to load terrain, blank canvas). Cesium 3DTileStyle's
+		// expression language also doesn't support defined() to guard
+		// against missing properties. If we want a height falloff back, do
+		// it via a per-feature pass at tileset-load time, not in the style
+		// expression.
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
-			color: {
-				conditions: [
-					['true', 'color("rgb(255, 180, 90)", (1.0 - clamp(${height} / 250.0, 0.0, 1.0)) * ' + alphaValue + ')'],
-				],
-			},
+			color: `color("rgb(255, 180, 90)", ${alphaValue})`,
 		});
 	}
 

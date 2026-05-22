@@ -262,8 +262,8 @@ export const world = $state({
 	envLight: 0.5,              // ambient warm moonlight floor (DOM-side)
 	viirsMaskStrength: 0.85,    // chroma gate — restrict palette to warm pixels
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
-	nightExposure: 0.7,         // exposure at deep night (was 0.85) — darker mid/highlights
-	atmosphereLight: 2.0,       // globe.atmosphereLightIntensity at night (was 3.0)
+	nightExposure: 0.88,        // exposure at deep night — terrain visible, mids only mildly dimmed
+	atmosphereLight: 4.5,       // globe.atmosphereLightIntensity at night (was 2.0 — terrain went black)
 	skyDarken: 2.4,             // sky brightness multiplier — bumped 1.6→2.4 per user "sky is white"
 	viirsBrightness: 1.5,       // multiplier on viirsLayer.brightness (set at setup)
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
