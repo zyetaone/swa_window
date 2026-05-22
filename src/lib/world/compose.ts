@@ -11,10 +11,8 @@ import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp } from '$lib/utils';
 import { T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
-import { ViirsGridLayer } from './viirs-grid-layer';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
-import { RoadLayer } from './road-layer';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -123,33 +121,24 @@ export class CesiumManager {
 	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
 	//   as night falls. The vivid day EOX boost is kept via baseDay* caches so
 	//   we can lerp between day-vivid and night-dark.
-	// (Phase 15.5 P2: CartoDB Dark imagery layer dropped. Its atmospheric
-	//   darkening function is now a 3-line mix() in COLOR_GRADING_GLSL. Saves
-	//   one Cesium imagery layer per fragment, plus ~180MB tile cache.)
 	// viirsLayer: NASA VIIRS Black Marble night lights — real satellite
-	//   nightlight imagery (z3-z8, 500m/px). Replaces the procedural
-	//   hash-palette the shader used to invent. ColorToAlpha hides dark
-	//   (unlit) pixels; hue+saturation tint the greyscale toward sodium
-	//   amber. Only visible at night via alpha gated on nightFactor.
+	//   nightlight imagery (z3-z8, 500m/px). ColorToAlpha hides dark (unlit)
+	//   pixels; hue+saturation tint toward sodium amber. Only visible at
+	//   night via alpha gated on nightFactor.
+	// roadMaskLayer: CartoDB Dark with colorToAlpha(BLACK) — white road
+	//   geometry survives, everything else punches transparent. Restored
+	//   Phase 17 from Feb-15's recipe (the simpler thing that worked) after
+	//   the Overpass-fetching RoadLayer was deleted as over-engineered.
 	private baseLayer: CesiumType.ImageryLayer | null = null;
 	private baseDaySaturation = 1.0;
 	private baseDayContrast = 1.0;
 	private viirsLayer: CesiumType.ImageryLayer | null = null;
-	// Reframe 2026-05-22: VIIRS grid is now a WORLD-anchored procedural
-	// imagery layer instead of a screen-anchored DOM effect. Owns its own
-	// canvas + Cesium SingleTileImageryProvider. Updated when location +
-	// nightFactor + density cross thresholds; otherwise per-frame free.
-	private viirsGridLayer: ViirsGridLayer | null = null;
-	// Reframe 2026-05-22: lightning is now a Cesium PostProcessStage that
-	// runs over the whole scene image, not a DOM gradient layered over the
-	// pane. The stage decides scene-wide brightness; the composition picker
-	// still authors timing / intensity / strike-position recipes.
+	private roadMaskLayer: CesiumType.ImageryLayer | null = null;
 	private lightningStage: LightningStage | null = null;
 	// Path 1 cloud migration — Cesium-native billboard clouds behind the
 	// world.useCesiumClouds flag. Default OFF; the existing CSS3D clouds
 	// keep shipping until billboards look right.
 	private cloudBillboardLayer: CloudBillboardLayer | null = null;
-	private roadLayer: RoadLayer | null = null;
 	private colorGradeStage: CesiumType.PostProcessStage | null = null;
 	private lastQualityMode: QualityMode | null = null;
 
@@ -257,13 +246,10 @@ export class CesiumManager {
 		await this.setupTerrain();
 		await this.setupImagery();
 		await this.setupBuildings();
-		this.viirsGridLayer = new ViirsGridLayer(C, v);
 		this.lightningStage = new LightningStage(C, v);
 		this.lightningStage.mount();
 		this.cloudBillboardLayer = new CloudBillboardLayer(C, v);
 		this.cloudBillboardLayer.mount();
-		this.roadLayer = new RoadLayer(C, v);
-		this.roadLayer.mount();
 
 		// Phase 16: call tick once immediately to synchronize state (night,
 		// camera, imagery) BEFORE the first render frame, avoiding the
@@ -422,12 +408,40 @@ export class CesiumManager {
 			this.baseLayer.brightness = 1.0;
 		}
 
-		// (CartoDB Dark imagery overlay removed in Phase 15.5. Atmospheric
-		// darkening is now a 3-line mix() in COLOR_GRADING_GLSL gated by the
-		// same 0.45→0.9 smoothstep curve. -1 Cesium imagery layer, -1 GPU
-		// texture sample per fragment, ~180MB tile cache reclaimed.)
-
 		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
+
+		// CartoDB Dark — RESTORED Phase 17 from Feb-15's recipe. The dark
+		// basemap has WHITE road lines on a near-black background; we punch
+		// out the black with colorToAlpha(BLACK) and only the road grid
+		// survives. ×4 brightness at deep night makes them glow sharp. Free
+		// road geometry for the cost of one imagery layer + zero JS state
+		// (vs. the deleted Overpass-fetching RoadLayer billboard collection).
+		try {
+			const cartoUrl = tileBase
+				? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
+				: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
+			this.roadMaskLayer = this.viewer.imageryLayers.addImageryProvider(
+				new C.UrlTemplateImageryProvider({
+					url: cartoUrl,
+					maximumLevel: 18,
+					minimumLevel: 0,
+					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
+				}),
+			);
+			if (this.roadMaskLayer) {
+				this.roadMaskLayer.alpha = 0;            // synced per-frame
+				this.roadMaskLayer.show = false;
+				this.roadMaskLayer.dayAlpha = 0;
+				this.roadMaskLayer.nightAlpha = 1;
+				this.roadMaskLayer.colorToAlpha = C.Color.BLACK;
+				this.roadMaskLayer.colorToAlphaThreshold = 0.0;
+				this.roadMaskLayer.saturation = 0.0;    // white/grey roads
+				this.roadMaskLayer.contrast = 1.5;
+				this.roadMaskLayer.brightness = 1.0;
+			}
+		} catch (e) {
+			console.warn('[CesiumManager] CartoDB roads layer failed:', e);
+		}
 
 		// VIIRS night lights layer — NASA Black Marble via tile-packager cache.
 		// Greyscale input → tinted amber via hue + saturation. ColorToAlpha
@@ -486,9 +500,7 @@ export class CesiumManager {
 		this.syncAtmosphere();
 		this.syncTerrainExaggeration();
 		this.syncImagery();
-		this.syncViirsGrid();
 		this.syncCloudBillboards();
-		this.syncRoads();
 		this.syncLightning(dt);
 		this.syncBuildings();
 		this.syncQuality();
@@ -512,21 +524,6 @@ export class CesiumManager {
 		);
 	}
 
-	private syncRoads(): void {
-		if (!this.roadLayer) return;
-		const m = this.model;
-		const w = m.config.world;
-		void this.roadLayer.update(
-			m.flight.lat,
-			m.flight.lon,
-			w.roadsEnabled,
-			w.roadsIntensity * m.nightFactor,
-			w.roadsGlowWidth,
-			w.roadsMotorwayBoost,
-			w.roadsResidentialBoost,
-		);
-	}
-
 	/**
 	 * Drive the lightning post-process stage. Composition picker fires
 	 * a strike, the stage's flash uniform decays. Falls back to weather
@@ -543,29 +540,6 @@ export class CesiumManager {
 			w.lightningMinInterval,
 			w.lightningMaxInterval,
 		);
-	}
-
-	/**
-	 * Drive the procedural VIIRS grid imagery layer. The ViirsGridLayer
-	 * itself caches against a coarse lat/lon/density key so per-frame
-	 * calls are essentially free unless one of those crossed a step.
-	 *
-	 * Alpha = nightFactor × nightLightScale × density × 0.9 — same
-	 * mental model as the warm-glow CSS dome it partially replaces,
-	 * but now the FALLOFF is geometric (the tile is anchored to a
-	 * lat/lon rectangle around the location, not the viewport).
-	 */
-	private syncViirsGrid(): void {
-		if (!this.viirsGridLayer) return;
-		const m = this.model;
-		const density = m.currentLocation.scene.nightLightDensity;
-		// Alpha tuned 0.45 → 0.22 — at cruise altitude the rectangle covers
-		// the whole foreground, so the grid should read as an ACCENT on the
-		// raster VIIRS underneath, not a replacement. Building emissive (at
-		// 15-25kft) is the dominant low-altitude light source; the grid is
-		// for mid-distance city footprint.
-		const alpha = Math.min(0.4, m.nightFactor * m.config.world.nightLightIntensity * density * 0.22);
-		this.viirsGridLayer.update(m.flight.lat, m.flight.lon, density, alpha);
 	}
 
 	private syncCamera(_dt: number): void {
@@ -796,6 +770,14 @@ export class CesiumManager {
 			// it once at setup; that meant slider changes required reload.
 			this.viirsLayer.brightness = 2.2 * w.viirsBrightness;
 		}
+
+		// CartoDB road mask — alpha + brightness lerp per Feb 15 recipe.
+		// Sharp filament-like road lines pop on the dark base at night.
+		if (this.roadMaskLayer) {
+			this.roadMaskLayer.show = show || firstNight;
+			this.roadMaskLayer.alpha = nf * scale;
+			this.roadMaskLayer.brightness = lerp(1.0, 4.0, nf) * scale;
+		}
 	}
 
 	// ─── Terrain Setup ────────────────────────────────────────────────────────
@@ -896,10 +878,6 @@ export class CesiumManager {
 	}
 
 	destroy(): void {
-		if (this.viirsGridLayer) {
-			this.viirsGridLayer.destroy();
-			this.viirsGridLayer = null;
-		}
 		if (this.lightningStage) {
 			this.lightningStage.destroy();
 			this.lightningStage = null;
@@ -907,10 +885,6 @@ export class CesiumManager {
 		if (this.cloudBillboardLayer) {
 			this.cloudBillboardLayer.destroy();
 			this.cloudBillboardLayer = null;
-		}
-		if (this.roadLayer) {
-			this.roadLayer.destroy();
-			this.roadLayer = null;
 		}
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {
