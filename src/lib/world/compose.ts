@@ -907,6 +907,10 @@ export class CesiumManager {
 			this.cloudBillboardLayer.destroy();
 			this.cloudBillboardLayer = null;
 		}
+		if (this.roadLayer) {
+			this.roadLayer.destroy();
+			this.roadLayer = null;
+		}
 		if (!this.viewer.isDestroyed()) {
 			if (this.#boundTick) {
 				this.viewer.scene.postRender.removeEventListener(this.#boundTick);
