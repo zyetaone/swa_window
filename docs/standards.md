@@ -161,7 +161,7 @@ Mixed — some files use default, some named, some both.
 1. Svelte components (`.svelte`) — the component itself is the default export (Svelte convention)
 2. SvelteKit page/layout files — framework requires default
 
-**`index.ts` barrels** only when ≥3 modules collapse into a domain hub (e.g. `$lib/night/index.ts` was worth it; a `utils/index.ts` re-exporting one utility isn't).
+**`index.ts` barrels** only when ≥3 modules collapse into a domain hub (e.g. `$content/locations/index.ts`). Domains with one or two consumers don't need a barrel — folding into the nearest existing SSOT is cleaner (cf. `$lib/night/` was inlined into `utils.ts` in 2026-05).
 
 ---
 

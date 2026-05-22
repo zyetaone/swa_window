@@ -4,7 +4,43 @@
  */
 
 import type { SkyState } from './types';
-import { T } from './night';
+
+// ── Time-of-day thresholds (SSOT for all night consumers) ──────────────────
+// Phase 11 (architecture cleanup): inlined from the deleted $lib/night/ barrel
+// since this file IS the night-state derivation home (getSkyState +
+// nightFactor + dawnDuskFactor below). Aesthetic constants — visual targets
+// like globe colour, sky brightness shift — live in $content/compositions/night.
+
+/**
+ * Time-of-day thresholds for the night/dawn/dusk rendering pipeline.
+ * All values are decimal hours in local time (same space as model.timeOfDay).
+ * Editing one value here keeps all consumers aligned automatically.
+ *
+ * Consumers:
+ *   - getSkyState (below)            categorical state
+ *   - nightFactor (below)            0..1 darkness
+ *   - dawnDuskFactor (below)         0..1 transition peak
+ *   - world/compose.ts               isSunVisible, sun disc visibility
+ */
+export const T = {
+	/** Night ends; dawn transition begins. */
+	DAWN_START:  5,
+	/** Dawn ends; full daylight. */
+	DAY_START:   7,
+	/** Full daylight ends; dusk transition begins. */
+	DAY_END:    18,
+	/** Dusk ends; night begins (blue hour is included in dusk). */
+	DUSK_END:   21,
+	/** dawnDusk factors reach zero; nightFactor reaches one. */
+	DEEP_NIGHT: 22,
+} as const;
+
+/**
+ * nightFactor floor below which the car-lights geo-effect is hidden.
+ * Dots fade in around dusk (nf crosses 0.2) and stay visible through
+ * night → dawn until nf drops below 0.2 again.
+ */
+export const CAR_LIGHTS_NIGHT_THRESHOLD = 0.2;
 
 /**
  * Clamp a value between min and max.

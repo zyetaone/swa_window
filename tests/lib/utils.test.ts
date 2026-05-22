@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, nightFactor, dawnDuskFactor, formatTime, readByPath, setByPath } from '$lib/utils';
-import { T } from '$lib/night/thresholds';
+import { clamp, lerp, normalizeHeading, randomBetween, pickRandom, shortestAngleDelta, getSkyState, nightFactor, dawnDuskFactor, formatTime, readByPath, setByPath, T } from '$lib/utils';
 
 describe('clamp', () => {
 	it('returns value within range', () => {

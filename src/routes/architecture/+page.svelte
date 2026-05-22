@@ -614,7 +614,7 @@
 
 	<footer class="arch-footer">
 		<p>Aero Dynamic Window · SvelteKit 2 + Cesium + Bun · Raspberry Pi 5 Kiosk · SWA Hyderabad install · 2026</p>
-		<p class="arch-footer-sub">v1.1 (2026-05-20). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order values sourced from <code>src/lib/scene/layers.ts</code>; sky-state thresholds from <code>src/lib/night/thresholds.ts</code>.</p>
+		<p class="arch-footer-sub">v1.1 (2026-05-20). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order values sourced from <code>src/lib/scene/layers.ts</code>; sky-state thresholds from <code>src/lib/utils.ts</code>.</p>
 	</footer>
 </main>
 

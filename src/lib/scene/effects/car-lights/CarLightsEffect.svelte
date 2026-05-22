@@ -10,7 +10,7 @@
 	 */
 	import { LOCATION_MAP } from '$content/locations';
 	import { useCesiumEffect } from '$lib/world/active.svelte';
-	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/night';
+	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/utils';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 

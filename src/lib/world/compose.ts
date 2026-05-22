@@ -9,7 +9,7 @@ import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp } from '$lib/utils';
-import { T } from '$lib/night';
+import { T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { ViirsGridLayer } from './viirs-grid-layer';
 import { LightningStage } from './lightning-stage';
@@ -767,10 +767,10 @@ export class CesiumManager {
 		// carries the sky/ocean dim load; VIIRS is the additive accent
 		// confined to the lit cells by colorToAlpha.
 		//
-		// Smoothstep curve (VIIRS_SMOOTHSTEP_FLOOR..CEIL = 0.55..0.9). Floor
-		// at 0.55 prevents the "magenta leak" that hue-rotated colorToAlpha
+		// Smoothstep curve (NIGHT_PALETTE.viirs.smoothstepFloor..Ceil = 0.55..0.9).
+		// Floor at 0.55 prevents the "magenta leak" that hue-rotated colorToAlpha
 		// produced on bright city cores at early dusk. Thresholds + cap live
-		// in $lib/night for discoverability.
+		// in $content/compositions/night.ts for discoverability.
 		if (this.viirsLayer) {
 			const V = NIGHT_PALETTE.viirs;
 			const viirsEase = smoothstep(
