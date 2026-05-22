@@ -231,7 +231,8 @@ const weatherOpacityFactor = $derived.by(() => {
 const layerOpacity = $derived.by(() => {
 	let d = effectiveDensity;
 	if (nightFactor > 0.5) d = Math.max(d, nightCloudFloor);
-	return Math.min(1, d * cloudProximity * 1.2 * weatherOpacityFactor);
+	// Phase 16: added 0.05 floor to opacity so clouds never truly vanish
+	return Math.min(1, (d + 0.05) * cloudProximity * 1.2 * weatherOpacityFactor);
 });
 
 // KEEP: altitudeShift drives cloud-deck vertical position — linter must not strip
@@ -245,14 +246,11 @@ const altitudeShift = $derived.by(() => {
 });
 
 // Environment-responsive color filter.
-// Phase 15.5 retune: saturate dropped from 0.4 → 0.05 at deep night. The
-// Phase 15.5 navy-backdrop shader made the previous hue-rotate(210deg) +
-// saturate(0.4) combo read as visible violet/magenta blobs over lit
-// terrain. Keeping a slight 200° rotation preserves the cool-moonlight
-// intent without saturating into purple.
+// Phase 16: boosted night brightness 0.3 -> 0.45 and saturation 0.05 -> 0.12.
+// This ensures clouds stay visible and have a slight cool tint at night.
 const envFilter = $derived.by(() => {
-	if (nightFactor > 0.6) return 'brightness(0.3) saturate(0.05) hue-rotate(200deg)';
-	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.5}) saturate(${(1 - nightFactor * 0.25) * 0.3}) hue-rotate(${nightFactor * 12}deg)`;
+	if (nightFactor > 0.6) return 'brightness(0.45) saturate(0.12) hue-rotate(200deg)';
+	if (nightFactor > 0.3) return `brightness(${1 - nightFactor * 0.4}) saturate(${(1 - nightFactor * 0.2) * 0.3}) hue-rotate(${nightFactor * 12}deg)`;
 	// Golden hour: push warm strongly. Dawn skews yellow-gold; dusk skews
 	// orange-red. Sepia + hue-rotate together give a painterly glow rather
 	// than a flat tint wash.

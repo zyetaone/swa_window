@@ -69,8 +69,10 @@ export const COLOR_GRADING_GLSL = `
 		//
 		// Phase 16: relaxed gate to allow desaturated (grayscale) VIIRS
 		// lights through. Grayscale is redBias=0; navy is redBias < -0.05.
+		// Reduced the smoothstep bottom so grayscale lights (0.0) are
+		// caught more strongly as "likely" city lights.
 		float redBias = rgb.r - rgb.b;
-		float viirsLikely = smoothstep(-0.05, 0.1, redBias);
+		float viirsLikely = smoothstep(-0.15, 0.1, redBias);
 		lightMask *= mix(1.0, viirsLikely, u_viirsMaskStrength);
 
 		// Desat under lights — kills blue-base / amber-light → purple bleed.
@@ -109,8 +111,9 @@ export const COLOR_GRADING_GLSL = `
 		rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
 
 		// Dark void crush — push lum < 0.2 toward black so cities pop.
+		// Phase 16: softened crush (0.85 max) so terrain detail survives.
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
-		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * u_darkVoidStrength * (1.0 - brightGuard));
+		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * (u_darkVoidStrength * 0.85) * (1.0 - brightGuard));
 
 		// Phase 15.5 pollution corona — broadened footprint for visible amber dome.
 		float pollution = smoothstep(0.10, 0.5, lum) * u_nightFactor;
@@ -131,8 +134,8 @@ export const COLOR_GRADING_GLSL = `
 		// Neutral-warm ambient moonlight floor — applied LAST so dark-void
 		// can't push terrain to pure void. Aligns with calm-amber brand
 		// (cool floor would stack to violet against navy backdrop).
-		// Phase 16: boosted floor slightly 0.025 → 0.035.
-		vec3 ambient = vec3(0.035, 0.032, 0.028) * u_envLight * u_nightFactor;
+		// Phase 16: boosted floor slightly 0.035 → 0.045.
+		vec3 ambient = vec3(0.045, 0.042, 0.038) * u_envLight * u_nightFactor;
 		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
