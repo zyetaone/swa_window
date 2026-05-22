@@ -265,6 +265,11 @@ export class CesiumManager {
 		this.roadLayer = new RoadLayer(C, v);
 		this.roadLayer.mount();
 
+		// Phase 16: call tick once immediately to synchronize state (night,
+		// camera, imagery) BEFORE the first render frame, avoiding the
+		// "flash of day" on boot at night.
+		this.tick();
+
 		// Set Cesium clock to model time on first frame so sun position is
 		// right from the start (otherwise we render with wall-clock UTC
 		// briefly until the next timeOfDay change).
@@ -462,7 +467,9 @@ export class CesiumManager {
 				// light spots survive the mask stage to be amplified by shader.
 				this.viirsLayer.brightness = 3.5 * this.model.config.world.viirsBrightness;
 				this.viirsLayer.contrast = 1.4;
-				this.viirsLayer.colorToAlphaThreshold = 0.08;
+				// Phase 16: extremely sensitive threshold (0.02) to ensure
+				// grayscale city lights are not accidentally cut out.
+				this.viirsLayer.colorToAlphaThreshold = 0.02;
 			}
 		} catch (e) {
 			console.warn('[CesiumManager] VIIRS layer failed:', e);
