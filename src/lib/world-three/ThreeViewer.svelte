@@ -93,7 +93,7 @@
 			bind:ref={camera}
 			makeDefault
 			position={sky.cameraPosition}
-			fov={45}
+			fov={model.config.camera.parallax.fovDeg}
 			near={100}
 			far={1e9}
 		/>
