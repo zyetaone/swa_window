@@ -66,6 +66,16 @@
 >
 	{#snippet viewer()}
 		<ThreeViewer bind:debugState />
+		<!-- Wing silhouette — same CSS shape as production Pane.svelte,
+		     overlaid on the Three.js canvas. Bank-angle-rolled + vertically
+		     bobbed by the motion engine so it reads as "you're inside a
+		     plane". Toggleable via config.shell.showWing. -->
+		{#if model.config.shell.showWing}
+			<div
+				class="wing-silhouette"
+				style:transform={`translateY(${(model.motion.motionOffsetY * 0.45 + model.motion.engineVibeY * 0.6).toFixed(2)}px) rotate(${(-2 + model.motion.bankAngle * 0.55).toFixed(2)}deg)`}
+			></div>
+		{/if}
 	{/snippet}
 
 	{#snippet diag()}
@@ -101,4 +111,26 @@
 <style>
 	/* All .playground / drawer / chip-row / fieldset / .diag / .city-btn styles
 	   now live in LabShell (single source of truth for both lean labs). */
+
+	/* Wing silhouette — exact shape copied from src/lib/shell/Pane.svelte
+	   so the lab matches what the production Cesium route shows. Scoped to
+	   this route's viewer snippet. transform-origin matches Pane so the
+	   bank-angle rotation pivots around the wing's outer tip, not centre. */
+	.wing-silhouette {
+		position: absolute;
+		bottom: -5%;
+		left: -15%;
+		width: 75%;
+		height: 35%;
+		pointer-events: none;
+		transform-origin: 80% 100%;
+		z-index: 7;
+		background: linear-gradient(
+			25deg,
+			rgba(20, 20, 25, 0.7) 0%,
+			rgba(30, 30, 35, 0.5) 20%,
+			rgba(40, 40, 50, 0.25) 40%,
+			transparent 60%
+		);
+	}
 </style>
