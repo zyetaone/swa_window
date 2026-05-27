@@ -31,9 +31,21 @@
 
 	const ctx = useThrelte();
 
-	useTask(() => {
+	// Throttle HUD writes — debug telemetry doesn't need 60 Hz. At ~10 Hz
+	// the panel still reads "live" to a human eye while skipping ~50
+	// reactive $bindable writes per second (each of which would notify the
+	// parent route's <aside> snippet — 4-5 DOM text updates).
+	const HUD_PERIOD_S = 0.1;
+	const scratch = new Vector2();
+	let accum = 0;
+
+	useTask((delta) => {
+		accum += delta;
+		if (accum < HUD_PERIOD_S) return;
+		accum = 0;
+
 		const cam = ctx.camera.current;
-		const sz = ctx.renderer.getSize(new Vector2());
+		const sz = ctx.renderer.getSize(scratch);
 		// Walk top-level children of the scene to confirm what's mounted.
 		const children: string[] = [];
 		for (const c of ctx.scene.children as Object3D[]) {

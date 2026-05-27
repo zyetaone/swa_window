@@ -29,6 +29,11 @@
 	geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
 	let opacity = $derived(nightFactor);
+
+	// Release the BufferGeometry's GPU buffers when this component
+	// unmounts. Without this, each /playground/three revisit leaks one
+	// position buffer (~24 KB) plus its WebGL handle.
+	$effect(() => () => geometry.dispose());
 </script>
 
 <T.Points {geometry}>

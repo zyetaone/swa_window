@@ -43,7 +43,12 @@
 
 	const sky = new SkyState(model);
 
-	let camera: PerspectiveCamera | undefined = $state();
+	// $state.raw — Three.js objects (PerspectiveCamera) should never be
+	// deep-proxied. We only care that the binding triggers our $effect
+	// once when the camera mounts; the camera's own internal state
+	// (position/quaternion/matrix) is mutated by code below and must stay
+	// referentially identical for Three.js's own bookkeeping.
+	let camera: PerspectiveCamera | undefined = $state.raw();
 	$effect(() => {
 		if (!camera) return;
 		const [x, y, z] = sky.cameraPosition;

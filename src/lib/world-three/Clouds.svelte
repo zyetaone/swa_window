@@ -35,7 +35,15 @@
 		{ altM: CLOUD_DECK_M + 8000,  scale: 0.7, opacityMul: 0.35, drift: -0.030, offsetU: 0.42 },
 	];
 
-	let meshes: (Mesh | undefined)[] = $state([undefined, undefined, undefined]);
+	// $state.raw — bind:ref writes need to land, but we don't want
+	// Three.js Mesh internals wrapped in a Proxy. The drift loop reads
+	// each slot every frame via useTask without needing reactivity.
+	let meshes: (Mesh | undefined)[] = $state.raw([undefined, undefined, undefined]);
+
+	// Track cloned textures so we can dispose them when the component
+	// unmounts (each clone allocates its own GPU upload). Without this,
+	// each route revisit leaks three GPU textures.
+	const clonedTextures: Texture[] = [];
 
 	/** Clone a Texture so its UV transform can be set independently. */
 	function cloneWithTransform(src: Texture, scale: number, offsetU: number): Texture {
@@ -43,6 +51,7 @@
 		t.repeat.set(scale, scale);
 		t.offset.set(offsetU, 0);
 		t.needsUpdate = true;
+		clonedTextures.push(t);
 		return t;
 	}
 
@@ -51,6 +60,11 @@
 			const m = meshes[i];
 			if (m) m.rotation.y += delta * LAYERS[i].drift;
 		}
+	});
+
+	$effect(() => () => {
+		for (const t of clonedTextures) t.dispose();
+		clonedTextures.length = 0;
 	});
 </script>
 

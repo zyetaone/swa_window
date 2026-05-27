@@ -45,18 +45,44 @@
 		features: BuildingFeature[];
 	}
 
-	let geometry: BufferGeometry | null = $state(null);
-	let anchorMatrix: Matrix4 | null = $state(null);
+	// $state.raw — Three.js BufferGeometry / Matrix4 should never be
+	// deep-proxied. We only care that reassignment notifies the template
+	// (to mount/unmount the <T.Mesh>); their internals aren't reactive.
+	let geometry: BufferGeometry | null = $state.raw(null);
+	let anchorMatrix: Matrix4 | null = $state.raw(null);
 	// Non-reactive ref so disposal in $effect doesn't register a read
 	// dependency on `geometry` and re-trigger the effect on subsequent
 	// writes (which would cause an infinite fetch loop).
 	let pendingDispose: BufferGeometry | null = null;
+	// Group ref for reactive matrix updates — replaces `oncreate` so the
+	// transform refreshes when `anchorMatrix` changes (location switch).
+	let group: ThreeGroup | undefined = $state.raw();
 
 	const material = new MeshStandardMaterial({
 		color: new Color(0xb8b8c0),
 		emissive: new Color(0x1a1a22),
 		roughness: 0.78,
 		metalness: 0.18,
+	});
+
+	// Dispose the long-lived material + any in-flight geometry when the
+	// component unmounts. Geometry disposal on `location` switches is
+	// already handled by `pendingDispose` inside the fetch effect.
+	$effect(() => () => {
+		material.dispose();
+		pendingDispose?.dispose();
+		pendingDispose = null;
+	});
+
+	// Apply the anchor matrix reactively. Previously this lived in a
+	// `oncreate` hook which only ran once at mount — meaning a later
+	// location change (Hyderabad → Tokyo) would compute a new matrix but
+	// the Group would still be transformed for Hyderabad. Now the effect
+	// re-runs whenever `group` or `anchorMatrix` changes.
+	$effect(() => {
+		if (!group || !anchorMatrix) return;
+		group.matrixAutoUpdate = false;
+		group.matrix.copy(anchorMatrix);
 	});
 
 	$effect(() => {
@@ -154,12 +180,7 @@
 </script>
 
 {#if geometry && anchorMatrix}
-	<T.Group
-		oncreate={(g: ThreeGroup) => {
-			g.matrixAutoUpdate = false;
-			g.matrix.copy(anchorMatrix!);
-		}}
-	>
+	<T.Group bind:ref={group}>
 		<T.Mesh {geometry} {material} />
 	</T.Group>
 {/if}

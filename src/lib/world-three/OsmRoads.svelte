@@ -52,13 +52,32 @@
 	};
 	const DEFAULT_COLOUR: [number, number, number] = [0.48, 0.45, 0.40];
 
-	let geometry: BufferGeometry | null = $state(null);
-	let anchorMatrix: Matrix4 | null = $state(null);
+	// $state.raw — Three.js objects don't need Proxy wrapping. Only the
+	// reassignment-triggered template re-mount matters here.
+	let geometry: BufferGeometry | null = $state.raw(null);
+	let anchorMatrix: Matrix4 | null = $state.raw(null);
 	let pendingDispose: BufferGeometry | null = null;
+	let group: ThreeGroup | undefined = $state.raw();
 
 	const material = new LineBasicMaterial({
 		vertexColors: true,
 		linewidth: 1, // WebGL ignores >1 but spec-required
+	});
+
+	// Release material + in-flight geometry on unmount.
+	$effect(() => () => {
+		material.dispose();
+		pendingDispose?.dispose();
+		pendingDispose = null;
+	});
+
+	// Re-apply the anchor matrix whenever it changes (location switch) —
+	// `oncreate` would only fire once at mount, leaving stale transforms
+	// when the user switches cities.
+	$effect(() => {
+		if (!group || !anchorMatrix) return;
+		group.matrixAutoUpdate = false;
+		group.matrix.copy(anchorMatrix);
 	});
 
 	$effect(() => {
@@ -159,12 +178,7 @@
 </script>
 
 {#if geometry && anchorMatrix}
-	<T.Group
-		oncreate={(g: ThreeGroup) => {
-			g.matrixAutoUpdate = false;
-			g.matrix.copy(anchorMatrix!);
-		}}
-	>
+	<T.Group bind:ref={group}>
 		<T.LineSegments {geometry} {material} />
 	</T.Group>
 {/if}
