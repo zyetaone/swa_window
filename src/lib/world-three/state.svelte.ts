@@ -172,7 +172,11 @@ export class SkyState {
 		const nz = ux * 0 - uy * ex;
 
 		// Heading: 0 north, +90 east. Pitch below horizon: camPitch-90.
-		const h = (f.camHeading * Math.PI) / 180;
+		// Pass through `effectiveHeading` so 3-Pi panorama parallax offsets
+		// (camera.parallax.headingOffsetDeg) apply — left/center/right Pis
+		// in a panorama install yaw apart and tile into one continuous view.
+		const effectiveHeading = this.model.config.camera.effectiveHeading(f.camHeading);
+		const h = (effectiveHeading * Math.PI) / 180;
 		const p = ((f.camPitch - 90) * Math.PI) / 180;
 		const ch = Math.cos(h), sh = Math.sin(h);
 		const cp = Math.cos(p), sp = Math.sin(p);

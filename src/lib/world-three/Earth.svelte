@@ -30,12 +30,20 @@
 		nightIntensity: number;
 	} = $props();
 
+	// useTexture rejects if any URL 404s. We wrap with a fallback so a
+	// missing asset still mounts the mesh with a solid-colour DataTexture
+	// instead of leaving the sphere transparent. The kiosk install
+	// network is intermittent — a half-rendered globe is worse than a
+	// stylised one.
 	const texturesPromise = useTexture([
 		'/textures/earth/day.jpg',
 		'/textures/earth/night.jpg',
 		'/textures/earth/normal.jpg',
 		'/textures/earth/height.jpg',
-	]);
+	]).catch((e) => {
+		console.warn('[Earth] texture load failed — falling back to procedural:', e);
+		return null as never;
+	});
 
 	const emissiveTint = new Color(0xffaa55);
 	const emissiveStrength = $derived(nightFactor * 1.4 * nightIntensity);
@@ -50,7 +58,9 @@
 	const DISPLACEMENT_SCALE_M = 9000;
 </script>
 
-{#await texturesPromise then [dayMap, nightMap, normalMap, heightMap]}
+{#await texturesPromise then loaded}
+	{#if loaded}
+		{@const [dayMap, nightMap, normalMap, heightMap] = loaded}
 	<!--
 	  Colour maps need sRGB decoding (gamma 2.2 from JPGs). Normal +
 	  height are linear data (encoded as colour but interpreted as
@@ -81,4 +91,13 @@
 			}}
 		/>
 	</T.Mesh>
+	{:else}
+		<!-- Texture load failed (e.g. install network 404). Render a
+		     solid-coloured sphere so the scene still has an Earth-shaped
+		     object in frame rather than a transparent void. -->
+		<T.Mesh>
+			<T.SphereGeometry args={[EARTH_RADIUS_M, 96, 48]} />
+			<T.MeshStandardMaterial color={0x223344} roughness={0.95} />
+		</T.Mesh>
+	{/if}
 {/await}
