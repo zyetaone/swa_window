@@ -61,6 +61,13 @@
 		camera.position.set(x, y, z);
 		camera.lookAt(tx, ty, tz);
 		camera.updateMatrixWorld();
+
+		// React to runtime changes in parallax.fovDeg (important for
+		// testing different 3-Pi configurations without reload).
+		if (camera.fov !== model.config.camera.parallax.fovDeg) {
+			camera.fov = model.config.camera.parallax.fovDeg;
+			camera.updateProjectionMatrix();
+		}
 	});
 
 	// Initialise debugState struct so DebugHud can write into it.
@@ -98,17 +105,22 @@
 			far={1e9}
 		/>
 
-		<!-- Ambient bumped to 0.6 — even when the directional sun is on the
-		     opposite hemisphere, the camera-side earth surface keeps a
-		     baseline brightness so the user always sees the planet. -->
-		<T.AmbientLight intensity={0.6} />
+		<!--
+		  Lighting ratio 0.25 ambient : 2.8 directional gives relief
+		  shading enough contrast to actually read terrain via the normal
+		  map. Earlier 0.6 ambient was too generous — it kept the planet
+		  baseline-bright but washed out mountain shadows entirely so
+		  "the terrains don't show" was the user-visible symptom. The
+		  0.25 floor still lifts the night-side enough to read.
+		-->
+		<T.AmbientLight intensity={0.25} />
 		<T.DirectionalLight
 			position={[
 				sky.sunDirection[0] * SUN_DISTANCE_M,
 				sky.sunDirection[1] * SUN_DISTANCE_M,
 				sky.sunDirection[2] * SUN_DISTANCE_M,
 			]}
-			intensity={2.0}
+			intensity={2.8}
 		/>
 
 		<Stars nightFactor={model.nightFactor} />

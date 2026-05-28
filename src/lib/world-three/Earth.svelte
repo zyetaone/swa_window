@@ -51,10 +51,15 @@
 	// normalScale tuned for cruise altitude — too low = no relief, too
 	// high = exaggerated alien-looking shading at oblique sun angles.
 	// Threlte accepts [x, y] tuple; T proxies it to a Three Vector2.
-	const NORMAL_SCALE: [number, number] = [0.85, 0.85];
+	// Bumped 0.85 → 1.8 (2026-05-28) — at the ambient/directional ratio
+	// the lab uses, sub-1.0 normalScale produced near-invisible relief
+	// even where the heightmap encodes ranges. 1.8 is the upper limit
+	// before the shading reads as alien on oblique sun angles.
+	const NORMAL_SCALE: [number, number] = [1.8, 1.8];
 
-	// Real elevation range on Earth (Everest ≈ 8.85 km). Slight overshoot
-	// to 9 000 m so the bumpmap's brightest pixels read as sharp ridges.
+	// Real elevation range on Earth (Everest ≈ 8.85 km). 9 000 m so the
+	// bumpmap's brightest pixels read as sharp ridges at cruise altitude
+	// without exceeding the cam-above-peak budget (35 kft cruise = 10.7 km).
 	const DISPLACEMENT_SCALE_M = 9000;
 </script>
 

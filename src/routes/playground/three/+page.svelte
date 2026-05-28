@@ -27,11 +27,20 @@
 	// Sync the flight engine to the show's opening location. createAeroWindow
 	// writes model.location='hyderabad' directly (no side-effect by design),
 	// but FlightSimEngine's lat/lon stay at their field-initialised default
-	// (Dubai). Without this line the camera would sit over Dubai while the
-	// OsmBuildings render at Hyderabad — 1500 km apart. Calling setLocation
-	// snaps flight.lat/lon (and the smoothed cam* values via #tickSmoothing)
-	// to the actual show city.
+	// (Dubai). Calling setLocation writes flight.lat/lon.
 	model.setLocation(model.location);
+
+	// CRITICAL — also snap the SMOOTHED camera coordinates. setLocation only
+	// writes the LOGICAL position; the smoothed camLat/camLon/camAlt that
+	// SkyState reads stay at Dubai defaults until the first model.tick() flips
+	// the #camInitialized flag. But our camera $effect in ThreeViewer runs at
+	// mount, BEFORE tick #1 fires — leaving the PerspectiveCamera positioned
+	// 3,000 km west of where Earth + OsmBuildings render. Blank-screen bug.
+	model.flight.camLat = model.flight.lat;
+	model.flight.camLon = model.flight.lon;
+	model.flight.camAlt = model.flight.altitude;
+	model.flight.camHeading = model.flight.heading;
+	model.flight.camPitch = model.flight.pitch;
 
 	let cityMode = $state(false);
 	let debugState = $state({

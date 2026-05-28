@@ -38,7 +38,7 @@
 
 <T.Points {geometry}>
 	<T.PointsMaterial
-		size={0.18}
+		size={2}
 		color={0xffffff}
 		transparent
 		{opacity}
