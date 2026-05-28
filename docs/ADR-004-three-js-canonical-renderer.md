@@ -248,3 +248,10 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - Usability: Added live 3-Pi Role simulator (left/center/right/solo) in extraControls that directly mutates `camera.parallax` — excellent for testing the CameraMirror inheritance.
 - Deletion surface decision: The D files (old pure-Three Earth/Sky/Stars/ThreeViewer/OsmBuildings/DebugHud) are the historical pure-Three exploration. **Decision: Leave uncommitted for now** (reversible, keeps history). The hybrid is the active surface. Will revisit in a dedicated cleanup pass or archive branch.
 - All changes kept small/deletable. Three additional focused commits planned for the live artistic surface.
+
+**Further session progress ("All!")**:
+- OsmRoads now receives ambient tint/intensity from the overlay for sky-mood harmony (consistent with Clouds).
+- 3-Pi simulator improved with live values display + reset button.
+- Remaining high-value surface modules (CameraMirror, OsmBuildingEdges, enu, texture-util) captured in prior surgical commit.
+- Observation: OsmRoads and OsmBuildingEdges have near-identical structure (intentional for now; extraction would be a future deletable refactor if volume grows).
+- Next natural ADR items: Production HUD overlay integration into the hybrid, or lightweight Pi 5 perf notes.
