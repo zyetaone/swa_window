@@ -14,7 +14,7 @@
 	import { T } from '@threlte/core';
 	import { AdditiveBlending, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection, sunVisibility, skyMood, SKY_PALETTE } from './sky';
+	import { computeSunDirection, airMassFactor, sunVisibility, skyMood, SKY_PALETTE } from './sky';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
@@ -36,15 +36,10 @@
 		return new Color(rgb[0], rgb[1], rgb[2]);
 	});
 
-	// Air mass for realistic horizon bloom — the big soft veil should feel
-	// dramatically stronger when the sun is low (thicker atmosphere path).
-	// Mirrors the SunGlow / LensFlare treatment so all three sun-anchored
-	// artistic layers participate in the same 3D lighting environment.
-	const airMassFactor = $derived.by(() => {
-		const d = computeSunDirection(model.flight.camLon, model.timeOfDay);
-		const elev = Math.max(-0.12, Math.min(1, d[1]));
-		return 1.0 / Math.max(0.12, elev + 0.12);
-	});
+	// Uses the shared airMassFactor from sky.ts for consistency across
+	// all artistic sky layers. The big soft veil now feels dramatically
+	// stronger near the horizon (thicker atmosphere path).
+
 
 	// Strongest at dawn/dusk (×0.32) and now boosted by air mass near the
 	// horizon. Residual daytime (0.10), faint at night (0.03). The airMass
@@ -56,7 +51,8 @@
 		if (phase === 'night') return 0.03;
 		const base = sunVisibility(model.timeOfDay) * 0.32;
 		// Strong horizon emphasis (up to ~2.5× at true horizon).
-		return base * (1 + Math.min(1.6, (airMassFactor - 1) * 0.35));
+		const am = airMassFactor(model.flight.camLon, model.timeOfDay);
+		return base * (1 + Math.min(1.6, (am - 1) * 0.35));
 	});
 
 	const veilTexture = makeRadialTexture([

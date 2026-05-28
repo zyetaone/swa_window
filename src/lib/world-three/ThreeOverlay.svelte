@@ -29,24 +29,25 @@
 	import NightStars from './NightStars.svelte';
 	import Moon from './Moon.svelte';
 	import OsmBuildingEdges from './OsmBuildingEdges.svelte';
-	import { skyMood, SKY_PALETTE, computeSunDirection } from './sky';
+	import OsmRoads from './OsmRoads.svelte';
+	import { computeSunDirection, environmentAmbient } from './sky';
 
 	const model = useAeroWindow();
 
 	// $state.raw — Three.js camera mutated each frame, must not be proxied.
 	let camera: PerspectiveCamera | undefined = $state.raw();
 
-	// Ambient tint pulled from the shared sky palette so all Three-side
-	// env layers (SunGlow / Moon / Veil / Clouds via ambient prop) ramp
-	// against the same time-of-day phases. Edits to dawn/dusk windows
-	// land in one place: world-three/sky.ts.
-	const ambientTint = $derived.by(() => {
-		const rgb = SKY_PALETTE.ambient[skyMood(model.timeOfDay).phase];
-		return new Color(rgb[0], rgb[1], rgb[2]);
-	});
-
-	// Ambient intensity drops at night so clouds dim naturally.
-	const ambientIntensity = $derived(0.45 + (1 - model.nightFactor) * 0.45);
+	// Smarter environment ambient that respects air mass + nightFactor
+	// while still keeping the artistic dawn/dusk mood windows.
+	// This makes the base Three environment feel more consistent with
+	// the upgraded artistic sky layers (Veil, SunGlow, etc.).
+	const env = $derived(environmentAmbient(
+		model.flight.camLon,
+		model.timeOfDay,
+		model.nightFactor
+	));
+	const ambientTint = $derived(new Color(env.color[0], env.color[1], env.color[2]));
+	const ambientIntensity = $derived(env.intensity);
 </script>
 
 <div class="three-overlay" aria-hidden="true">
@@ -89,6 +90,7 @@
 		<Moon />
 		<LensFlare />
 		<NightStars />
+		<OsmRoads location={model.location} />
 		<OsmBuildingEdges location={model.location} />
 		<Clouds
 			density={model.effectiveCloudDensity}

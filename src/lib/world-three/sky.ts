@@ -45,6 +45,46 @@ export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
 }
 
 /**
+ * Returns a more physically grounded ambient tint + intensity for the
+ * Three-side environment (the base AmbientLight in the hybrid overlay).
+ *
+ * It keeps the artistic phase-based mood windows (dawn/dusk hero moments)
+ * from the palette, but modulates them with air mass (stronger scatter
+ * near horizon) and nightFactor. This makes the overall "environment"
+ * feel more consistent with the upgraded individual sky layers.
+ */
+export function environmentAmbient(
+	camLonDeg: number,
+	timeOfDay: number,
+	nightFactor: number
+): { color: Vec3; intensity: number } {
+	const phase = skyMood(timeOfDay).phase;
+	const base = SKY_PALETTE.ambient[phase];
+
+	const am = airMassFactor(camLonDeg, timeOfDay);
+	// Horizon boost for the base environment (stronger at low sun)
+	const horizonBoost = 1 + Math.min(0.8, (am - 1) * 0.25);
+
+	// NightFactor already dims things, but we can give a little extra
+	// cool shift near the horizon at night for depth.
+	const nf = nightFactor;
+	const coolShift = nf * 0.15;
+
+	const r = Math.max(0, base[0] * horizonBoost);
+	const g = Math.max(0, base[1] * horizonBoost * (1 - coolShift * 0.6));
+	const b = Math.max(0, base[2] * horizonBoost * (1 - coolShift * 0.4) + coolShift * 0.1);
+
+	// Night floor dropped from 0.45 → 0.12: prior floor made nighttime
+	// clouds + ground glow too bright. Day peak now 0.90 (was 0.90).
+	const intensity = 0.12 + (1 - nf) * 0.78;
+
+	return {
+		color: [r, g, b],
+		intensity,
+	};
+}
+
+/**
  * Visibility curve for sun-anchored env layers (SunGlow, LensFlare,
  * AtmosphericVeil): peaks during the dawn/dusk windows, residual midday
  * lift, zero at deep night. Sine interpolation gives smooth ramps.
