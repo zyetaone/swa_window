@@ -99,6 +99,39 @@
 				/>
 			</label>
 		</fieldset>
+
+		<fieldset>
+			<legend>3-Pi Role (simulator)</legend>
+			<select
+				value={model.config.camera.parallax.role}
+				onchange={(e) => {
+					const role = (e.currentTarget as HTMLSelectElement).value as any;
+					model.config.camera.parallax.role = role;
+					// Sensible demo values for the hybrid lab
+					if (role === 'left') {
+						model.config.camera.parallax.headingOffsetDeg = -18;
+						model.config.camera.parallax.fovDeg = 42;
+					} else if (role === 'right') {
+						model.config.camera.parallax.headingOffsetDeg = 18;
+						model.config.camera.parallax.fovDeg = 42;
+					} else if (role === 'center') {
+						model.config.camera.parallax.headingOffsetDeg = 0;
+						model.config.camera.parallax.fovDeg = 45;
+					} else {
+						model.config.camera.parallax.headingOffsetDeg = 0;
+						model.config.camera.parallax.fovDeg = 45;
+					}
+				}}
+			>
+				<option value="solo">solo (0° offset)</option>
+				<option value="left">left (−18°)</option>
+				<option value="center">center (0°)</option>
+				<option value="right">right (+18°)</option>
+			</select>
+			<div style="font-size:10px;opacity:0.6;margin-top:2px;">
+				Directly mutates camera.parallax (tests inheritance via CameraMirror)
+			</div>
+		</fieldset>
 	{/snippet}
 </LabShell>
 

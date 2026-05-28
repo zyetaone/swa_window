@@ -34,6 +34,17 @@ export function computeSunDirection(camLonDeg: number, timeOfDay: number): Vec3 
 }
 
 /**
+ * Simple air-mass approximation for low-sun atmospheric effects.
+ * Used by multiple artistic layers for realistic horizon bloom / dimming.
+ * Tightened epsilon gives stronger response near the horizon.
+ */
+export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
+	const d = computeSunDirection(camLonDeg, timeOfDay);
+	const elev = Math.max(-0.12, Math.min(1, d[1]));
+	return 1.0 / Math.max(0.12, elev + 0.12);
+}
+
+/**
  * Visibility curve for sun-anchored env layers (SunGlow, LensFlare,
  * AtmosphericVeil): peaks during the dawn/dusk windows, residual midday
  * lift, zero at deep night. Sine interpolation gives smooth ramps.

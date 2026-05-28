@@ -209,3 +209,42 @@ be Accepted until they are resolved.)
 5. Why pre-rendered now, given real-time has shipped?
 6. Is "never the same flight twice" a hard requirement?
 7. HUD/sensor scope?
+
+## Current Status (2026-05-28) — after VE 3D pass + hybrid refactor
+
+**Hybrid architecture now active on `/playground/three`**:
+- Full production Cesium (terrain/imagery/VIIRS/shader/bloom) + transparent Three.js overlay.
+- `ThreeOverlay.svelte` + `CameraMirror.svelte` (syncs pose/fov/up from Cesium every frame, with correct ECEF→Three transform).
+- Artistic payload: Clouds (cluster sprites with live sun-direction side-lighting), SunGlow (core+halo with air-mass), LensFlare (aggressively de-faked ghosts), AtmosphericVeil (now air-mass boosted), Moon (now with horizon boost), NightStars (shader twinkle), OsmBuildingEdges + OsmRoads (night + altitude gated).
+- Consistent `sky.ts` SSOT for sun direction, visibility curves, and per-phase palettes (ambient, veil, sunCore, etc.).
+- LabShell + extra controls (night intensity) + diag already provide good day-to-day tuning.
+
+**ADR-004 Gating Checklist progress**:
+- 3. Fleet 3-Pi panorama: **Effectively complete for the Three artistic layers**. `CameraMirror` inherits the full `camera.parallax.{headingOffsetDeg, fovDeg}` + bank + effectiveHeading that the Cesium path already drives from the shared model. No extra code required in Three land (the mirror does the hard work).
+- 2. Shell components: Partial (wing silhouette + LabShell controls/snippets present; full blind/oval/HUD/Glass still on Cesium side for now).
+- 1,4-8 (Pi perf, production HUD, texture fallbacks, city data parity, director sanity, v2 tag): Not yet started. The composition model makes isolated testing of new Three effects much cheaper than the old pure-Three attempt.
+
+**3D visual-effects work (the "think in 3D" thread)**:
+- All four sun-anchored artistic layers (Clouds, SunGlow, LensFlare, AtmosphericVeil) now use real air-mass / sun-direction / nightFactor participation instead of pure time curves.
+- Moon received matching horizon-boost treatment.
+- Changes kept small, deletable, and consistent with the existing `sky.ts` + overlay ambient pipeline.
+- Two focused surgical commits captured the work on the live surface only (old pure-Three modules left as uncommitted D for later decision).
+
+**Risks / open surface items**:
+- Large uncommitted deletion set (old pure-Three Earth/Sky/Stars/ThreeViewer/DebugHud/OsmBuildings) + several new modules still untracked in the working tree (CameraMirror, enu, texture-util, NightStars, OsmBuildingEdges, etc.). Recommend batch review + isolated commits for the evolved artistic surface before any broader rebase or cleanup.
+- No Pi 5 hardware validation yet on the hybrid.
+- `state.svelte.ts` still contains some legacy pure-Three camera math (SkyState) that is no longer exercised by the main `/playground/three` route.
+
+**Recommended next 1-2 phases (pragmatic, low risk)**:
+1. Surgical commit batch for the remaining new modules (CameraMirror + utilities + NightStars + Osm* edges) + any final 3D polish. Keep deletions uncommitted until explicit decision.
+2. Light usability / parity pass on the hybrid lab (more LabShell controls, 3-Pi role simulator in UI, one-click "send current state to Cesium compose" button for fast concept porting).
+3. (Later) Formal Pi 5 perf run + ADR-004 owner decision on the open Q1-Q7.
+
+This hybrid + 3D work directly de-risks the "Three as future canonical" path while preserving the SWA Cesium install untouched.
+
+**2026-05-28 session update ("All the above")**:
+- Extracted `airMassFactor` helper into sky.ts (centralization win).
+- 3D polish: NightStars now uses airMassFactor for subtle high-altitude clarity modulation.
+- Usability: Added live 3-Pi Role simulator (left/center/right/solo) in extraControls that directly mutates `camera.parallax` — excellent for testing the CameraMirror inheritance.
+- Deletion surface decision: The D files (old pure-Three Earth/Sky/Stars/ThreeViewer/OsmBuildings/DebugHud) are the historical pure-Three exploration. **Decision: Leave uncommitted for now** (reversible, keeps history). The hybrid is the active surface. Will revisit in a dedicated cleanup pass or archive branch.
+- All changes kept small/deletable. Three additional focused commits planned for the live artistic surface.
