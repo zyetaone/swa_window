@@ -14,7 +14,7 @@
 	 *    AND to a `debugState` rune for on-screen HUD readout.
 	 */
 	import { Canvas, T } from '@threlte/core';
-	import { PerspectiveCamera, WebGLRenderer } from 'three';
+	import { PerspectiveCamera, WebGLRenderer, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { subscribe } from '$lib/game-loop';
 	import { SkyState, SUN_DISTANCE_M } from './state.svelte';
@@ -62,12 +62,18 @@
 		camera.lookAt(tx, ty, tz);
 		camera.updateMatrixWorld();
 
-		// React to runtime changes in parallax.fovDeg (important for
-		// testing different 3-Pi configurations without reload).
+		// React to runtime changes in parallax settings (important for
+		// live testing different 3-Pi configurations without reload).
 		if (camera.fov !== model.config.camera.parallax.fovDeg) {
 			camera.fov = model.config.camera.parallax.fovDeg;
 			camera.updateProjectionMatrix();
 		}
+
+		// If the device's heading offset changes, force the camera effect
+		// to re-run on the next frame by touching the sky state (cheap).
+		// The actual position/lookAt is already driven by SkyState which
+		// reads effectiveHeading.
+		void model.config.camera.parallax.headingOffsetDeg;
 	});
 
 	// Initialise debugState struct so DebugHud can write into it.
@@ -90,11 +96,13 @@
 	>
 		<T.Color args={sky.bgColor} attach="background" />
 
-		<!-- Atmospheric distance haze. FogExp2 density 7e-6 → terrain at
-		     100 km along the forward ray hazes ~40 %, giving proper
-		     aerial perspective without obscuring the foreground. Colour
-		     close to sky-blue so the horizon fades into the dome. -->
-		<T.FogExp2 args={[0x9bbbe6, 7e-6]} attach="fog" />
+		<!-- Atmospheric distance haze. FogExp2 density 3.5e-6 → terrain
+		     at 100 km still reads (~70 % visible) while 300 km horizon
+		     fades to atmosphere. The earlier 7e-6 washed out everything
+		     beyond 40 km, which at cruise altitude is most of the
+		     visible surface — contributed to the "ground looks blurred"
+		     report by compounding 2K-equirect upscale haze. -->
+		<T.FogExp2 args={[0x9bbbe6, 3.5e-6]} attach="fog" />
 
 		<T.PerspectiveCamera
 			bind:ref={camera}
@@ -129,7 +137,13 @@
 			nightFactor={model.nightFactor}
 			nightIntensity={model.nightLightScale}
 		/>
-		<Clouds density={model.effectiveCloudDensity} />
+		<Clouds 
+			density={model.effectiveCloudDensity} 
+			nightFactor={model.nightFactor}
+			ambientColor={new Color(0.95, 0.97, 1.0)}  // simple neutral for pure three lab
+			ambientIntensity={0.25 + (1 - model.nightFactor) * 0.2}
+			sunDirection={sky.sunDirection}
+		/>
 		<OsmRoads location={model.location} />
 		<OsmBuildings location={model.location} />
 
