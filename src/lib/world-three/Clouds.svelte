@@ -21,7 +21,6 @@
 	import { T, useTask } from '@threlte/core';
 	import { useTexture } from '@threlte/extras';
 	import {
-		Vector3,
 		Matrix4,
 		Group,
 		Sprite,
@@ -31,7 +30,8 @@
 		type Group as ThreeGroup,
 	} from 'three';
 	import { LOCATION_MAP } from '$content/locations';
-	import { CLOUD_DECK_M, geoToCartesian } from './state.svelte';
+	import { CLOUD_DECK_M } from './state.svelte';
+	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	let {
@@ -172,17 +172,12 @@
 		}
 	}
 
-	// Anchor matrix — re-derived when location changes.
+	// Anchor matrix — re-derived when location changes. Same ENU basis as
+	// OsmBuildingEdges and OsmBuildings (deleted) used; helper lives in enu.ts.
 	$effect(() => {
 		const loc = LOCATION_MAP.get(location);
 		if (!loc) { anchorMatrix = null; return; }
-		const [x, y, z] = geoToCartesian(loc.lat, loc.lon, CLOUD_DECK_M);
-		const up    = new Vector3(x, y, z).normalize();
-		const east  = new Vector3().crossVectors(new Vector3(0, 1, 0), up).normalize();
-		const north = new Vector3().crossVectors(up, east).normalize();
-		const matrix = new Matrix4().makeBasis(east, up, north.clone().negate());
-		matrix.setPosition(x, y, z);
-		anchorMatrix = matrix;
+		anchorMatrix = enuAnchorMatrix(loc.lat, loc.lon, CLOUD_DECK_M);
 	});
 
 	// Apply anchor matrix reactively (matrixAutoUpdate off — drift on the

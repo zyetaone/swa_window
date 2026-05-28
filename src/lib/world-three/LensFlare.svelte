@@ -16,16 +16,11 @@
 	 */
 	import { useThrelte } from '@threlte/core';
 	import { onDestroy } from 'svelte';
-	import {
-		PointLight,
-		Color,
-		CanvasTexture,
-		SRGBColorSpace,
-		LinearFilter,
-	} from 'three';
+	import { PointLight, Color } from 'three';
 	import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection } from './state.svelte';
+	import { computeSunDirection } from './sky';
+	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
@@ -34,27 +29,12 @@
 	// exact same world point as the sun core/halo billboards.
 	const SUN_PLACEMENT_M = 6e7;
 
-	function makeGhostTexture(): CanvasTexture {
-		const size = 128;
-		const canvas = document.createElement('canvas');
-		canvas.width = canvas.height = size;
-		const ctx2d = canvas.getContext('2d')!;
-		const r = size / 2;
-		const grad = ctx2d.createRadialGradient(r, r, 0, r, r, r);
-		grad.addColorStop(0,    'rgba(255, 255, 255, 1.0)');
-		grad.addColorStop(0.3,  'rgba(255, 220, 160, 0.6)');
-		grad.addColorStop(0.7,  'rgba(255, 160, 80, 0.18)');
-		grad.addColorStop(1.0,  'rgba(0, 0, 0, 0)');
-		ctx2d.fillStyle = grad;
-		ctx2d.fillRect(0, 0, size, size);
-		const tex = new CanvasTexture(canvas);
-		tex.colorSpace = SRGBColorSpace;
-		tex.minFilter = LinearFilter;
-		tex.magFilter = LinearFilter;
-		return tex;
-	}
-
-	const ghost = makeGhostTexture();
+	const ghost = makeRadialTexture([
+		[0,   'rgba(255, 255, 255, 1.0)'],
+		[0.3, 'rgba(255, 220, 160, 0.6)'],
+		[0.7, 'rgba(255, 160, 80, 0.18)'],
+		[1.0, 'rgba(0, 0, 0, 0)'],
+	], 128);
 
 	// The light is a vessel for Lensflare — its actual lighting contribution
 	// is irrelevant (we set intensity=0). What matters is its world position,

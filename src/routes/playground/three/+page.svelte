@@ -1,54 +1,41 @@
 <script lang="ts">
 	/**
-	 * /playground/three — full Three.js + Threlte artistic lab.
+	 * /playground/three — CESIUM + THREE.JS COMPOSITION LAB.
 	 *
-	 * Counterpart to /playground (the Cesium scene lab). Same model context
-	 * (useAeroWindow) drives both — flight, time-of-day, weather, location,
-	 * autopilot all behave identically. The only thing that differs is the
-	 * RENDERER: this route mounts a stylized Three.js sphere via Threlte
-	 * instead of Cesium's photoreal globe.
+	 * After hitting the fundamental ceilings of pure-Three Earth rendering
+	 * at WGS84 cruise scale (2 K-equirect texture upscale, mesh-face vs.
+	 * heightmap-pixel size mismatch, bumpmap-not-DEM source data), this
+	 * route is now a COMPOSITION:
 	 *
-	 * Architectural intent: a sandbox for shader-driven composition that
-	 * Cesium's fixed pipeline can't accommodate. Volumetric clouds,
-	 * Bruneton scattering, custom blend modes — all queued for the days
-	 * ahead. Day-1 ships a stylized procedural earth + sun-driven
-	 * day/night + atmosphere rim, hooked into the existing model + drawer.
+	 *   Cesium       → terrain + imagery + VIIRS night lights + atmosphere
+	 *                  + the production color-grade shader + bloom.
+	 *                  Everything its tile-streaming pipeline already does.
+	 *   ThreeOverlay → transparent canvas above Cesium. Camera mirrored
+	 *                  from Cesium each frame. Hosts the cluster cloud
+	 *                  sprite system (the only Three.js-side asset that
+	 *                  proved genuinely valuable in this lab) + room for
+	 *                  future custom shader passes.
 	 *
-	 * Not a ship route — /playground/three is an art lab. If a technique
-	 * here proves out, port the CONCEPT to /lib/world/ (Cesium) for the
-	 * production install. Keeping both stacks clean is the explicit goal.
+	 * Same shell + same model context as /playground (the lean Cesium lab) —
+	 * the only difference is the added Three.js overlay. If a technique
+	 * here proves out (volumetric cloud variants, post-process passes,
+	 * Bruneton scattering), port the CONCEPT into the shared compose path.
 	 */
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
-	import ThreeViewer from '$lib/world-three/ThreeViewer.svelte';
+	import { subscribe } from '$lib/game-loop';
+	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
+	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
 
 	const model = createAeroWindow();
 
-	// Sync the flight engine to the show's opening location. createAeroWindow
-	// writes model.location='hyderabad' directly (no side-effect by design),
-	// but FlightSimEngine's lat/lon stay at their field-initialised default
-	// (Dubai). Calling setLocation writes flight.lat/lon.
+	// RAF tick — same pattern as /playground. Drives flight + motion + director.
+	$effect(() => subscribe((dt) => model.tick(dt)));
+
+	// Snap the flight engine to the show's opening location.
 	model.setLocation(model.location);
 
-	// CRITICAL — also snap the SMOOTHED camera coordinates. setLocation only
-	// writes the LOGICAL position; the smoothed camLat/camLon/camAlt that
-	// SkyState reads stay at Dubai defaults until the first model.tick() flips
-	// the #camInitialized flag. But our camera $effect in ThreeViewer runs at
-	// mount, BEFORE tick #1 fires — leaving the PerspectiveCamera positioned
-	// 3,000 km west of where Earth + OsmBuildings render. Blank-screen bug.
-	model.flight.camLat = model.flight.lat;
-	model.flight.camLon = model.flight.lon;
-	model.flight.camAlt = model.flight.altitude;
-	model.flight.camHeading = model.flight.heading;
-	model.flight.camPitch = model.flight.pitch;
-
 	let cityMode = $state(false);
-	let debugState = $state({
-		frame: 0, drawCalls: 0, triangles: 0, sceneChildren: 0,
-		cameraPos: [0, 0, 0] as [number, number, number],
-		cameraDist: 0,
-		rendererSize: [0, 0] as [number, number],
-	});
 
 	// City-mode lock — pins altitude at 500 ft and keeps the flight engine's
 	// altitude lerp suppressed by re-triggering the user-interaction override
@@ -74,11 +61,13 @@
 	onCityToggle={() => { cityMode = !cityMode; }}
 >
 	{#snippet viewer()}
-		<ThreeViewer bind:debugState />
+		<!-- Cesium owns the globe + atmosphere + post-process. -->
+		<CesiumViewer />
+		<!-- Three.js overlay above, camera-mirrored from Cesium. -->
+		<ThreeOverlay />
 		<!-- Wing silhouette — same CSS shape as production Pane.svelte,
-		     overlaid on the Three.js canvas. Bank-angle-rolled + vertically
-		     bobbed by the motion engine so it reads as "you're inside a
-		     plane". Toggleable via config.shell.showWing. -->
+		     overlaid on the viewer. Bank-angle-rolled + vertically bobbed
+		     by the motion engine so it reads as "you're inside a plane". -->
 		{#if model.config.shell.showWing}
 			<div
 				class="wing-silhouette"
@@ -88,15 +77,11 @@
 	{/snippet}
 
 	{#snippet diag()}
-		<!-- Diagnostic HUD — visible at all times so even if the 3D scene
-		     fails to render, the user can confirm the scaffolding is alive. -->
 		<aside class="diag">
-			<div><b>Three.js Lab</b></div>
-			<div>frame: <code>{debugState.frame}</code> · calls: <code>{debugState.drawCalls}</code> · tris: <code>{debugState.triangles.toLocaleString()}</code></div>
-			<div>scene children: <code>{debugState.sceneChildren}</code> · renderer: <code>{debugState.rendererSize[0]}×{debugState.rendererSize[1]}</code></div>
-			<div>cam dist from origin: <code>{(debugState.cameraDist / 1000).toFixed(0)} km</code></div>
+			<div><b>Cesium + Three Lab</b></div>
 			<div>flight: <code>{model.flight.camLat.toFixed(2)}°N, {model.flight.camLon.toFixed(2)}°E, {(model.flight.camAlt / 1000).toFixed(2)}k ft</code></div>
 			<div>nightFactor: <code>{model.nightFactor.toFixed(2)}</code> · weather: <code>{model.weather}</code></div>
+			<div>cloud density: <code>{(model.effectiveCloudDensity * 100).toFixed(0)}%</code></div>
 		</aside>
 	{/snippet}
 
