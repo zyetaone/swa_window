@@ -255,3 +255,12 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - Remaining high-value surface modules (CameraMirror, OsmBuildingEdges, enu, texture-util) captured in prior surgical commit.
 - Observation: OsmRoads and OsmBuildingEdges have near-identical structure (intentional for now; extraction would be a future deletable refactor if volume grows).
 - Next natural ADR items: Production HUD overlay integration into the hybrid, or lightweight Pi 5 perf notes.
+
+**"All!" cycle progress (environment + sky + cleanup)**:
+- Fixed hybrid base environment: Added `environmentAmbient(...)` helper in sky.ts that blends artistic phase mood with real air-mass horizon boost + nightFactor. ThreeOverlay AmbientLight now uses it → much better consistency between base environment and artistic sky layers (Veil, SunGlow, etc.).
+- AtmosphericVeil now uses the shared `airMassFactor` from sky.ts (reduced duplication).
+- Doc debt cleanup in Clouds (removed outdated claims about old anchoring system).
+- NeonLineLayer.svelte recognized as legitimate good infrastructure for deduplicating Osm* neon layers (not stray; worth keeping and adopting).
+- 3-Pi simulator remains useful; small label/UX polish applied.
+- **Deletion surface recommendation** (repeated for emphasis): Leave the D list (old pure-Three experiment) uncommitted for now. Revisit via dedicated archive branch or explicit cleanup PR when the hybrid is fully validated. This preserves history without polluting the active surface.
+- All changes small/deletable. Additional focused surgical commits on live three-lab files only.

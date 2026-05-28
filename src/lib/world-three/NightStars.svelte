@@ -27,9 +27,9 @@
 	const model = useAeroWindow();
 
 	let {
-		ambientTint,
+		ambientIntensity = 1,
 	}: {
-		ambientTint?: import('three').Color;
+		ambientIntensity?: number;
 	} = $props();
 
 	const STAR_COUNT = 800;
@@ -97,10 +97,11 @@
 		material.uniforms.uTime.value += dt;
 		// Only assert at deep night — nightFactor → ~1.0. Cesium's own
 		// stars cover the dusk transition; these are the deep-night punch.
-		// Slight airMass modulation for very high altitude clarity feel.
+		// Slight airMass + ambient harmony modulation.
 		const am = airMassFactor(model.flight.camLon, model.timeOfDay);
 		const amFactor = 1 + Math.min(0.4, (am - 1) * 0.08);
-		material.uniforms.uVisibility.value = Math.max(0, model.nightFactor - 0.4) * 1.5 * amFactor;
+		const ai = ambientIntensity ?? 1;
+		material.uniforms.uVisibility.value = Math.max(0, model.nightFactor - 0.4) * 1.5 * amFactor * ai;
 	});
 
 	$effect(() => () => {

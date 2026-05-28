@@ -2,163 +2,28 @@
 	/**
 	 * OsmRoads — road LineStrings traced as glowing two-layer neon lines.
 	 *
-	 * Same recipe as OsmBuildingEdges: Line2 + LineMaterial × 2 (bright
-	 * sharp core + wider soft halo, both additive), ENU-anchored via the
-	 * shared `enuAnchorMatrix` helper, opacity driven by nightFactor in
-	 * a useTask with an altitude gate.
+	 * Thin wrapper around NeonLineLayer with a buildSegments closure that
+	 * converts OSM LineString features into LineSegments endpoint pairs +
+	 * per-class colour. Cool warm-white palette so roads register as a
+	 * distinct lighting type from the warm sodium building footprints.
 	 *
-	 * Differences vs OsmBuildingEdges:
-	 *   - Per-class color (motorway/primary/secondary/tertiary/residential)
-	 *     baked into per-vertex colours so the major arteries glow brighter
-	 *     than residential streets — reads as the actual urban hierarchy.
-	 *   - Slightly cooler/whiter palette than the warm building footprints;
-	 *     the contrast helps roads vs buildings register as different layers.
-	 *   - Thinner core (1.2 px) — roads should read as lines, buildings
-	 *     should read as filled-perimeter masses.
+	 * Per-class color contributes the urban hierarchy: motorway / trunk
+	 * brightest (mercury-vapour street-lamp feel), residential streets
+	 * quietest. Vertex-color values can exceed 1.0 to brighten major
+	 * arteries beyond the material's base tint.
 	 */
-	import { T, useTask, useThrelte } from '@threlte/core';
-	import {
-		Matrix4,
-		Vector2,
-		AdditiveBlending,
-		type Group as ThreeGroup,
-	} from 'three';
-	import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
-	import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-	import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-	import { LOCATION_MAP } from '$content/locations';
+	import NeonLineLayer, { type NeonSegments } from './NeonLineLayer.svelte';
 	import type { LocationId } from '$lib/types';
 	import { EARTH_RADIUS_M } from './state.svelte';
-	import { enuAnchorMatrix } from './enu';
-	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
-	let { 
-		location,
-		ambientColor,
-		ambientIntensity = 1,
-	}: { 
-		location: LocationId;
-		ambientColor?: import('three').Color;
-		ambientIntensity?: number;
-	} = $props();
-
-	const model = useAeroWindow();
-	const nightFactor = $derived(model.nightFactor);
-	const ctx = useThrelte();
+	let { location }: { location: LocationId } = $props();
 
 	interface RoadFeature {
 		type: 'Feature';
 		geometry: { type: 'LineString'; coordinates: [number, number][] };
 		properties: { class?: string };
 	}
-	interface RoadsResponse {
-		type: 'FeatureCollection';
-		features: RoadFeature[];
-	}
 
-	let geometry = $state.raw<LineSegmentsGeometry | null>(null);
-	let anchorMatrix = $state.raw<Matrix4 | null>(null);
-	let pendingDispose: LineSegmentsGeometry | null = null;
-	let group: ThreeGroup | undefined = $state.raw();
-
-	// Cool warm-white for roads — deliberately less amber than the
-	// buildings so the two layers register as different lighting kinds
-	// (street lamps mid-blue vs. building sodium amber). Slightly THICKER
-	// + brighter halo than the first pass so roads aren't overpowered by
-	// the warm building density.
-	const coreMaterial = new LineMaterial({
-		color: 0xeaf4ff,
-		linewidth: 2.0,
-		transparent: true,
-		opacity: 0,
-		blending: AdditiveBlending,
-		depthWrite: false,
-		worldUnits: false,
-		vertexColors: true,
-	});
-	const haloMaterial = new LineMaterial({
-		color: 0x8ab0d8,
-		linewidth: 5.5,
-		transparent: true,
-		opacity: 0,
-		blending: AdditiveBlending,
-		depthWrite: false,
-		worldUnits: false,
-		vertexColors: true,
-	});
-
-	const _scratch = new Vector2();
-
-	// Altitude gate softened to 25-60 kft so cruise frames see roads.
-	useTask(() => {
-		const camAlt = model.flight.camAlt;
-		const altGate = camAlt <= 25000
-			? 1
-			: Math.max(0, 1 - (camAlt - 25000) / 35000);
-		let intensity = Math.max(0, nightFactor - 0.15) * 1.1 * altGate;
-
-		// Light ambient harmony from the shared ThreeOverlay tint system
-		// (same pattern as Clouds). Makes roads respond to the overall sky mood.
-		const ai = ambientIntensity ?? 1;
-		intensity *= ai;
-
-		coreMaterial.opacity = intensity;
-		haloMaterial.opacity = intensity * 0.55;
-
-		if (ambientColor) {
-			// Gentle tint so roads participate in dawn/dusk/neon mood shifts
-			coreMaterial.color.set(
-				ambientColor.r * 0.95 + 0.05,
-				ambientColor.g * 0.95 + 0.05,
-				ambientColor.b * 0.95 + 0.05
-			);
-		}
-
-		const size = ctx.renderer.getSize(_scratch);
-		coreMaterial.resolution.set(size.x, size.y);
-		haloMaterial.resolution.set(size.x, size.y);
-	});
-
-	$effect(() => () => {
-		coreMaterial.dispose();
-		haloMaterial.dispose();
-		pendingDispose?.dispose();
-		pendingDispose = null;
-	});
-
-	$effect(() => {
-		if (!group || !anchorMatrix) return;
-		group.matrixAutoUpdate = false;
-		group.matrix.copy(anchorMatrix);
-	});
-
-	$effect(() => {
-		const loc = LOCATION_MAP.get(location);
-		if (!loc) { geometry = null; return; }
-		pendingDispose?.dispose();
-		pendingDispose = null;
-		geometry = null;
-		const ctrl = new AbortController();
-		fetch(`/api/roads/${location}`, { signal: ctrl.signal })
-			.then((r) => r.json() as Promise<RoadsResponse>)
-			.then((data) => {
-				if (!data.features?.length) return;
-				const built = buildRoadLines(data.features, loc.lat, loc.lon);
-				if (built) {
-					pendingDispose = built.geom;
-					geometry = built.geom;
-					anchorMatrix = built.matrix;
-				}
-			})
-			.catch((e) => { if (e.name !== 'AbortError') console.warn('[OsmRoads]', e); });
-		return () => ctrl.abort();
-	});
-
-	// Per-class warm-white → cool-grey ramp. Vertex colors multiply with
-	// the material's base color; values can exceed 1.0 to brighten major
-	// arteries beyond the base tint (renderer clamps in fragment shader).
-	// Motorways punch as 1.3× brightness so they read above the building
-	// dot density; residential streets stay quiet for hierarchy.
 	const CLASS_COLOUR: Record<string, [number, number, number]> = {
 		motorway:    [1.30, 1.38, 1.45],
 		trunk:       [1.30, 1.38, 1.45],
@@ -173,12 +38,10 @@
 		features: RoadFeature[],
 		lat0: number,
 		lon0: number,
-	): { geom: LineSegmentsGeometry; matrix: Matrix4 } | null {
+	): NeonSegments | null {
 		const cosLat0 = Math.cos((lat0 * Math.PI) / 180);
 		const R = EARTH_RADIUS_M;
 
-		// Count line segments — each LineString of N points contributes
-		// 2(N-1) endpoint vertices (LineSegments expects pairs).
 		let totalVerts = 0;
 		for (const f of features) {
 			const ring = f.geometry.coordinates;
@@ -216,28 +79,18 @@
 			}
 		}
 
-		const geom = new LineSegmentsGeometry();
-		geom.setPositions(positions);
-		geom.setColors(colors);
-
-		return { geom, matrix: enuAnchorMatrix(lat0, lon0, 0) };
+		return { positions, colors };
 	}
-
-	const haloLine = new LineSegments2();
-	haloLine.material = haloMaterial;
-	const coreLine = new LineSegments2();
-	coreLine.material = coreMaterial;
-
-	$effect(() => {
-		if (!geometry) return;
-		haloLine.geometry = geometry;
-		coreLine.geometry = geometry;
-	});
 </script>
 
-{#if geometry && anchorMatrix}
-	<T.Group bind:ref={group}>
-		<T is={haloLine} />
-		<T is={coreLine} />
-	</T.Group>
-{/if}
+<NeonLineLayer
+	{location}
+	endpoint="/api/roads"
+	coreColor={0xeaf4ff}
+	coreWidth={2.0}
+	haloColor={0x8ab0d8}
+	haloWidth={5.5}
+	haloOpacityMul={0.55}
+	intensityMul={1.1}
+	buildSegments={buildRoadLines}
+/>

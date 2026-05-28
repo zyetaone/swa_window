@@ -154,7 +154,11 @@
 				>reset</button>
 			</div>
 			<div style="font-size:9px;opacity:0.5;">
-				Tests CameraMirror inheritance of real parallax config
+				Tests CameraMirror inheritance of real parallax config.
+				<button style="margin-left:4px;font-size:8px;" onclick={() => {
+					const p = model.config.camera.parallax;
+					console.log('3-Pi parallax:', { role: p.role, headingOffsetDeg: p.headingOffsetDeg, fovDeg: p.fovDeg });
+				}}>log</button>
 			</div>
 		</fieldset>
 	{/snippet}

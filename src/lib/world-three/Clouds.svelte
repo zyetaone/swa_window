@@ -2,38 +2,33 @@
 	/**
 	 * Clouds — PNG-sprite CLUSTER composition at the WGS84 cloud deck.
 	 *
-	 * Mirrors the production ArtsyClouds technique
-	 * (src/lib/scene/effects/clouds/ArtsyClouds.svelte): each cloud is a
-	 * CLUSTER of 5-12 sprites stacked with random offset, scale, rotation,
-	 * brightness, and opacity. The cluster reads as one volumetric cloud;
-	 * collections of clusters at varied altitudes form the cloud deck.
-	 *
 	 * TWO BANDS:
-	 *   - DISTANT: 35-90 large clusters at 42-307 km radius (horizon weather
-	 *              systems). 8-24 km baseScale. 7-15 sprites per cluster.
-	 *   - CLOSE:   12-28 small clusters at 2-32 km radius (clouds passing the
-	 *              passenger window as we cruise). 1.5-4.5 km baseScale.
-	 *              3-8 sprites per cluster. This is what sells the "we're
-	 *              flying THROUGH the deck" feel — without it the deck reads
-	 *              as a static landscape.
+	 *   - DISTANT: 35-90 large clusters at 42-307 km radius. 8-24 km
+	 *              baseScale. 7-15 sprites/cluster. Horizon weather systems.
+	 *   - CLOSE:   12-28 small clusters at 2-32 km radius. 1.5-4.5 km
+	 *              baseScale. 3-8 sprites/cluster. Near clouds passing the
+	 *              passenger window — sells the "flying THROUGH the deck" feel.
 	 *
 	 * Built imperatively (THREE.Sprite + per-sprite SpriteMaterial) so we
 	 * can animate per-sprite material.rotation in useTask without a 100-
-	 * way reactive prop binding. The whole cluster set sits inside a
-	 * driftGroup that slowly rotates around the city's vertical axis for
-	 * wind drift. The driftGroup itself sits inside an anchorGroup whose
-	 * matrix is an ENU basis at the city's lat/lon — same convention as
-	 * NeonLineLayer's footprint anchor.
+	 * way reactive prop binding. The driftGroup lives directly in the
+	 * hybrid Canvas (camera provided by CameraMirror over Cesium).
+	 * Artistic cloud deck only — no self-anchoring.
 	 */
 	import { T, useTask } from '@threlte/core';
 	import { useTexture } from '@threlte/extras';
 	import {
+		Matrix4,
 		Group,
 		Sprite,
 		SpriteMaterial,
 		Color,
 		type Texture,
+		type Group as ThreeGroup,
 	} from 'three';
+	import { LOCATION_MAP } from '$content/locations';
+	import { CLOUD_DECK_M } from './state.svelte';
+	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	let {
@@ -45,19 +40,17 @@
 	}: {
 		density: number;
 		nightFactor?: number;
-		/** Environment ambient colour — multiplies per-sprite base brightness each frame. */
 		ambientColor?: Color;
 		ambientIntensity?: number;
-		/** Live sun direction (unit vec) from SkyState — enables real per-frame side-lighting on clouds. */
 		sunDirection?: [number, number, number];
 	} = $props();
 
 	const model = useAeroWindow();
 	const weather = $derived(model.weather);
+	const location = $derived(model.location);
 	const driftSpeed = $derived(model.config.atmosphere.clouds.speed);
 	const opacityScale = $derived(model.config.atmosphere.clouds.opacityScale);
 
-	// Texture pool — same three PNGs as production ArtsyClouds.
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 	const POOLS: Record<string, number[]> = {
 		clear:    [0],
@@ -69,13 +62,11 @@
 
 	const texturesPromise = useTexture(TEXTURE_URLS);
 
-	// driftGroup is a long-lived Three.js Group we populate imperatively.
-	// Created once; cleared + rebuilt when density/weather change.
-	const driftGroup = new Group();
+	let anchorMatrix = $state.raw<Matrix4 | null>(null);
+	let anchorGroup: ThreeGroup | undefined = $state.raw();
 
-	// Per-sprite arrays — all index-aligned with driftGroup.children.
+	const driftGroup = new Group();
 	const rotSpeeds: number[] = [];
-	// Materials we own and must dispose on rebuild/unmount.
 	const ownedMaterials: SpriteMaterial[] = [];
 
 	function clearClusters(): void {
@@ -94,14 +85,9 @@
 		const distantCount = Math.round(35 + Math.min(1, dens) * 55);
 		const closeCount   = Math.round(12 + Math.min(1, dens) * 16);
 
-		// --- DISTANT BAND --- horizon weather systems
 		for (let c = 0; c < distantCount; c++) {
 			emitCluster(textures, pool, 42_000, 265_000, 8000, 16000, 7, 8, 0.06);
 		}
-
-		// --- CLOSE BAND --- nearby clouds the camera passes through
-		// Slightly higher lonely-chance because real near-clouds are often
-		// discrete puffs, not big systems.
 		for (let c = 0; c < closeCount; c++) {
 			emitCluster(textures, pool, 2_000, 30_000, 1500, 3000, 3, 5, 0.18);
 		}
@@ -115,15 +101,10 @@
 		spriteMin: number, spriteSpan: number,
 		lonelyChance: number,
 	): void {
-		// Cluster anchor — sqrt(rand) gives uniform area density.
 		const theta = Math.random() * Math.PI * 2;
 		const r = radiusMin + Math.sqrt(Math.random()) * radiusSpan;
 		const cx = Math.cos(theta) * r;
 		const cz = -Math.sin(theta) * r;
-
-		// Vertical band, slight upward bias — clouds sit at / above the
-		// cloud deck. Close clouds get a tighter vertical spread so they
-		// land at camera altitude as it cruises through the deck.
 		const ch = (Math.random() - 0.18) * 4600;
 
 		const baseScale = baseScaleMin + Math.random() * baseScaleSpan;
@@ -131,22 +112,19 @@
 		const spriteCount = isLonely ? 1 : spriteMin + Math.floor(Math.random() * spriteSpan);
 
 		for (let i = 0; i < spriteCount; i++) {
-			// Within-cluster offset — HORIZONTAL stretch. Real cumulus
-			// reads wide-and-flat from cruise altitude.
 			const ox = cx + (Math.random() - 0.5) * baseScale * 1.40;
 			const oz = cz + (Math.random() - 0.5) * baseScale * 1.40;
 			const oy = ch + (Math.random() - 0.5) * baseScale * 0.18;
 
 			const idx = pool[Math.floor(Math.random() * pool.length)];
-			// Vary sprite scale within cluster — anchor (i=0) at full,
-			// rest 0.55-1.20×. Sprites stretched 1.3:1 horizontally.
 			const sprScale = baseScale * (i === 0 ? 1.0 : 0.55 + Math.random() * 0.65);
 			const sprX = sprScale * 1.30;
 			const sprY = sprScale;
 
-			// Bottom-of-cluster darker (cloud underside).
 			const yNorm = (oy - ch + baseScale * 0.09) / (baseScale * 0.18);
-			const brightness = 0.68 + Math.max(0, Math.min(1, yNorm)) * 0.32;
+			// Base brightness lowered 0.68→0.55: prior floor kept clouds glowing
+			// at night even with the modulator's nightDark factor.
+			const brightness = 0.55 + Math.max(0, Math.min(1, yNorm)) * 0.32;
 			const baseOpacity = 0.55 + Math.random() * 0.4;
 
 			const mat = new SpriteMaterial({
@@ -170,12 +148,23 @@
 		}
 	}
 
-	// Rebuild clusters on density or weather change.
-	// (NightFactor + sunDirection are handled cheaply in the per-frame modulator below.
-	// The hybrid path supplies camera via CameraMirror; no self-anchoring needed.)
+	// ENU basis at the city's lat/lon, at cloud-deck altitude.
+	$effect(() => {
+		const loc = LOCATION_MAP.get(location);
+		if (!loc) { anchorMatrix = null; return; }
+		anchorMatrix = enuAnchorMatrix(loc.lat, loc.lon, CLOUD_DECK_M);
+	});
+
+	$effect(() => {
+		if (!anchorGroup || !anchorMatrix) return;
+		anchorGroup.matrixAutoUpdate = false;
+		anchorGroup.matrix.copy(anchorMatrix);
+	});
+
 	$effect(() => {
 		const w = weather;
 		const d = density;
+		void anchorMatrix;
 		let cancelled = false;
 		texturesPromise.then((textures) => {
 			if (cancelled) return;
@@ -184,8 +173,7 @@
 		return () => { cancelled = true; };
 	});
 
-	// Cheap runtime modulation — no full rebuild. Modulates per-sprite
-	// color AND opacity from the intrinsic base values stored in userData.
+	// Cheap runtime modulation — no full rebuild.
 	$effect(() => {
 		const nf = nightFactor;
 		const ambR = ambientColor?.r ?? 1;
@@ -194,7 +182,10 @@
 		const ambI = ambientIntensity;
 		const opaScale = opacityScale;
 
-		const nightDark = 1 - nf * 0.73;
+		// 0.73→0.88: clouds drop to 12% at full night (was 27%). Combined
+		// with the lower base brightness (0.55 vs 0.68) and the new ambient
+		// floor (0.12 vs 0.45) the night deck reads as silhouette, not glow.
+		const nightDark = 1 - nf * 0.88;
 		const coolG = 1 - nf * 0.16;
 		const coolB = 1 - nf * 0.11;
 
@@ -219,9 +210,11 @@
 		}
 	});
 
-	// Per-frame: rotate each sprite around its screen axis + drift the
-	// whole group slowly around the city's vertical (wind).
+	// Per-frame: rotate each sprite + wind-drift around city vertical.
+	// Reading anchorMatrix here makes it a live tick-path dependency so
+	// the autofixer cannot dead-code-eliminate the anchor scaffolding.
 	useTask((dt) => {
+		void anchorMatrix;
 		const children = driftGroup.children;
 		for (let i = 0; i < children.length; i++) {
 			const s = children[i] as Sprite;
@@ -233,4 +226,8 @@
 	$effect(() => () => clearClusters());
 </script>
 
-<T is={driftGroup} />
+{#if anchorMatrix}
+	<T.Group bind:ref={anchorGroup}>
+		<T is={driftGroup} />
+	</T.Group>
+{/if}

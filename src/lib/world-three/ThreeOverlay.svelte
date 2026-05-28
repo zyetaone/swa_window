@@ -69,13 +69,9 @@
 			far={1e9}
 		/>
 
-		<!-- Sun-direction-tinted ambient — drives the whole Three-side
-		     environment mood. Warm peach at dawn, neutral white at noon,
-		     red-orange at dusk, cool blue at night. Cloud sprites pick
-		     this up via MeshBasicMaterial-equivalent lighting (SpriteMaterial
-		     ignores light but the color tint we apply during cluster
-		     build already encodes nightFactor; ambient affects the future
-		     non-Sprite Three-side assets we'll add). -->
+		<!-- Environment ambient (now smarter via environmentAmbient in sky.ts).
+		     Blends artistic phase mood with air-mass horizon boost + nightFactor.
+		     Provides consistent base lighting for all artistic overlays. -->
 		<T.AmbientLight color={ambientTint} intensity={ambientIntensity} />
 
 		<CameraMirror {camera} />
@@ -89,7 +85,7 @@
 		<SunGlow />
 		<Moon />
 		<LensFlare />
-		<NightStars />
+		<NightStars ambientIntensity={ambientIntensity} />
 		<OsmRoads location={model.location} />
 		<OsmBuildingEdges location={model.location} />
 		<Clouds
