@@ -264,3 +264,11 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - 3-Pi simulator remains useful; small label/UX polish applied.
 - **Deletion surface recommendation** (repeated for emphasis): Leave the D list (old pure-Three experiment) uncommitted for now. Revisit via dedicated archive branch or explicit cleanup PR when the hybrid is fully validated. This preserves history without polluting the active surface.
 - All changes small/deletable. Additional focused surgical commits on live three-lab files only.
+
+**Completion of "All!" items (user-approved)**:
+- NeonLineLayer adoption: **Complete**. Both OsmRoads and OsmBuildingEdges are now thin wrappers around the generic `NeonLineLayer` component (big duplication reduction achieved with almost no behavior change). This is the blessed pattern going forward for any future neon/geo-line layers.
+- Deletion surface: **Decision confirmed** — leave the entire D list (old pure-Three experiment files) uncommitted. The hybrid is the active, production-leaning path. History is preserved; we can always archive or cherry-pick later.
+- Production HUD for hybrid: Notes added — the overlay model (ThreeOverlay + CameraMirror) makes HUD integration relatively straightforward. Production `TelemetryOverlay` / `BlindInfoCard` can be mounted above the hybrid Canvas with minimal changes. Priority after basic validation.
+- Pi 5 perf: Initial lightweight checklist and observations section added to ADR (cold start, sustained fps at cruise vs city, GPU memory, comparison points vs old pure-Three and current Cesium baseline). A simple harness script skeleton can live in `tools/perf/` when we get hardware time.
+
+This cycle (environment/sky consistency + full "All!" items) brings the three-lab hybrid to a clean, well-documented, and deduplicated state while strictly respecting surgical commit discipline on the live surface.
