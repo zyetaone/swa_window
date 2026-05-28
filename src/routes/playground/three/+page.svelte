@@ -26,14 +26,32 @@
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
+	import { activeCesium } from '$lib/world/active.svelte';
 
 	const model = createAeroWindow();
+
+	// Cesium buildings as wireframe ("line marks") instead of filled cubes —
+	// honors the user's "buildings from the texture map line marks" intent.
+	// Fires when the CesiumManager finishes its async mount; idempotent.
+	$effect(() => {
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		mgr.setBuildingsWireframe(true);
+	});
 
 	// RAF tick — same pattern as /playground. Drives flight + motion + director.
 	$effect(() => subscribe((dt) => model.tick(dt)));
 
 	// Snap the flight engine to the show's opening location.
 	model.setLocation(model.location);
+
+	// Cesium's OSM-buildings primitive stays enabled — empirically it
+	// supplies the majority of the visible city-light density we want.
+	// The Three-side `OsmBuildingEdges` component overlays footprint
+	// outlines (extra "city traced in light" character) on top. Together
+	// they read as "mass + outline" — closer to the user's original
+	// "flow around" intent than disabling either alone.
+	// (Toggle this to false to inspect the Three-only outline contribution.)
 
 	let cityMode = $state(false);
 
@@ -106,30 +124,37 @@
 				value={model.config.camera.parallax.role}
 				onchange={(e) => {
 					const role = (e.currentTarget as HTMLSelectElement).value as any;
-					model.config.camera.parallax.role = role;
-					// Sensible demo values for the hybrid lab
+					const p = model.config.camera.parallax;
+					p.role = role;
 					if (role === 'left') {
-						model.config.camera.parallax.headingOffsetDeg = -18;
-						model.config.camera.parallax.fovDeg = 42;
+						p.headingOffsetDeg = -18; p.fovDeg = 42;
 					} else if (role === 'right') {
-						model.config.camera.parallax.headingOffsetDeg = 18;
-						model.config.camera.parallax.fovDeg = 42;
+						p.headingOffsetDeg = 18; p.fovDeg = 42;
 					} else if (role === 'center') {
-						model.config.camera.parallax.headingOffsetDeg = 0;
-						model.config.camera.parallax.fovDeg = 45;
+						p.headingOffsetDeg = 0; p.fovDeg = 45;
 					} else {
-						model.config.camera.parallax.headingOffsetDeg = 0;
-						model.config.camera.parallax.fovDeg = 45;
+						p.headingOffsetDeg = 0; p.fovDeg = 45;
 					}
 				}}
 			>
-				<option value="solo">solo (0° offset)</option>
+				<option value="solo">solo (0°)</option>
 				<option value="left">left (−18°)</option>
 				<option value="center">center (0°)</option>
 				<option value="right">right (+18°)</option>
 			</select>
-			<div style="font-size:10px;opacity:0.6;margin-top:2px;">
-				Directly mutates camera.parallax (tests inheritance via CameraMirror)
+			<div style="font-size:10px;opacity:0.7;margin-top:3px;">
+				offset: <code>{model.config.camera.parallax.headingOffsetDeg.toFixed(0)}°</code> · 
+				fov: <code>{model.config.camera.parallax.fovDeg.toFixed(0)}°</code>
+				<button 
+					style="margin-left:6px;font-size:9px;padding:1px 4px;"
+					onclick={() => {
+						const p = model.config.camera.parallax;
+						p.role = 'solo'; p.headingOffsetDeg = 0; p.fovDeg = 45;
+					}}
+				>reset</button>
+			</div>
+			<div style="font-size:9px;opacity:0.5;">
+				Tests CameraMirror inheritance of real parallax config
 			</div>
 		</fieldset>
 	{/snippet}
