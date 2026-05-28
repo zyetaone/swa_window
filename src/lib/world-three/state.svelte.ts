@@ -222,7 +222,21 @@ export class SkyState {
 		const cry =  ez * ux - ex * uz;
 		const crz =  ex * uy;
 		// Rodrigues' simplified (east ⟂ up so the east·up term vanishes):
-		return [ux * cb + crx * sb, uy * cb + cry * sb, uz * cb + crz * sb];
+		let up: Vec3 = [ux * cb + crx * sb, uy * cb + cry * sb, uz * cb + crz * sb];
+
+		// 3-Pi support: rotate the banked up around radial by this device's
+		// headingOffset so the tilt reference is correct for its virtual yaw.
+		const ho = (this.model.config.camera.parallax.headingOffsetDeg * Math.PI) / 180;
+		if (Math.abs(ho) > 1e-6) {
+			const co = Math.cos(ho), so = Math.sin(ho);
+			const ux_ = up[0], uy_ = up[1], uz_ = up[2];
+			up = [
+				ux_ * co + (uy * uz_ - uz * uy_) * so,
+				uy_ * co + (uz * ux_ - ux * uz_) * so,
+				uz_ * co + (ux * uy_ - uy * ux_) * so,
+			] as Vec3;
+		}
+		return up;
 	});
 
 	/** Scene background colour — lerps day blue → dusk plum → night. */
