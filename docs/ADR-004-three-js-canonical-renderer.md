@@ -275,6 +275,11 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
   - Recommended integration order: first port the existing HUD components on top of the hybrid Canvas exactly as they sit on the Cesium-only route, then evaluate whether any Three-specific diagnostics should be added later.
   - This is the next natural high-value piece of work after hardware validation of the current hybrid.
 - 2026-05-xx: Minimal HUD spike started in the three lab (`<HUD />` now rendered in the viewer snippet over the live Cesium + ThreeOverlay + artistic layers + postprocess). Uses the exact production components and `model.config.shell.blindOpen` state. Clean autofixer + check. Ready for visual validation of chrome against godrays/bloom/neon/meteors/etc.
+- 2026-05-xx ("All!"): Full remaining batch after review + explicit "all!" signal:
+  - Pi 5 perf harness skeleton completed (tools/perf/ README + Bun driver + injectable snippet using real model.telemetry; exact ADR acceptance criteria documented).
+  - Production HUD spike committed (real TelemetryOverlay/BlindInfoCard now live in the hybrid lab for validation against the artistic layers).
+  - The three high-signal artistic experiments from the 3D VE passes committed (EffectStack postprocess pipeline, Meteors deep-night streaks, SparkleField camera-tracked dust). All wired through shared model + sky.ts helpers, consistent with the hybrid "painterly but grounded" direction.
+  - Surgical commits only on live three-lab surface + ADR. D list (old pure-Three) left untouched. 0 errors throughout.
 - Pi 5 perf: Initial lightweight checklist and observations section added to ADR (cold start, sustained fps at cruise vs city, GPU memory, comparison points vs old pure-Three and current Cesium baseline). A simple harness script skeleton can live in `tools/perf/` when we get hardware time.
 - 2026-05-xx: Harness skeleton landed in `tools/perf/` (polished README with exact ADR acceptance criteria + robust console logger using the existing `model.telemetry` ring buffer + Bun driver script + standalone injectable-snippet.js). Zero new deps. Shift+T TelemetryPanel remains the zero-code live view. Ready for real Pi 5 hardware session. Everything is small and deletable post-validation. See `tools/perf/README.md`.
 
