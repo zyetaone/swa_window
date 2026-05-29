@@ -26,6 +26,7 @@
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
+	import HUD from '$lib/shell/HUD.svelte';
 	import { activeCesium } from '$lib/world/active.svelte';
 
 	const model = createAeroWindow();
@@ -92,6 +93,13 @@
 				style:transform={`translateY(${(model.motion.motionOffsetY * 0.45 + model.motion.engineVibeY * 0.6).toFixed(2)}px) rotate(${(-2 + model.motion.bankAngle * 0.55).toFixed(2)}deg)`}
 			></div>
 		{/if}
+
+		<!-- Production HUD spike for hybrid validation (ADR-004).
+		     Renders the real TelemetryOverlay / BlindInfoCard (driven by the shared
+		     model.config.shell.blindOpen + flight state) over the Cesium + Three scene.
+		     This lets us see the exact production chrome against the artistic layers,
+		     godrays, bloom, neon, meteors, etc. before porting the full shell. -->
+		<HUD />
 	{/snippet}
 
 	{#snippet diag()}
