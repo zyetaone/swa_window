@@ -172,6 +172,9 @@ Gating checklist:
    in `ThreeViewer`'s lookAt computation. ~10 lines.
 4. **Production HUD overlay.** Replace `DebugHud.svelte` with the
    production `TelemetryOverlay` / `BlindInfoCard` pair.
+   **Lab status (All! cycle)**: Real components successfully mounted and
+   rendering over the full hybrid (Cesium + ThreeOverlay + postprocess +
+   artistic layers) in `/playground/three`. Visual validation possible today.
 5. **Texture error paths.** Add solid-color fallback for failed
    `useTexture` loads so a 404 doesn't leave the sphere transparent.
 6. **City data parity.** Bake OSM data for the remaining 10 cities
@@ -274,6 +277,12 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
   - The only new consideration is ensuring the HUD reads from the shared model (it already does) and that any Three-specific telemetry (e.g. artistic layer draw calls) can be exposed via the existing `model.telemetry` ring buffer if desired.
   - Recommended integration order: first port the existing HUD components on top of the hybrid Canvas exactly as they sit on the Cesium-only route, then evaluate whether any Three-specific diagnostics should be added later.
   - This is the next natural high-value piece of work after hardware validation of the current hybrid.
+
+**Shell porting observations (All! cycle)**
+- Real production `<HUD />` mounts and functions without modification over the hybrid.
+- Main remaining work for full shell: integrating `Pane.svelte` + Blind/Glass/Weather while respecting the ThreeOverlay z:5 layer and postprocess stack.
+- The three lab (with HUD + artistic layers) is now the best place to prototype and validate shell chrome before touching the main production route.
+
 - 2026-05-xx: Minimal HUD spike started in the three lab (`<HUD />` now rendered in the viewer snippet over the live Cesium + ThreeOverlay + artistic layers + postprocess). Uses the exact production components and `model.config.shell.blindOpen` state. Clean autofixer + check. Ready for visual validation of chrome against godrays/bloom/neon/meteors/etc.
 - 2026-05-xx ("All!"): Full remaining batch after review + explicit "all!" signal:
   - Pi 5 perf harness skeleton completed (tools/perf/ README + Bun driver + injectable snippet using real model.telemetry; exact ADR acceptance criteria documented).

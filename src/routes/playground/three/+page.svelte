@@ -100,6 +100,17 @@
 		     This lets us see the exact production chrome against the artistic layers,
 		     godrays, bloom, neon, meteors, etc. before porting the full shell. -->
 		<HUD />
+
+		<!-- Minimal hybrid debug overlay (Item 1 of All! batch).
+		     Small, deletable panel showing live artistic + postprocess state.
+		     Only visible in this lab for validation of the Three layers over Cesium. -->
+		<div class="hybrid-debug">
+			<div class="label">Hybrid Debug</div>
+			<div class="row">night: <span>{model.nightFactor.toFixed(2)}</span></div>
+			<div class="row">clouds: <span>{(model.effectiveCloudDensity * 100).toFixed(0)}%</span></div>
+			<div class="row">post: <span>godrays + bloom</span></div>
+			<div class="row">3-Pi: <span>{model.config.camera.parallax.role}</span></div>
+		</div>
 	{/snippet}
 
 	{#snippet diag()}
@@ -160,6 +171,19 @@
 						p.role = 'solo'; p.headingOffsetDeg = 0; p.fovDeg = 45;
 					}}
 				>reset</button>
+				<button 
+					style="margin-left:4px;font-size:9px;padding:1px 4px;"
+					onclick={() => {
+						const p = model.config.camera.parallax;
+						const roles = ['solo', 'left', 'center', 'right'] as const;
+						const idx = (roles.indexOf(p.role) + 1) % roles.length;
+						const next = roles[idx];
+						p.role = next;
+						if (next === 'left') { p.headingOffsetDeg = -18; p.fovDeg = 42; }
+						else if (next === 'right') { p.headingOffsetDeg = 18; p.fovDeg = 42; }
+						else { p.headingOffsetDeg = 0; p.fovDeg = 45; }
+					}}
+				>cycle</button>
 			</div>
 			<div style="font-size:9px;opacity:0.5;">
 				Tests CameraMirror inheritance of real parallax config.
@@ -196,5 +220,37 @@
 			rgba(40, 40, 50, 0.25) 40%,
 			transparent 60%
 		);
+	}
+
+	/* Minimal hybrid debug panel (All! item 1) — deletable after validation */
+	.hybrid-debug {
+		position: absolute;
+		bottom: 12px;
+		left: 12px;
+		background: rgba(10, 10, 15, 0.85);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 6px;
+		padding: 6px 10px;
+		font-size: 10px;
+		color: #aaa;
+		z-index: 20;
+		pointer-events: auto;
+	}
+	.hybrid-debug .label {
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		opacity: 0.6;
+		margin-bottom: 2px;
+	}
+	.hybrid-debug .row {
+		display: flex;
+		justify-content: space-between;
+		gap: 8px;
+		line-height: 1.3;
+	}
+	.hybrid-debug .row span {
+		color: #7faeff;
+		font-family: ui-monospace, monospace;
 	}
 </style>
