@@ -1,6 +1,7 @@
 <script lang="ts">
 	/**
 	 * SparkleField — cabin-air dust motes that track the camera.
+	 * Part of the hybrid artistic layer set (see ThreeOverlay.svelte).
 	 *
 	 * Threlte's <Sparkles> lives at scene origin by default; when the
 	 * camera flies away from origin (WGS84 scale = millions of metres)

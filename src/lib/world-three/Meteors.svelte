@@ -1,6 +1,7 @@
 <script lang="ts">
 	/**
 	 * Meteors — rare shooting-star streaks at deep night.
+	 * Part of the hybrid artistic layer set (see ThreeOverlay.svelte).
 	 *
 	 * Discrete event rather than continuous oscillation: at random
 	 * intervals (60–240 s) a streak appears at a random point on the

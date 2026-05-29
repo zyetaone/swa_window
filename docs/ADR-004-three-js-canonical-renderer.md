@@ -172,9 +172,9 @@ Gating checklist:
    in `ThreeViewer`'s lookAt computation. ~10 lines.
 4. **Production HUD overlay.** Replace `DebugHud.svelte` with the
    production `TelemetryOverlay` / `BlindInfoCard` pair.
-   **Lab status (All! cycle)**: Real components successfully mounted and
-   rendering over the full hybrid (Cesium + ThreeOverlay + postprocess +
-   artistic layers) in `/playground/three`. Visual validation possible today.
+   **Lab status (All! + go-on cycles)**: Real components successfully mounted
+   and rendering over the full hybrid. A small deletable hybrid-debug panel
+   was also added in the three lab for artistic layer validation.
 5. **Texture error paths.** Add solid-color fallback for failed
    `useTexture` loads so a 404 doesn't leave the sphere transparent.
 6. **City data parity.** Bake OSM data for the remaining 10 cities
@@ -183,6 +183,12 @@ Gating checklist:
    no changes expected, but verify location transitions actually fly
    in Three.js mode.
 8. **Tag `pre-ship-v2`** after validation.
+
+**Recent lab wins (All! + go-on cycles)**
+- Full artistic layer set committed and running (EffectStack postprocess, Meteors, SparkleField, NeonLineLayer + thin Osm wrappers).
+- Easy one-liner perf benchmark helpers added to tools/perf/ (`runBenchmark(ms)`, CSV export) — directly supports Pi 5 gating item.
+- Hybrid debug panel + 3-Pi cycle button in the three lab for fast validation.
+- Real production HUD chrome successfully layered on top of the hybrid renderer.
 
 Cesium maintenance during the transition:
 
@@ -282,6 +288,10 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - Real production `<HUD />` mounts and functions without modification over the hybrid.
 - Main remaining work for full shell: integrating `Pane.svelte` + Blind/Glass/Weather while respecting the ThreeOverlay z:5 layer and postprocess stack.
 - The three lab (with HUD + artistic layers) is now the best place to prototype and validate shell chrome before touching the main production route.
+
+**Shell mounting spike (started in this All! batch)**
+- Initial exploration notes captured above.
+- Next small step could be a throwaway experiment mounting a simplified Blind + Glass structure in the three lab viewer snippet to measure z-index / backdrop-filter interaction with the Three postprocess stack.
 
 - 2026-05-xx: Minimal HUD spike started in the three lab (`<HUD />` now rendered in the viewer snippet over the live Cesium + ThreeOverlay + artistic layers + postprocess). Uses the exact production components and `model.config.shell.blindOpen` state. Clean autofixer + check. Ready for visual validation of chrome against godrays/bloom/neon/meteors/etc.
 - 2026-05-xx ("All!"): Full remaining batch after review + explicit "all!" signal:

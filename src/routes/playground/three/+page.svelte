@@ -101,16 +101,24 @@
 		     godrays, bloom, neon, meteors, etc. before porting the full shell. -->
 		<HUD />
 
-		<!-- Minimal hybrid debug overlay (Item 1 of All! batch).
+		<!-- Hybrid debug overlay (expanded in All! batch).
 		     Small, deletable panel showing live artistic + postprocess state.
 		     Only visible in this lab for validation of the Three layers over Cesium. -->
 		<div class="hybrid-debug">
 			<div class="label">Hybrid Debug</div>
 			<div class="row">night: <span>{model.nightFactor.toFixed(2)}</span></div>
 			<div class="row">clouds: <span>{(model.effectiveCloudDensity * 100).toFixed(0)}%</span></div>
-			<div class="row">post: <span>godrays + bloom</span></div>
+			<div class="row">godrays: <span>{(model.nightFactor < 0.85 ? 'on' : 'off')}</span></div>
+			<div class="row">bloom: <span>active</span></div>
+			<div class="row">neon: <span>roads+edges</span></div>
+			<div class="row">meteors: <span>{model.nightFactor > 0.5 ? 'on' : 'off'}</span></div>
 			<div class="row">3-Pi: <span>{model.config.camera.parallax.role}</span></div>
 		</div>
+
+		<!-- Shell mounting spike experiment (started in All! batch).
+		     Throwaway area to test real Pane/Blind/Glass elements over the hybrid.
+		     Currently just a marker + comment — expand or delete as needed. -->
+		<!-- <div class="shell-experiment">Full shell chrome would go here</div> -->
 	{/snippet}
 
 	{#snippet diag()}

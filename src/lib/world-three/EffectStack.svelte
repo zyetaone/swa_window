@@ -1,6 +1,7 @@
 <script lang="ts">
 	/**
 	 * EffectStack — postprocessing.js pipeline on the Three.js overlay.
+	 * Part of the hybrid artistic layer set (see ThreeOverlay.svelte).
 	 *
 	 * Replaces Threlte's default `autoRenderTask` with an EffectComposer
 	 * that renders the scene into an HDR (HalfFloat) render target, then
