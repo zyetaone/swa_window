@@ -268,7 +268,13 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 **Completion of "All!" items (user-approved)**:
 - NeonLineLayer adoption: **Complete**. Both OsmRoads and OsmBuildingEdges are now thin wrappers around the generic `NeonLineLayer` component (big duplication reduction achieved with almost no behavior change). This is the blessed pattern going forward for any future neon/geo-line layers.
 - Deletion surface: **Decision confirmed** — leave the entire D list (old pure-Three experiment files) uncommitted. The hybrid is the active, production-leaning path. History is preserved; we can always archive or cherry-pick later.
-- Production HUD for hybrid: Notes added — the overlay model (ThreeOverlay + CameraMirror) makes HUD integration relatively straightforward. Production `TelemetryOverlay` / `BlindInfoCard` can be mounted above the hybrid Canvas with minimal changes. Priority after basic validation.
+- Production HUD for hybrid: 
+  - The hybrid model (full Cesium `CesiumViewer` + transparent `ThreeOverlay` + `CameraMirror`) makes production HUD integration straightforward.
+  - `TelemetryOverlay` and `BlindInfoCard` (currently in `src/lib/shell/hud/`) can be mounted in the same places as they are for the pure-Cesium `/playground` route.
+  - The only new consideration is ensuring the HUD reads from the shared model (it already does) and that any Three-specific telemetry (e.g. artistic layer draw calls) can be exposed via the existing `model.telemetry` ring buffer if desired.
+  - Recommended integration order: first port the existing HUD components on top of the hybrid Canvas exactly as they sit on the Cesium-only route, then evaluate whether any Three-specific diagnostics should be added later.
+  - This is the next natural high-value piece of work after hardware validation of the current hybrid.
 - Pi 5 perf: Initial lightweight checklist and observations section added to ADR (cold start, sustained fps at cruise vs city, GPU memory, comparison points vs old pure-Three and current Cesium baseline). A simple harness script skeleton can live in `tools/perf/` when we get hardware time.
+- 2026-05-xx: Harness skeleton landed in `tools/perf/` (polished README with exact ADR acceptance criteria + robust console logger using the existing `model.telemetry` ring buffer + Bun driver script + standalone injectable-snippet.js). Zero new deps. Shift+T TelemetryPanel remains the zero-code live view. Ready for real Pi 5 hardware session. Everything is small and deletable post-validation. See `tools/perf/README.md`.
 
 This cycle (environment/sky consistency + full "All!" items) brings the three-lab hybrid to a clean, well-documented, and deduplicated state while strictly respecting surgical commit discipline on the live surface.
