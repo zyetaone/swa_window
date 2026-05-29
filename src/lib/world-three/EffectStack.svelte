@@ -157,6 +157,17 @@
 		// Base 0.38 (day, cloud peaks bloom softly) → 0.62 (night, only
 		// moon + stars + city lights bloom).
 		bloom.luminanceMaterial.uniforms.threshold.value = 0.38 + model.nightFactor * 0.24;
+
+		// Temporary lab-only debug bridge (All! batch, Item 2).
+		// Safe to delete when the hybrid-debug panel is no longer needed.
+		// Only used by the three lab for real-time artistic state visibility.
+		if (typeof window !== 'undefined') {
+			(window as any).__hybridDebug = {
+				godrayOpacity: godRays.blendMode.opacity.value,
+				bloomThreshold: bloom.luminanceMaterial.uniforms.threshold.value,
+				postprocessActive: true,
+			};
+		}
 	});
 
 	// Take over rendering: stop Threlte's auto-render, run composer in same stage.

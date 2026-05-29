@@ -27,6 +27,7 @@
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
 	import HUD from '$lib/shell/HUD.svelte';
+	import BlindInfoCard from '$lib/shell/hud/BlindInfoCard.svelte';
 	import { activeCesium } from '$lib/world/active.svelte';
 
 	const model = createAeroWindow();
@@ -108,17 +109,21 @@
 			<div class="label">Hybrid Debug</div>
 			<div class="row">night: <span>{model.nightFactor.toFixed(2)}</span></div>
 			<div class="row">clouds: <span>{(model.effectiveCloudDensity * 100).toFixed(0)}%</span></div>
-			<div class="row">godrays: <span>{(model.nightFactor < 0.85 ? 'on' : 'off')}</span></div>
-			<div class="row">bloom: <span>active</span></div>
+			<div class="row">godrays: <span>{((window as any).__hybridDebug?.godrayOpacity ?? 0).toFixed(2)}</span></div>
+			<div class="row">bloomThr: <span>{((window as any).__hybridDebug?.bloomThreshold ?? 0).toFixed(2)}</span></div>
 			<div class="row">neon: <span>roads+edges</span></div>
 			<div class="row">meteors: <span>{model.nightFactor > 0.5 ? 'on' : 'off'}</span></div>
 			<div class="row">3-Pi: <span>{model.config.camera.parallax.role}</span></div>
 		</div>
 
-		<!-- Shell mounting spike experiment (started in All! batch).
-		     Throwaway area to test real Pane/Blind/Glass elements over the hybrid.
-		     Currently just a marker + comment — expand or delete as needed. -->
-		<!-- <div class="shell-experiment">Full shell chrome would go here</div> -->
+		<!-- Shell mounting spike experiment (All! batch, Item 1).
+		     Concrete test of real production shell chrome over the hybrid renderer.
+		     Currently forcing a real BlindInfoCard (centered, reduced opacity) to
+		     observe z-index, readability, and interaction with artistic layers +
+		     postprocess. This is throwaway — delete or expand freely. -->
+		<div style="position:absolute; inset:0; z-index:25; pointer-events:none; opacity:0.55;">
+			<BlindInfoCard />
+		</div>
 	{/snippet}
 
 	{#snippet diag()}
@@ -199,6 +204,10 @@
 					const p = model.config.camera.parallax;
 					console.log('3-Pi parallax:', { role: p.role, headingOffsetDeg: p.headingOffsetDeg, fovDeg: p.fovDeg });
 				}}>log</button>
+				<!-- Small visual feedback for current offset (All! Item 4) -->
+				<span style="margin-left:8px; font-family:monospace; color:#7faeff;">
+					{ model.config.camera.parallax.headingOffsetDeg > 0 ? '+' : '' }{model.config.camera.parallax.headingOffsetDeg}°
+				</span>
 			</div>
 		</fieldset>
 	{/snippet}

@@ -187,8 +187,19 @@ Gating checklist:
 **Recent lab wins (All! + go-on cycles)**
 - Full artistic layer set committed and running (EffectStack postprocess, Meteors, SparkleField, NeonLineLayer + thin Osm wrappers).
 - Easy one-liner perf benchmark helpers added to tools/perf/ (`runBenchmark(ms)`, CSV export) — directly supports Pi 5 gating item.
-- Hybrid debug panel + 3-Pi cycle button in the three lab for fast validation.
+- Hybrid debug panel + 3-Pi cycle button + live offset readout in the three lab for fast validation.
 - Real production HUD chrome successfully layered on top of the hybrid renderer.
+- Concrete shell mounting experiment active (real BlindInfoCard mounted as throwaway test layer).
+
+**Lab Proven status (All! batch)**
+| Component / Capability              | Status in `/playground/three`          | Notes |
+|-------------------------------------|----------------------------------------|-------|
+| Production HUD (Telemetry + BlindInfoCard) | Proven & live                         | Renders cleanly over full hybrid |
+| Artistic layers (clouds, godrays, bloom, neon, meteors, sparkle) | Proven & live | All wired to shared model + sky.ts |
+| Hybrid debug tooling                | Proven & live                         | Real values from EffectStack |
+| 3-Pi inheritance via CameraMirror   | Proven & live                         | Cycle + visual feedback working |
+| Easy Pi 5 perf benchmarking         | Proven & usable                       | `runBenchmark()` + CSV ready |
+| Shell chrome mounting               | Initial experiment active             | Real BlindInfoCard test layer mounted |
 
 Cesium maintenance during the transition:
 
