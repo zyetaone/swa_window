@@ -54,6 +54,7 @@
 	import { HalfFloatType, Vector2, Mesh, SphereGeometry, MeshBasicMaterial } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, sunVisibility } from './sky';
+	import { updateHybridDebug } from './lab-debug';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
@@ -158,16 +159,14 @@
 		// moon + stars + city lights bloom).
 		bloom.luminanceMaterial.uniforms.threshold.value = 0.38 + model.nightFactor * 0.24;
 
-		// Temporary lab-only debug bridge (All! batch, Item 2).
-		// Safe to delete when the hybrid-debug panel is no longer needed.
-		// Only used by the three lab for real-time artistic state visibility.
-		if (typeof window !== 'undefined') {
-			(window as any).__hybridDebug = {
-				godrayOpacity: godRays.blendMode.opacity.value,
-				bloomThreshold: bloom.luminanceMaterial.uniforms.threshold.value,
-				postprocessActive: true,
-			};
-		}
+		// Lab-only debug bridge (All! batch).
+		// Uses the tiny deletable module in lab-debug.ts.
+		// Safe to remove entirely once hybrid validation is complete.
+		updateHybridDebug({
+			godrayOpacity: godRays.blendMode.opacity.value,
+			bloomThreshold: bloom.luminanceMaterial.uniforms.threshold.value,
+			postprocessActive: true,
+		});
 	});
 
 	// Take over rendering: stop Threlte's auto-render, run composer in same stage.

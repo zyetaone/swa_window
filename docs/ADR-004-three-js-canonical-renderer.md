@@ -256,9 +256,10 @@ be Accepted until they are resolved.)
 - `state.svelte.ts` still contains some legacy pure-Three camera math (SkyState) that is no longer exercised by the main `/playground/three` route.
 
 **Recommended next 1-2 phases (pragmatic, low risk)**:
-1. Surgical commit batch for the remaining new modules (CameraMirror + utilities + NightStars + Osm* edges) + any final 3D polish. Keep deletions uncommitted until explicit decision.
-2. Light usability / parity pass on the hybrid lab (more LabShell controls, 3-Pi role simulator in UI, one-click "send current state to Cesium compose" button for fast concept porting).
-3. (Later) Formal Pi 5 perf run + ADR-004 owner decision on the open Q1-Q7.
+1. Continue shell mounting experiments in the three lab (real Glass/Blind interaction with the hybrid postprocess stack is the current active spike).
+2. Formalize lab validation tooling (debug bridge + hybrid-debug panel) while keeping it obviously deletable.
+3. ADR-004 narrative refresh + Lab Proven tracking (ongoing).
+4. (Later) Formal Pi 5 perf runs using the new easy benchmark helpers + owner decision on open questions.
 
 This hybrid + 3D work directly de-risks the "Three as future canonical" path while preserving the SWA Cesium install untouched.
 
@@ -275,6 +276,12 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - Remaining high-value surface modules (CameraMirror, OsmBuildingEdges, enu, texture-util) captured in prior surgical commit.
 - Observation: OsmRoads and OsmBuildingEdges have near-identical structure (intentional for now; extraction would be a future deletable refactor if volume grows).
 - Next natural ADR items: Production HUD overlay integration into the hybrid, or lightweight Pi 5 perf notes.
+
+**Further "All!" cycle progress (shell spike + validation tooling)**:
+- Concrete shell mounting experiment active in the three lab (real BlindInfoCard + minimal Glass test layer mounted to observe z/backdrop/postprocess interaction).
+- Hybrid debug panel upgraded to pull real runtime values (godray opacity, bloom threshold) from EffectStack via a small deletable lab-debug module.
+- 3-Pi simulator enhanced with live bank + heading offset visual feedback.
+- Lab Proven table + expanded recent wins added to ADR-004.
 
 **"All!" cycle progress (environment + sky + cleanup)**:
 - Fixed hybrid base environment: Added `environmentAmbient(...)` helper in sky.ts that blends artistic phase mood with real air-mass horizon boost + nightFactor. ThreeOverlay AmbientLight now uses it → much better consistency between base environment and artistic sky layers (Veil, SunGlow, etc.).

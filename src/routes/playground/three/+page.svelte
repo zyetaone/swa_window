@@ -28,6 +28,7 @@
 	import LabShell from '$lib/playground/LabShell.svelte';
 	import HUD from '$lib/shell/HUD.svelte';
 	import BlindInfoCard from '$lib/shell/hud/BlindInfoCard.svelte';
+	import { hybridDebug } from '$lib/world-three/lab-debug';
 	import { activeCesium } from '$lib/world/active.svelte';
 
 	const model = createAeroWindow();
@@ -109,8 +110,8 @@
 			<div class="label">Hybrid Debug</div>
 			<div class="row">night: <span>{model.nightFactor.toFixed(2)}</span></div>
 			<div class="row">clouds: <span>{(model.effectiveCloudDensity * 100).toFixed(0)}%</span></div>
-			<div class="row">godrays: <span>{((window as any).__hybridDebug?.godrayOpacity ?? 0).toFixed(2)}</span></div>
-			<div class="row">bloomThr: <span>{((window as any).__hybridDebug?.bloomThreshold ?? 0).toFixed(2)}</span></div>
+			<div class="row">godrays: <span>{hybridDebug.godrayOpacity.toFixed(2)}</span></div>
+			<div class="row">bloomThr: <span>{hybridDebug.bloomThreshold.toFixed(2)}</span></div>
 			<div class="row">neon: <span>roads+edges</span></div>
 			<div class="row">meteors: <span>{model.nightFactor > 0.5 ? 'on' : 'off'}</span></div>
 			<div class="row">3-Pi: <span>{model.config.camera.parallax.role}</span></div>
@@ -118,11 +119,17 @@
 
 		<!-- Shell mounting spike experiment (All! batch, Item 1).
 		     Concrete test of real production shell chrome over the hybrid renderer.
-		     Currently forcing a real BlindInfoCard (centered, reduced opacity) to
-		     observe z-index, readability, and interaction with artistic layers +
-		     postprocess. This is throwaway — delete or expand freely. -->
+		     Currently forcing a real BlindInfoCard (centered, reduced opacity) + a
+		     minimal Glass test layer to observe z-index, backdrop-filter interaction,
+		     and readability against the artistic layers + EffectStack postprocess.
+		     This is throwaway — delete or expand freely. -->
 		<div style="position:absolute; inset:0; z-index:25; pointer-events:none; opacity:0.55;">
 			<BlindInfoCard />
+		</div>
+
+		<!-- Second shell experiment layer: minimal Glass test (backdrop + vignette) -->
+		<div class="shell-glass-test" style="position:absolute; inset:0; z-index:26; pointer-events:none;">
+			<div class="glass-vignette"></div>
 		</div>
 	{/snippet}
 
@@ -204,9 +211,10 @@
 					const p = model.config.camera.parallax;
 					console.log('3-Pi parallax:', { role: p.role, headingOffsetDeg: p.headingOffsetDeg, fovDeg: p.fovDeg });
 				}}>log</button>
-				<!-- Small visual feedback for current offset (All! Item 4) -->
+				<!-- Small visual feedback for current offset + bank (All! Item 4) -->
 				<span style="margin-left:8px; font-family:monospace; color:#7faeff;">
 					{ model.config.camera.parallax.headingOffsetDeg > 0 ? '+' : '' }{model.config.camera.parallax.headingOffsetDeg}°
+					| bank: {model.motion.bankAngle.toFixed(1)}°
 				</span>
 			</div>
 		</fieldset>
@@ -269,5 +277,19 @@
 	.hybrid-debug .row span {
 		color: #7faeff;
 		font-family: ui-monospace, monospace;
+	}
+
+	/* Shell Glass test layer (All! Item 1) — minimal deletable experiment */
+	.shell-glass-test .glass-vignette {
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(
+			ellipse at center,
+			transparent 40%,
+			rgba(0, 0, 0, 0.25) 70%,
+			rgba(0, 0, 0, 0.45) 100%
+		);
+		backdrop-filter: blur(1.5px);
+		pointer-events: none;
 	}
 </style>
