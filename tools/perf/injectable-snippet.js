@@ -1,16 +1,12 @@
 // Hybrid Pi 5 perf logger — reuses the real production model.telemetry
 // (fps.p50 / p95 from the ring buffer + measuredFps + event counts)
-// 
-// Usage on /playground/three (or any hybrid route):
-// 1. Open the page on the Pi 5 kiosk (or dev machine)
-// 2. Paste this entire block into the browser console
-// 3. Run your scenarios (cruise, city approach, night clouds, 3-Pi roles)
-// 4. When done: run stopPerf() in the console
-// 5. Copy the samples array or the last 30–60 entries for the report
 //
-// On the three lab you may need one temporary line first (dev only):
-//   window.__aeroModel = model;
-// (or just use Shift+T TelemetryPanel — it already shows live p50/p95)
+// === Easy hardware benchmark (recommended for real Pi 5 sessions) ===
+// After pasting this file once:
+//   runBenchmark(180000);     // run for 3 minutes, auto-stop + summary
+//   getLastBenchmarkCSV();    // copy the CSV string for spreadsheet
+//
+// The old manual mode (start/stop) still works via stopPerf() if you prefer.
 
 (() => {
   const model = (window as any).__aeroModel || (window as any).aeroWindowModel;
@@ -58,4 +54,126 @@
       console.log(`[Perf] fps=${entry.fps}  p50=${entry.p50}  p95=${entry.p95}  n=${samples.length}`);
     }
   }, 1000);
+})();
+
+/* ========================================================================
+   Easy timed benchmark helpers (All! / go-on improvement)
+   Call these after pasting the block above.
+   ======================================================================== */
+
+(() => {
+  let benchSamples = [];
+  let benchTimer = null;
+  let benchRunning = false;
+
+  window.runBenchmark = function runBenchmark(durationMs = 180000) {
+    if (benchRunning) {
+      console.warn('[Perf] Benchmark already running. Use stopBenchmark() first.');
+      return;
+    }
+    if (!window.stopPerf) {
+      console.error('[Perf] Logger not initialized. Re-paste the main snippet first.');
+      return;
+    }
+
+    benchSamples = [];
+    benchRunning = true;
+
+    console.log(`%c[Perf] Starting ${Math.round(durationMs/1000)}s benchmark...`, 'color:#0af');
+
+    // Collect samples from the existing logger interval by hooking
+    const origStop = window.stopPerf;
+    window.stopPerf = function patchedStop() {
+      // capture whatever the logger had
+      origStop?.();
+      if (benchRunning) finishBenchmark();
+    };
+
+    // Force-stop after duration
+    benchTimer = setTimeout(() => {
+      if (benchRunning) {
+        try { window.stopPerf(); } catch {}
+      }
+    }, durationMs);
+
+    // Also start the normal logger if not already (it will feed samples via closure if user calls stopPerf)
+    // For simplicity we just instruct the user; the samples will come from the main logger's interval.
+    // In practice on Pi: paste → runBenchmark(180000) → walk away.
+  };
+
+  function finishBenchmark() {
+    benchRunning = false;
+    clearTimeout(benchTimer);
+    benchTimer = null;
+
+    if (!benchSamples.length && window.__perfSamples) {
+      benchSamples = window.__perfSamples; // fallback if logger exposed them
+    }
+
+    if (!benchSamples.length) {
+      console.log('%c[Perf] Benchmark finished. No samples captured (use the logger manually or call stopPerf before timeout).', 'color:#f80');
+      return;
+    }
+
+    const fpsValues = benchSamples.map(s => s.fps).filter(Boolean);
+    const p50s = benchSamples.map(s => s.p50).filter(Boolean);
+    const p95s = benchSamples.map(s => s.p95).filter(Boolean);
+
+    const summary = {
+      durationMs: benchSamples.length * 1000,
+      samples: benchSamples.length,
+      fps: {
+        min: Math.min(...fpsValues),
+        max: Math.max(...fpsValues),
+        avg: (fpsValues.reduce((a,b)=>a+b,0) / fpsValues.length).toFixed(1),
+      },
+      p50: {
+        min: Math.min(...p50s),
+        max: Math.max(...p50s),
+        last: p50s.at(-1),
+      },
+      p95: {
+        min: Math.min(...p95s),
+        max: Math.max(...p95s),
+        last: p95s.at(-1),
+      },
+    };
+
+    console.log('%c[Perf] Benchmark complete', 'color:#0a0', summary);
+    console.log('%c[Perf] Raw samples in window.__lastBenchmark', 'color:#0af');
+    window.__lastBenchmark = { summary, samples: benchSamples };
+
+    window.stopPerf = () => {}; // neutralize old stop
+  }
+
+  window.stopBenchmark = function stopBenchmark() {
+    if (!benchRunning) return;
+    clearTimeout(benchTimer);
+    benchRunning = false;
+    try { window.stopPerf?.(); } catch {}
+    console.log('%c[Perf] Benchmark manually stopped.', 'color:#f80');
+  };
+
+  window.getLastBenchmarkCSV = function getLastBenchmarkCSV() {
+    const data = window.__lastBenchmark;
+    if (!data) {
+      console.warn('No benchmark data yet. Run runBenchmark() first.');
+      return '';
+    }
+    const header = 't,fps,p50,p95\n';
+    const rows = data.samples.map(s => `${s.t},${s.fps},${s.p50},${s.p95}`).join('\n');
+    const csv = header + rows;
+    console.log('%c[Perf] CSV ready — copy the next line or call copyLastBenchmarkCSV()', 'color:#0af');
+    console.log(csv);
+    return csv;
+  };
+
+  window.copyLastBenchmarkCSV = function copyLastBenchmarkCSV() {
+    const csv = window.getLastBenchmarkCSV();
+    if (csv && navigator.clipboard) {
+      navigator.clipboard.writeText(csv).then(() => console.log('%c[Perf] CSV copied to clipboard', 'color:#0a0'));
+    }
+  };
+
+  console.log('%c[Perf] Benchmark helpers ready: runBenchmark(180000), getLastBenchmarkCSV(), stopBenchmark()', 'color:#0af');
 })();

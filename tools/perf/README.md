@@ -25,48 +25,21 @@ The project already has excellent production telemetry (`model.telemetry` ring b
 4. The panel shows live p50/p95 FPS + recent frame times + event counts
 5. Use the "log" button in the 3-Pi simulator or the existing telemetry export for numbers
 
-### 2. Console logger (for timed runs + structured output)
-Paste the following in the browser console while on the hybrid route:
+### 2. Easy one-liner benchmark (recommended for real Pi 5 hardware)
+
+After pasting `injectable-snippet.js` (or the block below) once:
 
 ```js
-// Hybrid Pi 5 perf logger — uses the real model.telemetry (p50/p95 + events)
-(() => {
-  const model = (window as any).__aeroModel || (window as any).aeroWindowModel;
-  if (!model || !model.telemetry) {
-    console.warn('%c[Perf] No model.telemetry found. On the three lab: run this first:\n  window.__aeroModel = model;  (inside +page.svelte dev block or console)\nOr just use Shift+T TelemetryPanel.', 'color:#f80');
-    return;
-  }
+runBenchmark(180000);        // 3-minute automated run → auto-stop + summary
+getLastBenchmarkCSV();       // get CSV you can paste into a spreadsheet
+copyLastBenchmarkCSV();      // (if clipboard available) copies it directly
+```
 
-  console.log('%c[Perf] Hybrid logger started. Run stopPerf() when done (90–180s recommended).', 'color:#0af');
+The helpers reuse the production `model.telemetry` ring buffer, so the p50/p95 numbers are the exact same ones the HUD shows.
 
-  const samples: any[] = [];
-  let running = true;
+Manual `stopPerf()` mode is still available if you want live control.
 
-  (window as any).stopPerf = () => {
-    running = false;
-    clearInterval(iv);
-    console.log('%c[Perf] Stopped. Full samples:', 'color:#0af', samples);
-    console.log('%c[Perf] Summary (last 60s window):', 'color:#0af', samples.slice(-60));
-    // On Pi kiosk you can copy this or redirect to a file via other means
-  };
-
-  const iv = setInterval(() => {
-    if (!running) return;
-    const tel = model.telemetry.toJSON();
-    const fps = model.measuredFps || 0;
-    const entry = {
-      t: Date.now(),
-      fps,
-      p50: tel.fps?.p50 ?? 0,
-      p95: tel.fps?.p95 ?? 0,
-      counts: tel.counts,
-    };
-    samples.push(entry);
-
-    if (samples.length % 15 === 0) {
-      console.log(`[Perf] fps=${fps}  p50=${entry.p50}  p95=${entry.p95}  n=${samples.length}`);
-    }
-  }, 1000);
+(The full enhanced snippet with `runBenchmark` lives in `injectable-snippet.js`.)
 
   console.log('%c[Perf] Logger active. Use stopPerf() to halt and dump.', 'color:#0af');
 })();

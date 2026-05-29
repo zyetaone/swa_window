@@ -53,7 +53,7 @@ const SNIPPET = `// Hybrid Pi 5 perf logger — reuses real model.telemetry (p50
     return;
   }
 
-  console.log('%c[Perf] Hybrid logger active. Run stopPerf() when finished (90–180s).', 'color:#0af');
+  console.log('%c[Perf] Hybrid logger active. Recommended: runBenchmark(180000) for easy hardware runs.', 'color:#0af');
 
   const samples: any[] = [];
   let running = true;
@@ -62,7 +62,6 @@ const SNIPPET = `// Hybrid Pi 5 perf logger — reuses real model.telemetry (p50
     running = false;
     clearInterval(iv);
     console.log('%c[Perf] Stopped. Full samples array:', 'color:#0af', samples);
-    console.table(samples.slice(-30)); // last 30 seconds for quick view
   };
 
   const iv = setInterval(() => {
