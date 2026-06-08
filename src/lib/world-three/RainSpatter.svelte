@@ -73,29 +73,36 @@
 				vec2 cell = floor(grid);
 				vec2 cellUv = fract(grid);
 
-				// Per-cell existence gate — ~45% of cells host a drop, rest
-				// stay empty. Kills the gridded "evenly spaced drops" look.
-				float present = step(0.55, hash(cell + seed + 99.0));
+				// Per-cell birth offset staggers WHEN each cell resets so
+				// they don't all blink in unison. Static per cell.
+				float birth = hash(cell + seed + 13.7);
+				// Cycle index — increments every time this cell's drop
+				// completes a life. Mixing it into the seeds below means the
+				// NEXT drop in a cell lands at a DIFFERENT position and a
+				// different subset of cells fires each cycle. Without this,
+				// every cycle re-spawned the drop at the same per-cell spot
+				// — the "raining on the same spots" the eye was catching.
+				float t = uTime * 0.45 + birth;
+				float cycle = floor(t);
+				float age = fract(t);
+				// Per-cycle seed = cell + this cycle's index. Fresh each loop.
+				vec2 cseed = cell + seed + cycle * 31.7;
+
+				// Per-cycle existence gate — ~45% of cells host a drop this
+				// cycle; which cells fire changes every cycle.
+				float present = step(0.55, hash(cseed + 99.0));
 				if (present < 0.5) return 0.0;
 
-				// Per-cell random center — wider jitter range (0.15–0.85)
-				// breaks alignment between adjacent cells.
+				// Per-cycle random center — wide intra-cell jitter (0.15–0.85),
+				// re-rolled each cycle so successive drops in the same cell
+				// land in different spots.
 				vec2 center = vec2(
-					0.15 + hash(cell + seed) * 0.7,
-					0.15 + hash(cell + seed + 7.3) * 0.7
+					0.15 + hash(cseed) * 0.7,
+					0.15 + hash(cseed + 7.3) * 0.7
 				);
 
-				// Per-cell birth time + cycle period. 0.45 (was 0.26) —
-				// noticeably faster drop turnover so the spatter feels
-				// alive: drops appear, grow, fade, gone in ~2.2s vs the
-				// prior ~3.8s cycle. Reads as constant fresh rain rather
-				// than slow languid droplets.
-				float birth = hash(cell + seed + 13.7);
-				float age = mod(uTime * 0.45 + birth, 1.0);
-
 				// Droplet grows then dissipates. Tiny radius for fine
-				// pinprick droplets — was 0.04 + age * 0.12, now 0.025 +
-				// age * 0.07, about half the size at peak.
+				// pinprick droplets.
 				float radius = 0.025 + age * 0.07;
 				float dist = length(cellUv - center);
 				float ring = smoothstep(radius, radius - 0.015, dist);

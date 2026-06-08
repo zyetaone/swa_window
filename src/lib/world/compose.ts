@@ -79,6 +79,7 @@ interface CesiumModelView {
 	config: {
 		camera: {
 			effectiveHeading(baseHeading: number): number;
+			motion: { bankPitchCouple: number };
 		};
 		world: WorldConfig;
 		atmosphere: {
@@ -641,11 +642,19 @@ export class CesiumManager {
 		// `undefined` for ellipsoid (defaults to WGS84) so `_scratchDest`
 		// lands in the result slot it was always meant for.
 		C.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048, undefined, this._scratchDest);
+		// Bank → pitch coupling. Roll (below) only tilts the horizon; coupling
+		// bank into pitch makes a turn actually reveal more GROUND (banking one
+		// way) or more SKY (the other). Positive bank dips the view downward
+		// (more negative pitch = more ground); negative bank lifts it. Applied
+		// at display time from the live bankAngle so it never feeds back into
+		// the pitch-smoothing loop. Coefficient is admin-tunable.
+		const bankPitchCouple = this.model.config.camera.motion.bankPitchCouple ?? 0;
+		const pitchDeg = (f.camPitch - 90) - bankPitchCouple * mot.bankAngle;
 		this.viewer.camera.setView({
 			destination: this._scratchDest,
 			orientation: {
 				heading: this.CesiumModule.Math.toRadians((parallaxHeading + 90) % 360),
-				pitch: this.CesiumModule.Math.toRadians(f.camPitch - 90),
+				pitch: this.CesiumModule.Math.toRadians(pitchDeg),
 				roll: this.CesiumModule.Math.toRadians(-mot.bankAngle),
 			},
 		});

@@ -80,6 +80,7 @@ interface CameraShape {
 	motion: {
 		bankAngleMax: number;
 		bankSmoothing: number;
+		bankPitchCouple: number;
 		breathingPeriod: number;
 		breathingAmplitude: number;
 		engineVibeFreqX: number;
@@ -135,6 +136,13 @@ const _camera: CameraShape = {
 		// bankSmoothing — visible cabin tilt, not a snap.
 		bankAngleMax: 10.0,
 		bankSmoothing: 2.5,
+		// Bank → pitch coupling. Roll alone only TILTS the horizon — it can't
+		// show "more ground / more sky". This couples bank into camera pitch
+		// so a turn in one direction dips the view toward the ground, and the
+		// opposite turn lifts it toward the sky (applied in compose.ts
+		// syncCamera). 0.9 → a full 10° bank shifts pitch ~9°, a clear but
+		// not vertiginous ground/sky swing. Set 0 to disable.
+		bankPitchCouple: 0.9,
 		// Pitch breathing — slow nose up/down oscillation.
 		breathingPeriod: 22,
 		breathingAmplitude: 1.5,

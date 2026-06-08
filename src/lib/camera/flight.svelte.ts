@@ -10,6 +10,19 @@ import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
+import { createSeededRng, daySeed } from '$lib/world-three/prng';
+
+/**
+ * Stable 32-bit hash of a location id string (djb2). Combined with
+ * daySeed() to seed the per-location orbit so all 3 Pis in a panorama
+ * compute an IDENTICAL orbit (same bearing, start angle, direction) while
+ * the orbit still varies location-to-location and day-to-day.
+ */
+function hashLocationId(id: string): number {
+	let h = 5381;
+	for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0;
+	return h >>> 0;
+}
 
 export class FlightSimEngine {
 	// --- Position (raw simulation state) ---
@@ -42,6 +55,10 @@ export class FlightSimEngine {
 	orbitRadiusMinor = $state<number>(0.06);
 	orbitBearing = $state(0);
 	orbitAngle = $state(0);
+	// Rotation sense around the orbit ellipse: +1 or -1. Randomised
+	// (deterministically) per location so the camera doesn't always sweep
+	// the same way — some passes go left-to-right, others right-to-left.
+	orbitDirection = $state(1);
 
 	// --- Internal state (#private) ---
 	#cruiseElapsed = 0;
@@ -81,8 +98,18 @@ export class FlightSimEngine {
 		this.lon = loc.lon;
 		this.orbitCenterLat = loc.lat;
 		this.orbitCenterLon = loc.lon;
-		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon) + (Math.random() - 0.5) * 0.6;
-		this.orbitAngle = Math.random() * Math.PI * 2;
+		// Deterministic orbit seed — daySeed() ^ location hash. All 3 Pis in a
+		// panorama share daySeed and the broadcast location, so they compute
+		// an IDENTICAL orbit (bearing + start angle + rotation direction) and
+		// stay position-locked (only their yaw offset differs). Was raw
+		// Math.random(), which diverged each Pi's camera position and broke
+		// the panorama. The day component keeps the orbit fresh day-to-day.
+		const rng = createSeededRng((daySeed() ^ hashLocationId(locationId)) >>> 0);
+		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon) + (rng() - 0.5) * 0.6;
+		this.orbitAngle = rng() * Math.PI * 2;
+		// Randomise rotation sense so the camera sweep isn't always the same
+		// direction. Deterministic via the seeded rng → identical across Pis.
+		this.orbitDirection = rng() < 0.5 ? -1 : 1;
 		this.#initScenario(locationId, skyState);
 	}
 
@@ -200,8 +227,11 @@ export class FlightSimEngine {
 		const tx = a * Math.cos(this.orbitAngle);
 		const ty = -b * Math.sin(this.orbitAngle);
 		const localSpeed = Math.sqrt(tx * tx + ty * ty);
-		this.orbitAngle += ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
+		// Advance the orbit angle in the chosen rotation sense (±1). Wrap
+		// both ends now that the angle can decrease as well as increase.
+		this.orbitAngle += this.orbitDirection * ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
 		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
+		if (this.orbitAngle < 0) this.orbitAngle += Math.PI * 2;
 
 		const ex = a * Math.sin(this.orbitAngle);
 		const ey = b * Math.cos(this.orbitAngle);
@@ -214,7 +244,12 @@ export class FlightSimEngine {
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
-		const baseHeading = normalizeHeading((Math.atan2(tx * sb + ty * cb, tx * cb - ty * sb) * 180) / Math.PI);
+		// Heading follows the actual direction of travel: negate the tangent
+		// when orbiting in reverse so a reversed orbit banks the opposite way
+		// (turn rate → bank coupling in motion.svelte stays correctly signed).
+		const vtx = tx * this.orbitDirection;
+		const vty = ty * this.orbitDirection;
+		const baseHeading = normalizeHeading((Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI);
 		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
 
