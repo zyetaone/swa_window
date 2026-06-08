@@ -97,9 +97,9 @@
 
 	const material = new LineMaterial({
 		// Screen-space width — stays the same pixel count at any distance.
-		// 2.5 px reads as a "thin pencil line" — large enough to register
+		// 2.0 px reads as a "thin pencil line" — large enough to register
 		// at viewing distance, narrow enough to feel atmospheric.
-		linewidth: 2.5,
+		linewidth: 2.0,
 		vertexColors: true,
 		transparent: true,
 		opacity: 0,
@@ -131,8 +131,10 @@
 		// Hide during cruise warp transition (teleport) — contrail through
 		// a non-physical scene cut would look broken.
 		const warpGate = 1 - Math.min(1, model.flight.warpFactor * 3);
-		// Smooth opacity tween (k matches motion engine's smoothing).
-		const target = altRamp * warpGate;
+		// Smooth opacity tween (k matches motion engine's smoothing). Capped
+		// at 0.55 so the additive trail reads as a wispy ice ribbon rather
+		// than a hot white laser line under the bloom pass.
+		const target = altRamp * warpGate * 0.55;
 		const k = 1 - Math.exp(-dt / 0.8);
 		material.opacity += (target - material.opacity) * k;
 

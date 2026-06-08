@@ -34,11 +34,11 @@
 {#if nightFactor > 0.3}
 	<T.Group bind:ref={group}>
 		<Sparkles
-			count={80}
-			size={1.6}
+			count={44}
+			size={1.1}
 			scale={[5000, 1500, 5000]}
 			speed={0.4}
-			opacity={0.45}
+			opacity={0.26}
 			color="#fff6e0"
 			noise={0.6}
 		/>

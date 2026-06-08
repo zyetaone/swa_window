@@ -128,14 +128,16 @@
      this since they're at the same position). -->
 <T.Sprite
 	position={sunPos}
-	scale={[HALO_SIZE_M * (1 + lowSunFactor * 0.68), HALO_SIZE_M * (1 + lowSunFactor * 0.68), 1]}
+	scale={[HALO_SIZE_M * (1 + lowSunFactor * 0.5), HALO_SIZE_M * (1 + lowSunFactor * 0.5), 1]}
 	renderOrder={0}
 >
 	<T.SpriteMaterial
 		map={haloTexture}
 		color={haloTint}
-		// Air-mass emphasis: dramatically stronger scatter bloom near horizon.
-		opacity={visibility * (0.72 + lowSunFactor * 0.38) * (1 + Math.min(0.9, (airMassFactor - 1) * 0.12)) * shimmer}
+		// Air-mass emphasis: stronger scatter near horizon, but dialed back
+		// (0.72→0.5 base, 0.38→0.24 low-sun boost) — the old values stacked
+		// with the bloom pass into a hot white blob at dusk.
+		opacity={visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMassFactor - 1) * 0.12)) * shimmer}
 		transparent
 		depthWrite={false}
 		depthTest={false}

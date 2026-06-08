@@ -107,7 +107,9 @@
 	});
 
 	const bloom = new BloomEffect({
-		intensity: 0.55,
+		// Dialed 0.55 → 0.42: the prior value blew out the SunGlow halo and
+		// the >1.0 neon-road vertex colours into hot white discs at dusk.
+		intensity: 0.42,
 		// Kernel bumped LARGE → VERY_LARGE: even wider downsample halo.
 		// With mipmapBlur enabled the extra cost is minimal (one more
 		// downsample level), ~0.15 ms additional on Pi 5. The result is

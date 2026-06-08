@@ -28,6 +28,7 @@
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
 	import HUD from '$lib/shell/HUD.svelte';
+	import DevWingTuner from '$lib/world-three/DevWingTuner.svelte';
 	import { hybridDebug } from '$lib/world-three/lab-debug';
 	import { activeCesium } from '$lib/world/active.svelte';
 
@@ -104,6 +105,12 @@
 		     is now rendered as a 3D mesh inside ThreeOverlay (Wing.svelte),
 		     replacing the prior CSS .wing-silhouette div. -->
 		<ThreeOverlay />
+
+		<!-- DEV-ONLY wing pose tuner — persists across HMR (unlike the prior
+		     console-injected panel). Delete once the pose is baked. -->
+		{#if import.meta.env.DEV}
+			<DevWingTuner />
+		{/if}
 
 		<!-- Production HUD spike for hybrid validation (ADR-004).
 		     Renders the real TelemetryOverlay / BlindInfoCard (driven by the shared

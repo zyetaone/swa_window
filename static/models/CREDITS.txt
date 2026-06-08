@@ -1,0 +1,1 @@
+wing.glb derived from SW 737 (CC-BY-4.0, A Random Modeler) — see static/models/southwest-737/license.txt

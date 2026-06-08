@@ -71,11 +71,13 @@
 		const elev = Math.max(0.06, dir[1]);
 		const airMass = 1.0 / elev;
 		let vis = Math.pow(airMass * 0.42, 1.85) * (1 - model.nightFactor * 0.93);
-		vis = Math.min(vis, 0.95) * 0.42;
+		// Final wash dialed 0.42 → 0.28 and anchor glow shrunk 220 → 150 so
+		// the flare reads as a faint optical hint, not a hovering bright disc.
+		vis = Math.min(vis, 0.95) * 0.28;
 
 		const ghostScale = Math.max(0.10, Math.min(0.90, airMass * 0.24));
-		_anchorBaseSize = 220 * ghostScale;
-		_g1BaseSize = 38 * ghostScale;
+		_anchorBaseSize = 150 * ghostScale;
+		_g1BaseSize = 30 * ghostScale;
 
 		light.visible = vis > 0.12;
 	});

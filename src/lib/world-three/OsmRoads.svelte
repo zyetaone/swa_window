@@ -24,15 +24,19 @@
 		properties: { class?: string };
 	}
 
+	// Class colours pulled below 1.0 across the board so they no longer blow
+	// out to hot white discs under the bloom pass — the brightest arteries
+	// (motorway/trunk) now sit at ~0.95 instead of 1.45. Urban hierarchy is
+	// preserved by the relative ratios, just at a calmer overall level.
 	const CLASS_COLOUR: Record<string, [number, number, number]> = {
-		motorway:    [1.30, 1.38, 1.45],
-		trunk:       [1.30, 1.38, 1.45],
-		primary:     [1.10, 1.20, 1.32],
-		secondary:   [0.90, 1.00, 1.12],
-		tertiary:    [0.70, 0.80, 0.92],
-		residential: [0.48, 0.55, 0.65],
+		motorway:    [0.88, 0.94, 1.00],
+		trunk:       [0.88, 0.94, 1.00],
+		primary:     [0.74, 0.82, 0.92],
+		secondary:   [0.60, 0.68, 0.80],
+		tertiary:    [0.46, 0.54, 0.66],
+		residential: [0.32, 0.38, 0.48],
 	};
-	const DEFAULT_COLOUR: [number, number, number] = [0.48, 0.55, 0.65];
+	const DEFAULT_COLOUR: [number, number, number] = [0.32, 0.38, 0.48];
 
 	function buildRoadLines(
 		features: RoadFeature[],
@@ -87,10 +91,10 @@
 	{location}
 	endpoint="/api/roads"
 	coreColor={0xeaf4ff}
-	coreWidth={2.0}
+	coreWidth={1.5}
 	haloColor={0x8ab0d8}
-	haloWidth={5.5}
-	haloOpacityMul={0.55}
-	intensityMul={1.1}
+	haloWidth={4.5}
+	haloOpacityMul={0.45}
+	intensityMul={0.6}
 	buildSegments={buildRoadLines}
 />
