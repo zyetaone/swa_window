@@ -59,6 +59,16 @@
 			<p class="loading">Loading model…</p>
 		{/if}
 
+		<!-- Live hover readout — what's under the cursor right now. -->
+		<div class="hover-readout" class:active={!!controller.hovered}>
+			{#if controller.hovered}
+				<span class="hov-name">{controller.hovered.name}</span>
+				<span class="hov-tris">{controller.hovered.tris.toLocaleString()}</span>
+			{:else}
+				<span class="hov-idle">hover a mesh…</span>
+			{/if}
+		</div>
+
 		<!-- Selection tools -->
 		<div class="section">
 			<div class="section-head">
@@ -89,6 +99,27 @@
 					{copied ? 'Copied ✓' : 'Copy names'}
 				</button>
 			</div>
+
+			<button
+				class="export"
+				onclick={() => controller.exportSelection?.()}
+				disabled={controller.selection.length === 0}
+			>
+				⬇ Export selection as GLB
+			</button>
+			<button class="export-alt" onclick={() => controller.exportVisible?.()}>
+				⬇ Export everything visible
+			</button>
+			{#if controller.lastExport}
+				<p class="export-note">
+					Exported {controller.lastExport.meshes} meshes ·
+					{controller.lastExport.tris.toLocaleString()} tris → wing-extract.glb
+				</p>
+			{/if}
+			<p class="hint export-hint">
+				Click the wing + winglet + turbine (shift-click to add), then Export
+				selection. Use Isolate first to verify you got every piece.
+			</p>
 		</div>
 
 		<div class="hint nav">drag rotate · scroll zoom · right-drag pan</div>
@@ -169,6 +200,40 @@
 		font-style: italic;
 	}
 
+	.hover-readout {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+		margin-bottom: 12px;
+		padding: 6px 9px;
+		border-radius: 6px;
+		background: rgba(63, 217, 255, 0.06);
+		border: 1px solid rgba(63, 217, 255, 0.12);
+		font-size: 11px;
+		min-height: 15px;
+		transition: background 0.12s, border-color 0.12s;
+	}
+	.hover-readout.active {
+		background: rgba(63, 217, 255, 0.14);
+		border-color: rgba(63, 217, 255, 0.4);
+	}
+	.hov-name {
+		font-family: ui-monospace, monospace;
+		color: #6fe0ff;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.hov-tris {
+		font-family: ui-monospace, monospace;
+		color: #4a7d8c;
+		flex-shrink: 0;
+	}
+	.hov-idle {
+		color: #4a4f5c;
+		font-style: italic;
+	}
+
 	.section {
 		border-top: 1px solid rgba(255, 255, 255, 0.08);
 		padding-top: 10px;
@@ -242,6 +307,37 @@
 	button:disabled {
 		opacity: 0.4;
 		cursor: default;
+	}
+
+	.export {
+		width: 100%;
+		flex: none;
+		margin-top: 4px;
+		padding: 7px 8px;
+		font-weight: 500;
+		color: #0c1018;
+		background: #7faeff;
+		border-color: #7faeff;
+	}
+	.export:hover:not(:disabled) {
+		background: #9cc0ff;
+		border-color: #9cc0ff;
+	}
+	.export-alt {
+		width: 100%;
+		flex: none;
+		margin-top: 6px;
+		padding: 5px 8px;
+		font-size: 11px;
+	}
+	.export-note {
+		margin: 8px 0 0;
+		font-size: 10px;
+		color: #6cd08a;
+		font-family: ui-monospace, monospace;
+	}
+	.export-hint {
+		margin-top: 6px;
 	}
 
 	.hint {

@@ -20,10 +20,20 @@
 	 */
 	export interface InspectorController {
 		selection: SelEntry[];
+		/** The mesh currently under the cursor (live hover readout). */
+		hovered?: SelEntry | null;
 		isolate?: () => void;
 		hide?: () => void;
 		showAll?: () => void;
 		clear?: () => void;
+		/** Export exactly the SELECTED meshes to a downloaded .glb — the
+		 *  direct path: click the wing + winglet + turbine, then export. */
+		exportSelection?: () => void;
+		/** Export every currently-VISIBLE mesh — the alternate path: hide the
+		 *  parts you don't want, then export what's left. */
+		exportVisible?: () => void;
+		/** Set after an export so the page can show feedback. */
+		lastExport?: { meshes: number; tris: number } | null;
 	}
 </script>
 
@@ -47,11 +57,13 @@
 		Vector3,
 		Vector2,
 		Raycaster,
+		Group,
 		MeshStandardMaterial,
 		type Mesh,
 		type Material,
 		type Object3D,
 	} from 'three';
+	import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
 	let {
 		wireframe = false,
@@ -85,6 +97,18 @@
 		metalness: 0.1,
 		roughness: 0.5,
 	});
+	// Hover preview — a cooler cyan so the mesh under the cursor is obvious
+	// BEFORE you click. Distinct from the orange selection so the two states
+	// never get confused.
+	const hoverMat = new MeshStandardMaterial({
+		color: 0x3fd9ff,
+		emissive: 0x0a8ab0,
+		emissiveIntensity: 0.55,
+		metalness: 0.1,
+		roughness: 0.5,
+	});
+	let hovered: Mesh | null = null;
+	let hoveredOrigMat: Material | Material[] | null = null;
 
 	function isMesh(o: Object3D): o is Mesh {
 		return (o as Mesh).isMesh === true;
@@ -106,6 +130,32 @@
 		const orig = origMats.get(mesh);
 		if (orig) mesh.material = orig;
 		origMats.delete(mesh);
+	}
+
+	// Restore the currently-hovered mesh to its true material (unless it's
+	// selected, in which case the orange must stay). Called before any
+	// click/selection mutation so origMats never captures the hover material.
+	function clearHover() {
+		if (hovered && hoveredOrigMat && !selected.has(hovered)) {
+			hovered.material = hoveredOrigMat;
+		}
+		hovered = null;
+		hoveredOrigMat = null;
+	}
+
+	function setHover(mesh: Mesh | null) {
+		if (mesh === hovered) return;
+		clearHover();
+		if (mesh && !selected.has(mesh)) {
+			hoveredOrigMat = mesh.material;
+			mesh.material = hoverMat;
+			hovered = mesh;
+		} else if (mesh) {
+			// Selected meshes keep their orange but still report for the readout.
+			hovered = mesh;
+		}
+		controller.hovered = mesh ? { name: mesh.name || '(unnamed)', tris: triCount(mesh) } : null;
+		invalidate();
 	}
 
 	function reportSelection() {
@@ -170,27 +220,78 @@
 			reportSelection();
 			invalidate();
 		};
+		// Export a set of meshes to a downloaded .glb. Each mesh is cloned
+		// with its WORLD transform baked in (so the assembly is preserved
+		// even though we strip it out of the original hierarchy), and its
+		// real material restored (so the orange highlight isn't exported).
+		function exportMeshes(source: Iterable<Mesh>) {
+			const group = new Group();
+			let meshes = 0;
+			let tris = 0;
+			for (const o of source) {
+				if (!isMesh(o)) continue;
+				o.updateWorldMatrix(true, false);
+				const clone = o.clone();
+				o.matrixWorld.decompose(clone.position, clone.quaternion, clone.scale);
+				const orig = origMats.get(o);
+				if (orig) clone.material = orig;
+				group.add(clone);
+				meshes++;
+				tris += triCount(o);
+			}
+			if (meshes === 0) return;
+			new GLTFExporter().parse(
+				group,
+				(result) => {
+					const blob = new Blob([result as ArrayBuffer], { type: 'model/gltf-binary' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = 'wing-extract.glb';
+					a.click();
+					URL.revokeObjectURL(url);
+					controller.lastExport = { meshes, tris };
+				},
+				(err) => console.error('[model-inspector] export failed', err),
+				{ binary: true },
+			);
+		}
+
+		controller.exportSelection = () => exportMeshes(selected);
+		controller.exportVisible = () => {
+			const visible: Mesh[] = [];
+			scene.traverse((o) => {
+				if (isMesh(o) && o.visible) visible.push(o);
+			});
+			exportMeshes(visible);
+		};
 		invalidate();
 	});
 
-	// ── Click-to-select (raycast) ──────────────────────────────────────
+	// ── Click-to-select + hover-preview (raycast) ──────────────────────
 	const raycaster = new Raycaster();
 	const pointer = new Vector2();
+
+	function pickAt(canvas: HTMLCanvasElement, root: Object3D, clientX: number, clientY: number): Mesh | null {
+		const rect = canvas.getBoundingClientRect();
+		pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+		pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+		raycaster.setFromCamera(pointer, camera.current);
+		const hit = raycaster.intersectObject(root, true).find((h) => isMesh(h.object) && h.object.visible);
+		return hit ? (hit.object as Mesh) : null;
+	}
+
 	$effect(() => {
 		const canvas = renderer?.domElement;
 		const root = $gltf?.scene;
 		if (!canvas || !root) return;
 
 		const onClick = (e: MouseEvent) => {
-			const rect = canvas.getBoundingClientRect();
-			pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-			pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-			raycaster.setFromCamera(pointer, camera.current);
-			const hit = raycaster
-				.intersectObject(root, true)
-				.find((h) => isMesh(h.object) && h.object.visible);
-			if (!hit) return;
-			const mesh = hit.object as Mesh;
+			// Restore the hovered mesh's true material FIRST so highlight()
+			// captures the real original, not the cyan hover material.
+			clearHover();
+			const mesh = pickAt(canvas, root, e.clientX, e.clientY);
+			if (!mesh) return;
 
 			// Plain click replaces the selection; Shift-click toggles add.
 			if (!e.shiftKey) {
@@ -208,8 +309,32 @@
 			invalidate();
 		};
 
+		// Hover preview — raycast at most once per animation frame (dedups the
+		// stream of pointermove events; independent of Threlte's on-demand
+		// render loop). setHover() invalidates to paint the cyan preview.
+		let rafPending = false;
+		let lastX = 0;
+		let lastY = 0;
+		const onPointerMove = (e: PointerEvent) => {
+			lastX = e.clientX;
+			lastY = e.clientY;
+			if (rafPending) return;
+			rafPending = true;
+			requestAnimationFrame(() => {
+				rafPending = false;
+				setHover(pickAt(canvas, root, lastX, lastY));
+			});
+		};
+		const onPointerLeave = () => setHover(null);
+
 		canvas.addEventListener('click', onClick);
-		return () => canvas.removeEventListener('click', onClick);
+		canvas.addEventListener('pointermove', onPointerMove);
+		canvas.addEventListener('pointerleave', onPointerLeave);
+		return () => {
+			canvas.removeEventListener('click', onClick);
+			canvas.removeEventListener('pointermove', onPointerMove);
+			canvas.removeEventListener('pointerleave', onPointerLeave);
+		};
 	});
 
 	// ── Wireframe toggle (covers highlight material too) ───────────────
