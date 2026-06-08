@@ -265,6 +265,61 @@
 			});
 			exportMeshes(visible);
 		};
+
+		// ── Spatial-selection hook (console power-tool) ────────────────
+		// The wing + turbine is a REGION of model space, not a material or a
+		// name. This exposes a geometry-based selector on window so the whole
+		// wing assembly (skin + flaps + winglet + engine under it) can be
+		// grabbed by a centroid predicate — no clicking, no material guess.
+		//   __mi.analyze()                  → per-axis centroid min/max/mean
+		//   __mi.selectByCentroid((x,y,z,m) => z > 8)   → select that region
+		//   __mi.isolate() / .exportSelection() / .clear()
+		const _box = new Box3();
+		const _c = new Vector3();
+		const centroidOf = (m: Mesh): Vector3 => {
+			_box.setFromObject(m);
+			return _box.getCenter(_c);
+		};
+		(window as unknown as { __mi: unknown }).__mi = {
+			scene,
+			analyze() {
+				const xs: number[] = [];
+				const ys: number[] = [];
+				const zs: number[] = [];
+				scene.traverse((o) => {
+					if (!isMesh(o) || !o.geometry) return;
+					const c = centroidOf(o);
+					xs.push(c.x);
+					ys.push(c.y);
+					zs.push(c.z);
+				});
+				const stat = (a: number[]) => ({
+					min: +Math.min(...a).toFixed(2),
+					max: +Math.max(...a).toFixed(2),
+					mean: +(a.reduce((s, v) => s + v, 0) / a.length).toFixed(2),
+				});
+				return { count: xs.length, x: stat(xs), y: stat(ys), z: stat(zs) };
+			},
+			selectByCentroid(pred: (x: number, y: number, z: number, m: Mesh) => boolean) {
+				selected.forEach(unhighlight);
+				selected.clear();
+				scene.traverse((o) => {
+					if (!isMesh(o) || !o.geometry) return;
+					const c = centroidOf(o);
+					if (pred(c.x, c.y, c.z, o)) {
+						highlight(o);
+						selected.add(o);
+					}
+				});
+				reportSelection();
+				invalidate();
+				return selected.size;
+			},
+			isolate: () => controller.isolate?.(),
+			showAll: () => controller.showAll?.(),
+			clear: () => controller.clear?.(),
+			exportSelection: () => controller.exportSelection?.(),
+		};
 		invalidate();
 	});
 
