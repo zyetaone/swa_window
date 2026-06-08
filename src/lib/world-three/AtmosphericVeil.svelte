@@ -11,7 +11,7 @@
 	 * Visibility curve + palette come from world-three/sky.ts (shared with
 	 * SunGlow + LensFlare so all three sun-anchored layers ramp together).
 	 */
-	import { T } from '@threlte/core';
+	import { T, useTask } from '@threlte/core';
 	import { AdditiveBlending, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, airMassFactor, sunVisibility, skyMood, SKY_PALETTE } from './sky';
@@ -45,14 +45,35 @@
 	// horizon. Residual daytime (0.10), faint at night (0.03). The airMass
 	// term gives the "painterly scatter" that passengers actually see at
 	// low sun angles.
+	// Slow breathing — solar prominence / atmospheric wave throb. Slowest
+	// of the randomization patterns: 0.018 + 0.031 + 0.013 Hz frequencies
+	// give a periodicity of ~10s with quasi-random envelope. ±8% magnitude.
+	let _veilT = $state(0);
+	useTask((dt) => { _veilT += dt; });
+	const veilBreath = $derived.by(() => {
+		const t = _veilT;
+		const n = 0.5 * Math.sin(t * 0.018) + 0.3 * Math.cos(t * 0.031) + 0.2 * Math.sin(t * 0.013);
+		return 1 + n * 0.08;
+	});
+
 	const veilOpacity = $derived.by(() => {
 		const phase = skyMood(model.timeOfDay).phase;
-		if (phase === 'day')   return 0.10;
-		if (phase === 'night') return 0.03;
+		// Day: track solar arc so the veil responds to sun elevation,
+		// not a flat constant. Coefficient chosen so midday ≈ original 0.10.
+		// Floor at 0.10 because sunVisibility() has discontinuities at the
+		// dawn-day boundary (t=8) and day-dusk boundary (t=17) where it
+		// momentarily drops to 0 before jumping to the 0.35 day plateau.
+		// Without the floor those discontinuities produce a brief visible
+		// dip-then-snap on the veil opacity right at 08:00 / 17:00.
+		if (phase === 'day')   return Math.max(0.10, 0.29 * sunVisibility(model.timeOfDay)) * veilBreath;
+		// Natural-night pass: lifted 0.03 → 0.06 so the upper sky carries a
+		// faint blue wash instead of pure black. Bridges the contrast gap
+		// between the (now softer) horizon limb and the sky proper.
+		if (phase === 'night') return 0.06 * veilBreath;
 		const base = sunVisibility(model.timeOfDay) * 0.32;
 		// Strong horizon emphasis (up to ~2.5× at true horizon).
 		const am = airMassFactor(model.flight.camLon, model.timeOfDay);
-		return base * (1 + Math.min(1.6, (am - 1) * 0.35));
+		return base * (1 + Math.min(1.6, (am - 1) * 0.35)) * veilBreath;
 	});
 
 	const veilTexture = makeRadialTexture([

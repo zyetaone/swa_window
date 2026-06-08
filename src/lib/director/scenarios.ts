@@ -9,7 +9,7 @@
 
 import type { LocationId, SkyState, FlightScenario } from '$lib/types';
 import { SCENARIOS } from '$content/scenarios';
-import { LOCATION_IDS } from '$content/locations';
+import { LOCATION_IDS, LOCATION_MAP } from '$content/locations';
 import { getSkyState } from '$lib/utils';
 
 const SCENARIOS_BY_LOCATION = new Map<LocationId, FlightScenario[]>();
@@ -47,14 +47,39 @@ export function pickScenario(locationId: LocationId, skyState: SkyState): Flight
 	return candidates[candidates.length - 1].scenario;
 }
 
+export interface PickNextLocationOptions {
+	/**
+	 * Restrict the candidate pool to locations whose `hasBuildings === true`
+	 * (i.e. cities with OSM building extrusions and real VIIRS night-light
+	 * footprint). Used by the director autopilot to keep the camera over a
+	 * lit footprint at night-themed kiosk installs. Defaults to false.
+	 *
+	 * If filtering would leave zero candidates (e.g. only one city in the
+	 * catalog and the camera is already there), falls back to the full pool
+	 * so the picker still progresses rather than stalling.
+	 */
+	nightLitOnly?: boolean;
+}
+
 /**
  * Pick a random next location, excluding the current one.
  * Weighted by scenario availability for the current sky state.
  */
-export function pickNextLocation(currentId: LocationId, timeOfDay: number): LocationId {
+export function pickNextLocation(
+	currentId: LocationId,
+	timeOfDay: number,
+	options: PickNextLocationOptions = {},
+): LocationId {
 	const skyState = getSkyState(timeOfDay);
-	const allLocations = [...LOCATION_IDS].filter(id => id !== currentId);
+	let allLocations = [...LOCATION_IDS].filter(id => id !== currentId);
 	if (allLocations.length === 0) return currentId;
+
+	if (options.nightLitOnly) {
+		const lit = allLocations.filter(id => LOCATION_MAP.get(id)?.hasBuildings === true);
+		// Only narrow if the filter still has candidates; otherwise let the
+		// full pool through so the director keeps moving.
+		if (lit.length > 0) allLocations = lit;
+	}
 
 	const allScenarios = SCENARIOS.filter(s => s.locationId !== currentId);
 

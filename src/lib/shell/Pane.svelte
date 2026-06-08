@@ -15,8 +15,6 @@
 	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
-	import { NIGHT_PALETTE } from "$content/compositions/night";
-	import { clamp } from "$lib/utils";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import Glass from "./window/Glass.svelte";
@@ -124,21 +122,6 @@
 	});
 
 
-	// --- Wing silhouette (dark gradient at bottom-left, shifting with bank) ---
-	//
-	// Phase 11 (wing-audit agent): two-line delta to give the silhouette a
-	// felt connection to the cabin. Was: pure rotate by bankAngle×0.3. Now:
-	//   - bank coefficient 0.3 → 0.55 so a 6° bank visibly rolls the wing
-	//   - translateY tracks motionOffsetY (turbulence + bumps) so a cabin
-	//     shake also bobs the wing 2-3px instead of leaving it floating
-	//     decoupled from the fuselage
-	//   - engineVibeY adds a tiny constant shimmer so the wing reads as
-	//     "vibrating along with the engines" at rest
-	const wingFlex = $derived(model.motion.motionOffsetY * 0.45 + model.motion.engineVibeY * 0.6);
-	const wingTransform = $derived(
-		`translateY(${wingFlex.toFixed(2)}px) rotate(${(-2 + model.motion.bankAngle * 0.55).toFixed(2)}deg)`,
-	);
-
 	// --- Glass ---
 
 	const glassVignetteOpacity = $derived(
@@ -180,27 +163,15 @@
 			style:transform={motionTransform}
 			style:filter={filterString}
 		>
-			<!-- Cesium terrain/buildings/city light billboards.
-			     Phase 10 (user direction "css derived from viirs density + map
-			     mixture as env falloff, not constant"): warm-glow city dome
-			     lives INSIDE .render-layer (sibling of CesiumViewer) so it's
-			     bound to the MAP IMAGE LAYER bounds, not the screen/window.
-			     Opacity = nightFactor (when) × nightLightScale (slider) ×
-			     location.scene.nightLightDensity (where — VIIRS-style env
-			     falloff: 0.95 over cities, 0 over open ocean). -->
+			<!-- Cesium terrain/buildings/city-light billboards. The DOM warm-
+			     glow dome that used to live here was removed once the Cesium
+			     side gained real night-light layering (VIIRS Black Marble +
+			     altitude-blended CartoDB road mask + procedural building
+			     emissive + post-process pollution corona). The CSS dome
+			     painted a uniform amber tint across the entire pane regardless
+			     of where the lights actually were — duplicative now. -->
 			<div class="render-layer" style:z-index={Z.cesium}>
 				<CesiumViewer />
-				<div
-					class="map-warm-glow"
-					style:opacity={clamp(
-						model.nightFactor
-						* model.nightLightScale
-						* model.currentLocation.scene.nightLightDensity
-						* NIGHT_PALETTE.warmGlow.peak,
-						0,
-						NIGHT_PALETTE.warmGlow.peak,
-					)}
-				></div>
 			</div>
 
 			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
@@ -212,12 +183,10 @@
 			     To re-enable: pass {rainOpacity} {frostAmount} below instead. -->
 			<Weather rainOpacity={0} {windAngle} frostAmount={0} />
 
-			<!-- Wing silhouette (bottom-left, shifts with bank) -->
-			<div
-				class="wing-silhouette"
-				style:z-index={Z.wing}
-				style:transform={wingTransform}
-			></div>
+			<!-- Wing now lives in world-three/Wing.svelte as a real 3D mesh
+			     (camera-anchored, with per-Pi fuselageOffsetM). The legacy
+			     CSS .wing-silhouette div was removed once the 3D wing
+			     landed — it was invisible in practice anyway. -->
 		</div>
 
 		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
@@ -329,43 +298,7 @@
 		height: 100% !important;
 	}
 
-	/* Phase 10 — warm city-glow dome painted ONTO the map image (sibling of
-	   Cesium canvas inside .render-layer, NOT a screen-level overlay).
-	   `mix-blend-mode: screen` reads as light emanating from below; the
-	   radial anchor at 50% 100% means the glow rises FROM the bottom edge
-	   of the map upward. Bound to the same DOM box as Cesium canvas so
-	   it can't bleed onto window-frame / glass / chrome. */
-	.map-warm-glow {
-		pointer-events: none;
-		mix-blend-mode: screen;
-		background: radial-gradient(
-			ellipse 75% 45% at 50% 100%,
-			rgba(255, 140, 50, 0.55) 0%,
-			rgba(220, 90, 30, 0.30) 35%,
-			rgba(0, 0, 0, 0) 75%
-		);
-		transition: opacity 1.5s ease;
-	}
-
 	/* Glass recess rim — on TOP of everything, creates the depth illusion */
-	/* --- Wing silhouette --- */
-
-	.wing-silhouette {
-		position: absolute;
-		bottom: -5%;
-		left: -15%;
-		width: 75%;
-		height: 35%;
-		pointer-events: none;
-		transform-origin: 80% 100%;
-		background: linear-gradient(
-			25deg,
-			rgba(20, 20, 25, 0.7) 0%,
-			rgba(30, 30, 35, 0.5) 20%,
-			rgba(40, 40, 50, 0.25) 40%,
-			transparent 60%
-		);
-	}
 
 	/* --- UI overlays --- */
 
@@ -405,12 +338,12 @@
 	   used for the 3-Pi panorama where the oval would break the seam.
 
 	   Glass.svelte + Blind.svelte elements are in child-component scope, so
-	   we reach into them via :global(). Wing silhouette stays inside
-	   scene-content and is local to this file. */
+	   we reach into them via :global(). The 3D wing is in the Three.js
+	   overlay and stays visible in no-frame mode (the 3-Pi panorama uses
+	   no-frame and explicitly wants the wing). */
 	.window-container.no-frame :global(.glass-surface),
 	.window-container.no-frame :global(.vignette),
-	.window-container.no-frame :global(.glass-recess),
-	.window-container.no-frame .wing-silhouette {
+	.window-container.no-frame :global(.glass-recess) {
 		visibility: hidden;
 	}
 	.window-container.no-frame {

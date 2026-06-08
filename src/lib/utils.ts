@@ -31,8 +31,12 @@ export const T = {
 	DAY_END:    18,
 	/** Dusk ends; night begins (blue hour is included in dusk). */
 	DUSK_END:   21,
-	/** dawnDusk factors reach zero; nightFactor reaches one. */
-	DEEP_NIGHT: 22,
+	/** dawnDusk factors reach zero; nightFactor reaches one.
+	 * Aligned with DUSK_END so sky-state, nightFactor, and dawnDuskFactor
+	 * all flip together at 21:00 instead of leaving a 1-hour "early
+	 * night but sky not committed" window between 21 and 22 that reads
+	 * as bright sky in the evening. */
+	DEEP_NIGHT: 21,
 } as const;
 
 /**
@@ -41,6 +45,16 @@ export const T = {
  * night → dawn until nf drops below 0.2 again.
  */
 export const CAR_LIGHTS_NIGHT_THRESHOLD = 0.2;
+
+/**
+ * Hysteresis band for the compositor's car-lights `when:` predicate.
+ * Mount when nightFactor crosses ABOVE _HI; unmount when it crosses
+ * BELOW _LO. Without hysteresis a single threshold causes the 350-
+ * entity CustomDataSource to teardown/rebuild on every-frame jitter
+ * across the boundary at dusk.
+ */
+export const CAR_LIGHTS_MOUNT_LO = 0.10;
+export const CAR_LIGHTS_MOUNT_HI = 0.20;
 
 /**
  * Clamp a value between min and max.
@@ -100,12 +114,30 @@ export function getSkyState(timeOfDay: number): SkyState {
 /**
  * Night factor 0..1 from decimal time of day.
  * 0 = full day, 1 = full night.
+ *
+ * √-curve (concave, exponent 0.5) instead of linear. Real-world twilight
+ * is not linear — civil/nautical/astronomical twilight stages have the
+ * sky already significantly dim within 30 min of sunset, then plateauing
+ * toward deep night over the next 60-90 min. The linear curve made
+ * 19:30 read as "50% dim" (mathematically half-night) when realistically
+ * it should already be ~70% night. √-curve fixes this without
+ * re-tuning any downstream lerps: the whole pipeline (Cesium exposure,
+ * brightnessShift, atmosphereLight, fog, baseColor, VIIRS, color-grade
+ * shader, Three.js ambient, clouds, moon, stars) consumes nightFactor
+ * and now ramps to night faster everywhere.
+ *
+ * Mirror on dawn: keeps sky dark through early dawn (5-6 AM still feels
+ * pre-dawn), brightens fast as 7 AM approaches.
  */
 export function nightFactor(timeOfDay: number): number {
 	if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) return 0;
 	if (timeOfDay < T.DAWN_START || timeOfDay > T.DEEP_NIGHT) return 1;
-	if (timeOfDay < T.DAY_START) return 1 - (timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START);
-	return (timeOfDay - T.DAY_END) / (T.DEEP_NIGHT - T.DAY_END);
+	if (timeOfDay < T.DAY_START) {
+		const tDawn = (timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START);
+		return Math.sqrt(1 - tDawn);
+	}
+	const tDusk = (timeOfDay - T.DAY_END) / (T.DEEP_NIGHT - T.DAY_END);
+	return Math.sqrt(tDusk);
 }
 
 /**

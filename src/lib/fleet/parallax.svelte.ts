@@ -161,3 +161,24 @@ export function headingOffsetForRole(role: DeviceRole, panoramaArcDeg = 44): num
 		default:      return 0;
 	}
 }
+
+/**
+ * Fuselage offset in metres — translates the viewer along the aircraft's
+ * fuselage axis (camera-local Z in the Three.js scene). Pairs with
+ * `headingOffsetForRole` to give each Pi in a 3-Pi panorama a distinct
+ * vantage on the SAME wing.
+ *
+ *   left   (front-of-aircraft seat): -6 m → sees wing leading edge
+ *   center (over wing root):          0 m → sees full wing
+ *   right  (aft seat):                +6 m → sees trailing edge / winglet
+ *
+ * Magnitude (6 m) approximates real 737 row spacing (~32" pitch × ~7 rows).
+ * solo defaults to 0 so single-Pi installs render the wing centered.
+ */
+export function fuselageOffsetForRole(role: DeviceRole): number {
+	switch (role) {
+		case 'left':  return -6;
+		case 'right': return  6;
+		default:      return 0;
+	}
+}

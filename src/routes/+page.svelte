@@ -53,9 +53,20 @@
 		return undefined;
 	});
 
-	// Debounced auto-save (moved out of AeroWindow for testability)
+	// Debounced auto-save (moved out of AeroWindow for testability).
+	// `getPersistedSnapshot()` reads `flight.altitude`, which the cruise
+	// engine writes on EVERY tick. Without a structural-change guard the
+	// $effect re-ran 60×/sec, scheduling + cancelling a setTimeout each
+	// frame (no leak, but constant microtask + GC churn). Hash the
+	// snapshot and skip when nothing meaningful changed.
+	let _lastSnapHash = '';
 	$effect(() => {
 		const data = model.getPersistedSnapshot();
+		// Round altitude to 100 ft — sub-100 ft cruise jitter shouldn't
+		// trigger a re-save. Other fields are categorical/booleans.
+		const hash = `${data.location}|${Math.round(data.altitude / 100)}|${data.weather}|${data.cloudDensity}|${data.buildingsEnabled}|${data.showClouds}|${data.syncToRealTime}`;
+		if (hash === _lastSnapHash) return;
+		_lastSnapHash = hash;
 		const timeout = setTimeout(() => savePersistedState(data), 2000);
 		return () => clearTimeout(timeout);
 	});

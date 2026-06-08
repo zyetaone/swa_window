@@ -11,12 +11,12 @@ import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
 import { effectiveCloudDensity } from '$lib/scene/effects/clouds';
-import { nextQualityMode } from '$lib/model/config-tree.svelte';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
-import { defaultShow } from '$content/shows/default.show';
-import { applyShowOpening } from '$lib/show/load';
+import { pickDailyShow } from '$content/shows';
+import { applyShowOpening, type Show } from '$lib/show/load';
+import { startShow as runnerStart, stopShow as runnerStop, getActiveShow } from '$lib/show/runner.svelte';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
@@ -85,6 +85,11 @@ export class AeroWindow {
 	// Environment
 	weather = $state<WeatherType>('cloudy');
 
+	// Move 2 — active authored show. Null = director runs freely. Non-null =
+	// director suspends (see ctx.showActive in autopilot.svelte.ts). Show
+	// runner (Move 1) is the writer; AeroWindow just surfaces it to ctx.
+	activeShowId = $state<string | null>(null);
+
 	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
 	// Window.svelte does not consume this yet; add a display-path consumer here
 	// when screensaver/video modes are implemented. Plain fields (not $state):
@@ -100,13 +105,10 @@ export class AeroWindow {
 	get userAdjustingTime()       { return hasActiveOverride('time'); }
 	get userAdjustingAtmosphere() { return hasActiveOverride('atmosphere'); }
 
-	// qualityMode/autoQuality stay as getters because CesiumModelView takes
-	// a narrowed typed interface — dropping them would push the narrowing
-	// into every consumer. The other four (blindOpen / showClouds /
-	// showBuildings / haze) were pure delegation and are gone; read
-	// `model.config.*` directly instead.
+	// qualityMode stays as a getter because CesiumModelView takes a narrowed
+	// typed interface — dropping it would push the narrowing into every
+	// consumer. autoQuality is gone (no more silent FPS-driven demotion).
 	get qualityMode() { return this.config.world.qualityMode; }
-	get autoQuality() { return this.config.world.autoQuality; }
 
 	// High-frequency animation time (not reactive — updated each tick).
 	// Read internally via #createContext to feed engines; no external consumer.
@@ -115,7 +117,9 @@ export class AeroWindow {
 	// Private perf counters
 	#frameCount    = 0;
 	#fpsLastTime   = 0;
-	#qualityCheckTimer = 0;
+	// Auto-quality demotion is removed. qualityMode stays as a manual ops
+	// pick via model.config.world.qualityMode — no silent FPS-driven switches
+	// that fight the color-grade / bloom stages.
 
 	// ── Derived ───────────────────────────────────────────────────────────────
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
@@ -153,7 +157,10 @@ export class AeroWindow {
 		//   4. Real-time wall-clock (if syncToRealTime, overrides timeOfDay
 		//      to current wall-clock below)
 		// URL params and admin pushes come later in the page lifecycle.
-		applyShowOpening(this, defaultShow);
+		// Daily-rotation: pickDailyShow() uses daySeed() so all 3 Pis in a
+		// panorama group pick the same show on a given day, and the show
+		// changes each day at midnight UTC. See content/shows/index.ts.
+		applyShowOpening(this, pickDailyShow());
 		const persisted = loadPersistedState();
 		this.#applyPersisted(persisted);
 		this.#syncWeatherConfig();
@@ -251,11 +258,37 @@ export class AeroWindow {
 	}
 
 	pickNextLocation(): LocationId {
-		return pickNextLocation(this.location, this.timeOfDay);
+		return pickNextLocation(this.location, this.timeOfDay, {
+			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly,
+		});
 	}
 
 	flyTo(locationId: LocationId): void {
 		this.flight.flyTo(locationId);
+	}
+
+	/**
+	 * Play an authored show timeline (Move 1). Sets activeShowId, which
+	 * suspends the director (Move 2 guard), and walks the show's cues at
+	 * their atMs offsets. On completion, activeShowId clears and the
+	 * director resumes from the show's final state.
+	 *
+	 * Shows with no cues just stamp the opening (`applyShowOpening` is
+	 * called by the caller — this method only starts the runner; it
+	 * doesn't replay the opening).
+	 */
+	playShow(show: Show, startAtMs: number = Date.now()): void {
+		runnerStart(this, show, startAtMs);
+	}
+
+	/** Stop any active show — director resumes immediately. */
+	stopShow(): void {
+		runnerStop();
+	}
+
+	/** Active show info (or null) — for admin UI / telemetry. */
+	get activeShow(): { showId: string; nextCueIdx: number; totalCues: number } | null {
+		return getActiveShow();
 	}
 
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
@@ -313,7 +346,9 @@ export class AeroWindow {
 		motionStep(delta, ctx);
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
-		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay);
+		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay, {
+			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly,
+		});
 		// Phase 7 — solo + center are leaders (run autopilot). left + right
 		// are followers (wait for director_decision from leader).
 		const role = this.config.camera.parallax.role;
@@ -346,8 +381,6 @@ export class AeroWindow {
 			}
 			this.flight.flyTo(directorPatch.nextLocation);
 		}
-
-		if (this.config.world.autoQuality) this.#tickAutoQuality(delta);
 
 		this.telemetry.recordFrame(performance.now() - frameStart);
 	}
@@ -388,6 +421,7 @@ export class AeroWindow {
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		c.camera                = _config.camera;
 		c.director              = _config.director;
+		c.showActive            = this.activeShowId !== null;
 		return c;
 	}
 
@@ -398,17 +432,6 @@ export class AeroWindow {
 			this.measuredFps = Math.round((this.#frameCount * 1000) / elapsed);
 			this.#frameCount = 0;
 			this.#fpsLastTime = now;
-		}
-	}
-
-	#tickAutoQuality(delta: number): void {
-		if (this.measuredFps === 0) return;
-		this.#qualityCheckTimer += delta;
-		if (this.#qualityCheckTimer < 5) return;
-		this.#qualityCheckTimer = 0;
-		const next = nextQualityMode(this.measuredFps, this.config.world.qualityMode);
-		if (next !== this.config.world.qualityMode) {
-			this.applyConfigPatch('world.qualityMode', next);
 		}
 	}
 

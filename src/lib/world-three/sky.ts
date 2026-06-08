@@ -14,6 +14,20 @@ type Vec3 = [number, number, number];
 const SUN_TILT = 0.4;
 
 /**
+ * World-space placement radius for sun-anchored layers (SunGlow core/halo,
+ * LensFlare, EffectStack GodRays source, Moon at anti-sun direction).
+ *
+ * Previously this 6e7 m constant was duplicated across SunGlow, LensFlare,
+ * EffectStack, and Moon — silent drift risk if anyone changed one without
+ * the others. Single source of truth lives here; consumers import it.
+ *
+ * 60,000 km is "past every other Three-side scene asset" + "inside
+ * camera.far (1e9)" → sun layers stay behind clouds in depth order
+ * while remaining safely renderable.
+ */
+export const SUN_PLACEMENT_M = 6e7;
+
+/**
  * World-space unit vector toward the sun for the given camera longitude
  * (deg) and time-of-day (hours 0-24). Matches the geoToCartesian Z-negation
  * convention so the result composes correctly with our Three.js scene.
@@ -22,15 +36,37 @@ const SUN_TILT = 0.4;
  *   t=6  → east of camera (dawn)
  *   t=12 → overhead (noon)
  *   t=18 → west of camera (dusk)
+ *
+ * Memoised: returns the same Vec3 array for identical (camLonDeg, timeOfDay)
+ * inputs. Since multiple components (SunGlow, Moon, LensFlare, AtmosphericVeil,
+ * ThreeOverlay, EffectStack) each compute this independently in their respective
+ * $derived / $effect blocks, the memo collapses 6-8 calls into 1 trig
+ * evaluation per frame when inputs are shared.
+ *
+ * ⚠ ALIASING WARNING: the returned reference is shared across callers and
+ * mutated in place on cache miss. Safe for the dominant pattern (caller
+ * immediately reads d[0]/d[1]/d[2] and computes a derived value
+ * synchronously). UNSAFE if a caller stores the reference and reads from
+ * it later — by then another call may have rewritten _sunMemo.result.
+ * Don't capture; always read-and-derive in the same synchronous block.
  */
+const _sunMemo: { camLonDeg: number; timeOfDay: number; result: Vec3 } = {
+	camLonDeg: Infinity,
+	timeOfDay: Infinity,
+	result: [0, 0, 0],
+};
 export function computeSunDirection(camLonDeg: number, timeOfDay: number): Vec3 {
+	if (camLonDeg === _sunMemo.camLonDeg && timeOfDay === _sunMemo.timeOfDay) {
+		return _sunMemo.result;
+	}
 	const sunLonRad = ((camLonDeg + 180 - timeOfDay * 15) * Math.PI) / 180;
 	const cosTilt = Math.cos(SUN_TILT);
-	return [
-		cosTilt * Math.cos(sunLonRad),
-		Math.sin(SUN_TILT),
-		-cosTilt * Math.sin(sunLonRad),
-	];
+	_sunMemo.result[0] = cosTilt * Math.cos(sunLonRad);
+	_sunMemo.result[1] = Math.sin(SUN_TILT);
+	_sunMemo.result[2] = -cosTilt * Math.sin(sunLonRad);
+	_sunMemo.camLonDeg = camLonDeg;
+	_sunMemo.timeOfDay = timeOfDay;
+	return _sunMemo.result;
 }
 
 /**
@@ -43,6 +79,12 @@ export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
 	const elev = Math.max(-0.12, Math.min(1, d[1]));
 	return 1.0 / Math.max(0.12, elev + 0.12);
 }
+
+// Module-scope cached return for environmentAmbient — the function is called
+// by multiple $derived consumers every frame during flight. Returning a new
+// object literal each call created short-lived GC pressure. Now we mutate
+// and return the same cached object (consumers only read, never mutate).
+const _envCache: { color: Vec3; intensity: number } = { color: [0, 0, 0], intensity: 0 };
 
 /**
  * Returns a more physically grounded ambient tint + intensity for the
@@ -70,18 +112,15 @@ export function environmentAmbient(
 	const nf = nightFactor;
 	const coolShift = nf * 0.15;
 
-	const r = Math.max(0, base[0] * horizonBoost);
-	const g = Math.max(0, base[1] * horizonBoost * (1 - coolShift * 0.6));
-	const b = Math.max(0, base[2] * horizonBoost * (1 - coolShift * 0.4) + coolShift * 0.1);
+	_envCache.color[0] = Math.max(0, base[0] * horizonBoost);
+	_envCache.color[1] = Math.max(0, base[1] * horizonBoost * (1 - coolShift * 0.6));
+	_envCache.color[2] = Math.max(0, base[2] * horizonBoost * (1 - coolShift * 0.4) + coolShift * 0.1);
 
 	// Night floor dropped from 0.45 → 0.12: prior floor made nighttime
 	// clouds + ground glow too bright. Day peak now 0.90 (was 0.90).
-	const intensity = 0.12 + (1 - nf) * 0.78;
+	_envCache.intensity = 0.12 + (1 - nf) * 0.78;
 
-	return {
-		color: [r, g, b],
-		intensity,
-	};
+	return _envCache;
 }
 
 /**

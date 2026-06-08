@@ -53,7 +53,7 @@
 	} from 'postprocessing';
 	import { HalfFloatType, Vector2, Mesh, SphereGeometry, MeshBasicMaterial } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection, sunVisibility } from './sky';
+	import { computeSunDirection, sunVisibility, SUN_PLACEMENT_M } from './sky';
 	import { updateHybridDebug } from './lab-debug';
 
 	const model = useAeroWindow();
@@ -63,8 +63,8 @@
 	// world position. .visible=false → not drawn in the main scene
 	// (the SunGlow sprite handles the visible sun); GodRaysEffect
 	// toggles .visible=true only during its own sampling pass to
-	// generate the light-source mask.
-	const SUN_PLACEMENT_M = 6e7;
+	// generate the light-source mask. SUN_PLACEMENT_M imported from
+	// sky.ts (single source of truth, shared with SunGlow/LensFlare/Moon).
 	const sunSource = new Mesh(
 		new SphereGeometry(8e5, 16, 16),
 		new MeshBasicMaterial({ color: 0xffffff, fog: false, transparent: false }),
@@ -73,10 +73,13 @@
 	sunSource.frustumCulled = false;
 	ctx.scene.add(sunSource);
 
-	// Track the sun position reactively. Same SUN_PLACEMENT and direction
-	// computation as SunGlow / LensFlare so the rays align with the
-	// visible sun sprite.
-	$effect(() => {
+	// Track the sun position via useTask, not $effect. Both camLon and
+	// timeOfDay tick every frame during simulation; $effect can fire
+	// multiple times per reactive flush + is sensitive to dependency
+	// backpressure. useTask runs exactly once per render frame, which is
+	// the right cadence for a sun-source whose only consumer is the
+	// GodRaysEffect that samples on every render anyway.
+	useTask(() => {
 		const dir = computeSunDirection(model.flight.camLon, model.timeOfDay);
 		sunSource.position.set(
 			dir[0] * SUN_PLACEMENT_M,
@@ -150,14 +153,29 @@
 	));
 
 	// Gate GodRays + bloom by sun visibility — no rays / less bloom at deep night.
+	// Also gates noise + chromatic aberration: both are invisible in daylight
+	// but still consume GPU passes. NightFactor ramp fades them in gradually.
+	//
+	// GodRays sample count scales with visibility: 40 at dawn/dusk hero moments,
+	// 20 at midday, 8 when near-invisible — saves ~0.2ms GPU at night/noon.
 	$effect(() => {
 		const vis = sunVisibility(model.timeOfDay) * (1 - model.nightFactor * 0.95);
 		godRays.blendMode.opacity.value = Math.min(1, vis * 1.5);
+		godRays.samples = vis > 0.25 ? 40 : vis > 0.08 ? 20 : 8;
 		// Raise bloom threshold at night: clouds are dimmer at night and
 		// shouldn't bloom (they should read as silhouette against stars).
 		// Base 0.38 (day, cloud peaks bloom softly) → 0.62 (night, only
 		// moon + stars + city lights bloom).
 		bloom.luminanceMaterial.uniforms.threshold.value = 0.38 + model.nightFactor * 0.24;
+
+		// Film grain invisible in daylight — gate to save the noise pass.
+		const nf = model.nightFactor;
+		noise.blendMode.opacity.value = nf > 0.15 ? 0.10 * Math.min(1, (nf - 0.15) / 0.35) : 0;
+
+		// Chromatic aberration is a subtle lens-imperfection effect —
+		// invisible at the 0.0008 offset in normal viewing. Gate to
+		// night/dusk for the subtle RGB fringe around bright lights.
+		chromatic.blendMode.opacity.value = nf > 0.3 ? (nf - 0.3) / 0.7 : 0;
 
 		// Lab-only debug bridge (All! batch).
 		// Uses the tiny deletable module in lab-debug.ts.

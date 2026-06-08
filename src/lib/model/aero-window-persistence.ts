@@ -1,5 +1,6 @@
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
 import { isValidLocation } from '$content/locations';
+import { daySeed } from '$lib/world-three/prng';
 
 // Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
 // Hardcoded here (one-time startup concern) to keep persistence.ts free of
@@ -46,7 +47,7 @@ export function loadPersistedState(): Partial<PersistedState> {
 			parsed.altitude = safeNum(parsed.altitude, ALT_DEFAULT, ALT_MIN, ALT_MAX);
 		}
 		if (parsed.cloudDensity !== undefined) {
-			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.7, 0, 1);
+			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.85, 0, 1);
 		}
 		if (parsed.location !== undefined && !isValidLocation(parsed.location)) {
 			delete parsed.location;
@@ -56,6 +57,21 @@ export function loadPersistedState(): Partial<PersistedState> {
 				delete parsed.weather;
 			}
 		}
+
+		// Daily-rotation gate — if the persisted dayKey doesn't match today's
+		// daySeed, strip `location` and `weather` so the boot path falls back
+		// to today's `pickDailyShow()` opening. Without this, persistence
+		// pinned the kiosk to the user's last manual override forever; the
+		// daily rotation was invisible on a deployed kiosk after first boot.
+		// Other fields (altitude, cloudDensity, building/cloud toggles,
+		// syncToRealTime) carry forward unchanged across days — they reflect
+		// operator preferences, not scene state.
+		const today = daySeed();
+		if (typeof parsed.dayKey !== 'number' || parsed.dayKey !== today) {
+			delete parsed.location;
+			delete parsed.weather;
+		}
+		delete parsed.dayKey; // never expose internal field to PersistedState consumers
 
 		// Validate boolean flags
 		if (parsed.buildingsEnabled !== undefined && typeof parsed.buildingsEnabled !== 'boolean') {
@@ -77,7 +93,10 @@ export function loadPersistedState(): Partial<PersistedState> {
 export function savePersistedState(state: PersistedState): void {
 	if (typeof window === 'undefined') return;
 	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+		// Stamp the current dayKey so loadPersistedState() can detect a
+		// day rollover and let the daily show rotation pick win on the
+		// next boot. See loadPersistedState() for the gate logic.
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, dayKey: daySeed() }));
 	} catch {
 		// Storage full or blocked — silently ignore
 	}

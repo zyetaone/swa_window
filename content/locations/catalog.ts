@@ -22,18 +22,6 @@ export interface SceneDefaults {
 	 * - >1.0 = thicker air (humid coast, sea moisture)
 	 */
 	haze: { intensity: number };
-	/**
-	 * Approximate VIIRS night-light density for this archetype (0..1).
-	 * Drives the env-falloff of the warm city-glow CSS dome on .render-layer.
-	 * - 0.95 city  → dense lit cells, full pollution dome
-	 * - 0.60 cloud → overflying lit terrain, partially occluded
-	 * - 0.10 desert → sparse oases
-	 * - 0.05 mountain → near-zero
-	 * - 0.00 ocean → no city light
-	 * Editing here keeps the CSS warm-glow consistent with what the user
-	 * actually sees in the satellite imagery beneath.
-	 */
-	nightLightDensity: number;
 }
 
 export interface Location {
@@ -64,44 +52,47 @@ type LocationShape = { id: string; name: string; lat: number; lon: number; utcOf
 //   desert    0.50  bone-dry air gives near-perfect distant clarity
 //   clouds    0.35  you're in the cloud layer — ambient diffuse, not haze
 
+// fog.nightBrightness was 0.008–0.04 across scenes — those non-zero values
+// produced the WHITE HORIZON BAND at night because Cesium's fog renders
+// as (fog.color × minimumBrightness) at distance and the default fog.color
+// is white. With any positive minimumBrightness at night, dark sky pixels
+// near the horizon got lifted toward white, producing a faint band.
+// Zeroing nightBrightness eliminates the minimum-brightness floor. Fog
+// density at night is still non-zero so atmospheric perspective (depth
+// cue at distance) is preserved — only the WHITE FLOOR is removed.
 const CITY_SCENE = {
-	fog: { dayDensity: 0.0014, nightDensity: 0.0006, dayBrightness: 0.55, nightBrightness: 0.04 },
+	fog: { dayDensity: 0.0014, nightDensity: 0.0006, dayBrightness: 0.55, nightBrightness: 0 },
 	clouds: { density: 0.5, speed: 0.4 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 1.0 },
-	nightLightDensity: 0.95,
 } as const;
 
 const MOUNTAIN_SCENE = {
-	fog: { dayDensity: 0.0003, nightDensity: 0.00015, dayBrightness: 0.6, nightBrightness: 0.008 },
+	fog: { dayDensity: 0.0003, nightDensity: 0.00015, dayBrightness: 0.6, nightBrightness: 0 },
 	clouds: { density: 0.3, speed: 0.3 },
 	terrain: { exaggeration: 1.5 },
 	haze: { intensity: 0.55 },
-	nightLightDensity: 0.05,
 } as const;
 
 const OCEAN_SCENE = {
-	fog: { dayDensity: 0.0018, nightDensity: 0.0008, dayBrightness: 0.5, nightBrightness: 0.012 },
+	fog: { dayDensity: 0.0018, nightDensity: 0.0008, dayBrightness: 0.5, nightBrightness: 0 },
 	clouds: { density: 0.6, speed: 0.5 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 1.3 },
-	nightLightDensity: 0.0,
 } as const;
 
 const DESERT_SCENE = {
-	fog: { dayDensity: 0.0004, nightDensity: 0.00015, dayBrightness: 0.65, nightBrightness: 0.008 },
+	fog: { dayDensity: 0.0004, nightDensity: 0.00015, dayBrightness: 0.65, nightBrightness: 0 },
 	clouds: { density: 0.2, speed: 0.2 },
 	terrain: { exaggeration: 1.3 },
 	haze: { intensity: 0.5 },
-	nightLightDensity: 0.10,
 } as const;
 
 const CLOUDS_SCENE = {
-	fog: { dayDensity: 0.0007, nightDensity: 0.00025, dayBrightness: 0.75, nightBrightness: 0.012 },
+	fog: { dayDensity: 0.0007, nightDensity: 0.00025, dayBrightness: 0.75, nightBrightness: 0 },
 	clouds: { density: 0.8, speed: 0.6 },
 	terrain: { exaggeration: 1.0 },
 	haze: { intensity: 0.35 },
-	nightLightDensity: 0.60,
 } as const;
 
 // ─── Locations ───────────────────────────────────────────────────────────────
@@ -110,15 +101,22 @@ const CLOUDS_SCENE = {
 // `satisfies` validates every entry has the required shape without widening.
 const LOCATIONS_DATA = [
 	// International destinations
-	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 15000, scene: CITY_SCENE },
-	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 20000, scene: CITY_SCENE },
+	//
+	// nightAltitude was originally a "passenger window descending into city"
+	// height (15–25kft). At those altitudes the camera FOV shrinks and the
+	// VIIRS / road-mask footprint at the frame edges falls outside view —
+	// reads as "lights going off" once the boot altitude finishes lerping
+	// down. Bumped night targets up to ~28–35kft so the camera holds a
+	// wide-area overview of the city light footprint.
+	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 28000, scene: CITY_SCENE },
+	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
+	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
 	// Southwest Airlines hubs
-	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.797, utcOffset: -6, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 25000, scene: CITY_SCENE },
-	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, utcOffset: -7, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
-	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 18000, scene: CITY_SCENE },
-	{ id: 'denver', name: 'Denver', lat: 39.8561, lon: -104.6737, utcOffset: -7, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 24000, scene: CITY_SCENE },
-	{ id: 'chicago_midway', name: 'Chicago Midway', lat: 41.7868, lon: -87.7522, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 22000, scene: CITY_SCENE },
+	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.797, utcOffset: -6, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
+	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, utcOffset: -7, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
+	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
+	{ id: 'denver', name: 'Denver', lat: 39.8561, lon: -104.6737, utcOffset: -7, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
+	{ id: 'chicago_midway', name: 'Chicago Midway', lat: 41.7868, lon: -87.7522, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
 	// Nature / scenic
 	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, utcOffset: 5.75, hasBuildings: false, defaultAltitude: 38000, nightAltitude: 42000, scene: MOUNTAIN_SCENE },
 	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, utcOffset: -10, hasBuildings: false, defaultAltitude: 40000, nightAltitude: 45000, scene: OCEAN_SCENE },

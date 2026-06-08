@@ -16,8 +16,11 @@
 	import { T, useTask, useThrelte } from '@threlte/core';
 	import { Sparkles } from '@threlte/extras';
 	import type { Group as ThreeGroup } from 'three';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
+	const model = useAeroWindow();
 	const ctx = useThrelte();
+	const nightFactor = $derived(model.nightFactor);
 
 	let group = $state.raw<ThreeGroup | undefined>();
 
@@ -28,14 +31,16 @@
 	});
 </script>
 
-<T.Group bind:ref={group}>
-	<Sparkles
-		count={80}
-		size={1.6}
-		scale={[5000, 1500, 5000]}
-		speed={0.4}
-		opacity={0.45}
-		color="#fff6e0"
-		noise={0.6}
-	/>
-</T.Group>
+{#if nightFactor > 0.3}
+	<T.Group bind:ref={group}>
+		<Sparkles
+			count={80}
+			size={1.6}
+			scale={[5000, 1500, 5000]}
+			speed={0.4}
+			opacity={0.45}
+			color="#fff6e0"
+			noise={0.6}
+		/>
+	</T.Group>
+{/if}

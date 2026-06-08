@@ -30,10 +30,10 @@
 	 * water boundaries, area boundaries) slot in by writing only their
 	 * `buildSegments` closure — about 30 lines instead of 200.
 	 */
+	import { untrack } from 'svelte';
 	import { T, useTask, useThrelte } from '@threlte/core';
 	import {
 		Matrix4,
-		Vector2,
 		AdditiveBlending,
 		type Group as ThreeGroup,
 	} from 'three';
@@ -88,11 +88,18 @@
 	let group: ThreeGroup | undefined = $state.raw();
 
 	// Snapshot the material-static props at construction time. These are
-	// per-mount constants, not reactive — destructuring into locals tells
-	// Svelte's compiler "we intentionally capture once, no closure needed."
+	// per-mount constants — LineMaterial is constructed ONCE and never
+	// re-created when the caller's props change (callers pass literal
+	// numbers anyway; OsmRoads/OsmBuildingEdges are the only consumers).
+	// The `svelte-ignore` directives suppress Svelte 5's reactive-capture
+	// warning since the one-shot capture is intentional here.
+	// svelte-ignore state_referenced_locally
 	const _coreColor = coreColor as number;
+	// svelte-ignore state_referenced_locally
 	const _coreWidth = coreWidth as number;
+	// svelte-ignore state_referenced_locally
 	const _haloColor = haloColor as number;
+	// svelte-ignore state_referenced_locally
 	const _haloWidth = haloWidth as number;
 
 	const coreMaterial = new LineMaterial({
@@ -116,20 +123,23 @@
 		vertexColors: true,
 	});
 
-	const _scratch = new Vector2();
+	// LineMaterial.resolution only needs syncing when the renderer size
+	// actually changes — was running every frame in useTask before. Now
+	// gated to a $effect on ctx.size.current so it only fires on resize.
+	$effect(() => {
+		const { width, height } = ctx.size.current;
+		coreMaterial.resolution.set(width, height);
+		haloMaterial.resolution.set(width, height);
+	});
 
 	useTask(() => {
-		const camAlt = model.flight.camAlt;
+		const { camAlt, nf } = untrack(() => ({ camAlt: model.flight.camAlt, nf: nightFactor }));
 		const altGate = camAlt <= gateStartFt
 			? 1
 			: Math.max(0, 1 - (camAlt - gateStartFt) / (gateEndFt - gateStartFt));
-		const intensity = Math.max(0, nightFactor - 0.15) * intensityMul * altGate;
+		const intensity = Math.max(0, nf - 0.15) * intensityMul * altGate;
 		coreMaterial.opacity = intensity;
 		haloMaterial.opacity = intensity * haloOpacityMul;
-
-		const size = ctx.renderer.getSize(_scratch);
-		coreMaterial.resolution.set(size.x, size.y);
-		haloMaterial.resolution.set(size.x, size.y);
 	});
 
 	$effect(() => () => {

@@ -11,6 +11,7 @@
 	import { LOCATION_MAP } from '$content/locations';
 	import { useCesiumEffect } from '$lib/world/active.svelte';
 	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/utils';
+	import { createSeededRng, daySeed } from '$lib/world-three/prng';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 
@@ -23,7 +24,13 @@
 
 	function makeDataSource(Cesium: typeof import('cesium'), loc: { lat: number; lon: number }) {
 		const datasource = new Cesium.CustomDataSource('car-lights');
-		const seeds = seedDots(loc.lat, loc.lon, LIGHT_COUNT, LIGHT_RADIUS_DEG);
+		// 3-Pi panorama determinism — pass a daySeed-seeded rng so all three
+		// Pis scatter the same 350 dots around the location. seedDots()
+		// defaults to Math.random when no rng is passed; injecting one
+		// keeps the panorama seam continuous (cars don't suddenly shift
+		// position between adjacent screens).
+		const rng = createSeededRng(daySeed());
+		const seeds = seedDots(loc.lat, loc.lon, LIGHT_COUNT, LIGHT_RADIUS_DEG, rng);
 		for (const seed of seeds) {
 			const [r, g, b, a] = lightColorBytes(lightClass(seed.rand));
 			datasource.entities.add({

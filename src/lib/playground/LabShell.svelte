@@ -219,7 +219,12 @@
 		padding: 0 8px;
 	}
 	label { display: block; font-size: 12px; color: #ccc; margin: 8px 0; }
-	label .val { float: right; color: #7faeff; font-family: ui-monospace, monospace; font-size: 11px; }
+	/* `.val` markup lives inside the consumer routes' slot content
+	   (+page.svelte for each playground variant) — scoped CSS in LabShell
+	   can't reach across the slot boundary, so the selector must be
+	   global to land. Was reported as "Unused CSS selector" until this
+	   fix because Svelte's static analysis sees no local consumer. */
+	label :global(.val) { float: right; color: #7faeff; font-family: ui-monospace, monospace; font-size: 11px; }
 
 	.select,
 	select {

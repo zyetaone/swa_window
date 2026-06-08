@@ -71,6 +71,12 @@ export class DeviceClient {
 	#peers: PeerAddress[] = [];
 	#bootTime = Date.now();
 	#destroyed = false;
+	// Track pending director_decision setTimeouts so we can cancel them on
+	// disconnect/destroy. Without this, a follower receives a transition
+	// scheduled +2.5s in the future, the page navigates or HMR fires, the
+	// timeout still resolves and calls applyScene() on a torn-down model —
+	// either crashes or pins the model + scene in memory beyond GC.
+	#pendingTransitions = new Set<ReturnType<typeof setTimeout>>();
 	#state: ConnectionState = $state('disconnected');
 
 	/** Reactive connection state — mirrors old WS transport's `state`. */
@@ -98,6 +104,14 @@ export class DeviceClient {
 
 	connect(): void {
 		if (this.#destroyed) return;
+		// Defensive re-entry guard: if a previous EventSource is still
+		// open (e.g., reconnect button, programmatic retry), close it
+		// before opening a new one so handlers + retry timers in the old
+		// instance don't survive past their owner.
+		if (this.#eventSource) {
+			this.#eventSource.close();
+			this.#eventSource = null;
+		}
 		this.#state = 'connecting';
 		this.#eventSource = new EventSource('/api/events');
 
@@ -126,6 +140,10 @@ export class DeviceClient {
 	disconnect(): void {
 		if (this.#statusInterval) { clearInterval(this.#statusInterval); this.#statusInterval = null; }
 		if (this.#peerInterval) { clearInterval(this.#peerInterval); this.#peerInterval = null; }
+		// Cancel any scheduled future director_decision applies — without
+		// this they'd fire on a torn-down model after disconnect.
+		for (const id of this.#pendingTransitions) clearTimeout(id);
+		this.#pendingTransitions.clear();
 		this.#eventSource?.close();
 		this.#eventSource = null;
 		this.#state = 'disconnected';
@@ -266,7 +284,14 @@ export class DeviceClient {
 					console.warn(`[fleet] director_decision arrived ${-delay}ms late; applying immediately`);
 					this.#model.applyScene(loc, weather);
 				} else {
-					setTimeout(() => this.#model.applyScene(loc, weather), Math.max(0, delay));
+					// Track the handle so disconnect() can cancel pending
+					// transitions and the closure stops pinning #model.
+					const id = setTimeout(() => {
+						this.#pendingTransitions.delete(id);
+						if (this.#destroyed) return;
+						this.#model.applyScene(loc, weather);
+					}, Math.max(0, delay));
+					this.#pendingTransitions.add(id);
 				}
 				break;
 			}

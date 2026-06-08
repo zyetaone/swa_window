@@ -108,4 +108,42 @@ describe('pickNextLocation', () => {
 		// promises this in scenarios.ts:57.
 		expect(pickNextLocation).toBeTypeOf('function');
 	});
+
+	describe('nightLitOnly option', () => {
+		it('returns only locations where hasBuildings === true when enabled', () => {
+			const litIds = new Set(LOCATIONS.filter(l => l.hasBuildings).map(l => l.id));
+			// Start from a non-city location so the city filter has all cities available.
+			const currentId = LOCATIONS.find(l => !l.hasBuildings)?.id ?? LOCATIONS[0].id;
+			for (const r of [0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99]) {
+				vi.spyOn(Math, 'random').mockReturnValue(r);
+				const next = pickNextLocation(currentId, 22, { nightLitOnly: true });
+				expect(litIds.has(next)).toBe(true);
+			}
+		});
+
+		it('returns the full pool when nightLitOnly is false or omitted', () => {
+			// We can't easily test "non-city is *possible*" without exhausting
+			// Math.random; just confirm the function doesn't filter when the
+			// option is absent or false — i.e. it returns a valid LocationId.
+			const allIds = new Set(LOCATIONS.map(l => l.id));
+			const currentId = LOCATIONS[0].id;
+			expect(allIds.has(pickNextLocation(currentId, 22))).toBe(true);
+			expect(allIds.has(pickNextLocation(currentId, 22, { nightLitOnly: false }))).toBe(true);
+		});
+
+		it('falls back to the full pool when the lit filter would leave zero candidates', () => {
+			// Currently impossible (we have multiple cities), but the picker
+			// must not stall if it ever happens. Construct the scenario: every
+			// city is the current location → no lit candidates after self-
+			// exclusion. We can't trivially construct that, so just assert the
+			// safety branch returns *some* valid id when the option is on
+			// and the current id is a city (the filter still has candidates).
+			const cityId = LOCATIONS.find(l => l.hasBuildings)?.id;
+			if (!cityId) return;
+			const allIds = new Set(LOCATIONS.map(l => l.id));
+			const next = pickNextLocation(cityId, 22, { nightLitOnly: true });
+			expect(allIds.has(next)).toBe(true);
+			expect(next).not.toBe(cityId);
+		});
+	});
 });

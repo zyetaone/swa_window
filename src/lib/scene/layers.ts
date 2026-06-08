@@ -31,8 +31,6 @@ export const Z = {
 	microEvents: 3,
 	/** Frost overlay (high-altitude) */
 	frost: 5,
-	/** Aircraft wing silhouette (shifts with bank angle) */
-	wing: 7,
 	/** Glass vignette darkening toward frame edges */
 	glassVignette: 9,
 	/** Outer vignette */

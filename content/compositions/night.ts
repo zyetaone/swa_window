@@ -25,6 +25,43 @@
  * engine code and stays in lib/world/.
  */
 
+/**
+ * ─── THE NIGHT SKY TUNING SURFACE (read me) ──────────────────────────────────
+ *
+ * The ENTIRE night pipeline is a function of `nightFactor(timeOfDay)`
+ * (see src/lib/utils.ts). Every Cesium dim (skyAtmosphere brightnessShift,
+ * exposure, atmosphereLight, fog, baseColor, VIIRS, color-grade shader)
+ * AND every Three.js dim (ambient floor, cloud nightDark, moon visibility)
+ * lerps off it. Reshape that ONE function and the whole composition shifts.
+ *
+ * Master curve (most impactful):
+ *   - `nightFactor` uses a √t concave curve so 30 min after sunset the sky
+ *     is already ~40% dim, 60 min in is ~60%, 90 min in is ~80%. Linear
+ *     ramp left evening hours mathematically half-bright.
+ *   - `T.DEEP_NIGHT` (utils.ts) — when nf hits 1.0. Currently 21:00.
+ *
+ * Per-layer targets (this file):
+ *   - `skyAtmosphere.brShift/satShift` — Cesium analytical sky look at night
+ *     (clamped at Cesium's -1.0 internal floor)
+ *   - `globeColor` — color of unrendered globe (where imagery has gaps)
+ *   - `viirs` — Black Marble night-light overlay opacity ceiling
+ *   - `scene.exposureDay` / `scene.atmosphereLightDay` — day anchors;
+ *     night targets are operator-tunable in config-tree (world.nightExposure,
+ *     world.atmosphereLight, world.skyDarken)
+ *
+ * Operator sliders (config-tree, also surfaced in admin panel):
+ *   - `world.nightExposure` — global Cesium tonemap dim at deep night
+ *   - `world.atmosphereLight` — atmosphere bleed onto ground at deep night
+ *   - `world.skyDarken` — multiplier on `brShift` toward Cesium's -1 clamp
+ *
+ * Three.js overlay layers (separate transparent canvas, not in this pipeline):
+ *   tuned in src/lib/world-three/sky.ts + Clouds.svelte.
+ *
+ * To darken night sky: edit the √-curve exponent in utils.ts FIRST (fixes
+ * everything via single point of truth), then lower the operator sliders if
+ * still too bright at deep night.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 export const NIGHT_PALETTE = {
 	/**
 	 * Cesium globe baseColor (uint8 RGB). Lerps day → night with nightFactor,
@@ -48,8 +85,16 @@ export const NIGHT_PALETTE = {
 	 * sunset scatter). -0.08 retains warmth while cancelling cyan edge.
 	 */
 	skyAtmosphere: {
-		satShift: { day: 0, night: -0.8, duskBias: -0.08 },
-		brShift:  { day: 0, night: -0.3, duskBias: -0.02 },
+		// satShift -1 keeps the night sky fully greyscale (eliminates
+		// the cyan limb the desat-only Hosek-Wilkie was producing).
+		// brShift base set to -0.4 so the operator knob `world.skyDarken`
+		// (default 2.4) lands at effective -0.96 — just under Cesium's
+		// -1.0 clamp, so the knob still has visible headroom in both
+		// directions. (Going lower than -0.4 here saturates the clamp and
+		// the knob becomes inert.) The bulk of night sky dimming now
+		// comes from world.nightExposure post-process exposure.
+		satShift: { day: 0, night: -1.0, duskBias: -0.08 },
+		brShift:  { day: 0, night: -0.4, duskBias: -0.02 },
 	},
 
 	/**
@@ -73,14 +118,5 @@ export const NIGHT_PALETTE = {
 		maxAlpha:         0.8,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
-	},
-
-	/**
-	 * CSS warm-glow city dome peak opacity (Pane.svelte .map-warm-glow).
-	 * Multiplied by nightFactor × nightLightScale × location.scene.nightLightDensity
-	 * at the consume site so the dome fades with time, user knob, and place.
-	 */
-	warmGlow: {
-		peak: 0.55,
 	},
 } as const;

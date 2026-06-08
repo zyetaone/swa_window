@@ -12,8 +12,8 @@
  */
 
 import { WEATHER_EFFECTS } from '$content/weather';
-import { QUALITY_MODES, type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
-import { headingOffsetForRole } from '$lib/fleet/parallax.svelte';
+import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
+import { headingOffsetForRole, fuselageOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath, readByPath } from '$lib/utils';
 
@@ -24,6 +24,7 @@ export const atmosphere = $state({
 		density: 0.85,   // CLOUD_DENSITY_MAX(1.0) * 0.85
 		speed: 0.6,      // CLOUD_SPEED_MIN(0.2) + 0.4
 		layerCount: 3,
+		opacityScale: 1.0, // Multiplies per-sprite opacity at frame time (Three-side tuner).
 	},
 	haze: {
 		amount: 0.07,    // HAZE_MIN(0) + 0.07
@@ -54,11 +55,7 @@ export const atmosphere = $state({
 	},
 });
 
-export function syncAtmosphereWeather(
-	fx: { turbulence: 'light' | 'moderate' | 'severe'; hasLightning: boolean; rainOpacity: number; windAngle: number; cloudDensityRange: [number, number]; nightCloudFloor: number; filterBrightness: number },
-): void {
-	Object.assign(atmosphere.weather, fx);
-}
+
 
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
@@ -106,6 +103,7 @@ interface CameraShape {
 		headingOffsetDeg: number;
 		fovDeg: number;
 		panoramaArcDeg: number;
+		fuselageOffsetM: number;
 	};
 	effectiveHeading(this: CameraShape, baseHeading: number): number;
 }
@@ -168,6 +166,13 @@ const _camera: CameraShape = {
 		headingOffsetDeg: 0,
 		fovDeg: 60,
 		panoramaArcDeg: 44,
+		// Position offset along the fuselage axis (camera-local Z), in metres.
+		// Used by Wing.svelte so each Pi in a 3-Pi panorama sees a different
+		// portion of the same wing — front Pi (negative) sees leading edge,
+		// back Pi (positive) sees trailing edge. solo / center = 0.
+		// Heading offset rotates the view; fuselage offset translates the
+		// viewer along the fuselage so the wing perspective shifts.
+		fuselageOffsetM: 0,
 	},
 	effectiveHeading(this: typeof _camera, baseHeading: number): number {
 		return (baseHeading + this.parallax.headingOffsetDeg + 360) % 360;
@@ -181,6 +186,7 @@ export type CameraConfig = typeof _camera;
 export function setParallaxRole(role: DeviceRole): void {
 	camera.parallax.role = role;
 	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);
+	camera.parallax.fuselageOffsetM = fuselageOffsetForRole(role);
 }
 
 
@@ -204,6 +210,13 @@ export const director = $state({
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
 		directorMinInterval: 100,      // 1:40
 		directorMaxInterval: 160,      // 2:40
+		// Restrict the director's auto-flight pool to locations where
+		// hasBuildings === true (i.e. cities with OSM building extrusions and
+		// real VIIRS night-light footprint). When false, the full pool —
+		// including ocean / mountain / desert archetypes that look dark at
+		// night — is used. Defaulted ON so an unattended kiosk install never
+		// wanders into a "lights off" moment between location changes.
+		nightLitCitiesOnly: true,
 	},
 	ambient: {
 		// Drift ranges per randomisation cycle.
@@ -230,8 +243,12 @@ export const world = $state({
 	// navy, smoothstep(0.45, 0.9, nf) * 0.85).
 	baseNightSaturation: 0.05,
 	// nightLightIntensity multiplies VIIRS alpha (and the shader's pollution
-	// corona) — the operator's "how lit do cities feel" knob.
-	nightLightIntensity: 0.6,
+	// corona) — the operator's "how lit do cities feel" knob. Bumped 0.6 → 3.0
+	// per ship-prep direction. Verified-safe: u_lightIntensity at 3.0 adds
+	// 0.04·1·3 = 0.12 to B channel through pollution path — well under the
+	// shader's clamp(rgb,0,1) ceiling. VIIRS path has outer Math.min(...,1.0).
+	// Building shader fragment-clamps. No saturation regression at 3.0.
+	nightLightIntensity: 3.0,
 	// Bloom post-process — high contrast + negative brightness means only the
 	// top of the luminance range blooms. Sigma controls the Gaussian spread.
 	// Phase 11b (user "increase additive light and bloom"): brightness
@@ -246,8 +263,12 @@ export const world = $state({
 	// (passenger-window mode) and fade above cruise altitude. The blend is on
 	// raw flight.altitude in feet so it tracks descent/climb naturally during
 	// cruise→orbit transitions. Defaults from night-lab E_DEFAULTS.
-	buildingEmissiveLowAltFt: 15000,
-	buildingEmissiveHighAltFt: 25000,
+	// Window-density gate for the procedural building shader. Raised from
+	// 15k/25k to 25k/55k so the building emissive remains visible across the
+	// full passenger-window altitude band (default 35kft is well above 25k;
+	// the old gate produced zero emissive at cruise — invisible buildings).
+	buildingEmissiveLowAltFt: 25000,
+	buildingEmissiveHighAltFt: 55000,
 	buildingEmissiveMax: 0.6,
 	// Phase 9 (Apr-15 hash palette + Cesium API knobs productionized from
 	// night-lab Variants G + H). Defaults below were tuned in the lab against
@@ -255,11 +276,35 @@ export const world = $state({
 	// fine-tune. The 6 shader uniforms (palette / chroma / dark void / env /
 	// ambient) feed COLOR_GRADING_GLSL; the 6 scene uniforms (moonlight /
 	// exposure / atmosphere / sky / viirs) drive compose.ts scene-lighting.
-	additiveStrength: 2.5,      // emissive boost on lit pixels (Feb 15 baseline value)
+	// Emissive boost on lit pixels. Feb-15's value of 2.5 was paired with
+	// multiple warm additive paths in the old shader (chroma boost + hash
+	// variance + palette stops); the simplified single-path shader needs
+	// more headroom to read as photoreal city glow. 6.0 lands at "punch"
+	// without saturating to white.
+	additiveStrength: 6.0,
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
-	nightExposure: 0.88,        // exposure at deep night — terrain visible, mids only mildly dimmed
-	atmosphereLight: 4.5,       // globe.atmosphereLightIntensity at night (was 2.0 — terrain went black)
-	skyDarken: 2.4,             // sky brightness multiplier — bumped 1.6→2.4 per user "sky is white"
+	// nightExposure 0.75: 0.50 crushed everything once the shader's warm
+	// additive was lightMask-gated (the shader fix did most of the sky-
+	// brightness work). 0.75 gives the scene back its dynamic range
+	// while still being meaningfully dimmer than the prior 0.88.
+	nightExposure: 0.75,
+	// atmosphereLight 2.4: dropped 3.5 → 2.4 after user reported a
+	// persistent white horizon band at night even with skyBox disabled
+	// and fog floor zeroed. The analytical globe.atmosphereLightIntensity
+	// produces atmospheric scattering on the globe sphere — at horizon,
+	// where atmosphere depth is largest, the scattering peaks and reads
+	// as a horizon band. 2.4 keeps terrain visible (the 2.0 floor warning
+	// in earlier comments) while dimming the horizon scatter ~30%.
+	// Natural-night pass: dropped 2.4 → 1.6. The 2.4 default lit the horizon
+	// band too aggressively — combined with brShift driving the sky proper to
+	// near-black (skyDarken below), it created a "black sky / bright ring at
+	// horizon" stark line that read as unnatural. 1.6 softens the limb scatter
+	// ~33% while still showing the atmosphere band passengers expect.
+	atmosphereLight: 1.6,
+	// Natural-night pass: 2.4 → 1.8. brShift now lands at -0.72 (instead of
+	// -0.96 next to Cesium's -1.0 clamp). The sky retains some atmospheric
+	// tint — a smooth fade into the horizon limb instead of pitch black.
+	skyDarken: 1.8,
 	viirsBrightness: 1.5,       // multiplier on viirsLayer.brightness (set at setup)
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
 	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
@@ -276,7 +321,6 @@ export const world = $state({
 	// look right side-by-side; flip to true to test.
 	useCesiumClouds: false,
 	qualityMode: 'balanced' as QualityMode,
-	autoQuality: true,
 });
 
 
@@ -292,6 +336,10 @@ export const shell = $state({
 	hudVisible: true,
 	sidePanelOpen: false,
 	showWing: true,
+	// Optional wall-clock display in the playground diag/HUD overlay.
+	// Off by default — operator can toggle via the playground lab's
+	// extraControls panel. Lab-scope only; doesn't affect the prod kiosk.
+	clockVisible: false,
 	// Phase 10 interactivity prototype — cursor parallax. When true and a
 	// mouse is present (kiosk with hidden cursor effectively has none),
 	// scene-content gets a subtle ~12px max offset based on cursor position
@@ -329,6 +377,26 @@ const _configRoot: Record<string, unknown> = config as unknown as Record<string,
 const crdt = createCRDTStore(_configRoot);
 
 /**
+ * Sync atmosphere.weather fields from a weather effect recipe.
+ * Each field is stamped through the CRDT so concurrent admin PATCHes
+ * to the same fields participate in LWW merge — previously Object.assign
+ * bypassed CRDT and would silently clobber fleet-config writes.
+ */
+export function syncAtmosphereWeather(
+	fx: { turbulence: 'light' | 'moderate' | 'severe'; hasLightning: boolean; rainOpacity: number; windAngle: number; cloudDensityRange: [number, number]; nightCloudFloor: number; filterBrightness: number },
+): void {
+	for (const [key, value] of Object.entries(fx)) {
+		const path = `atmosphere.weather.${key}`;
+		if (key === 'cloudDensityRange') {
+			atmosphere.weather.cloudDensityRange = [...value as [number, number]];
+		} else {
+			(atmosphere.weather as Record<string, unknown>)[key] = value;
+		}
+		crdt.set(path, value);
+	}
+}
+
+/**
  * Apply a path-keyed patch to the config tree.
  *
  * Local writes (no `remote` arg) stamp with `Date.now()` + current
@@ -360,10 +428,24 @@ export function applyConfigPatch(
 	// on slider snap-back, a telemetry event, and the downstream $effect
 	// invalidations. Object.is so NaN-vs-NaN counts as "unchanged."
 	const rootRec = root as unknown as Record<string, unknown>;
-	if (Object.is(readByPath(rootRec, rest), value)) return true;
+	const existing = readByPath(rootRec, rest);
 
+	// Idempotency: when the value is already what we're being asked to set,
+	// skip the CRDT stamp + setByPath. Saves a per-keystroke peer-sync PATCH
+	// on slider snap-back, a telemetry event, and the downstream $effect
+	// invalidations. Object.is so NaN-vs-NaN counts as "unchanged."
+	if (Object.is(existing, value)) return true;
+
+	// Type guard: reject patches whose value type doesn't match the existing
+	// config leaf. Prevents 'potato' → number field from corrupting runtime.
+	if (typeof value !== typeof existing) return false;
+
+	// Write config FIRST — if setByPath fails (bogus path), we must not
+	// have stamped the CRDT. Previously crdt.set() ran before setByPath(),
+	// so a failed write left a stale CRDT timestamp with no config change.
+	if (!setByPath(rootRec, rest, value)) return false;
 	crdt.set(path, value);
-	return setByPath(rootRec, rest, value);
+	return true;
 }
 
 /**
@@ -380,19 +462,6 @@ export function setParallaxRoleWithSync(role: DeviceRole): void {
 export { setCRDTDeviceId, getCRDTDeviceId };
 
 // ─── Auto-quality stepping ─────────────────────────────────────────────────────
-
-/**
- * Bands: below 20 fps → step down one level, above 40 fps → step up.
- * Returns the same mode if inside the hysteresis band, or if already at
- * the extreme of the available presets.
- */
-export function nextQualityMode(fps: number, current: QualityMode): QualityMode {
-	if (fps <= 0) return current;
-	const idx = QUALITY_MODES.indexOf(current);
-	if (fps < 20 && idx > 0) return QUALITY_MODES[idx - 1];
-	if (fps > 40 && idx < QUALITY_MODES.length - 1) return QUALITY_MODES[idx + 1];
-	return current;
-}
 
 function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};

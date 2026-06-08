@@ -3,8 +3,10 @@
 	 * FlightControls — cruising speed + altitude sliders.
 	 * Slider ranges pull from config SSOT (camera.cruise + camera.altitude).
 	 */
+	import { config } from '$lib/model/config-tree.svelte';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import RangeSlider from './RangeSlider.svelte';
+	import Toggle from './Toggle.svelte';
 
 	const model = useAeroWindow();
 </script>
@@ -31,4 +33,8 @@
 		formatValue={(v) => (v / 1000).toFixed(0) + 'k ft'}
 		oninput={(e) => model.setAltitude(parseFloat(e.currentTarget.value))}
 	/>
+	<!-- Restrict autopilot's location pool to lit cities. ON for kiosk
+	     installs so the camera never wanders to ocean / desert / mountain
+	     and dimmed the scene. OFF lets the director use the full pool. -->
+	<Toggle label="Night-Lit Cities Only" bind:checked={config.director.autopilot.nightLitCitiesOnly} />
 </section>

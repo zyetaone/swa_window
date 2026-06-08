@@ -52,7 +52,6 @@
 			model.applyConfigPatch('shell.hudVisible', false);
 			model.applyConfigPatch('shell.sidePanelOpen', false);
 			model.applyConfigPatch('world.qualityMode', 'ultra');
-			model.applyConfigPatch('world.autoQuality', false);
 			model.location = 'hyderabad';
 			model.flight.setLocationWithSky('hyderabad', 'night');
 			model.flight.altitude = 28000;
@@ -945,5 +944,4 @@
 	.reset.small { padding: 6px; font-size: 11px; }
 	footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 	footer .note { margin: 0; font-size: 10px; color: #666; line-height: 1.4; }
-	footer code { font-family: ui-monospace, monospace; color: #888; background: rgba(255, 255, 255, 0.06); padding: 1px 4px; border-radius: 3px; }
 </style>

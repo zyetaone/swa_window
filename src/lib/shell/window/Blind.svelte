@@ -44,6 +44,24 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- Drag-to-close zone — when blind is OPEN, an invisible overlay
+	     covers the window so a pointer-down + drag-down anywhere
+	     triggers the blind to close. The translated-off-screen
+	     .blind-overlay above doesn't catch events at its visual
+	     (off-screen) position, so this sibling provides the interactive
+	     surface for the "pull blind down to close" gesture. -->
+	{#if model.config.shell.blindOpen}
+		<div
+			class="blind-grab"
+			onpointerdown={blind.onPointerDown}
+			onpointermove={blind.onPointerMove}
+			onpointerup={blind.onPointerUp}
+			role="button"
+			tabindex={-1}
+			aria-label="Drag down to close window blind"
+		></div>
+	{/if}
 </div>
 
 <style>
@@ -166,4 +184,22 @@
 		0%, 100% { opacity: 0.25; transform: translateY(0); }
 		50%      { opacity: 0.85; transform: translateY(3px); }
 	}
+
+	/* Invisible drag-zone for the "pull down to close" gesture when the
+	   blind is open. Covers the whole window area; transparent so the
+	   Cesium scene + Three overlay show through. touch-action: pan-y
+	   tells the browser this surface intentionally consumes vertical
+	   pointer drags (no native scroll/zoom interference). cursor: grab
+	   gives the affordance — the only mouse cursor in the kiosk. */
+	.blind-grab {
+		position: absolute;
+		inset: 0;
+		pointer-events: auto;
+		touch-action: pan-y;
+		cursor: grab;
+		background: transparent;
+		border: none;
+		z-index: 1;
+	}
+	.blind-grab:active { cursor: grabbing; }
 </style>

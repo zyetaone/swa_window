@@ -21,6 +21,7 @@ import type { EffectProps } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { pickCloudComposition, type CloudComposition } from '$content/compositions/clouds';
 import { subscribe } from '$lib/game-loop';
+import { createSeededRng, daySeed } from '$lib/world-three/prng';
 
 // Effect-component signature — compositor passes { model }. The wrapper
 // that used to unpack model into explicit props (CloudsEffect.svelte) is
@@ -80,30 +81,39 @@ const textureSets: Record<string, readonly string[]> = {
 	storm: HEAVY,
 };
 
-function rand(min: number, max: number) { return min + Math.random() * (max - min); }
-function randRange(r: readonly [number, number]) { return rand(r[0], r[1]); }
-function randCount(r: readonly [number, number]) {
-	return Math.floor(r[0] + Math.random() * (r[1] - r[0] + 1));
+// rand/randRange/randCount accept an optional `rng` — defaults to Math.random
+// so per-event per-frame callers (cloud-wraparound resets in the animation
+// loop below) don't need to thread a seeded rng. Build-once callers (cloud
+// rebuild $effect) pass a daySeed-seeded rng to keep 3-Pi panorama in sync.
+function rand(min: number, max: number, rng: () => number = Math.random) {
+	return min + rng() * (max - min);
+}
+function randRange(r: readonly [number, number], rng: () => number = Math.random) {
+	return rand(r[0], r[1], rng);
+}
+function randCount(r: readonly [number, number], rng: () => number = Math.random) {
+	return Math.floor(r[0] + rng() * (r[1] - r[0] + 1));
 }
 
 function createSprites(
 	count: number,
 	textures: readonly string[],
 	isHorizon: boolean,
+	rng: () => number = Math.random,
 ): CloudSprite[] {
 	const sprites: CloudSprite[] = [];
 	for (let i = 0; i < count; i++) {
-		const y = rand(-5, 5);
+		const y = rand(-5, 5, rng);
 		sprites.push({
-			x: rand(-8, 8),
+			x: rand(-8, 8, rng),
 			y,
-			z: isHorizon ? rand(-80, 80) : rand(-100, 100),
-			rot: rand(0, 360),
-			scale: isHorizon ? rand(0.5, 1.3) : rand(0.5, 1.4),
-			speed: isHorizon ? rand(0.01, 0.05) : rand(0.015, 0.08),
-			texture: textures[Math.floor(Math.random() * textures.length)],
+			z: isHorizon ? rand(-80, 80, rng) : rand(-100, 100, rng),
+			rot: rand(0, 360, rng),
+			scale: isHorizon ? rand(0.5, 1.3, rng) : rand(0.5, 1.4, rng),
+			speed: isHorizon ? rand(0.01, 0.05, rng) : rand(0.015, 0.08, rng),
+			texture: textures[Math.floor(rng() * textures.length)],
 			// Horizon sprites lower opacity so terrain shows through (haze, not wall)
-			opacity: isHorizon ? rand(0.18, 0.38) : rand(0.55, 0.92),
+			opacity: isHorizon ? rand(0.18, 0.38, rng) : rand(0.55, 0.92, rng),
 			brightness: isHorizon ? 0.8 + (y + 5) / 10 * 0.2 : 0.7 + (y + 5) / 10 * 0.35,
 		});
 	}
@@ -123,8 +133,9 @@ function createCloudFromBand(
 	band: CloudComposition['horizon'],
 	textures: readonly string[],
 	isHorizon: boolean,
+	rng: () => number = Math.random,
 ): Cloud {
-	const y = randRange(band.yRange);
+	const y = randRange(band.yRange, rng);
 	// Lerp z by y position within the band so perspective reads.
 	const yMin = band.yRange[0];
 	const yMax = band.yRange[1];
@@ -132,14 +143,14 @@ function createCloudFromBand(
 	const zNear = isHorizon ? -700 : -60;
 	const zFar = isHorizon ? -1600 : -400;
 	// High y (deeper in band) reads as closer, so lerp from far → near as t grows.
-	const z = zFar + (zNear - zFar) * t + rand(-80, 80);
+	const z = zFar + (zNear - zFar) * t + rand(-80, 80, rng);
 	return {
-		x: rand(-30, 130),
+		x: rand(-30, 130, rng),
 		y,
 		z,
-		vx: randRange(band.speedRange),
-		baseScale: randRange(band.scaleRange),
-		sprites: createSprites(randCount(band.spritesPerCloud), textures, isHorizon),
+		vx: randRange(band.speedRange, rng),
+		baseScale: randRange(band.scaleRange, rng),
+		sprites: createSprites(randCount(band.spritesPerCloud, rng), textures, isHorizon, rng),
 	};
 }
 
@@ -161,12 +172,20 @@ $effect(() => {
 	// returns a new recipe (also triggered by weather change). Reading
 	// composition.id here is what binds the effect to the picker.
 	void composition.id;
+	// 3-Pi panorama determinism: seed with daySeed() so all three Pis
+	// generate identical cloud positions on the same day. Without this,
+	// each Pi picks its own Math.random and the cloud seam between
+	// adjacent screens breaks. Matches the Clouds.svelte / NightStars
+	// canonical pattern. Per-frame wraparound resets in the animation
+	// loop below stay live (Math.random) — that's per-event randomness,
+	// invisible across the panorama seam.
+	const rng = createSeededRng(daySeed());
 	const textures = textureSets[weather] ?? textureSets.clear;
 	const horizon = Array.from({ length: horizonCount }, () =>
-		createCloudFromBand(composition.horizon, textures, true),
+		createCloudFromBand(composition.horizon, textures, true, rng),
 	);
 	const mid = Array.from({ length: midCount }, () =>
-		createCloudFromBand(composition.mid, textures, false),
+		createCloudFromBand(composition.mid, textures, false, rng),
 	);
 	clouds = [...horizon, ...mid];
 });

@@ -111,11 +111,27 @@ describe('nightFactor', () => {
 		expect(nightFactor(T.DAWN_START - 0.1)).toBe(1);
 		expect(nightFactor(T.DEEP_NIGHT + 0.1)).toBe(1);
 	});
-	it('ramps 1→0 through dawn (DAWN_START→DAY_START)', () => {
-		expect(nightFactor((T.DAWN_START + T.DAY_START) / 2)).toBeCloseTo(0.5, 5);
+	it('ramps 1→0 through dawn (DAWN_START→DAY_START) with √-curve', () => {
+		// √-curve: midpoint = √0.5 ≈ 0.707. Sky stays dark through early
+		// dawn, brightens fast toward sunrise — matches real twilight.
+		expect(nightFactor((T.DAWN_START + T.DAY_START) / 2)).toBeCloseTo(Math.sqrt(0.5), 5);
 	});
-	it('ramps 0→1 through dusk/night (DAY_END→DEEP_NIGHT)', () => {
-		expect(nightFactor((T.DAY_END + T.DEEP_NIGHT) / 2)).toBeCloseTo(0.5, 5);
+	it('ramps 0→1 through dusk/night (DAY_END→DEEP_NIGHT) with √-curve', () => {
+		// √-curve: midpoint = √0.5 ≈ 0.707. Sky dims fast after sunset,
+		// plateaus toward deep night — matches civil/nautical twilight.
+		expect(nightFactor((T.DAY_END + T.DEEP_NIGHT) / 2)).toBeCloseTo(Math.sqrt(0.5), 5);
+	});
+	it('√-curve accelerates dusk early: 25% wall-clock through reads as 50% night', () => {
+		// At DAY_END + 25% of the dusk window, nightFactor reaches 0.5
+		// (the linear curve would have given 0.25 — sky still bright).
+		const quarterPoint = T.DAY_END + (T.DEEP_NIGHT - T.DAY_END) * 0.25;
+		expect(nightFactor(quarterPoint)).toBeCloseTo(0.5, 5);
+	});
+	it('√-curve keeps dawn dark longer: 25% wall-clock through still reads as 87% night', () => {
+		// At DAWN_START + 25% of the dawn window, nightFactor is still
+		// √0.75 ≈ 0.866 (linear would have given 0.75 — sky too bright at 5:30 AM).
+		const quarterPoint = T.DAWN_START + (T.DAY_START - T.DAWN_START) * 0.25;
+		expect(nightFactor(quarterPoint)).toBeCloseTo(Math.sqrt(0.75), 5);
 	});
 });
 

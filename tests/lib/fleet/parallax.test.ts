@@ -10,6 +10,7 @@ import {
 	isGroupLeader,
 	shouldApplyDirectorDecision,
 	headingOffsetForRole,
+	fuselageOffsetForRole,
 	resolveBinding,
 	saveBinding,
 	listBindings,
@@ -78,6 +79,26 @@ describe('headingOffsetForRole', () => {
 	it('scales linearly with panoramaArcDeg', () => {
 		expect(headingOffsetForRole('right', 60)).toBeCloseTo(60 / 2 - 60 / 6, 5);
 		expect(headingOffsetForRole('right', 90)).toBeCloseTo(90 / 2 - 90 / 6, 5);
+	});
+});
+
+// ─── fuselageOffsetForRole — wing parallax math ────────────────────────────
+
+describe('fuselageOffsetForRole', () => {
+	it('returns 0 for solo (single-Pi installs render wing centered)', () => {
+		expect(fuselageOffsetForRole('solo')).toBe(0);
+	});
+	it('returns 0 for center (passenger over wing root)', () => {
+		expect(fuselageOffsetForRole('center')).toBe(0);
+	});
+	it('returns -6 for left (front-of-aircraft seat, leading-edge view)', () => {
+		expect(fuselageOffsetForRole('left')).toBe(-6);
+	});
+	it('returns +6 for right (aft seat, trailing-edge view)', () => {
+		expect(fuselageOffsetForRole('right')).toBe(6);
+	});
+	it('left and right are symmetric around 0', () => {
+		expect(fuselageOffsetForRole('left')).toBe(-fuselageOffsetForRole('right'));
 	});
 });
 

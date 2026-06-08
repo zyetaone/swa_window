@@ -17,6 +17,7 @@
 		"generate-textures": "bun run scripts/generate-textures.ts",
 		"prefetch-tiles": "bun run scripts/prefetch-tiles.ts",
 		"build-pmtiles": "bun run scripts/build-pmtiles.ts",
+		"process-clouds": "bun run scripts/process-clouds.ts",
 		"serve": "bun run server.ts",
 		"start": "bun run build && bun run server.ts"
 	},
@@ -37,7 +38,7 @@
 		"vitest": "^4.1.7"
 	},
 	"dependencies": {
-		"@threlte/core": "^8.5.14",
+		"@threlte/core": "^8.5.16",
 		"@threlte/extras": "^9.19.0",
 		"cesium": "^1.141.0",
 		"multicast-dns": "^7.2.5",

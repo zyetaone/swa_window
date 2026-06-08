@@ -37,12 +37,27 @@ export const COLOR_GRADING_GLSL = `
 
 	void main() {
 		vec4 color = texture(colorTexture, v_textureCoordinates);
+
+		// Uniform-driven early-exit. At day (u_nightFactor=0) every step
+		// below is mathematically identity: the additive paths multiply by
+		// nightFactor=0 (skipped), shadowCrush=1.0 makes pow() identity, and
+		// the contrast bump is 1.0× (also identity). Since u_nightFactor is
+		// a UNIFORM (same value across all fragments per frame), this branch
+		// is divergence-free — the entire wavefront takes the same path,
+		// no GPU stall cost. Saves ~10 ops/pixel + a pow() for the ~12
+		// daytime hours of every kiosk day.
+		if (u_nightFactor < 0.001) {
+			out_FragColor = color;
+			return;
+		}
+
 		vec3 rgb = color.rgb;
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
-		// 1. lightMask — bright pixels only (VIIRS amber + CartoDB road
-		//    lines + building emissive).
-		float lightMask = smoothstep(0.12, 0.5, lum);
+		// 1. lightMask — gates the warm additive paths below. Floor lowered
+		//    from 0.12 → 0.08 so mid-bright VIIRS suburbs and dim CartoDB
+		//    arterials catch the warmth too (was missing the city extent).
+		float lightMask = smoothstep(0.08, 0.5, lum);
 
 		// 2. Desat under lights — kill blue-base/amber-light → purple bleed.
 		vec3 grayBase = vec3(lum);
@@ -50,7 +65,12 @@ export const COLOR_GRADING_GLSL = `
 
 		// 3. 3-stop warm palette (sodium → amber → warm-white). Calm-amber
 		//    brand. Additive blend so lights ADD on top of the desaturated
-		//    terrain.
+		//    terrain. CRITICAL: gated by lightMask — without this, dim
+		//    sky pixels (lum ~0.03-0.05 after brightnessShift) pick up a
+		//    warm tint from lightColor x lum x 6.0 and the night sky
+		//    reads brown/amber instead of black. desat (above) and
+		//    pollution (below) were already lightMask-gated; this line
+		//    was the lone exception and is the deep "bright sky" bug.
 		vec3 sodium  = vec3(1.0, 0.6, 0.2);
 		vec3 amber   = vec3(1.0, 0.8, 0.4);
 		vec3 warmWht = vec3(1.0, 0.95, 0.85);
@@ -58,14 +78,18 @@ export const COLOR_GRADING_GLSL = `
 		vec3 lightColor = mix(sodium, amber, smoothstep(0.2, 0.6, lum));
 		lightColor = mix(lightColor, warmWht, smoothstep(0.6, 1.0, lum));
 
-		rgb += lightColor * lum * u_additiveStrength * u_nightFactor;
+		rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
-		// 4. Soft pollution corona — subtle warm haze near bright sources.
+		// 4. Pollution corona — warm haze near bright sources. Amplified 4×
+		//    so the halo reads at viewing distance (Feb-15 numbers were near
+		//    invisible).
 		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
-		rgb += vec3(0.12, 0.06, 0.01) * pollution * u_lightIntensity;
+		rgb += vec3(0.4, 0.2, 0.04) * pollution * u_lightIntensity;
 
-		// 5. Shadow crush + contrast bump at night so cities pop.
-		float shadowCrush = 1.0 - 0.35 * u_nightFactor;
+		// 5. Shadow crush + contrast bump at night so cities pop. Crush
+		//    softened (0.35 → 0.2) so suburb mid-tones survive — too-deep
+		//    crush collapsed the city silhouette into the sky.
+		float shadowCrush = 1.0 - 0.20 * u_nightFactor;
 		rgb = pow(max(rgb, 0.0), vec3(1.0 / shadowCrush));
 		float contrast = 1.0 + 0.25 * u_nightFactor;
 		rgb = (rgb - 0.5) * contrast + 0.5;

@@ -273,7 +273,13 @@ export class FlightSimEngine {
 		const targetAlt = ctx.nightFactor > 0.5
 			? (loc?.nightAltitude ?? altCfg.default)
 			: (loc?.defaultAltitude ?? altCfg.default);
-		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.1, 1);
+		// Lerp toward the location's preferred altitude. Rate softened
+		// 0.1 → 0.04 (10s → ~25s time constant) so the initial descent
+		// from config default 35kft to a city nightAltitude doesn't
+		// perceptibly shrink the FOV and "switch off" city lights at the
+		// frame edges. Slower descent reads as "settling cruise" rather
+		// than "elevator dropping".
+		this.altitude += (targetAlt - this.altitude) * Math.min(delta * 0.04, 1);
 	}
 
 	#altitudePitch(ctx: SimulationContext): number {

@@ -14,20 +14,19 @@
 	 * Imperative (uses ctx.scene.add) because Lensflare is a non-T-proxied
 	 * Three.js Object3D that lives outside Threlte's declarative tree.
 	 */
-	import { useThrelte } from '@threlte/core';
-	import { onDestroy } from 'svelte';
+	import { useThrelte, useTask } from '@threlte/core';
 	import { PointLight, Color } from 'three';
 	import { Lensflare, LensflareElement } from 'three/addons/objects/Lensflare.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection } from './sky';
+	import { computeSunDirection, SUN_PLACEMENT_M } from './sky';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
 
-	// Match SunGlow's sun-placement so the flare ghosts originate from the
-	// exact same world point as the sun core/halo billboards.
-	const SUN_PLACEMENT_M = 6e7;
+	// SUN_PLACEMENT_M imported from sky.ts (shared with SunGlow + EffectStack +
+	// Moon) so flare ghosts originate at the exact same world point as the
+	// visible sun sprite and GodRays light source.
 
 	const ghost = makeRadialTexture([
 		[0,   'rgba(255, 255, 255, 1.0)'],
@@ -42,17 +41,16 @@
 	const light = new PointLight(0xffffff, 0);
 
 	const flare = new Lensflare();
-	// Store elements so we can scale them with air mass (less fake).
-	const anchorGhost = new LensflareElement(ghost, 520, 0,    new Color(1.0, 0.85, 0.50)); // slightly smaller base
-	const g1 = new LensflareElement(ghost, 85, 0.30, new Color(1.0, 0.65, 0.30));
-	const g2 = new LensflareElement(ghost, 60,  0.55, new Color(1.0, 0.50, 0.25));
-	const g3 = new LensflareElement(ghost, 120, 0.78, new Color(1.0, 0.75, 0.45));
-	const g4 = new LensflareElement(ghost, 42,  0.95, new Color(1.0, 0.90, 0.60));
+	// Restraint: 5 saturated-orange ghosts in a line read as the classic
+	// "Doctor Strange lens flare" stamp — instantly illustrated. Restraint:
+	// keep only the anchor glow + ONE faint distant ghost. Colors pulled
+	// toward neutral white (real camera optical coating reads cooler) and
+	// sizes shrunk. Result: a subtle radial brighten at the sun position
+	// + one barely-visible ghost on the opposite side, no Hollywood streak.
+	const anchorGhost = new LensflareElement(ghost, 220, 0, new Color(1.0, 0.92, 0.78));
+	const g1 = new LensflareElement(ghost, 38, 0.85, new Color(0.95, 0.92, 0.88));
 	flare.addElement(anchorGhost);
 	flare.addElement(g1);
-	flare.addElement(g2);
-	flare.addElement(g3);
-	flare.addElement(g4);
 	light.add(flare);
 
 	ctx.scene.add(light);
@@ -65,26 +63,41 @@
 			dir[2] * SUN_PLACEMENT_M,
 		);
 
-		// Lens flare aggressively driven by air mass: strong cinematic ghosts only
-		// when sun is low (thick air path); near-zero when high in sky or at night.
-		// Tighter floor + higher power + lower base coeffs = disappears fast as sun rises.
+		// Visibility — only at low sun angles (golden-hour wash). Lowered
+		// max from 0.78 → 0.42 + raised threshold so flare is essentially
+		// invisible above 30° elevation (matches real airline-window glass
+		// with anti-reflective coating, which doesn't flare except at very
+		// shallow angles).
 		const elev = Math.max(0.06, dir[1]);
 		const airMass = 1.0 / elev;
-		let vis = Math.pow(airMass * 0.48, 1.72) * (1 - model.nightFactor * 0.93);
-		vis = Math.min(vis, 1.15) * 0.78;
+		let vis = Math.pow(airMass * 0.42, 1.85) * (1 - model.nightFactor * 0.93);
+		vis = Math.min(vis, 0.95) * 0.42;
 
-		// Much more aggressive ghost scaling — high sun → tiny or invisible ghosts.
-		const ghostScale = Math.max(0.14, Math.min(1.08, airMass * 0.31));
-		anchorGhost.size = 520 * ghostScale;
-		g1.size = 85 * ghostScale;
-		g2.size = 60 * ghostScale;
-		g3.size = 120 * ghostScale;
-		g4.size = 42 * ghostScale;
+		const ghostScale = Math.max(0.10, Math.min(0.90, airMass * 0.24));
+		_anchorBaseSize = 220 * ghostScale;
+		_g1BaseSize = 38 * ghostScale;
 
-		light.visible = vis > 0.09;
+		light.visible = vis > 0.12;
 	});
 
-	onDestroy(() => {
+	// Per-frame jitter — real cameras don't hold lens-flare ghosts
+	// perfectly steady; micro-vibration from the airframe + atmospheric
+	// turbulence wobbles the optical reflections. Sizes are stored as
+	// _bases (set in $effect from current air-mass) and re-multiplied
+	// each frame so the wobble doesn't compound.
+	let _anchorBaseSize = 220;
+	let _g1BaseSize = 38;
+	let _flareT = 0;
+	useTask((dt) => {
+		if (!light.visible) return;
+		_flareT += dt;
+		const w1 = 1 + 0.06 * Math.sin(_flareT * 4.13) * Math.cos(_flareT * 7.91);
+		const w2 = 1 + 0.10 * Math.sin(_flareT * 6.71) * Math.cos(_flareT * 13.07);
+		anchorGhost.size = _anchorBaseSize * w1;
+		g1.size = _g1BaseSize * w2;
+	});
+
+	$effect(() => () => {
 		ctx.scene.remove(light);
 		light.remove(flare);
 		// Lensflare.dispose exists on the addon's class.

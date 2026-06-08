@@ -22,12 +22,12 @@
 	 * Bruneton scattering), port the CONCEPT into the shared compose path.
 	 */
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
+	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { subscribe } from '$lib/game-loop';
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
 	import HUD from '$lib/shell/HUD.svelte';
-	import BlindInfoCard from '$lib/shell/hud/BlindInfoCard.svelte';
 	import { hybridDebug } from '$lib/world-three/lab-debug';
 	import { activeCesium } from '$lib/world/active.svelte';
 
@@ -61,16 +61,32 @@
 	// City-mode lock — pins altitude at 500 ft and keeps the flight engine's
 	// altitude lerp suppressed by re-triggering the user-interaction override
 	// (8 s window) every 6 s while active. Toggle resumes normal autopilot.
+	// Uses setTimeout chain instead of setInterval — avoids a race where
+	// rapid cityMode toggles could leave an orphaned interval handle.
 	$effect(() => {
 		if (!cityMode) return;
 		model.flight.altitude = 500;
 		model.onUserInteraction('altitude');
-		const i = setInterval(() => {
-			model.flight.altitude = 500;
-			model.onUserInteraction('altitude');
-		}, 6000);
-		return () => clearInterval(i);
+		let active = true;
+		const schedule = () => {
+			if (!active) return;
+			setTimeout(() => {
+				if (!active) return;
+				model.flight.altitude = 500;
+				model.onUserInteraction('altitude');
+				schedule();
+			}, 6000);
+		};
+		schedule();
+		return () => { active = false; };
 	});
+
+	const ROLE_PRESETS = {
+		left:   { headingOffsetDeg: -18, fovDeg: 42 },
+		center: { headingOffsetDeg: 0, fovDeg: 45 },
+		right:  { headingOffsetDeg: 18, fovDeg: 42 },
+		solo:   { headingOffsetDeg: 0, fovDeg: 45 },
+	} as const;
 </script>
 
 <LabShell 
@@ -84,17 +100,10 @@
 	{#snippet viewer()}
 		<!-- Cesium owns the globe + atmosphere + post-process. -->
 		<CesiumViewer />
-		<!-- Three.js overlay above, camera-mirrored from Cesium. -->
+		<!-- Three.js overlay above, camera-mirrored from Cesium. The wing
+		     is now rendered as a 3D mesh inside ThreeOverlay (Wing.svelte),
+		     replacing the prior CSS .wing-silhouette div. -->
 		<ThreeOverlay />
-		<!-- Wing silhouette — same CSS shape as production Pane.svelte,
-		     overlaid on the viewer. Bank-angle-rolled + vertically bobbed
-		     by the motion engine so it reads as "you're inside a plane". -->
-		{#if model.config.shell.showWing}
-			<div
-				class="wing-silhouette"
-				style:transform={`translateY(${(model.motion.motionOffsetY * 0.45 + model.motion.engineVibeY * 0.6).toFixed(2)}px) rotate(${(-2 + model.motion.bankAngle * 0.55).toFixed(2)}deg)`}
-			></div>
-		{/if}
 
 		<!-- Production HUD spike for hybrid validation (ADR-004).
 		     Renders the real TelemetryOverlay / BlindInfoCard (driven by the shared
@@ -103,9 +112,8 @@
 		     godrays, bloom, neon, meteors, etc. before porting the full shell. -->
 		<HUD />
 
-		<!-- Hybrid debug overlay (expanded in All! batch).
-		     Small, deletable panel showing live artistic + postprocess state.
-		     Only visible in this lab for validation of the Three layers over Cesium. -->
+		<!-- Hybrid debug overlay — live artistic + postprocess state readout.
+		     Lab-only instrument for validating the Three layers over Cesium. -->
 		<div class="hybrid-debug">
 			<div class="label">Hybrid Debug</div>
 			<div class="row">night: <span>{model.nightFactor.toFixed(2)}</span></div>
@@ -116,21 +124,6 @@
 			<div class="row">meteors: <span>{model.nightFactor > 0.5 ? 'on' : 'off'}</span></div>
 			<div class="row">3-Pi: <span>{model.config.camera.parallax.role}</span></div>
 		</div>
-
-		<!-- Shell mounting spike experiment (All! batch, Item 1).
-		     Concrete test of real production shell chrome over the hybrid renderer.
-		     Currently forcing a real BlindInfoCard (centered, reduced opacity) + a
-		     minimal Glass test layer to observe z-index, backdrop-filter interaction,
-		     and readability against the artistic layers + EffectStack postprocess.
-		     This is throwaway — delete or expand freely. -->
-		<div style="position:absolute; inset:0; z-index:25; pointer-events:none; opacity:0.55;">
-			<BlindInfoCard />
-		</div>
-
-		<!-- Second shell experiment layer: minimal Glass test (backdrop + vignette) -->
-		<div class="shell-glass-test" style="position:absolute; inset:0; z-index:26; pointer-events:none;">
-			<div class="glass-vignette"></div>
-		</div>
 	{/snippet}
 
 	{#snippet diag()}
@@ -139,10 +132,46 @@
 			<div>flight: <code>{model.flight.camLat.toFixed(2)}°N, {model.flight.camLon.toFixed(2)}°E, {(model.flight.camAlt / 1000).toFixed(2)}k ft</code></div>
 			<div>nightFactor: <code>{model.nightFactor.toFixed(2)}</code> · weather: <code>{model.weather}</code></div>
 			<div>cloud density: <code>{(model.effectiveCloudDensity * 100).toFixed(0)}%</code></div>
+			{#if model.config.shell.clockVisible}
+				<div class="clock">
+					{(() => {
+						const h = Math.floor(model.timeOfDay);
+						const m = Math.floor((model.timeOfDay - h) * 60);
+						return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+					})()}
+				</div>
+			{/if}
 		</aside>
 	{/snippet}
 
 	{#snippet extraControls()}
+		<fieldset>
+			<legend>HUD</legend>
+			<label style="display:flex;align-items:center;gap:6px;font-size:11px;">
+				<input type="checkbox" bind:checked={model.config.shell.clockVisible} />
+				Show clock
+			</label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Weather</legend>
+			<select
+				value={model.weather}
+				onchange={(e) => {
+					model.setWeather((e.currentTarget as HTMLSelectElement).value as 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm');
+				}}
+			>
+				<option value="clear">clear</option>
+				<option value="cloudy">cloudy</option>
+				<option value="rain">rain</option>
+				<option value="overcast">overcast</option>
+				<option value="storm">storm</option>
+			</select>
+			<div style="font-size:10px;opacity:0.7;margin-top:3px;">
+				Rain + spatter activate at <code>rain</code> / <code>storm</code>.
+			</div>
+		</fieldset>
+
 		<fieldset>
 			<legend>Night intensity</legend>
 			<label>
@@ -162,18 +191,13 @@
 			<select
 				value={model.config.camera.parallax.role}
 				onchange={(e) => {
-					const role = (e.currentTarget as HTMLSelectElement).value as any;
-					const p = model.config.camera.parallax;
-					p.role = role;
-					if (role === 'left') {
-						p.headingOffsetDeg = -18; p.fovDeg = 42;
-					} else if (role === 'right') {
-						p.headingOffsetDeg = 18; p.fovDeg = 42;
-					} else if (role === 'center') {
-						p.headingOffsetDeg = 0; p.fovDeg = 45;
-					} else {
-						p.headingOffsetDeg = 0; p.fovDeg = 45;
-					}
+					const role = (e.currentTarget as HTMLSelectElement).value as keyof typeof ROLE_PRESETS;
+					// setParallaxRole is the SSOT — sets role, headingOffsetDeg,
+					// AND fuselageOffsetM (the latter drives Wing.svelte's per-Pi
+					// position so the wing visibly shifts between left/center/right).
+					setParallaxRole(role);
+					// Lab-only fov override (production keeps fov at config default).
+					model.config.camera.parallax.fovDeg = ROLE_PRESETS[role].fovDeg;
 				}}
 			>
 				<option value="solo">solo (0°)</option>
@@ -184,24 +208,21 @@
 			<div style="font-size:10px;opacity:0.7;margin-top:3px;">
 				offset: <code>{model.config.camera.parallax.headingOffsetDeg.toFixed(0)}°</code> · 
 				fov: <code>{model.config.camera.parallax.fovDeg.toFixed(0)}°</code>
-				<button 
+				<button
 					style="margin-left:6px;font-size:9px;padding:1px 4px;"
 					onclick={() => {
-						const p = model.config.camera.parallax;
-						p.role = 'solo'; p.headingOffsetDeg = 0; p.fovDeg = 45;
+						setParallaxRole('solo');
+						model.config.camera.parallax.fovDeg = ROLE_PRESETS.solo.fovDeg;
 					}}
 				>reset</button>
-				<button 
+				<button
 					style="margin-left:4px;font-size:9px;padding:1px 4px;"
 					onclick={() => {
-						const p = model.config.camera.parallax;
 						const roles = ['solo', 'left', 'center', 'right'] as const;
-						const idx = (roles.indexOf(p.role) + 1) % roles.length;
+						const idx = (roles.indexOf(model.config.camera.parallax.role) + 1) % roles.length;
 						const next = roles[idx];
-						p.role = next;
-						if (next === 'left') { p.headingOffsetDeg = -18; p.fovDeg = 42; }
-						else if (next === 'right') { p.headingOffsetDeg = 18; p.fovDeg = 42; }
-						else { p.headingOffsetDeg = 0; p.fovDeg = 45; }
+						setParallaxRole(next);
+						model.config.camera.parallax.fovDeg = ROLE_PRESETS[next].fovDeg;
 					}}
 				>cycle</button>
 			</div>
@@ -224,28 +245,6 @@
 <style>
 	/* All .playground / drawer / chip-row / fieldset / .diag / .city-btn styles
 	   now live in LabShell (single source of truth for both lean labs). */
-
-	/* Wing silhouette — exact shape copied from src/lib/shell/Pane.svelte
-	   so the lab matches what the production Cesium route shows. Scoped to
-	   this route's viewer snippet. transform-origin matches Pane so the
-	   bank-angle rotation pivots around the wing's outer tip, not centre. */
-	.wing-silhouette {
-		position: absolute;
-		bottom: -5%;
-		left: -15%;
-		width: 75%;
-		height: 35%;
-		pointer-events: none;
-		transform-origin: 80% 100%;
-		z-index: 7;
-		background: linear-gradient(
-			25deg,
-			rgba(20, 20, 25, 0.7) 0%,
-			rgba(30, 30, 35, 0.5) 20%,
-			rgba(40, 40, 50, 0.25) 40%,
-			transparent 60%
-		);
-	}
 
 	/* Minimal hybrid debug panel (All! item 1) — deletable after validation */
 	.hybrid-debug {
@@ -279,17 +278,12 @@
 		font-family: ui-monospace, monospace;
 	}
 
-	/* Shell Glass test layer (All! Item 1) — minimal deletable experiment */
-	.shell-glass-test .glass-vignette {
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(
-			ellipse at center,
-			transparent 40%,
-			rgba(0, 0, 0, 0.25) 70%,
-			rgba(0, 0, 0, 0.45) 100%
-		);
-		backdrop-filter: blur(1.5px);
-		pointer-events: none;
+	.diag .clock {
+		font-family: ui-monospace, monospace;
+		font-size: 22px;
+		color: #cfe5ff;
+		letter-spacing: 1px;
+		margin-top: 4px;
+		text-shadow: 0 0 8px rgba(120, 180, 255, 0.4);
 	}
 </style>

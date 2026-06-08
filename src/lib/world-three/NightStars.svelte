@@ -23,6 +23,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { STARS_RADIUS_M } from './state.svelte';
 	import { airMassFactor } from './sky';
+	import { createSeededRng, daySeed, spherePoint } from './prng';
 
 	const model = useAeroWindow();
 
@@ -32,27 +33,58 @@
 		ambientIntensity?: number;
 	} = $props();
 
-	const STAR_COUNT = 800;
+	const STAR_COUNT = 1200;
 
-	// Pre-allocate position + per-star phase. Spherical distribution via
-	// the standard u/v → (θ, φ) transform — uniform across the sphere.
+	// Spectral-class palette (approximate Bayer distribution). Cumulative
+	// probabilities + tints — realistic mix is M-class red dwarves
+	// dominant (~60%), G-class sun-like ~20%, A/F white ~15%, O/B blue
+	// rare ~5%. The night sky reads with proper colour variance instead
+	// of a uniform white twinkle.
+	type SpectralClass = { tint: [number, number, number]; cumulativeP: number };
+	const SPECTRAL: SpectralClass[] = [
+		{ tint: [1.00, 0.70, 0.50], cumulativeP: 0.60 }, // M/K — warm orange/red
+		{ tint: [1.00, 0.92, 0.78], cumulativeP: 0.80 }, // G — sun-yellow
+		{ tint: [0.95, 0.96, 1.00], cumulativeP: 0.95 }, // A/F — white
+		{ tint: [0.78, 0.88, 1.00], cumulativeP: 1.00 }, // O/B — blue-white
+	];
+
+	function pickSpectralTint(rng: () => number): [number, number, number] {
+		const r = rng();
+		for (const s of SPECTRAL) if (r <= s.cumulativeP) return s.tint;
+		return SPECTRAL[SPECTRAL.length - 1].tint;
+	}
+
+	// Pre-allocate position + per-star phase + magnitude + spectral colour.
+	// Seeded with daySeed() so all three Pis in a 3-Pi panorama see the
+	// SAME star positions on the same day (continuous sky across screens).
+	// Day rolls over → new seed → fresh constellation arrangement.
+	// Per-frame twinkle phase advance stays live (uTime in shader) so
+	// individual Pis don't synchronise their oscillation, only the
+	// underlying star positions.
+	const rng = createSeededRng(daySeed());
 	const positions = new Float32Array(STAR_COUNT * 3);
 	const phases = new Float32Array(STAR_COUNT);
+	const magnitudes = new Float32Array(STAR_COUNT);
+	const colors = new Float32Array(STAR_COUNT * 3);
 	for (let i = 0; i < STAR_COUNT; i++) {
-		const u = Math.random();
-		const v = Math.random();
-		const theta = 2 * Math.PI * u;
-		const phi = Math.acos(2 * v - 1);
-		const r = STARS_RADIUS_M;
-		positions[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
-		positions[i * 3 + 1] = r * Math.cos(phi);
-		positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-		phases[i] = Math.random() * Math.PI * 2;
+		const [x, y, z] = spherePoint(rng, STARS_RADIUS_M);
+		positions[i * 3 + 0] = x;
+		positions[i * 3 + 1] = y;
+		positions[i * 3 + 2] = z;
+		phases[i] = rng() * Math.PI * 2;
+		const m = Math.pow(rng(), 3); // cubic bias toward dim
+		magnitudes[i] = m;
+		const tint = pickSpectralTint(rng);
+		colors[i * 3 + 0] = tint[0];
+		colors[i * 3 + 1] = tint[1];
+		colors[i * 3 + 2] = tint[2];
 	}
 
 	const geometry = new BufferGeometry();
 	geometry.setAttribute('position', new BufferAttribute(positions, 3));
 	geometry.setAttribute('aPhase', new BufferAttribute(phases, 1));
+	geometry.setAttribute('aMagnitude', new BufferAttribute(magnitudes, 1));
+	geometry.setAttribute('aColor', new BufferAttribute(colors, 3));
 
 	const material = new ShaderMaterial({
 		transparent: true,
@@ -62,31 +94,69 @@
 		uniforms: {
 			uTime: { value: 0 },
 			uVisibility: { value: 0 },
+			uNightFactor: { value: 0 },
 		},
 		vertexShader: /* glsl */ `
 			attribute float aPhase;
+			attribute float aMagnitude;
+			attribute vec3 aColor;
 			uniform float uTime;
 			uniform float uVisibility;
+			uniform float uNightFactor;
 			varying float vAlpha;
+			varying vec3 vColor;
 			void main() {
-				// 0.6-1.0 twinkle range — never fully dark so the constellation
-				// stays readable even at trough of the oscillation.
-				float twinkle = 0.6 + 0.4 * sin(uTime * 0.9 + aPhase * 3.0);
-				vAlpha = uVisibility * twinkle;
+				// Twinkle: bright stars twinkle more (eye's refraction
+				// sensitivity correlates with apparent magnitude).
+				// Two irrational frequencies prevent visible cycle.
+				float twinkleBase = sin(uTime * 0.9 + aPhase * 3.0);
+				float twinkleFast = sin(uTime * 2.7 + aPhase * 7.13);
+				// Dim stars barely twinkle (~6% flicker); bright stars
+				// twinkle dramatically (~50%). Matches real eye refraction
+				// sensitivity which scales with apparent magnitude.
+				float twinkleAmp = 0.06 + aMagnitude * 0.45;
+				float twinkle = 1.0 + twinkleAmp * (0.7 * twinkleBase + 0.3 * twinkleFast);
+				// Magnitude-driven brightness — dim stars stay dim, bright
+				// stars punch (and bloom in EffectStack).
+				float bright = 0.18 + aMagnitude * 1.05;
+
+				// Per-star magnitude-gated fade-in. This is how a real night
+				// sky reveals itself: bright planets/stars (Vega, Sirius)
+				// appear first at civil twilight; mid-magnitude stars phase
+				// in as the sky darkens; the faintest only at deep dark.
+				// Threshold is linear in magnitude:
+				//   - aMag = 1.0 (brightest) → threshold 0.18 (civil twilight)
+				//   - aMag = 0.5 (mid)       → threshold ~0.52
+				//   - aMag = 0.0 (faintest)  → threshold 0.85 (only deep night)
+				// 0.12 smoothstep width gives ~2 min of fade across the
+				// real-time-sync cycle — passengers see stars phase in,
+				// not all appear at once. Bright-star floor lowered 0.30 →
+				// 0.18 so Vega/Sirius show through the blue hour, matching
+				// what passengers actually see from a window seat at dusk.
+				float starThreshold = 0.18 + (1.0 - aMagnitude) * 0.67;
+				float starFade = smoothstep(starThreshold, starThreshold + 0.12, uNightFactor);
+
+				vAlpha = uVisibility * twinkle * bright * starFade;
+				vColor = aColor;
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
 				gl_Position = projectionMatrix * mv;
-				// sizeAttenuation false-equivalent: fixed pixel size.
-				gl_PointSize = 2.6;
+				// Size scales with magnitude: 1.4 px for the dimmest stars,
+				// 4.4 px for the brightest — the brightest will bloom strongly.
+				gl_PointSize = 1.4 + aMagnitude * 3.0;
 			}
 		`,
 		fragmentShader: /* glsl */ `
 			varying float vAlpha;
+			varying vec3 vColor;
 			void main() {
 				vec2 uv = gl_PointCoord - 0.5;
 				float d = length(uv);
-				// Soft round disk via smoothstep.
-				float a = smoothstep(0.5, 0.05, d);
-				gl_FragColor = vec4(1.0, 1.0, 1.0, a * vAlpha);
+				// Soft round disk via smoothstep, with a tight inner core
+				// so bright stars get a hot centre that picks up bloom.
+				float disk = smoothstep(0.5, 0.05, d);
+				float core = smoothstep(0.18, 0.0, d);
+				vec3 c = vColor * (1.0 + core * 0.5);
+				gl_FragColor = vec4(c, disk * vAlpha);
 			}
 		`,
 	});
@@ -102,6 +172,10 @@
 		const amFactor = 1 + Math.min(0.4, (am - 1) * 0.08);
 		const ai = ambientIntensity ?? 1;
 		material.uniforms.uVisibility.value = Math.max(0, model.nightFactor - 0.4) * 1.5 * amFactor * ai;
+		// Raw nightFactor for the per-star magnitude-gated fade-in (vertex shader).
+		// uVisibility handles env modulation (airMass, ambient); uNightFactor
+		// drives the "first stars appear, more reveal as it darkens" cinematic.
+		material.uniforms.uNightFactor.value = model.nightFactor;
 	});
 
 	$effect(() => () => {

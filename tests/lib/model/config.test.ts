@@ -93,14 +93,14 @@ describe('setByPath behaviour (via applyConfigPatch)', () => {
 		expect(ok).toBe(false);
 	});
 
-	it('writes the raw value without coercion (caller owns type validation)', () => {
-		// setByPath is a low-level mutator — it does NOT validate value types.
-		// Callers that need validation (fleet protocol) do so before calling.
+	it('rejects writes whose value type does not match the existing leaf', () => {
+		// applyConfigPatch enforces a type guard (config-tree.svelte.ts:420)
+		// so a runaway 'potato' string can't land in a number/boolean field
+		// and corrupt downstream consumers. Reject + no mutation.
 		const original = shell.hudVisible;
 		const ok = applyConfigPatch('shell.hudVisible', 'not-a-boolean' as unknown as boolean);
-		expect(ok).toBe(true);
-		expect(shell.hudVisible).toBe('not-a-boolean' as unknown as boolean);
-		shell.hudVisible = original;
+		expect(ok).toBe(false);
+		expect(shell.hudVisible).toBe(original);
 	});
 });
 
