@@ -1,7 +1,29 @@
 # ADR-012 — Defer adopting html-in-canvas until post-Pi-install
 
-**Status:** Proposed
-**Date:** 2026-04-24
+**Status:** Deferred — origin trial open, spike scheduled post-install
+**Date:** 2026-04-24 · **Reviewed:** 2026-06-10
+
+## 2026-06-10 status review
+
+`canvas-draw-element` advanced from flag-only to a **Chromium origin trial
+(M148–M151, opened 2026-05-19)**, and WICG reached rough stage-2 consensus on
+the API shape. The WebGL primitive is `texElementImage2D`. **However**, Gecko
+filed a *negative* position and neither Firefox nor Safari will implement it —
+it remains Chrome-exclusive for the foreseeable future.
+
+Re-scoring the three revisit gates below:
+1. Frame p95 ≥ 22 ms traced to shell compositor — **still unmeasured** (needs Pi 5 hardware).
+2. Ships unflagged in Stable OR W3C working draft — **partial**: origin trial + WICG stage-2, but not unflagged Stable and not a W3C WD.
+3. Pi spike shows GPU-mem reduction — **not done**.
+
+**Decision unchanged for first install (defer)**, but the advancement makes a
+post-install spike worthwhile. For this kiosk the Chrome-exclusivity is moot
+(we ship our own Chromium per Pi); the real pull is a single unified canvas so
+the night grade + bloom + bank/breathing transforms apply across shell *and*
+scene instead of only Cesium's pixels (the WindowChrome shell added more CSS
+z-layers, not fewer). Risk: origin-trial spec churn + DevTools/HMR ergonomics.
+**Action: after the Hyderabad unit is up, run gate-1 (measure Pi shell p95) +
+gate-3 (`texElementImage2D` HUD-over-Cesium POC).**
 
 ## Context
 

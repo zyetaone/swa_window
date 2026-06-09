@@ -51,7 +51,6 @@
 		Color,
 		DoubleSide,
 		type Object3D,
-		type Group as ThreeGroup,
 	} from 'three';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
@@ -84,26 +83,25 @@
 	// without a negative-scale mirror (which would reverse the text).
 	const WING_NATURAL_DIR = 1;
 
-	// Placement holder (positioned per frame) → two wing holders, one per side.
+	// ONE wing holder. placement carries shared Y/Z; the holder carries X +
+	// the direction mirror. The reverse orbit direction is handled by a
+	// negative-X scale on the holder (see tick) — NOT a second GLB — so there's
+	// only ever one wing in the scene (no stray second wing, no visibility swap
+	// to fight Threlte over). The model has zero textures, so a mirror has no
+	// livery text to reverse.
 	const placement = new Group();
-	const rightHolder = new Group();
-	const leftHolder = new Group();
-	placement.add(rightHolder, leftHolder);
-	// placement carries the shared Y/Z; each holder carries its own ±X so the
-	// left wing sits at the X-mirror of the right (its model also gets the
-	// mirrored rotation below) → the left view mirrors the right's composition.
+	const holder = new Group();
+	placement.add(holder);
 	placement.position.set(0, WING_Y_BASE, WING_Z_BASE);
-	rightHolder.position.x = WING_X_BASE;
-	leftHolder.position.x = -WING_X_BASE;
+	holder.position.x = WING_X_BASE;
 
-	// Mutable X base. The tick re-derives placement.position.x every frame, so a
-	// raw write to placement.position.x is clobbered — the tuner drives THIS via
-	// __wing.setXBase instead.
+	// Mutable X base — the tuner drives this via __wing.setXBase; the tick
+	// re-derives holder.position.x from it every frame.
 	let xBase = WING_X_BASE;
 
-	// Winglet tips (camera-local, per wing) for the night nav lights.
-	let tipRight = new Vector3();
-	let tipLeft = new Vector3();
+	// Winglet tip in HOLDER-LOCAL space for the night nav lights (so the
+	// holder's mirror scale flips it with the wing).
+	let tip = new Vector3();
 
 	// Convert a GLB material to a FLAT (unlit) DoubleSide MeshBasicMaterial,
 	// keeping its albedo colour/map. Flat because the scene ambient is near-zero
@@ -118,18 +116,9 @@
 			fog: false,
 		});
 
-	// Load + normalize + orient one wing GLB into the given holder. Both wings
-	// get the IDENTICAL pose — because the left wing is the mirror geometry,
-	// the same transform renders it as the correct mirror image (winglet
-	// trailing the other way) with readable livery.
+	// Load + normalize + orient the wing GLB into the holder.
 	const loader = new GLTFLoader();
-	function loadWing(
-		url: string,
-		holder: ThreeGroup,
-		rot: [number, number, number],
-		isLeft: boolean,
-		onTip: (t: Vector3) => void,
-	): () => void {
+	function loadWing(url: string, rot: [number, number, number]): () => void {
 		let cancelled = false;
 		loader
 			.loadAsync(url)
@@ -147,35 +136,30 @@
 					me.material = Array.isArray(mat) ? mat.map(toFlat) : toFlat(mat);
 				});
 				holder.add(m);
-				// Winglet tip = the outboard span extreme (max.x for the right
-				// wing, min.x for the mirrored left), at the top of the bbox.
-				const tb = new Box3().setFromObject(holder);
-				onTip(new Vector3(isLeft ? tb.min.x : tb.max.x, tb.max.y, (tb.min.z + tb.max.z) / 2));
-				// Dev-only live tuning hook. __wing.model is the right wing (the
-				// one the tuner edits); the left mirrors the same baked pose, so
-				// re-tune the right + reload and both update.
+				// Winglet tip in holder-local space (worldToLocal undoes the
+				// holder transform, leaving m's own transformed outboard-top
+				// extreme). Nav lights are children of holder, so this rides the
+				// mirror scale automatically.
+				holder.updateWorldMatrix(true, false);
+				const wb = new Box3().setFromObject(m);
+				tip = holder.worldToLocal(new Vector3(wb.max.x, wb.max.y, (wb.min.z + wb.max.z) / 2));
+				navLight.position.copy(tip);
+				strobeLight.position.copy(tip);
+				// Dev-only live tuning hook.
 				if (import.meta.env.DEV) {
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const w = ((window as any).__wing ??= {
-						placement,
-						aero: model,
+					(window as any).__wing = {
+						placement, aero: model, model: m,
 						setXBase: (v: number) => { xBase = v; },
 						get xBase() { return xBase; },
-					});
-					if (holder === rightHolder) w.model = m;
+					};
 				}
 			})
 			.catch((err) => console.error(`[Wing] ${url} load failed`, err));
 		return () => { cancelled = true; };
 	}
 
-	$effect(() => {
-		// Left wing gets the X-mirror of the pose (negate Y/Z rotations) so its
-		// composition mirrors the right's: winglet up-right instead of up-left.
-		const c1 = loadWing('/models/wing.glb', rightHolder, [WING_ROT_X, WING_ROT_Y, WING_ROT_Z], false, (t) => (tipRight = t));
-		const c2 = loadWing('/models/wing-left.glb', leftHolder, [WING_ROT_X, -WING_ROT_Y, -WING_ROT_Z], true, (t) => (tipLeft = t));
-		return () => { c1(); c2(); };
-	});
+	$effect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
 
 	// ─── Night nav lights ───────────────────────────────────────────────
 	const lightGeom = new SphereGeometry(0.12, 8, 8);
@@ -199,10 +183,10 @@
 	const strobeLight = new Mesh(lightGeom, strobeMat);
 	strobeLight.frustumCulled = false;
 
-	// Nav lights live on the placement (not a wing holder) and are repositioned
-	// each frame to the visible wing's tip — so they're correct for whichever
-	// wing is shown.
-	placement.add(navLight, strobeLight);
+	// Nav lights are children of the holder, fixed at the holder-local winglet
+	// tip — so they inherit the holder's direction-mirror scale automatically
+	// (no per-frame repositioning).
+	holder.add(navLight, strobeLight);
 
 	// Reusable bank quaternions — avoid per-frame allocation. Bank is now
 	// three-axis: a screen-plane roll (z) plus a dimensional pitch (x) + yaw
@@ -229,23 +213,15 @@
 		const group = placement.parent;
 		if (!group) return;
 
-		// Wing follows flight direction — show the wing whose winglet trails the
-		// current orbit sense, and PARK THE OTHER FAR OFF-SCREEN. placement
-		// carries shared Y/Z; each holder carries its mirrored X.
-		//
-		// Why position-park instead of `.visible = false`: Threlte re-renders
-		// <T is={placement}> each frame and resets descendant `.visible` back to
-		// true, so the hidden holder kept reappearing (the stray second wing).
-		// Position writes are NOT reset, so sliding the inactive holder to
-		// x=1e6 is the reliable hide. `.visible` is kept too as belt-and-braces.
+		// Wing follows flight direction via a single mirrored wing. A negative-X
+		// scale reflects the right wing's pose [rx,ry,rz] into [rx,-ry,-rz] —
+		// exactly the opposite-wing look (winglet trailing the other way) — so
+		// the reverse orbit needs no second GLB and no visibility swap. Nav
+		// lights are holder children, so they mirror along for free.
 		const orbitDir = untrack(() => model.flight.orbitDirection);
 		const showRight = orbitDir === WING_NATURAL_DIR;
-		rightHolder.position.x = showRight ? xBase : 1e6;
-		leftHolder.position.x = showRight ? 1e6 : -xBase;
-		rightHolder.visible = showRight;
-		leftHolder.visible = !showRight;
-		navLight.position.copy(showRight ? tipRight : tipLeft);
-		strobeLight.position.copy(showRight ? tipRight : tipLeft);
+		holder.position.x = xBase;
+		holder.scale.x = showRight ? 1 : -1;
 
 		// Mirror the camera world transform onto the group.
 		const cam = ctx.camera.current;
