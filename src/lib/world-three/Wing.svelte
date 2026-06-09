@@ -64,19 +64,19 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = 2.0;
-	const WING_Y_BASE = -3.5;
-	const WING_Z_BASE = -9.0;
+	const WING_X_BASE = -7.4;
+	const WING_Y_BASE = -3.0;
+	const WING_Z_BASE = -12.2;
 	// Orientation (radians). rotY≈1.36 is the receding swing (span → depth);
 	// rotX is the static resting pitch (look-down onto the top surface) — NOT
 	// the bank, which the tick applies separately from motion.bankAngle. rotZ
 	// is a small sweep tilt.
-	const WING_ROT_X = 0.12;
-	const WING_ROT_Y = 1.36;
-	const WING_ROT_Z = 0.2;
+	const WING_ROT_X = 0.02;
+	const WING_ROT_Y = 1.62;
+	const WING_ROT_Z = 0.18;
 	// Absolute model-unit scale (both GLBs are normalized to a 17-unit span by
 	// scripts/extract-wing.ts, so a direct scalar is exact).
-	const WING_SCALE = 0.91;
+	const WING_SCALE = 0.76;
 	// The right wing (wing.glb) is correct when orbitDirection === this value.
 	// When the seeded orbit runs the other way, we show the LEFT wing
 	// (wing-left.glb) instead — the plane's real mirror wing, with its own
