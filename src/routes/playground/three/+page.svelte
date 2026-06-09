@@ -27,6 +27,7 @@
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
 	import ThreeOverlay from '$lib/world-three/ThreeOverlay.svelte';
 	import LabShell from '$lib/playground/LabShell.svelte';
+	import WindowChrome from '$lib/shell/WindowChrome.svelte';
 	import HUD from '$lib/shell/HUD.svelte';
 	import DevWingTuner from '$lib/world-three/DevWingTuner.svelte';
 	import { hybridDebug } from '$lib/world-three/lab-debug';
@@ -99,12 +100,18 @@
 	onCityToggle={() => { cityMode = !cityMode; }}
 >
 	{#snippet viewer()}
-		<!-- Cesium owns the globe + atmosphere + post-process. -->
-		<CesiumViewer />
-		<!-- Three.js overlay above, camera-mirrored from Cesium. The wing
-		     is now rendered as a 3D mesh inside ThreeOverlay (Wing.svelte),
-		     replacing the prior CSS .wing-silhouette div. -->
-		<ThreeOverlay />
+		<!-- Full shipping window shell (oval frame + glass + pull-down blind)
+		     wrapping the Cesium globe + Three overlay — the lab now previews the
+		     complete composition, not just the bare render. WindowChrome adds no
+		     CesiumViewer of its own and no DOM Compositor, so the Three overlay's
+		     clouds aren't doubled. Frame toggles via config.shell.windowFrame. -->
+		<WindowChrome>
+			<!-- Cesium owns the globe + atmosphere + post-process. -->
+			<CesiumViewer />
+			<!-- Three.js overlay above, camera-mirrored from Cesium (wing,
+			     clouds, sky, neon). -->
+			<ThreeOverlay />
+		</WindowChrome>
 
 		<!-- Production HUD spike for hybrid validation (ADR-004).
 		     Renders the real TelemetryOverlay / BlindInfoCard (driven by the shared
