@@ -105,8 +105,6 @@
 	let tipRight = new Vector3();
 	let tipLeft = new Vector3();
 
-	let group = $state.raw<ThreeGroup | undefined>();
-
 	// Convert a GLB material to a FLAT (unlit) DoubleSide MeshBasicMaterial,
 	// keeping its albedo colour/map. Flat because the scene ambient is near-zero
 	// at altitude (PBR would render black); DoubleSide because the wing skin is
@@ -206,9 +204,14 @@
 	// wing is shown.
 	placement.add(navLight, strobeLight);
 
-	// Reusable bank quaternion — avoid per-frame allocation.
+	// Reusable bank quaternions — avoid per-frame allocation. Bank is now
+	// three-axis: a screen-plane roll (z) plus a dimensional pitch (x) + yaw
+	// (y) so the wing tilts INTO the turn rather than just rolling flat.
 	const _bankAxis = new Vector3(0, 0, 1);
 	const _bankQuat = new Quaternion();
+	const _bankAxisX = new Vector3(1, 0, 0);
+	const _bankQuatX = new Quaternion();
+	const _bankQuatY = new Quaternion();
 	// Reusable per-Pi yaw-compensation quaternion (see tick for the why).
 	const _yawAxis = new Vector3(0, 1, 0);
 	const _yawQuat = new Quaternion();
@@ -219,18 +222,26 @@
 	const STROBE_PULSE_S = 0.06;
 
 	useTask((dt) => {
+		// The camera-mirror wrapper IS placement's parent (the <T.Group> below).
+		// Read it directly rather than via bind:ref — the bound $state wasn't
+		// populating, so the whole tick was early-returning (no visibility swap,
+		// no bank). placement.parent is set as soon as the group mounts.
+		const group = placement.parent;
 		if (!group) return;
 
-		// Per-wing X (each the mirror of the other); placement carries shared Y/Z.
-		// Yaw-compensation below handles the per-Pi panorama continuity.
-		rightHolder.position.x = xBase;
-		leftHolder.position.x = -xBase;
-
 		// Wing follows flight direction — show the wing whose winglet trails the
-		// current orbit sense. Both are real geometry with readable livery, so no
-		// text-reversing mirror is needed — we just swap which one is visible.
+		// current orbit sense, and PARK THE OTHER FAR OFF-SCREEN. placement
+		// carries shared Y/Z; each holder carries its mirrored X.
+		//
+		// Why position-park instead of `.visible = false`: Threlte re-renders
+		// <T is={placement}> each frame and resets descendant `.visible` back to
+		// true, so the hidden holder kept reappearing (the stray second wing).
+		// Position writes are NOT reset, so sliding the inactive holder to
+		// x=1e6 is the reliable hide. `.visible` is kept too as belt-and-braces.
 		const orbitDir = untrack(() => model.flight.orbitDirection);
 		const showRight = orbitDir === WING_NATURAL_DIR;
+		rightHolder.position.x = showRight ? xBase : 1e6;
+		leftHolder.position.x = showRight ? 1e6 : -xBase;
 		rightHolder.visible = showRight;
 		leftHolder.visible = !showRight;
 		navLight.position.copy(showRight ? tipRight : tipLeft);
@@ -260,11 +271,16 @@
 			group.quaternion.multiply(_yawQuat);
 		}
 
-		// Bank — post-rotate around local z (screen-plane roll).
+		// Bank — three-axis so the wing tilts INTO the turn. Screen-plane roll
+		// (z) is the dominant motion; a smaller pitch (x) drops/raises the tip
+		// and a yaw (y) sweeps it fore/aft, giving the bank real dimension
+		// instead of a flat 2D roll. Coefficients are deliberately modest;
+		// tune to taste.
 		const bankAngleDeg = untrack(() => model.motion.bankAngle);
-		const bankRad = (bankAngleDeg * 0.55 * Math.PI) / 180;
-		_bankQuat.setFromAxisAngle(_bankAxis, bankRad);
-		group.quaternion.multiply(_bankQuat);
+		_bankQuat.setFromAxisAngle(_bankAxis, bankAngleDeg * 0.55 * DEG2RAD);
+		_bankQuatX.setFromAxisAngle(_bankAxisX, bankAngleDeg * 0.18 * DEG2RAD);
+		_bankQuatY.setFromAxisAngle(_yawAxis, bankAngleDeg * 0.12 * DEG2RAD);
+		group.quaternion.multiply(_bankQuat).multiply(_bankQuatX).multiply(_bankQuatY);
 
 		// Hide during cruise warp (teleport).
 		const warpFactor = untrack(() => model.flight.warpFactor);
@@ -289,6 +305,6 @@
 	});
 </script>
 
-<T.Group bind:ref={group}>
+<T.Group>
 	<T is={placement} />
 </T.Group>
