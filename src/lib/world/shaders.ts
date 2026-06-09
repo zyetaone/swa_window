@@ -80,14 +80,12 @@ export const COLOR_GRADING_GLSL = `
 
 		rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
-		// 4. Pollution corona — warm haze near bright sources. Trimmed 0.4 →
-		//    0.12: this halo doubled the glow the EffectStack bloom already
-		//    produces over the same bright core, feeding the over-bright
-		//    central dome. A faint trace remains; bloom carries the rest.
-		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
-		rgb += vec3(0.12, 0.06, 0.012) * pollution * u_lightIntensity;
+		// (Pollution corona removed — it doubled the halo the EffectStack bloom
+		// already produces over the same bright core, feeding the over-bright
+		// central dome. Bloom now owns the glow halo entirely. u_lightIntensity
+		// still drives the building-window shader; only this corona is gone.)
 
-		// 5. Shadow crush + contrast bump at night so cities pop. Crush
+		// 4. Shadow crush + contrast bump at night so cities pop. Crush
 		//    softened (0.35 → 0.2) so suburb mid-tones survive — too-deep
 		//    crush collapsed the city silhouette into the sky.
 		float shadowCrush = 1.0 - 0.20 * u_nightFactor;
