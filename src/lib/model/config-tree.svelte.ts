@@ -106,6 +106,9 @@ interface CameraShape {
 		panoramaArcDeg: number;
 		fuselageOffsetM: number;
 	};
+	/** Camera pitch override in degrees (0 = off → normal wing-out look; e.g.
+	 *  −60 looks DOWN at the city). Lab "night flyover" preview; ship = 0. */
+	flyoverPitchDeg: number;
 	effectiveHeading(this: CameraShape, baseHeading: number): number;
 }
 
@@ -185,6 +188,7 @@ const _camera: CameraShape = {
 		// viewer along the fuselage so the wing perspective shifts.
 		fuselageOffsetM: 0,
 	},
+	flyoverPitchDeg: 0, // 0 = off (ship). Lab night-flyover sets ~−60 to look down.
 	effectiveHeading(this: typeof _camera, baseHeading: number): number {
 		return (baseHeading + this.parallax.headingOffsetDeg + 360) % 360;
 	},

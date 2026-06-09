@@ -176,6 +176,32 @@
 		</fieldset>
 
 		<fieldset>
+			<legend>Night city flyover</legend>
+			<button
+				type="button"
+				class={['city-btn', model.config.camera.flyoverPitchDeg !== 0 && 'active']}
+				onclick={() => {
+					const turningOn = model.config.camera.flyoverPitchDeg === 0;
+					model.config.camera.flyoverPitchDeg = turningOn ? -60 : 0;
+					if (turningOn) {
+						// Snap the orbit to the current city, drop low + deep night so
+						// the camera looks DOWN at the lit ground (VIIRS + roads + dome).
+						model.setLocation(model.location);
+						model.setTime(2);
+						model.setAltitude(8000);
+						model.onUserInteraction('altitude');
+					}
+				}}
+			>
+				{model.config.camera.flyoverPitchDeg !== 0 ? '✓ Flyover — looking down' : 'Night City Flyover'}
+			</button>
+			<div style="font-size:10px;opacity:0.65;margin-top:3px;">
+				Pitches the camera down over the city to preview the night lights
+				(VIIRS + dotted roads + glow dome). Toggle off to return to the wing view.
+			</div>
+		</fieldset>
+
+		<fieldset>
 			<legend>Weather</legend>
 			<select
 				value={model.weather}

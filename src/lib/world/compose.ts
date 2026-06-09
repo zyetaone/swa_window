@@ -80,6 +80,7 @@ interface CesiumModelView {
 		camera: {
 			effectiveHeading(baseHeading: number): number;
 			motion: { bankPitchCouple: number };
+			flyoverPitchDeg: number;
 		};
 		world: WorldConfig;
 		atmosphere: {
@@ -652,7 +653,13 @@ export class CesiumManager {
 		// at display time from the live bankAngle so it never feeds back into
 		// the pitch-smoothing loop. Coefficient is admin-tunable.
 		const bankPitchCouple = this.model.config.camera.motion.bankPitchCouple ?? 0;
-		const pitchDeg = (f.camPitch - 90) - bankPitchCouple * mot.bankAngle;
+		// Flyover override (lab night-city preview): a non-zero flyoverPitchDeg
+		// pins the camera to look DOWN at the city instead of out the window.
+		// Ship default is 0 → normal wing-out pitch.
+		const flyover = this.model.config.camera.flyoverPitchDeg ?? 0;
+		const pitchDeg = flyover !== 0
+			? flyover - bankPitchCouple * mot.bankAngle
+			: (f.camPitch - 90) - bankPitchCouple * mot.bankAngle;
 		this.viewer.camera.setView({
 			destination: this._scratchDest,
 			orientation: {
