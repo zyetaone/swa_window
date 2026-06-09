@@ -18,10 +18,7 @@
 		set: (x: number, y: number, z: number) => void;
 	}
 	interface WingHook {
-		model: {
-			rotation: Vec3Like;
-			scale: { x: number; setScalar: (s: number) => void; set: (x: number, y: number, z: number) => void };
-		};
+		model: { rotation: Vec3Like; scale: { x: number; setScalar: (s: number) => void } };
 		placement: { position: Vec3Like };
 		// posX goes through setXBase — the wing tick owns placement.position.x
 		// (re-derives it from the X base − fuselageOffset every frame).
@@ -38,7 +35,6 @@
 	let py = $state(-3.2);
 	let pz = $state(-9);
 	let sc = $state(0.53);
-	let mirror = $state(false); // wing mirrored along span (negative X scale)
 	let ready = $state(false);
 	let copied = $state(false);
 
@@ -53,8 +49,7 @@
 			px = +(w.xBase ?? w.placement.position.x).toFixed(2);
 			py = +w.placement.position.y.toFixed(2);
 			pz = +w.placement.position.z.toFixed(2);
-			mirror = w.model.scale.x < 0;
-			sc = +Math.abs(w.model.scale.x).toFixed(3);
+			sc = +w.model.scale.x.toFixed(3);
 			ready = true;
 			return true;
 		};
@@ -76,7 +71,7 @@
 		else w.placement.position.x = px;
 		w.placement.position.y = py;
 		w.placement.position.z = pz;
-		w.model.scale.set(mirror ? -sc : sc, sc, sc);
+		w.model.scale.setScalar(sc);
 	});
 
 	const dump = $derived(
@@ -112,11 +107,6 @@
 	<label>scale <span>{sc.toFixed(2)}</span>
 		<input type="range" min="0.05" max="1.3" step="0.01" bind:value={sc} /></label>
 
-	<label class="check">
-		<input type="checkbox" bind:checked={mirror} />
-		mirror span <span class="warn">(reverses livery text)</span>
-	</label>
-
 	<button class="dump" onclick={copy}>{copied ? 'copied ✓' : dump}</button>
 </fieldset>
 
@@ -151,20 +141,6 @@
 		width: 100%;
 		accent-color: #7faeff;
 		margin: 2px 0 4px;
-	}
-	.check {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		margin-top: 8px;
-		font-size: 11px;
-	}
-	.check input {
-		accent-color: #7faeff;
-	}
-	.check .warn {
-		color: #c98a6a;
-		float: none;
 	}
 	.dump {
 		margin-top: 8px;

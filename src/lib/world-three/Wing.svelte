@@ -129,6 +129,7 @@
 		url: string,
 		holder: ThreeGroup,
 		rot: [number, number, number],
+		isLeft: boolean,
 		onTip: (t: Vector3) => void,
 	): () => void {
 		let cancelled = false;
@@ -148,8 +149,10 @@
 					me.material = Array.isArray(mat) ? mat.map(toFlat) : toFlat(mat);
 				});
 				holder.add(m);
+				// Winglet tip = the outboard span extreme (max.x for the right
+				// wing, min.x for the mirrored left), at the top of the bbox.
 				const tb = new Box3().setFromObject(holder);
-				onTip(new Vector3(tb.min.x, tb.max.y, (tb.min.z + tb.max.z) / 2));
+				onTip(new Vector3(isLeft ? tb.min.x : tb.max.x, tb.max.y, (tb.min.z + tb.max.z) / 2));
 				// Dev-only live tuning hook. __wing.model is the right wing (the
 				// one the tuner edits); the left mirrors the same baked pose, so
 				// re-tune the right + reload and both update.
@@ -171,8 +174,8 @@
 	$effect(() => {
 		// Left wing gets the X-mirror of the pose (negate Y/Z rotations) so its
 		// composition mirrors the right's: winglet up-right instead of up-left.
-		const c1 = loadWing('/models/wing.glb', rightHolder, [WING_ROT_X, WING_ROT_Y, WING_ROT_Z], (t) => (tipRight = t));
-		const c2 = loadWing('/models/wing-left.glb', leftHolder, [WING_ROT_X, -WING_ROT_Y, -WING_ROT_Z], (t) => (tipLeft = t));
+		const c1 = loadWing('/models/wing.glb', rightHolder, [WING_ROT_X, WING_ROT_Y, WING_ROT_Z], false, (t) => (tipRight = t));
+		const c2 = loadWing('/models/wing-left.glb', leftHolder, [WING_ROT_X, -WING_ROT_Y, -WING_ROT_Z], true, (t) => (tipLeft = t));
 		return () => { c1(); c2(); };
 	});
 
