@@ -16,9 +16,13 @@
 	 *
 	 * ─── CAMERA ANCHORING + 3-PI PANORAMA ──────────────────────────────
 	 * Mirrors the camera world transform onto a Group each frame (same
-	 * pattern as WingContrail). The wing holder sits at a fixed camera-LOCAL
-	 * offset, shifted along camera-X by the per-Pi `fuselageOffsetM` so each
-	 * Pi in a panorama sees a different portion of the same wing.
+	 * pattern as WingContrail), then STRIPS the per-Pi heading offset from
+	 * the orientation so the wing lives in the shared base-heading (aircraft
+	 * body) frame. Each yawed Pi camera then sees a different angular slice
+	 * of the SAME wing — it flows continuously across the 3-Pi seam, matching
+	 * how the world (clouds/terrain/stars) tiles. (A lateral fuselageOffsetM
+	 * X-slide was the old approach; it just showed three shifted copies, not
+	 * one continuous wing, so it's been replaced by the yaw-compensation.)
 	 *
 	 * ─── BANK / NIGHT LIGHTS ───────────────────────────────────────────
 	 * Bank is a post-rotation about camera-Z (screen-plane roll). The
@@ -60,9 +64,9 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = 0.3;
-	const WING_Y_BASE = -3.6;
-	const WING_Z_BASE = -8.6;
+	const WING_X_BASE = 2.0;
+	const WING_Y_BASE = -3.5;
+	const WING_Z_BASE = -9.0;
 	// Orientation (radians). rotY≈1.36 is the receding swing (span → depth);
 	// rotX is the static resting pitch (look-down onto the top surface) — NOT
 	// the bank, which the tick applies separately from motion.bankAngle. rotZ
@@ -70,60 +74,72 @@
 	const WING_ROT_X = 0.12;
 	const WING_ROT_Y = 1.36;
 	const WING_ROT_Z = 0.2;
-	// Absolute model-unit scale (baked from the tuner — the GLB is a fixed
-	// asset so a direct scalar is exact and resolution-independent).
+	// Absolute model-unit scale (both GLBs are normalized to a 17-unit span by
+	// scripts/extract-wing.ts, so a direct scalar is exact).
 	const WING_SCALE = 0.91;
+	// The right wing (wing.glb) is correct when orbitDirection === this value.
+	// When the seeded orbit runs the other way, we show the LEFT wing
+	// (wing-left.glb) instead — the plane's real mirror wing, with its own
+	// readable "Southwest.com" livery — so the winglet always trails the motion
+	// without a negative-scale mirror (which would reverse the text).
+	const WING_NATURAL_DIR = 1;
 
-	// Placement holder (positioned/offset per frame) → wingHolder (the model).
+	// Placement holder (positioned per frame) → two wing holders, one per side.
 	const placement = new Group();
-	const wingHolder = new Group();
-	placement.add(wingHolder);
-	placement.position.set(WING_X_BASE, WING_Y_BASE, WING_Z_BASE);
+	const rightHolder = new Group();
+	const leftHolder = new Group();
+	placement.add(rightHolder, leftHolder);
+	// placement carries the shared Y/Z; each holder carries its own ±X so the
+	// left wing sits at the X-mirror of the right (its model also gets the
+	// mirrored rotation below) → the left view mirrors the right's composition.
+	placement.position.set(0, WING_Y_BASE, WING_Z_BASE);
+	rightHolder.position.x = WING_X_BASE;
+	leftHolder.position.x = -WING_X_BASE;
 
-	// Mutable X base. The tick re-derives placement.position.x every frame
-	// (WING_X_BASE − fuselageOffset for per-Pi parallax), so a raw write to
-	// placement.position.x is clobbered each frame — that's why the tuner's
-	// posX appeared dead. The tuner now drives THIS instead via __wing.setXBase.
+	// Mutable X base. The tick re-derives placement.position.x every frame, so a
+	// raw write to placement.position.x is clobbered — the tuner drives THIS via
+	// __wing.setXBase instead.
 	let xBase = WING_X_BASE;
+
+	// Winglet tips (camera-local, per wing) for the night nav lights.
+	let tipRight = new Vector3();
+	let tipLeft = new Vector3();
 
 	let group = $state.raw<ThreeGroup | undefined>();
 
-	// Load + normalize + orient the real wing GLB.
+	// Convert a GLB material to a FLAT (unlit) DoubleSide MeshBasicMaterial,
+	// keeping its albedo colour/map. Flat because the scene ambient is near-zero
+	// at altitude (PBR would render black); DoubleSide because the wing skin is
+	// single-sided shells (otherwise the top surface culls to transparent).
+	const toFlat = (src: { color?: Color; map?: unknown }) =>
+		new MeshBasicMaterial({
+			color: src.color ? src.color.clone() : new Color(0.8, 0.8, 0.82),
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			map: (src.map as any) ?? null,
+			side: DoubleSide,
+			fog: false,
+		});
+
+	// Load + normalize + orient one wing GLB into the given holder. Both wings
+	// get the IDENTICAL pose — because the left wing is the mirror geometry,
+	// the same transform renders it as the correct mirror image (winglet
+	// trailing the other way) with readable livery.
 	const loader = new GLTFLoader();
-	$effect(() => {
+	function loadWing(
+		url: string,
+		holder: ThreeGroup,
+		rot: [number, number, number],
+		onTip: (t: Vector3) => void,
+	): () => void {
 		let cancelled = false;
 		loader
-			.loadAsync('/models/wing.glb')
+			.loadAsync(url)
 			.then((gltf) => {
 				if (cancelled) return;
 				const m = gltf.scene as Object3D;
-				const box = new Box3().setFromObject(m);
-				const center = box.getCenter(new Vector3());
-				m.position.sub(center);
+				m.position.sub(new Box3().setFromObject(m).getCenter(new Vector3()));
 				m.scale.setScalar(WING_SCALE);
-				// Orient: rotY≈1.36 swings the span into depth (receding wing),
-				// rotX a small look-down pitch, rotZ sweep (see constants).
-				m.rotation.set(WING_ROT_X, WING_ROT_Y, WING_ROT_Z);
-				// Convert each GLB material to a FLAT (unlit) MeshBasicMaterial
-				// keeping its albedo colour/map. The scene's ambient is near-
-				// zero at high altitude, so the GLB's PBR materials rendered
-				// black; flat materials always show the livery (white wing skin,
-				// Heart-gradient winglet) regardless of scene light — same
-				// reliable-visibility choice as the old placeholder. nightFactor
-				// dimming can be layered on later.
-				// DoubleSide: the GLB's wing skin is modelled as single-sided
-				// shells, so looking DOWN onto the top surface (the passenger's
-				// view) showed straight through the back-face-culled top into
-				// the underside — the "top material missing / transparent" bug.
-				// Rendering both faces fills the top in.
-				const toFlat = (src: { color?: Color; map?: unknown }) =>
-					new MeshBasicMaterial({
-						color: src.color ? src.color.clone() : new Color(0.8, 0.8, 0.82),
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						map: (src.map as any) ?? null,
-						side: DoubleSide,
-						fog: false,
-					});
+				m.rotation.set(rot[0], rot[1], rot[2]);
 				m.traverse((o) => {
 					const me = o as Mesh;
 					if (!me.isMesh) return;
@@ -131,45 +147,37 @@
 					const mat = me.material as { color?: Color; map?: unknown } | { color?: Color; map?: unknown }[];
 					me.material = Array.isArray(mat) ? mat.map(toFlat) : toFlat(mat);
 				});
-				wingHolder.add(m);
-				// Auto-place the night nav lights at the model's far wingtip,
-				// derived from the oriented bounding box (the old TIP_* constants
-				// were for the deleted placeholder slab). Attaching them to
-				// wingHolder means they inherit placement + fuselageOffset for
-				// free — no per-frame position juggling needed.
-				const tipBox = new Box3().setFromObject(wingHolder);
-				const tip = new Vector3(
-					tipBox.min.x,
-					tipBox.max.y,
-					(tipBox.min.z + tipBox.max.z) / 2,
-				);
-				navLight.position.copy(tip);
-				strobeLight.position.copy(tip);
-				wingHolder.add(navLight, strobeLight);
-				// Dev-only live tuning hook — adjust placement/scale/orientation
-				// from the console without an edit→reload cycle:
-				//   __wing.placement.position.set(x, y, z)
-				//   __wing.model.rotation.y = Math.PI/2
-				//   __wing.model.scale.multiplyScalar(0.6)
+				holder.add(m);
+				const tb = new Box3().setFromObject(holder);
+				onTip(new Vector3(tb.min.x, tb.max.y, (tb.min.z + tb.max.z) / 2));
+				// Dev-only live tuning hook. __wing.model is the right wing (the
+				// one the tuner edits); the left mirrors the same baked pose, so
+				// re-tune the right + reload and both update.
 				if (import.meta.env.DEV) {
-					(window as unknown as { __wing: unknown }).__wing = {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const w = ((window as any).__wing ??= {
 						placement,
-						model: m,
 						aero: model,
-						// posX must go through here — the tick owns placement.position.x.
 						setXBase: (v: number) => { xBase = v; },
 						get xBase() { return xBase; },
-					};
+					});
+					if (holder === rightHolder) w.model = m;
 				}
 			})
-			.catch((err) => console.error('[Wing] wing.glb load failed', err));
-		return () => {
-			cancelled = true;
-		};
+			.catch((err) => console.error(`[Wing] ${url} load failed`, err));
+		return () => { cancelled = true; };
+	}
+
+	$effect(() => {
+		// Left wing gets the X-mirror of the pose (negate Y/Z rotations) so its
+		// composition mirrors the right's: winglet up-right instead of up-left.
+		const c1 = loadWing('/models/wing.glb', rightHolder, [WING_ROT_X, WING_ROT_Y, WING_ROT_Z], (t) => (tipRight = t));
+		const c2 = loadWing('/models/wing-left.glb', leftHolder, [WING_ROT_X, -WING_ROT_Y, -WING_ROT_Z], (t) => (tipLeft = t));
+		return () => { c1(); c2(); };
 	});
 
 	// ─── Night nav lights ───────────────────────────────────────────────
-	const lightGeom = new SphereGeometry(0.35, 8, 8);
+	const lightGeom = new SphereGeometry(0.12, 8, 8);
 	const navMat = new MeshBasicMaterial({
 		color: 0x00ff77,
 		transparent: true,
@@ -190,9 +198,18 @@
 	const strobeLight = new Mesh(lightGeom, strobeMat);
 	strobeLight.frustumCulled = false;
 
+	// Nav lights live on the placement (not a wing holder) and are repositioned
+	// each frame to the visible wing's tip — so they're correct for whichever
+	// wing is shown.
+	placement.add(navLight, strobeLight);
+
 	// Reusable bank quaternion — avoid per-frame allocation.
 	const _bankAxis = new Vector3(0, 0, 1);
 	const _bankQuat = new Quaternion();
+	// Reusable per-Pi yaw-compensation quaternion (see tick for the why).
+	const _yawAxis = new Vector3(0, 1, 0);
+	const _yawQuat = new Quaternion();
+	const DEG2RAD = Math.PI / 180;
 
 	let _strobeT = 0;
 	const STROBE_PERIOD_S = 1.0;
@@ -201,15 +218,44 @@
 	useTask((dt) => {
 		if (!group) return;
 
-		// Per-Pi fuselage offset along camera-X. The nav lights are children of
-		// wingHolder (under placement), so they inherit this shift for free.
-		const fuselageOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
-		placement.position.x = xBase - fuselageOffset;
+		// Per-wing X (each the mirror of the other); placement carries shared Y/Z.
+		// Yaw-compensation below handles the per-Pi panorama continuity.
+		rightHolder.position.x = xBase;
+		leftHolder.position.x = -xBase;
+
+		// Wing follows flight direction — show the wing whose winglet trails the
+		// current orbit sense. Both are real geometry with readable livery, so no
+		// text-reversing mirror is needed — we just swap which one is visible.
+		const orbitDir = untrack(() => model.flight.orbitDirection);
+		const showRight = orbitDir === WING_NATURAL_DIR;
+		rightHolder.visible = showRight;
+		leftHolder.visible = !showRight;
+		navLight.position.copy(showRight ? tipRight : tipLeft);
+		strobeLight.position.copy(showRight ? tipRight : tipLeft);
 
 		// Mirror the camera world transform onto the group.
 		const cam = ctx.camera.current;
 		group.position.copy(cam.position);
 		group.quaternion.copy(cam.quaternion);
+
+		// ─── 3-Pi panorama continuity ──────────────────────────────────────
+		// The per-Pi heading offset is baked into the camera orientation
+		// (compose.ts → effectiveHeading → Cesium camera → CameraMirror → here).
+		// If we keep it, the wing is screen-locked identically on all three Pis
+		// — you'd see THREE wings, not one continuous wing spanning the seam,
+		// contradicting the world (clouds/terrain/stars) which DOES tile across
+		// the seam because it's world-anchored. Stripping the offset puts the
+		// wing in the shared base-heading (aircraft body) frame, so each yawed
+		// camera sees a different angular slice of the SAME wing — it flows
+		// continuously across the three screens, matching the world behind it.
+		// (Sign verified empirically against the lab role switcher.)
+		const headingOffsetDeg = untrack(
+			() => model.config.camera.parallax.headingOffsetDeg,
+		);
+		if (headingOffsetDeg !== 0) {
+			_yawQuat.setFromAxisAngle(_yawAxis, headingOffsetDeg * DEG2RAD);
+			group.quaternion.multiply(_yawQuat);
+		}
 
 		// Bank — post-rotate around local z (screen-plane roll).
 		const bankAngleDeg = untrack(() => model.motion.bankAngle);
