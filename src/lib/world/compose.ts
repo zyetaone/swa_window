@@ -561,7 +561,10 @@ export class CesiumManager {
 				// Phase 16: boosted brightness + lowered threshold so more dim
 				// light spots survive the mask stage to be amplified by shader.
 				this.viirsLayer.brightness = 3.5 * this.model.config.world.viirsBrightness;
-				this.viirsLayer.contrast = 1.4;
+				// Lowered 1.4 → 1.1: a softer contrast curve spreads the VIIRS glow
+			// out from the hot CBD core into the suburbs ("spread NASA over the
+			// city") instead of crushing everything but the brightest cells black.
+			this.viirsLayer.contrast = 1.1;
 				// Phase 16: extremely sensitive threshold (0.02) to ensure
 				// grayscale city lights are not accidentally cut out.
 				this.viirsLayer.colorToAlphaThreshold = 0.02;

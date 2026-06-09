@@ -80,11 +80,12 @@ export const COLOR_GRADING_GLSL = `
 
 		rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
-		// 4. Pollution corona — warm haze near bright sources. Amplified 4×
-		//    so the halo reads at viewing distance (Feb-15 numbers were near
-		//    invisible).
+		// 4. Pollution corona — warm haze near bright sources. Trimmed 0.4 →
+		//    0.12: this halo doubled the glow the EffectStack bloom already
+		//    produces over the same bright core, feeding the over-bright
+		//    central dome. A faint trace remains; bloom carries the rest.
 		float pollution = smoothstep(0.25, 0.6, lum) * u_nightFactor;
-		rgb += vec3(0.4, 0.2, 0.04) * pollution * u_lightIntensity;
+		rgb += vec3(0.12, 0.06, 0.012) * pollution * u_lightIntensity;
 
 		// 5. Shadow crush + contrast bump at night so cities pop. Crush
 		//    softened (0.35 → 0.2) so suburb mid-tones survive — too-deep

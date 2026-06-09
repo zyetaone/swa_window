@@ -289,7 +289,10 @@ export const world = $state({
 	// variance + palette stops); the simplified single-path shader needs
 	// more headroom to read as photoreal city glow. 6.0 lands at "punch"
 	// without saturating to white.
-	additiveStrength: 6.0,
+	// Lowered 6.0 → 3.5: 6.0 over-amplified the city core into one hot white
+	// dome (the same glow VIIRS + bloom already paint — a triple-count). 3.5
+	// keeps the city reading as glow without the saturated central blowout.
+	additiveStrength: 3.5,
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
 	// nightExposure 0.75: 0.50 crushed everything once the shader's warm
 	// additive was lightMask-gated (the shader fix did most of the sky-

@@ -89,11 +89,14 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Window color variation (5 types)
 		float colorMix = fract(sin(dot(cellId, vec2(269.5, 183.3))) * 7461.7);
-		vec3 warmColor   = vec3(1.0, 0.65, 0.35);    // warm residential
-		vec3 coolColor   = vec3(0.8, 0.9, 1.0);       // cool office
-		vec3 retailColor = vec3(1.0, 0.85, 0.6);     // retail/lobby
-		vec3 screenColor = vec3(0.55, 0.65, 1.0);    // blueish screens
-		vec3 officeWhite = vec3(1.0, 0.97, 0.92);    // fluorescent office
+		// Palette: YELLOW + WHITE only (per direction). The old cool/screen
+		// tints pulled blue into the city; dropped them so the night reads as
+		// sodium-yellow windows + fluorescent white, no blue cast.
+		vec3 warmColor   = vec3(1.0, 0.78, 0.40);    // sodium yellow (residential)
+		vec3 coolColor   = vec3(0.96, 0.96, 0.92);   // white (was blue office)
+		vec3 retailColor = vec3(1.0, 0.85, 0.55);    // warm yellow (retail/lobby)
+		vec3 screenColor = vec3(1.0, 0.90, 0.72);    // warm white (was blue screens)
+		vec3 officeWhite = vec3(1.0, 0.98, 0.94);    // fluorescent white
 
 		vec3 upperColor = mix(
 			mix(warmColor, coolColor, smoothstep(0.0, 0.4, colorMix)),
