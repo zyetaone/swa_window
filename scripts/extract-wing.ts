@@ -36,9 +36,12 @@ import { NodeIO, type mat4, type Node } from '@gltf-transform/core';
 import { getBounds, prune, transformPrimitive } from '@gltf-transform/functions';
 
 const SRC = 'static/models/southwest-737/scene.gltf';
-const X_CUT = 170; // fuselage half-width: centroids cluster ≤162 then gap → wing at 207+
-const Z_MIN = -6300; // drop the tailplane (cz ≈ −6900) + horizontal stabiliser
-const Z_MAX = -3800; // drop the nose / forward fuselage
+const X_CUT = 250; // OUTBOARD of the fuselage skin radius. 170 cut inside the
+                   // fuselage, dragging in a long strip of body side-skin +
+                   // cabin-window glass (Z-span 28-39 vs the wing's ~13). 250
+                   // clears the fuselage, keeping the wing root onward.
+const Z_MIN = -6000; // tightened: drop tailplane + aft belly/gear fore-aft slab
+const Z_MAX = -4400; // tightened: drop the nose / forward fuselage + fairing
 const TARGET_DIM = 17; // normalized longest-axis span (Wing.svelte WING_SCALE basis)
 
 // ─── world-matrix helpers (column-major, glTF convention) ──────────────
