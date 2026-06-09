@@ -35,6 +35,7 @@
 	import Moon from './Moon.svelte';
 	import OsmBuildingEdges from './OsmBuildingEdges.svelte';
 	import OsmRoads from './OsmRoads.svelte';
+	import CityGlowDome from './CityGlowDome.svelte';
 	import EffectStack from './EffectStack.svelte';
 	import SparkleField from './SparkleField.svelte';
 	import Meteors from './Meteors.svelte';
@@ -161,6 +162,9 @@
 		<NightStars ambientIntensity={ambientIntensity} />
 		<Venus />
 		<Meteors />
+		<!-- City skyglow dome — warm amber glow over the city core at night,
+		     the low-frequency "vast city below" signal. Behind the neon lines. -->
+		<CityGlowDome />
 		<OsmRoads location={model.location} />
 		<OsmBuildingEdges location={model.location} />
 		<Clouds

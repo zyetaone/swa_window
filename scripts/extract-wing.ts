@@ -38,7 +38,9 @@
 import { NodeIO, type mat4, type Node } from '@gltf-transform/core';
 import { getBounds, prune, transformPrimitive } from '@gltf-transform/functions';
 
-const SRC = 'static/models/southwest-737/scene.gltf';
+// Build-time source — kept OUT of static/ so the 10 MB full-737 model doesn't
+// ship to the Pi (the app only loads the extracted wing.glb).
+const SRC = 'tools/wing-source/southwest-737/scene.gltf';
 const X_CUT = 250; // OUTBOARD of the fuselage skin radius. 170 cut inside the
                    // fuselage, dragging in a long strip of body side-skin +
                    // cabin-window glass (Z-span 28-39 vs the wing's ~13). 250

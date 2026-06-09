@@ -143,13 +143,16 @@ const _camera: CameraShape = {
 		// syncCamera). 0.9 → a full 10° bank shifts pitch ~9°, a clear but
 		// not vertiginous ground/sky swing. Set 0 to disable.
 		bankPitchCouple: 0.9,
-		// Pitch breathing — slow nose up/down oscillation.
+		// Pitch breathing — slow nose up/down oscillation. Lifted 1.5 → 2.6 for
+		// richer "alive in flight" motion (the cabin gently rises/settles)
+		// without adding turbulence jolts (kept low per prior direction).
 		breathingPeriod: 22,
-		breathingAmplitude: 1.5,
-		// Engine micro-vibration — constant fine hum.
+		breathingAmplitude: 2.6,
+		// Engine micro-vibration — constant fine hum. 0.35 → 0.5 so the view
+		// has a subtle living shimmer at rest, not a dead-still frame.
 		engineVibeFreqX: 7,     // Hz
 		engineVibeFreqY: 11,    // Hz (different to avoid Lissajous lock)
-		engineVibeAmp: 0.35,    // pixels
+		engineVibeAmp: 0.5,     // pixels
 		// Turbulence bumps — occasional jolts. Phase 11 (user direction
 		// "turbulence to be lower"): cut amplitude and multipliers in half
 		// AGAIN after the Phase-10b softening. Office install reads as a
