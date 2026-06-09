@@ -170,6 +170,12 @@
 		// moon + stars + city lights bloom).
 		bloom.luminanceMaterial.uniforms.threshold.value = 0.38 + model.nightFactor * 0.24;
 
+		// Bloom intensity ramp: past dusk the city lights become the main bloom
+		// source, so push the glow harder for a richer night read. Zero effect
+		// in daylight (ramp starts at nightFactor 0.6). Base intensity 0.42.
+		const nfBloom = Math.max(0, (model.nightFactor - 0.6) / 0.4);
+		bloom.intensity = 0.42 + nfBloom * 0.2;
+
 		// Film grain invisible in daylight — gate to save the noise pass.
 		const nf = model.nightFactor;
 		noise.blendMode.opacity.value = nf > 0.15 ? 0.10 * Math.min(1, (nf - 0.15) / 0.35) : 0;

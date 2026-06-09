@@ -35,13 +35,15 @@
 
 	const model = createAeroWindow();
 
-	// Cesium buildings as wireframe ("line marks") instead of filled cubes —
-	// honors the user's "buildings from the texture map line marks" intent.
-	// Fires when the CesiumManager finishes its async mount; idempotent.
+	// Cesium buildings: wireframe ("line marks") vs solid (the live procedural
+	// window-shader facades). Toggle in the drawer — wireframe hides the lit
+	// windows, solid shows them. Re-applies whenever the toggle or the manager
+	// changes; idempotent.
+	let buildingsWireframe = $state(true);
 	$effect(() => {
 		const mgr = activeCesium.manager;
 		if (!mgr) return;
-		mgr.setBuildingsWireframe(true);
+		mgr.setBuildingsWireframe(buildingsWireframe);
 	});
 
 	// RAF tick — same pattern as /playground. Drives flight + motion + director.
@@ -162,6 +164,14 @@
 			<label style="display:flex;align-items:center;gap:6px;font-size:11px;">
 				<input type="checkbox" bind:checked={model.config.shell.clockVisible} />
 				Show clock
+			</label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Buildings</legend>
+			<label style="display:flex;align-items:center;gap:6px;font-size:11px;">
+				<input type="checkbox" bind:checked={buildingsWireframe} />
+				Wireframe (off = lit window facades)
 			</label>
 		</fieldset>
 

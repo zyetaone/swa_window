@@ -64,6 +64,8 @@
 		dashed = false,
 		dashSize = 0,
 		gapSize = 0,
+		dashFlow = 0,
+		depthFade = 0,
 		buildSegments,
 	}: {
 		location: LocationId;
@@ -88,6 +90,19 @@
 		dashed?: boolean;
 		dashSize?: number;
 		gapSize?: number;
+		/**
+		 * Animate the dash phase by this many world-metres per second (negative
+		 * crawls the dots "forward" along each segment) — a slow traffic-flow
+		 * shimmer on the dotted lines. Only meaningful when `dashed`.
+		 */
+		dashFlow?: number;
+		/**
+		 * Atmospheric depth fade. When > 0, per-vertex colours are dimmed and
+		 * cool-shifted by planar distance (metres) from the city centre (the
+		 * ENU group origin): the core glows warm, the outskirts recede into
+		 * cool haze. Build-time, deterministic. 0 disables.
+		 */
+		depthFade?: number;
 		buildSegments: (features: F[], lat0: number, lon0: number) => NeonSegments | null;
 	} = $props();
 
@@ -120,6 +135,10 @@
 	const _dashSize = dashSize as number;
 	// svelte-ignore state_referenced_locally
 	const _gapSize = gapSize as number;
+	// svelte-ignore state_referenced_locally
+	const _dashFlow = dashFlow as number;
+	// svelte-ignore state_referenced_locally
+	const _depthFade = depthFade as number;
 
 	// Dash params are per-mount constants. Setting `dashed:true` at
 	// construction bakes the USE_DASH shader define; it can't be toggled later
@@ -160,7 +179,7 @@
 		haloMaterial.resolution.set(width, height);
 	});
 
-	useTask(() => {
+	useTask((delta) => {
 		const { camAlt, nf } = untrack(() => ({ camAlt: model.flight.camAlt, nf: nightFactor }));
 		const altGate = camAlt <= gateStartFt
 			? 1
@@ -168,6 +187,13 @@
 		const intensity = Math.max(0, nf - 0.15) * intensityMul * altGate;
 		coreMaterial.opacity = intensity;
 		haloMaterial.opacity = intensity * haloOpacityMul;
+		// Traffic-flow shimmer: crawl the dash phase. Both passes share the
+		// offset so the glow tracks each dot. dashOffset is a LineMaterial
+		// uniform; bumping two floats/frame is free.
+		if (_dashed && _dashFlow) {
+			coreMaterial.dashOffset -= _dashFlow * delta;
+			haloMaterial.dashOffset = coreMaterial.dashOffset;
+		}
 	});
 
 	$effect(() => () => {
@@ -197,6 +223,21 @@
 				if (!data.features?.length) return;
 				const result = buildSegments(data.features, loc.lat, loc.lon);
 				if (!result || result.positions.length === 0) return;
+				// Atmospheric depth fade — dim + cool-shift each vertex by its
+				// planar distance from the city centre (group origin). Mutates a
+				// copy of the colours so the core glows warm and the outskirts
+				// haze out. Blue fades least → far lights read cooler.
+				if (_depthFade > 0 && result.colors) {
+					const p = result.positions, col = result.colors;
+					const near = _depthFade * 0.2;
+					for (let i = 0; i < col.length; i += 3) {
+						const d = Math.hypot(p[i], p[i + 2]); // ENU: x east, z north
+						const f = Math.max(0, Math.min(1, 1 - (d - near) / (_depthFade - near)));
+						col[i] *= 0.18 + 0.82 * f;     // R fades most
+						col[i + 1] *= 0.28 + 0.72 * f; // G
+						col[i + 2] *= 0.42 + 0.58 * f; // B fades least (cool haze)
+					}
+				}
 				const geom = new LineSegmentsGeometry();
 				geom.setPositions(result.positions);
 				if (result.colors) geom.setColors(result.colors);

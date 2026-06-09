@@ -106,5 +106,7 @@
 	dashed
 	dashSize={70}
 	gapSize={55}
+	dashFlow={20}
+	depthFade={12000}
 	buildSegments={buildRoadLines}
 />

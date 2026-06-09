@@ -102,5 +102,6 @@
 	haloWidth={5.0}
 	haloOpacityMul={0.62}
 	intensityMul={1.9}
+	depthFade={12000}
 	buildSegments={buildFootprintEdges}
 />
