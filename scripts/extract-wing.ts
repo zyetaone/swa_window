@@ -1,9 +1,12 @@
 /**
- * extract-wing.ts — headless extraction of the SW 737 wings from the full
- * model into small standalone GLBs.
+ * extract-wing.ts — headless extraction of the SW 737 right wing from the full
+ * model into one small standalone GLB.
  *
  *   right wing (+X) → static/models/wing.glb
- *   left  wing (−X) → static/models/wing-left.glb
+ *
+ * (Wing.svelte mirrors this single wing via a negative-X holder scale for the
+ * reverse orbit direction — no separate left GLB needed; the model has no
+ * textures so the mirror reverses no livery.)
  *
  * ─── WHY TRIANGLE-CLIP, NOT NODE-FILTER ────────────────────────────────
  * The earlier version kept whole mesh NODES whose centroid sat off the
@@ -158,5 +161,7 @@ async function extract(side: 'right' | 'left', out: string): Promise<void> {
 	);
 }
 
+// Single wing only — Wing.svelte mirrors it via a negative-X holder scale for
+// the reverse orbit direction (the model has no textures, so the mirror
+// reverses no livery). The old left-wing GLB is no longer generated.
 await extract('right', 'static/models/wing.glb');
-await extract('left', 'static/models/wing-left.glb');

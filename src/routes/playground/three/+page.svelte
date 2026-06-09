@@ -300,6 +300,29 @@
 		font-family: ui-monospace, monospace;
 	}
 
+	/* Base diag panel — was unstyled (the "moved to LabShell" comment was wrong;
+	   LabShell's scoped CSS can't reach this snippet's markup), so it rendered
+	   unpositioned and clipped to a few px at top-left. Pin + style it. */
+	.diag {
+		position: absolute;
+		top: 12px;
+		left: 12px;
+		z-index: 20;
+		max-width: 340px;
+		padding: 8px 11px;
+		background: rgba(10, 10, 15, 0.7);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		font-size: 11px;
+		line-height: 1.5;
+		color: #cdd6e6;
+		pointer-events: none;
+	}
+	.diag :global(code) {
+		color: #7faeff;
+		font-family: ui-monospace, monospace;
+	}
+
 	.diag .clock {
 		font-family: ui-monospace, monospace;
 		font-size: 22px;
