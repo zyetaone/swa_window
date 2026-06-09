@@ -703,8 +703,21 @@ export class CesiumManager {
 		// world.skyDarken (operator on-site knob). Targets in NIGHT_PALETTE.
 		const S = NIGHT_PALETTE.skyAtmosphere;
 		const satShift = lerp(S.satShift.day, S.satShift.night, nf) + dd * S.satShift.duskBias;
-		const brShift = (lerp(S.brShift.day, S.brShift.night, nf) * this.model.config.world.skyDarken)
+		let brShift = (lerp(S.brShift.day, S.brShift.night, nf) * this.model.config.world.skyDarken)
 			+ dd * S.brShift.duskBias;
+		// Altitude-gated night darkening. The Cesium analytical atmosphere
+		// (sky dome + ground limb) washes the view WHITE/orange at LOW altitude
+		// at night — you look UP through the lit limb. At cruise you look
+		// outward and it's correctly dark. `lowAltNight` ramps 0→1 only at
+		// night as altitude drops below ATMO_GATE_HI, so we floor the sky
+		// brightness toward −1 and (below) fade atmosphereLightIntensity to
+		// near-zero — killing the white horizon band without touching the
+		// (good) high-altitude look. Lowering atmosphereLight ALONE caused a
+		// "bright ring" before; flooring brShift in lock-step avoids it.
+		const ATMO_GATE_HI = 35000, ATMO_GATE_LO = 8000;
+		const lowAltNight = nf * Math.max(0, Math.min(1,
+			(ATMO_GATE_HI - m.flight.camAlt) / (ATMO_GATE_HI - ATMO_GATE_LO)));
+		brShift += (-1.0 - brShift) * lowAltNight;
 		// Guard bug fix: previously only checked satShift, which is constant
 		// at deep night (-1.0). brShift changes from skyDarken slider were
 		// silently dropped, making the operator knob inert. Each shift now
@@ -810,8 +823,9 @@ export class CesiumManager {
 			(v.scene.postProcessStages as any).exposure = targetExposure;
 		}
 		const targetAtmoLight
-			= NIGHT_PALETTE.scene.atmosphereLightDay
-			+ (w.atmosphereLight - NIGHT_PALETTE.scene.atmosphereLightDay) * nf;
+			= (NIGHT_PALETTE.scene.atmosphereLightDay
+			+ (w.atmosphereLight - NIGHT_PALETTE.scene.atmosphereLightDay) * nf)
+			* (1 - lowAltNight * 0.9);
 		if (Math.abs(targetAtmoLight - this.lastAtmoLight) > 0.005) {
 			this.lastAtmoLight = targetAtmoLight;
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
