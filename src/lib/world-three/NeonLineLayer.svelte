@@ -61,6 +61,9 @@
 		intensityMul = 1,
 		gateStartFt = 25000,
 		gateEndFt = 60000,
+		dashed = false,
+		dashSize = 0,
+		gapSize = 0,
 		buildSegments,
 	}: {
 		location: LocationId;
@@ -75,6 +78,16 @@
 		/** Altitude (ft) at which the layer is fully visible; fades to gateEndFt. */
 		gateStartFt?: number;
 		gateEndFt?: number;
+		/**
+		 * Render the lines as dashes/dots instead of solid. `dashSize` /
+		 * `gapSize` are in world metres (positions are metres in the ENU
+		 * frame). When true, geometry line-distances are computed on build and
+		 * both core + halo share the same dash phase so the glow tracks each
+		 * dot. Per-mount constant — pass a literal.
+		 */
+		dashed?: boolean;
+		dashSize?: number;
+		gapSize?: number;
 		buildSegments: (features: F[], lat0: number, lon0: number) => NeonSegments | null;
 	} = $props();
 
@@ -101,6 +114,19 @@
 	const _haloColor = haloColor as number;
 	// svelte-ignore state_referenced_locally
 	const _haloWidth = haloWidth as number;
+	// svelte-ignore state_referenced_locally
+	const _dashed = dashed as boolean;
+	// svelte-ignore state_referenced_locally
+	const _dashSize = dashSize as number;
+	// svelte-ignore state_referenced_locally
+	const _gapSize = gapSize as number;
+
+	// Dash params are per-mount constants. Setting `dashed:true` at
+	// construction bakes the USE_DASH shader define; it can't be toggled later
+	// without a defines recompile, which we never need (callers pass literals).
+	const dashOpts = _dashed
+		? { dashed: true, dashSize: _dashSize, gapSize: _gapSize }
+		: {};
 
 	const coreMaterial = new LineMaterial({
 		color: _coreColor,
@@ -111,6 +137,7 @@
 		depthWrite: false,
 		worldUnits: false,
 		vertexColors: true,
+		...dashOpts,
 	});
 	const haloMaterial = new LineMaterial({
 		color: _haloColor,
@@ -121,6 +148,7 @@
 		depthWrite: false,
 		worldUnits: false,
 		vertexColors: true,
+		...dashOpts,
 	});
 
 	// LineMaterial.resolution only needs syncing when the renderer size
@@ -172,6 +200,15 @@
 				const geom = new LineSegmentsGeometry();
 				geom.setPositions(result.positions);
 				if (result.colors) geom.setColors(result.colors);
+				// Dashing needs per-vertex line distances; each road segment is
+				// a disjoint 2-point pair so the dash phase restarts per segment.
+				// computeLineDistances is real on LineSegmentsGeometry but absent
+				// from the bundled addon .d.ts — narrow cast over `any`.
+				if (_dashed) {
+					(geom as LineSegmentsGeometry & {
+						computeLineDistances: () => LineSegmentsGeometry;
+					}).computeLineDistances();
+				}
 				pendingDispose = geom;
 				geometry = geom;
 				anchorMatrix = enuAnchorMatrix(loc.lat, loc.lon, 0);
