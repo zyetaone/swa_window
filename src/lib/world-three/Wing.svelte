@@ -63,24 +63,24 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = -7.4;
-	const WING_Y_BASE = -3.0;
-	const WING_Z_BASE = -12.2;
-	// Orientation (radians). rotY≈1.36 is the receding swing (span → depth);
-	// rotX is the static resting pitch (look-down onto the top surface) — NOT
-	// the bank, which the tick applies separately from motion.bankAngle. rotZ
-	// is a small sweep tilt.
+	const WING_X_BASE = -10.0;
+	const WING_Y_BASE = -4.5;
+	const WING_Z_BASE = -12.4;
+	// Orientation (radians). rotY is the receding swing (span → depth); rotX is
+	// the static resting pitch (look-down onto the top surface) — NOT the bank,
+	// which the tick applies separately from motion.bankAngle. rotZ is a small
+	// sweep tilt. Baked from DevWingTuner.
 	const WING_ROT_X = 0.02;
-	const WING_ROT_Y = 1.62;
+	const WING_ROT_Y = 1.68;
 	const WING_ROT_Z = 0.18;
-	// Absolute model-unit scale (both GLBs are normalized to a 17-unit span by
-	// scripts/extract-wing.ts, so a direct scalar is exact).
-	const WING_SCALE = 0.76;
-	// The right wing (wing.glb) is correct when orbitDirection === this value.
-	// When the seeded orbit runs the other way, we show the LEFT wing
-	// (wing-left.glb) instead — the plane's real mirror wing, with its own
-	// readable "Southwest.com" livery — so the winglet always trails the motion
-	// without a negative-scale mirror (which would reverse the text).
+	// Per-axis model scale (X span / Y thickness / Z chord). Independent axes so
+	// the wing can be stretched/squashed per direction in the tuner. Equal =
+	// uniform scale.
+	const WING_SCALE_X = 1.11;
+	const WING_SCALE_Y = 1.11;
+	const WING_SCALE_Z = 1.11;
+	// Wing shown unmirrored when orbitDirection === this; the reverse direction
+	// is a negative-X scale on the single holder (see tick).
 	const WING_NATURAL_DIR = 1;
 
 	// ONE wing holder. placement carries shared Y/Z; the holder carries X +
@@ -126,7 +126,7 @@
 				if (cancelled) return;
 				const m = gltf.scene as Object3D;
 				m.position.sub(new Box3().setFromObject(m).getCenter(new Vector3()));
-				m.scale.setScalar(WING_SCALE);
+				m.scale.set(WING_SCALE_X, WING_SCALE_Y, WING_SCALE_Z);
 				m.rotation.set(rot[0], rot[1], rot[2]);
 				m.traverse((o) => {
 					const me = o as Mesh;

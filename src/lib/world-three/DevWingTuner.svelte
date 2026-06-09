@@ -18,7 +18,10 @@
 		set: (x: number, y: number, z: number) => void;
 	}
 	interface WingHook {
-		model: { rotation: Vec3Like; scale: { x: number; setScalar: (s: number) => void } };
+		model: {
+			rotation: Vec3Like;
+			scale: { x: number; y: number; z: number; set: (x: number, y: number, z: number) => void };
+		};
 		placement: { position: Vec3Like };
 		// posX goes through setXBase — the wing tick owns placement.position.x
 		// (re-derives it from the X base − fuselageOffset every frame).
@@ -34,7 +37,9 @@
 	let px = $state(2.5);
 	let py = $state(-3.2);
 	let pz = $state(-9);
-	let sc = $state(0.53);
+	let scX = $state(1.11);
+	let scY = $state(1.11);
+	let scZ = $state(1.11);
 	let ready = $state(false);
 	let copied = $state(false);
 
@@ -49,7 +54,9 @@
 			px = +(w.xBase ?? w.placement.position.x).toFixed(2);
 			py = +w.placement.position.y.toFixed(2);
 			pz = +w.placement.position.z.toFixed(2);
-			sc = +w.model.scale.x.toFixed(3);
+			scX = +w.model.scale.x.toFixed(3);
+			scY = +w.model.scale.y.toFixed(3);
+			scZ = +w.model.scale.z.toFixed(3);
 			ready = true;
 			return true;
 		};
@@ -71,11 +78,11 @@
 		else w.placement.position.x = px;
 		w.placement.position.y = py;
 		w.placement.position.z = pz;
-		w.model.scale.setScalar(sc);
+		w.model.scale.set(scX, scY, scZ);
 	});
 
 	const dump = $derived(
-		`rot(${rx.toFixed(3)}, ${ry.toFixed(3)}, ${rz.toFixed(3)}) pos(${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}) scale ${sc.toFixed(3)}`,
+		`rot(${rx.toFixed(3)}, ${ry.toFixed(3)}, ${rz.toFixed(3)}) pos(${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}) scale(${scX.toFixed(3)}, ${scY.toFixed(3)}, ${scZ.toFixed(3)})`,
 	);
 
 	async function copy() {
@@ -99,13 +106,17 @@
 	<label>rotZ <span>{rz.toFixed(2)}</span>
 		<input type="range" min="-3.2" max="3.2" step="0.02" bind:value={rz} /></label>
 	<label>posX <span>{px.toFixed(1)}</span>
-		<input type="range" min="-10" max="10" step="0.1" bind:value={px} /></label>
+		<input type="range" min="-16" max="16" step="0.1" bind:value={px} /></label>
 	<label>posY <span>{py.toFixed(1)}</span>
-		<input type="range" min="-8" max="2" step="0.1" bind:value={py} /></label>
+		<input type="range" min="-10" max="2" step="0.1" bind:value={py} /></label>
 	<label>posZ <span>{pz.toFixed(1)}</span>
 		<input type="range" min="-26" max="-3" step="0.1" bind:value={pz} /></label>
-	<label>scale <span>{sc.toFixed(2)}</span>
-		<input type="range" min="0.05" max="1.3" step="0.01" bind:value={sc} /></label>
+	<label>scaleX <span>{scX.toFixed(2)}</span>
+		<input type="range" min="0.05" max="3" step="0.01" bind:value={scX} /></label>
+	<label>scaleY <span>{scY.toFixed(2)}</span>
+		<input type="range" min="0.05" max="3" step="0.01" bind:value={scY} /></label>
+	<label>scaleZ <span>{scZ.toFixed(2)}</span>
+		<input type="range" min="0.05" max="3" step="0.01" bind:value={scZ} /></label>
 
 	<button class="dump" onclick={copy}>{copied ? 'copied ✓' : dump}</button>
 </fieldset>
