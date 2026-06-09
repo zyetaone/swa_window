@@ -18,7 +18,10 @@
 		set: (x: number, y: number, z: number) => void;
 	}
 	interface WingHook {
-		model: { rotation: Vec3Like; scale: { x: number; setScalar: (s: number) => void } };
+		model: {
+			rotation: Vec3Like;
+			scale: { x: number; setScalar: (s: number) => void; set: (x: number, y: number, z: number) => void };
+		};
 		placement: { position: Vec3Like };
 		// posX goes through setXBase — the wing tick owns placement.position.x
 		// (re-derives it from the X base − fuselageOffset every frame).
@@ -35,6 +38,7 @@
 	let py = $state(-3.2);
 	let pz = $state(-9);
 	let sc = $state(0.53);
+	let mirror = $state(false); // wing mirrored along span (negative X scale)
 	let ready = $state(false);
 	let copied = $state(false);
 
@@ -49,7 +53,8 @@
 			px = +(w.xBase ?? w.placement.position.x).toFixed(2);
 			py = +w.placement.position.y.toFixed(2);
 			pz = +w.placement.position.z.toFixed(2);
-			sc = +w.model.scale.x.toFixed(3);
+			mirror = w.model.scale.x < 0;
+			sc = +Math.abs(w.model.scale.x).toFixed(3);
 			ready = true;
 			return true;
 		};
@@ -71,7 +76,7 @@
 		else w.placement.position.x = px;
 		w.placement.position.y = py;
 		w.placement.position.z = pz;
-		w.model.scale.setScalar(sc);
+		w.model.scale.set(mirror ? -sc : sc, sc, sc);
 	});
 
 	const dump = $derived(
@@ -89,8 +94,8 @@
 	}
 </script>
 
-<div class="wing-tuner">
-	<div class="title">WING TUNER {ready ? '' : '· waiting for GLB…'}</div>
+<fieldset class="wing-tuner">
+	<legend>Wing pose{ready ? '' : ' · waiting…'}</legend>
 
 	<label>rotX <span>{rx.toFixed(2)}</span>
 		<input type="range" min="-3.2" max="3.2" step="0.02" bind:value={rx} /></label>
@@ -107,33 +112,36 @@
 	<label>scale <span>{sc.toFixed(2)}</span>
 		<input type="range" min="0.05" max="1.3" step="0.01" bind:value={sc} /></label>
 
+	<label class="check">
+		<input type="checkbox" bind:checked={mirror} />
+		mirror span <span class="warn">(reverses livery text)</span>
+	</label>
+
 	<button class="dump" onclick={copy}>{copied ? 'copied ✓' : dump}</button>
-</div>
+</fieldset>
 
 <style>
+	/* Rendered inside the LabShell drawer as a fieldset — match that chrome.
+	   LabShell's scoped fieldset/label CSS can't reach slotted content, so the
+	   styling is restated here. */
 	.wing-tuner {
-		position: fixed;
-		top: 12px;
-		right: 12px;
-		z-index: 99999;
-		width: 232px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 12px;
+		margin: 0 0 16px;
 		padding: 12px;
-		background: rgba(12, 14, 20, 0.92);
-		backdrop-filter: blur(8px);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 10px;
-		color: #dde;
-		font: 12px/1.5 ui-monospace, monospace;
-		pointer-events: auto;
+		font: 12px/1.4 ui-monospace, monospace;
 	}
-	.title {
-		font-weight: bold;
-		color: #7faeff;
-		margin-bottom: 8px;
+	.wing-tuner legend {
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: #666;
+		padding: 0 8px;
 	}
 	label {
 		display: block;
 		margin: 4px 0;
+		color: #ccc;
 	}
 	label span {
 		color: #7faeff;
@@ -142,6 +150,21 @@
 	input[type='range'] {
 		width: 100%;
 		accent-color: #7faeff;
+		margin: 2px 0 4px;
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 8px;
+		font-size: 11px;
+	}
+	.check input {
+		accent-color: #7faeff;
+	}
+	.check .warn {
+		color: #c98a6a;
+		float: none;
 	}
 	.dump {
 		margin-top: 8px;

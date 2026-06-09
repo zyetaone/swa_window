@@ -106,12 +106,6 @@
 		     replacing the prior CSS .wing-silhouette div. -->
 		<ThreeOverlay />
 
-		<!-- DEV-ONLY wing pose tuner — persists across HMR (unlike the prior
-		     console-injected panel). Delete once the pose is baked. -->
-		{#if import.meta.env.DEV}
-			<DevWingTuner />
-		{/if}
-
 		<!-- Production HUD spike for hybrid validation (ADR-004).
 		     Renders the real TelemetryOverlay / BlindInfoCard (driven by the shared
 		     model.config.shell.blindOpen + flight state) over the Cesium + Three scene.
@@ -152,6 +146,10 @@
 	{/snippet}
 
 	{#snippet extraControls()}
+		{#if import.meta.env.DEV}
+			<DevWingTuner />
+		{/if}
+
 		<fieldset>
 			<legend>HUD</legend>
 			<label style="display:flex;align-items:center;gap:6px;font-size:11px;">
