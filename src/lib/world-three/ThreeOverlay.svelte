@@ -43,7 +43,8 @@
 	import RainSpatter from './RainSpatter.svelte';
 	import WingContrail from './WingContrail.svelte';
 	import Wing from './Wing.svelte';
-	import { computeSunDirection, environmentAmbient } from './sky';
+	import { computeSunDirection } from './sky';
+	import { lightingState } from './lighting';
 
 	type Vec3 = [number, number, number];
 
@@ -52,25 +53,25 @@
 	// $state.raw — Three.js camera mutated each frame, must not be proxied.
 	let camera: PerspectiveCamera | undefined = $state.raw();
 
-	// Smarter environment ambient that respects air mass + nightFactor
-	// while still keeping the artistic dawn/dusk mood windows.
-	// This makes the base Three environment feel more consistent with
-	// the upgraded artistic sky layers (Veil, SunGlow, etc.).
-	const env = $derived(environmentAmbient(
-		model.flight.camLon,
-		model.timeOfDay,
-		model.nightFactor
-	));
-	// Pre-allocated scratch Color reused on every recompute. Previously
-	// `$derived(new Color(...))` allocated a fresh Color object 60×/sec
-	// since env's three reactive sources all tick every frame. Threlte's
-	// `<T.AmbientLight color={ambientTint}>` reads the .r/.g/.b directly
-	// via Three.js's color reconciler — mutating-in-place still propagates.
+	// Environment ambient + IBL params now come from the unified lighting SSOT
+	// (world-three/lighting.ts) — the single owner of every day/dusk/night
+	// response. Each value is its own $derived reading the raw model inputs so
+	// Svelte invalidation is correct; lightingState is memoised so the repeated
+	// calls collapse to ONE compute per frame.
+	//
+	// Pre-allocated scratch Color reused on every recompute. Threlte's
+	// `<T.AmbientLight color={ambientTint}>` reads the .r/.g/.b directly via
+	// Three.js's color reconciler — mutating-in-place still propagates.
 	const _ambientTintScratch = new Color();
-	const ambientTint = $derived(
-		_ambientTintScratch.setRGB(env.color[0], env.color[1], env.color[2])
-	);
-	const ambientIntensity = $derived(env.intensity);
+	const ambientTint = $derived.by(() => {
+		const s = lightingState(model.timeOfDay, model.nightFactor);
+		return _ambientTintScratch.setRGB(s.ambientColor[0], s.ambientColor[1], s.ambientColor[2]);
+	});
+	const ambientIntensity = $derived(lightingState(model.timeOfDay, model.nightFactor).ambientIntensity);
+	// IBL <Sky> params: clearer/bluer by day, hazier-warm through dawn/dusk so
+	// the environment cubemap matches the palette instead of fighting it.
+	const skyTurbidity = $derived(lightingState(model.timeOfDay, model.nightFactor).skyTurbidity);
+	const skyRayleigh = $derived(lightingState(model.timeOfDay, model.nightFactor).skyRayleigh);
 
 	// Sun position for Threlte's <Sky> — driving the IBL cubemap.
 	// THROTTLE: previously `sunPosVec` was a $derived that emitted a new
@@ -183,8 +184,8 @@
 		<Sky
 			cubeMapSize={64}
 			setEnvironment
-			turbidity={8}
-			rayleigh={2.5}
+			turbidity={skyTurbidity}
+			rayleigh={skyRayleigh}
 			mieCoefficient={0.005}
 			mieDirectionalG={0.75}
 			scale={0.0001}

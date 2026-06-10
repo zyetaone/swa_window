@@ -63,6 +63,19 @@ export const COLOR_GRADING_GLSL = `
 		vec3 grayBase = vec3(lum);
 		rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
 
+		// 2b. BASE DARKENING (Phase 15.5 contract — restored). Pull the unlit
+		//     terrain / open water / residual sky toward deep navy as night
+		//     falls. This is load-bearing: compose.ts:syncImagery DELIBERATELY
+		//     no longer dims baseLayer.brightness (stays 1.0) because it relies
+		//     on THIS mix to darken the scene — the contract was silently broken
+		//     when the shader was reverted to the Feb-15 base, leaving the bright
+		//     EOX ocean to get gold-tinted by the additive below (the "gold
+		//     night" bug). Gated by (1 - lightMask) so genuine city lights
+		//     survive and still take the warm additive in step 3.
+		vec3 deepNavy = vec3(0.012, 0.022, 0.045);
+		float baseDark = smoothstep(0.45, 0.9, u_nightFactor) * 0.85 * (1.0 - lightMask);
+		rgb = mix(rgb, deepNavy, baseDark);
+
 		// 3. 3-stop warm palette (sodium → amber → warm-white). Calm-amber
 		//    brand. Additive blend so lights ADD on top of the desaturated
 		//    terrain. CRITICAL: gated by lightMask — without this, dim
