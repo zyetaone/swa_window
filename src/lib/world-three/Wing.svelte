@@ -49,6 +49,7 @@
 		MeshBasicMaterial,
 		MeshLambertMaterial,
 		DirectionalLight,
+		HemisphereLight,
 		SphereGeometry,
 		Color,
 		DoubleSide,
@@ -221,10 +222,16 @@
 	// lerp warm-day → cool-moonlight by nightFactor; the scene AmbientLight is
 	// the floor that keeps the shadowed side from going pure black.
 	const keyLight = new DirectionalLight(0xffffff, 1.0);
+	// Soft hemisphere fill so the directional key SHAPES the wing without
+	// carving harsh near-black shadow facets at the root / leading edge (which
+	// read as "strange" hard shadows). Cool sky tint from above, dim warm bounce
+	// from below — a gentle gradient that lifts the shadowed side. Only the wing
+	// (sole lit object in the overlay) sees it. Intensity set in the tick.
+	const fillLight = new HemisphereLight(0xbcd2ff, 0x2a2620, 0.0);
 	$effect(() => {
 		const scene = ctx.scene;
-		scene.add(keyLight, keyLight.target);
-		return () => scene.remove(keyLight, keyLight.target);
+		scene.add(keyLight, keyLight.target, fillLight);
+		return () => scene.remove(keyLight, keyLight.target, fillLight);
 	});
 
 	// Reusable bank quaternions — avoid per-frame allocation. Bank is now
@@ -331,8 +338,11 @@
 		const sd = computeSunDirection(untrack(() => model.flight.camLon), untrack(() => model.timeOfDay));
 		_keyDir.set(sd[0], Math.max(sd[1], 0.45), sd[2]).normalize().multiplyScalar(1e6);
 		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
-		keyLight.intensity = 0.35 + (1 - nf) * 1.05; // night 0.35 → day 1.4
+		// Eased key + hemisphere fill → gentle ~2.5:1 lit:shadow ratio instead of
+		// the old ~6:1 that made the root facets read as harsh black shadows.
+		keyLight.intensity = 0.3 + (1 - nf) * 0.85; // night 0.3 → day 1.15
 		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
+		fillLight.intensity = 0.45 - nf * 0.28; // day 0.45 soft fill → night 0.17
 	});
 
 	$effect(() => () => {
