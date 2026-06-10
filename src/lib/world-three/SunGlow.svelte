@@ -21,7 +21,8 @@
 	import { T, useTask } from '@threlte/core';
 	import { AdditiveBlending, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection, sunVisibility, skyMood, SKY_PALETTE, SUN_PLACEMENT_M } from './sky';
+	import { computeSunDirection, airMassFactor, SUN_PLACEMENT_M } from './sky';
+	import { lightingState } from './lighting';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
@@ -43,43 +44,32 @@
 		return [d[0] * SUN_PLACEMENT_M, d[1] * SUN_PLACEMENT_M, d[2] * SUN_PLACEMENT_M];
 	});
 
-	// Visibility + per-phase palette — both pulled from sky.ts so SunGlow,
-	// LensFlare, and AtmosphericVeil share the same dawn/dusk windows.
-	const visibility = $derived(sunVisibility(model.timeOfDay));
-	const sunColor = $derived(SKY_PALETTE.sunCore[skyMood(model.timeOfDay).phase]);
-
-	// Air mass (secant approximation) + real light intensity.
-	// Tighter epsilon → higher peak values near horizon for dramatic
-	// core dimming + halo bloom when the sun is low (thick atmosphere).
-	// Blended with nightFactor so the artistic glow respects scene light strength.
-	const airMassFactor = $derived.by(() => {
-		const d = computeSunDirection(model.flight.camLon, model.timeOfDay);
-		const elev = Math.max(-0.12, Math.min(1, d[1]));
-		return 1.0 / Math.max(0.12, elev + 0.12);
-	});
+	// Visibility + colour now come from the unified lighting SSOT:
+	// sunGlowVisibility owns the curve sky.ts `sunVisibility` used to, and
+	// `horizonTint` is the CONTINUOUS sun-core blend (no hard phase switch).
+	// airMass uses the SHARED sky.ts helper — the duplicated local copy is gone,
+	// so SunGlow / Moon / NightStars all read one air-mass formula.
+	const visibility = $derived(lightingState(model.timeOfDay, model.nightFactor).sunGlowVisibility);
+	const airMass = $derived(airMassFactor(model.flight.camLon, model.timeOfDay));
 
 	// Blend air mass with sun strength from nightFactor (real directional light proxy)
 	const sunStrength = $derived(1 - model.nightFactor * 0.72);
-	const lowSunFactor = $derived(Math.min(4.2, airMassFactor * 0.58 * sunStrength));
+	const lowSunFactor = $derived(Math.min(4.2, airMass * 0.58 * sunStrength));
 
 	// Extra warm shift + core dim when air mass is high (low sun elevation).
-	// Makes the core itself feel "through more atmosphere" — warmer and softer.
-	// MUST be defined before coreTint which reads it (was previously after,
-	// causing a one-frame stale-read on warmShift).
-	const warmShift = $derived(Math.min(0.85, (airMassFactor - 1.0) * 0.18 * sunStrength));
+	const warmShift = $derived(Math.min(0.85, (airMass - 1.0) * 0.18 * sunStrength));
 
 	const coreTint = $derived.by(() => {
-		// Base from palette (warm at dawn/dusk). Extra warm shift when air mass high.
-		const r = Math.min(1, sunColor[0] + warmShift * 0.22);
-		const g = Math.max(0.22, sunColor[1] - warmShift * 0.38);
-		const b = Math.max(0.12, sunColor[2] - warmShift * 0.52);
+		const s = lightingState(model.timeOfDay, model.nightFactor);
+		const r = Math.min(1, s.horizonTint[0] + warmShift * 0.22);
+		const g = Math.max(0.22, s.horizonTint[1] - warmShift * 0.38);
+		const b = Math.max(0.12, s.horizonTint[2] - warmShift * 0.52);
 		return new Color(r, g, b);
 	});
-	const haloTint = $derived(new Color(
-		sunColor[0] * 0.95,
-		sunColor[1] * 0.70,
-		sunColor[2] * 0.50,
-	));
+	const haloTint = $derived.by(() => {
+		const s = lightingState(model.timeOfDay, model.nightFactor);
+		return new Color(s.horizonTint[0] * 0.95, s.horizonTint[1] * 0.70, s.horizonTint[2] * 0.50);
+	});
 
 	// Programmatic radial gradient — sun core. Smoothed: fewer hard color
 	// stops in the falloff band so there's no visible "ring" between
@@ -137,7 +127,7 @@
 		// Air-mass emphasis: stronger scatter near horizon, but dialed back
 		// (0.72→0.5 base, 0.38→0.24 low-sun boost) — the old values stacked
 		// with the bloom pass into a hot white blob at dusk.
-		opacity={visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMassFactor - 1) * 0.12)) * shimmer}
+		opacity={visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMass - 1) * 0.12)) * shimmer}
 		transparent
 		depthWrite={false}
 		depthTest={false}

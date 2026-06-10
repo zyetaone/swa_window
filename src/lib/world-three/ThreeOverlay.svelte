@@ -144,9 +144,9 @@
 			far={1e9}
 		/>
 
-		<!-- Environment ambient (now smarter via environmentAmbient in sky.ts).
-		     Blends artistic phase mood with air-mass horizon boost + nightFactor.
-		     Provides consistent base lighting for all artistic overlays. -->
+		<!-- Environment ambient from the unified lighting SSOT (lighting.ts):
+		     continuous phase palette + air-mass horizon boost + nightFactor.
+		     One owner of base lighting for all artistic overlays. -->
 		<T.AmbientLight color={ambientTint} intensity={ambientIntensity} />
 
 		<CameraMirror {camera} />

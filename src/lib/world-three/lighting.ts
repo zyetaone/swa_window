@@ -50,6 +50,11 @@ export interface LightingState {
 	/** How much the sun lights the scene: 1 by day, hard 0 by deep night. Pure
 	 *  function of time/nightFactor — the kill-switch for the gold-night warm layers. */
 	sunContribution: number;
+	/** Visibility curve for the sun-anchored glow layers (SunGlow core/halo,
+	 *  EffectStack godrays): a 0.35 daytime plateau with a sine hero-peak through
+	 *  the dawn/dusk bands, 0 at night. Owns what sky.ts `sunVisibility` did, now
+	 *  on the canonical T windows. */
+	sunGlowVisibility: number;
 	/** 0 (day) → ~1 (deep night). The single darkening authority for clouds etc. */
 	nightDarkness: number;
 	/** City skyglow strength 0..1. 0 in day, gated in from mid-dusk (nf > 0.45). */
@@ -86,6 +91,7 @@ const _state: LightingState = {
 	phase: 'day',
 	dawnDuskWeight: 0,
 	sunContribution: 1,
+	sunGlowVisibility: 0.35,
 	nightDarkness: 0,
 	cityGlowAmount: 0,
 	starVisibility: 0,
@@ -173,6 +179,18 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunDir?: V
 	// (SunGlow, Veil, LensFlare, cloud Mie) all scale by this.
 	_state.sunContribution = clamp(1 - nf, 0, 1);
 	_state.nightDarkness = nf;
+
+	// Sun-glow visibility: sine hero-peak through dawn/dusk, 0.35 day plateau,
+	// 0 at night. Same shape sky.ts sunVisibility had, re-based on T windows.
+	if (timeOfDay >= T.DAWN_START && timeOfDay < T.DAY_START) {
+		_state.sunGlowVisibility = Math.sin(((timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START)) * Math.PI);
+	} else if (timeOfDay > T.DAY_END && timeOfDay <= T.DUSK_END) {
+		_state.sunGlowVisibility = Math.sin(((timeOfDay - T.DAY_END) / (T.DUSK_END - T.DAY_END)) * Math.PI);
+	} else if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) {
+		_state.sunGlowVisibility = 0.35;
+	} else {
+		_state.sunGlowVisibility = 0;
+	}
 
 	// One warm hero weight, smoothstep-eased and capped so dusk doesn't blow out.
 	_state.dawnDuskWeight = Math.min(0.75, smoothstep(dawnDuskFactor(timeOfDay)));

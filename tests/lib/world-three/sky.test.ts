@@ -10,10 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	computeSunDirection,
-	sunVisibility,
-	skyMood,
 	airMassFactor,
-	environmentAmbient,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world-three/sky';
@@ -69,41 +66,8 @@ describe('computeSunDirection', () => {
 	});
 });
 
-describe('skyMood phases', () => {
-	it('day at noon', () => expect(skyMood(12).phase).toBe('day'));
-	it('night at midnight', () => expect(skyMood(0).phase).toBe('night'));
-	it('dawn at the dawn window peak', () => expect(skyMood(6).phase).toBe('dawn'));
-	it('dusk at the dusk window peak', () => expect(skyMood(18.5).phase).toBe('dusk'));
-	it('night after 21:00', () => expect(skyMood(22).phase).toBe('night'));
-	it('intensity is [0, 1] for any time', () => {
-		for (const t of [0, 5, 6, 7.5, 12, 17, 18.25, 19.5, 22]) {
-			const { intensity } = skyMood(t);
-			expect(intensity).toBeGreaterThanOrEqual(0);
-			expect(intensity).toBeLessThanOrEqual(1);
-		}
-	});
-});
-
-describe('sunVisibility', () => {
-	it('is 0 at deep night', () => {
-		expect(sunVisibility(0)).toBe(0);
-		expect(sunVisibility(3)).toBe(0);
-		expect(sunVisibility(23)).toBe(0);
-	});
-	it('is at the residual day plateau between dawn and dusk windows', () => {
-		expect(sunVisibility(12)).toBeCloseTo(0.35, 5);
-	});
-	it('peaks during the dawn window', () => {
-		// Sine-curve over t∈[5,8] reaches max at t=6.5.
-		const peak = sunVisibility(6.5);
-		expect(peak).toBeCloseTo(1, 5);
-	});
-	it('peaks during the dusk window', () => {
-		// Sine-curve over t∈[17,20] reaches max at t=18.5.
-		const peak = sunVisibility(18.5);
-		expect(peak).toBeCloseTo(1, 5);
-	});
-});
+// skyMood + sunVisibility retired from sky.ts — their day/dusk/night response
+// now lives in world-three/lighting.ts (lightingState), covered by lighting.test.ts.
 
 describe('airMassFactor', () => {
 	it('returns the elevation-floor value when sun is high', () => {
@@ -120,24 +84,8 @@ describe('airMassFactor', () => {
 	});
 });
 
-describe('environmentAmbient', () => {
-	it('intensity hits the documented night floor at nf=1', () => {
-		const env = environmentAmbient(0, 0, 1);
-		expect(env.intensity).toBeCloseTo(0.12, 5);
-	});
-	it('intensity hits the documented day peak at nf=0', () => {
-		const env = environmentAmbient(0, 12, 0);
-		expect(env.intensity).toBeCloseTo(0.12 + 0.78, 5);
-	});
-	it('returns non-negative RGB for any input', () => {
-		for (const [lon, t, nf] of [[0, 0, 1], [0, 12, 0], [180, 6, 0.5], [0, 18, 0.7]] as const) {
-			const env = environmentAmbient(lon, t, nf);
-			expect(env.color[0]).toBeGreaterThanOrEqual(0);
-			expect(env.color[1]).toBeGreaterThanOrEqual(0);
-			expect(env.color[2]).toBeGreaterThanOrEqual(0);
-		}
-	});
-});
+// environmentAmbient retired from sky.ts — ambient color/intensity now comes
+// from lightingState (lighting.test.ts pins the 0.12 + (1-nf)*0.78 curve).
 
 describe('SKY_PALETTE', () => {
 	it('has entries for every (layer, phase) combination', () => {

@@ -31,8 +31,8 @@
 	 *
 	 * ─── LIGHTING ──────────────────────────────────────────────────────
 	 * The GLB keeps its own materials (white wing skin + Heart-gradient
-	 * winglet). They're lit by the scene AmbientLight (tinted by
-	 * environmentAmbient → dawn warm / day cool / dusk amber / night blue)
+	 * winglet). They're lit by the scene AmbientLight (tinted by the lighting
+	 * SSOT → dawn warm / day cool / dusk amber / night blue)
 	 * + the Sky IBL, so the wing transitions with time of day automatically.
 	 * Fog is disabled on the wing materials (the holder is camera-anchored
 	 * but baked far from world origin, so distance fog would wrongly darken

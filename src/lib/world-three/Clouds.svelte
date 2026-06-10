@@ -81,6 +81,7 @@
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from './prng';
+	import { lightingState } from './lighting';
 
 	let {
 		density,
@@ -346,6 +347,11 @@
 	// render frame, avoiding the ~2.5µs Svelte dep-tracking overhead.
 	useTask(() => {
 		const nf = nightFactor;
+		// Unified lighting SSOT — the cloud darkening / city-glow / moon-lift now
+		// read the same gates as every other Three layer (cityGlowAmount lights up
+		// at dusk in lock-step with CityGlowDome; moonContribution gates the grey
+		// moon-lift by actual moon presence instead of raw nf).
+		const L = lightingState(model.timeOfDay, model.nightFactor, sunDirection);
 		const ambR = ambientColor?.r ?? 1;
 		const ambG = ambientColor?.g ?? 1;
 		const ambB = ambientColor?.b ?? 1;
@@ -377,7 +383,7 @@
 		// VERY_LARGE bloom kernel, this reads as a recognizable warm wash
 		// without driving the underside to saturation white. Increase to
 		// 0.35 for "Las Vegas dramatic" effect, lower for subtler glow.
-		const cityGlowStrength = nf * cityFactor * density * 0.22;
+		const cityGlowStrength = L.cityGlowAmount * cityFactor * density * 0.22;
 
 		const sd = sunDirection;
 		let liveSunBoost = 0;
@@ -460,7 +466,7 @@
 			// of a moonlit grey deck. The lift scales by baseB so wispy/thin
 			// clouds stay subtle and dense clusters read as a proper deck.
 			// Slight blue tint on B mimics moonlight Rayleigh scatter.
-			const moonLit = nf * baseB * 0.16;
+			const moonLit = L.moonContribution * baseB * 0.16;
 
 			// City skyglow — warm-amber additive on cluster underside.
 			// Strong on R, mid on G, weak on B → reads as sodium-amber

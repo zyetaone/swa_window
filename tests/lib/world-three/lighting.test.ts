@@ -97,6 +97,15 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 		expect(b.dawnDuskWeight).toBe(snapshot.dd);
 	});
 
+	it('sunGlowVisibility is a 0.35 day plateau, hero-peaks in dawn/dusk, 0 at night', () => {
+		expect(lightingState(12, 0).sunGlowVisibility).toBeCloseTo(0.35, 6); // day plateau
+		expect(lightingState(1, 1).sunGlowVisibility).toBe(0); // night
+		expect(lightingState(23, 1).sunGlowVisibility).toBe(0); // night
+		// Dawn/dusk peaks rise above the day plateau (hero glow).
+		expect(lightingState(6, nightFactor(6)).sunGlowVisibility).toBeGreaterThan(0.35);
+		expect(lightingState(19.5, nightFactor(19.5)).sunGlowVisibility).toBeGreaterThan(0.35);
+	});
+
 	it('skyTurbidity / skyRayleigh stay finite and clearer by day', () => {
 		const day = lightingState(12, 0);
 		const dayTurb = day.skyTurbidity;

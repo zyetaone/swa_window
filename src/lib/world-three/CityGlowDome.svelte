@@ -15,6 +15,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { enuAnchorMatrix } from './enu';
 	import { makeRadialTexture } from './texture-util';
+	import { lightingState } from './lighting';
 
 	const model = useAeroWindow();
 
@@ -39,10 +40,12 @@
 	useTask((dt) => { _t += dt; });
 
 	const opacity = $derived.by(() => {
-		const nf = model.nightFactor;
-		if (nf < 0.45) return 0; // dusk onward only
+		// cityGlowAmount (lighting SSOT) owns the "dusk-onward city skyglow" gate
+		// — 0 until nf > 0.45, smoothstep ramp after. Same gate the cloud city
+		// glow now reads, so dome + clouds light up in lock-step.
+		const cityGlow = lightingState(model.timeOfDay, model.nightFactor).cityGlowAmount;
 		const breath = 1 + 0.07 * Math.sin(_t * 0.05);
-		return Math.min(1, (nf - 0.45) / 0.55) * 0.2 * breath;
+		return cityGlow * 0.2 * breath;
 	});
 
 	// Sodium-amber, matched to the Cesium grade's warm city-light palette so the

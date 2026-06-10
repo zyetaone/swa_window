@@ -53,7 +53,8 @@
 	} from 'postprocessing';
 	import { HalfFloatType, Vector2, Mesh, SphereGeometry, MeshBasicMaterial } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection, sunVisibility, SUN_PLACEMENT_M } from './sky';
+	import { computeSunDirection, SUN_PLACEMENT_M } from './sky';
+	import { lightingState } from './lighting';
 	import { updateHybridDebug } from './lab-debug';
 
 	const model = useAeroWindow();
@@ -167,7 +168,7 @@
 	// GodRays sample count scales with visibility: 40 at dawn/dusk hero moments,
 	// 20 at midday, 8 when near-invisible — saves ~0.2ms GPU at night/noon.
 	$effect(() => {
-		const vis = sunVisibility(model.timeOfDay) * (1 - model.nightFactor * 0.95);
+		const vis = lightingState(model.timeOfDay, model.nightFactor).sunGlowVisibility * (1 - model.nightFactor * 0.95);
 		godRays.blendMode.opacity.value = Math.min(1, vis * 1.5);
 		godRays.samples = vis > 0.25 ? 40 : vis > 0.08 ? 20 : 8;
 		// Raise bloom threshold at night: clouds are dimmer at night and

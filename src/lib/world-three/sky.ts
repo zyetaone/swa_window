@@ -1,11 +1,12 @@
 /**
- * world-three/sky — SSOT for sun direction, time-of-day visibility curves,
- * and the per-phase colour palette that drives every Three-side env layer.
+ * world-three/sky — geometry primitives for the Three-side env layers: the
+ * sun-direction vector, the air-mass approximation, and the per-phase colour
+ * palette.
  *
- * Previously these constants + functions lived inline in SunGlow / Moon /
- * LensFlare / AtmosphericVeil / ThreeOverlay (3-4× duplication across
- * components). Centralising here means the dawn/dusk window boundaries
- * (5 / 7.5 / 17 / 19.5) are now a single edit.
+ * The time-of-day RESPONSE curves (visibility, mood phase, ambient) used to
+ * live here too; they moved to world-three/lighting.ts — the single owner of
+ * every day/dusk/night response, keyed on the canonical T thresholds. This
+ * file now holds only the inputs lighting.ts (and a few layers) build on.
  */
 
 type Vec3 = [number, number, number];
@@ -78,77 +79,6 @@ export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
 	const d = computeSunDirection(camLonDeg, timeOfDay);
 	const elev = Math.max(-0.12, Math.min(1, d[1]));
 	return 1.0 / Math.max(0.12, elev + 0.12);
-}
-
-// Module-scope cached return for environmentAmbient — the function is called
-// by multiple $derived consumers every frame during flight. Returning a new
-// object literal each call created short-lived GC pressure. Now we mutate
-// and return the same cached object (consumers only read, never mutate).
-const _envCache: { color: Vec3; intensity: number } = { color: [0, 0, 0], intensity: 0 };
-
-/**
- * Returns a more physically grounded ambient tint + intensity for the
- * Three-side environment (the base AmbientLight in the hybrid overlay).
- *
- * It keeps the artistic phase-based mood windows (dawn/dusk hero moments)
- * from the palette, but modulates them with air mass (stronger scatter
- * near horizon) and nightFactor. This makes the overall "environment"
- * feel more consistent with the upgraded individual sky layers.
- */
-export function environmentAmbient(
-	camLonDeg: number,
-	timeOfDay: number,
-	nightFactor: number
-): { color: Vec3; intensity: number } {
-	const phase = skyMood(timeOfDay).phase;
-	const base = SKY_PALETTE.ambient[phase];
-
-	const am = airMassFactor(camLonDeg, timeOfDay);
-	// Horizon boost for the base environment (stronger at low sun)
-	const horizonBoost = 1 + Math.min(0.8, (am - 1) * 0.25);
-
-	// NightFactor already dims things, but we can give a little extra
-	// cool shift near the horizon at night for depth.
-	const nf = nightFactor;
-	const coolShift = nf * 0.15;
-
-	_envCache.color[0] = Math.max(0, base[0] * horizonBoost);
-	_envCache.color[1] = Math.max(0, base[1] * horizonBoost * (1 - coolShift * 0.6));
-	_envCache.color[2] = Math.max(0, base[2] * horizonBoost * (1 - coolShift * 0.4) + coolShift * 0.1);
-
-	// Night floor dropped from 0.45 → 0.12: prior floor made nighttime
-	// clouds + ground glow too bright. Day peak now 0.90 (was 0.90).
-	_envCache.intensity = 0.12 + (1 - nf) * 0.78;
-
-	return _envCache;
-}
-
-/**
- * Visibility curve for sun-anchored env layers (SunGlow, LensFlare,
- * AtmosphericVeil): peaks during the dawn/dusk windows, residual midday
- * lift, zero at deep night. Sine interpolation gives smooth ramps.
- */
-export function sunVisibility(timeOfDay: number): number {
-	const t = timeOfDay;
-	if (t >= 5 && t <= 8)        return Math.sin(((t - 5) / 3) * Math.PI);
-	if (t >= 17 && t <= 20)      return Math.sin(((t - 17) / 3) * Math.PI);
-	if (t > 8 && t < 17)         return 0.35;
-	return 0;
-}
-
-export type SkyPhase = 'dawn' | 'day' | 'dusk' | 'night';
-
-/**
- * Sky mood from time-of-day. `phase` selects the palette below; `intensity`
- * is the sine-curve ramp within dawn/dusk transitions (1 at peak), used
- * for crossfading between palettes if a consumer wants more nuance.
- */
-export function skyMood(timeOfDay: number): { phase: SkyPhase; intensity: number } {
-	const t = timeOfDay;
-	if (t >= 5 && t <= 7.5)     return { phase: 'dawn',  intensity: Math.sin(((t - 5)  / 2.5) * Math.PI) };
-	if (t >= 17 && t <= 19.5)   return { phase: 'dusk',  intensity: Math.sin(((t - 17) / 2.5) * Math.PI) };
-	if (t > 7.5 && t < 17)      return { phase: 'day',   intensity: 1 };
-	return                              { phase: 'night', intensity: 1 };
 }
 
 /**
