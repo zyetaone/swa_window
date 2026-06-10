@@ -727,6 +727,15 @@ export class CesiumManager {
 		const ATMO_GATE_HI = 35000, ATMO_GATE_LO = 8000;
 		const lowAltNight = nf * Math.max(0, Math.min(1,
 			(ATMO_GATE_HI - m.flight.camAlt) / (ATMO_GATE_HI - ATMO_GATE_LO)));
+		// Deep-night sky floor — applies at ALL altitudes. The altitude gate
+		// above assumed the cruise horizon limb is naturally dark at night; it
+		// isn't — the analytical skyAtmosphere limb stays bright at 35k ft,
+		// leaving the white horizon band. `deepNight` ramps 0→1 only across the
+		// last stretch of nightFactor (0.7→1.0) so the warm dusk / blue-hour
+		// beat (nf<0.7) is untouched. `lowAltNight` still adds EXTRA darkening
+		// for the low-altitude up-look on top of this baseline.
+		const deepNight = Math.max(0, Math.min(1, (nf - 0.7) / 0.3));
+		brShift += (-1.0 - brShift) * deepNight * 0.6;
 		brShift += (-1.0 - brShift) * lowAltNight;
 		// Guard bug fix: previously only checked satShift, which is constant
 		// at deep night (-1.0). brShift changes from skyDarken slider were
@@ -835,7 +844,8 @@ export class CesiumManager {
 		const targetAtmoLight
 			= (NIGHT_PALETTE.scene.atmosphereLightDay
 			+ (w.atmosphereLight - NIGHT_PALETTE.scene.atmosphereLightDay) * nf)
-			* (1 - lowAltNight * 0.9);
+			* (1 - lowAltNight * 0.9)
+			* (1 - deepNight * 0.55);
 		if (Math.abs(targetAtmoLight - this.lastAtmoLight) > 0.005) {
 			this.lastAtmoLight = targetAtmoLight;
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
