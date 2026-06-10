@@ -17,6 +17,7 @@
 	import { SKY_PALETTE } from "$content/palettes";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
+	import ThreeOverlay from "$lib/world-three/ThreeOverlay.svelte";
 	import Glass from "./window/Glass.svelte";
 	import Blind from "./window/Blind.svelte";
 	import Weather from './window/Weather.svelte';
@@ -173,6 +174,15 @@
 			<div class="render-layer" style:z-index={Z.cesium}>
 				<CesiumViewer />
 			</div>
+
+			<!-- hybrid-v2 (Phase A): photoreal Three overlay — wing / clouds / moon /
+			     sky / postprocess, camera-mirrored from Cesium. Inside .scene-content
+			     so it shakes with turbulence alongside Cesium (matches the lab's
+			     WindowChrome setup). Gated by the perf-validated fallback flag;
+			     when ON, the duplicate DOM clouds + star micro-events self-disable. -->
+			{#if model.config.world.useThreeOverlay}
+				<ThreeOverlay />
+			{/if}
 
 			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
 			<Compositor />

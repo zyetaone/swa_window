@@ -252,6 +252,12 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
+	// hybrid-v2 fallback switch (Phase A). false ⇒ ship route / renders Cesium
+	// only (byte-identical to pre-ship-v1). true ⇒ / mounts the Three overlay
+	// (wing / clouds / moon / photoreal sky / postprocess), camera-mirrored from
+	// Cesium. Flipped to true only after the Pi 5 perf gate passes; the fleet can
+	// toggle it per-Pi via config_patch('world.useThreeOverlay', …).
+	useThreeOverlay: false,
 	// Base imagery night-time saturation. Near-zero so the green Sentinel-2
 	// vegetation + blue water don't bleed through as a hue cast under the
 	// shader's navy mix. baseNightBrightness was removed in Phase 15.5 —
