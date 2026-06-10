@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aero Dynamic Window is a **circadian-aware digital airplane window display** for office wellbeing. It renders a realistic airplane window view synced to time of day, designed for Raspberry Pi 5 fleet deployment with headless Chromium kiosk mode.
 
-**Active branch:** `playground/maplibre-app`. Ship-stack is **Cesium v1** — globe, terrain, buildings, VIIRS night-lights, and the post-process color-grade pipeline all live in `src/lib/world/` and are the production renderer for the SWA Hyderabad install (SATTVA Knowledge Park, end of May 2026). The MapLibre + PMTiles + Takram three-geospatial path explored earlier on this branch is **archived** — the takram recipe survives in `docs/reference/takram-atmosphere-recipe.md` for future revisit. Cesium remains isolated to `src/lib/world/` (only two files import the package; the rest of the codebase is framework-free and unit-testable).
+**Active branch:** `main`. Ship-stack is **Cesium v1** — globe, terrain, buildings, VIIRS night-lights, and the post-process color-grade pipeline all live in `src/lib/world/` and are the production renderer for the SWA Hyderabad install (SATTVA Knowledge Park). The MapLibre + PMTiles + Takram three-geospatial path explored earlier is **archived** — the takram recipe survives in `docs/reference/takram-atmosphere-recipe.md` for future revisit. Cesium remains isolated to `src/lib/world/` (only `world/CesiumViewer.svelte` does the runtime import; the rest of the codebase is framework-free and unit-testable).
+
+**Hybrid Three.js overlay (`src/lib/world-three/`, Phase 16-17) is LAB-ONLY.** A transparent Three.js canvas mounted above Cesium on `/playground/three` — clouds, the SWA wing, sky-extras (Moon, stars, sun-glow, meteors), neon city lines, and a full postprocessing chain. It is the R&D surface for photoreal effects; the ship route `/` renders Cesium only. ⚠ `compose.ts`, `flight.svelte.ts`, and `config-tree.svelte.ts` are SHARED — editing them affects both the lab and the ship.
 
 ## Commands
 
@@ -16,8 +18,14 @@ bun run build        # Build for production (single-bundle for Pi)
 bun run preview      # Preview production build
 bun run check        # Type check with svelte-check
 bun run check:watch  # Type check in watch mode
-bun x vitest run     # Run unit/integration tests
+bun run test         # Run unit/integration tests (alias: bun x vitest run)
+bun x vitest run tests/lib/world-three/sky.test.ts   # Run a single test file
+bun x vitest run -t "memoises sun direction"          # Run tests matching a name
+bun run serve        # Full LAN server via Bun (server.ts — starts mDNS peer discovery)
+bun run start        # build + serve (production-like, what the Pi runs)
 ```
+
+`bun run dev` (Vite) skips mDNS, so `/api/devices` only ever shows self; use `bun run serve` to exercise real fleet discovery.
 
 ## Tech Stack
 
@@ -97,6 +105,21 @@ src/lib/
 │   ├── lan-peers.server.ts         mDNS discovery (started ONLY in `bun run server.ts`; `bun run dev` skips it so `/api/devices` shows only self)
 │   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
 │
+├── world-three/        HYBRID THREE.JS PHOTOREAL OVERLAY — LAB-ONLY (Phase 16-17)
+│   │                   Transparent Three.js canvas mounted ABOVE Cesium, camera-
+│   │                   mirrored each frame (Cesium-PULL model, never push). Mounted
+│   │                   ONLY in /playground/three — the ship route (/) is Cesium-only.
+│   ├── ThreeOverlay.svelte    <Canvas> host — alpha:true + logarithmicDepthBuffer,
+│   │                          near=1 far=1e9. Wires every effect below + the IBL <Sky>.
+│   ├── CameraMirror.svelte    Copies Cesium positionWC/directionWC/upWC/fovy → Three cam
+│   ├── EffectStack.svelte     EffectComposer: HDR→GodRays→Bloom→ChromAb→ACES→Vignette→grain
+│   ├── sky.ts                 computeSunDirection (memo, ⚠ alias contract) + environmentAmbient
+│   ├── prng.ts                createSeededRng(daySeed()) — 3-Pi determinism SSOT (invariant #4)
+│   ├── Wing.svelte            Visible SWA wing mesh, camera-anchored, per-Pi fuselageOffsetM
+│   ├── Clouds / NightStars / Moon / Venus / SunGlow / LensFlare / Meteors /
+│   │   AtmosphericVeil / SparkleField / Rain / RainSpatter / WingContrail / CityGlowDome
+│   └── OsmRoads / OsmBuildingEdges / NeonLineLayer   Neon line overlays (geo-anchored)
+│
 ├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
 │   └── thresholds.ts   T constants — SSOT for DAWN_START/DAY_START/DAY_END/DUSK_END/DEEP_NIGHT
 │                        All four sky-state consumers (getSkyState, nightFactor, dawnDuskFactor,
@@ -115,14 +138,15 @@ src/routes/
 ├── +layout.ts          ssr=false (app-wide; descendants inherit)
 ├── +page.svelte        Main display (Pi kiosk)
 ├── admin/              Fleet admin panel + content drag-drop + fleet/health
-├── playground/         Lean Cesium scene lab (same pipeline as /, no shell)
+├── playground/         Scene labs (no fleet): /playground lean Cesium · /playground/three
+│                       hybrid Cesium+Three · /playground/night-lab · /playground/model
 └── api/                content + assets + tiles + buildings + fleet endpoints + bundle peer-cache
 
 tools/
 ├── tile-packager/      Pre-downloads tiles for offline Pi
 └── aero-push-worker/   Cloudflare Worker — firmware-like OTA push
 
-tests/lib/…             Mirrors src/ layout; imports via $lib/* — 250 tests, 21 files
+tests/lib/…             Mirrors src/ layout; imports via $lib/* — 341 tests, 29 files
 
 docs/
 ├── ADR-001-offline-tile-architecture.md
@@ -135,7 +159,7 @@ docs/
 
 ## Architectural Invariants (DO NOT BREAK)
 
-These are the three rules the whole reorg was designed to preserve. If a future change seems to violate one, flag it.
+These are the rules the architecture was designed to preserve. If a future change seems to violate one, flag it.
 
 ### 1. Cesium isolation
 **Cesium is confined to `src/lib/world/`.** A handful of files import `cesium` as a **type** (`compose.ts`, `cesium-setup.ts`, `cloud-billboard-layer.ts`, `lightning-stage.ts`), and only `world/CesiumViewer.svelte` does the actual runtime `import('cesium')`. Every other module (engines, scene effects, config, fleet, shell) is framework-free and unit-testable. Verify with `rg "from 'cesium'|import\('cesium'\)" src/lib/` — every hit must be under `world/`. The exact count grows as new geo-effects are added; the invariant is the **directory boundary**, not the number.
@@ -151,6 +175,9 @@ Any sky/cloud/star content that uses `Math.random()` in a build-once-and-never-r
 
 ### 5. Sun-direction memo aliasing contract
 `computeSunDirection(camLon, timeOfDay)` in `world-three/sky.ts` memoises and returns a **shared mutated array** on cache miss — collapses 6-8 component calls/frame into 1 trig eval. Safe when callers immediately read `d[0]/d[1]/d[2]` synchronously. UNSAFE if a caller stores the reference and reads later (by then another call may have rewritten the same array). Read-and-derive in the same synchronous block. Test-pinned in `tests/lib/world-three/sky.test.ts`.
+
+### 6. Ship-vs-lab boundary + Cesium-pull camera
+The `world-three/` Three.js overlay renders ONLY on `/playground/three`; the ship route `/` is Cesium-only. The overlay's camera is **pulled** from Cesium every frame in `CameraMirror.svelte` (copies `positionWC`/`directionWC`/`upWC`/`fovy`) — Three never drives the camera, Cesium does. Consequence: `compose.ts`, `flight.svelte.ts`, `motion.svelte.ts`, and `config-tree.svelte.ts` are SHARED between lab and ship — a change there ships to the Pi even though you were "only tuning the lab." Pure `world-three/*.svelte` changes are lab-only and safe. The CameraMirror also applies a Y↔Z handedness flip (so `+X` renders screen-LEFT), which is why on-screen signs in `Wing.svelte` are calibrated, not derived.
 
 ## AeroWindow — composition
 
@@ -379,6 +406,8 @@ $effect(() => {
 
 - `/` — Main window display (Pi kiosk). Full shell.
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
+- `/playground/three` — Hybrid Cesium + Three.js composition lab. `CesiumViewer` (terrain/imagery/VIIRS/atmosphere/post-process) + `ThreeOverlay` (clouds/wing/sky-extras/neon/postprocess) inside `WindowChrome`. The R&D surface for everything in `world-three/`. **Lab-only** — none of the Three overlay ships on `/`.
+- `/playground/night-lab` + `/playground/model` — focused night-look and model-inspection labs.
 - `/admin` — Fleet admin panel.
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard.
