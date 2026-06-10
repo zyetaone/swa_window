@@ -269,7 +269,13 @@
 		// lights are holder children, so they mirror along for free.
 		const orbitDir = untrack(() => model.flight.orbitDirection);
 		const showRight = orbitDir === WING_NATURAL_DIR;
-		holder.position.x = xBase;
+		// Seat / window position slides the wing fore-aft along the fuselage axis
+		// (holder X). A forward seat (negative offset) shows more trailing edge;
+		// an aft seat (positive) more leading edge. Reads the per-role offset the
+		// model already computes (parallax.fuselageOffsetM) — 0 for solo, ±6 m for
+		// the left/right panorama roles.
+		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
+		holder.position.x = xBase + seatOffset;
 		holder.scale.x = showRight ? 1 : -1;
 
 		// Mirror the camera world transform onto the group.
@@ -308,7 +314,16 @@
 		// roll at a lazy ~0.08–0.16 Hz.
 		_swayT += dt;
 		const sway = 1.7 * Math.sin(_swayT * 0.52) + 0.8 * Math.sin(_swayT * 0.97 + 1.3);
-		const bankAngleDeg = untrack(() => model.motion.bankAngle) + sway;
+		// Steady lean into the circular orbit turn (a real plane holds a bank
+		// through a sustained turn). motion.bankAngle only reacts to heading-CHANGE
+		// rate, which is ~0 in the slow orbit, so without this the wing wouldn't
+		// bank even though the orbit IS a continuous turn. Gated to orbit mode so
+		// it doesn't fight the scripted cruise-transition bank. Sign = orbitDir so
+		// it leans into the turn direction.
+		const flightMode = untrack(() => model.flight.flightMode);
+		const ORBIT_BANK_DEG = 9;
+		const turnBank = flightMode === 'orbit' ? orbitDir * ORBIT_BANK_DEG : 0;
+		const bankAngleDeg = untrack(() => model.motion.bankAngle) + turnBank + sway;
 		_bankQuat.setFromAxisAngle(_bankAxis, bankAngleDeg * 0.55 * DEG2RAD);
 		_bankQuatX.setFromAxisAngle(_bankAxisX, bankAngleDeg * 0.18 * DEG2RAD);
 		_bankQuatY.setFromAxisAngle(_yawAxis, bankAngleDeg * 0.12 * DEG2RAD);
