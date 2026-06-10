@@ -81,28 +81,7 @@ export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
 	return 1.0 / Math.max(0.12, elev + 0.12);
 }
 
-/**
- * Per-layer × per-phase RGB palette. Each consumer reads `SKY_PALETTE[layer][phase]`.
- * Numbers picked so the dawn/dusk windows read warm-amber and the night
- * is cool-blue across the board.
- */
-export const SKY_PALETTE = {
-	sunCore: {
-		dawn:  [1.0, 0.62, 0.28] as Vec3,
-		day:   [1.0, 0.94, 0.82] as Vec3,
-		dusk:  [1.0, 0.48, 0.18] as Vec3,
-		night: [0.8, 0.45, 0.25] as Vec3, // residual twilight tint
-	},
-	veil: {
-		dawn:  [1.00, 0.55, 0.28] as Vec3,
-		day:   [0.85, 0.92, 1.00] as Vec3,
-		dusk:  [1.00, 0.40, 0.18] as Vec3,
-		night: [0.10, 0.18, 0.40] as Vec3,
-	},
-	ambient: {
-		dawn:  [1.00, 0.78, 0.65] as Vec3,
-		day:   [0.95, 0.97, 1.00] as Vec3,
-		dusk:  [1.00, 0.66, 0.45] as Vec3,
-		night: [0.30, 0.40, 0.65] as Vec3,
-	},
-} as const;
+// SKY_PALETTE now lives in the framework-free $lib/world-lighting/curves (so the
+// Cesium side can read it too, not just Three). Re-exported here for the Three
+// layers + shell components that import it from './sky'.
+export { SKY_PALETTE } from '$lib/world-lighting/curves';
