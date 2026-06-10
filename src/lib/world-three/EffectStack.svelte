@@ -90,7 +90,13 @@
 
 	const composer = new EffectComposer(ctx.renderer, {
 		frameBufferType: HalfFloatType,
-		multisampling: 0,
+		// 4× MSAA on the HDR render target (WebGL2). Was 0 — fine while the wing
+		// was a flat unlit fill, but once it became a lit MeshLambert surface the
+		// un-antialiased geometry edges (wing silhouette, livery colour seams,
+		// panel lines) showed as jagged stair-stepping. MSAA resolves geometry
+		// edges cleanly. Pi 5 (WebGL2 via ANGLE/GLES) supports multisampled
+		// targets; ~0.3–0.5 ms at 1080p — drop to 2 if the fleet benchmark needs it.
+		multisampling: 4,
 	});
 	composer.addPass(new RenderPass(ctx.scene, ctx.camera.current));
 
