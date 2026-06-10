@@ -47,6 +47,8 @@
 		Quaternion,
 		Mesh,
 		MeshBasicMaterial,
+		MeshLambertMaterial,
+		DirectionalLight,
 		SphereGeometry,
 		Color,
 		DoubleSide,
@@ -54,6 +56,7 @@
 	} from 'three';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { computeSunDirection } from './sky';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
@@ -100,15 +103,25 @@
 	let xBase = WING_X_BASE;
 
 	// Winglet tip in HOLDER-LOCAL space for the night nav lights (so the
-	// holder's mirror scale flips it with the wing).
+	// holder's mirror scale flips it with the wing). Baked from the dev hook
+	// (the highest on-screen wing vertex — heading-independent because
+	// holder-local is the wing's own body frame). Replaces an unreliable
+	// post-rotation bbox-corner guess that parked the light off-screen.
+	const WING_TIP_LOCAL = new Vector3(1.24, 5.86, -12.63);
 	let tip = new Vector3();
 
-	// Convert a GLB material to a FLAT (unlit) DoubleSide MeshBasicMaterial,
-	// keeping its albedo colour/map. Flat because the scene ambient is near-zero
-	// at altitude (PBR would render black); DoubleSide because the wing skin is
-	// single-sided shells (otherwise the top surface culls to transparent).
-	const toFlat = (src: { color?: Color; map?: unknown }) =>
-		new MeshBasicMaterial({
+	// Convert a GLB material to a LIT DoubleSide MeshLambertMaterial, keeping its
+	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
+	// responds to the scene AmbientLight + the dawn/moon key light below, so the
+	// wing reads as a dimensional 3D surface (lit edge + shadowed edge) whose
+	// shading SHIFTS as it banks — instead of the old flat MeshBasicMaterial that
+	// looked like a static decal day and night. DoubleSide because the wing skin
+	// is single-sided shells (the top surface would otherwise cull to transparent).
+	// The earlier flat approach existed because PBR went black at altitude with
+	// near-zero ambient; the dedicated key light + ambient floor fix that, and the
+	// night dimming now falls out of the (low) night light levels for free.
+	const toLit = (src: { color?: Color; map?: unknown }) =>
+		new MeshLambertMaterial({
 			color: src.color ? src.color.clone() : new Color(0.8, 0.8, 0.82),
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			map: (src.map as any) ?? null,
@@ -133,16 +146,13 @@
 					if (!me.isMesh) return;
 					me.frustumCulled = false;
 					const mat = me.material as { color?: Color; map?: unknown } | { color?: Color; map?: unknown }[];
-					me.material = Array.isArray(mat) ? mat.map(toFlat) : toFlat(mat);
+					me.material = Array.isArray(mat) ? mat.map(toLit) : toLit(mat);
 				});
 				holder.add(m);
-				// Winglet tip in holder-local space (worldToLocal undoes the
-				// holder transform, leaving m's own transformed outboard-top
-				// extreme). Nav lights are children of holder, so this rides the
-				// mirror scale automatically.
-				holder.updateWorldMatrix(true, false);
-				const wb = new Box3().setFromObject(m);
-				tip = holder.worldToLocal(new Vector3(wb.max.x, wb.max.y, (wb.min.z + wb.max.z) / 2));
+				// Nav lights sit at the baked winglet tip (holder-local). They're
+				// holder children, so the direction-mirror scale flips them with
+				// the wing automatically.
+				tip.copy(WING_TIP_LOCAL);
 				navLight.position.copy(tip);
 				strobeLight.position.copy(tip);
 				// Dev-only live tuning hook.
@@ -162,31 +172,60 @@
 	$effect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
 
 	// ─── Night nav lights ───────────────────────────────────────────────
-	const lightGeom = new SphereGeometry(0.12, 8, 8);
+	// Enlarged vs the body so the bloom pass blows them into a glowing point —
+	// the wing goes dark at night (above) so these are the only bright thing on
+	// it, the iconic 737 starboard signal. Strobe sphere is bigger again for a
+	// punchier anti-collision flash.
+	const navGeom = new SphereGeometry(0.12, 12, 12);
+	const strobeGeom = new SphereGeometry(0.18, 12, 12);
 	const navMat = new MeshBasicMaterial({
 		color: 0x00ff77,
 		transparent: true,
 		opacity: 0,
 		depthWrite: false,
+		// depthTest off → the wingtip light always draws over the dark wing
+		// (never occluded by the winglet body) and the bloom pass blows it
+		// into a glowing emerald point — the star of the night wing.
+		depthTest: false,
 		fog: false,
 	});
-	const navLight = new Mesh(lightGeom, navMat);
+	const navLight = new Mesh(navGeom, navMat);
 	navLight.frustumCulled = false;
+	navLight.renderOrder = 3;
 
 	const strobeMat = new MeshBasicMaterial({
 		color: 0xffffff,
 		transparent: true,
 		opacity: 0,
 		depthWrite: false,
+		depthTest: false,
 		fog: false,
 	});
-	const strobeLight = new Mesh(lightGeom, strobeMat);
+	const strobeLight = new Mesh(strobeGeom, strobeMat);
 	strobeLight.frustumCulled = false;
+	strobeLight.renderOrder = 3;
 
 	// Nav lights are children of the holder, fixed at the holder-local winglet
 	// tip — so they inherit the holder's direction-mirror scale automatically
 	// (no per-frame repositioning).
 	holder.add(navLight, strobeLight);
+
+	// ─── Dawn / moon key light ──────────────────────────────────────────
+	// A single directional light added to the SCENE (NOT the banking wing group,
+	// so it stays world-fixed and the wing's shading shifts as it banks). The
+	// wing is the only lit-material object in the Three overlay (everything else
+	// is sprites / lines / custom shaders), so this light touches nothing but the
+	// wing — no layer scoping needed. Direction tracks the sun azimuth but is
+	// elevation-floored (tick) so it always rakes the top surface, never a
+	// sub-horizon backlight that would black the wing out. Colour + intensity
+	// lerp warm-day → cool-moonlight by nightFactor; the scene AmbientLight is
+	// the floor that keeps the shadowed side from going pure black.
+	const keyLight = new DirectionalLight(0xffffff, 1.0);
+	$effect(() => {
+		const scene = ctx.scene;
+		scene.add(keyLight, keyLight.target);
+		return () => scene.remove(keyLight, keyLight.target);
+	});
 
 	// Reusable bank quaternions — avoid per-frame allocation. Bank is now
 	// three-axis: a screen-plane roll (z) plus a dimensional pitch (x) + yaw
@@ -202,8 +241,11 @@
 	const DEG2RAD = Math.PI / 180;
 
 	let _strobeT = 0;
+	let _swayT = 0;
 	const STROBE_PERIOD_S = 1.0;
 	const STROBE_PULSE_S = 0.06;
+	// Scratch sun-direction holder for the key light (avoids per-frame alloc).
+	const _keyDir = new Vector3();
 
 	useTask((dt) => {
 		// The camera-mirror wrapper IS placement's parent (the <T.Group> below).
@@ -252,7 +294,14 @@
 		// and a yaw (y) sweeps it fore/aft, giving the bank real dimension
 		// instead of a flat 2D roll. Coefficients are deliberately modest;
 		// tune to taste.
-		const bankAngleDeg = untrack(() => model.motion.bankAngle);
+		// Perpetual gentle sway so the wing is never frozen in the sky. Even in
+		// steady orbit (motion.bankAngle ≈ 0) the air keeps the wing in slow
+		// motion; combined with the key light, the shifting shade reads as
+		// "flying," not a static decal. Two detuned sines → non-repeating ±~2.5°
+		// roll at a lazy ~0.08–0.16 Hz.
+		_swayT += dt;
+		const sway = 1.7 * Math.sin(_swayT * 0.52) + 0.8 * Math.sin(_swayT * 0.97 + 1.3);
+		const bankAngleDeg = untrack(() => model.motion.bankAngle) + sway;
 		_bankQuat.setFromAxisAngle(_bankAxis, bankAngleDeg * 0.55 * DEG2RAD);
 		_bankQuatX.setFromAxisAngle(_bankAxisX, bankAngleDeg * 0.18 * DEG2RAD);
 		_bankQuatY.setFromAxisAngle(_yawAxis, bankAngleDeg * 0.12 * DEG2RAD);
@@ -272,10 +321,23 @@
 		_strobeT += dt;
 		if (_strobeT > STROBE_PERIOD_S) _strobeT -= STROBE_PERIOD_S;
 		strobeMat.opacity = nf * (_strobeT < STROBE_PULSE_S ? 1 : 0);
+
+		// Dawn / moon key light — direction tracks the sun azimuth but with the
+		// elevation floored to +0.45 so it always rakes the wing's top surface
+		// (never a sub-horizon backlight). Colour + intensity lerp warm-day →
+		// cool-dim-moonlight by nightFactor, so the wing dims and cools at night
+		// for free (no per-material colour hack) while the AmbientLight floor
+		// keeps the shadowed side from crushing to black.
+		const sd = computeSunDirection(untrack(() => model.flight.camLon), untrack(() => model.timeOfDay));
+		_keyDir.set(sd[0], Math.max(sd[1], 0.45), sd[2]).normalize().multiplyScalar(1e6);
+		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
+		keyLight.intensity = 0.35 + (1 - nf) * 1.05; // night 0.35 → day 1.4
+		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
 	});
 
 	$effect(() => () => {
-		lightGeom.dispose();
+		navGeom.dispose();
+		strobeGeom.dispose();
 		navMat.dispose();
 		strobeMat.dispose();
 	});
