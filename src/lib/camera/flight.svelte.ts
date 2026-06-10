@@ -70,6 +70,15 @@ export class FlightSimEngine {
 	#scenarioProgress = 0;
 
 	// --- Derived ---
+	// Single source of truth for travel direction. Everything downstream that
+	// needs "which way are we going" (world drift, wing mirror, wing turn-lean)
+	// derives from this one value via screen-conventions.ts — see that file for
+	// why the old four-separate-sign-sites design kept the wing fighting the
+	// movement. Currently the orbit rotation sense; cruise/scenario modes can
+	// override it here later without touching the consumers.
+	get travelSign(): number {
+		return this.orbitDirection;
+	}
 	isTransitioning = $derived(this.flightMode !== 'orbit' && this.flightMode !== 'arrival_hold');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null

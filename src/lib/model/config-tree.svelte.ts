@@ -115,7 +115,8 @@ interface CameraShape {
 const _camera: CameraShape = {
 	orbit: {
 		// Flight drift in degrees/second at speed=1.0. 0.01 gives commercial-cruise
-		// pace at the default 1.4x (~2.3× earlier 0.006 setting's apparent motion).
+		// pace at the default 1.4x. (A 0.017 bump read as "flying weird" — too fast
+		// a pan for the calm scenic mood — so kept at the gentle cruise value.)
 		driftRate: 0.01,
 		major: 0.15,            // degrees (~17 km) long axis
 		minor: 0.06,            // degrees (~7 km) short axis — ~2.5:1 aspect

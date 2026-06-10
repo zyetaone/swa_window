@@ -58,6 +58,7 @@
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection } from './sky';
+	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
@@ -67,9 +68,9 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = -10.0;
-	const WING_Y_BASE = -4.5;
-	const WING_Z_BASE = -12.4;
+	const WING_X_BASE = -9.5;
+	const WING_Y_BASE = -1.4;
+	const WING_Z_BASE = -8.9;
 	// Orientation (radians). rotY is the receding swing (span → depth); rotX is
 	// the static resting pitch (look-down onto the top surface) — NOT the bank,
 	// which the tick applies separately from motion.bankAngle. rotZ is a small
@@ -83,9 +84,10 @@
 	const WING_SCALE_X = 1.11;
 	const WING_SCALE_Y = 1.11;
 	const WING_SCALE_Z = 1.11;
-	// Wing shown unmirrored when orbitDirection === this; the reverse direction
-	// is a negative-X scale on the single holder (see tick).
-	const WING_NATURAL_DIR = 1;
+	// Mirror state (which travel direction shows the un-mirrored "good" pose) is
+	// no longer a standalone WING_NATURAL_DIR guess — it's derived in the tick
+	// from screenTravelSign(), the same term that defines world-drift direction,
+	// so the wing can't desync from the movement. See screen-conventions.ts.
 
 	// ONE wing holder. placement carries shared Y/Z; the holder carries X +
 	// the direction mirror. The reverse orbit direction is handled by a
@@ -163,6 +165,10 @@
 						placement, aero: model, model: m,
 						setXBase: (v: number) => { xBase = v; },
 						get xBase() { return xBase; },
+						// Calibration: flip until the wing sweeps WITH the world, then
+						// bake the result into DEFAULT_SCREEN_DRIFT_SIGN.
+						flipDriftSign: () => { setScreenDriftSign(-getScreenDriftSign()); return getScreenDriftSign(); },
+						get driftSign() { return getScreenDriftSign(); },
 					};
 				}
 			})
@@ -267,8 +273,12 @@
 		// exactly the opposite-wing look (winglet trailing the other way) — so
 		// the reverse orbit needs no second GLB and no visibility swap. Nav
 		// lights are holder children, so they mirror along for free.
-		const orbitDir = untrack(() => model.flight.orbitDirection);
-		const showRight = orbitDir === WING_NATURAL_DIR;
+		// Travel direction → screen parity. The wing mirror AND the turn-lean
+		// (below) both derive from this ONE term (screen-conventions.ts), so the
+		// wing always sweeps WITH the world drift and banks INTO the turn — by
+		// construction, not by four separate signs happening to agree.
+		const travelSign = untrack(() => model.flight.travelSign);
+		const screenSign = screenTravelSign(travelSign);
 		// Seat / window position slides the wing fore-aft along the fuselage axis
 		// (holder X). A forward seat (negative offset) shows more trailing edge;
 		// an aft seat (positive) more leading edge. Reads the per-role offset the
@@ -276,7 +286,8 @@
 		// the left/right panorama roles.
 		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
 		holder.position.x = xBase + seatOffset;
-		holder.scale.x = showRight ? 1 : -1;
+		// screenSign ≥ 0 → un-mirrored "good" pose; < 0 → mirrored (reverse travel).
+		holder.scale.x = screenSign >= 0 ? 1 : -1;
 
 		// Mirror the camera world transform onto the group.
 		const cam = ctx.camera.current;
@@ -321,8 +332,8 @@
 		// it doesn't fight the scripted cruise-transition bank. Sign = orbitDir so
 		// it leans into the turn direction.
 		const flightMode = untrack(() => model.flight.flightMode);
-		const ORBIT_BANK_DEG = 9;
-		const turnBank = flightMode === 'orbit' ? orbitDir * ORBIT_BANK_DEG : 0;
+		const ORBIT_BANK_DEG = 5; // gentle, steady lean into the orbit turn (13° read as "weird")
+		const turnBank = flightMode === 'orbit' ? screenSign * ORBIT_BANK_DEG : 0;
 		const bankAngleDeg = untrack(() => model.motion.bankAngle) + turnBank + sway;
 		_bankQuat.setFromAxisAngle(_bankAxis, bankAngleDeg * 0.55 * DEG2RAD);
 		_bankQuatX.setFromAxisAngle(_bankAxisX, bankAngleDeg * 0.18 * DEG2RAD);
