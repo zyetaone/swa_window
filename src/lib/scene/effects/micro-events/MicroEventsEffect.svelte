@@ -73,7 +73,9 @@
 			if (altitude < 15000 && sky === 'day' && weather !== 'rain' && weather !== 'overcast') {
 				types.push('bird');
 			}
-			if (sky === 'night' && density < 0.5) {
+			// Skip DOM shooting-stars when the Three overlay is on — its Meteors
+			// own that (and NightStars the static field). Birds/contrails stay.
+			if (sky === 'night' && density < 0.5 && !model.config.world.useThreeOverlay) {
 				types.push('shooting-star');
 			}
 			if (sky === 'day' && altitude > 20000 && density < 0.8) {
