@@ -530,9 +530,14 @@ export class CesiumManager {
 		// dramatically larger / sharper night-light footprint over Hyderabad and
 		// the rest of South Asia.
 		try {
+			// Canonical GIBS WMTS REST endpoint (epsg3857/best, PNG). The older
+			// map1.vis.earthdata.nasa.gov/wmts-webmerc host now returns
+			// InvalidParameter (400), so the remote fallback silently rendered NO
+			// ground night-lights in dev / uncached deployments. Cached Pis read
+			// from tileBase and were unaffected.
 			const viirsUrl = tileBase
 				? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
-				: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg';
+				: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png';
 			this.viirsLayer = this.viewer.imageryLayers.addImageryProvider(
 				new C.UrlTemplateImageryProvider({
 					url: viirsUrl,
