@@ -47,6 +47,16 @@ describe('FlightSimEngine orbit determinism', () => {
 		expect(differs).toBe(true);
 	});
 
+	it('noseHeadingDeg mirrors heading (the true nose / travel direction)', () => {
+		// AircraftBody-frame groundwork (C1): noseHeadingDeg is `heading` under an
+		// unambiguous name — the camera looks SEAT_LOOK_DEG (90°) off it for the
+		// side window. Pinning the alias so a future body-frame migration (C4)
+		// that diverges them is a deliberate, visible change.
+		const e = new FlightSimEngine();
+		e.setLocationWithSky(FIRST_LOCATION, 'day');
+		expect(e.noseHeadingDeg).toBe(e.heading);
+	});
+
 	it('re-seeding the same location is stable (idempotent within a day)', () => {
 		const e = new FlightSimEngine();
 		e.setLocationWithSky(FIRST_LOCATION, 'day');

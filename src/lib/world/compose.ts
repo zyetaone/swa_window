@@ -637,6 +637,11 @@ export class CesiumManager {
 		// into a continuous horizon band from the same shared flight state.
 		// Uses model.flight.camHeading (SSOT smoothed).
 		const parallaxHeading = this.model.config.camera.effectiveHeading(f.camHeading);
+		// The passenger faces out the SIDE window — SEAT_LOOK_DEG (90°) off the
+		// aircraft's nose (flight.noseHeadingDeg, smoothed + per-Pi-yawed into
+		// parallaxHeading). Naming the old magic `+ 90` makes the camera-vs-nose
+		// frame explicit (AircraftBody groundwork): camHeading = nose + seat-look.
+		const SEAT_LOOK_DEG = 90;
 
 		const C = this.CesiumModule;
 		// Cesium signature is fromDegrees(lon, lat, height, ellipsoid, result).
@@ -663,7 +668,7 @@ export class CesiumManager {
 		this.viewer.camera.setView({
 			destination: this._scratchDest,
 			orientation: {
-				heading: this.CesiumModule.Math.toRadians((parallaxHeading + 90) % 360),
+				heading: this.CesiumModule.Math.toRadians((parallaxHeading + SEAT_LOOK_DEG) % 360),
 				pitch: this.CesiumModule.Math.toRadians(pitchDeg),
 				roll: this.CesiumModule.Math.toRadians(-mot.bankAngle),
 			},

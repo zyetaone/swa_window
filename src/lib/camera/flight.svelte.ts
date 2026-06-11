@@ -79,6 +79,20 @@ export class FlightSimEngine {
 	get travelSign(): number {
 		return this.orbitDirection;
 	}
+
+	/**
+	 * The aircraft's TRUE nose direction (= compass direction of travel), in
+	 * degrees. This is exactly what `heading` already is — the velocity tangent
+	 * (atan2 of the orbit tangent × orbitDirection) — exposed under an unambiguous
+	 * name so the frame is explicit: the camera looks SEAT_LOOK_DEG (90°) off this
+	 * to face out the SIDE window (compose.ts:syncCamera), and the wing mounts
+	 * rigidly in THIS body frame (no reflection chain). AircraftBody-frame SSOT
+	 * groundwork (docs/analysis/flight-architecture-simplification.md) — consumed
+	 * once camera + wing migrate to the body frame, post-perf-gate.
+	 */
+	get noseHeadingDeg(): number {
+		return this.heading;
+	}
 	isTransitioning = $derived(this.flightMode !== 'orbit' && this.flightMode !== 'arrival_hold');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
