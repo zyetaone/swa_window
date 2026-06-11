@@ -21,13 +21,23 @@
 	 * is perceptually correct — it's far enough that camera parallax over
 	 * a passenger window is undetectable.
 	 */
-	import { T, useTask } from '@threlte/core';
+	import { T, useTask, useThrelte } from '@threlte/core';
 	import { AdditiveBlending, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, SUN_PLACEMENT_M } from './sky';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
+	const ctx = useThrelte();
+
+	// Earth-occlusion (mirrors Moon.svelte): fade Venus out when the planet is
+	// between the camera and the sprite. Venus is biased just above the SUN-space
+	// horizon, but that isn't the camera's LOCAL horizon — so without this it can
+	// bleed straight through the Earth the way the moon did. depthTest:false means
+	// this opacity factor is the only thing that can hide it behind the limb.
+	const EARTH_RADIUS_M = 6.371e6;
+	const OCCLUSION_SOFTNESS_M = 6e4;
+	let occlusionFactor = $state(1);
 
 	// Venus is real-world ~1.7° subtended at brightest. We use a tiny
 	// sprite + bloom halo for the actual visual punch — the core itself
@@ -79,6 +89,24 @@
 	useTask((dt) => {
 		if (visibility <= 0) return;
 		_vT += dt;
+		// Ray from camera toward Venus vs the Earth sphere (origin, EARTH_RADIUS_M).
+		const cam = ctx.camera.current.position;
+		const vx = venusPos[0] - cam.x, vy = venusPos[1] - cam.y, vz = venusPos[2] - cam.z;
+		const vlen = Math.sqrt(vx * vx + vy * vy + vz * vz) || 1;
+		const dx = vx / vlen, dy = vy / vlen, dz = vz / vlen;
+		const b = cam.x * dx + cam.y * dy + cam.z * dz;
+		const camLenSq = cam.x * cam.x + cam.y * cam.y + cam.z * cam.z;
+		const disc = b * b - (camLenSq - EARTH_RADIUS_M * EARTH_RADIUS_M);
+		let factor = 1;
+		if (disc >= 0) {
+			const sq = Math.sqrt(disc);
+			// Earth ahead of the camera (tExit > 0) and before Venus (tEntry < vlen).
+			if (-b + sq > 0 && -b - sq < vlen) {
+				const closest = Math.sqrt(Math.max(0, camLenSq - b * b));
+				factor = Math.max(0, Math.min(1, 0.5 + (closest - EARTH_RADIUS_M) / OCCLUSION_SOFTNESS_M));
+			}
+		}
+		if (factor !== occlusionFactor) occlusionFactor = factor;
 	});
 	const twinkleFactor = $derived(visibility > 0 ? 1 + 0.04 * Math.sin(_vT * 4.4) : 1);
 
@@ -101,7 +129,7 @@
 	<T.SpriteMaterial
 		map={venusTex}
 		color={venusColor}
-		opacity={visibility * twinkleFactor}
+		opacity={visibility * twinkleFactor * occlusionFactor}
 		transparent
 		depthWrite={false}
 		depthTest={false}
