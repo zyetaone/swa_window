@@ -4,13 +4,13 @@
 	 *
 	 * Thin wrapper around NeonLineLayer with a buildSegments closure that
 	 * converts OSM LineString features into LineSegments endpoint pairs +
-	 * per-class colour. Cool warm-white palette so roads register as a
-	 * distinct lighting type from the warm sodium building footprints.
+	 * per-class colour. WARM sodium palette (was cool blue-white) so the roads
+	 * join the same warm city-light family as the VIIRS aggregate, the building
+	 * window emissive and the CityGlowDome — one cohesive luminous city instead
+	 * of a cool neon grid fighting a warm skyline.
 	 *
-	 * Per-class color contributes the urban hierarchy: motorway / trunk
-	 * brightest (mercury-vapour street-lamp feel), residential streets
-	 * quietest. Vertex-color values can exceed 1.0 to brighten major
-	 * arteries beyond the material's base tint.
+	 * Per-class colour contributes the urban hierarchy: motorway / trunk
+	 * brightest (sodium street-lamp feel), residential streets quietest.
 	 */
 	import NeonLineLayer, { type NeonSegments } from './NeonLineLayer.svelte';
 	import type { LocationId } from '$lib/types';
@@ -24,19 +24,18 @@
 		properties: { class?: string };
 	}
 
-	// Class colours pulled below 1.0 across the board so they no longer blow
-	// out to hot white discs under the bloom pass — the brightest arteries
-	// (motorway/trunk) now sit at ~0.95 instead of 1.45. Urban hierarchy is
-	// preserved by the relative ratios, just at a calmer overall level.
+	// WARM sodium palette (R>G>B) so roads read as part of the warm city, not a
+	// cool blue-white grid laid on top of it. Kept below 1.0 so they don't blow
+	// out to hot discs under bloom; hierarchy preserved by relative brightness.
 	const CLASS_COLOUR: Record<string, [number, number, number]> = {
-		motorway:    [0.88, 0.94, 1.00],
-		trunk:       [0.88, 0.94, 1.00],
-		primary:     [0.74, 0.82, 0.92],
-		secondary:   [0.60, 0.68, 0.80],
-		tertiary:    [0.46, 0.54, 0.66],
-		residential: [0.32, 0.38, 0.48],
+		motorway:    [1.00, 0.86, 0.58],
+		trunk:       [1.00, 0.86, 0.58],
+		primary:     [0.86, 0.72, 0.47],
+		secondary:   [0.68, 0.56, 0.36],
+		tertiary:    [0.52, 0.42, 0.27],
+		residential: [0.38, 0.30, 0.19],
 	};
-	const DEFAULT_COLOUR: [number, number, number] = [0.32, 0.38, 0.48];
+	const DEFAULT_COLOUR: [number, number, number] = [0.38, 0.30, 0.19];
 
 	function buildRoadLines(
 		features: RoadFeature[],
@@ -97,9 +96,9 @@
 <NeonLineLayer
 	{location}
 	endpoint="/api/roads"
-	coreColor={0xeaf4ff}
+	coreColor={0xffeccc}
 	coreWidth={1.5}
-	haloColor={0x8ab0d8}
+	haloColor={0xdca860}
 	haloWidth={4.5}
 	haloOpacityMul={0.45}
 	intensityMul={0.6}
@@ -108,5 +107,6 @@
 	gapSize={55}
 	dashFlow={20}
 	depthFade={12000}
+	viirsModulate
 	buildSegments={buildRoadLines}
 />

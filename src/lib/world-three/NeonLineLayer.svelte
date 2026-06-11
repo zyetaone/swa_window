@@ -43,6 +43,8 @@
 	import { LOCATION_MAP } from '$content/locations';
 	import type { LocationId } from '$lib/types';
 	import { enuAnchorMatrix } from './enu';
+	import { EARTH_RADIUS_M } from './state.svelte';
+	import { getViirsField, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	/** Generic geo feature collection — buildSegments callbacks narrow F. */
@@ -66,6 +68,7 @@
 		gapSize = 0,
 		dashFlow = 0,
 		depthFade = 0,
+		viirsModulate = false,
 		buildSegments,
 	}: {
 		location: LocationId;
@@ -103,6 +106,14 @@
 		 * cool haze. Build-time, deterministic. 0 disables.
 		 */
 		depthFade?: number;
+		/**
+		 * Drive per-vertex brightness from the NASA VIIRS night-lights field for
+		 * `location` — bright cores brighten, dark outskirts dim — so the neon
+		 * derives from the same satellite ground-truth as the Cesium VIIRS imagery.
+		 * Loads one tile async; until ready (or on CORS failure) the static
+		 * per-vertex colours are used unchanged.
+		 */
+		viirsModulate?: boolean;
 		buildSegments: (features: F[], lat0: number, lon0: number) => NeonSegments | null;
 	} = $props();
 
@@ -114,6 +125,19 @@
 	let anchorMatrix = $state.raw<Matrix4 | null>(null);
 	let pendingDispose: LineSegmentsGeometry | null = null;
 	let group: ThreeGroup | undefined = $state.raw();
+
+	// VIIRS brightness field for `location` (night-lights integration). Loaded
+	// async when viirsModulate is on; setting it re-runs the build effect below
+	// to bake the satellite-driven brightness into the vertex colours.
+	let viirsField = $state.raw<ViirsField | null>(null);
+	$effect(() => {
+		if (!viirsModulate) { viirsField = null; return; }
+		const loc = LOCATION_MAP.get(location);
+		if (!loc) { viirsField = null; return; }
+		viirsField = getViirsField(loc.lat, loc.lon, () => {
+			viirsField = getViirsField(loc.lat, loc.lon);
+		});
+	});
 
 	// Snapshot the material-static props at construction time. These are
 	// per-mount constants — LineMaterial is constructed ONCE and never
@@ -212,6 +236,8 @@
 	$effect(() => {
 		const loc = LOCATION_MAP.get(location);
 		if (!loc) { geometry = null; return; }
+		// Read viirsField so this effect re-runs (rebuilds) once the tile loads.
+		const vfield = viirsModulate ? viirsField : null;
 		pendingDispose?.dispose();
 		pendingDispose = null;
 		geometry = null;
@@ -236,6 +262,23 @@
 						col[i] *= 0.18 + 0.82 * f;     // R fades most
 						col[i + 1] *= 0.28 + 0.72 * f; // G
 						col[i + 2] *= 0.42 + 0.58 * f; // B fades least (cool haze)
+					}
+				}
+				// VIIRS night-lights modulation — scale each vertex by the satellite
+				// brightness at its lat/lon (recovered from the ENU position), so the
+				// neon tracks the real city: lit cores pop, dark edges recede. Runs
+				// after depthFade; the two compound. Static colours kept until the
+				// tile loads (or if the fetch/CORS read failed → vfield stays null).
+				if (vfield && result.colors) {
+					const p = result.positions, col = result.colors;
+					const lat0 = loc.lat, lon0 = loc.lon;
+					const cosLat0 = Math.cos((lat0 * Math.PI) / 180) || 1e-6;
+					const RAD = 180 / Math.PI;
+					for (let i = 0; i < col.length; i += 3) {
+						const lon = lon0 + (p[i] / (cosLat0 * EARTH_RADIUS_M)) * RAD;
+						const lat = lat0 + (-p[i + 2] / EARTH_RADIUS_M) * RAD;
+						const f = 0.3 + 1.1 * vfield.sample(lat, lon); // dark→0.3, bright→1.4
+						col[i] *= f; col[i + 1] *= f; col[i + 2] *= f;
 					}
 				}
 				const geom = new LineSegmentsGeometry();
