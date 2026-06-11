@@ -25,28 +25,56 @@
 	let error = $state<string | null>(null);
 	let viewerContainer: HTMLDivElement;
 	let loadTimeout: ReturnType<typeof setTimeout> | null = null;
+	let destroyed = false;
+
+	// Bounded auto-retry: a kiosk Pi often boots BEFORE the network / Cesium Ion
+	// handshake settles, so the first init fails. Without auto-retry the screen
+	// wedges on a manual "Retry" button no on-site operator will press. Try a few
+	// times with backoff; the manual button stays as the last-resort fallback.
+	const MAX_INIT_ATTEMPTS = 3;
 
 	onMount(async () => {
-		try {
-			const CesiumModule = await import('cesium');
-			initCesiumGlobal(CesiumModule);
+		for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS && !destroyed; attempt++) {
+			try {
+				const CesiumModule = await import('cesium');
+				if (destroyed) return;
+				initCesiumGlobal(CesiumModule);
 
-			cesium = new CesiumManager(model, CesiumModule, viewerContainer);
-			await cesium.start(COLOR_GRADING_GLSL);
-			activeCesium.manager = cesium;
+				cesium = new CesiumManager(model, CesiumModule, viewerContainer);
+				await cesium.start(COLOR_GRADING_GLSL);
+				if (destroyed) {
+					cesium.destroy();
+					cesium = null;
+					return;
+				}
+				activeCesium.manager = cesium;
 
-			fadingOut = true;
-			loadTimeout = setTimeout(() => {
-				loading = false;
-				fadingOut = false;
-			}, 600);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Unknown error';
-			loading = false;
+				fadingOut = true;
+				loadTimeout = setTimeout(() => {
+					loading = false;
+					fadingOut = false;
+				}, 600);
+				return; // success
+			} catch (e) {
+				// Tear down any half-built viewer / WebGL context before retrying.
+				cesium?.destroy();
+				cesium = null;
+				activeCesium.manager = null;
+				if (attempt < MAX_INIT_ATTEMPTS && !destroyed) {
+					// Linear-ish backoff (0.8s, 1.6s) — give the handshake time.
+					await new Promise((r) => setTimeout(r, 800 * attempt));
+					continue;
+				}
+				if (!destroyed) {
+					error = e instanceof Error ? e.message : 'Unknown error';
+					loading = false;
+				}
+			}
 		}
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		if (loadTimeout) clearTimeout(loadTimeout);
 		activeCesium.manager = null;
 		cesium?.destroy();
