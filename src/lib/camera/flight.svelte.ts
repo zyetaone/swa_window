@@ -6,7 +6,7 @@
  */
 
 import { untrack } from 'svelte';
-import { clamp, lerp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
+import { clamp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
@@ -22,6 +22,29 @@ function hashLocationId(id: string): number {
 	let h = 5381;
 	for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0;
 	return h >>> 0;
+}
+
+/**
+ * Uniform Catmull-Rom interpolation of a scalar through 4 control points,
+ * evaluated at local parameter t∈[0,1] between p1 and p2.
+ *
+ * Why: a per-segment smoothstep (the old `raw*raw*(3-2*raw)`) eases velocity to
+ * ZERO at p1 AND p2 — so the camera visibly decelerates to a STOP at every
+ * waypoint, then re-accelerates ("moves and stops"). Catmull-Rom is
+ * C1-continuous across the join (the tangent leaving one segment matches the
+ * tangent entering the next), so a LINEAR time parameter carries the camera
+ * THROUGH each waypoint at steady speed. p0/p3 are the neighbouring waypoints
+ * that shape the tangents.
+ */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+	const t2 = t * t;
+	const t3 = t2 * t;
+	return 0.5 * (
+		2 * p1 +
+		(-p0 + p2) * t +
+		(2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+		(-p0 + 3 * p1 - 3 * p2 + p3) * t3
+	);
 }
 
 export class FlightSimEngine {
@@ -282,32 +305,48 @@ export class FlightSimEngine {
 	#tickScenario(delta: number, ctx: SimulationContext): void {
 		if (!this.#currentScenario) return;
 		const waypoints = this.#currentScenario.waypoints;
+		const n = waypoints.length;
 		const idx = this.#scenarioWaypointIndex;
-		const nextIdx = (idx + 1) % waypoints.length;
-		const current = waypoints[idx];
-		const next = waypoints[nextIdx];
+		const nextIdx = (idx + 1) % n;
+		// Catmull-Rom control points: the active segment is p1→p2 (current→next);
+		// p0/p3 are the neighbouring waypoints (wrapped) that shape the tangents
+		// so velocity stays continuous across the join — no stop at the waypoint.
+		const p0 = waypoints[(idx - 1 + n) % n];
+		const p1 = waypoints[idx];
+		const p2 = waypoints[nextIdx];
+		const p3 = waypoints[(nextIdx + 1) % n];
 
-		const duration = next.duration > 0 ? next.duration : 30;
+		const duration = p2.duration > 0 ? p2.duration : 30;
 		this.#scenarioProgress += (delta * this.flightSpeed) / duration;
 
-		const raw = clamp(this.#scenarioProgress, 0, 1);
-		const t = raw * raw * (3 - 2 * raw);
+		// LINEAR param (was smoothstep) — Catmull-Rom now supplies the smoothing,
+		// so a steady param advances the camera THROUGH each waypoint instead of
+		// easing to a halt at it.
+		const t = clamp(this.#scenarioProgress, 0, 1);
 
 		const js = 0.0003;
 		const jLat = Math.sin(ctx.time * 0.13) * js + Math.sin(ctx.time * 0.31) * js * 0.5;
 		const jLon = Math.sin(ctx.time * 0.17) * js + Math.sin(ctx.time * 0.37) * js * 0.5;
 
-		const newLat = lerp(current.lat, next.lat, t) + jLat;
-		const newLon = lerp(current.lon, next.lon, t) + jLon;
+		const newLat = catmullRom(p0.lat, p1.lat, p2.lat, p3.lat, t) + jLat;
+		const newLon = catmullRom(p0.lon, p1.lon, p2.lon, p3.lon, t) + jLon;
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
 		if (!ctx.userAdjustingAltitude) {
-			this.altitude = lerp(current.altitude, next.altitude, t) + Math.sin(ctx.time * 0.07) * 50;
+			this.altitude =
+				catmullRom(p0.altitude, p1.altitude, p2.altitude, p3.altitude, t) +
+				Math.sin(ctx.time * 0.07) * 50;
 		}
 
-		const hDiff = shortestAngleDelta(current.heading, next.heading);
-		this.heading = normalizeHeading(current.heading + hDiff * t + Math.sin(ctx.time * 0.05) * 0.25);
+		// Heading: smooth the AUTHORED waypoint headings with the same Catmull-Rom,
+		// but UNWRAP them first (shortestAngleDelta chain anchored on p1) so the
+		// 359°→0° seam interpolates the short way, not a full spin.
+		const u1 = p1.heading;
+		const u0 = u1 + shortestAngleDelta(u1, p0.heading);
+		const u2 = u1 + shortestAngleDelta(u1, p2.heading);
+		const u3 = u2 + shortestAngleDelta(u2, p3.heading);
+		this.heading = normalizeHeading(catmullRom(u0, u1, u2, u3, t) + Math.sin(ctx.time * 0.05) * 0.25);
 		this.pitch = this.#altitudePitch(ctx) + Math.sin(ctx.time * 0.04) * 1.0;
 
 		if (this.#scenarioProgress >= 1) {
