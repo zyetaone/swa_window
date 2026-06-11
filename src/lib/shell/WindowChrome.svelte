@@ -23,6 +23,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { SKY_PALETTE } from '$content/palettes';
 	import Glass from './window/Glass.svelte';
+	import RainGlass from './window/RainGlass.svelte';
 	import Blind from './window/Blind.svelte';
 	import { useMouseParallax } from './use-mouse-parallax.svelte';
 
@@ -83,6 +84,7 @@
 			</div>
 		</div>
 
+		<RainGlass />
 		<Glass {glassVignetteOpacity} />
 	</div>
 

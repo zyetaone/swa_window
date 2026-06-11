@@ -19,6 +19,7 @@
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world-three/ThreeOverlay.svelte";
 	import Glass from "./window/Glass.svelte";
+	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
 	import Weather from './window/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
@@ -202,6 +203,11 @@
 			     CSS .wing-silhouette div was removed once the 3D wing
 			     landed — it was invisible in practice anyway. -->
 		</div>
+
+		<!-- Water beads on the glass — CSS backdrop-filter refraction. Renderer-
+		     agnostic (ships on both the Cesium-only and hybrid paths); only mounts
+		     its blur layers while actually raining. Replaces the old Three shader. -->
+		<RainGlass />
 
 		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
 		     vignette + recess rim, z:9–11. See shell/window/Glass.svelte. -->

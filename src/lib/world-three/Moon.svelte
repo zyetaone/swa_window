@@ -210,13 +210,19 @@
 			moonMesh.rotation.z = Math.sin(_libT * 0.017) * 0.03;
 		}
 
-		// Ray-sphere occlusion test. Ray origin = camera (world coords),
-		// direction = normalised moonOffset (= -sunDir, already unit-length),
-		// length = MOON_PLACEMENT_M. Sphere = Earth at origin, radius
-		// EARTH_RADIUS_M. Solve t² + 2(cP·dir)t + (|cP|² - R²) = 0.
-		// If the smaller positive root falls before the moon, Earth is
-		// between camera and moon → occluded.
-		const dx = -sunDir[0], dy = -sunDir[1], dz = -sunDir[2];
+		// Ray-sphere occlusion test. Earth (sphere at origin, radius
+		// EARTH_RADIUS_M) between camera and moon → fade the moon out (the moon
+		// mesh is depthTest:false, so this opacity factor is the ONLY thing that
+		// can hide it behind the planet).
+		//
+		// The ray direction is the ACTUAL camera→moon vector (normalised
+		// moonOffset) — NOT the assumed `-sunDir`. They were treated as equal,
+		// but once any elevation/declination offset is baked into moonOffset the
+		// two drift apart, so the test probed the wrong ray and the moon bled
+		// straight through the Earth. Deriving the ray from the real offset fixes
+		// that by construction.
+		const olen = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+		const dx = ox / olen, dy = oy / olen, dz = oz / olen;
 		const b = camPos.x * dx + camPos.y * dy + camPos.z * dz;
 		const camLenSq = camPos.x * camPos.x + camPos.y * camPos.y + camPos.z * camPos.z;
 		const c = camLenSq - EARTH_RADIUS_M * EARTH_RADIUS_M;
@@ -225,10 +231,13 @@
 		if (disc >= 0) {
 			const sq = Math.sqrt(disc);
 			const tEntry = -b - sq;
-			if (tEntry > 0 && tEntry < MOON_PLACEMENT_M) {
-				// Soft fade: distance from ray to Earth's edge. Inside Earth
-				// shadow by more than OCCLUSION_SOFTNESS_M → fully hidden.
-				// At the tangent → 0.5. Just outside → fully visible.
+			const tExit = -b + sq;
+			// Earth blocks the moon when the sphere is intersected AHEAD of the
+			// camera (tExit > 0 keeps grazing / at-altitude cases the old
+			// `tEntry > 0` gate dropped) and before the moon's distance.
+			if (tExit > 0 && tEntry < MOON_PLACEMENT_M) {
+				// Soft fade across the Earth limb: ray's closest approach minus
+				// the radius. Inside the shadow → 0; at the tangent → 0.5.
 				const closestApproach = Math.sqrt(Math.max(0, camLenSq - b * b));
 				const edgeDistance = closestApproach - EARTH_RADIUS_M;
 				factor = Math.max(0, Math.min(1, 0.5 + edgeDistance / OCCLUSION_SOFTNESS_M));

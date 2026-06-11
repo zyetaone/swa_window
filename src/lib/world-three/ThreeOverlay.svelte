@@ -29,7 +29,6 @@
 	import CameraMirror from './CameraMirror.svelte';
 	import SunGlow from './SunGlow.svelte';
 	import LensFlare from './LensFlare.svelte';
-	import AtmosphericVeil from './AtmosphericVeil.svelte';
 	import NightStars from './NightStars.svelte';
 	import Venus from './Venus.svelte';
 	import Moon from './Moon.svelte';
@@ -40,8 +39,6 @@
 	import SparkleField from './SparkleField.svelte';
 	import Meteors from './Meteors.svelte';
 	import Rain from './Rain.svelte';
-	import RainSpatter from './RainSpatter.svelte';
-	import WingContrail from './WingContrail.svelte';
 	import Wing from './Wing.svelte';
 	import { computeSunDirection } from './sky';
 	import { lightingState } from './lighting';
@@ -151,12 +148,13 @@
 
 		<CameraMirror {camera} />
 		<!-- Order matters for additive blending depth:
-		     veil (broad diffuse, renderOrder=-1) →
 		     sun glow halo+core (sharp, renderOrder=0/1) →
 		     lens flare (screen-space ghosts) →
 		     stars (deep night, depthTest false) →
-		     clouds (cluster sprites, world-anchored). -->
-		<AtmosphericVeil />
+		     clouds (cluster sprites, world-anchored).
+		     The sky is now Cesium's skyAtmosphere ONLY; the Threlte <Sky> below
+		     stays as invisible IBL environment. (AtmosphericVeil — a second
+		     Three-drawn warm-glow sky layer — was removed for that clean split.) -->
 		<SunGlow />
 		<Moon />
 		<LensFlare />
@@ -204,22 +202,18 @@
 		     from EffectStack. -->
 		<Rain />
 
-		<!-- Procedural rain spatter on the camera near-plane (window glass).
-		     Fullscreen quad with hash-based droplets; same lifecycle as Rain. -->
-		<RainSpatter />
+		<!-- Note: rain ON the glass (beads) is now CSS — shell/window/RainGlass.svelte
+		     in the DOM glass layer (real backdrop-filter refraction, renderer-
+		     agnostic). The old near-plane shader quad was retired. -->
 
-		<!-- Wing — the visible aircraft wing as a Three.js mesh (placeholder
-		     BoxGeometry; will swap to GLTFLoader on extracted SW 737 wing).
-		     Camera-anchored with per-Pi fuselageOffsetM so a 3-Pi panorama
-		     sees one continuous wing across three windows. -->
+		<!-- Wing — the extracted SW 737 right wing GLB (static/models/wing.glb),
+		     camera-anchored with per-Pi fuselageOffsetM so a 3-Pi panorama sees
+		     one continuous wing across three windows. The GLB's own panel/flap
+		     detail carries the "you are on a plane" read — the old abstract
+		     WingContrail Line2 was retired (it competed with the real wing). -->
 		<Wing />
 
-		<!-- Wing contrail — a faint white trail extending behind the right wing.
-		     Camera-anchored (world transform mirrored onto group), gated by
-		     altitude > 26k ft. The iconic "you are on a plane" signal. -->
-		<WingContrail />
-
-		<!-- Postprocessing chain: bloom + godrays + chromatic + tonemap + vignette + grain.
+		<!-- Postprocessing chain: godrays + bloom + chromatic + tonemap + grain.
 		     Replaces Threlte's autoRenderTask with EffectComposer.render(). -->
 		<EffectStack />
 	</Canvas>

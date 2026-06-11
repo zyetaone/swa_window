@@ -15,8 +15,8 @@
 	 * wing reads edge-on). Final pose is tunable via the __wing dev hook.
 	 *
 	 * ─── CAMERA ANCHORING + 3-PI PANORAMA ──────────────────────────────
-	 * Mirrors the camera world transform onto a Group each frame (same
-	 * pattern as WingContrail), then STRIPS the per-Pi heading offset from
+	 * Mirrors the camera world transform onto a Group each frame, then
+	 * STRIPS the per-Pi heading offset from
 	 * the orientation so the wing lives in the shared base-heading (aircraft
 	 * body) frame. Each yawed Pi camera then sees a different angular slice
 	 * of the SAME wing — it flows continuously across the 3-Pi seam, matching
@@ -44,8 +44,11 @@
 		Group,
 		Box3,
 		Vector3,
+		Matrix4,
+		Euler,
 		Quaternion,
 		Mesh,
+		AdditiveBlending,
 		MeshBasicMaterial,
 		MeshLambertMaterial,
 		DirectionalLight,
@@ -83,7 +86,7 @@
 	// uniform scale.
 	const WING_SCALE_X = 1.11;
 	const WING_SCALE_Y = 1.11;
-	const WING_SCALE_Z = 1.11;
+	const WING_SCALE_Z = -1.110;
 	// Mirror state (which travel direction shows the un-mirrored "good" pose) is
 	// no longer a standalone WING_NATURAL_DIR guess — it's derived in the tick
 	// from screenTravelSign(), the same term that defines world-drift direction,
@@ -105,13 +108,12 @@
 	// re-derives holder.position.x from it every frame.
 	let xBase = WING_X_BASE;
 
-	// Winglet tip in HOLDER-LOCAL space for the night nav lights (so the
-	// holder's mirror scale flips it with the wing). Baked from the dev hook
-	// (the highest on-screen wing vertex — heading-independent because
-	// holder-local is the wing's own body frame). Replaces an unreliable
-	// post-rotation bbox-corner guess that parked the light off-screen.
+	// Winglet tip, baked from the dev hook as a HOLDER-LOCAL point (the highest
+	// on-screen wing vertex). At load we recover the equivalent MODEL-LOCAL
+	// vertex from this and parent the nav lights to the model `m` — so they stay
+	// welded to the winglet through the model's scale/rotation (incl. the
+	// WING_SCALE_Z flip) instead of detaching when the wing is re-tuned.
 	const WING_TIP_LOCAL = new Vector3(1.24, 5.86, -12.63);
-	let tip = new Vector3();
 
 	// Convert a GLB material to a LIT DoubleSide MeshLambertMaterial, keeping its
 	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
@@ -152,12 +154,23 @@
 					me.material = Array.isArray(mat) ? mat.map(toLit) : toLit(mat);
 				});
 				holder.add(m);
-				// Nav lights sit at the baked winglet tip (holder-local). They're
-				// holder children, so the direction-mirror scale flips them with
-				// the wing automatically.
-				tip.copy(WING_TIP_LOCAL);
-				navLight.position.copy(tip);
-				strobeLight.position.copy(tip);
+				// Weld the nav lights to the winglet-tip VERTEX by parenting them
+				// to the model `m`. Recover that vertex in model-local space from
+				// the baked holder-local tip — since tip = m.position + R·S·vertex,
+				// vertex = S⁻¹·R⁻¹·(tip − m.position) (S magnitude = the +1.11 the
+				// const was baked at). The lights then ride m's actual scale,
+				// including the Z flip, so they never drift off the winglet again.
+				const rInv = new Matrix4()
+					.makeRotationFromEuler(new Euler(rot[0], rot[1], rot[2]))
+					.invert();
+				const navPos = WING_TIP_LOCAL.clone()
+					.sub(m.position)
+					.applyMatrix4(rInv)
+					.divide(new Vector3(WING_SCALE_X, WING_SCALE_Y, Math.abs(WING_SCALE_Z)));
+				m.add(navLight, strobeLight, navHalo);
+				navLight.position.copy(navPos);
+				strobeLight.position.copy(navPos);
+				navHalo.position.copy(navPos);
 				// Dev-only live tuning hook.
 				if (import.meta.env.DEV) {
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -186,7 +199,7 @@
 	const navGeom = new SphereGeometry(0.12, 12, 12);
 	const strobeGeom = new SphereGeometry(0.18, 12, 12);
 	const navMat = new MeshBasicMaterial({
-		color: 0x00ff77,
+		color: 0x00ee44, // truer aviation green (was 0x00ff77, slightly yellow)
 		transparent: true,
 		opacity: 0,
 		depthWrite: false,
@@ -200,6 +213,22 @@
 	navLight.frustumCulled = false;
 	navLight.renderOrder = 3;
 
+	// Soft additive green halo behind the core — light scattering in humid air;
+	// the bloom pass merges it with the core into one coherent glow. Cheap (one
+	// 10×10 sphere, additive, depthTest off).
+	const navHaloMat = new MeshBasicMaterial({
+		color: 0x00ee44,
+		transparent: true,
+		opacity: 0,
+		depthWrite: false,
+		depthTest: false,
+		blending: AdditiveBlending,
+		fog: false,
+	});
+	const navHalo = new Mesh(new SphereGeometry(0.34, 10, 10), navHaloMat);
+	navHalo.frustumCulled = false;
+	navHalo.renderOrder = 2;
+
 	const strobeMat = new MeshBasicMaterial({
 		color: 0xffffff,
 		transparent: true,
@@ -212,10 +241,8 @@
 	strobeLight.frustumCulled = false;
 	strobeLight.renderOrder = 3;
 
-	// Nav lights are children of the holder, fixed at the holder-local winglet
-	// tip — so they inherit the holder's direction-mirror scale automatically
-	// (no per-frame repositioning).
-	holder.add(navLight, strobeLight);
+	// Nav lights are parented to the model `m` at load (see loadWing) so they
+	// ride the winglet through every model transform — no per-frame reposition.
 
 	// ─── Dawn / moon key light ──────────────────────────────────────────
 	// A single directional light added to the SCENE (NOT the banking wing group,
@@ -255,8 +282,11 @@
 
 	let _strobeT = 0;
 	let _swayT = 0;
-	const STROBE_PERIOD_S = 1.0;
-	const STROBE_PULSE_S = 0.06;
+	// Anti-collision strobe: a DOUBLE flash (two quick pulses STROBE_GAP_S apart)
+	// every period — the real 737 beacon cadence, punchier than a single blink.
+	const STROBE_PERIOD_S = 1.1;
+	const STROBE_PULSE_S = 0.05;
+	const STROBE_GAP_S = 0.16;
 	// Scratch sun-direction holder for the key light (avoids per-frame alloc).
 	const _keyDir = new Vector3();
 
@@ -351,9 +381,15 @@
 		// Night nav lights — gated by nightFactor.
 		const nf = untrack(() => model.nightFactor);
 		navMat.opacity = nf;
+		navHaloMat.opacity = nf * 0.35;
 		_strobeT += dt;
 		if (_strobeT > STROBE_PERIOD_S) _strobeT -= STROBE_PERIOD_S;
-		strobeMat.opacity = nf * (_strobeT < STROBE_PULSE_S ? 1 : 0);
+		// Double-flash: two sharp pulses (at 0 and STROBE_GAP_S) → the bloom
+		// pass turns each into a hard anti-collision burst.
+		const flash =
+			_strobeT < STROBE_PULSE_S ||
+			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
+		strobeMat.opacity = nf * (flash ? 1 : 0);
 
 		// Dawn / moon key light — direction tracks the sun azimuth but with the
 		// elevation floored to +0.45 so it always rakes the wing's top surface

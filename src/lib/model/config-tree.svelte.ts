@@ -330,7 +330,7 @@ export const world = $state({
 	// -0.96 next to Cesium's -1.0 clamp). The sky retains some atmospheric
 	// tint — a smooth fade into the horizon limb instead of pitch black.
 	skyDarken: 1.8,
-	viirsBrightness: 1.5,       // multiplier on viirsLayer.brightness (set at setup)
+	viirsBrightness: 0.95,      // multiplier on viirsLayer.brightness (set at setup). Was 1.5 (×3.5 internal = 5.25×) which blew out CBD cores into bloom halos; 0.95 tames the harsh ground patches while keeping the city read.
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
 	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
 	// it doesn't compete with the building emissive at passenger-window

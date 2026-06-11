@@ -28,10 +28,13 @@
 	 *                              clipping at 1.0 — eliminates the
 	 *                              "blown-out white" feel.
 	 *     ↓
-	 *     VignetteEffect        → soft darken at corners
-	 *     ↓
 	 *     NoiseEffect           → film grain, premultiplied so transparent
 	 *                              pixels stay transparent
+	 *
+	 * Edge darkening is intentionally NOT here — the DOM Glass recess
+	 * (shell/window/Glass.svelte) owns the window-vignette in both the
+	 * Cesium-only fallback and the hybrid, so a postprocess VignetteEffect
+	 * would double-darken the oval rim. One source of edge falloff.
 	 *
 	 * Threlte 8 wiring: stop `autoRenderTask`, register a task in
 	 * `renderStage` that calls `composer.render(dt)` each frame.
@@ -43,7 +46,6 @@
 		EffectPass,
 		BloomEffect,
 		ChromaticAberrationEffect,
-		VignetteEffect,
 		NoiseEffect,
 		GodRaysEffect,
 		ToneMappingEffect,
@@ -143,8 +145,6 @@
 
 	const tonemap = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
 
-	const vignette = new VignetteEffect({ offset: 0.35, darkness: 0.50 });
-
 	const noise = new NoiseEffect({
 		premultiply: true,
 		blendFunction: BlendFunction.OVERLAY,
@@ -157,7 +157,6 @@
 		bloom,
 		chromatic,
 		tonemap,
-		vignette,
 		noise,
 	));
 
@@ -221,7 +220,6 @@
 		bloom.dispose();
 		chromatic.dispose();
 		tonemap.dispose();
-		vignette.dispose();
 		noise.dispose();
 		sunSource.geometry.dispose();
 		(sunSource.material as MeshBasicMaterial).dispose();
