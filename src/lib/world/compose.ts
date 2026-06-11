@@ -10,6 +10,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
+import { lightingState } from '$lib/world-lighting/curves';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
@@ -685,7 +686,17 @@ export class CesiumManager {
 		const v = this.viewer;
 		const C = this.CesiumModule;
 		const nf = m.nightFactor;
-		const dd = m.dawnDuskFactor;
+		// P3 SSOT consolidation: the dawn/dusk warm weight is now the SHARED
+		// lightingState() value — the exact same `dawnDuskWeight` the Three
+		// overlay reads (a capped smoothstep of dawnDuskFactor) — instead of the
+		// raw `model.dawnDuskFactor` Cesium used to derive on its own. The two
+		// renderers' dusk weighting can no longer drift apart by construction.
+		// (No sunDir passed: only dawnDuskWeight is read here, which is purely
+		// time/nightFactor driven.) Numerically this scales the dusk biases a few
+		// % vs the old raw factor — the warm-dusk *magnitude* recalibration (now
+		// that AtmosphericVeil is gone and Cesium owns dusk solo) lives in the
+		// NIGHT_PALETTE.skyAtmosphere/globeColor duskBias targets, tuned live.
+		const dd = lightingState(m.timeOfDay, nf).dawnDuskWeight;
 		const isSunVisible = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 
 		// Sync clock on time-of-day OR longitude change (>0.5°). Previously
