@@ -58,7 +58,9 @@
 			model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude +
 			model.motion.engineVibeY +
 			parallax.y;
-		const rotate = model.motion.motionOffsetY * 0.02 + model.motion.bankAngle;
+		// Bank no longer spins the canvas — the camera roll tilts the horizon and
+		// world-three/Wing banks the wing relative to it. Keep only turbulence here.
+		const rotate = model.motion.motionOffsetY * 0.02;
 		const scale = 1 + model.motion.warpZoom;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
 	});

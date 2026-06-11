@@ -106,7 +106,6 @@
 	const breathingY = $derived(
 		model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude,
 	);
-	const bankDegrees = $derived(model.motion.bankAngle);
 
 	// Phase 10 — cursor parallax (game-engine-style "look around" interactivity).
 	// Adds a subtle DOM translate on .scene-content based on cursor position
@@ -117,7 +116,12 @@
 	const motionTransform = $derived.by(() => {
 		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
 		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
-		const rotate = turbulenceRotate + bankDegrees;
+		// Bank is NOT applied to the DOM canvas anymore — rotating the whole
+		// scene-content rigidly spun the window view ("the canvas rotates on
+		// bank"). Bank now reads naturally: the Cesium camera roll (-bankAngle)
+		// tilts the HORIZON, and world-three/Wing banks the WING relative to it.
+		// The window frame — the passenger's fixed reference — stays put.
+		const rotate = turbulenceRotate;
 		const scale = 1 + model.motion.warpZoom;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
 	});
