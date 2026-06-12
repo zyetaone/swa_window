@@ -37,9 +37,10 @@
 
 	// Cesium buildings: wireframe ("line marks") vs solid (the live procedural
 	// window-shader facades). Toggle in the drawer — wireframe hides the lit
-	// windows, solid shows them. Re-applies whenever the toggle or the manager
-	// changes; idempotent.
-	let buildingsWireframe = $state(true);
+	// windows, solid shows them. Solid is the default so the vertical lit-
+	// window grids ARE the night look; flip to wireframe for the Tron pass.
+	// Re-applies whenever the toggle or the manager changes; idempotent.
+	let buildingsWireframe = $state(false);
 	$effect(() => {
 		const mgr = activeCesium.manager;
 		if (!mgr) return;

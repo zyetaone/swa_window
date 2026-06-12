@@ -23,7 +23,8 @@
  * Uniforms:
  *   u_nightFactor    0..1 — emission gated entirely on this
  *   u_lightIntensity operator knob (nightLightScale)
- *   u_windowDensity  fraction of windows lit (peaks ~0.5 at deep night)
+ *   u_windowDensity  fraction of windows lit (dusk ramp; peaks 0.6 at deep
+ *                    night × world.windowLightIntensity, tapers with altitude)
  *   u_time           seconds — drives flicker + aviation blink
  *
  * Why a customShader (not Cesium3DTileStyle):
@@ -65,10 +66,19 @@ export const BUILDING_SHADER_GLSL = `
 		float heightFactor = smoothstep(10.0, 80.0, buildingHeight);
 		float adjustedDensity = mix(u_windowDensity * 0.4, u_windowDensity * 1.3, heightFactor);
 
+		// In-plane horizontal coordinate for the window grid. Walls whose
+		// normal points along ±X vary in Y across the face (and vice versa);
+		// the Feb-15 recipe used wp.x unconditionally, which collapsed
+		// X-facing walls into featureless floor-bands (gridUV.x constant
+		// across the face). Pure position+normal selection — still fully
+		// deterministic across the 3-Pi fleet (invariant #4).
+		float facingX = step(abs(normal.y), abs(normal.x));
+		float horiz = mix(wp.x, wp.y, facingX);
+
 		// Window grid pattern
 		float windowWidth = mix(0.55, 0.8, isGroundFloor);
 		float windowHeight = mix(0.65, 0.85, isGroundFloor);
-		vec2 gridUV = fract(vec2(wp.x * 0.12, wp.z / floorHeight));
+		vec2 gridUV = fract(vec2(horiz * 0.12, wp.z / floorHeight));
 		float windowX = smoothstep(0.5 - windowWidth * 0.5, 0.5 - windowWidth * 0.5 + 0.05, gridUV.x)
 		             * smoothstep(0.5 + windowWidth * 0.5, 0.5 + windowWidth * 0.5 - 0.05, gridUV.x);
 		float windowY = smoothstep(0.5 - windowHeight * 0.5, 0.5 - windowHeight * 0.5 + 0.05, gridUV.y)
@@ -76,7 +86,7 @@ export const BUILDING_SHADER_GLSL = `
 		float windowMask = windowX * windowY;
 
 		// Per-window random (hash from cell position)
-		vec2 cellId = vec2(floor(wp.x * 0.12), floorIndex);
+		vec2 cellId = vec2(floor(horiz * 0.12), floorIndex);
 		float rand = fract(sin(dot(cellId, vec2(127.1, 311.7))) * 43758.5453);
 
 		// Floor-level randomization (some whole floors dark = empty offices)

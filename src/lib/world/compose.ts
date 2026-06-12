@@ -121,7 +121,11 @@ export class CesiumManager {
 	// update from syncBuildings(). null if Ion token missing.
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private buildingsShader: any = null;
-	private buildingsTime = 0;
+	// Wall-clock-seeded (seconds since local midnight-ish epoch) so the
+	// aviation-beacon blink + AC-hum flicker phase matches across the
+	// 3-Pi fleet — each Pi boots at a different instant; a 0-seed would
+	// desync the 2 s beacon blink across the panorama seam (invariant #4).
+	private buildingsTime = (Date.now() % 86_400_000) / 1000;
 
 	// Boot-time fade — defeats the "amber lights glowing against a still-
 	// loading globe" flash on initial render. timeOfDay is initialised at
@@ -1102,9 +1106,24 @@ export class CesiumManager {
 			// VIIRS + road mask instead of snapping on while base tiles stream.
 			this.buildingsShader.setUniform('u_nightFactor', nf * bootFade);
 			this.buildingsShader.setUniform('u_lightIntensity', scale);
-			// Window density tapers as altitude rises — at cruise we don't
-			// need full per-window granularity, just a glow signature.
-			this.buildingsShader.setUniform('u_windowDensity', nf * 0.4 * scale * (1 - altBlend));
+			// Window density — decoupled from nightLightScale. That knob
+			// (world.nightLightIntensity, default 3.0) already multiplies
+			// emissive BRIGHTNESS via u_lightIntensity; folding it into
+			// density too saturated tall towers to 100%-lit at deep night
+			// (adjustedDensity 0.4·3·1.3 = 1.56 → every window on = fake).
+			// Density now has its own dusk ramp: glow begins as nf passes
+			// ~0.35, reaching the 0.6 ceiling by deep night. The shader's
+			// height factor maps that to 0.78 raw on towers (~0.65 effective
+			// lit after the 20% dark-floor cull) and 0.24 on low-rise —
+			// "office tower at night" with believable dark-window variation.
+			// Tapers with altitude so the per-window detail owns the low
+			// city-approach band and hands off to the VIIRS raster at cruise.
+			// windowLightIntensity is the operator dial (default 1).
+			const duskRamp = smoothstep((nf - 0.3) / 0.65);
+			this.buildingsShader.setUniform(
+				'u_windowDensity',
+				0.6 * duskRamp * w.windowLightIntensity * (1 - altBlend),
+			);
 			this.buildingsShader.setUniform('u_time', this.buildingsTime);
 			return;
 		}

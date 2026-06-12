@@ -292,6 +292,11 @@ export const world = $state({
 	buildingEmissiveLowAltFt: 25000,
 	buildingEmissiveHighAltFt: 55000,
 	buildingEmissiveMax: 0.6,
+	// Operator dial for the procedural lit-window density (building-shader
+	// u_windowDensity). 1.0 = tuned default (0.6 ceiling at deep night).
+	// Independent of nightLightIntensity, which scales emissive BRIGHTNESS —
+	// this one scales how MANY windows are lit.
+	windowLightIntensity: 1.0,
 	// Phase 9 (Apr-15 hash palette + Cesium API knobs productionized from
 	// night-lab Variants G + H). Defaults below were tuned in the lab against
 	// Hyderabad night view; operators can adjust via admin panel for on-site
