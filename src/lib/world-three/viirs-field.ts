@@ -15,9 +15,19 @@
  * fetch + decode happen once, sampling is an array index (Pi-cheap, no per-frame
  * cost). Deterministic (same day's tile on every Pi) → 3-Pi panorama safe.
  *
- * Graceful degradation: if the tile fails to load OR the canvas read-back is
- * blocked (CORS taint), the entry is marked 'failed' and callers get null —
- * they fall back to their static colours. No hard dependency on the network.
+ * Graceful degradation: a network load error is retried up to 3 times with a
+ * linear backoff (1.5 s, 3 s) — a blip at kiosk boot must not mean dark/static
+ * neon until reload. Only after 3 failures (or a CORS-tainted canvas, which is
+ * deterministic, not transient) is the entry marked 'failed' permanently and
+ * callers get null — they fall back to their static colours. No hard
+ * dependency on the network.
+ *
+ * Waiter semantics: `onReady` callbacks stay registered across retries and are
+ * notified exactly once, on TERMINAL resolution (success or permanent failure).
+ * Retryable failures do not notify — a notified waiter would call back into
+ * getViirsField, read null, and have to re-register anyway; keeping it
+ * registered is the simplest correct behaviour. Use `removeViirsWaiter` to
+ * cancel a registration on unmount.
  */
 
 const TILE_Z = 7;
@@ -44,6 +54,32 @@ function latToTileYf(lat: number, z: number): number {
 type Entry = ViirsField | 'loading' | 'failed';
 const _cache = new Map<string, Entry>();
 const _waiters = new Map<string, Set<() => void>>();
+// Per-tile network-error counter. < MAX_FAILS → retryable (entry deleted +
+// background retry scheduled); >= MAX_FAILS → 'failed' permanently.
+const _fails = new Map<string, number>();
+const MAX_FAILS = 3;
+const RETRY_BASE_MS = 1500;
+
+function tileKey(lat: number, lon: number): { key: string; tx: number; ty: number } {
+	const tx = Math.floor(lonToTileXf(lon, TILE_Z));
+	const ty = Math.floor(latToTileYf(lat, TILE_Z));
+	return { key: `${TILE_Z}/${ty}/${tx}`, tx, ty };
+}
+
+/**
+ * Deregister an `onReady` callback previously passed to `getViirsField` for
+ * the tile covering (lat, lon). Call from component cleanup — without this a
+ * still-pending load would hold the closure (and whatever it captures) until
+ * the tile resolves. No-op if the callback was never registered or already
+ * notified.
+ */
+export function removeViirsWaiter(lat: number, lon: number, onReady: () => void): void {
+	const { key } = tileKey(lat, lon);
+	const s = _waiters.get(key);
+	if (!s) return;
+	s.delete(onReady);
+	if (s.size === 0) _waiters.delete(key);
+}
 
 /**
  * Get the VIIRS field for the tile covering (lat, lon). Returns the field if it
@@ -53,9 +89,7 @@ const _waiters = new Map<string, Set<() => void>>();
 export function getViirsField(lat: number, lon: number, onReady?: () => void): ViirsField | null {
 	if (typeof document === 'undefined') return null; // SSR guard
 	const z = TILE_Z;
-	const tx = Math.floor(lonToTileXf(lon, z));
-	const ty = Math.floor(latToTileYf(lat, z));
-	const key = `${z}/${ty}/${tx}`;
+	const { key, tx, ty } = tileKey(lat, lon);
 
 	const e = _cache.get(key);
 	if (e && e !== 'loading' && e !== 'failed') return e;
@@ -99,14 +133,27 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 				},
 			});
 		} catch {
-			// Tainted canvas (CORS) or decode failure → fall back to static colours.
+			// Tainted canvas (CORS) or decode failure → deterministic, not a
+			// transient network blip — fail permanently, fall back to static colours.
 			_cache.set(key, 'failed');
 		}
+		_fails.delete(key);
 		notify();
 	};
 	img.onerror = () => {
-		_cache.set(key, 'failed');
-		notify();
+		const fails = (_fails.get(key) ?? 0) + 1;
+		_fails.set(key, fails);
+		if (fails >= MAX_FAILS) {
+			_cache.set(key, 'failed'); // terminal — give up, notify waiters once
+			notify();
+			return;
+		}
+		// Retryable network error (kiosk-boot blip): delete the entry so the next
+		// getViirsField call re-enters the load path, and schedule a background
+		// retry with linear backoff. Waiters stay registered — they are only
+		// notified on terminal success/failure (see module doc).
+		_cache.delete(key);
+		setTimeout(() => getViirsField(lat, lon), RETRY_BASE_MS * fails);
 	};
 	img.src = VIIRS_TILE(z, ty, tx);
 	return null;

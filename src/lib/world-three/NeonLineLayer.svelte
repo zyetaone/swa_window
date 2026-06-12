@@ -44,7 +44,7 @@
 	import type { LocationId } from '$lib/types';
 	import { enuAnchorMatrix } from './enu';
 	import { EARTH_RADIUS_M } from './state.svelte';
-	import { getViirsField, type ViirsField } from './viirs-field';
+	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	/** Generic geo feature collection — buildSegments callbacks narrow F. */
@@ -128,15 +128,20 @@
 
 	// VIIRS brightness field for `location` (night-lights integration). Loaded
 	// async when viirsModulate is on; setting it re-runs the build effect below
-	// to bake the satellite-driven brightness into the vertex colours.
+	// to bake the satellite-driven brightness into the vertex colours. The
+	// onReady waiter is deregistered on cleanup — otherwise a still-pending
+	// tile load would hold this closure (and a stale `viirsField` write target)
+	// until it resolved.
 	let viirsField = $state.raw<ViirsField | null>(null);
 	$effect(() => {
 		if (!viirsModulate) { viirsField = null; return; }
 		const loc = LOCATION_MAP.get(location);
 		if (!loc) { viirsField = null; return; }
-		viirsField = getViirsField(loc.lat, loc.lon, () => {
+		const onReady = () => {
 			viirsField = getViirsField(loc.lat, loc.lon);
-		});
+		};
+		viirsField = getViirsField(loc.lat, loc.lon, onReady);
+		return () => removeViirsWaiter(loc.lat, loc.lon, onReady);
 	});
 
 	// Snapshot the material-static props at construction time. These are
@@ -233,74 +238,94 @@
 		group.matrix.copy(anchorMatrix);
 	});
 
+	// ---- Effect A: fetch-only -------------------------------------------
+	// Depends on location/endpoint ONLY (no viirsField read) — the GeoJSON is
+	// downloaded + parsed exactly once per location. The parsed features are
+	// snapshotted together with the city lat/lon so the build effect below
+	// never re-reads LOCATION_MAP against a location that has since changed.
+	let rawFeatures = $state.raw<{ features: F[]; lat: number; lon: number } | null>(null);
 	$effect(() => {
 		const loc = LOCATION_MAP.get(location);
-		if (!loc) { geometry = null; return; }
-		// Read viirsField so this effect re-runs (rebuilds) once the tile loads.
-		const vfield = viirsModulate ? viirsField : null;
-		pendingDispose?.dispose();
-		pendingDispose = null;
-		geometry = null;
-
+		if (!loc) { rawFeatures = null; return; }
+		rawFeatures = null;
 		const ctrl = new AbortController();
 		fetch(`${endpoint}/${location}`, { signal: ctrl.signal })
 			.then((r) => r.json() as Promise<FeatureCollection<F>>)
 			.then((data) => {
 				if (!data.features?.length) return;
-				const result = buildSegments(data.features, loc.lat, loc.lon);
-				if (!result || result.positions.length === 0) return;
-				// Atmospheric depth fade — dim + cool-shift each vertex by its
-				// planar distance from the city centre (group origin). Mutates a
-				// copy of the colours so the core glows warm and the outskirts
-				// haze out. Blue fades least → far lights read cooler.
-				if (_depthFade > 0 && result.colors) {
-					const p = result.positions, col = result.colors;
-					const near = _depthFade * 0.2;
-					for (let i = 0; i < col.length; i += 3) {
-						const d = Math.hypot(p[i], p[i + 2]); // ENU: x east, z north
-						const f = Math.max(0, Math.min(1, 1 - (d - near) / (_depthFade - near)));
-						col[i] *= 0.18 + 0.82 * f;     // R fades most
-						col[i + 1] *= 0.28 + 0.72 * f; // G
-						col[i + 2] *= 0.42 + 0.58 * f; // B fades least (cool haze)
-					}
-				}
-				// VIIRS night-lights modulation — scale each vertex by the satellite
-				// brightness at its lat/lon (recovered from the ENU position), so the
-				// neon tracks the real city: lit cores pop, dark edges recede. Runs
-				// after depthFade; the two compound. Static colours kept until the
-				// tile loads (or if the fetch/CORS read failed → vfield stays null).
-				if (vfield && result.colors) {
-					const p = result.positions, col = result.colors;
-					const lat0 = loc.lat, lon0 = loc.lon;
-					const cosLat0 = Math.cos((lat0 * Math.PI) / 180) || 1e-6;
-					const RAD = 180 / Math.PI;
-					for (let i = 0; i < col.length; i += 3) {
-						const lon = lon0 + (p[i] / (cosLat0 * EARTH_RADIUS_M)) * RAD;
-						const lat = lat0 + (-p[i + 2] / EARTH_RADIUS_M) * RAD;
-						const f = 0.3 + 1.1 * vfield.sample(lat, lon); // dark→0.3, bright→1.4
-						col[i] *= f; col[i + 1] *= f; col[i + 2] *= f;
-					}
-				}
-				const geom = new LineSegmentsGeometry();
-				geom.setPositions(result.positions);
-				if (result.colors) geom.setColors(result.colors);
-				// Dashing needs per-vertex line distances; each road segment is
-				// a disjoint 2-point pair so the dash phase restarts per segment.
-				// computeLineDistances is real on LineSegmentsGeometry but absent
-				// from the bundled addon .d.ts — narrow cast over `any`.
-				if (_dashed) {
-					(geom as LineSegmentsGeometry & {
-						computeLineDistances: () => LineSegmentsGeometry;
-					}).computeLineDistances();
-				}
-				pendingDispose = geom;
-				geometry = geom;
-				anchorMatrix = enuAnchorMatrix(loc.lat, loc.lon, 0);
+				rawFeatures = { features: data.features, lat: loc.lat, lon: loc.lon };
 			})
 			.catch((e) => {
 				if (e.name !== 'AbortError') console.warn(`[NeonLineLayer ${endpoint}]`, e);
 			});
 		return () => ctrl.abort();
+	});
+
+	// ---- Effect B: geometry build ----------------------------------------
+	// Depends on the fetched features + viirsField. When the VIIRS tile
+	// arrives 1-3 s after mount, ONLY this effect re-runs — segments are
+	// rebuilt from the in-memory features, no re-download / re-parse.
+	// buildSegments returns fresh arrays each call, so the in-place
+	// depthFade/VIIRS colour mutations never compound across re-runs.
+	$effect(() => {
+		const raw = rawFeatures;
+		// Read viirsField so this effect re-runs (rebuilds) once the tile loads.
+		const vfield = viirsModulate ? viirsField : null;
+		// Dispose the previous build exactly once: pendingDispose is nulled
+		// immediately, so a re-run (or the unmount cleanup) can't double-dispose.
+		pendingDispose?.dispose();
+		pendingDispose = null;
+		geometry = null;
+		if (!raw) return;
+		// untrack: buildSegments is caller-supplied — keep any incidental
+		// reactive reads inside it out of this effect's dependencies (the old
+		// fetch `.then` body ran outside tracking; preserve that).
+		untrack(() => {
+			const result = buildSegments(raw.features, raw.lat, raw.lon);
+			if (!result || result.positions.length === 0) return;
+			// Atmospheric depth fade — dim + cool-shift each vertex by its
+			// planar distance from the city centre (group origin). Mutates a
+			// copy of the colours so the core glows warm and the outskirts
+			// haze out. Blue fades least → far lights read cooler.
+			if (_depthFade > 0 && result.colors) {
+				const p = result.positions, col = result.colors;
+				const near = _depthFade * 0.2;
+				for (let i = 0; i < col.length; i += 3) {
+					const d = Math.hypot(p[i], p[i + 2]); // ENU: x east, z north
+					const f = Math.max(0, Math.min(1, 1 - (d - near) / (_depthFade - near)));
+					col[i] *= 0.18 + 0.82 * f;     // R fades most
+					col[i + 1] *= 0.28 + 0.72 * f; // G
+					col[i + 2] *= 0.42 + 0.58 * f; // B fades least (cool haze)
+				}
+			}
+			// VIIRS night-lights modulation — scale each vertex by the satellite
+			// brightness at its lat/lon (recovered from the ENU position), so the
+			// neon tracks the real city: lit cores pop, dark edges recede. Runs
+			// after depthFade; the two compound. Static colours kept until the
+			// tile loads (or if the fetch/CORS read failed → vfield stays null).
+			if (vfield && result.colors) {
+				const p = result.positions, col = result.colors;
+				const lat0 = raw.lat, lon0 = raw.lon;
+				const cosLat0 = Math.cos((lat0 * Math.PI) / 180) || 1e-6;
+				const RAD = 180 / Math.PI;
+				for (let i = 0; i < col.length; i += 3) {
+					const lon = lon0 + (p[i] / (cosLat0 * EARTH_RADIUS_M)) * RAD;
+					const lat = lat0 + (-p[i + 2] / EARTH_RADIUS_M) * RAD;
+					// dark→0.3, bright→~1.15. Bright cores already get the VIIRS
+					// raster boost + Cesium emissive shader + two blooms — the
+					// core halo is owned by bloom + CityGlowDome, the neon must
+					// not compound it. Keep the ceiling barely above 1.
+					const f = 0.3 + 0.85 * vfield.sample(lat, lon);
+					col[i] *= f; col[i + 1] *= f; col[i + 2] *= f;
+				}
+			}
+			const geom = new LineSegmentsGeometry();
+			geom.setPositions(result.positions);
+			if (result.colors) geom.setColors(result.colors);
+			pendingDispose = geom;
+			geometry = geom;
+			anchorMatrix = enuAnchorMatrix(raw.lat, raw.lon, 0);
+		});
 	});
 
 	const haloLine = new LineSegments2();
@@ -312,6 +337,15 @@
 		if (!geometry) return;
 		haloLine.geometry = geometry;
 		coreLine.geometry = geometry;
+		// Dashing needs per-segment line distances. In three r183 the method
+		// lives on the LineSegments2 OBJECT (not LineSegmentsGeometry — calling
+		// it there was a TypeError that silently killed the whole road build).
+		// Both lines share one geometry; the first call writes the instance
+		// distance attributes, the second is a cheap idempotent rewrite.
+		if (_dashed) {
+			haloLine.computeLineDistances();
+			coreLine.computeLineDistances();
+		}
 	});
 </script>
 
