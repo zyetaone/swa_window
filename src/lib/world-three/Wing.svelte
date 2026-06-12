@@ -60,7 +60,7 @@
 	} from 'three';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection } from './sky';
+	import { computeSunDirection, sunElevationSin } from './sky';
 	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
 
 	const model = useAeroWindow();
@@ -71,9 +71,9 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = -9.5;
-	const WING_Y_BASE = -1.4;
-	const WING_Z_BASE = -8.9;
+	const WING_X_BASE = -4.5;
+	const WING_Y_BASE = -2.2;
+	const WING_Z_BASE = -3.7;
 	// Orientation (radians). rotY is the receding swing (span → depth); rotX is
 	// the static resting pitch (look-down onto the top surface) — NOT the bank,
 	// which the tick applies separately from motion.bankAngle. rotZ is a small
@@ -86,7 +86,7 @@
 	// uniform scale.
 	const WING_SCALE_X = 1.11;
 	const WING_SCALE_Y = 1.11;
-	const WING_SCALE_Z = -1.110;
+	const WING_SCALE_Z = 1.11;
 	// Mirror state (which travel direction shows the un-mirrored "good" pose) is
 	// no longer a standalone WING_NATURAL_DIR guess — it's derived in the tick
 	// from screenTravelSign(), the same term that defines world-drift direction,
@@ -143,9 +143,15 @@
 			.then((gltf) => {
 				if (cancelled) return;
 				const m = gltf.scene as Object3D;
-				m.position.sub(new Box3().setFromObject(m).getCenter(new Vector3()));
 				m.scale.set(WING_SCALE_X, WING_SCALE_Y, WING_SCALE_Z);
 				m.rotation.set(rot[0], rot[1], rot[2]);
+				// Recenter AFTER scale+rotation so the COMPOSED bbox centers on the
+				// holder origin. Recentering first (the old order) bakes the offset
+				// at identity scale — a negative scale component then NEGATES the
+				// model's internal centre offset instead of compensating it, which
+				// translated the whole wing ~2× that offset sideways and parked it
+				// off-frame (the WING_SCALE_Z flip made the wing "vanish").
+				m.position.sub(new Box3().setFromObject(m).getCenter(new Vector3()));
 				m.traverse((o) => {
 					const me = o as Mesh;
 					if (!me.isMesh) return;
@@ -391,14 +397,20 @@
 			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
 		strobeMat.opacity = nf * (flash ? 1 : 0);
 
-		// Dawn / moon key light — direction tracks the sun azimuth but with the
-		// elevation floored to +0.45 so it always rakes the wing's top surface
-		// (never a sub-horizon backlight). Colour + intensity lerp warm-day →
+		// Dawn / moon key light — direction tracks the sun azimuth with REAL
+		// local solar elevation (sunElevationSin) so dawn/dusk light rakes the
+		// wing low and noon light falls steep. Floored to +0.15 (never a
+		// sub-horizon backlight) and lerped toward the old fixed +0.45 as night
+		// falls — the night key is stand-in moonlight, not the sun, so it keeps
+		// its calibrated raking angle. Colour + intensity lerp warm-day →
 		// cool-dim-moonlight by nightFactor, so the wing dims and cools at night
 		// for free (no per-material colour hack) while the AmbientLight floor
 		// keeps the shadowed side from crushing to black.
-		const sd = computeSunDirection(untrack(() => model.flight.camLon), untrack(() => model.timeOfDay));
-		_keyDir.set(sd[0], Math.max(sd[1], 0.45), sd[2]).normalize().multiplyScalar(1e6);
+		const timeOfDay = untrack(() => model.timeOfDay);
+		const sd = computeSunDirection(untrack(() => model.flight.camLon), timeOfDay);
+		const elevSin = Math.max(sunElevationSin(untrack(() => model.flight.camLat), timeOfDay), 0.15);
+		const keyElev = elevSin * (1 - nf) + 0.45 * nf;
+		_keyDir.set(sd[0], keyElev, sd[2]).normalize().multiplyScalar(1e6);
 		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
 		// Eased key + hemisphere fill → gentle ~2.5:1 lit:shadow ratio instead of
 		// the old ~6:1 that made the root facets read as harsh black shadows.
