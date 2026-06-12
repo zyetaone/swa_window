@@ -50,7 +50,10 @@
 	// airMass uses the SHARED sky.ts helper — the duplicated local copy is gone,
 	// so SunGlow / Moon / NightStars all read one air-mass formula.
 	const visibility = $derived(lightingState(model.timeOfDay, model.nightFactor).sunGlowVisibility);
-	const airMass = $derived(airMassFactor(model.flight.camLon, model.timeOfDay));
+	// airMassFactor is now latitude + time driven (real local solar elevation
+	// via sunElevationSin) — previously it read the constant sunDir[1] and
+	// returned ~1.965 for every input, freezing warmShift/shimmer mid-state.
+	const airMass = $derived(airMassFactor(model.flight.camLat, model.timeOfDay));
 
 	// Blend air mass with sun strength from nightFactor (real directional light proxy)
 	const sunStrength = $derived(1 - model.nightFactor * 0.72);
@@ -115,7 +118,10 @@
 
 <!-- Halo first (rendered behind core thanks to lower depth-test priority
      after both have depthWrite false; sprite render-order also handles
-     this since they're at the same position). -->
+     this since they're at the same position).
+     depthTest ON for both sprites: built-in SpriteMaterial handles the log
+     depth buffer, so the wing's depth writes occlude the sun glow (clouds
+     are depthWrite:false and never occlude). -->
 <T.Sprite
 	position={sunPos}
 	scale={[HALO_SIZE_M * (1 + lowSunFactor * 0.5), HALO_SIZE_M * (1 + lowSunFactor * 0.5), 1]}
@@ -130,7 +136,7 @@
 		opacity={visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMass - 1) * 0.12)) * shimmer}
 		transparent
 		depthWrite={false}
-		depthTest={false}
+		depthTest={true}
 		blending={AdditiveBlending}
 	/>
 </T.Sprite>
@@ -147,7 +153,7 @@
 		opacity={visibility * (0.93 - lowSunFactor * 0.29)}
 		transparent
 		depthWrite={false}
-		depthTest={false}
+		depthTest={true}
 		blending={AdditiveBlending}
 	/>
 </T.Sprite>

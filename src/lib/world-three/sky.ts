@@ -39,7 +39,7 @@ export const SUN_PLACEMENT_M = 6e7;
  *   t=18 → west of camera (dusk)
  *
  * Memoised: returns the same Vec3 array for identical (camLonDeg, timeOfDay)
- * inputs. Since multiple components (SunGlow, Moon, LensFlare, AtmosphericVeil,
+ * inputs. Since multiple components (SunGlow, Moon, LensFlare,
  * ThreeOverlay, EffectStack) each compute this independently in their respective
  * $derived / $effect blocks, the memo collapses 6-8 calls into 1 trig
  * evaluation per frame when inputs are shared.
@@ -70,15 +70,83 @@ export function computeSunDirection(camLonDeg: number, timeOfDay: number): Vec3 
 	return _sunMemo.result;
 }
 
+const DEG2RAD = Math.PI / 180;
+
+/**
+ * Sine of the LOCAL solar elevation for an observer at `latDeg`, at solar
+ * `timeOfDay` (hours 0-24). Standard solar-position formula:
+ *
+ *   sin(elev) = sin(lat)·sin(decl) + cos(lat)·cos(decl)·cos(hourAngle)
+ *
+ * with declination fixed at SUN_TILT (matching the simplified seasonal model
+ * computeSunDirection uses) and hourAngle = (timeOfDay − 12)/24 · 2π.
+ *
+ * WHY THIS EXISTS: computeSunDirection's Y component is the sun's projection
+ * onto the WORLD polar axis (CameraMirror's frame has +Y = north pole), which
+ * is a CONSTANT sin(SUN_TILT) — it is NOT the local "how high is the sun"
+ * elevation. Every consumer that wants horizon physics (air mass, horizon
+ * boost, low-sun warm shift) must use this function, not sunDir[1].
+ *
+ * Pure, frame-free, deterministic (3-Pi safe — invariant #4).
+ *
+ *   t=12 noon    → max elevation for the latitude
+ *   t=6 / t=18   → ~0 at the equator (sunrise / sunset)
+ *   t=0 midnight → max negative (except polar-summer latitudes)
+ */
+export function sunElevationSin(latDeg: number, timeOfDay: number): number {
+	const lat = latDeg * DEG2RAD;
+	const hourAngle = ((timeOfDay - 12) / 24) * Math.PI * 2;
+	return (
+		Math.sin(lat) * Math.sin(SUN_TILT)
+		+ Math.cos(lat) * Math.cos(SUN_TILT) * Math.cos(hourAngle)
+	);
+}
+
 /**
  * Simple air-mass approximation for low-sun atmospheric effects.
  * Used by multiple artistic layers for realistic horizon bloom / dimming.
  * Tightened epsilon gives stronger response near the horizon.
+ *
+ * Now driven by the REAL local solar elevation (sunElevationSin) instead of
+ * computeSunDirection's constant world-Y — previously this returned ~1.965
+ * for every input, freezing every consumer's horizon response at a mid-state
+ * constant. Range: ~0.96 (sun overhead) → 1/0.12 ≈ 8.33 (sun at/below the
+ * horizon, hard-capped by the elevation clamp).
  */
-export function airMassFactor(camLonDeg: number, timeOfDay: number): number {
-	const d = computeSunDirection(camLonDeg, timeOfDay);
-	const elev = Math.max(-0.12, Math.min(1, d[1]));
+export function airMassFactor(latDeg: number, timeOfDay: number): number {
+	const elev = Math.max(-0.12, Math.min(1, sunElevationSin(latDeg, timeOfDay)));
 	return 1.0 / Math.max(0.12, elev + 0.12);
+}
+
+/**
+ * Mean lunar-phase fraction for a UTC timestamp (ms). 0 = new moon,
+ * 0.25 = first quarter (waxing), 0.5 = full, 0.75 = last quarter (waning).
+ *
+ * Mean-synodic-month approximation anchored at the 2000-01-06 18:14 UTC new
+ * moon — the same quantity world/compose.ts derives from Cesium's
+ * Simon1994PlanetaryPositions (its `moonPhase = (1 − cos(elongation))/2` is
+ * exactly `moonIlluminatedFraction` below). The mean-cycle approximation can
+ * drift up to ~0.6 days from the true ephemeris (lunar orbit eccentricity);
+ * for moonlight intensity + terminator shading that error is invisible.
+ *
+ * Deterministic from the wall clock — all 3 Pis on synced NTP compute the
+ * same phase (invariant #4); no Math.random anywhere.
+ */
+const SYNODIC_MONTH_DAYS = 29.530588853;
+const NEW_MOON_EPOCH_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+export function moonPhaseFraction(nowMs: number): number {
+	const days = (nowMs - NEW_MOON_EPOCH_MS) / 86_400_000;
+	const f = (days / SYNODIC_MONTH_DAYS) % 1;
+	return f < 0 ? f + 1 : f;
+}
+
+/**
+ * Illuminated fraction of the lunar disc: (1 − cos(2π·phase))/2.
+ * 0 at new moon, 1 at full — matches compose.ts's Simon1994-derived
+ * `moonPhase`, so Cesium moonlight intensity and the visual moon agree.
+ */
+export function moonIlluminatedFraction(nowMs: number): number {
+	return (1 - Math.cos(moonPhaseFraction(nowMs) * Math.PI * 2)) * 0.5;
 }
 
 // SKY_PALETTE now lives in the framework-free $lib/world-lighting/curves (so the

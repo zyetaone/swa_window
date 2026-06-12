@@ -78,6 +78,7 @@
 	} from 'three';
 	import { LOCATION_MAP } from '$content/locations';
 	import { CLOUD_DECK_M } from './state.svelte';
+	import { sunElevationSin } from './sky';
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from './prng';
@@ -351,7 +352,11 @@
 		// read the same gates as every other Three layer (cityGlowAmount lights up
 		// at dusk in lock-step with CityGlowDome; moonContribution gates the grey
 		// moon-lift by actual moon presence instead of raw nf).
-		const L = lightingState(model.timeOfDay, model.nightFactor, sunDirection);
+		// Real local solar elevation — drives lightingState's ambient horizon
+		// boost AND liveSunBoost below. (Previously sunDirection was passed and
+		// its constant [1] component froze the horizon response mid-state.)
+		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
+		const L = lightingState(model.timeOfDay, model.nightFactor, elevSin);
 		const ambR = ambientColor?.r ?? 1;
 		const ambG = ambientColor?.g ?? 1;
 		const ambB = ambientColor?.b ?? 1;
@@ -385,13 +390,15 @@
 		// 0.35 for "Las Vegas dramatic" effect, lower for subtler glow.
 		const cityGlowStrength = L.cityGlowAmount * cityFactor * density * 0.22;
 
+		// Overall sun-lit brightness lift — scales with the REAL local solar
+		// elevation (high sun = brighter deck, horizon sun = dimmer). The old
+		// version dotted sunDirection with an up-ish pseudo-normal, but
+		// sunDirection's y is the CONSTANT polar-axis projection — the boost
+		// was frozen at one mid-state value all day. (sunDirection itself is
+		// still used below for the AZIMUTHAL terms — Mie forward-scatter and
+		// sun-side cluster shading — where the world direction is meaningful.)
 		const sd = sunDirection;
-		let liveSunBoost = 0;
-		if (sd && sd.length === 3) {
-			const clusterN = [0.0, 0.92, 0.08];
-			const sunDot = Math.max(0, sd[0]*clusterN[0] + sd[1]*clusterN[1] + sd[2]*clusterN[2]);
-			liveSunBoost = sunDot * (1 - nf) * 0.52;
-		}
+		const liveSunBoost = Math.max(0, elevSin) * (1 - nf) * 0.52;
 
 		// Per-sprite Mie forward-scatter — clouds whose direction-from-camera
 		// closely aligns with the sun direction get a sharp warm glow boost.

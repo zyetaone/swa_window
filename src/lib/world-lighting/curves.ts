@@ -176,13 +176,18 @@ function blendPhase(out: Vec3, layer: keyof typeof SKY_PALETTE, t: number): void
  *
  * @param timeOfDay   decimal hours 0..24 (model.timeOfDay)
  * @param nightFactor 0..1 darkness (model.nightFactor — already the √-curve SSOT)
- * @param sunDir      optional sun unit vector (computeSunDirection). Only its
- *                    elevation (y) feeds the ambient horizon boost; everything
- *                    phase-related is time/nightFactor driven by design.
+ * @param sunElevSin  optional sin(local solar elevation) — world-three/sky.ts
+ *                    `sunElevationSin(latDeg, timeOfDay)`. Feeds ONLY the
+ *                    ambient horizon boost; everything phase-related is
+ *                    time/nightFactor driven by design. Previously this took a
+ *                    sunDir Vec3 and read its [1] — but that component is the
+ *                    constant world-polar-axis projection sin(0.4), not a local
+ *                    elevation, so the horizon boost was frozen mid-state.
+ *                    Callers that omit it get the legacy constant behaviour.
  * @returns the SHARED LightingState — read synchronously, do not capture.
  */
-export function lightingState(timeOfDay: number, nightFactor: number, sunDir?: Vec3): LightingState {
-	const sunY = sunDir ? sunDir[1] : Math.sin(0.4);
+export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin?: number): LightingState {
+	const sunY = sunElevSin ?? Math.sin(0.4);
 	if (timeOfDay === _lastT && nightFactor === _lastNf && sunY === _lastSunY) {
 		return _state;
 	}
@@ -227,9 +232,9 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunDir?: V
 	blendPhase(_state.ambientColor, 'ambient', timeOfDay);
 
 	// Ambient horizon boost + cool night shift — reproduces the legacy
-	// environmentAmbient() formula. airMass is derived from the sun elevation
-	// when provided (currently ~constant, but correct if the sun arc ever gains
-	// real elevation variation).
+	// environmentAmbient() formula. airMass is derived from the real local sun
+	// elevation when the caller provides sunElevSin (ThreeOverlay / Clouds do);
+	// omitted → the legacy sin(0.4) constant keeps old behaviour.
 	const elev = Math.max(-0.12, Math.min(1, sunY));
 	const am = 1.0 / Math.max(0.12, elev + 0.12);
 	const horizonBoost = 1 + Math.min(0.8, (am - 1) * 0.25);

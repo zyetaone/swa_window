@@ -30,6 +30,8 @@
 
 
 export const EARTH_RADIUS_M = 6378137;
+// Soft Earth-limb fade band for celestial occlusion (moon/Venus fade vs pop).
+export const OCCLUSION_SOFTNESS_M = 6e4;
 export const FEET_PER_METER = 3.28084;
 // Directional lights in Three.js are parallel — only the position
 // VECTOR direction matters, not the magnitude. Keep these within the

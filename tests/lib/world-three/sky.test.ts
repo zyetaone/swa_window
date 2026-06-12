@@ -10,7 +10,10 @@
 import { describe, it, expect } from 'vitest';
 import {
 	computeSunDirection,
+	sunElevationSin,
 	airMassFactor,
+	moonPhaseFraction,
+	moonIlluminatedFraction,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world-three/sky';
@@ -69,18 +72,88 @@ describe('computeSunDirection', () => {
 // skyMood + sunVisibility retired from sky.ts — their day/dusk/night response
 // now lives in world-three/lighting.ts (lightingState), covered by lighting.test.ts.
 
+describe('sunElevationSin', () => {
+	it('peaks at noon and is maximally negative at midnight (equator)', () => {
+		// sin(elev) = sin(lat)·sin(decl) + cos(lat)·cos(decl)·cos(hourAngle)
+		// At the equator: noon → cos(SUN_TILT); midnight → −cos(SUN_TILT).
+		expect(sunElevationSin(0, 12)).toBeCloseTo(Math.cos(SUN_TILT), 6);
+		expect(sunElevationSin(0, 0)).toBeCloseTo(-Math.cos(SUN_TILT), 6);
+	});
+	it('crosses zero at 6h / 18h on the equator (sunrise / sunset)', () => {
+		expect(sunElevationSin(0, 6)).toBeCloseTo(0, 6);
+		expect(sunElevationSin(0, 18)).toBeCloseTo(0, 6);
+	});
+	it('is symmetric about noon', () => {
+		expect(sunElevationSin(17.4, 9)).toBeCloseTo(sunElevationSin(17.4, 15), 6);
+	});
+	it('ACTUALLY varies with time of day — the dead-air-mass regression guard', () => {
+		// The old physics read computeSunDirection()[1], a CONSTANT — every
+		// consumer saw the same mid-state value at all hours. The real
+		// elevation must differ between noon and dawn.
+		expect(sunElevationSin(17.4, 12)).not.toBeCloseTo(sunElevationSin(17.4, 6), 2);
+	});
+	it('shows midnight sun at high latitudes (decl = SUN_TILT keeps it up)', () => {
+		// lat 70°N with declination 0.4 rad ≈ 22.9° → the sun never sets.
+		expect(sunElevationSin(70, 0)).toBeGreaterThan(0);
+	});
+	it('is deterministic — same inputs, same output (3-Pi safety)', () => {
+		expect(sunElevationSin(17.4, 19.25)).toBe(sunElevationSin(17.4, 19.25));
+	});
+});
+
 describe('airMassFactor', () => {
-	it('returns the elevation-floor value when sun is high', () => {
-		// y at noon = sin(SUN_TILT) ≈ 0.389. airMass = 1/(0.389+0.12) ≈ 1.964.
-		const expected = 1 / (Math.sin(SUN_TILT) + 0.12);
+	it('returns ~1 (thin air) when the sun is high overhead', () => {
+		// Equator noon: sin(elev) = cos(SUN_TILT) ≈ 0.921 → 1/(0.921+0.12).
+		const expected = 1 / (Math.cos(SUN_TILT) + 0.12);
 		expect(airMassFactor(0, 12)).toBeCloseTo(expected, 4);
 	});
-	it('blows up safely (capped) when sun is below horizon (night)', () => {
-		// At midnight y is large negative; the elev clamp at -0.12 + 0.12 = 0
-		// would divide by zero — code clamps to Math.max(0.12, …) → ceiling.
+	it('hits the hard ceiling when the sun is below the horizon (night)', () => {
+		// At midnight sin(elev) is large negative; the elev clamp at −0.12
+		// + 0.12 = 0 would divide by zero — code clamps to Math.max(0.12, …).
 		const result = airMassFactor(0, 0);
-		expect(result).toBeGreaterThan(0);
-		expect(result).toBeLessThanOrEqual(1 / 0.12); // hard ceiling
+		expect(result).toBeCloseTo(1 / 0.12, 6); // ceiling reached exactly
+	});
+	it('decreases monotonically from sunrise to noon (real elevation physics)', () => {
+		// The whole point of the rewire: low sun → thick air → big factor.
+		const dawn = airMassFactor(17.4, 6.5);
+		const mid = airMassFactor(17.4, 9);
+		const noon = airMassFactor(17.4, 12);
+		expect(dawn).toBeGreaterThan(mid);
+		expect(mid).toBeGreaterThan(noon);
+	});
+});
+
+describe('moonPhaseFraction / moonIlluminatedFraction', () => {
+	const EPOCH_MS = Date.UTC(2000, 0, 6, 18, 14, 0); // reference new moon
+	const SYNODIC_MS = 29.530588853 * 86_400_000;
+
+	it('is 0 at the reference new moon and wraps each synodic month', () => {
+		expect(moonPhaseFraction(EPOCH_MS)).toBeCloseTo(0, 6);
+		// Exactly one cycle later the float mod can land at 1 − ε — measure
+		// circular distance to 0 rather than the raw value.
+		for (const n of [1, 3]) {
+			const f = moonPhaseFraction(EPOCH_MS + n * SYNODIC_MS);
+			expect(Math.min(f, 1 - f)).toBeCloseTo(0, 6);
+		}
+	});
+	it('is 0.5 (full) half a synodic month after new', () => {
+		expect(moonPhaseFraction(EPOCH_MS + SYNODIC_MS / 2)).toBeCloseTo(0.5, 6);
+	});
+	it('stays in [0, 1) including for dates before the epoch', () => {
+		for (const ms of [EPOCH_MS - SYNODIC_MS * 2.3, EPOCH_MS + SYNODIC_MS * 321.7]) {
+			const f = moonPhaseFraction(ms);
+			expect(f).toBeGreaterThanOrEqual(0);
+			expect(f).toBeLessThan(1);
+		}
+	});
+	it('illuminated fraction matches the compose.ts (1 − cosΦ)/2 convention', () => {
+		expect(moonIlluminatedFraction(EPOCH_MS)).toBeCloseTo(0, 6); // new
+		expect(moonIlluminatedFraction(EPOCH_MS + SYNODIC_MS / 2)).toBeCloseTo(1, 6); // full
+		expect(moonIlluminatedFraction(EPOCH_MS + SYNODIC_MS / 4)).toBeCloseTo(0.5, 6); // quarter
+	});
+	it('is deterministic — same timestamp, same phase (3-Pi safety)', () => {
+		const t = Date.UTC(2026, 5, 12);
+		expect(moonPhaseFraction(t)).toBe(moonPhaseFraction(t));
 	});
 });
 

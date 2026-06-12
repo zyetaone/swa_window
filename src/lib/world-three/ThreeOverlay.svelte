@@ -40,7 +40,7 @@
 	import Meteors from './Meteors.svelte';
 	import Rain from './Rain.svelte';
 	import Wing from './Wing.svelte';
-	import { computeSunDirection } from './sky';
+	import { computeSunDirection, sunElevationSin } from './sky';
 	import { lightingState } from './lighting';
 
 	type Vec3 = [number, number, number];
@@ -61,7 +61,11 @@
 	// Three.js's color reconciler — mutating-in-place still propagates.
 	const _ambientTintScratch = new Color();
 	const ambientTint = $derived.by(() => {
-		const s = lightingState(model.timeOfDay, model.nightFactor);
+		// Pass the real local solar elevation so the ambient horizon boost
+		// responds to actual sun height (it's the only lightingState field
+		// that reads the third param).
+		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
+		const s = lightingState(model.timeOfDay, model.nightFactor, elevSin);
 		return _ambientTintScratch.setRGB(s.ambientColor[0], s.ambientColor[1], s.ambientColor[2]);
 	});
 	const ambientIntensity = $derived(lightingState(model.timeOfDay, model.nightFactor).ambientIntensity);

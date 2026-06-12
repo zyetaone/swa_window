@@ -62,7 +62,10 @@
 		opacity: 0,
 		blending: AdditiveBlending,
 		depthWrite: false,
-		depthTest: false,
+		// depthTest ON so the wing occludes meteor streaks. LineMaterial
+		// (three/addons) includes the <logdepthbuf_*> chunks itself, so it
+		// compares correctly against the log depth buffer.
+		depthTest: true,
 	});
 
 	const line = new LineSegments2(geometry, material);

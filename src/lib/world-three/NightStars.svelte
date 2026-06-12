@@ -21,8 +21,9 @@
 		Points,
 	} from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { STARS_RADIUS_M } from './state.svelte';
+	import { STARS_RADIUS_M, EARTH_RADIUS_M, OCCLUSION_SOFTNESS_M } from './state.svelte';
 	import { airMassFactor } from './sky';
+	import { lightingState } from './lighting';
 	import { createSeededRng, daySeed, spherePoint } from './prng';
 
 	const model = useAeroWindow();
@@ -89,7 +90,13 @@
 	const material = new ShaderMaterial({
 		transparent: true,
 		depthWrite: false,
-		depthTest: false,
+		// depthTest ON so the wing (the only depth-writing Three geometry)
+		// occludes stars. Requires the <logdepthbuf_*> chunks below — the
+		// renderer is logarithmicDepthBuffer, so a custom shader only compares
+		// depth correctly if it computes the same log encoding. Clouds are
+		// depthWrite:false and can never occlude. The Earth isn't in the Three
+		// depth buffer; the per-star horizon fade (vertex shader) handles it.
+		depthTest: true,
 		blending: AdditiveBlending,
 		uniforms: {
 			uTime: { value: 0 },
@@ -97,6 +104,8 @@
 			uNightFactor: { value: 0 },
 		},
 		vertexShader: /* glsl */ `
+			#include <common>
+			#include <logdepthbuf_pars_vertex>
 			attribute float aPhase;
 			attribute float aMagnitude;
 			attribute vec3 aColor;
@@ -105,6 +114,10 @@
 			uniform float uNightFactor;
 			varying float vAlpha;
 			varying vec3 vColor;
+			// Earth geometry for the per-star horizon fade — compile-time
+			// constants from state.svelte.ts (deterministic, zero JS/frame).
+			const float EARTH_R_M = ${EARTH_RADIUS_M.toFixed(1)};
+			const float SOFTNESS_M = ${OCCLUSION_SOFTNESS_M.toFixed(1)};
 			void main() {
 				// Twinkle: bright stars twinkle more (eye's refraction
 				// sensitivity correlates with apparent magnitude).
@@ -136,19 +149,44 @@
 				float starThreshold = 0.18 + (1.0 - aMagnitude) * 0.67;
 				float starFade = smoothstep(starThreshold, starThreshold + 0.12, uNightFactor);
 
-				vAlpha = uVisibility * twinkle * bright * starFade;
+				// ── Earth-limb horizon fade ──────────────────────────────
+				// Stars are distributed over the FULL sphere at STARS_RADIUS_M,
+				// so roughly half would otherwise shine THROUGH the planet (the
+				// Earth lives in Cesium's depth buffer, not Three's). GLSL port
+				// of occlusion.ts's ray-sphere test against the Earth at the
+				// world origin: star distance (5e8 m) >> Earth, so the
+				// "intersection beyond the object" branch drops out — the star
+				// is occluded iff the ray hits the sphere ahead of the camera.
+				// Soft fade over the OCCLUSION_SOFTNESS_M limb band (no pop at
+				// the horizon — same band the moon/Venus fades use).
+				vec3 starWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+				vec3 starDir = normalize(starWorld - cameraPosition);
+				float b = dot(cameraPosition, starDir);
+				float camLenSq = dot(cameraPosition, cameraPosition);
+				float disc = b * b - (camLenSq - EARTH_R_M * EARTH_R_M);
+				float horizonFade = 1.0;
+				if (disc >= 0.0 && (sqrt(disc) - b) > 0.0) {
+					float closestApproach = sqrt(max(0.0, camLenSq - b * b));
+					horizonFade = clamp(
+						0.5 + (closestApproach - EARTH_R_M) / SOFTNESS_M, 0.0, 1.0);
+				}
+
+				vAlpha = uVisibility * twinkle * bright * starFade * horizonFade;
 				vColor = aColor;
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
 				gl_Position = projectionMatrix * mv;
+				#include <logdepthbuf_vertex>
 				// Size scales with magnitude: 1.4 px for the dimmest stars,
 				// 4.4 px for the brightest — the brightest will bloom strongly.
 				gl_PointSize = 1.4 + aMagnitude * 3.0;
 			}
 		`,
 		fragmentShader: /* glsl */ `
+			#include <logdepthbuf_pars_fragment>
 			varying float vAlpha;
 			varying vec3 vColor;
 			void main() {
+				#include <logdepthbuf_fragment>
 				vec2 uv = gl_PointCoord - 0.5;
 				float d = length(uv);
 				// Soft round disk via smoothstep, with a tight inner core
@@ -168,10 +206,14 @@
 		// Only assert at deep night — nightFactor → ~1.0. Cesium's own
 		// stars cover the dusk transition; these are the deep-night punch.
 		// Slight airMass + ambient harmony modulation.
-		const am = airMassFactor(model.flight.camLon, model.timeOfDay);
+		const am = airMassFactor(model.flight.camLat, model.timeOfDay);
 		const amFactor = 1 + Math.min(0.4, (am - 1) * 0.08);
 		const ai = ambientIntensity ?? 1;
-		material.uniforms.uVisibility.value = Math.max(0, model.nightFactor - 0.4) * 1.5 * amFactor * ai;
+		// Star ramp from the unified lighting SSOT. lightingState returns a
+		// SHARED mutated object — read the scalar in the same expression,
+		// never store the reference.
+		material.uniforms.uVisibility.value =
+			lightingState(model.timeOfDay, model.nightFactor).starVisibility * amFactor * ai;
 		// Raw nightFactor for the per-star magnitude-gated fade-in (vertex shader).
 		// uVisibility handles env modulation (airMass, ambient); uNightFactor
 		// drives the "first stars appear, more reveal as it darkens" cinematic.

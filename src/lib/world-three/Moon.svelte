@@ -11,11 +11,15 @@
 	 *   - Bloom-friendly: the bright lit lambert side punches through
 	 *     EffectStack's bloom threshold producing a real glow halo
 	 *
-	 * Geometry simplification: moon_pos = −sunDir × placement. Camera is
-	 * always on the Earth side of this line, so Lambert math gives the
-	 * camera-facing hemisphere lit → reads as full moon. Real lunar
-	 * phases would require modeling the moon's orbit; this approximation
-	 * matches the "moon comes out at night" feel passengers expect.
+	 * Geometry simplification: moon_pos = −sunDir × placement. The PLACEMENT
+	 * stays anti-sun — a deliberate theatrical shortcut so the moon rises at
+	 * dusk, matching the "moon comes out at night" feel passengers expect
+	 * (real placement would need a lunar ephemeris). The ILLUMINATION,
+	 * however, is phase-true: the Lambert sun-direction uniform is rotated
+	 * by the real date-derived phase angle (moonPhaseFraction in sky.ts —
+	 * same illuminated-fraction quantity compose.ts feeds Cesium moonlight),
+	 * so the terminator renders an honest gibbous/crescent instead of a
+	 * perpetual full moon.
 	 *
 	 * The halo sprite is retained as a separate additive billboard — it
 	 * carries the soft atmospheric scatter and benefits from bloom.
@@ -30,7 +34,9 @@
 		type Sprite as ThreeSprite,
 	} from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { computeSunDirection, SUN_PLACEMENT_M } from './sky';
+	import { computeSunDirection, sunElevationSin, moonPhaseFraction, SUN_PLACEMENT_M } from './sky';
+	import { lightingState } from './lighting';
+	import { earthOcclusionFactor } from './occlusion';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();
@@ -67,19 +73,29 @@
 	// in a $derived doesn't track Three.js's in-place mutation, hence the
 	// per-frame application path in useTask.
 
+	// Moon air mass from the REAL local elevation. The moon sits anti-sun, so
+	// its elevation is the negated solar elevation (sunElevationSin in sky.ts).
+	// Previously this read -sunDir[1] — a CONSTANT polar-axis projection — so
+	// the horizon boost was frozen at one mid-state value all night.
 	const airMassFactor = $derived.by(() => {
-		const moonElev = Math.max(-0.12, Math.min(1, -sunDir[1]));
+		const moonElev = Math.max(
+			-0.12,
+			Math.min(1, -sunElevationSin(model.flight.camLat, model.timeOfDay)),
+		);
 		return 1.0 / Math.max(0.12, moonElev + 0.12);
 	});
 
-	// Ray-sphere occlusion against Earth. Updated each frame in useTask
-	// since it depends on camera world position, not just sun direction.
-	// 0 = moon hidden by Earth, 1 = moon visible. Smooth fade across the
-	// terminator via the radial-vs-earth-radius softness band.
-	let earthOcclusionFactor = $state(1);
+	// Ray-sphere occlusion against Earth (earthOcclusionFactor from
+	// ./occlusion). Updated each frame in useTask since it depends on
+	// camera world position, not just sun direction. 0 = moon hidden by
+	// Earth, 1 = moon visible, soft fade across the limb.
+	let occlusionFactor = $state(1);
 
 	const moonVisibility = $derived.by(() => {
-		const nfGate = Math.max(0, model.nightFactor - 0.15) * 1.18;
+		// Moon ramp from the unified lighting SSOT. lightingState returns a
+		// SHARED mutated object — read the scalar in the same expression,
+		// never store the reference.
+		const nfGate = lightingState(model.timeOfDay, model.nightFactor).moonContribution;
 		const horizonBoost = 1 + Math.min(0.9, (airMassFactor - 1) * 0.22);
 		// Multiply by Earth-occlusion factor (computed per frame in useTask
 		// below). The previous `Math.max(0, -sunDir[1])` gate was wrong: in
@@ -87,10 +103,18 @@
 		// tilt projection, not a camera-local altitude — so the gate would
 		// have always zeroed the moon. Proper ray-sphere math against the
 		// real camera position handles oblique angles + multi-Pi parallax.
-		return nfGate * horizonBoost * earthOcclusionFactor;
+		return nfGate * horizonBoost * occlusionFactor;
 	});
 
+	// Log-depth chunks: the renderer uses logarithmicDepthBuffer, so the wing's
+	// (built-in material) depth writes are log-encoded. This custom shader now
+	// depth-TESTS against them (so the wing occludes the moon) — which only
+	// compares correctly if it computes the same log depth, hence the
+	// <logdepthbuf_*> includes. <common> provides isPerspectiveMatrix() the
+	// vertex chunk needs.
 	const VS = /* glsl */ `
+		#include <common>
+		#include <logdepthbuf_pars_vertex>
 		varying vec3 vWorldNormal;
 		varying vec3 vViewDir;
 		void main() {
@@ -98,10 +122,12 @@
 			vWorldNormal = normalize(mat3(modelMatrix) * normal);
 			vViewDir = normalize(cameraPosition - worldPos.xyz);
 			gl_Position = projectionMatrix * viewMatrix * worldPos;
+			#include <logdepthbuf_vertex>
 		}
 	`;
 
 	const FS = /* glsl */ `
+		#include <logdepthbuf_pars_fragment>
 		uniform vec3 uSunDir;
 		uniform vec3 uMoonTint;
 		uniform float uVisibility;
@@ -134,6 +160,7 @@
 		}
 
 		void main() {
+			#include <logdepthbuf_fragment>
 			// Lambert with a soft terminator — eliminates the harsh
 			// day/night edge a raw step would produce.
 			float lambert = dot(vWorldNormal, uSunDir);
@@ -160,7 +187,13 @@
 		fragmentShader: FS,
 		transparent: true,
 		depthWrite: false,
-		depthTest: false,
+		// depthTest ON so real depth-writing geometry (the wing, ~5-20 m away)
+		// occludes the moon. Valid because the shader includes the log-depth
+		// chunks (see VS/FS) — the comparison margin is massive (moon at 6e7 m
+		// vs wing at <30 m). Clouds stay depthWrite:false so they never occlude.
+		// The Earth is NOT in the Three depth buffer; earthOcclusionFactor's
+		// opacity fade (useTask below) remains the only Earth occluder.
+		depthTest: true,
 		uniforms: {
 			uSunDir: { value: new Vector3(1, 0, 0) },
 			uMoonTint: { value: new Color(0.94, 0.96, 1.0) },
@@ -169,8 +202,36 @@
 	});
 
 	// Update shader uniforms reactively — reuses the shared sunDir derived.
+	//
+	// PHASE-TRUE ILLUMINATION: uSunDir is no longer the raw sun direction.
+	// Because the moon is PLACED anti-sun, feeding the real sunDir lights the
+	// camera-facing hemisphere fully → perpetual full moon. Instead we rotate
+	// the illumination direction away from the anti-sun axis by the real
+	// date-derived phase angle:
+	//
+	//   f = moonPhaseFraction(now)   (0 new → 0.5 full → 1 new)
+	//   α = π·(1 − 2f)               (full → 0 = lit toward camera;
+	//                                 new → π = lit away; sign of α encodes
+	//                                 waxing vs waning → crescent side)
+	//
+	// Rotation axis k = normalize(cross(sunDir, worldUp)) is ⟂ sunDir, so
+	// Rodrigues reduces to  v·cosα + (k×v)·sinα. Date-based + deterministic —
+	// all 3 Pis render the same phase (invariant #4).
 	$effect(() => {
-		moonMaterial.uniforms.uSunDir.value.set(sunDir[0], sunDir[1], sunDir[2]);
+		const sx = sunDir[0], sy = sunDir[1], sz = sunDir[2];
+		const f = moonPhaseFraction(Date.now());
+		const alpha = Math.PI * (1 - 2 * f);
+		const cosA = Math.cos(alpha);
+		const sinA = Math.sin(alpha);
+		// k = cross(sun, (0,1,0)) / |…| = (−sz, 0, sx) / h. h = horizontal
+		// magnitude of sunDir — never 0 (sunDir y-component is the constant
+		// axial-tilt projection, so cos(SUN_TILT) ≈ 0.92 stays horizontal).
+		const h = Math.sqrt(sx * sx + sz * sz) || 1;
+		// k×sun = (−sx·sy/h, h, −sy·sz/h)  (since k ⟂ sun, |k×sun| = 1)
+		const rx = sx * cosA + (-sx * sy / h) * sinA;
+		const ry = sy * cosA + h * sinA;
+		const rz = sz * cosA + (-sy * sz / h) * sinA;
+		moonMaterial.uniforms.uSunDir.value.set(rx, ry, rz);
 		moonMaterial.uniforms.uVisibility.value = Math.min(1, moonVisibility);
 	});
 
@@ -185,14 +246,6 @@
 	let moonMesh = $state.raw<Mesh | undefined>();
 	let moonHalo = $state.raw<ThreeSprite | undefined>();
 	let _libT = 0;
-	// WGS84 mean Earth radius. Slightly tighter than the equatorial
-	// 6.378e6 — using mean radius gives consistent occlusion across
-	// latitudes without per-frame ellipsoid sampling cost.
-	const EARTH_RADIUS_M = 6.371e6;
-	// Softness band: a smoothstep ramp around the Earth tangent so the
-	// moon fades rather than pops as it crosses the horizon. 60 km of
-	// soft band reads as a 1-2 second fade at orbital cruise speeds.
-	const OCCLUSION_SOFTNESS_M = 6e4;
 	useTask((dt) => {
 		_libT += dt;
 		const camPos = ctx.camera.current.position;
@@ -210,10 +263,11 @@
 			moonMesh.rotation.z = Math.sin(_libT * 0.017) * 0.03;
 		}
 
-		// Ray-sphere occlusion test. Earth (sphere at origin, radius
-		// EARTH_RADIUS_M) between camera and moon → fade the moon out (the moon
-		// mesh is depthTest:false, so this opacity factor is the ONLY thing that
-		// can hide it behind the planet).
+		// Ray-sphere occlusion test against the Earth (see ./occlusion).
+		// The moon mesh now depth-tests against Three geometry (the wing),
+		// but the Earth lives in CESIUM's depth buffer, not Three's — so this
+		// opacity factor remains the ONLY thing that can hide the moon
+		// behind the planet.
 		//
 		// The ray direction is the ACTUAL camera→moon vector (normalised
 		// moonOffset) — NOT the assumed `-sunDir`. They were treated as equal,
@@ -222,28 +276,12 @@
 		// straight through the Earth. Deriving the ray from the real offset fixes
 		// that by construction.
 		const olen = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
-		const dx = ox / olen, dy = oy / olen, dz = oz / olen;
-		const b = camPos.x * dx + camPos.y * dy + camPos.z * dz;
-		const camLenSq = camPos.x * camPos.x + camPos.y * camPos.y + camPos.z * camPos.z;
-		const c = camLenSq - EARTH_RADIUS_M * EARTH_RADIUS_M;
-		const disc = b * b - c;
-		let factor = 1;
-		if (disc >= 0) {
-			const sq = Math.sqrt(disc);
-			const tEntry = -b - sq;
-			const tExit = -b + sq;
-			// Earth blocks the moon when the sphere is intersected AHEAD of the
-			// camera (tExit > 0 keeps grazing / at-altitude cases the old
-			// `tEntry > 0` gate dropped) and before the moon's distance.
-			if (tExit > 0 && tEntry < MOON_PLACEMENT_M) {
-				// Soft fade across the Earth limb: ray's closest approach minus
-				// the radius. Inside the shadow → 0; at the tangent → 0.5.
-				const closestApproach = Math.sqrt(Math.max(0, camLenSq - b * b));
-				const edgeDistance = closestApproach - EARTH_RADIUS_M;
-				factor = Math.max(0, Math.min(1, 0.5 + edgeDistance / OCCLUSION_SOFTNESS_M));
-			}
-		}
-		if (factor !== earthOcclusionFactor) earthOcclusionFactor = factor;
+		const factor = earthOcclusionFactor(
+			camPos.x, camPos.y, camPos.z,
+			ox / olen, oy / olen, oz / olen,
+			MOON_PLACEMENT_M,
+		);
+		if (factor !== occlusionFactor) occlusionFactor = factor;
 	});
 
 	// Halo — soft cool-blue scatter ring around the moon. Picks up bloom
@@ -265,13 +303,15 @@
 	scale={[MOON_HALO_SIZE_M, MOON_HALO_SIZE_M, 1]}
 	renderOrder={0}
 >
+	<!-- depthTest ON: built-in SpriteMaterial handles log depth itself, so the
+	     wing's depth writes occlude the halo (clouds don't — depthWrite:false). -->
 	<T.SpriteMaterial
 		map={haloTexture}
 		color={haloTint}
 		opacity={moonVisibility * 0.55}
 		transparent
 		depthWrite={false}
-		depthTest={false}
+		depthTest={true}
 		blending={AdditiveBlending}
 	/>
 </T.Sprite>
