@@ -44,8 +44,6 @@
 		Group,
 		Box3,
 		Vector3,
-		Matrix4,
-		Euler,
 		Quaternion,
 		Mesh,
 		AdditiveBlending,
@@ -108,13 +106,6 @@
 	// re-derives holder.position.x from it every frame.
 	let xBase = WING_X_BASE;
 
-	// Winglet tip, baked from the dev hook as a HOLDER-LOCAL point (the highest
-	// on-screen wing vertex). At load we recover the equivalent MODEL-LOCAL
-	// vertex from this and parent the nav lights to the model `m` — so they stay
-	// welded to the winglet through the model's scale/rotation (incl. the
-	// WING_SCALE_Z flip) instead of detaching when the wing is re-tuned.
-	const WING_TIP_LOCAL = new Vector3(1.24, 5.86, -12.63);
-
 	// Convert a GLB material to a LIT DoubleSide MeshLambertMaterial, keeping its
 	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
 	// responds to the scene AmbientLight + the dawn/moon key light below, so the
@@ -159,20 +150,41 @@
 					const mat = me.material as { color?: Color; map?: unknown } | { color?: Color; map?: unknown }[];
 					me.material = Array.isArray(mat) ? mat.map(toLit) : toLit(mat);
 				});
-				holder.add(m);
 				// Weld the nav lights to the winglet-tip VERTEX by parenting them
-				// to the model `m`. Recover that vertex in model-local space from
-				// the baked holder-local tip — since tip = m.position + R·S·vertex,
-				// vertex = S⁻¹·R⁻¹·(tip − m.position) (S magnitude = the +1.11 the
-				// const was baked at). The lights then ride m's actual scale,
-				// including the Z flip, so they never drift off the winglet again.
-				const rInv = new Matrix4()
-					.makeRotationFromEuler(new Euler(rot[0], rot[1], rot[2]))
-					.invert();
-				const navPos = WING_TIP_LOCAL.clone()
-					.sub(m.position)
-					.applyMatrix4(rInv)
-					.divide(new Vector3(WING_SCALE_X, WING_SCALE_Y, Math.abs(WING_SCALE_Z)));
+				// to the model `m`. The tip is derived from the ACTUAL geometry at
+				// load — not a baked constant, which went stale every time the
+				// recenter order or the placement tune changed. Scan every mesh
+				// vertex in the COMPOSED frame (post scale+rotation+recenter; m is
+				// still unparented so each mesh's matrixWorld is exactly that
+				// composition) and take the max-Y vertex: the winglet sweeps up at
+				// the span end and is the highest point of the wing in its final
+				// pose (verified against the GLB — the top candidates all cluster
+				// on the winglet; nothing else competes). The winner maps back to
+				// m's LOCAL frame, so the lights ride every model transform (incl.
+				// the holder mirror flip) and can never drift off the winglet
+				// again. Runs once at load over ~64 meshes — pure geometry, fully
+				// deterministic.
+				m.updateWorldMatrix(true, true);
+				const _v = new Vector3();
+				const tipComposed = new Vector3(0, -Infinity, 0);
+				m.traverse((o) => {
+					const me = o as Mesh;
+					if (!me.isMesh) return;
+					const pos = me.geometry.getAttribute('position');
+					for (let i = 0; i < pos.count; i++) {
+						_v.fromBufferAttribute(pos, i).applyMatrix4(me.matrixWorld);
+						if (_v.y > tipComposed.y) tipComposed.copy(_v);
+					}
+				});
+				const navPos = tipComposed.clone().applyMatrix4(m.matrix.clone().invert());
+				if (import.meta.env.DEV)
+					console.debug(
+						'[Wing] winglet tip — model-local',
+						navPos.toArray().map((n) => n.toFixed(2)),
+						'composed',
+						tipComposed.toArray().map((n) => n.toFixed(2)),
+					);
+				holder.add(m);
 				m.add(navLight, strobeLight, navHalo);
 				navLight.position.copy(navPos);
 				strobeLight.position.copy(navPos);
