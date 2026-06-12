@@ -74,7 +74,11 @@ export const NIGHT_PALETTE = {
 		day:       [140, 170, 200] as const,
 		night:     [25, 25, 40]    as const,
 		duskBias:  [110, 90, 80]   as const,
-		duskWeight: 0.15,
+		// 0.15 → 0.22 (P3 recalibration): with the Three-side AtmosphericVeil
+		// deleted, Cesium owns dusk alone — the globe needed more of the warm
+		// scatter the veil used to contribute. Still well under the 0.3 that
+		// produced the "brownish globe".
+		duskWeight: 0.22,
 	},
 
 	/**
@@ -93,8 +97,15 @@ export const NIGHT_PALETTE = {
 		// directions. (Going lower than -0.4 here saturates the clamp and
 		// the knob becomes inert.) The bulk of night sky dimming now
 		// comes from world.nightExposure post-process exposure.
-		satShift: { day: 0, night: -1.0, duskBias: -0.08 },
-		brShift:  { day: 0, night: -0.4, duskBias: -0.02 },
+		// duskBias flipped POSITIVE (P3 recalibration, post-veil-deletion):
+		// the nf-lerp toward night:-1.0 was already at satShift ≈ -0.64 /
+		// brShift ≈ -0.43 (×skyDarken) by 19:00 — the dusk sky rendered
+		// near-black grey, no amber arc. The positive bias re-saturates +
+		// re-brightens the Cesium sunset scatter at the dusk PEAK only
+		// (dd → 0 by 21:00, so deep night still lands exactly on the -1.0
+		// greyscale target — the cyan-limb fix is untouched).
+		satShift: { day: 0, night: -1.0, duskBias: 0.35 },
+		brShift:  { day: 0, night: -0.4, duskBias: 0.22 },
 	},
 
 	/**

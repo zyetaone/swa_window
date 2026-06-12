@@ -40,12 +40,17 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 		}
 	});
 
-	it('cityGlowAmount is 0 in day and through early dusk, gates in past nf 0.45', () => {
+	it('cityGlowAmount is 0 in day, gates in past nf 0.32 (evening recalibration)', () => {
 		expect(lightingState(12, 0).cityGlowAmount).toBe(0);
-		expect(lightingState(19, 0.45).cityGlowAmount).toBe(0);
+		// Gate moved 0.45 → 0.32 so the city's warm glow rises through the
+		// evening band (value-pin updated alongside curves.ts).
+		expect(lightingState(18.3, 0.32).cityGlowAmount).toBe(0);
+		expect(lightingState(19, 0.45).cityGlowAmount).toBeGreaterThan(0);
 		const mid = lightingState(20, 0.8).cityGlowAmount;
 		expect(mid).toBeGreaterThan(0);
 		expect(mid).toBeLessThanOrEqual(1);
+		// Still reaches exactly 1 at deep night.
+		expect(lightingState(23, 1).cityGlowAmount).toBe(1);
 	});
 
 	it('starVisibility ramps from late dusk (nf > 0.4)', () => {

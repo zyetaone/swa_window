@@ -210,7 +210,15 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	if (timeOfDay >= T.DAWN_START && timeOfDay < T.DAY_START) {
 		_state.sunGlowVisibility = Math.sin(((timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START)) * Math.PI);
 	} else if (timeOfDay > T.DAY_END && timeOfDay <= T.DUSK_END) {
-		_state.sunGlowVisibility = Math.sin(((timeOfDay - T.DAY_END) / (T.DUSK_END - T.DAY_END)) * Math.PI);
+		// Dusk phase compressed (x^0.55): the plain sine peaked at 19:30, but
+		// the sun-anchored sprites (SunGlow / godrays source) drop below the
+		// horizon and get globe-depth-occluded by ~18:45 — the hero peak was
+		// landing exactly when nothing could render it. Front-loading the
+		// curve puts the glow maximum in the 18:00-18:40 window where the sun
+		// is still on the horizon, giving dusk its authored sunset moment.
+		// Still 0 at both band edges (x=0, x=1) — no seam.
+		const x = (timeOfDay - T.DAY_END) / (T.DUSK_END - T.DAY_END);
+		_state.sunGlowVisibility = Math.sin(Math.pow(x, 0.55) * Math.PI);
 	} else if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) {
 		_state.sunGlowVisibility = 0.35;
 	} else {
@@ -220,8 +228,12 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	// One warm hero weight, smoothstep-eased and capped so dusk doesn't blow out.
 	_state.dawnDuskWeight = Math.min(0.75, smoothstep(dawnDuskFactor(timeOfDay)));
 
-	// City skyglow only from mid-dusk; smooth gate avoids a pop at the boundary.
-	_state.cityGlowAmount = nf <= 0.45 ? 0 : smoothstep((nf - 0.45) / 0.55);
+	// City skyglow from EARLY dusk (gate 0.45 → 0.32, evening recalibration):
+	// in the real world the city's warm glow rises while the sky still has
+	// twilight in it — gating until nf 0.45 left the 18:30-19:30 "evening"
+	// band with no warm presence at all once the veil was deleted. Smooth
+	// gate still reaches exactly 1 at deep night (nf = 1).
+	_state.cityGlowAmount = nf <= 0.32 ? 0 : smoothstep((nf - 0.32) / 0.68);
 	// Stars from late dusk; moon a touch earlier.
 	_state.starVisibility = clamp((nf - 0.4) * 1.5, 0, 1);
 	_state.moonContribution = clamp((nf - 0.15) * 1.18, 0, 1);

@@ -122,9 +122,12 @@
      depthTest ON for both sprites: built-in SpriteMaterial handles the log
      depth buffer, so the wing's depth writes occlude the sun glow (clouds
      are depthWrite:false and never occlude). -->
+<!-- Halo growth 0.5 → 0.25 per lowSunFactor unit: at the sunset maximum
+     (lowSunFactor ~3.3) the old factor inflated the halo to ~38° of sky —
+     a dome, not a glow. ~26° keeps the painterly horizon wash. -->
 <T.Sprite
 	position={sunPos}
-	scale={[HALO_SIZE_M * (1 + lowSunFactor * 0.5), HALO_SIZE_M * (1 + lowSunFactor * 0.5), 1]}
+	scale={[HALO_SIZE_M * (1 + lowSunFactor * 0.25), HALO_SIZE_M * (1 + lowSunFactor * 0.25), 1]}
 	renderOrder={0}
 >
 	<T.SpriteMaterial
@@ -133,7 +136,10 @@
 		// Air-mass emphasis: stronger scatter near horizon, but dialed back
 		// (0.72→0.5 base, 0.38→0.24 low-sun boost) — the old values stacked
 		// with the bloom pass into a hot white blob at dusk.
-		opacity={visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMass - 1) * 0.12)) * shimmer}
+		// Capped at 0.55 (evening recalibration): with the front-loaded
+		// sunGlowVisibility curve the uncapped product saturated to 1.0 at
+		// sunset and the halo read as a nuclear dome, not a calm sunset glow.
+		opacity={Math.min(0.55, visibility * (0.5 + lowSunFactor * 0.24) * (1 + Math.min(0.9, (airMass - 1) * 0.12)) * shimmer)}
 		transparent
 		depthWrite={false}
 		depthTest={true}
@@ -150,7 +156,10 @@
 		map={coreTexture}
 		color={coreTint}
 		// Core dims harder + gets extra warm tint (via coreTint) when low in sky.
-		opacity={visibility * (0.93 - lowSunFactor * 0.29)}
+		// max(0, …): lowSunFactor > 3.2 drove this NEGATIVE at the horizon —
+		// a negative opacity SUBTRACTS under additive blending and painted a
+		// black square over the sunset glow.
+		opacity={Math.max(0, visibility * (0.93 - lowSunFactor * 0.29))}
 		transparent
 		depthWrite={false}
 		depthTest={true}

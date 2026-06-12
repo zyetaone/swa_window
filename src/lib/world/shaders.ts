@@ -73,7 +73,12 @@ export const COLOR_GRADING_GLSL = `
 		//     night" bug). Gated by (1 - lightMask) so genuine city lights
 		//     survive and still take the warm additive in step 3.
 		vec3 deepNavy = vec3(0.012, 0.022, 0.045);
-		float baseDark = smoothstep(0.45, 0.9, u_nightFactor) * 0.85 * (1.0 - lightMask);
+		// Ramp start 0.45 → 0.55 (evening recalibration): the navy pull was
+		// already 20% engaged by 19:00 (nf 0.58), crushing what little dusk
+		// signal the scene has into black an hour early. Starting later keeps
+		// the evening band present; the nf=1.0 deep-night value (0.85) is
+		// unchanged, so the load-bearing night-ground contract holds.
+		float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.85 * (1.0 - lightMask);
 		rgb = mix(rgb, deepNavy, baseDark);
 
 		// 3. 3-stop warm palette (sodium → amber → warm-white). Calm-amber
@@ -86,10 +91,15 @@ export const COLOR_GRADING_GLSL = `
 		//    was the lone exception and is the deep "bright sky" bug.
 		vec3 sodium  = vec3(1.0, 0.6, 0.2);
 		vec3 amber   = vec3(1.0, 0.8, 0.4);
-		vec3 warmWht = vec3(1.0, 0.95, 0.85);
+		vec3 warmWht = vec3(1.0, 0.88, 0.72);
 
 		vec3 lightColor = mix(sodium, amber, smoothstep(0.2, 0.6, lum));
-		lightColor = mix(lightColor, warmWht, smoothstep(0.6, 1.0, lum));
+		// warm-white stop pushed 0.6 → 0.78 (and the white itself warmed):
+		// highway cores were blowing to pure white under additive×bloom,
+		// splitting the city into "white roads vs amber blocks". Holding
+		// amber longer keeps one coherent sodium identity; only the very
+		// brightest CBD pixels reach warm-white now.
+		lightColor = mix(lightColor, warmWht, smoothstep(0.78, 1.0, lum));
 
 		rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
@@ -103,7 +113,11 @@ export const COLOR_GRADING_GLSL = `
 		//    crush collapsed the city silhouette into the sky.
 		float shadowCrush = 1.0 - 0.20 * u_nightFactor;
 		rgb = pow(max(rgb, 0.0), vec3(1.0 / shadowCrush));
-		float contrast = 1.0 + 0.25 * u_nightFactor;
+		// 0.25 → 0.16: full-strength contrast at deep night double-crushed
+		// the suburb mid-tones (pitch-black gaps between lit blocks) while
+		// pushing the already-additive road cores further toward clip. A
+		// gentler bump keeps the city "pop" without the Tron look.
+		float contrast = 1.0 + 0.16 * u_nightFactor;
 		rgb = (rgb - 0.5) * contrast + 0.5;
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);

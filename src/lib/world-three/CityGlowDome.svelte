@@ -45,7 +45,10 @@
 		// glow now reads, so dome + clouds light up in lock-step.
 		const cityGlow = lightingState(model.timeOfDay, model.nightFactor).cityGlowAmount;
 		const breath = 1 + 0.07 * Math.sin(_t * 0.05);
-		return cityGlow * 0.2 * breath;
+		// 0.2 → 0.28: with the grade's night contrast softened the dome is
+		// the layer that fuses VIIRS + neon + windows into ONE city — a bit
+		// more ambient skyglow presence sells the unified haze.
+		return cityGlow * 0.28 * breath;
 	});
 
 	// Sodium-amber, matched to the Cesium grade's warm city-light palette so the

@@ -87,11 +87,12 @@
 </script>
 
 <!--
-	Dashed/dotted roads: 70 m dash + 55 m gap reads as a string of streetlight
-	dots from cruise altitude rather than a continuous painted line — softer,
-	more "city traced in light" than "road map". Sizes are in ENU world metres
-	(see buildRoadLines). Both core + halo share the dash phase so the glow
-	pulses with each dot.
+	Dashed/dotted roads: 32 m dash + 38 m gap (70 m period) reads as a DENSE
+	string of streetlight dots from altitude rather than a continuous painted
+	line — softer, more "city traced in light" than "road map". dashFlow 6 m/s
+	is a lazy traffic crawl (20 was a visible sprint — user: "too few and too
+	fast"). Sizes are in ENU world metres (see buildRoadLines). Both core +
+	halo share the dash phase so the glow pulses with each dot.
 -->
 <NeonLineLayer
 	{location}
@@ -103,9 +104,9 @@
 	haloOpacityMul={0.45}
 	intensityMul={0.6}
 	dashed
-	dashSize={70}
-	gapSize={55}
-	dashFlow={20}
+	dashSize={32}
+	gapSize={38}
+	dashFlow={6}
 	depthFade={12000}
 	viirsModulate
 	buildSegments={buildRoadLines}
