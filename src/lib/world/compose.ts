@@ -565,9 +565,9 @@ export class CesiumManager {
 				// Kept 0.1 saturation so the shader's red-bias gate has a signal.
 				this.viirsLayer.hue = 0.0;
 				this.viirsLayer.saturation = 0.1;
-				// Phase 16: boosted brightness + lowered threshold so more dim
-				// light spots survive the mask stage to be amplified by shader.
-				this.viirsLayer.brightness = 3.5 * this.model.config.world.viirsBrightness;
+				// matches syncImagery's night value; sync owns this from frame 1
+				// (lastViirsBrightness starts at -1, so the first pass always writes).
+				this.viirsLayer.brightness = 2.2 * this.model.config.world.viirsBrightness;
 				// Lowered 1.4 → 1.1: a softer contrast curve spreads the VIIRS glow
 			// out from the hot CBD core into the suburbs ("spread NASA over the
 			// city") instead of crushing everything but the brightest cells black.

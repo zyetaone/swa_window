@@ -114,8 +114,6 @@
 			inset 1.5px 2px 3px rgba(255, 255, 255, 0.4),
 			inset -2px -3px 5px rgba(0, 0, 0, 0.3),
 			0 2px 4px rgba(0, 0, 0, 0.15);
-		/* Slightly blurred so the bead reads as soft wet glass, not a hard decal. */
-		filter: blur(0.4px);
 		will-change: transform, opacity;
 		animation: rg-bead var(--dur) ease-in-out var(--delay) infinite;
 	}

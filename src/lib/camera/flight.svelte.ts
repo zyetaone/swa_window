@@ -356,8 +356,6 @@ export class FlightSimEngine {
 				const fresh = pickScenario(ctx.locationId, ctx.skyState);
 				if (fresh && fresh.id !== this.#currentScenario.id) {
 					this.#currentScenario = fresh;
-					this.#scenarioWaypointIndex = 0;
-					this.#scenarioProgress = 0;
 				}
 			}
 		}

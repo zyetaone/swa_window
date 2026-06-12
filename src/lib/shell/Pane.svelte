@@ -61,16 +61,8 @@
 
 	// --- Atmospheric effects ---
 
-	// Phase 10: frostAmount derivation kept for easy re-enable, but Weather
-	// is now passed 0 directly (see <Weather/> below). Underscore prefix
-	// silences the unused-var lint without removing the computation.
-	/*
-	const _frostAmount = $derived.by(() => {
-		const start = model.config.atmosphere.weather.frostStartAltitude;
-		const max   = model.config.atmosphere.weather.frostMaxAltitude;
-		return clamp((model.flight.altitude - start) / (max - start), 0, 1);
-	});
-	*/
+	// Frost (disabled — Weather receives 0 below). If re-enabling:
+	// frostAmount = clamp((altitude - frostStartAltitude) / (frostMaxAltitude - frostStartAltitude), 0, 1)
 
 	const filterString = $derived.by(() => {
 		const timeBrightness =
