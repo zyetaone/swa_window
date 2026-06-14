@@ -38,8 +38,16 @@ const VIIRS_TILE = (z: number, y: number, x: number) =>
 	`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
 
 export interface ViirsField {
-	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core). */
+	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core).
+	 *  Nearest-pixel — cheapest, but snaps to the coarse ~1.2 km/px tile grid
+	 *  (blocky for dense point placement). */
 	sample(lat: number, lon: number): number;
+	/** Bilinearly-interpolated luminance, 0 … 1. Smooths the coarse VIIRS
+	 *  pixel grid so a field of points placed against it reads as a continuous
+	 *  light carpet, not blocky clumps — and averages away single-pixel sensor
+	 *  noise, so callers can use a LOWER brightness floor for wider spread
+	 *  without picking up rural noise as orphan dots. */
+	sampleBilinear(lat: number, lon: number): number;
 }
 
 // Fractional WebMercator tile coordinates (so we can sample sub-tile pixels).
@@ -121,15 +129,35 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 			if (!c2) throw new Error('no 2d context');
 			c2.drawImage(img, 0, 0, 256, 256);
 			const data = c2.getImageData(0, 0, 256, 256).data;
+			// Luminance of pixel (px,py) — VIIRS PNG is already a brightness map.
+			const lumAt = (px: number, py: number): number => {
+				const i = (py * 256 + px) * 4;
+				return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+			};
 			_cache.set(key, {
 				sample(la: number, lo: number): number {
 					const fx = (lonToTileXf(lo, z) - tx) * 256;
 					const fy = (latToTileYf(la, z) - ty) * 256;
 					const px = fx < 0 ? 0 : fx > 255 ? 255 : fx | 0;
 					const py = fy < 0 ? 0 : fy > 255 ? 255 : fy | 0;
-					const i = (py * 256 + px) * 4;
-					// VIIRS jpg is already a brightness map; luminance of RGB.
-					return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+					return lumAt(px, py);
+				},
+				sampleBilinear(la: number, lo: number): number {
+					// Fractional pixel position, clamped to the 0..255 grid.
+					let fx = (lonToTileXf(lo, z) - tx) * 256;
+					let fy = (latToTileYf(la, z) - ty) * 256;
+					fx = fx < 0 ? 0 : fx > 255 ? 255 : fx;
+					fy = fy < 0 ? 0 : fy > 255 ? 255 : fy;
+					const x0 = fx | 0;
+					const y0 = fy | 0;
+					const x1 = x0 < 255 ? x0 + 1 : 255;
+					const y1 = y0 < 255 ? y0 + 1 : 255;
+					const dx = fx - x0;
+					const dy = fy - y0;
+					// Bilinear blend of the 4 surrounding pixels.
+					const top = lumAt(x0, y0) * (1 - dx) + lumAt(x1, y0) * dx;
+					const bot = lumAt(x0, y1) * (1 - dx) + lumAt(x1, y1) * dx;
+					return top * (1 - dy) + bot * dy;
 				},
 			});
 		} catch {

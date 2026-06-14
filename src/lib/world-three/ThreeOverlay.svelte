@@ -34,8 +34,8 @@
 	import Moon from './Moon.svelte';
 	import OsmBuildingEdges from './OsmBuildingEdges.svelte';
 	import OsmRoads from './OsmRoads.svelte';
-	import CityGlowDome from './CityGlowDome.svelte';
 	import CityLightField from './CityLightField.svelte';
+	import CityGlowDome from './CityGlowDome.svelte';
 	import EffectStack from './EffectStack.svelte';
 	import SparkleField from './SparkleField.svelte';
 	import Meteors from './Meteors.svelte';
@@ -169,8 +169,10 @@
 		<!-- City skyglow dome — warm amber glow over the city core at night,
 		     the low-frequency "vast city below" signal. Behind the neon lines. -->
 		<CityGlowDome />
-		<!-- Far-layer city-light bokeh — VIIRS-sampled soft warm dots, strong at
-		     cruise, crossfading OUT as the sharp neon below fades IN. -->
+		<!-- Far-layer bokeh carpet: thousands of soft warm dots over the whole
+		     metro (VIIRS-placed, seeded). Strong at cruise, crossfades OUT toward
+		     the ground as the sharp neon detail (OsmRoads) resolves. Sits between
+		     the low-frequency glow dome (behind) and the sharp neon (on top). -->
 		<CityLightField location={model.location} />
 		<OsmRoads location={model.location} />
 		<OsmBuildingEdges location={model.location} />
