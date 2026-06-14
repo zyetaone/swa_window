@@ -7,7 +7,7 @@
 	 * Variants represent genuinely different aesthetic choices, not
 	 * parameter tweaks on the same idea.
 	 */
-	import { onDestroy, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
 	import { subscribe } from '$lib/game-loop';
 	import CesiumViewer from '$lib/world/CesiumViewer.svelte';
@@ -67,21 +67,21 @@
 	const GLOBAL_DEFAULTS = { timeOfDay: 22.0, altitude: 28000 };
 	const globals = $state({ ...GLOBAL_DEFAULTS });
 
-	$effect(() => { untrack(() => { model.timeOfDay = globals.timeOfDay; }); });
-	$effect(() => { untrack(() => { model.flight.altitude = globals.altitude; }); });
+	$effect(() => { model.timeOfDay = globals.timeOfDay; });
+	$effect(() => { model.flight.altitude = globals.altitude; });
 
 	// ─── Variant tunables ─────────────────────────────────────────────────────
 
 	const A_DEFAULTS = {
 		bloomSigma: 2.2, bloomContrast: 128, bloomBrightness: -0.3,
-		nightLightIntensity: 0.6, baseNightBrightness: 0.15, baseNightSaturation: 0.05,
+		nightLightIntensity: 0.6, baseNightSaturation: 0.05,
 	};
 	const tunablesA = $state({ ...A_DEFAULTS });
 
 	const B_DEFAULTS = { sigma: 6.0, contrast: 64, brightness: -0.5, nightLightIntensity: 1.2 };
 	const tunablesB = $state({ ...B_DEFAULTS });
 
-	const C_DEFAULTS = { viirsBrightness: 1.8, cartoAlpha: 0.35 };
+	const C_DEFAULTS = { viirsBrightness: 1.8 };
 	const tunablesC = $state({ ...C_DEFAULTS });
 
 	const D_DEFAULTS = { viirsHue: -0.5, viirsSaturation: 0.3, sigma: 5.0, contrast: 80 };
@@ -224,13 +224,12 @@
 
 	$effect(() => {
 		if (variant !== 'A') return;
-		const { bloomSigma, bloomContrast, bloomBrightness, nightLightIntensity, baseNightBrightness, baseNightSaturation } = tunablesA;
+		const { bloomSigma, bloomContrast, bloomBrightness, nightLightIntensity, baseNightSaturation } = tunablesA;
 		untrack(() => {
 			model.applyConfigPatch('world.bloomSigma', bloomSigma);
 			model.applyConfigPatch('world.bloomContrast', bloomContrast);
 			model.applyConfigPatch('world.bloomBrightness', bloomBrightness);
 			model.applyConfigPatch('world.nightLightIntensity', nightLightIntensity);
-			model.applyConfigPatch('world.baseNightBrightness', baseNightBrightness);
 			model.applyConfigPatch('world.baseNightSaturation', baseNightSaturation);
 		});
 	});
@@ -272,20 +271,6 @@
 		for (let i = 0; i < layers.length; i++) {
 			const l = layers.get(i) as Record<string, unknown> | null;
 			if (l && l.colorToAlpha !== undefined) return l;
-		}
-		return null;
-	}
-
-	function findCartoLayer(viewer: any): unknown | null {
-		const layers = viewer.imageryLayers;
-		for (let i = 0; i < layers.length; i++) {
-			const l = layers.get(i) as Record<string, unknown> | null;
-			// CartoDB is the only layer with alpha=0 at day — VIIRS also has alpha=0
-			// but has colorToAlpha. Distinguish: CartoDB has no colorToAlpha.
-			if (l && l.alpha !== undefined && l.colorToAlpha === undefined && l.imageryProvider) {
-				const prov = l.imageryProvider as Record<string, unknown>;
-				if (prov.url && typeof prov.url === 'string' && (prov.url as string).includes('cartocdn')) return l;
-			}
 		}
 		return null;
 	}
@@ -339,24 +324,20 @@
 		const viewer = activeCesium.manager?.getViewer();
 		const bloom = viewer?.scene.postProcessStages?.bloom;
 		const viirs = findViirsLayer(viewer!) as Record<string, number> | null;
-		const carto = findCartoLayer(viewer!) as Record<string, number> | null;
 		if (!bloom || !viirs) return;
 		const prevBloomEnabled = bloom.enabled;
 		const prevHue = viirs.hue;
 		const prevSat = viirs.saturation;
 		const prevBright = viirs.brightness;
-		const prevCartoAlpha = carto?.alpha ?? 0;
 		bloom.enabled = false;
 		viirs.hue = 0;
 		viirs.saturation = 1.0;
 		viirs.brightness = tunablesC.viirsBrightness;
-		if (carto) carto.alpha = tunablesC.cartoAlpha;
 		return () => {
 			bloom.enabled = prevBloomEnabled;
 			viirs.hue = prevHue;
 			viirs.saturation = prevSat;
 			viirs.brightness = prevBright;
-			if (carto) carto.alpha = prevCartoAlpha;
 		};
 	});
 
@@ -457,6 +438,7 @@
 
 		void (async () => {
 			try {
+				roadsError = '';
 				const fc = await getRoads();
 				if (!active) return;
 				roadsFeatureCount = fc.features.length;
@@ -486,7 +468,7 @@
 				}
 			} catch (e) {
 				if (!active) return;
-				console.error('Roads fetch failed:', e);
+				roadsError = e instanceof Error ? e.message : String(e);
 			}
 		})();
 
@@ -744,6 +726,7 @@
 	const F_DEFAULTS = { intensity: 5.0, glowWidth: 7.0, viirsDim: 0.5, motorwayBoost: 2.5, residentialBoost: 1.5 };
 	const tunablesF = $state({ ...F_DEFAULTS });
 	let roadsFeatureCount = $state(0);
+	let roadsError = $state('');
 
 	// Variant F application handled inline in the main $effect below (too
 	// complex to extract — uses async road fetch + BillboardCollection).
@@ -760,37 +743,24 @@
 		return clamp((model.flight.altitude - tunablesE.lowAltitudeFt) / Math.max(tunablesE.highAltitudeFt - tunablesE.lowAltitudeFt, 1), 0, 1);
 	});
 
-	onDestroy(() => {});
-
 	// ─── Slider helpers ───────────────────────────────────────────────────────
 
 	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) { globals.timeOfDay = parseFloat(e.currentTarget.value); }
 	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) { globals.altitude = parseFloat(e.currentTarget.value); }
 
-	function setA<K extends keyof typeof tunablesA>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesA as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
+	function makeSetter(obj: object) {
+		return (k: string) => (e: Event & { currentTarget: HTMLInputElement }) => {
+			(obj as Record<string, number>)[k] = parseFloat(e.currentTarget.value);
+		};
 	}
-	function setB<K extends keyof typeof tunablesB>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesB as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setC<K extends keyof typeof tunablesC>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesC as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setD<K extends keyof typeof tunablesD>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesD as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setE<K extends keyof typeof tunablesE>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesE as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setF<K extends keyof typeof tunablesF>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesF as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setG<K extends keyof typeof tunablesG>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesG as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
-	function setH<K extends keyof typeof tunablesH>(k: K) {
-		return (e: Event & { currentTarget: HTMLInputElement }) => { (tunablesH as Record<string, number>)[k] = parseFloat(e.currentTarget.value); };
-	}
+	const setA = makeSetter(tunablesA);
+	const setB = makeSetter(tunablesB);
+	const setC = makeSetter(tunablesC);
+	const setD = makeSetter(tunablesD);
+	const setE = makeSetter(tunablesE);
+	const setF = makeSetter(tunablesF);
+	const setG = makeSetter(tunablesG);
+	const setH = makeSetter(tunablesH);
 </script>
 
 <div class="lab">
@@ -814,11 +784,11 @@
 
 		<fieldset class="variants" role="radiogroup" aria-label="Rendering variant">
 			<legend>Variant</legend>
-			{#each VARIANTS as v (v.id)}
+			{#each VARIANTS as vtab (vtab.id)}
 				<label class="row">
-					<input type="radio" name="variant" value={v.id} checked={variant === v.id} onchange={() => (variant = v.id)} />
-					<span class="row-label"><strong>{v.id}.</strong>{v.label}</span>
-					<span class="row-hint">{v.hint}</span>
+					<input type="radio" name="variant" value={vtab.id} checked={variant === vtab.id} onchange={() => (variant = vtab.id)} />
+					<span class="row-label"><strong>{vtab.id}.</strong>{vtab.label}</span>
+					<span class="row-hint">{vtab.hint}</span>
 				</label>
 			{/each}
 		</fieldset>
@@ -831,7 +801,6 @@
 				<RangeSlider label="Bloom contrast" value={tunablesA.bloomContrast} min={32} max={256} step={1} formatValue={(v) => v.toFixed(0)} oninput={setA('bloomContrast')} />
 				<RangeSlider label="Bloom brightness" value={tunablesA.bloomBrightness} min={-1.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setA('bloomBrightness')} />
 				<RangeSlider label="Night light intensity" value={tunablesA.nightLightIntensity} min={0.0} max={2.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setA('nightLightIntensity')} />
-				<RangeSlider label="Base night brightness" value={tunablesA.baseNightBrightness} min={0.0} max={0.5} step={0.01} formatValue={(v) => v.toFixed(2)} oninput={setA('baseNightBrightness')} />
 				<RangeSlider label="Base night saturation" value={tunablesA.baseNightSaturation} min={0.0} max={0.5} step={0.01} formatValue={(v) => v.toFixed(2)} oninput={setA('baseNightSaturation')} />
 			{:else if variant === 'B'}
 				<RangeSlider label="Sigma" value={tunablesB.sigma} min={2.0} max={10.0} step={0.5} formatValue={(v) => v.toFixed(1)} oninput={setB('sigma')} />
@@ -840,7 +809,6 @@
 				<RangeSlider label="Night light intensity" value={tunablesB.nightLightIntensity} min={0.0} max={3.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setB('nightLightIntensity')} />
 			{:else if variant === 'C'}
 				<RangeSlider label="VIIRS brightness" value={tunablesC.viirsBrightness} min={0.5} max={4.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setC('viirsBrightness')} />
-				<RangeSlider label="CartoDB alpha" value={tunablesC.cartoAlpha} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setC('cartoAlpha')} />
 			{:else if variant === 'D'}
 				<RangeSlider label="VIIRS hue" value={tunablesD.viirsHue} min={-1.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setD('viirsHue')} />
 				<RangeSlider label="VIIRS saturation" value={tunablesD.viirsSaturation} min={0.0} max={1.5} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setD('viirsSaturation')} />
@@ -857,6 +825,9 @@
 				<RangeSlider label="VIIRS dim" value={tunablesF.viirsDim} min={0.0} max={1.0} step={0.05} formatValue={(v) => v.toFixed(2)} oninput={setF('viirsDim')} />
 				<RangeSlider label="Motorway boost" value={tunablesF.motorwayBoost} min={0.1} max={6.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setF('motorwayBoost')} />
 				<RangeSlider label="Residential boost" value={tunablesF.residentialBoost} min={0.1} max={6.0} step={0.1} formatValue={(v) => v.toFixed(1)} oninput={setF('residentialBoost')} />
+				{#if roadsError}
+					<p class="roads-error" role="alert">Roads fetch failed: {roadsError}</p>
+				{/if}
 			{:else if variant === 'G'}
 				<RangeSlider label="Palette spread" value={tunablesG.paletteSpread} min={0.0} max={0.6} step={0.02} formatValue={(v) => v.toFixed(2)} oninput={setG('paletteSpread')} />
 				<RangeSlider label="Additive strength" value={tunablesG.additiveStrength} min={0.0} max={15.0} step={0.25} formatValue={(v) => v.toFixed(1)} oninput={setG('additiveStrength')} />
@@ -944,4 +915,5 @@
 	.reset.small { padding: 6px; font-size: 11px; }
 	footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 	footer .note { margin: 0; font-size: 10px; color: #666; line-height: 1.4; }
+	.roads-error { margin: 6px 0 0; font-size: 11px; color: #ff8a7a; line-height: 1.4; }
 </style>
