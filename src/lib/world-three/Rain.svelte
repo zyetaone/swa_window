@@ -69,12 +69,26 @@
 			positions[i * 3 + 1] = rng() * Y_RANGE;
 			positions[i * 3 + 2] = (rng() - 0.5) * Z_RANGE;
 			phases[i] = rng();
-			// Streak length 5-13 px (was 8-22) — smaller streaks read as
-			// finer/lighter rain rather than chunky pixel streaks.
-			sizes[i] = 5 + rng() * 8;
-			// Fall speed 0.9-1.5× base (was 0.7-1.3×) — faster fall reads as
-			// more fluid motion rather than drifting droplets.
-			speeds[i] = 0.9 + rng() * 0.6;
+			// Streak length 3-19 px with a POWER-SKEWED distribution (pow 2.2)
+			// instead of the old flat 5-13 uniform — that uniform made every
+			// drop nearly the same size (2.6× max/min, clustered mid-range), so
+			// the rain read as a wall of identical streaks. The skew puts most
+			// drops at the fine 3-6 px end (distant/light) with a long tail of
+			// big 15-19 px drops (near/heavy), a 6× spread you actually see —
+			// real rain is mostly fine mist with occasional fat close streaks.
+			const sizeT = Math.pow(rng(), 2.2);
+			// Streak length 3-16 px (power-skewed). Capped shorter than a naive
+			// big range: a long streak that falls SLOWLY overlaps its own prior
+			// position frame-to-frame and reads as a STANDING vertical line that
+			// "stays" instead of a falling drop. The cap + the speed correlation
+			// below keep even the big streaks transient.
+			sizes[i] = 3 + sizeT * 13;
+			// Fall speed correlates with size (motion-blur physics: a faster drop
+			// draws a longer streak). The big 1.0-1.7× drops are ALSO the fast
+			// ones, so their long streaks sweep down quickly and never linger;
+			// the fine 0.85-1.1× drops are short AND slow (drifting mist). One
+			// rule gives both the size variation and the no-lingering fix.
+			speeds[i] = 0.85 + sizeT * 0.85 + rng() * 0.1;
 			// Horizontal sway amplitude 0-1.2 m. Wind-blown wobble.
 			sways[i] = rng() * 1.2;
 		}
@@ -100,10 +114,11 @@
 		uniforms: {
 			uTime: { value: 0 },
 			uVisibility: { value: 0 },
-			// 0.65 (was 0.5) — combined with per-particle 0.9-1.5× multiplier
-			// this puts drop fall times around 1-2 s vs the prior 2-3 s. Reads
-			// as proper rain motion rather than drifting droplets.
-			uFallSpeed: { value: 0.65 },
+			// 1.15 (was 0.65) — drops now cross the volume in ~0.55-1.0 s (was
+			// ~1.0-2.0 s). The slower rate made streaks hang/linger on screen
+			// ("the streaks stay for a while"); at this rate each streak sweeps
+			// down fast enough to read as a falling drop, not a standing line.
+			uFallSpeed: { value: 1.15 },
 			uYRange: { value: Y_RANGE },
 			uYTop: { value: Y_RANGE * 0.5 },
 		},
