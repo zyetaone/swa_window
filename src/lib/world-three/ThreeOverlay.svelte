@@ -174,10 +174,9 @@
 		     the low-frequency glow dome (behind) and the sharp neon (on top). -->
 		<CityLightField location={model.location} />
 		<OsmRoads location={model.location} />
-		<!-- OsmBuildingEdges (footprint-outline neon) pulled for review — the
-		     CityLightField carpet + OsmRoads streets may cover its read. Restore
-		     by re-adding the import + this mount if the city looks too sparse. -->
-		<!-- <OsmBuildingEdges location={model.location} /> -->
+		<!-- (OsmBuildingEdges footprint-outline neon was removed here — the
+		     CityLightField carpet + OsmRoads streets cover that read. Recover the
+		     component from git history if a footprint layer is ever wanted again.) -->
 		<Clouds
 			density={model.effectiveCloudDensity}
 			nightFactor={model.nightFactor}

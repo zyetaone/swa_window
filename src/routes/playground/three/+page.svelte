@@ -61,13 +61,11 @@
 	// Snap the flight engine to the show's opening location.
 	model.setLocation(model.location);
 
-	// Cesium's OSM-buildings primitive stays enabled — empirically it
-	// supplies the majority of the visible city-light density we want.
-	// The Three-side `OsmBuildingEdges` component overlays footprint
-	// outlines (extra "city traced in light" character) on top. Together
-	// they read as "mass + outline" — closer to the user's original
-	// "flow around" intent than disabling either alone.
-	// (Toggle this to false to inspect the Three-only outline contribution.)
+	// Cesium's OSM-buildings primitive stays enabled — it supplies the bulk of
+	// the city-light mass. The night-city detail above it is now CityLightField
+	// (the soft VIIRS bokeh carpet) + OsmRoads (sharp amber streets); the old
+	// OsmBuildingEdges footprint-outline overlay was pulled — the carpet + streets
+	// cover that read without the competing rectangles.
 
 	let cityMode = $state(false);
 
