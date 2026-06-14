@@ -11,9 +11,9 @@
 	 * across the 3-Pi panorama deterministically (no RNG → invariant #4 safe).
 	 */
 	import { T, useTask } from '@threlte/core';
-	import { AdditiveBlending, Color, type Group as ThreeGroup, type Matrix4 } from 'three';
+	import { AdditiveBlending, Color, type Group as ThreeGroup, type Matrix4, type SpriteMaterial } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { enuAnchorMatrix } from './enu';
+	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
 	import { groundAltM } from '$content/locations';
 	import { makeRadialTexture } from './texture-util';
 	import { lightingState } from './lighting';
@@ -31,27 +31,27 @@
 	});
 
 	$effect(() => {
-		if (!group || !anchor) return;
-		group.matrixAutoUpdate = false;
-		group.matrix.copy(anchor);
+		if (group && anchor) applyEnuAnchor(group, anchor);
 	});
 
-	// Faint breathing so the dome doesn't read as a static decal.
-	let _t = $state(0);
-	useTask((dt) => { _t += dt; });
-
-	const opacity = $derived.by(() => {
-		// cityGlowAmount (lighting SSOT) owns the "dusk-onward city skyglow" gate
-		// — 0 until nf > 0.45, smoothstep ramp after. Same gate the cloud city
-		// glow now reads, so dome + clouds light up in lock-step.
+	// Opacity is driven IMPERATIVELY in useTask, not via a $derived. A $derived
+	// reading a per-frame `_t` counter would invalidate the Svelte reactive graph
+	// every frame for a value only the SpriteMaterial consumes — pure scheduling
+	// overhead. Holding the material ref + setting `.opacity` directly bypasses it.
+	let _t = 0;
+	let spriteMat = $state.raw<SpriteMaterial | undefined>();
+	useTask((dt) => {
+		_t += dt;
+		const m = spriteMat;
+		if (!m) return;
+		// cityGlowAmount (lighting SSOT) owns the dusk-onward skyglow gate — the
+		// diffuse companion to cityLightAmount (the dome lags the discrete lights).
+		// 0.11 cap (was 0.28): at 0.28 this wide additive sprite WASHED the upper
+		// sky/horizon warm-brown from cruise. Faint glow + low DOME_HEIGHT keeps it
+		// a "vast city below" haze hugging the horizon, not a sky tint; bloom lifts
+		// it. Faint breathing so it doesn't read as a static decal.
 		const cityGlow = lightingState(model.timeOfDay, model.nightFactor).cityGlowAmount;
-		const breath = 1 + 0.07 * Math.sin(_t * 0.05);
-		// 0.28 → 0.11: at 0.28 this 35 km-wide additive sprite WASHED the whole
-		// upper sky/horizon warm-brown from cruise (the "white still on the
-		// horizon"). Dropped to a faint glow + lowered (DOME_HEIGHT 2500→900) so
-		// it reads as a subtle "vast city below" haze hugging the horizon, not a
-		// sky tint. Bloom still amplifies it.
-		return cityGlow * 0.11 * breath;
+		m.opacity = cityGlow * 0.11 * (1 + 0.07 * Math.sin(_t * 0.05));
 	});
 
 	// Sodium-amber, matched to the Cesium grade's warm city-light palette so the
@@ -76,9 +76,10 @@
 			renderOrder={-1}
 		>
 			<T.SpriteMaterial
+				bind:ref={spriteMat}
 				map={tex}
 				color={amber}
-				{opacity}
+				opacity={0}
 				transparent
 				depthWrite={false}
 				blending={AdditiveBlending}

@@ -243,14 +243,14 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	// gate still reaches exactly 1 at deep night (nf = 1).
 	_state.cityGlowAmount = nf <= 0.32 ? 0 : smoothstep((nf - 0.32) / 0.68);
 
-		// Discrete city lights (streetlights, lit windows, the Three carpet + neon
-		// that derive from VIIRS) come on TOGETHER through civil twilight — ONE
-		// curve so every discrete night-light layer brightens in lock-step instead
-		// of each picking its own raw-nf threshold (the carpet used nf-0.2, the
-		// neon nf-0.15; they now share this). Gated 0.15, ahead of the diffuse
-		// cityGlowAmount above by design: the lights come on first, then the glow
-		// they throw into the haze. smoothstep reaches exactly 1 at deep night.
-		_state.cityLightAmount = nf <= 0.15 ? 0 : smoothstep((nf - 0.15) / 0.85);
+	// Discrete city lights (streetlights, lit windows, the Three carpet + neon
+	// that derive from VIIRS) come on TOGETHER through civil twilight — ONE
+	// curve so every discrete night-light layer brightens in lock-step instead
+	// of each picking its own raw-nf threshold (the carpet used nf-0.2, the
+	// neon nf-0.15; they now share this). Gated 0.15, ahead of the diffuse
+	// cityGlowAmount above by design: the lights come on first, then the glow
+	// they throw into the haze. smoothstep reaches exactly 1 at deep night.
+	_state.cityLightAmount = nf <= 0.15 ? 0 : smoothstep((nf - 0.15) / 0.85);
 	// Stars from late dusk; moon a touch earlier.
 	_state.starVisibility = clamp((nf - 0.4) * 1.5, 0, 1);
 	_state.moonContribution = clamp((nf - 0.15) * 1.18, 0, 1);

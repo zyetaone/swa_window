@@ -49,7 +49,8 @@
 	import { LOCATION_MAP, groundAltM } from '$content/locations';
 	import type { LocationId } from '$lib/types';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { enuAnchorMatrix } from './enu';
+	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
+	import { smoothstep } from '$lib/utils';
 	import { createSeededRng, daySeed } from './prng';
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { EARTH_RADIUS_M } from './state.svelte';
@@ -93,12 +94,6 @@
 		return () => removeViirsWaiter(loc.lat, loc.lon, onReady);
 	});
 
-	// smoothstep — local helper (matches the GLSL builtin) for the keep curve.
-	function smoothstep(e0: number, e1: number, x: number): number {
-		const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
-		return t * t * (3 - 2 * t);
-	}
-
 	// Build the point cloud from the VIIRS field. Deterministic: one seeded RNG
 	// for placement, jitter, twinkle phase, size + colour variance → identical on
 	// every Pi for a given day. Rebuilds on location change or VIIRS arrival.
@@ -133,7 +128,7 @@
 					if (b < BRIGHT_FLOOR) continue; // truly dark → no dot
 					// Flat baseline + brightness boost: suburbs keep ~0.22, cores
 					// saturate to ~1.0. Spreads dots across the whole lit metro.
-					const keepP = KEEP_BASELINE + (1 - KEEP_BASELINE) * smoothstep(BRIGHT_FLOOR, 0.55, b);
+					const keepP = KEEP_BASELINE + (1 - KEEP_BASELINE) * smoothstep((b - BRIGHT_FLOOR) / (0.55 - BRIGHT_FLOOR));
 					if (rng() > keepP) continue;
 					east.push((lon - lon0) * RAD * cosLat0 * EARTH_RADIUS_M);
 					north.push((lat - lat0) * RAD * EARTH_RADIUS_M);
@@ -277,9 +272,7 @@
 	// CityGlowDome / OsmRoads) — T.Group's `matrix` prop only takes a number[].
 	let group = $state.raw<ThreeGroup | undefined>();
 	$effect(() => {
-		if (!group || !anchorMatrix) return;
-		group.matrixAutoUpdate = false;
-		group.matrix.copy(anchorMatrix);
+		if (group && anchorMatrix) applyEnuAnchor(group, anchorMatrix);
 	});
 
 	useTask((dt) => {

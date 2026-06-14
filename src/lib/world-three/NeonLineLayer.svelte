@@ -42,7 +42,7 @@
 	import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 	import { LOCATION_MAP, groundAltM } from '$content/locations';
 	import type { LocationId } from '$lib/types';
-	import { enuAnchorMatrix } from './enu';
+	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
 	import { EARTH_RADIUS_M } from './state.svelte';
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
@@ -115,7 +115,6 @@
 	} = $props();
 
 	const model = useAeroWindow();
-	const nightFactor = $derived(model.nightFactor);
 	const ctx = useThrelte();
 
 	let geometry = $state.raw<LineSegmentsGeometry | null>(null);
@@ -144,27 +143,21 @@
 	// Snapshot the material-static props at construction time. These are
 	// per-mount constants — LineMaterial is constructed ONCE and never
 	// re-created when the caller's props change (callers pass literal
-	// numbers anyway; OsmRoads/OsmBuildingEdges are the only consumers).
-	// The `svelte-ignore` directives suppress Svelte 5's reactive-capture
-	// warning since the one-shot capture is intentional here.
-	// svelte-ignore state_referenced_locally
-	const _coreColor = coreColor as number;
-	// svelte-ignore state_referenced_locally
-	const _coreWidth = coreWidth as number;
-	// svelte-ignore state_referenced_locally
-	const _haloColor = haloColor as number;
-	// svelte-ignore state_referenced_locally
-	const _haloWidth = haloWidth as number;
-	// svelte-ignore state_referenced_locally
-	const _dashed = dashed as boolean;
-	// svelte-ignore state_referenced_locally
-	const _dashSize = dashSize as number;
-	// svelte-ignore state_referenced_locally
-	const _gapSize = gapSize as number;
-	// svelte-ignore state_referenced_locally
-	const _dashFlow = dashFlow as number;
-	// svelte-ignore state_referenced_locally
-	const _depthFade = depthFade as number;
+	// numbers anyway; OsmRoads is the only consumer). One `untrack()` makes the
+	// one-shot capture explicit — and replaces nine per-symbol `svelte-ignore
+	// state_referenced_locally` suppressions with a single intentional read.
+	const { _coreColor, _coreWidth, _haloColor, _haloWidth, _dashed, _dashSize, _gapSize, _dashFlow, _depthFade } =
+		untrack(() => ({
+			_coreColor: coreColor as number,
+			_coreWidth: coreWidth as number,
+			_haloColor: haloColor as number,
+			_haloWidth: haloWidth as number,
+			_dashed: dashed as boolean,
+			_dashSize: dashSize as number,
+			_gapSize: gapSize as number,
+			_dashFlow: dashFlow as number,
+			_depthFade: depthFade as number,
+		}));
 
 	// Dash params are per-mount constants. Setting `dashed:true` at
 	// construction bakes the USE_DASH shader define; it can't be toggled later
@@ -207,7 +200,7 @@
 
 	useTask((delta) => {
 		const { camAlt, nf, tod } = untrack(() => ({
-			camAlt: model.flight.camAlt, nf: nightFactor, tod: model.timeOfDay,
+			camAlt: model.flight.camAlt, nf: model.nightFactor, tod: model.timeOfDay,
 		}));
 		// NEAR layer of the integrated night-city lighting:
 		//   cityLightAmount (lighting SSOT) — the discrete-lights curve shared with
@@ -235,9 +228,7 @@
 	});
 
 	$effect(() => {
-		if (!group || !anchorMatrix) return;
-		group.matrixAutoUpdate = false;
-		group.matrix.copy(anchorMatrix);
+		if (group && anchorMatrix) applyEnuAnchor(group, anchorMatrix);
 	});
 
 	// ---- Effect A: fetch-only -------------------------------------------
@@ -258,7 +249,12 @@
 				rawFeatures = { features: data.features, lat: loc.lat, lon: loc.lon };
 			})
 			.catch((e) => {
-				if (e.name !== 'AbortError') console.warn(`[NeonLineLayer ${endpoint}]`, e);
+				// Network failure → fall back to the static per-vertex colours
+				// (no neon for this location). Route to telemetry, not console —
+				// surfaces in the TelemetryPanel for on-site kiosk debugging.
+				if (e.name !== 'AbortError') {
+					model.telemetry.recordEvent('error', { src: `NeonLineLayer:${endpoint}`, message: String(e) });
+				}
 			});
 		return () => ctrl.abort();
 	});

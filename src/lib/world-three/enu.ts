@@ -1,8 +1,8 @@
 /**
  * world-three/enu — local ENU (East-North-Up) tangent-plane anchor math.
  *
- * Many city-anchored Three-side assets (Clouds, OsmBuildingEdges, the old
- * OsmBuildings/OsmRoads) construct the same 3-line basis matrix to position
+ * Many city-anchored Three-side assets (CityLightField, CityGlowDome, OsmRoads,
+ * Clouds) construct the same 3-line basis matrix to position
  * a Group at a known (lat, lon, alt) on the WGS84 ellipsoid:
  *
  *   up    = normalize(geoToCartesian(lat, lon, alt))
@@ -16,10 +16,24 @@
  * positioned in local ENU coordinates (x=east, y=up, z=-north) land at the
  * correct world position on the ellipsoid surface.
  */
-import { Matrix4, Vector3 } from 'three';
+import { Matrix4, Vector3, type Object3D } from 'three';
 import { geoToCartesian } from './state.svelte';
 
 const _WORLD_Y = new Vector3(0, 1, 0);
+
+/**
+ * Pin a Three Group/Object to a precomputed ENU anchor matrix. The two steps
+ * MUST run in this order: disabling `matrixAutoUpdate` first stops Three from
+ * recomposing `matrix` from position/quaternion/scale each frame, so the basis
+ * we copy in survives. Every city-anchored layer (CityLightField, CityGlowDome,
+ * NeonLineLayer) shared this exact 2-line body inside its own `$effect` — the
+ * `$effect` wrappers stay per-component (they own the reactive deps); only this
+ * non-obvious imperative core is hoisted here.
+ */
+export function applyEnuAnchor(group: Object3D, matrix: Matrix4): void {
+	group.matrixAutoUpdate = false;
+	group.matrix.copy(matrix);
+}
 
 /**
  * Build the ENU anchor matrix at (lat°, lon°, alt m). Pure: every call
