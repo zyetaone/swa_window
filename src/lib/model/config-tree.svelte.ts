@@ -285,10 +285,8 @@ export const world = $state({
 	// (passenger-window mode) and fade above cruise altitude. The blend is on
 	// raw flight.altitude in feet so it tracks descent/climb naturally during
 	// cruise→orbit transitions. Defaults from night-lab E_DEFAULTS.
-	// Window-density gate for the procedural building shader. Raised from
-	// 15k/25k to 25k/55k so the building emissive remains visible across the
-	// full passenger-window altitude band (default 35kft is well above 25k;
-	// the old gate produced zero emissive at cruise — invisible buildings).
+	// Window-density gate for the procedural building shader.
+	// TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
 	buildingEmissiveLowAltFt: 25000,
 	buildingEmissiveHighAltFt: 55000,
 	buildingEmissiveMax: 0.6,
@@ -339,9 +337,7 @@ export const world = $state({
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
 	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
 	// it doesn't compete with the building emissive at passenger-window
-	// altitudes. At cruise (>15kft) VIIRS is full strength; below 5kft VIIRS
-	// is fully off. Pairs with the building emissive band (15-25kft) so the
-	// city-light load smoothly crossfades between sources during ascent.
+	// altitudes. TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
 	viirsAltGateLowFt: 5000,
 	viirsAltGateHighFt: 15000,
 	showClouds: true,

@@ -46,6 +46,7 @@
 	import { EARTH_RADIUS_M } from './state.svelte';
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { altitudeDetailMix } from '$lib/world-lighting/altitude';
 
 	/** Generic geo feature collection — buildSegments callbacks narrow F. */
 	interface FeatureCollection<T> {
@@ -61,8 +62,6 @@
 		haloWidth,
 		haloOpacityMul,
 		intensityMul = 1,
-		gateStartFt = 25000,
-		gateEndFt = 60000,
 		dashed = false,
 		dashSize = 0,
 		gapSize = 0,
@@ -80,9 +79,6 @@
 		haloOpacityMul: number;
 		/** Multiplier applied to (nightFactor - 0.15) when computing opacity. */
 		intensityMul?: number;
-		/** Altitude (ft) at which the layer is fully visible; fades to gateEndFt. */
-		gateStartFt?: number;
-		gateEndFt?: number;
 		/**
 		 * Render the lines as dashes/dots instead of solid. `dashSize` /
 		 * `gapSize` are in world metres (positions are metres in the ENU
@@ -210,10 +206,9 @@
 
 	useTask((delta) => {
 		const { camAlt, nf } = untrack(() => ({ camAlt: model.flight.camAlt, nf: nightFactor }));
-		const altGate = camAlt <= gateStartFt
-			? 1
-			: Math.max(0, 1 - (camAlt - gateStartFt) / (gateEndFt - gateStartFt));
-		const intensity = Math.max(0, nf - 0.15) * intensityMul * altGate;
+		// NEAR layer: altitudeDetailMix is the shared SSOT (1 = approach, 0 = cruise).
+		// Neon lines are near-detail — they scale by mix and yield to VIIRS at cruise.
+		const intensity = Math.max(0, nf - 0.15) * intensityMul * altitudeDetailMix(camAlt);
 		coreMaterial.opacity = intensity;
 		haloMaterial.opacity = intensity * haloOpacityMul;
 		// Traffic-flow shimmer: crawl the dash phase. Both passes share the

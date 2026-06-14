@@ -953,6 +953,9 @@ export class CesiumManager {
 			// zero below 5kft so the building emissive (Phase 3) and future
 			// vector roads (Phase 5) own the city-light load at low altitude
 			// without VIIRS' photoreal aggregate overpainting them.
+			// TODO (post-Pi-perf-gate): adopt altitudeDetailMix from
+			// world-lighting/altitude.ts as the shared SSOT — same band
+			// that the Three-side NeonLineLayer/OsmRoads/OsmBuildingEdges now use.
 			const altGate = smoothstep(
 				(this.model.flight.altitude - w.viirsAltGateLowFt) /
 					Math.max(w.viirsAltGateHighFt - w.viirsAltGateLowFt, 1),
@@ -983,15 +986,11 @@ export class CesiumManager {
 			}
 		}
 
-		// CartoDB road mask — altitude-crossfaded against VIIRS.
-		//
-		// VIIRS (above) ramps IN as altitude climbs (5k→15k via viirsAltGate);
-		// CartoDB ramps OUT as altitude climbs (15k→35k via roadAltGate). Both
-		// layers overlap fully in the 15k–25k passenger-window band so the
-		// transition reads as a smooth blend rather than a swap. At cruise
-		// (35k+) CartoDB holds at ~40% so the street skeleton still ghosts
-		// through the amber wash; at descent (<15k) CartoDB carries the
-		// detail load while VIIRS has faded out.
+		// CartoDB road mask — altitude-crossfaded against VIIRS via the shared
+		// altitudeDetailMix SSOT. VIIRS (above) is the FAR layer (1 − mix);
+		// CartoDB roads are a NEAR layer that floors at 0.4 at cruise so the
+		// street skeleton ghosts through the amber wash. At cruise (35k+)
+		// CartoDB holds at ~40%; on approach (<5k) it's fully lit.
 		// Hybrid dedup (night-light ultrathink, 3-lens consensus): the CartoDB
 		// raster road-mask is a WHITE global road skeleton that clashes with the
 		// Three OsmRoads AMBER neon tracing the same streets (different colour,
@@ -1012,6 +1011,7 @@ export class CesiumManager {
 				1,
 			);
 			// 1.0 at low altitude → 0.4 at cruise.
+			// TODO (post-Pi-perf-gate): adopt altitudeDetailMix SSOT.
 			const roadAltGate = 1.0 - altRamp * 0.6;
 			// Roads have a small daytime baseline (12 %) so the city skeleton
 			// reads slightly through the satellite imagery at every hour, not
@@ -1131,6 +1131,8 @@ export class CesiumManager {
 		const w = this.model.config.world;
 		const lo = w.buildingEmissiveLowAltFt;
 		const hi = w.buildingEmissiveHighAltFt;
+		// TODO (post-Pi-perf-gate): adopt altitudeDetailMix SSOT — altBlend
+		// becomes (1 − altitudeDetailMix(altitude)), eliminating the lo/hi config keys.
 		const altBlend = clamp((this.model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
