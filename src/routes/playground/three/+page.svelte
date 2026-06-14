@@ -35,6 +35,14 @@
 
 	const model = createAeroWindow();
 
+	// This lab ALWAYS mounts <ThreeOverlay/> (it IS the hybrid surface), so the
+	// `useThreeOverlay` flag must reflect that — otherwise every Cesium↔Three
+	// dedup gate (car-lights, CartoDB road-mask, DOM clouds/shooting-stars)
+	// stays inactive here and the Cesium layers double the Three ones (the
+	// white road blowout + popping). Not persisted (not in PersistedState), so
+	// this never leaks to the Cesium-only ship route.
+	model.config.world.useThreeOverlay = true;
+
 	// Cesium buildings: wireframe ("line marks") vs solid (the live procedural
 	// window-shader facades). Toggle in the drawer — wireframe hides the lit
 	// windows, solid shows them. Solid is the default so the vertical lit-

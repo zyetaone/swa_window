@@ -19,8 +19,8 @@
 
 	const model = useAeroWindow();
 
-	const DOME_HEIGHT_M = 2500; // glow centre lifted above the city
-	const DOME_RADIUS_M = 16000; // ~metro radius; sprite is wider than tall (dome)
+	const DOME_HEIGHT_M = 900; // glow centre kept LOW — hugs the horizon, not a sky wash
+	const DOME_RADIUS_M = 14000; // ~metro radius; sprite is wider than tall (dome)
 
 	let group = $state.raw<ThreeGroup | undefined>();
 
@@ -45,10 +45,12 @@
 		// glow now reads, so dome + clouds light up in lock-step.
 		const cityGlow = lightingState(model.timeOfDay, model.nightFactor).cityGlowAmount;
 		const breath = 1 + 0.07 * Math.sin(_t * 0.05);
-		// 0.2 → 0.28: with the grade's night contrast softened the dome is
-		// the layer that fuses VIIRS + neon + windows into ONE city — a bit
-		// more ambient skyglow presence sells the unified haze.
-		return cityGlow * 0.28 * breath;
+		// 0.28 → 0.11: at 0.28 this 35 km-wide additive sprite WASHED the whole
+		// upper sky/horizon warm-brown from cruise (the "white still on the
+		// horizon"). Dropped to a faint glow + lowered (DOME_HEIGHT 2500→900) so
+		// it reads as a subtle "vast city below" haze hugging the horizon, not a
+		// sky tint. Bloom still amplifies it.
+		return cityGlow * 0.11 * breath;
 	});
 
 	// Sodium-amber, matched to the Cesium grade's warm city-light palette so the
@@ -69,7 +71,7 @@
 		     and near geometry occlude it; depthWrite false (additive). -->
 		<T.Sprite
 			position={[0, DOME_HEIGHT_M, 0]}
-			scale={[DOME_RADIUS_M * 2.2, DOME_RADIUS_M * 1.1, 1]}
+			scale={[DOME_RADIUS_M * 2.2, DOME_RADIUS_M * 0.7, 1]}
 			renderOrder={-1}
 		>
 			<T.SpriteMaterial

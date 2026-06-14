@@ -1011,7 +1011,15 @@ export class CesiumManager {
 			const dayComponent   = (1 - nf) * ROAD_DAY_BASE * roadAltGate;
 			this.roadMaskLayer.show = true;
 			this.roadMaskLayer.alpha = (nightComponent + dayComponent) * bootFade;
-			this.roadMaskLayer.brightness = lerp(1.6, 4.0, nf) * Math.max(scale, 0.5);
+			// Brightness ceiling tamed: was lerp(1.6,4.0)*max(scale,0.5) = 12 at
+			// deep night (scale=nightLightIntensity=3), which blew dense road
+			// grids to a solid WHITE blob over metro cores. The mask is the
+			// GLOBAL road skeleton (covers everywhere, unlike the per-location
+			// Three neon), so it stays — just capped (~5 at deep night) so the
+			// white roads read as crisp lines, not a clipped sheet, while staying
+			// bright enough to carry uncovered areas. Live-tunable via
+			// world.nightLightIntensity (scale); fine-dial on hardware.
+			this.roadMaskLayer.brightness = lerp(1.6, 3.4, nf) * Math.min(1.6, Math.max(scale * 0.5, 0.6));
 		}
 
 		// Disable the color-grade PostProcessStage at full day — the shader is
