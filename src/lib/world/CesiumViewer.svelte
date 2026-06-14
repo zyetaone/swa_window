@@ -49,6 +49,13 @@
 				}
 				activeCesium.manager = cesium;
 
+				// Dev-only diagnostic hook: reach the live Cesium scene from the
+				// console / headless probe to bisect atmosphere defects.
+				if (import.meta.env.DEV) {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					(window as any).__cesium = { viewer: cesium.getViewer(), C: cesium.getCesium() };
+				}
+
 				fadingOut = true;
 				loadTimeout = setTimeout(() => {
 					loading = false;

@@ -198,6 +198,7 @@ export class CesiumManager {
 	private lastLightIntensity = -1;
 	private lastSkySatShift = 999;
 	private lastSkyBrShift = 999;
+	private lastAtmoKilled: boolean | null = null;
 	private lastExposure = -1;
 	private lastAtmoLight = -1;
 	private lastBuildingsShow = true;
@@ -779,6 +780,24 @@ export class CesiumManager {
 			}
 		}
 
+		// Deep-night atmosphere kill — the warm horizon BAND.
+		// Cesium's ANALYTICAL sky dome + ground limb compute a sunset-coloured
+		// horizon glow from the sun's (sub-horizon) position. brightnessShift
+		// and atmosphereLightIntensity only ATTENUATE it — proven empirically
+		// that even brShift=-1 + atmoLight≈0 still leaves the orange band; only
+		// disabling the passes removes it (atmosphere-bisect, Jun 14). At deep
+		// night the correct sky IS pure black + the Three star field, so disable
+		// both passes. Boolean, so cache-gated to flip ONCE deep in the night
+		// (deepNight>0.6 ≈ nf>0.88) where the atmosphere is already near-gone —
+		// the transition is a faint line vanishing, not a visible pop.
+		const killAtmo = deepNight > 0.6;
+		if (killAtmo !== this.lastAtmoKilled) {
+			this.lastAtmoKilled = killAtmo;
+			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = !killAtmo;
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(v.scene.globe as any).showGroundAtmosphere = !killAtmo;
+		}
+
 		const fog = m.sceneFog;
 		const targetDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + m.config.atmosphere.haze.amount * 8);
 		const targetBrightness = lerp(fog.dayBrightness, fog.nightBrightness, nf);
@@ -789,14 +808,14 @@ export class CesiumManager {
 				v.scene.fog.density = targetDensity;
 				// Phase 10 / 11b — visualDensityScalar adds aerial-perspective
 				// haze on the horizon without increasing tile-cull density
-				// (no pop-in). Bumped 1.5→2.4 after the DOM HazeEffect was
-				// deleted so Cesium fog alone carries the horizon-band haze
-				// that the screen-anchored gradient used to provide.
-				// Also picks up the per-location haze multiplier
-				// (atmosphere.haze.intensity) so mountain locations get
-				// crisper air, ocean locations get thicker.
+				// (no pop-in). Day term carries the horizon-band haze the old
+				// DOM HazeEffect used to provide. The night term was 2.4 (→3.4×
+				// at deep night) which VEILED the city lights into a murky haze
+				// (atmosphere-bisect Jun 14: turning fog off revealed the amber
+				// roads underneath). Cut to 0.9 so the night ground stays crisp
+				// and the lights read; daytime aerial perspective is unchanged.
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				(v.scene.fog as any).visualDensityScalar = 1.0 + 2.4 * nf + m.config.atmosphere.haze.amount * 4;
+				(v.scene.fog as any).visualDensityScalar = 1.0 + 0.9 * nf + m.config.atmosphere.haze.amount * 4;
 			}
 		}
 		if (Math.abs(targetBrightness - this.lastFogBrightness) > 0.01) {
