@@ -78,7 +78,14 @@ export interface LightingState {
 	sunGlowVisibility: number;
 	/** 0 (day) → ~1 (deep night). The single darkening authority for clouds etc. */
 	nightDarkness: number;
-	/** City skyglow strength 0..1. 0 in day, gated in from mid-dusk (nf > 0.45). */
+	/** Discrete city light SOURCES (streetlights, lit windows, the VIIRS
+	 *  aggregate + the Three carpet/neon that derive from it) 0..1 — the hard
+	 *  lights. On TOGETHER through civil twilight (nf > 0.15). Every discrete
+	 *  night-light layer scales by this so they brighten in lock-step. */
+	cityLightAmount: number;
+	/** Diffuse city SKYGLOW the lights throw into the haze 0..1 — the low-freq
+	 *  "vast city below" dome. Builds LATER than cityLightAmount (nf > 0.32):
+	 *  the lights come on first, then the glow they cast. */
 	cityGlowAmount: number;
 	/** Star visibility 0..1, ramps in from late dusk (nf > 0.4). */
 	starVisibility: number;
@@ -114,6 +121,7 @@ const _state: LightingState = {
 	sunContribution: 1,
 	sunGlowVisibility: 0.35,
 	nightDarkness: 0,
+	cityLightAmount: 0,
 	cityGlowAmount: 0,
 	starVisibility: 0,
 	moonContribution: 0,
@@ -234,6 +242,15 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	// band with no warm presence at all once the veil was deleted. Smooth
 	// gate still reaches exactly 1 at deep night (nf = 1).
 	_state.cityGlowAmount = nf <= 0.32 ? 0 : smoothstep((nf - 0.32) / 0.68);
+
+		// Discrete city lights (streetlights, lit windows, the Three carpet + neon
+		// that derive from VIIRS) come on TOGETHER through civil twilight — ONE
+		// curve so every discrete night-light layer brightens in lock-step instead
+		// of each picking its own raw-nf threshold (the carpet used nf-0.2, the
+		// neon nf-0.15; they now share this). Gated 0.15, ahead of the diffuse
+		// cityGlowAmount above by design: the lights come on first, then the glow
+		// they throw into the haze. smoothstep reaches exactly 1 at deep night.
+		_state.cityLightAmount = nf <= 0.15 ? 0 : smoothstep((nf - 0.15) / 0.85);
 	// Stars from late dusk; moon a touch earlier.
 	_state.starVisibility = clamp((nf - 0.4) * 1.5, 0, 1);
 	_state.moonContribution = clamp((nf - 0.15) * 1.18, 0, 1);

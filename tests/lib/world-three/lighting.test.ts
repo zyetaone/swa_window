@@ -53,6 +53,21 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 		expect(lightingState(23, 1).cityGlowAmount).toBe(1);
 	});
 
+	it('cityLightAmount (discrete lights) gates earlier than the diffuse glow', () => {
+		// 0 in day, comes on at civil twilight (nf 0.15), reaches 1 at deep night.
+		expect(lightingState(12, 0).cityLightAmount).toBe(0);
+		expect(lightingState(18, 0.15).cityLightAmount).toBe(0);
+		expect(lightingState(18.5, 0.3).cityLightAmount).toBeGreaterThan(0);
+		expect(lightingState(23, 1).cityLightAmount).toBe(1);
+		// The integration contract: the discrete lights lead the diffuse skyglow
+		// they cast — at any partial-dusk nf, cityLightAmount ≥ cityGlowAmount, so
+		// the lights are never dimmer than the haze glow above them.
+		for (const nf of [0.2, 0.35, 0.5, 0.7]) {
+			const s = lightingState(20, nf);
+			expect(s.cityLightAmount).toBeGreaterThanOrEqual(s.cityGlowAmount);
+		}
+	});
+
 	it('starVisibility ramps from late dusk (nf > 0.4)', () => {
 		expect(lightingState(18, 0.4).starVisibility).toBe(0);
 		expect(lightingState(20, 0.7).starVisibility).toBeCloseTo(0.45, 5);

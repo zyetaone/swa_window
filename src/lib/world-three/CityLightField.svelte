@@ -54,6 +54,7 @@
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { EARTH_RADIUS_M } from './state.svelte';
 	import { altitudeDetailMix } from '$lib/world-lighting/altitude';
+	import { lightingState } from './lighting';
 
 	let { location }: { location: LocationId } = $props();
 
@@ -283,14 +284,19 @@
 
 	useTask((dt) => {
 		material.uniforms.uTime.value += dt;
-		const { camAlt, nf } = untrack(() => ({ camAlt: model.flight.camAlt, nf: model.nightFactor }));
+		const { camAlt, nf, tod } = untrack(() => ({
+			camAlt: model.flight.camAlt, nf: model.nightFactor, tod: model.timeOfDay,
+		}));
 		// FAR layer of the shared altitudeDetailMix SSOT: far layers scale by
 		// (1 − mix) — full at cruise, fading toward the ground where the sharp
 		// neon detail (the NEAR layers, which scale by mix) takes over. The 0.15
 		// floor keeps a little sparkle low so there's no hard cut; one smooth
 		// handoff across all night-light layers, no popping.
 		const altFar = 0.15 + 0.85 * (1 - altitudeDetailMix(camAlt));
-		material.uniforms.uIntensity.value = Math.max(0, nf - 0.2) * altFar;
+		// Night onset from the SHARED cityLightAmount curve (lighting SSOT) — the
+		// SAME discrete-lights driver the neon streets read, so the carpet and the
+		// streets come on together instead of each on its own raw-nf threshold.
+		material.uniforms.uIntensity.value = lightingState(tod, nf).cityLightAmount * altFar;
 	});
 
 	$effect(() => () => {

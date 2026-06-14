@@ -47,6 +47,7 @@
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { altitudeDetailMix } from '$lib/world-lighting/altitude';
+	import { lightingState } from './lighting';
 
 	/** Generic geo feature collection — buildSegments callbacks narrow F. */
 	interface FeatureCollection<T> {
@@ -205,10 +206,16 @@
 	});
 
 	useTask((delta) => {
-		const { camAlt, nf } = untrack(() => ({ camAlt: model.flight.camAlt, nf: nightFactor }));
-		// NEAR layer: altitudeDetailMix is the shared SSOT (1 = approach, 0 = cruise).
-		// Neon lines are near-detail — they scale by mix and yield to VIIRS at cruise.
-		const intensity = Math.max(0, nf - 0.15) * intensityMul * altitudeDetailMix(camAlt);
+		const { camAlt, nf, tod } = untrack(() => ({
+			camAlt: model.flight.camAlt, nf: nightFactor, tod: model.timeOfDay,
+		}));
+		// NEAR layer of the integrated night-city lighting:
+		//   cityLightAmount (lighting SSOT) — the discrete-lights curve shared with
+		//     the bokeh carpet, so neon + carpet brighten in lock-step (one owner,
+		//     not each layer's own raw-nf threshold).
+		//   altitudeDetailMix — NEAR gate (1 = approach, 0 = cruise): neon is
+		//     near-detail, yielding to the VIIRS aggregate at cruise.
+		const intensity = lightingState(tod, nf).cityLightAmount * intensityMul * altitudeDetailMix(camAlt);
 		coreMaterial.opacity = intensity;
 		haloMaterial.opacity = intensity * haloOpacityMul;
 		// Traffic-flow shimmer: crawl the dash phase. Both passes share the
