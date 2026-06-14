@@ -96,8 +96,8 @@
 					const fy = (gy + rng()) / GRID - 0.5;
 					const lat = lat0 + fy * 2 * halfDeg;
 					const lon = lon0 + (fx * 2 * halfDeg) / cosLat0;
-					const b = vf.sample(lat, lon);
-					if (b < BRIGHT_FLOOR) continue; // cull noise/rural → no orphan dots
+					const b = vf.sampleArea(lat, lon);
+					if (b < BRIGHT_FLOOR) continue; // neighbourhood mean < floor → no orphan dots
 					// Keep probabilistically by brightness — dense cores, sparse
 					// edges — instead of a uniform grid. Steep exponent so the dim
 					// outskirts contribute almost nothing.

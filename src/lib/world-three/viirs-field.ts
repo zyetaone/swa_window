@@ -40,6 +40,13 @@ const VIIRS_TILE = (z: number, y: number, x: number) =>
 export interface ViirsField {
 	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core). */
 	sample(lat: number, lon: number): number;
+	/**
+	 * Area-mean luminance averaged over a (2×radiusPx+1)² pixel neighbourhood.
+	 * A single sensor-noise pixel surrounded by dark cells returns a mean far
+	 * below the brightness floor, so it cannot spawn an orphan dot.
+	 * Clamps at tile edges like sample(). O(radiusPx²), Pi-cheap for r=1.
+	 */
+	sampleArea(lat: number, lon: number, radiusPx?: number): number;
 }
 
 // Fractional WebMercator tile coordinates (so we can sample sub-tile pixels).
@@ -130,6 +137,24 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 					const i = (py * 256 + px) * 4;
 					// VIIRS jpg is already a brightness map; luminance of RGB.
 					return (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+				},
+				sampleArea(la: number, lo: number, radiusPx = 1): number {
+					const fx = (lonToTileXf(lo, z) - tx) * 256;
+					const fy = (latToTileYf(la, z) - ty) * 256;
+					const cx = fx < 0 ? 0 : fx > 255 ? 255 : fx | 0;
+					const cy = fy < 0 ? 0 : fy > 255 ? 255 : fy | 0;
+					const r = radiusPx | 0;
+					let sum = 0;
+					for (let dy = -r; dy <= r; dy++) {
+						const py = cy + dy < 0 ? 0 : cy + dy > 255 ? 255 : cy + dy;
+						for (let dx = -r; dx <= r; dx++) {
+							const px = cx + dx < 0 ? 0 : cx + dx > 255 ? 255 : cx + dx;
+							const i = (py * 256 + px) * 4;
+							sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+						}
+					}
+					const count = (2 * r + 1) * (2 * r + 1);
+					return sum / (count * 255);
 				},
 			});
 		} catch {

@@ -137,6 +137,57 @@ describe('getViirsField — bounded retry on network error', () => {
 	});
 });
 
+describe('ViirsField.sampleArea', () => {
+	it('constant canvas: area mean equals the per-pixel luminance', () => {
+		const val = 180;
+		const pixels = new Uint8ClampedArray(256 * 256 * 4).fill(val);
+		vi.spyOn(document, 'createElement').mockReturnValue({
+			width: 0,
+			height: 0,
+			getContext: () => ({
+				drawImage: () => {},
+				getImageData: () => ({ data: pixels }),
+			}),
+		} as unknown as HTMLElement);
+		// lon=92 → fresh tile not used by other tests (z7 tile width is 2.8125°)
+		getViirsField(0, 92);
+		lastImg().onload?.();
+		const field = getViirsField(0, 92)!;
+		expect(field).not.toBeNull();
+		// (0.299 + 0.587 + 0.114) == 1 so luminance = val/255 exactly
+		const expected = val / 255;
+		expect(field.sampleArea(0, 92, 1)).toBeCloseTo(expected, 5);
+		expect(field.sampleArea(0, 92, 1)).toBeCloseTo(field.sample(0, 92), 5);
+	});
+
+	it('isolated bright pixel: area mean ≈ 1/9 of peak (below a 0.13 orphan floor)', () => {
+		// lon=94.21875 → lonToTileXf=97.5 → tile_x=97, pixel_x=128.
+		// lat=-1.4082 → latToTileYf≈64.5 → tile_y=64, pixel_y=128.
+		// Tile key 7/64/97 — different from the constant-canvas test (7/64/96),
+		// so the module-level cache does not carry over between these two tests.
+		const pixels = new Uint8ClampedArray(256 * 256 * 4).fill(0);
+		const cx = 128, cy = 128;
+		const ci = (cy * 256 + cx) * 4;
+		pixels[ci] = pixels[ci + 1] = pixels[ci + 2] = 255; // single white pixel
+		vi.spyOn(document, 'createElement').mockReturnValue({
+			width: 0,
+			height: 0,
+			getContext: () => ({
+				drawImage: () => {},
+				getImageData: () => ({ data: pixels }),
+			}),
+		} as unknown as HTMLElement);
+		const lat = -1.4082, lon = 94.21875;
+		getViirsField(lat, lon);
+		lastImg().onload?.();
+		const field = getViirsField(lat, lon)!;
+		// Nearest-pixel sees the bright center: sample() == 1.
+		expect(field.sample(lat, lon)).toBeCloseTo(1, 5);
+		// Area mean: 1 bright + 8 dark neighbours → ≈ 1/9 ≈ 0.111, below floor 0.13.
+		expect(field.sampleArea(lat, lon, 1)).toBeCloseTo(1 / 9, 1);
+	});
+});
+
 describe('removeViirsWaiter', () => {
 	it('a removed waiter is not notified on terminal resolution', () => {
 		stubCanvas();
