@@ -46,9 +46,16 @@
 	// fine candidate grid sampled against VIIRS, kept probabilistically by
 	// brightness so the density tracks the real light distribution. Capped for
 	// the Pi (one draw call regardless).
-	const PATCH_M = 46000;
-	const GRID = 150; // 150² = 22,500 candidates → ~307 m spacing
-	const MAX_POINTS = 4000;
+	// Tightened after "too many dots / orphan lights without logic": the field
+	// must sit ON the lit city, not scatter across dark/rural/water cells where
+	// VIIRS only has faint sensor noise. Smaller patch (concentrate on the
+	// metro), high brightness floor (cull the noise), steep keep-probability
+	// (dense cores, almost nothing at the dim edges), fewer total.
+	const PATCH_M = 34000; // ~34 km — hug the metro, not the whole region
+	const GRID = 140; // 140² candidates → ~243 m spacing
+	const MAX_POINTS = 2800;
+	const BRIGHT_FLOOR = 0.13; // below this VIIRS is noise/rural → no dot (kills orphans)
+	const KEEP_EXP = 1.1; // mild concentration → dense cores, thinner (not bare) edges
 	const RAD = Math.PI / 180;
 
 	let geometry = $state.raw<BufferGeometry | null>(null);
@@ -90,13 +97,16 @@
 					const lat = lat0 + fy * 2 * halfDeg;
 					const lon = lon0 + (fx * 2 * halfDeg) / cosLat0;
 					const b = vf.sample(lat, lon);
-					if (b < 0.05) continue;
+					if (b < BRIGHT_FLOOR) continue; // cull noise/rural → no orphan dots
 					// Keep probabilistically by brightness — dense cores, sparse
-					// edges — instead of a uniform grid.
-					if (rng() > Math.pow(b, 0.6)) continue;
+					// edges — instead of a uniform grid. Steep exponent so the dim
+					// outskirts contribute almost nothing.
+					if (rng() > Math.pow(b, KEEP_EXP)) continue;
 					const east = (lon - lon0) * RAD * cosLat0 * EARTH_RADIUS_M;
 					const north = (lat - lat0) * RAD * EARTH_RADIUS_M;
-					pos.push(east, 2 + rng() * 25, -north); // local ENU (x=E, y=up, z=-N)
+					// Low up-jitter (1–6 m) so the dots HUG the ground plane rather
+					// than floating in a slab above the terrain.
+					pos.push(east, 1 + rng() * 5, -north); // local ENU (x=E, y=up, z=-N)
 					bright.push(b);
 					phase.push(rng() * Math.PI * 2);
 					if (bright.length >= MAX_POINTS) break;
