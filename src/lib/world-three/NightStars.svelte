@@ -62,18 +62,48 @@
 	// Per-frame twinkle phase advance stays live (uTime in shader) so
 	// individual Pis don't synchronise their oscillation, only the
 	// underlying star positions.
+	// Milky Way — route a fraction of the stars into a tilted galactic-plane
+	// BAND (a great circle with a soft ±~11° gaussian spread) instead of the
+	// uniform sphere. This paints the faint "river of stars" across the sky
+	// purely as star DENSITY — no glow band (we just removed those), so it's
+	// safe: it's only more, dimmer points clustered along a plane, which bloom
+	// fuses into a soft haze. Deterministic (same seeded rng → same band on
+	// every Pi). MW_TILT crosses the band diagonally so it's not horizon-flat.
+	const MW_FRACTION = 0.42;
+	const MW_TILT = 1.05; // rad — galactic-plane inclination in world frame
+	const MW_HALFWIDTH = 0.19; // rad — band thickness (~11°)
+	const cosTilt = Math.cos(MW_TILT), sinTilt = Math.sin(MW_TILT);
+	function milkyWayPoint(r: () => number, radius: number): [number, number, number] {
+		const alpha = 2 * Math.PI * r(); // along the band
+		// Sum-of-uniforms ≈ gaussian latitude, concentrated on the plane.
+		const g = r() + r() + r() - 1.5;
+		const beta = g * MW_HALFWIDTH;
+		const cb = Math.cos(beta);
+		const dx = cb * Math.cos(alpha);
+		const dy = Math.sin(beta);
+		const dz = cb * Math.sin(alpha);
+		// Tilt about X so the band sweeps diagonally across the dome.
+		return [dx * radius, (dy * cosTilt - dz * sinTilt) * radius, (dy * sinTilt + dz * cosTilt) * radius];
+	}
+
 	const rng = createSeededRng(daySeed());
 	const positions = new Float32Array(STAR_COUNT * 3);
 	const phases = new Float32Array(STAR_COUNT);
 	const magnitudes = new Float32Array(STAR_COUNT);
 	const colors = new Float32Array(STAR_COUNT * 3);
 	for (let i = 0; i < STAR_COUNT; i++) {
-		const [x, y, z] = spherePoint(rng, STARS_RADIUS_M);
+		// Band stars: clustered on the galactic plane + biased FAINT (the Milky
+		// Way reads as a haze of dim stars, not bright ones — the hero stars
+		// stay in the uniform field). Field stars: uniform sphere, cubic-dim.
+		const inBand = rng() < MW_FRACTION;
+		const [x, y, z] = inBand
+			? milkyWayPoint(rng, STARS_RADIUS_M)
+			: spherePoint(rng, STARS_RADIUS_M);
 		positions[i * 3 + 0] = x;
 		positions[i * 3 + 1] = y;
 		positions[i * 3 + 2] = z;
 		phases[i] = rng() * Math.PI * 2;
-		const m = Math.pow(rng(), 3); // cubic bias toward dim
+		const m = inBand ? Math.pow(rng(), 5) * 0.55 : Math.pow(rng(), 3);
 		magnitudes[i] = m;
 		const tint = pickSpectralTint(rng);
 		colors[i * 3 + 0] = tint[0];
