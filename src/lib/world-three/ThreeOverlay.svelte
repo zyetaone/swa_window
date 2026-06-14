@@ -32,7 +32,6 @@
 	import NightStars from './NightStars.svelte';
 	import Venus from './Venus.svelte';
 	import Moon from './Moon.svelte';
-	import OsmBuildingEdges from './OsmBuildingEdges.svelte';
 	import OsmRoads from './OsmRoads.svelte';
 	import CityLightField from './CityLightField.svelte';
 	import CityGlowDome from './CityGlowDome.svelte';
@@ -175,7 +174,10 @@
 		     the low-frequency glow dome (behind) and the sharp neon (on top). -->
 		<CityLightField location={model.location} />
 		<OsmRoads location={model.location} />
-		<OsmBuildingEdges location={model.location} />
+		<!-- OsmBuildingEdges (footprint-outline neon) pulled for review — the
+		     CityLightField carpet + OsmRoads streets may cover its read. Restore
+		     by re-adding the import + this mount if the city looks too sparse. -->
+		<!-- <OsmBuildingEdges location={model.location} /> -->
 		<Clouds
 			density={model.effectiveCloudDensity}
 			nightFactor={model.nightFactor}
