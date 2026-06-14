@@ -363,15 +363,19 @@
 		const ambI = ambientIntensity;
 		const opaScale = opacityScale;
 
-		// nightDark multiplier dropped 0.88 → 0.55 so clouds stay readable
-		// as a grey deck at night, not a black silhouette. At nf=1 they
-		// now hold 45% brightness (was 12%). User feedback: "night clouds
-		// should be grey not black." Combined with the cool channel shifts
-		// (coolG, coolB below) and reduced ambient at night, this gives
-		// the moonlit cumulus feel without going pitch-black.
-		const nightDark = 1 - nf * 0.55;
-		const coolG = 1 - nf * 0.16;
-		const coolB = 1 - nf * 0.11;
+		// nightDark multiplier: 0.55 read MILKY/daylit at deep night (the
+		// lit term held 45% brightness which, summed with the moonLit floor
+		// + bloom, blew clouds to bright grey-white). Pulled to 0.78 so the
+		// daylit lit-term collapses to ~22% at nf=1 — clouds read as DIM
+		// grey-blue masses, not white. The moonLit floor below (also dropped)
+		// supplies the only night visibility, keeping them as silhouetted
+		// moonlit deck rather than a black void. Dawn/dusk (nf<1) ramps in
+		// proportionally so day/golden-hour are unchanged. The cool channel
+		// shifts are deepened (coolG/coolB) to push the residual toward the
+		// blue-grey of a moonlit night sky instead of neutral grey.
+		const nightDark = 1 - nf * 0.78;
+		const coolG = 1 - nf * 0.22;
+		const coolB = 1 - nf * 0.08;
 
 		// City skyglow factor — when over a city archetype at night, light
 		// pollution from the urban core below reflects off cloud bases as a
@@ -466,14 +470,15 @@
 			const litG = baseB * (1 + liveSunBoost * 0.85 + mie * 0.95 + sunSide * 1.00);
 			const litB = baseB * (1 + liveSunBoost * 0.85 + mie * 0.42 + sunSide * 0.85);
 
-			// Moonlit floor — additive grey lift gated by nightFactor. Without
-			// this, the ambient pipeline (color ~0.30,0.40,0.65 × intensity
-			// 0.12 at full night) crushes clouds to ~1-2% per channel — they
-			// read as black silhouettes against the slightly-lit sky instead
-			// of a moonlit grey deck. The lift scales by baseB so wispy/thin
-			// clouds stay subtle and dense clusters read as a proper deck.
-			// Slight blue tint on B mimics moonlight Rayleigh scatter.
-			const moonLit = L.moonContribution * baseB * 0.16;
+			// Moonlit floor — additive grey-blue lift gated by nightFactor.
+			// Without this, the ambient pipeline crushes clouds to ~1-2% per
+			// channel — black silhouettes. But the prior 0.16 coefficient
+			// over-lifted: combined with the (then higher) nightDark floor +
+			// bloom it read as milky white. Dropped 0.16 → 0.085 so the deck
+			// stays DIM — visible as grey-blue mass, not a bright wash. The
+			// blue bias is carried in the per-channel mix below (B > R) so it
+			// reads as cool moonlight Rayleigh scatter, not neutral white.
+			const moonLit = L.moonContribution * baseB * 0.085;
 
 			// City skyglow — warm-amber additive on cluster underside.
 			// Strong on R, mid on G, weak on B → reads as sodium-amber
@@ -486,10 +491,13 @@
 			const cityLitG = cityGlowStrength * baseB * 0.55;
 			const cityLitB = cityGlowStrength * baseB * 0.18;
 
+			// Moonlit per-channel mix biased COOL (R suppressed, B lifted) so
+			// the dim night deck reads grey-blue like real moonlit cumulus,
+			// not neutral/warm grey. R 0.82 < G 1.0 < B 1.22.
 			mat.color.setRGB(
-				litR * nightDark         * ambR * ambI + moonLit         + cityLitR,
-				litG * nightDark * coolG * ambG * ambI + moonLit * 1.02 + cityLitG,
-				litB * nightDark * coolB * ambB * ambI + moonLit * 1.10 + cityLitB,
+				litR * nightDark         * ambR * ambI + moonLit * 0.82 + cityLitR,
+				litG * nightDark * coolG * ambG * ambI + moonLit * 1.00 + cityLitG,
+				litB * nightDark * coolB * ambB * ambI + moonLit * 1.22 + cityLitB,
 			);
 			mat.opacity = baseO * opaScale;
 		}

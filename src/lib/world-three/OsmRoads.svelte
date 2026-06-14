@@ -97,7 +97,7 @@
 <NeonLineLayer
 	{location}
 	endpoint="/api/roads"
-	coreColor={0xffeccc}
+	coreColor={0xffc77a}
 	coreWidth={1.5}
 	haloColor={0xdca860}
 	haloWidth={4.5}

@@ -311,11 +311,15 @@
 				for (let i = 0; i < col.length; i += 3) {
 					const lon = lon0 + (p[i] / (cosLat0 * EARTH_RADIUS_M)) * RAD;
 					const lat = lat0 + (-p[i + 2] / EARTH_RADIUS_M) * RAD;
-					// dark→0.3, bright→~1.15. Bright cores already get the VIIRS
+					// dark→0.3, bright→~1.0. Bright cores already get the VIIRS
 					// raster boost + Cesium emissive shader + two blooms — the
 					// core halo is owned by bloom + CityGlowDome, the neon must
-					// not compound it. Keep the ceiling barely above 1.
-					const f = 0.3 + 0.85 * vfield.sample(lat, lon);
+					// not compound it. Ceiling pulled 1.15 → 1.0: under additive
+					// blending the >1 product was driving major-arterial cores
+					// past saturation (all 3 channels → white) even with the
+					// warm-biased core colour. At exactly 1.0 the warm vertex
+					// hue survives the additive sum, so cores stay amber/sodium.
+					const f = 0.3 + 0.70 * vfield.sample(lat, lon);
 					col[i] *= f; col[i + 1] *= f; col[i + 2] *= f;
 				}
 			}
