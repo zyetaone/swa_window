@@ -34,7 +34,9 @@
 		ambientIntensity?: number;
 	} = $props();
 
-	const STAR_COUNT = 1800;
+	// Reduced from 1800 → 320: Cesium's skyBox (Tycho-2) is now the dense star
+	// field; these are just the bright animated twinklers layered on top.
+	const STAR_COUNT = 320;
 
 	// Spectral-class palette (approximate Bayer distribution). Cumulative
 	// probabilities + tints — realistic mix is M-class red dwarves
@@ -62,49 +64,26 @@
 	// Per-frame twinkle phase advance stays live (uTime in shader) so
 	// individual Pis don't synchronise their oscillation, only the
 	// underlying star positions.
-	// Milky Way — route a fraction of the stars into a tilted galactic-plane
-	// BAND (a great circle with a soft ±~11° gaussian spread) instead of the
-	// uniform sphere. This paints the faint "river of stars" across the sky
-	// purely as star DENSITY — no glow band (we just removed those), so it's
-	// safe: it's only more, dimmer points clustered along a plane, which bloom
-	// fuses into a soft haze. Deterministic (same seeded rng → same band on
-	// every Pi). MW_TILT crosses the band diagonally so it's not horizon-flat.
-	const MW_FRACTION = 0.42;
-	const MW_TILT = 1.05; // rad — galactic-plane inclination in world frame
-	const MW_HALFWIDTH = 0.19; // rad — band thickness (~11°)
-	const cosTilt = Math.cos(MW_TILT), sinTilt = Math.sin(MW_TILT);
-	function milkyWayPoint(r: () => number, radius: number): [number, number, number] {
-		const alpha = 2 * Math.PI * r(); // along the band
-		// Sum-of-uniforms ≈ gaussian latitude, concentrated on the plane.
-		const g = r() + r() + r() - 1.5;
-		const beta = g * MW_HALFWIDTH;
-		const cb = Math.cos(beta);
-		const dx = cb * Math.cos(alpha);
-		const dy = Math.sin(beta);
-		const dz = cb * Math.sin(alpha);
-		// Tilt about X so the band sweeps diagonally across the dome.
-		return [dx * radius, (dy * cosTilt - dz * sinTilt) * radius, (dy * sinTilt + dz * cosTilt) * radius];
-	}
-
+	// Cesium's skyBox (Tycho-2 catalog + Milky Way arc) is now the PRIMARY star
+	// field. The Three NightStars are reduced to a SMALL set of bright animated
+	// twinklers layered on top — the live scintillation Cesium's static texture
+	// can't do. So: no Milky Way band here (Cesium's is real), and only the
+	// bright magnitude tail (biased UP, not the dim dust) so they read as the
+	// handful of brightest stars catching the eye. Uniform sphere, seeded.
 	const rng = createSeededRng(daySeed());
 	const positions = new Float32Array(STAR_COUNT * 3);
 	const phases = new Float32Array(STAR_COUNT);
 	const magnitudes = new Float32Array(STAR_COUNT);
 	const colors = new Float32Array(STAR_COUNT * 3);
 	for (let i = 0; i < STAR_COUNT; i++) {
-		// Band stars: clustered on the galactic plane + biased FAINT (the Milky
-		// Way reads as a haze of dim stars, not bright ones — the hero stars
-		// stay in the uniform field). Field stars: uniform sphere, cubic-dim.
-		const inBand = rng() < MW_FRACTION;
-		const [x, y, z] = inBand
-			? milkyWayPoint(rng, STARS_RADIUS_M)
-			: spherePoint(rng, STARS_RADIUS_M);
+		const [x, y, z] = spherePoint(rng, STARS_RADIUS_M);
 		positions[i * 3 + 0] = x;
 		positions[i * 3 + 1] = y;
 		positions[i * 3 + 2] = z;
 		phases[i] = rng() * Math.PI * 2;
-		const m = inBand ? Math.pow(rng(), 5) * 0.55 : Math.pow(rng(), 3);
-		magnitudes[i] = m;
+		// Bias BRIGHT (sqrt, not cubic) — these are the few hero twinklers, not
+		// the dim dust (Cesium's catalog supplies the dust).
+		magnitudes[i] = Math.sqrt(rng());
 		const tint = pickSpectralTint(rng);
 		colors[i * 3 + 0] = tint[0];
 		colors[i * 3 + 1] = tint[1];

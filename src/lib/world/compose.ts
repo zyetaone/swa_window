@@ -276,15 +276,17 @@ export class CesiumManager {
 		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
-		// Cesium skyBox OFF — it ships the Tycho-2 catalog texture which
-		// includes a diffuse MILKY WAY ARC that reads as a faint white band
-		// across the night sky. With Three.js NightStars (1,200 stars with
-		// spectral classes + magnitude + twinkle) + Meteors handling stellar
-		// content, the Cesium skyBox is doubled-up and contributes only the
-		// undesired Milky Way artifact. Disabled here at setup; the tick-loop
-		// equivalent below is also flipped to false.
+		// Cesium skyBox ON — it ships the real Tycho-2 catalog texture (thousands
+		// of accurately-placed stars + the Milky Way arc), Cesium's native night
+		// sky. This is now the PRIMARY star field on BOTH paths: the ship route
+		// (Three overlay off) gets a real starry sky instead of empty black, and
+		// the hybrid lab uses Cesium's real catalog too. The Three NightStars are
+		// reduced to a few bright animated twinklers on top (Cesium's skyBox is
+		// static); the Three Milky Way was removed (Cesium's is real). Cesium owns
+		// the stars; Three owns moon/meteors/sparkles. (Was force-OFF in Phase 16
+		// when Three owned the whole star field.)
 		if (v.scene.skyBox)
-			(v.scene.skyBox as any).show = false;
+			(v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		// Cesium's built-in moon is OFF — the Three-side Moon component (in
 		// world-three/Moon.svelte for the /playground/three composition) gives
@@ -714,10 +716,10 @@ export class CesiumManager {
 			this.syncClock();
 		}
 
-		// Skybox OFF — see setup() for rationale. Guarded: only written
-		// once (setup already sets false), skipped every frame after.
-		if (v.scene.skyBox && (v.scene.skyBox as any).show !== false)
-			(v.scene.skyBox as any).show = false;
+		// Skybox ON — Cesium's Tycho-2 star catalog is the primary night sky
+		// (see setup() for rationale). Guarded: written once, skipped after.
+		if (v.scene.skyBox && (v.scene.skyBox as any).show !== true)
+			(v.scene.skyBox as any).show = true;
 
 		// Globe color: lerp day → night by nightFactor, then bias toward
 		// duskBias proportional to dawnDuskFactor × duskWeight. Targets live
