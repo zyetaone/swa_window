@@ -99,14 +99,16 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Window color variation (5 types)
 		float colorMix = fract(sin(dot(cellId, vec2(269.5, 183.3))) * 7461.7);
-		// Palette: YELLOW + WHITE only (per direction). The old cool/screen
-		// tints pulled blue into the city; dropped them so the night reads as
-		// sodium-yellow windows + fluorescent white, no blue cast.
-		vec3 warmColor   = vec3(1.0, 0.78, 0.40);    // sodium yellow (residential)
-		vec3 coolColor   = vec3(0.96, 0.96, 0.92);   // white (was blue office)
-		vec3 retailColor = vec3(1.0, 0.85, 0.55);    // warm yellow (retail/lobby)
-		vec3 screenColor = vec3(1.0, 0.90, 0.72);    // warm white (was blue screens)
-		vec3 officeWhite = vec3(1.0, 0.98, 0.94);    // fluorescent white
+		// Palette: full sodium family. All five entries sit in the
+		// amber-to-warm-gold band; no cool or near-pure whites. At 35 k ft
+		// atmospheric scattering + light-pollution haze warm every window
+		// colour toward HPS amber — a cold office-white is a surface fiction,
+		// not a 35 k ft truth.
+		vec3 warmColor   = vec3(1.0, 0.68, 0.22);    // LPS sodium amber (residential)
+		vec3 coolColor   = vec3(1.0, 0.86, 0.56);    // HPS warm-gold (office tower)
+		vec3 retailColor = vec3(1.0, 0.76, 0.32);    // HPS street-front (retail/lobby)
+		vec3 screenColor = vec3(1.0, 0.88, 0.62);    // golden warm-white (mixed use)
+		vec3 officeWhite = vec3(1.0, 0.91, 0.70);    // warm white (no pure whites from altitude)
 
 		vec3 upperColor = mix(
 			mix(warmColor, coolColor, smoothstep(0.0, 0.4, colorMix)),
@@ -124,7 +126,7 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Street-level ambient glow (sodium lamps illuminate building bases)
 		float streetGlow = smoothstep(6.0, 0.0, wp.z) * 0.4;
-		vec3 streetLampColor = vec3(1.0, 0.82, 0.45);
+		vec3 streetLampColor = vec3(1.0, 0.72, 0.28); // classic HPS lamp — deeper amber
 
 		// Rooftop aviation warning lights (tall buildings only, slow blink)
 		float isTall = smoothstep(30.0, 50.0, buildingHeight);
