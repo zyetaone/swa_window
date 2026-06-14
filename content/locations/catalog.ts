@@ -144,3 +144,31 @@ export const LOCATION_MAP = new Map<LocationId, Location>(LOCATIONS_DATA.map((l)
 export function isValidLocation(v: unknown): v is LocationId {
 	return typeof v === 'string' && (LOCATION_IDS as ReadonlySet<string>).has(v);
 }
+
+/**
+ * Approximate ground elevation (metres AMSL) per location. Cesium drapes
+ * VIIRS / roads / buildings on real terrain at this height; Three geo-anchored
+ * night lights (bokeh, neon, glow dome) must anchor at the SAME elevation
+ * (passed as the `altM` of geoToCartesian/enuAnchorMatrix) or they float off
+ * the lit ground. Rough city-centre values are plenty — the registration error
+ * they remove is ~hundreds of metres; sub-100 m precision is invisible from the
+ * air. Defaults to 0 (sea level) for anything unlisted.
+ */
+const GROUND_ALT_M: Partial<Record<LocationId, number>> = {
+	hyderabad: 542,
+	denver: 1609,
+	las_vegas: 620,
+	phoenix: 331,
+	dallas: 131,
+	chicago_midway: 188,
+	himalayas: 4200,
+	desert: 320,
+	dubai: 5,
+	mumbai: 14,
+	clouds: 40,
+};
+
+/** Ground elevation (m AMSL) for a location; 0 if unlisted. */
+export function groundAltM(id: LocationId): number {
+	return GROUND_ALT_M[id] ?? 0;
+}

@@ -14,6 +14,7 @@
 	import { AdditiveBlending, Color, type Group as ThreeGroup, type Matrix4 } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { enuAnchorMatrix } from './enu';
+	import { groundAltM } from '$content/locations';
 	import { makeRadialTexture } from './texture-util';
 	import { lightingState } from './lighting';
 
@@ -26,7 +27,7 @@
 
 	const anchor = $derived.by<Matrix4 | null>(() => {
 		const loc = model.currentLocation;
-		return loc ? enuAnchorMatrix(loc.lat, loc.lon, 0) : null;
+		return loc ? enuAnchorMatrix(loc.lat, loc.lon, groundAltM(loc.id)) : null;
 	});
 
 	$effect(() => {

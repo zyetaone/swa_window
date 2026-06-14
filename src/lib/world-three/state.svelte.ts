@@ -63,10 +63,21 @@ type Vec3 = [number, number, number];
  * transform required.
  */
 export function geoToCartesian(latDeg: number, lonDeg: number, altM: number): Vec3 {
-	const r = EARTH_RADIUS_M + altM;
+	// WGS84 ellipsoid (NOT a sphere) — Cesium places its globe + terrain +
+	// imagery on the WGS84 ellipsoid and the camera is mirrored from Cesium's
+	// exact ECEF frame, so Three geo-anchored content MUST use the same ellipsoid
+	// or it mis-registers vertically by the sphere-vs-ellipsoid gap (~1.9 km at
+	// mid-latitudes) — the root cause of "orphan lights" floating off the lit
+	// ground. Axis convention unchanged (X=ecef_x, Y=ecef_z up, Z=−ecef_y); only
+	// the radial distance becomes latitude-dependent via the prime-vertical
+	// radius N. Pass altM = terrain elevation to land assets ON the draped ground.
+	const e2 = 0.0066943799901413165; // WGS84 first eccentricity²
 	const lat = (latDeg * Math.PI) / 180;
 	const lon = (lonDeg * Math.PI) / 180;
+	const sinLat = Math.sin(lat);
 	const cosLat = Math.cos(lat);
-	return [r * cosLat * Math.cos(lon), r * Math.sin(lat), -r * cosLat * Math.sin(lon)];
+	const N = EARTH_RADIUS_M / Math.sqrt(1 - e2 * sinLat * sinLat);
+	const xy = (N + altM) * cosLat;
+	return [xy * Math.cos(lon), (N * (1 - e2) + altM) * sinLat, -xy * Math.sin(lon)];
 }
 

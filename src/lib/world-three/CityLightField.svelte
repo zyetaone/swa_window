@@ -30,7 +30,7 @@
 		type Group as ThreeGroup,
 		type Matrix4,
 	} from 'three';
-	import { LOCATION_MAP } from '$content/locations';
+	import { LOCATION_MAP, groundAltM } from '$content/locations';
 	import type { LocationId } from '$lib/types';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { enuAnchorMatrix } from './enu';
@@ -122,7 +122,7 @@
 			g.setAttribute('aPhase', new BufferAttribute(new Float32Array(phase), 1));
 			pendingDispose = g;
 			geometry = g;
-			anchorMatrix = enuAnchorMatrix(lat0, lon0, 0);
+			anchorMatrix = enuAnchorMatrix(lat0, lon0, groundAltM(location));
 		});
 	});
 

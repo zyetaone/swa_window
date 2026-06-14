@@ -40,7 +40,7 @@
 	import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 	import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 	import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-	import { LOCATION_MAP } from '$content/locations';
+	import { LOCATION_MAP, groundAltM } from '$content/locations';
 	import type { LocationId } from '$lib/types';
 	import { enuAnchorMatrix } from './enu';
 	import { EARTH_RADIUS_M } from './state.svelte';
@@ -328,7 +328,7 @@
 			if (result.colors) geom.setColors(result.colors);
 			pendingDispose = geom;
 			geometry = geom;
-			anchorMatrix = enuAnchorMatrix(raw.lat, raw.lon, 0);
+			anchorMatrix = enuAnchorMatrix(raw.lat, raw.lon, groundAltM(location));
 		});
 	});
 

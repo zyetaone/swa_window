@@ -12,6 +12,7 @@ export {
 	LOCATION_IDS,
 	LOCATION_MAP,
 	isValidLocation,
+	groundAltM,
 	type Location,
 	type LocationId,
 	type SceneDefaults,
