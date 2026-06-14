@@ -84,7 +84,11 @@
 	// uniform scale.
 	const WING_SCALE_X = 1.11;
 	const WING_SCALE_Y = 1.11;
-	const WING_SCALE_Z = 1.11;
+	// Negative Z mirrors the CHORD (leading↔trailing edge) so the wing faces
+	// WITH the direction of travel (user-confirmed). Safe now that recenter runs
+	// AFTER scale (below) — the negative component no longer offsets the wing
+	// off-frame. DoubleSide materials mean the flipped winding doesn't cull.
+	const WING_SCALE_Z = -1.11;
 	// Mirror state (which travel direction shows the un-mirrored "good" pose) is
 	// no longer a standalone WING_NATURAL_DIR guess — it's derived in the tick
 	// from screenTravelSign(), the same term that defines world-drift direction,
