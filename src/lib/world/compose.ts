@@ -990,7 +990,17 @@ export class CesiumManager {
 		// (35k+) CartoDB holds at ~40% so the street skeleton still ghosts
 		// through the amber wash; at descent (<15k) CartoDB carries the
 		// detail load while VIIRS has faded out.
-		if (this.roadMaskLayer) {
+		// Hybrid dedup (night-light ultrathink, 3-lens consensus): the CartoDB
+		// raster road-mask is a WHITE global road skeleton that clashes with the
+		// Three OsmRoads AMBER neon tracing the same streets (different colour,
+		// different registration) — the #1 incoherence. When the Three overlay
+		// is active, the neon owns roads; hide the mask. The Cesium-only ship
+		// path (flag off until the Pi gate) keeps it as its sole global road
+		// source. (Uncovered lab locations lose sharp roads but keep VIIRS +
+		// bokeh, which reads MORE coherent than a clashing white grid.)
+		if (this.roadMaskLayer && this.model.config.world.useThreeOverlay) {
+			if (this.roadMaskLayer.show) this.roadMaskLayer.show = false;
+		} else if (this.roadMaskLayer) {
 			const altRampLowFt  = 15000;
 			const altRampHighFt = 35000;
 			const altRamp = clamp(
