@@ -69,9 +69,9 @@
 	// the span RECEDES into the distance (rotY≈1.36 swings the span into
 	// camera-depth) — the real out-the-window look: root near you, winglet far.
 	// Values baked from the DevWingTuner; re-tune there and paste the readout.
-	const WING_X_BASE = -4.5;
-	const WING_Y_BASE = -2.2;
-	const WING_Z_BASE = -3.7;
+	const WING_X_BASE = -5.3;
+	const WING_Y_BASE = -2.6;
+	const WING_Z_BASE = -3.0;
 	// Orientation (radians). rotY is the receding swing (span → depth); rotX is
 	// the static resting pitch (look-down onto the top surface) — NOT the bank,
 	// which the tick applies separately from motion.bankAngle. rotZ is a small
