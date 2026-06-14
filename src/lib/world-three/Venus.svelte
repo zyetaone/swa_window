@@ -42,7 +42,7 @@
 	// Venus is real-world ~1.7° subtended at brightest. We use a tiny
 	// sprite + bloom halo for the actual visual punch — the core itself
 	// reads as a hot point, bloom expands it into a recognisable star.
-	const VENUS_SIZE_M = 1.5e6;
+	const VENUS_SIZE_M = 1.9e6;
 
 	// Dawn window: Venus is visible from astronomical twilight (~ sun at
 	// -18°) through civil twilight (sun at -6°) and even ~30 min after

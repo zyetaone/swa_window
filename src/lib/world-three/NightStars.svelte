@@ -34,7 +34,7 @@
 		ambientIntensity?: number;
 	} = $props();
 
-	const STAR_COUNT = 1200;
+	const STAR_COUNT = 1800;
 
 	// Spectral-class palette (approximate Bayer distribution). Cumulative
 	// probabilities + tints — realistic mix is M-class red dwarves
@@ -130,8 +130,12 @@
 				float twinkleAmp = 0.06 + aMagnitude * 0.45;
 				float twinkle = 1.0 + twinkleAmp * (0.7 * twinkleBase + 0.3 * twinkleFast);
 				// Magnitude-driven brightness — dim stars stay dim, bright
-				// stars punch (and bloom in EffectStack).
-				float bright = 0.18 + aMagnitude * 1.05;
+				// stars punch (and bloom in EffectStack). The mid/bright tail
+				// is curved UP (aMagnitude^0.8 boost) so prominent stars
+				// genuinely shine against the now-clean black sky, while the
+				// faint floor (0.22) keeps the dust subtle but perceptible —
+				// the magnitude hierarchy is preserved, just with more contrast.
+				float bright = 0.22 + pow(aMagnitude, 0.8) * 1.55;
 
 				// Per-star magnitude-gated fade-in. This is how a real night
 				// sky reveals itself: bright planets/stars (Vega, Sirius)
@@ -176,9 +180,11 @@
 				vec4 mv = modelViewMatrix * vec4(position, 1.0);
 				gl_Position = projectionMatrix * mv;
 				#include <logdepthbuf_vertex>
-				// Size scales with magnitude: 1.4 px for the dimmest stars,
-				// 4.4 px for the brightest — the brightest will bloom strongly.
-				gl_PointSize = 1.4 + aMagnitude * 3.0;
+				// Size scales with magnitude: 1.5 px for the dimmest stars,
+				// ~6.2 px for the brightest — the brightest read as distinct
+				// bright points and bloom strongly. Curved (^0.7) so the size
+				// boost concentrates on the prominent stars, not the faint dust.
+				gl_PointSize = 1.5 + pow(aMagnitude, 0.7) * 4.7;
 			}
 		`,
 		fragmentShader: /* glsl */ `

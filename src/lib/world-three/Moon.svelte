@@ -47,7 +47,10 @@
 	// reads from the single source of truth.
 	const MOON_PLACEMENT_M = SUN_PLACEMENT_M;
 	const MOON_RADIUS_M = 2.0e6;
-	const MOON_HALO_SIZE_M = MOON_RADIUS_M * 8;
+	// Halo widened 8×→10× the disc so the moon carries a soft atmospheric
+	// scatter glow that makes it findable in a wide night frame — the eye
+	// catches the bloom before the disc. Still well within camera.far.
+	const MOON_HALO_SIZE_M = MOON_RADIUS_M * 10;
 
 	// Single sun-direction computation shared by moonOffset, airMassFactor,
 	// and the uniform $effect. Previously each derived its own call — 3×
@@ -177,7 +180,14 @@
 			float view = clamp(dot(vWorldNormal, vViewDir), 0.0, 1.0);
 			float limb = smoothstep(0.0, 0.55, view);
 
-			vec3 color = uMoonTint * lit * crat * (0.60 + limb * 0.45);
+			// Lit-side gain (1.35) lifts the sunlit hemisphere well above the
+			// bloom threshold so the moon reads as a luminous focal point —
+			// the brightest object in the night frame — and the bloom halo
+			// blooms cleanly off it. The terminator + crescent shape is still
+			// fully preserved (lit/crat/limb shape the disc; only the gain on
+			// the lit fraction changes). Limb floor lifted 0.60→0.66 so the
+			// disc edge doesn't vanish into the black sky.
+			vec3 color = uMoonTint * lit * crat * (0.66 + limb * 0.45) * 1.35;
 			gl_FragColor = vec4(color, uVisibility);
 		}
 	`;
@@ -308,7 +318,7 @@
 	<T.SpriteMaterial
 		map={haloTexture}
 		color={haloTint}
-		opacity={moonVisibility * 0.55}
+		opacity={moonVisibility * 0.72}
 		transparent
 		depthWrite={false}
 		depthTest={true}
