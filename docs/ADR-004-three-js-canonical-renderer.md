@@ -1,6 +1,11 @@
 # ADR-004 — Three.js + Threlte as the Canonical Renderer
 
-> Status: Proposed (2026-05-27). Awaiting decision by project owner.
+> Status: Proposed (2026-05-27) → **in hardware validation** on branch
+> `hybrid-v2` (2026-06-15). The shipped shape is a Cesium+Three **hybrid** gated
+> by `config.world.useThreeOverlay` (default off), NOT a pure-Three replacement —
+> see "Current decision record (2026-06-15)" at the bottom for the authoritative
+> status; the Context/Decision sections below are the original framing, kept as
+> history. Decision still gated on the P8 Pi-5 perf run.
 > Counter-proposal to the 2026-05-27 *Experiential Flight Window Display*
 > brief which framed pre-rendered Earth Studio video as Phase 1.
 >
@@ -321,3 +326,65 @@ This hybrid + 3D work directly de-risks the "Three as future canonical" path whi
 - 2026-05-xx: Harness skeleton landed in `tools/perf/` (polished README with exact ADR acceptance criteria + robust console logger using the existing `model.telemetry` ring buffer + Bun driver script + standalone injectable-snippet.js). Zero new deps. Shift+T TelemetryPanel remains the zero-code live view. Ready for real Pi 5 hardware session. Everything is small and deletable post-validation. See `tools/perf/README.md`.
 
 This cycle (environment/sky consistency + full "All!" items) brings the three-lab hybrid to a clean, well-documented, and deduplicated state while strictly respecting surgical commit discipline on the live surface.
+
+---
+
+## Current decision record (2026-06-15) — `hybrid-v2` consolidation
+
+This section supersedes the scattered "All!"-cycle notes above as the canonical
+status. The architecture that actually landed is **not** "pure-Three replaces
+Cesium" (the original framing in Context/Decision §1 is historical). It is a
+**hybrid**: Cesium remains the base renderer (terrain/imagery/VIIRS/atmosphere/
+post-process/bloom); a transparent Three.js overlay (`world-three/`) composes
+photoreal layers above it, camera-mirrored from Cesium each frame. The overlay
+is gated by **`config.world.useThreeOverlay` (default `false`)** — so `/` is
+byte-identical to `pre-ship-v1` until the gate flips. The decision is a *config
+flag*, not a code fork.
+
+### What landed on `hybrid-v2` (all tests green, 367)
+
+**Cross-renderer SSOTs** (framework-free, imported by both Cesium `world/` and
+Three `world-three/` — does not break Cesium-isolation invariant #1, they are
+pure math):
+- `world-lighting/curves.ts` — `lightingState(timeOfDay, nightFactor)` owns the
+  whole day/dusk/night response; kills the "white horizon seam" where Cesium and
+  Three derived night independently.
+- `world-lighting/altitude.ts` — `altitudeDetailMix` unifies the 5 night-light
+  altitude gates (NEAR layers × mix, FAR × 1−mix). Three-side consumers are live;
+  the Cesium-side gates (VIIRS/CartoDB/building-emissive) carry TODOs to flip
+  post-perf-gate (compose.ts is the high-blast-radius shipping renderer).
+- `cityLightAmount` + `cityGlowAmount` (in curves.ts) — the discrete-lights and
+  diffuse-skyglow night curves; CityLightField + OsmRoads + CityGlowDome read
+  them so the night-city layers brighten in lock-step (one owner, not per-layer
+  raw-nf thresholds). Test-pinned (lights lead glow).
+- `content/palettes/city-lights.ts` — the named warm hue family (sodium/amber/
+  warm-white/cool-LED). A full "every layer reads one palette" merge was explored
+  and rejected as a wrong abstraction (role-differentiated hues across 5
+  representations); the module is the documented reference + the cheap Three
+  consumers import it. Hex round-trip test-pinned.
+
+**Night-light layer set** (Three overlay): `CityLightField` (VIIRS-placed bokeh
+carpet, bilinear-sampled, seeded for 3-Pi), `CityGlowDome` (diffuse skyglow),
+`OsmRoads` (neon streets via `NeonLineLayer`). `OsmBuildingEdges` was **removed** —
+the carpet + streets cover its read.
+
+**Flight groundwork** (Phase C1–C2): `flight.noseHeadingDeg` getter + `body`
+accessor + `SEAT_LOOK_DEG` named. The C4 keystone (wing built from body frame,
+drop the camera-quaternion copy) stays gated to post-Pi hardware.
+
+**Ship-readiness**: Cesium init bounded auto-retry; `/?overlay=1|0` URL param to
+run the perf A/B on the ship route.
+
+### The one remaining gate — P8 (Pi-5 perf)
+
+The go/no-go is the **overlay-ON vs OFF delta** on `/`, on real Pi-5 hardware:
+acceptance ≥30 fps cruise / ≥24 fps city-approach. Procedure in
+`tools/perf/README.md` (§3, the `?overlay=` A/B).
+
+- **GO** → flip `useThreeOverlay` default to `true`, tag `pre-ship-v2`, then
+  proceed with the gated Cesium-side `altitudeDetailMix` migration + the C4 wing
+  keystone.
+- **NO-GO** → default stays `false`; the hybrid remains lab-only and matures as
+  v2; SWA Hyderabad ships Cesium-only (`pre-ship-v1`) unchanged.
+
+Until then `main`/`pre-ship-v1` is the untouched proven fallback.
