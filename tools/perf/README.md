@@ -71,8 +71,14 @@ Pin the scenario with the other params so both runs match exactly:
 
 `?time=` (decimal hours 0-24) pins time-of-day and disables real-time sync, so a
 night run is reproducible regardless of the wall-clock hour. (`?role=` also
-composes for a 3-Pi unit.) All params are read once at mount, overlay defaults
-off — a normal visitor or the kiosk autostart never enables it.
+composes for a 3-Pi unit.) `?overlay` is read once at mount and defaults off — a
+normal visitor or the kiosk autostart never enables it.
+
+> ⚠ `?time` persists `syncToRealTime=false` to localStorage (same as unchecking
+> "sync to real time" in the SidePanel). On a unit that will later run the live
+> circadian display, re-enable real-time after benchmarking — toggle it back in
+> the SidePanel, or clear the kiosk's localStorage — otherwise it stays pinned at
+> the benchmark hour. (Irrelevant on a throwaway test Pi.)
 
 ### Recommended Pi 5 Test Matrix
 - Cold boot → first stable frame (target measured separately via boot logs + first RAF)
