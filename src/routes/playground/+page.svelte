@@ -11,7 +11,6 @@
 	 * Production `/` uses the exact same CesiumViewer + Compositor; the
 	 * only difference is `/` adds the installation shell on top.
 	 */
-	import { onDestroy } from 'svelte';
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
 	import { WEATHER_EFFECTS } from '$content/weather';
 	import { clamp } from '$lib/utils';
@@ -29,10 +28,6 @@
 	// Weather derivations (same shape as production /).
 	const weatherFx = $derived(WEATHER_EFFECTS[model.weather]);
 	const frostAmount = $derived(clamp((model.flight.altitude - 25000) / 15000, 0, 1));
-
-	onDestroy(() => {
-		// Model cleanup handled by createAeroWindow lifecycle.
-	});
 </script>
 
 <LabShell title="Scene Lab" hint="Cesium composite · tune visuals here, ship from /" {model}>

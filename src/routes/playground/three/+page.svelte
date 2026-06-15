@@ -92,12 +92,10 @@
 		return () => { active = false; };
 	});
 
-	const ROLE_PRESETS = {
-		left:   { headingOffsetDeg: -18, fovDeg: 42 },
-		center: { headingOffsetDeg: 0, fovDeg: 45 },
-		right:  { headingOffsetDeg: 18, fovDeg: 42 },
-		solo:   { headingOffsetDeg: 0, fovDeg: 45 },
-	} as const;
+	// Lab-only fov-per-role (production keeps fov at the config default). The
+	// heading offset is NOT duplicated here — setParallaxRole() is the SSOT for
+	// that (+ fuselageOffsetM); this map only carries the lab's fov override.
+	const ROLE_FOV = { left: 42, center: 45, right: 42, solo: 45 } as const;
 </script>
 
 <LabShell 
@@ -106,7 +104,6 @@
 	{model}
 	showCityMode
 	bind:cityMode
-	onCityToggle={() => { cityMode = !cityMode; }}
 >
 	{#snippet viewer()}
 		<!-- Full shipping window shell (oval frame + glass + pull-down blind)
@@ -208,24 +205,8 @@
 			</div>
 		</fieldset>
 
-		<fieldset>
-			<legend>Weather</legend>
-			<select
-				value={model.weather}
-				onchange={(e) => {
-					model.setWeather((e.currentTarget as HTMLSelectElement).value as 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm');
-				}}
-			>
-				<option value="clear">clear</option>
-				<option value="cloudy">cloudy</option>
-				<option value="rain">rain</option>
-				<option value="overcast">overcast</option>
-				<option value="storm">storm</option>
-			</select>
-			<div style="font-size:10px;opacity:0.7;margin-top:3px;">
-				Rain + spatter activate at <code>rain</code> / <code>storm</code>.
-			</div>
-		</fieldset>
+		<!-- Weather control lives in LabShell's chip-row (single source) — the
+		     duplicate <select> that was here was removed. -->
 
 		<fieldset>
 			<legend>Night intensity</legend>
@@ -246,13 +227,13 @@
 			<select
 				value={model.config.camera.parallax.role}
 				onchange={(e) => {
-					const role = (e.currentTarget as HTMLSelectElement).value as keyof typeof ROLE_PRESETS;
+					const role = (e.currentTarget as HTMLSelectElement).value as keyof typeof ROLE_FOV;
 					// setParallaxRole is the SSOT — sets role, headingOffsetDeg,
 					// AND fuselageOffsetM (the latter drives Wing.svelte's per-Pi
 					// position so the wing visibly shifts between left/center/right).
 					setParallaxRole(role);
 					// Lab-only fov override (production keeps fov at config default).
-					model.config.camera.parallax.fovDeg = ROLE_PRESETS[role].fovDeg;
+					model.config.camera.parallax.fovDeg = ROLE_FOV[role];
 				}}
 			>
 				<option value="solo">solo (0°)</option>
@@ -267,7 +248,7 @@
 					style="margin-left:6px;font-size:9px;padding:1px 4px;"
 					onclick={() => {
 						setParallaxRole('solo');
-						model.config.camera.parallax.fovDeg = ROLE_PRESETS.solo.fovDeg;
+						model.config.camera.parallax.fovDeg = ROLE_FOV.solo;
 					}}
 				>reset</button>
 				<button
@@ -277,17 +258,13 @@
 						const idx = (roles.indexOf(model.config.camera.parallax.role) + 1) % roles.length;
 						const next = roles[idx];
 						setParallaxRole(next);
-						model.config.camera.parallax.fovDeg = ROLE_PRESETS[next].fovDeg;
+						model.config.camera.parallax.fovDeg = ROLE_FOV[next];
 					}}
 				>cycle</button>
 			</div>
 			<div style="font-size:9px;opacity:0.5;">
 				Tests CameraMirror inheritance of real parallax config.
-				<button style="margin-left:4px;font-size:8px;" onclick={() => {
-					const p = model.config.camera.parallax;
-					console.log('3-Pi parallax:', { role: p.role, headingOffsetDeg: p.headingOffsetDeg, fovDeg: p.fovDeg });
-				}}>log</button>
-				<!-- Small visual feedback for current offset + bank (All! Item 4) -->
+				<!-- offset + bank readout -->
 				<span style="margin-left:8px; font-family:monospace; color:#7faeff;">
 					{ model.config.camera.parallax.headingOffsetDeg > 0 ? '+' : '' }{model.config.camera.parallax.headingOffsetDeg}°
 					| bank: {model.motion.bankAngle.toFixed(1)}°
