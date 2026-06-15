@@ -22,8 +22,11 @@
 	const model = createAeroWindow();
 
 	// RAF tick — model.tick drives the full simulation (flight, motion, director).
+	// untrack() per invariant #3 (mirrors Pane.svelte): keeps 60 Hz config reads
+	// inside model.tick from building a reactive dep back onto the model.
+	import { untrack } from 'svelte';
 	import { subscribe } from '$lib/game-loop';
-	$effect(() => subscribe((dt) => model.tick(dt)));
+	$effect(() => subscribe((dt) => untrack(() => model.tick(dt))));
 
 	// Weather derivations (same shape as production /).
 	const weatherFx = $derived(WEATHER_EFFECTS[model.weather]);

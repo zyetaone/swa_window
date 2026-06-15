@@ -21,6 +21,7 @@
 	 * here proves out (volumetric cloud variants, post-process passes,
 	 * Bruneton scattering), port the CONCEPT into the shared compose path.
 	 */
+	import { untrack } from 'svelte';
 	import { createAeroWindow } from '$lib/model/aero-window.svelte';
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { subscribe } from '$lib/game-loop';
@@ -55,8 +56,10 @@
 		mgr.setBuildingsWireframe(buildingsWireframe);
 	});
 
-	// RAF tick — same pattern as /playground. Drives flight + motion + director.
-	$effect(() => subscribe((dt) => model.tick(dt)));
+	// RAF tick — same pattern as /playground + Pane.svelte. untrack() per
+	// invariant #3 so 60 Hz config reads inside model.tick don't build a reactive
+	// dep from this effect back onto the model (the drawer tunes config live).
+	$effect(() => subscribe((dt) => untrack(() => model.tick(dt))));
 
 	// Snap the flight engine to the show's opening location.
 	model.setLocation(model.location);
