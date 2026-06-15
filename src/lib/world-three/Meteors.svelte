@@ -72,6 +72,15 @@
 	line.frustumCulled = false;
 
 	// State for the active meteor + scheduling.
+	//
+	// Determinism (invariant #4): meteor spawn timing + position + direction use
+	// live Math.random, NOT createSeededRng — a DELIBERATE exception, unlike the
+	// build-once star/cloud/bokeh layouts which must be seeded. Two reasons it's
+	// safe for the 3-Pi panorama: (1) a meteor is a rare transient event (60-240s
+	// apart), not a persistent layout, so an independent streak per Pi reads fine
+	// — there's no static seam to mismatch; (2) true cross-Pi sync is impossible
+	// anyway since the Pis have no shared wall-clock origin (they reboot at
+	// different times), so seeding the interval sequence wouldn't align spawns.
 	const origin = new Vector3();
 	const head = new Vector3();
 	const dir = new Vector3();
