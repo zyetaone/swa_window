@@ -248,6 +248,8 @@
 				float soft = pow(1.0 - r, 2.2);
 				// Warm city-light palette with per-dot hue variety:
 				//   sodium (deep orange) → amber → warm-white, + rare cool LED.
+				// Inline by design (per-fragment variety); the canonical family is
+				// $content/palettes/city-lights (CITY_SODIUM/AMBER/WARM_WHITE/COOL_LED).
 				vec3 sodium = vec3(1.0, 0.50, 0.18);
 				vec3 amber  = vec3(1.0, 0.70, 0.36);
 				vec3 warmW  = vec3(1.0, 0.88, 0.70);

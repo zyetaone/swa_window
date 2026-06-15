@@ -15,6 +15,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
 	import { groundAltM } from '$content/locations';
+	import { CITY_GLOW } from '$content/palettes';
 	import { makeRadialTexture } from './texture-util';
 	import { lightingState } from './lighting';
 
@@ -54,9 +55,9 @@
 		m.opacity = cityGlow * 0.11 * (1 + 0.07 * Math.sin(_t * 0.05));
 	});
 
-	// Sodium-amber, matched to the Cesium grade's warm city-light palette so the
-	// dome reinforces it rather than fighting it.
-	const amber = new Color(1.0, 0.55, 0.2);
+	// Diffuse skyglow tint — from the shared city-lights palette (CITY_GLOW) so
+	// the dome stays in the same warm family as the carpet + streets + Cesium grade.
+	const amber = new Color(...CITY_GLOW);
 	const tex = makeRadialTexture([
 		[0.0, 'rgba(255, 255, 255, 0.6)'],
 		[0.35, 'rgba(255, 255, 255, 0.22)'],

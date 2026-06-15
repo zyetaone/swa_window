@@ -15,6 +15,7 @@
 	import NeonLineLayer, { type NeonSegments } from './NeonLineLayer.svelte';
 	import type { LocationId } from '$lib/types';
 	import { EARTH_RADIUS_M } from './state.svelte';
+	import { STREET_CORE, STREET_HALO, hexOf } from '$content/palettes';
 
 	let { location }: { location: LocationId } = $props();
 
@@ -97,9 +98,9 @@
 <NeonLineLayer
 	{location}
 	endpoint="/api/roads"
-	coreColor={0xffc77a}
+	coreColor={hexOf(STREET_CORE)}
 	coreWidth={1.5}
-	haloColor={0xdca860}
+	haloColor={hexOf(STREET_HALO)}
 	haloWidth={4.5}
 	haloOpacityMul={0.45}
 	intensityMul={0.6}
