@@ -117,8 +117,11 @@ src/lib/
 │   ├── prng.ts                createSeededRng(daySeed()) — 3-Pi determinism SSOT (invariant #4)
 │   ├── Wing.svelte            Visible SWA wing mesh, camera-anchored, per-Pi fuselageOffsetM
 │   ├── Clouds / NightStars / Moon / Venus / SunGlow / LensFlare / Meteors /
-│   │   AtmosphericVeil / SparkleField / Rain / RainSpatter / WingContrail / CityGlowDome
-│   └── OsmRoads / OsmBuildingEdges / NeonLineLayer   Neon line overlays (geo-anchored)
+│   │   AtmosphericVeil / SparkleField / Rain / RainSpatter / CityGlowDome / CityLightField
+│   └── OsmRoads / NeonLineLayer   Neon line overlays (geo-anchored). City night-light
+│       intensity is the cityLightAmount/cityGlowAmount SSOT (world-lighting/curves);
+│       altitude crossfade is altitudeDetailMix (world-lighting/altitude); warm hues are
+│       the $content/palettes/city-lights family.
 │
 ├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
 │   └── thresholds.ts   T constants — SSOT for DAWN_START/DAY_START/DAY_END/DUSK_END/DEEP_NIGHT
@@ -139,7 +142,7 @@ src/routes/
 ├── +page.svelte        Main display (Pi kiosk)
 ├── admin/              Fleet admin panel + content drag-drop + fleet/health
 ├── playground/         Scene labs (no fleet): /playground lean Cesium · /playground/three
-│                       hybrid Cesium+Three · /playground/night-lab · /playground/model
+│                       hybrid Cesium+Three · /playground/night-lab
 └── api/                content + assets + tiles + buildings + fleet endpoints + bundle peer-cache
 
 tools/
@@ -407,7 +410,8 @@ $effect(() => {
 - `/` — Main window display (Pi kiosk). Full shell.
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
 - `/playground/three` — Hybrid Cesium + Three.js composition lab. `CesiumViewer` (terrain/imagery/VIIRS/atmosphere/post-process) + `ThreeOverlay` (clouds/wing/sky-extras/neon/postprocess) inside `WindowChrome`. The R&D surface for everything in `world-three/`. **Lab-only** — none of the Three overlay ships on `/`.
-- `/playground/night-lab` + `/playground/model` — focused night-look and model-inspection labs.
+- `/playground/night-lab` — focused night-look tuning lab (per-variant tunables).
+- `/` accepts `?overlay=1|0` to force the hybrid Three overlay on/off for the Pi-5 perf A/B (default off; composes with `?location`/`?altitude`/`?role`).
 - `/admin` — Fleet admin panel.
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard.
