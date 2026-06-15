@@ -153,6 +153,18 @@
 			}
 		}
 
+		// Perf-gate A/B (P8): force the hybrid Three overlay ON/OFF on the SHIP
+		// route via ?overlay=1 / ?overlay=0, so the Pi-5 benchmark can measure the
+		// exact shipping tree BOTH ways from one URL each (the go/no-go is the
+		// delta). No param leaves the config-tree default (false) untouched — a
+		// normal kiosk/visitor never enables it.
+		const overlayParam = params.get("overlay");
+		if (overlayParam === "1" || overlayParam === "true") {
+			model.config.world.useThreeOverlay = true;
+		} else if (overlayParam === "0" || overlayParam === "false") {
+			model.config.world.useThreeOverlay = false;
+		}
+
 		// Phase 7 — multi-Pi parallax role. URL wins over localStorage wins
 		// over 'solo' default. When URL param is set, persist it so the role
 		// survives reload without the query string. Non-solo roles also auto-

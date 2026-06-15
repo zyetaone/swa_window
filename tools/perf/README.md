@@ -23,7 +23,7 @@ The project already has excellent production telemetry (`model.telemetry` ring b
 2. Press **Shift+T** — the ring-buffer viewer appears
 3. Run your scenario (cruise 90–120 s, then city approach, night with clouds, 3-Pi role changes)
 4. The panel shows live p50/p95 FPS + recent frame times + event counts
-5. Use the "log" button in the 3-Pi simulator or the existing telemetry export for numbers
+5. Read the numbers off the panel, or run the one-liner benchmark (§2) for a CSV
 
 ### 2. Easy one-liner benchmark (recommended for real Pi 5 hardware)
 
@@ -46,6 +46,28 @@ Manual `stopPerf()` mode is still available if you want live control.
 ```
 
 Run `stopPerf()` (or the global) when finished.
+
+### 3. The A/B that decides the gate — overlay ON vs OFF on the SHIP route
+
+The go/no-go is the **delta**: how much the hybrid Three overlay costs over the
+Cesium-only baseline on the *same* Pi, measured on the route that actually ships
+(`/`), not the lab. Use the `?overlay=` URL param (added for exactly this):
+
+| URL | What renders | Use |
+|---|---|---|
+| `http://<pi>/?overlay=0` | Cesium-only (today's `pre-ship-v1` tree) | **baseline** |
+| `http://<pi>/?overlay=1` | hybrid (Cesium + the full Three overlay) | **candidate** |
+| `http://<pi>/` (no param) | config default (`useThreeOverlay:false`) | normal kiosk |
+
+Procedure per scenario (cruise, then city-approach, then night+clouds):
+1. Open `/?overlay=0`, let it settle ~10 s, `runBenchmark(180000)`, save the CSV.
+2. Open `/?overlay=1`, same scenario, same 180 s, save the CSV.
+3. Compare p50/p95. **GO** if overlay-ON holds ≥30 fps cruise / ≥24 fps approach.
+
+Pin the scenario with the other params so both runs match exactly, e.g.
+`/?overlay=1&location=hyderabad&altitude=8000` for city-approach. (`?role=` also
+composes if you're testing a 3-Pi unit.) The param is read once at mount, default
+off — a normal visitor or the kiosk autostart never enables it.
 
 ### Recommended Pi 5 Test Matrix
 - Cold boot → first stable frame (target measured separately via boot logs + first RAF)
