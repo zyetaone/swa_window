@@ -62,16 +62,23 @@
 	// Extra warm shift + core dim when air mass is high (low sun elevation).
 	const warmShift = $derived(Math.min(0.85, (airMass - 1.0) * 0.18 * sunStrength));
 
+	// Pre-allocated scratch Colors mutated in place each frame (same pattern as
+	// ThreeOverlay's _ambientTintScratch) — these $derived fire every frame during
+	// flight, so `new Color()` here was two heap allocations/frame of GC pressure.
+	// Threlte's colour reconciler reads .r/.g/.b directly, so mutate-in-place
+	// propagates. (s = the shared lightingState object — read synchronously here.)
+	const _coreTintScratch = new Color();
 	const coreTint = $derived.by(() => {
 		const s = lightingState(model.timeOfDay, model.nightFactor);
 		const r = Math.min(1, s.horizonTint[0] + warmShift * 0.22);
 		const g = Math.max(0.22, s.horizonTint[1] - warmShift * 0.38);
 		const b = Math.max(0.12, s.horizonTint[2] - warmShift * 0.52);
-		return new Color(r, g, b);
+		return _coreTintScratch.setRGB(r, g, b);
 	});
+	const _haloTintScratch = new Color();
 	const haloTint = $derived.by(() => {
 		const s = lightingState(model.timeOfDay, model.nightFactor);
-		return new Color(s.horizonTint[0] * 0.95, s.horizonTint[1] * 0.70, s.horizonTint[2] * 0.50);
+		return _haloTintScratch.setRGB(s.horizonTint[0] * 0.95, s.horizonTint[1] * 0.70, s.horizonTint[2] * 0.50);
 	});
 
 	// Programmatic radial gradient — sun core. Smoothed: fewer hard color

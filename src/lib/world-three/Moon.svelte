@@ -228,7 +228,13 @@
 	// Rodrigues reduces to  v·cosα + (k×v)·sinα. Date-based + deterministic —
 	// all 3 Pis render the same phase (invariant #4).
 	$effect(() => {
-		const sx = sunDir[0], sy = sunDir[1], sz = sunDir[2];
+		// Alias contract (invariant #5): computeSunDirection returns a SHARED
+		// mutated array. Re-call + read here synchronously rather than reading the
+		// `sunDir` $derived — that holds the same reference and another caller's
+		// call (EffectStack / Clouds) could have rewritten it before this effect's
+		// reactive flush runs, corrupting the phase terminator orientation.
+		const d = computeSunDirection(model.flight.camLon, model.timeOfDay);
+		const sx = d[0], sy = d[1], sz = d[2];
 		const f = moonPhaseFraction(Date.now());
 		const alpha = Math.PI * (1 - 2 * f);
 		const cosA = Math.cos(alpha);

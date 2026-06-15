@@ -133,6 +133,11 @@
 	const loader = new GLTFLoader();
 	function loadWing(url: string, rot: [number, number, number]): () => void {
 		let cancelled = false;
+		// Track the loaded model + the MeshLambertMaterials toLit() mints so the
+		// cleanup can dispose them. Without this, each HMR cycle (or any unmount)
+		// orphaned the GLB's ~60+ materials + geometries on the GPU.
+		let loaded: Object3D | null = null;
+		const litMats: MeshLambertMaterial[] = [];
 		loader
 			.loadAsync(url)
 			.then((gltf) => {
@@ -152,7 +157,9 @@
 					if (!me.isMesh) return;
 					me.frustumCulled = false;
 					const mat = me.material as { color?: Color; map?: unknown } | { color?: Color; map?: unknown }[];
-					me.material = Array.isArray(mat) ? mat.map(toLit) : toLit(mat);
+					const lit = Array.isArray(mat) ? mat.map(toLit) : toLit(mat);
+					me.material = lit;
+					if (Array.isArray(lit)) litMats.push(...lit); else litMats.push(lit);
 				});
 				// Weld the nav lights to the winglet-tip VERTEX by parenting them
 				// to the model `m`. The tip is derived from the ACTUAL geometry at
@@ -189,6 +196,7 @@
 						tipComposed.toArray().map((n) => n.toFixed(2)),
 					);
 				holder.add(m);
+				loaded = m;
 				m.add(navLight, strobeLight, navHalo);
 				navLight.position.copy(navPos);
 				strobeLight.position.copy(navPos);
@@ -208,7 +216,25 @@
 				}
 			})
 			.catch((err) => console.error(`[Wing] ${url} load failed`, err));
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+			// Dispose the GLB model's geometries + the toLit materials, and detach
+			// the nav lights (they're module-scoped + disposed in the cleanup effect
+			// below, so just unparent them here). Prevents a GPU leak on HMR/unmount.
+			if (loaded) {
+				loaded.remove(navLight, strobeLight, navHalo);
+				loaded.traverse((o) => {
+					const me = o as Mesh;
+					if (me.isMesh && me.geometry && me !== navLight && me !== strobeLight && me !== navHalo) {
+						me.geometry.dispose();
+					}
+				});
+				holder.remove(loaded);
+				loaded = null;
+			}
+			for (const mt of litMats) mt.dispose();
+			litMats.length = 0;
+		};
 	}
 
 	$effect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
@@ -440,6 +466,8 @@
 		strobeGeom.dispose();
 		navMat.dispose();
 		strobeMat.dispose();
+		navHaloMat.dispose();
+		navHalo.geometry.dispose();
 	});
 </script>
 

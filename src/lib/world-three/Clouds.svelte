@@ -420,7 +420,10 @@
 		// ancestor chain (sprite → driftGroup → anchorGroup → scene). Using
 		// applyMatrix4(driftGroup.matrixWorld) is ~3× faster than per-sprite
 		// getWorldPosition() which walks the parent chain for each sprite.
-		driftGroup.updateMatrixWorld();
+		// updateWorldMatrix(parents=true, children=false): we only need driftGroup's
+		// OWN matrixWorld current for getWorldPosition — the old updateMatrixWorld()
+		// recursed into all ~1840 sprite descendants every frame for nothing.
+		driftGroup.updateWorldMatrix(true, false);
 		driftGroup.getWorldPosition(_driftWorldPos);
 
 		for (let i = 0; i < n; i++) {

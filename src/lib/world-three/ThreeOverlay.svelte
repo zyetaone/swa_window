@@ -182,7 +182,7 @@
 			nightFactor={model.nightFactor}
 			ambientColor={ambientTint}
 			ambientIntensity={ambientIntensity}
-			sunDirection={computeSunDirection(model.flight.camLon, model.timeOfDay)}
+			sunDirection={[...computeSunDirection(model.flight.camLon, model.timeOfDay)]}
 		/>
 
 		<!-- IBL-only Sky: invisible mesh (scale 0.0001), but renders to
