@@ -204,6 +204,11 @@ export class CesiumManager {
 	private lastBuildingsShow = true;
 	private lastClockLon = -999;
 	private lastTimeOfDay = -1;
+	private started = false;
+	// Moon-phase (Simon1994) is a function of date, not the 60 Hz frame — cache it
+	// and recompute only when the clock time changes (see syncAtmosphere).
+	private _moonPhaseTime = -1;
+	private _moonPhaseCache = 1.0;
 	private lastBuildingNightFactor = -1;
 	private lastTerrainExaggeration = -1;
 	// VIIRS write-skip cache. syncImagery() runs every tick; writing
@@ -243,6 +248,12 @@ export class CesiumManager {
 	getCesium(): typeof CesiumType { return this.CesiumModule; }
 
 	async start(COLOR_GRADING_GLSL: string): Promise<void> {
+		// Re-entrancy guard: a second start() (rapid unmount→remount / HMR) would
+		// add duplicate imagery layers, terrain providers, and post-process stages
+		// on top of the first — N compositing copies accumulating over the kiosk's
+		// life. Start exactly once per manager; destroy() builds a fresh one.
+		if (this.started) return;
+		this.started = true;
 		const C = this.CesiumModule;
 		const v = this.viewer;
 
@@ -305,7 +316,7 @@ export class CesiumManager {
 		});
 		this._sunPos = new C.Cartesian3();
 		this._moonPos = new C.Cartesian3();
-		this._earthToMoon = new C.Cartesian3();
+		this._earthToMoon = new C.Cartesian3(0, 0, -1); // valid downward dir if Simon1994 ever throws before first compute
 		this._moonToSun = new C.Cartesian3();
 		this._scratchDest = new C.Cartesian3();
 
@@ -833,20 +844,27 @@ export class CesiumManager {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const Cany = C as any;
 
-		// Compute moon phase from real planetary positions.
-		let moonPhase = 1.0;
-		try {
-			const julianDate = v.clock.currentTime;
-			Cany.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(julianDate, this._sunPos);
-			Cany.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(julianDate, this._moonPos);
-			C.Cartesian3.normalize(this._moonPos, this._earthToMoon);
-			C.Cartesian3.subtract(this._sunPos, this._moonPos, this._moonToSun);
-			C.Cartesian3.normalize(this._moonToSun, this._moonToSun);
-			const cosPhase = C.Cartesian3.dot(this._earthToMoon, this._moonToSun);
-			moonPhase = (1.0 - cosPhase) * 0.5;
-		} catch {
-			// phase = 1.0 fallback
+		// Moon phase from real planetary positions. Cached + recomputed ONLY when
+		// the clock time changed — Simon1994 is a function of date, so running it
+		// every 60 Hz frame burned Pi CPU for an identical result between clock
+		// ticks. _earthToMoon (the moonlight direction below) updates on the same
+		// cadence, which is correct — the moon moves with time, not with frames.
+		if (this._moonPhaseTime !== m.timeOfDay) {
+			this._moonPhaseTime = m.timeOfDay;
+			try {
+				const julianDate = v.clock.currentTime;
+				Cany.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(julianDate, this._sunPos);
+				Cany.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(julianDate, this._moonPos);
+				C.Cartesian3.normalize(this._moonPos, this._earthToMoon);
+				C.Cartesian3.subtract(this._sunPos, this._moonPos, this._moonToSun);
+				C.Cartesian3.normalize(this._moonToSun, this._moonToSun);
+				const cosPhase = C.Cartesian3.dot(this._earthToMoon, this._moonToSun);
+				this._moonPhaseCache = (1.0 - cosPhase) * 0.5;
+			} catch {
+				// keep last cached phase (defaults to 1.0)
+			}
 		}
+		const moonPhase = this._moonPhaseCache;
 		const phaseFactor = 0.7 + 0.3 * moonPhase;
 		const moonlightIntensity = nf > 0.01 ? Math.max(w.moonlightIntensity * nf * phaseFactor, 0.035) : 0;
 
@@ -947,7 +965,10 @@ export class CesiumManager {
 		if (this.viirsLayer) {
 			const V = NIGHT_PALETTE.viirs;
 			const viirsEase = smoothstep(
-				(nf - V.smoothstepFloor) / (V.smoothstepCeil - V.smoothstepFloor),
+				// max(denominator, ε): guards against a NaN viirsAlpha (→ Cesium
+				// treats it as 1.0 on some drivers) if a palette ever sets
+				// smoothstepFloor === smoothstepCeil. smoothstep already clamps input.
+				(nf - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001),
 			);
 			// Phase 6 (altitude-gate VIIRS): smoothstep gate fades VIIRS to
 			// zero below 5kft so the building emissive (Phase 3) and future
@@ -1142,7 +1163,10 @@ export class CesiumManager {
 		// global gates here. Cheap; the shader handles the rest.
 		if (this.buildingsShader) {
 			const bootFade = this.getBootFade();
-			this.buildingsTime += dt;        // frame-rate independent
+			// Modulo a large multiple of 2π so the float32 GPU uniform keeps sub-radian
+		// precision across the kiosk's uptime — raw accumulation degrades past
+		// ~2^24 s (≈194 days) and the beacon fract() would freeze.
+		this.buildingsTime = (this.buildingsTime + dt) % (Math.PI * 4000); // frame-rate independent
 			// nightFactor is gated by bootFade so the emissive ramps in alongside
 			// VIIRS + road mask instead of snapping on while base tiles stream.
 			this.buildingsShader.setUniform('u_nightFactor', nf * bootFade);

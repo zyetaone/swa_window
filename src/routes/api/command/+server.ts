@@ -13,6 +13,16 @@
  * The endpoint doesn't validate the payload shape beyond needing a `type`
  * string. It publishes the full body to the SSE bus so the local browser
  * can handle it. Unknown types are ignored by the browser handler.
+ *
+ * ⚠ KNOWN GAP (tracked for the P8 hardware pass): unlike PATCH /api/config,
+ * this route is NOT bearer-gated. Acceptable under the LAN-only / physical-
+ * access threat model, but a compromised kiosk could fan fabricated
+ * `director_decision`/`set_scene` to peers. Closing it requires `requireAdminToken`
+ * here PLUS injecting the token into all three POST callers — the kiosk's own
+ * browser (localhost peer-token), a remote admin laptop (sessionStorage prompt,
+ * like the content routes), and the leader→follower fan-out (client.svelte.ts) —
+ * verified on the fleet so neither 3-Pi sync nor the admin "force scene" breaks.
+ * Deferred to the hardware pass for that reason; do NOT half-gate it.
  */
 
 import { json, error } from '@sveltejs/kit';
