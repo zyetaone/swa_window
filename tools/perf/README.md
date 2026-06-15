@@ -64,9 +64,14 @@ Procedure per scenario (cruise, then city-approach, then night+clouds):
 2. Open `/?overlay=1`, same scenario, same 180 s, save the CSV.
 3. Compare p50/p95. **GO** if overlay-ON holds ≥30 fps cruise / ≥24 fps approach.
 
-Pin the scenario with the other params so both runs match exactly, e.g.
-`/?overlay=1&location=hyderabad&altitude=8000` for city-approach. (`?role=` also
-composes if you're testing a 3-Pi unit.) The param is read once at mount, default
+Pin the scenario with the other params so both runs match exactly:
+- city-approach: `/?overlay=1&location=hyderabad&altitude=8000`
+- **night** (the night-light stress case): `/?overlay=1&location=hyderabad&time=2&altitude=8000`
+- cruise: `/?overlay=1&location=hyderabad&altitude=30000`
+
+`?time=` (decimal hours 0-24) pins time-of-day and disables real-time sync, so a
+night run is reproducible regardless of the wall-clock hour. (`?role=` also
+composes for a 3-Pi unit.) All params are read once at mount, overlay defaults
 off — a normal visitor or the kiosk autostart never enables it.
 
 ### Recommended Pi 5 Test Matrix

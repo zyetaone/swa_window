@@ -411,7 +411,7 @@ $effect(() => {
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
 - `/playground/three` — Hybrid Cesium + Three.js composition lab. `CesiumViewer` (terrain/imagery/VIIRS/atmosphere/post-process) + `ThreeOverlay` (clouds/wing/sky-extras/neon/postprocess) inside `WindowChrome`. The R&D surface for everything in `world-three/`. **Lab-only** — none of the Three overlay ships on `/`.
 - `/playground/night-lab` — focused night-look tuning lab (per-variant tunables).
-- `/` accepts `?overlay=1|0` to force the hybrid Three overlay on/off for the Pi-5 perf A/B (default off; composes with `?location`/`?altitude`/`?role`).
+- `/` accepts `?overlay=1|0` (force the hybrid Three overlay on/off for the Pi-5 perf A/B; default off) and `?time=<0-24>` (pin time-of-day + disable real-time sync, for a reproducible night scenario). Both compose with `?location`/`?altitude`/`?role`.
 - `/admin` — Fleet admin panel.
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard.

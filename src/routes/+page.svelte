@@ -153,6 +153,19 @@
 			}
 		}
 
+		// Pin time-of-day via ?time=2 (decimal hours 0-24) for a reproducible
+		// scenario — disables real-time sync so the wall-clock can't override it.
+		// Pairs with ?overlay for a fixed "Hyderabad night" A/B (perf gate + visual
+		// comparison) instead of whatever hour it happens to be at the kiosk.
+		const timeParam = params.get("time");
+		if (timeParam !== null && timeParam !== "") {
+			const t = Number(timeParam);
+			if (Number.isFinite(t) && t >= 0 && t <= 24) {
+				model.syncToRealTime = false;
+				model.setTime(t);
+			}
+		}
+
 		// Perf-gate A/B (P8): force the hybrid Three overlay ON/OFF on the SHIP
 		// route via ?overlay=1 / ?overlay=0, so the Pi-5 benchmark can measure the
 		// exact shipping tree BOTH ways from one URL each (the go/no-go is the
