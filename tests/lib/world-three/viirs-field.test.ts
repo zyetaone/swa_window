@@ -15,7 +15,7 @@
  * its own longitude → its own z7 tile key (tile width at z7 is 2.8125°).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getViirsField, removeViirsWaiter } from '$lib/world-three/viirs-field';
+import { despeckle, getViirsField, removeViirsWaiter } from '$lib/world-three/viirs-field';
 
 class FakeImage {
 	static instances: FakeImage[] = [];
@@ -137,37 +137,74 @@ describe('getViirsField — bounded retry on network error', () => {
 	});
 });
 
-describe('ViirsField.sampleArea', () => {
-	it('constant canvas: area mean equals the per-pixel luminance', () => {
-		const val = 180;
-		const pixels = new Uint8ClampedArray(256 * 256 * 4).fill(val);
-		vi.spyOn(document, 'createElement').mockReturnValue({
-			width: 0,
-			height: 0,
-			getContext: () => ({
-				drawImage: () => {},
-				getImageData: () => ({ data: pixels }),
-			}),
-		} as unknown as HTMLElement);
-		// lon=92 → fresh tile not used by other tests (z7 tile width is 2.8125°)
-		getViirsField(0, 92);
-		lastImg().onload?.();
-		const field = getViirsField(0, 92)!;
-		expect(field).not.toBeNull();
-		// (0.299 + 0.587 + 0.114) == 1 so luminance = val/255 exactly
-		const expected = val / 255;
-		expect(field.sampleArea(0, 92, 1)).toBeCloseTo(expected, 5);
-		expect(field.sampleArea(0, 92, 1)).toBeCloseTo(field.sample(0, 92), 5);
+describe('despeckle — isolated-hot-pixel suppressor (RDT-192 v2)', () => {
+	const W = 16, H = 16;
+	/** Dark WxH RGBA buffer; set(x,y,v) paints a grey pixel of value v. */
+	function buffer(): { data: Uint8ClampedArray; set: (x: number, y: number, v: number) => void; lum: (x: number, y: number) => number } {
+		const data = new Uint8ClampedArray(W * H * 4);
+		const set = (x: number, y: number, v: number) => {
+			const p = (y * W + x) * 4;
+			data[p] = data[p + 1] = data[p + 2] = v;
+		};
+		const lum = (x: number, y: number) => {
+			const p = (y * W + x) * 4;
+			return 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+		};
+		return { data, set, lum };
+	}
+
+	it('folds a lone hot pixel down to its (dark) neighbourhood mean', () => {
+		const b = buffer();
+		b.set(8, 8, 255);
+		expect(despeckle(b.data, W, H)).toBe(1);
+		expect(b.lum(8, 8)).toBe(0); // 8 dark neighbours → mean 0 → folded to 0
 	});
 
-	it('isolated bright pixel: area mean ≈ 1/9 of peak (below a 0.13 orphan floor)', () => {
+	it('preserves a 1-px-wide bright line INCLUDING its endpoints (roads/filaments)', () => {
+		const b = buffer();
+		for (let x = 2; x < 14; x++) b.set(x, 8, 255); // horizontal string
+		expect(despeckle(b.data, W, H)).toBe(0);
+		expect(b.lum(8, 8)).toBe(255); // interior
+		expect(b.lum(2, 8)).toBe(255); // endpoint — one lit neighbour must suffice
+	});
+
+	it('preserves a 2×2 block (a real small town)', () => {
+		const b = buffer();
+		b.set(8, 8, 255); b.set(9, 8, 255); b.set(8, 9, 255); b.set(9, 9, 255);
+		expect(despeckle(b.data, W, H)).toBe(0);
+		expect(b.lum(8, 8)).toBe(255);
+	});
+
+	it('leaves dim pixels below the HOT threshold untouched', () => {
+		const b = buffer();
+		b.set(8, 8, 10); // below HOT=12 — faint rural glow, not an orphan
+		expect(despeckle(b.data, W, H)).toBe(0);
+		expect(b.lum(8, 8)).toBeCloseTo(10, 5);
+	});
+
+	it('suppresses a dim orphan just above the consumer floor (HOT ≤ floor — review finding)', () => {
+		const b = buffer();
+		// 15/255 ≈ 0.059 — above CityLightField's 0.05 BRIGHT_FLOOR. With the
+		// old HOT=24 this survived despeckle AND passed the floor → orphan dot.
+		b.set(8, 8, 15);
+		expect(despeckle(b.data, W, H)).toBe(1);
+		expect(b.lum(8, 8)).toBe(0);
+	});
+
+	it('pins the accepted limit: a 2-px noise pair mutually shields and survives', () => {
+		const b = buffer();
+		b.set(8, 8, 255);
+		b.set(9, 8, 255); // each is the other's one lit neighbour (mean = 1/8 ≥ ISOLATION)
+		expect(despeckle(b.data, W, H)).toBe(0);
+	});
+
+	it('field integration: a decoded lone hot pixel can no longer clear the floor', () => {
 		// lon=94.21875 → lonToTileXf=97.5 → tile_x=97, pixel_x=128.
 		// lat=-1.4082 → latToTileYf≈64.5 → tile_y=64, pixel_y=128.
-		// Tile key 7/64/97 — different from the constant-canvas test (7/64/96),
-		// so the module-level cache does not carry over between these two tests.
+		// Tile key 7/64/97 — fresh, so the module-level cache does not
+		// carry over from other tests in this file.
 		const pixels = new Uint8ClampedArray(256 * 256 * 4).fill(0);
-		const cx = 128, cy = 128;
-		const ci = (cy * 256 + cx) * 4;
+		const ci = (128 * 256 + 128) * 4;
 		pixels[ci] = pixels[ci + 1] = pixels[ci + 2] = 255; // single white pixel
 		vi.spyOn(document, 'createElement').mockReturnValue({
 			width: 0,
@@ -181,10 +218,11 @@ describe('ViirsField.sampleArea', () => {
 		getViirsField(lat, lon);
 		lastImg().onload?.();
 		const field = getViirsField(lat, lon)!;
-		// Nearest-pixel sees the bright center: sample() == 1.
-		expect(field.sample(lat, lon)).toBeCloseTo(1, 5);
-		// Area mean: 1 bright + 8 dark neighbours → ≈ 1/9 ≈ 0.111, below floor 0.13.
-		expect(field.sampleArea(lat, lon, 1)).toBeCloseTo(1 / 9, 1);
+		// Pre-despeckle this read 1.0 at the pixel's own centre — the exact
+		// orphan-dot pathology. Decode-time despeckle kills it at the source
+		// for EVERY sampler.
+		expect(field.sample(lat, lon)).toBeCloseTo(0, 5);
+		expect(field.sampleBilinear(lat, lon)).toBeCloseTo(0, 5);
 	});
 });
 

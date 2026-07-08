@@ -44,20 +44,73 @@ export interface ViirsField {
 	sample(lat: number, lon: number): number;
 	/** Bilinearly-interpolated luminance, 0 … 1. Smooths the coarse VIIRS
 	 *  pixel grid so a field of points placed against it reads as a continuous
-	 *  light carpet, not blocky clumps — and averages away single-pixel sensor
-	 *  noise, so callers can use a LOWER brightness floor for wider spread
-	 *  without picking up rural noise as orphan dots. */
+	 *  light carpet, not blocky clumps. Noise-robustness does NOT come from the
+	 *  blend (sampled at a hot pixel's own centre, bilinear returns it at full
+	 *  value) — it comes from despeckle() cleaning the tile once at decode. */
 	sampleBilinear(lat: number, lon: number): number;
-	/**
-	 * Area-mean luminance averaged over a (2×radiusPx+1)² pixel neighbourhood
-	 * (RDT-192). A single sensor-noise pixel surrounded by dark cells returns a
-	 * mean far below the brightness floor, so it cannot spawn an orphan dot —
-	 * stronger noise kill than bilinear, which returns the full hot-pixel value
-	 * when sampled at its centre. Clamps at tile edges like sample().
-	 * O(radiusPx²), Pi-cheap for r=1. CityLightField currently ships on
-	 * sampleBilinear; A/B this as the floor test if orphan dots resurface.
-	 */
-	sampleArea(lat: number, lon: number, radiusPx?: number): number;
+}
+
+/**
+ * Isolated-hot-pixel suppressor, run ONCE on the decoded tile (RDT-192 v2).
+ *
+ * The orphan-dot pathology is salt noise in the SOURCE raster: a lone lit
+ * pixel in dark rural cells clears any low brightness floor and spawns a
+ * bokeh dot / neon glow in the void. Per-sample defences (the retired
+ * sampleArea neighbourhood mean) fixed one consumer at a time and traded
+ * away sub-pixel smoothness; fixing the data at decode fixes every consumer
+ * (bokeh carpet, neon roads, wing up-light) through the samplers they
+ * already use.
+ *
+ * Deliberately NOT a median/box filter: VIIRS is full of 1-px-wide road and
+ * filament strings a 3×3 median would erase. A pixel is suppressed only when
+ * it is bright AND its 8-neighbour mean is near-dark — a line pixel has ≥2
+ * lit neighbours, so lines, blocks, and suburb gradients pass byte-identical.
+ * Border ring is left untouched (a metro never sits on the tile edge that
+ * matters, and edge clamping would double-count).
+ *
+ * Pure function of the tile bytes → identical on all 3 Pis (invariant #4).
+ * O(w·h), ~0.6M adds for 256² — once per tile load, off the frame loop.
+ * Returns the number of suppressed pixels (observability + tests).
+ */
+export function despeckle(data: Uint8ClampedArray, w: number, h: number): number {
+	// Snapshot luminance first so suppression decisions never cascade.
+	const lum = new Float32Array(w * h);
+	for (let i = 0, p = 0; i < lum.length; i++, p += 4) {
+		lum[i] = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+	}
+	// A pixel is an orphan when brighter than HOT (above sensor black) and its
+	// neighbourhood mean is below ISOLATION × its own value.
+	// HOT must sit AT OR BELOW every consumer's brightness floor or a band of
+	// un-suppressed orphans survives above the gate: CityLightField culls at
+	// 0.05 (= 12.75/255), so HOT=12 leaves no gap (review finding, Jul 9).
+	// ISOLATION 0.10 < 1/8: ONE equal-brightness neighbour is enough to keep a
+	// pixel, so the endpoints of 1-px road strings survive; only pixels with
+	// essentially no lit neighbour are folded. Known accepted limit: a 2-px
+	// noise PAIR mutually shields itself and survives — that shape is rare in
+	// VIIRS composites and reads as a tiny hamlet, not an artifact.
+	const HOT = 12; // ≈0.047 luminance
+	const ISOLATION = 0.10;
+	let suppressed = 0;
+	for (let y = 1; y < h - 1; y++) {
+		for (let x = 1; x < w - 1; x++) {
+			const i = y * w + x;
+			const v = lum[i];
+			if (v <= HOT) continue;
+			const mean =
+				(lum[i - w - 1] + lum[i - w] + lum[i - w + 1] +
+					lum[i - 1] + lum[i + 1] +
+					lum[i + w - 1] + lum[i + w] + lum[i + w + 1]) / 8;
+			if (mean >= v * ISOLATION) continue;
+			// Fold the orphan down to its neighbourhood mean, preserving hue.
+			const k = mean / v;
+			const p = i * 4;
+			data[p] = data[p] * k;
+			data[p + 1] = data[p + 1] * k;
+			data[p + 2] = data[p + 2] * k;
+			suppressed++;
+		}
+	}
+	return suppressed;
 }
 
 // Fractional WebMercator tile coordinates (so we can sample sub-tile pixels).
@@ -139,6 +192,7 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 			if (!c2) throw new Error('no 2d context');
 			c2.drawImage(img, 0, 0, 256, 256);
 			const data = c2.getImageData(0, 0, 256, 256).data;
+			despeckle(data, 256, 256);
 			// Luminance of pixel (px,py) — VIIRS PNG is already a brightness map.
 			const lumAt = (px: number, py: number): number => {
 				const i = (py * 256 + px) * 4;
@@ -168,24 +222,6 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 					const top = lumAt(x0, y0) * (1 - dx) + lumAt(x1, y0) * dx;
 					const bot = lumAt(x0, y1) * (1 - dx) + lumAt(x1, y1) * dx;
 					return top * (1 - dy) + bot * dy;
-				},
-				sampleArea(la: number, lo: number, radiusPx = 1): number {
-					const fx = (lonToTileXf(lo, z) - tx) * 256;
-					const fy = (latToTileYf(la, z) - ty) * 256;
-					const cx = fx < 0 ? 0 : fx > 255 ? 255 : fx | 0;
-					const cy = fy < 0 ? 0 : fy > 255 ? 255 : fy | 0;
-					const r = radiusPx | 0;
-					let sum = 0;
-					for (let dy = -r; dy <= r; dy++) {
-						const py = cy + dy < 0 ? 0 : cy + dy > 255 ? 255 : cy + dy;
-						for (let dx = -r; dx <= r; dx++) {
-							const px = cx + dx < 0 ? 0 : cx + dx > 255 ? 255 : cx + dx;
-							const i = (py * 256 + px) * 4;
-							sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-						}
-					}
-					const count = (2 * r + 1) * (2 * r + 1);
-					return sum / (count * 255);
 				},
 			});
 		} catch {

@@ -16,8 +16,9 @@
 	 * The first cut clustered everything onto the brightest core and left the
 	 * rest of the city dark, in blocky clumps. Four things fix that:
 	 *   1. BILINEAR VIIRS sampling — smooths the coarse ~1.2 km tile grid so the
-	 *      field is continuous, not blocky; also averages away single-pixel
-	 *      sensor noise so we can use a LOW floor without orphan dots.
+	 *      field is continuous, not blocky. (Orphan-dot noise robustness comes
+	 *      from viirs-field's decode-time despeckle(), NOT from the blend —
+	 *      bilinear returns a hot pixel at full value at its own centre.)
 	 *   2. FLAT-baseline keep-probability — every lit cell keeps SOME dots
 	 *      (baseline), brightness only adds MORE on top. Density tracks the
 	 *      lights but covers the whole metro instead of collapsing to the core.
@@ -69,9 +70,10 @@
 	const PATCH_M = 42000; // ~42 km — whole metro + lit fringe
 	const GRID = 160; // 160² candidates → ~262 m spacing
 	const MAX_POINTS = 4000; // small dots → one cheap draw call even at 4k
-	// Low floor — bilinear smoothing means a lone bright VIIRS noise pixel is
-	// averaged down by its dark neighbours, so 0.05 catches genuine suburb glow
-	// without resurrecting the rural orphan dots the old high floor suppressed.
+	// Low floor — safe because viirs-field's despeckle() folds isolated hot
+	// pixels at decode (its HOT threshold is calibrated to sit at/below this
+	// floor — keep them in sync), so 0.05 catches genuine suburb glow without
+	// resurrecting the rural orphan dots the old high floor suppressed.
 	const BRIGHT_FLOOR = 0.05;
 	// Keep-probability = baseline everywhere lit + brightness on top. The flat
 	// baseline guarantees the suburbs get dots (no "dark everywhere"); the
