@@ -142,16 +142,15 @@
 			model.setLocation(locationParam);
 		}
 
+		// setAltitude clamps to camera.altitude.min/max downstream — the old
+		// range check here silently DROPPED out-of-range values instead
+		// (?altitude=3000 was ignored, min is 10000), which reads as "param
+		// broken" during perf/visual A/Bs. Clamp-at-bound is the slider's
+		// semantics; match it.
 		const altitudeParam = params.get("altitude");
 		if (altitudeParam) {
 			const alt = Number(altitudeParam);
-			if (
-				Number.isFinite(alt) &&
-				alt >= model.config.camera.altitude.min &&
-				alt <= model.config.camera.altitude.max
-			) {
-				model.setAltitude(alt);
-			}
+			if (Number.isFinite(alt)) model.setAltitude(alt);
 		}
 
 		// Pin time-of-day via ?time=2 (decimal hours 0-24) for a reproducible
