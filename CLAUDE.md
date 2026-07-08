@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aero Dynamic Window is a **circadian-aware digital airplane window display** for office wellbeing. It renders a realistic airplane window view synced to time of day, designed for Raspberry Pi 5 fleet deployment with headless Chromium kiosk mode.
 
-**Active branch:** `main`. Ship-stack is **Cesium v1** — globe, terrain, buildings, VIIRS night-lights, and the post-process color-grade pipeline all live in `src/lib/world/` and are the production renderer for the SWA Hyderabad install (SATTVA Knowledge Park). The MapLibre + PMTiles + Takram three-geospatial path explored earlier is **archived** — the takram recipe survives in `docs/reference/takram-atmosphere-recipe.md` for future revisit. Cesium remains isolated to `src/lib/world/` (only `world/CesiumViewer.svelte` does the runtime import; the rest of the codebase is framework-free and unit-testable).
+**Active branch:** `hybrid-v2` (main holds `pre-ship-v1`). Ship-stack is **Cesium v1** — globe, terrain, buildings, VIIRS night-lights, and the post-process color-grade pipeline all live in `src/lib/world/` and are the production renderer for the SWA Hyderabad install (SATTVA Knowledge Park). The MapLibre + PMTiles + Takram three-geospatial path explored earlier is **archived** — the takram recipe survives in `docs/reference/takram-atmosphere-recipe.md` for future revisit. Cesium remains isolated to `src/lib/world/` (only `world/CesiumViewer.svelte` does the runtime import; the rest of the codebase is framework-free and unit-testable).
 
-**Hybrid Three.js overlay (`src/lib/world-three/`, Phase 16-17) is LAB-ONLY.** A transparent Three.js canvas mounted above Cesium on `/playground/three` — clouds, the SWA wing, sky-extras (Moon, stars, sun-glow, meteors), neon city lines, and a full postprocessing chain. It is the R&D surface for photoreal effects; the ship route `/` renders Cesium only. ⚠ `compose.ts`, `flight.svelte.ts`, and `config-tree.svelte.ts` are SHARED — editing them affects both the lab and the ship.
+**Hybrid Three.js overlay (`src/lib/world-three/`, Phase 16+) is flag-gated, default OFF.** A transparent Three.js canvas mounted above Cesium — clouds, the SWA wing, sky-extras (Moon, Venus, stars, sun-glow, meteors), neon city lines, and a full postprocessing chain. Always on at `/playground/three` (the R&D surface); on the ship route `/` it mounts only when `config.world.useThreeOverlay` is true (default `false`, or `?overlay=1` for the P8 Pi-5 perf A/B). The P8 perf gate is the open go/no-go that would flip the default — see `docs/ADR-004-three-js-canonical-renderer.md`. ⚠ `compose.ts`, `flight.svelte.ts`, and `config-tree.svelte.ts` are SHARED — editing them affects both the lab and the ship.
 
 ## Commands
 
@@ -105,10 +105,11 @@ src/lib/
 │   ├── lan-peers.server.ts         mDNS discovery (started ONLY in `bun run server.ts`; `bun run dev` skips it so `/api/devices` shows only self)
 │   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
 │
-├── world-three/        HYBRID THREE.JS PHOTOREAL OVERLAY — LAB-ONLY (Phase 16-17)
+├── world-three/        HYBRID THREE.JS PHOTOREAL OVERLAY (Phase 16+)
 │   │                   Transparent Three.js canvas mounted ABOVE Cesium, camera-
-│   │                   mirrored each frame (Cesium-PULL model, never push). Mounted
-│   │                   ONLY in /playground/three — the ship route (/) is Cesium-only.
+│   │                   mirrored each frame (Cesium-PULL model, never push). Always on
+│   │                   in /playground/three; on / only when world.useThreeOverlay
+│   │                   (default false — flips after the P8 Pi-5 perf gate).
 │   ├── ThreeOverlay.svelte    <Canvas> host — alpha:true + logarithmicDepthBuffer,
 │   │                          near=1 far=1e9. Wires every effect below + the IBL <Sky>.
 │   ├── CameraMirror.svelte    Copies Cesium positionWC/directionWC/upWC/fovy → Three cam
@@ -116,12 +117,18 @@ src/lib/
 │   ├── sky.ts                 computeSunDirection (memo, ⚠ alias contract) + environmentAmbient
 │   ├── prng.ts                createSeededRng(daySeed()) — 3-Pi determinism SSOT (invariant #4)
 │   ├── Wing.svelte            Visible SWA wing mesh, camera-anchored, per-Pi fuselageOffsetM
+│   │                          (DevWingTuner.svelte = lab pose-tuning aid)
 │   ├── Clouds / NightStars / Moon / Venus / SunGlow / LensFlare / Meteors /
-│   │   AtmosphericVeil / SparkleField / Rain / RainSpatter / CityGlowDome / CityLightField
-│   └── OsmRoads / NeonLineLayer   Neon line overlays (geo-anchored). City night-light
-│       intensity is the cityLightAmount/cityGlowAmount SSOT (world-lighting/curves);
-│       altitude crossfade is altitudeDetailMix (world-lighting/altitude); warm hues are
-│       the $content/palettes/city-lights family.
+│   │   SparkleField / Rain / CityGlowDome / CityLightField
+│   ├── OsmRoads / NeonLineLayer   Neon line overlays (geo-anchored, VIIRS-driven via
+│   │                              viirs-field.ts). Occlusion helpers in occlusion.ts;
+│   │                              ENU frame math in enu.ts.
+│   └── (city night-light intensity SSOT lives in world-lighting/ — see below)
+│
+├── world-lighting/     Night-light SSOT shared by every city-light layer
+│   ├── curves.ts       cityLightAmount / cityGlowAmount intensity curves
+│   └── altitude.ts     altitudeDetailMix — altitude crossfade. Warm hues are the
+│                        $content/palettes/city-lights family.
 │
 ├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
 │   └── thresholds.ts   T constants — SSOT for DAWN_START/DAY_START/DAY_END/DUSK_END/DEEP_NIGHT
@@ -149,13 +156,17 @@ tools/
 ├── tile-packager/      Pre-downloads tiles for offline Pi
 └── aero-push-worker/   Cloudflare Worker — firmware-like OTA push
 
-tests/lib/…             Mirrors src/ layout; imports via $lib/* — 341 tests, 29 files
+tests/lib/…             Mirrors src/ layout; imports via $lib/* — 367 tests, 32 files
 
 docs/
 ├── ADR-001-offline-tile-architecture.md
 ├── ADR-002-zero-cost-caching-strategy.md
+├── ADR-003-night-pipeline-simplification.md
+├── ADR-004-three-js-canonical-renderer.md   Hybrid overlay status + P8 gate decision record
 ├── ADR-012-html-in-canvas-defer.md
+├── SHIP-READINESS.md
 ├── standards.md        Rules 0-10 (content/control split, effect layout, named exports, …)
+├── analysis/           Flight-architecture simplification proposal + VISION
 ├── CODEMAPS/           Module-level navigation docs
 └── reference/          Integration recipes (e.g. takram atmosphere)
 ```
@@ -180,7 +191,7 @@ Any sky/cloud/star content that uses `Math.random()` in a build-once-and-never-r
 `computeSunDirection(camLon, timeOfDay)` in `world-three/sky.ts` memoises and returns a **shared mutated array** on cache miss — collapses 6-8 component calls/frame into 1 trig eval. Safe when callers immediately read `d[0]/d[1]/d[2]` synchronously. UNSAFE if a caller stores the reference and reads later (by then another call may have rewritten the same array). Read-and-derive in the same synchronous block. Test-pinned in `tests/lib/world-three/sky.test.ts`.
 
 ### 6. Ship-vs-lab boundary + Cesium-pull camera
-The `world-three/` Three.js overlay renders ONLY on `/playground/three`; the ship route `/` is Cesium-only. The overlay's camera is **pulled** from Cesium every frame in `CameraMirror.svelte` (copies `positionWC`/`directionWC`/`upWC`/`fovy`) — Three never drives the camera, Cesium does. Consequence: `compose.ts`, `flight.svelte.ts`, `motion.svelte.ts`, and `config-tree.svelte.ts` are SHARED between lab and ship — a change there ships to the Pi even though you were "only tuning the lab." Pure `world-three/*.svelte` changes are lab-only and safe. The CameraMirror also applies a Y↔Z handedness flip (so `+X` renders screen-LEFT), which is why on-screen signs in `Wing.svelte` are calibrated, not derived.
+The `world-three/` Three.js overlay is always on at `/playground/three`; on the ship route `/` it mounts only behind `config.world.useThreeOverlay` (default `false` — pending the P8 Pi-5 perf gate, ADR-004). The overlay's camera is **pulled** from Cesium every frame in `CameraMirror.svelte` (copies `positionWC`/`directionWC`/`upWC`/`fovy`) — Three never drives the camera, Cesium does. Consequence: `compose.ts`, `flight.svelte.ts`, `motion.svelte.ts`, and `config-tree.svelte.ts` are SHARED between lab and ship — a change there ships to the Pi even though you were "only tuning the lab." Pure `world-three/*.svelte` changes are lab-only and safe. The CameraMirror also applies a Y↔Z handedness flip (so `+X` renders screen-LEFT), which is why on-screen signs in `Wing.svelte` are calibrated, not derived.
 
 ## AeroWindow — composition
 
@@ -193,7 +204,7 @@ model.flight                            // FlightSimEngine instance (class)
 model.motion                            // motion module — module-level $state, not a class
 
 // Config tree (admin-tunable; drives engines via SimulationContext)
-model.config.world.*                    // imagery + bloom + terrain + buildings + lights + qualityMode
+model.config.world.*                    // imagery + bloom + terrain + buildings + lights + qualityMode + useThreeOverlay
 model.config.atmosphere.clouds.*        // density, speed, layerCount
 model.config.atmosphere.haze.*          // amount, min, max
 model.config.atmosphere.weather.*       // frost altitudes, lightning timing
@@ -409,9 +420,9 @@ $effect(() => {
 
 - `/` — Main window display (Pi kiosk). Full shell.
 - `/playground` — Lean Cesium scene lab. Same `CesiumViewer` + `Compositor` + `Weather` as `/`, no shell / fleet. For tuning the composite in isolation.
-- `/playground/three` — Hybrid Cesium + Three.js composition lab. `CesiumViewer` (terrain/imagery/VIIRS/atmosphere/post-process) + `ThreeOverlay` (clouds/wing/sky-extras/neon/postprocess) inside `WindowChrome`. The R&D surface for everything in `world-three/`. **Lab-only** — none of the Three overlay ships on `/`.
+- `/playground/three` — Hybrid Cesium + Three.js composition lab. `CesiumViewer` (terrain/imagery/VIIRS/atmosphere/post-process) + `ThreeOverlay` (clouds/wing/sky-extras/neon/postprocess) inside `WindowChrome`. The R&D surface for everything in `world-three/`. On `/` the same overlay is gated behind `world.useThreeOverlay` (default off).
 - `/playground/night-lab` — focused night-look tuning lab (per-variant tunables).
-- `/` accepts `?overlay=1|0` (force the hybrid Three overlay on/off for the Pi-5 perf A/B; default off) and `?time=<0-24>` (pin time-of-day + disable real-time sync, for a reproducible night scenario). Both compose with `?location`/`?altitude`/`?role`.
+- `/` accepts `?overlay=1|0` (force the hybrid Three overlay on/off for the Pi-5 perf A/B; default off), `?time=<0-24>` (pin time-of-day + disable real-time sync, for a reproducible night scenario), and `?weather=<clear|cloudy|rain|overcast|storm>` (pin weather — completes the reproducible-scenario trio). All compose with `?location`/`?altitude`/`?role`. ⚠ `?altitude` silently ignores values outside `camera.altitude.min/max` (10k–65k ft).
 - `/admin` — Fleet admin panel.
 - `/admin/content` — Drag-drop bundle UI (LAN-only).
 - `/admin/fleet/health` — Fleet health dashboard.
@@ -496,3 +507,4 @@ AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endp
 | 15.5 night pipeline simplification | 4-lens council (game-design/game-dev/exp-design/exp-dev) voted P2 (3-of-1). Phases LANDED: (1) shader-driven base darkening replaces CartoDB layer's atmospheric ramp via `mix(rgb, navy, smoothstep(0.45,0.9,nf)*0.85*(1-brightGuard))`; (2) drop CartoDB Dark imagery layer entirely; (1.5a) drop redundant base-imagery brightness lerp; (1.5b) drop shader shadow-crush + contrast (~90% redundant with HDR tonemap + bloom); (1.5c) collapse 3 glass DOM layers (z:9+10+11) into one element with stacked gradients + inset box-shadow + `@property`-registered CSS var for rim transitions; (7) drop orphan night config fields (`nightAlpha`, `nightBrightness`, `nightContrast`, `baseNightBrightness`). Result: 3 imagery layers → 2, 5 shader ops → 3, 11 DOM compositor layers → 9, 7 admin night sliders → 4. Council Phases 3-6 (productionize variant E altitude-aware buildings emissive + variant F vector OSM roads + altitude-gate VIIRS) queued for post-hardware-validation. See `docs/ADR-003-night-pipeline-simplification.md`. | 51f4290–a8b3fe5 |
 | 16 hybrid Three.js photoreal overlay | New `world-three/` domain (21 files, ~3,000 LOC) — transparent Three.js canvas above Cesium, camera-mirrored each frame. Components: `Clouds` (sprite cluster system with Mie forward-scatter + sun-side shading + smoothstep yNorm gradient + per-cluster wind shear), `Moon` (sphere mesh + custom ShaderMaterial doing Lambert + procedural value-noise cratering + limb darkening + libration drift), `SunGlow` (core + halo sprites + atmospheric shimmer at low sun), `LensFlare` (2 ghosts max + jitter), `NightStars` (1,200 stars with 4 Bayer spectral classes + power-law magnitude + per-star twinkle, **deterministic-seeded for 3-Pi panorama continuity**), `Meteors` (rare streak events 60-240s intervals at deep night), `AtmosphericVeil` (slow breathing), `SparkleField` (camera-tracked cabin-air dust), `Rain` (300 particles with per-particle size/speed/sway + burst-pause lifecycle), `RainSpatter` (procedural droplet shader on camera near-plane quad), `OsmRoads` + `OsmBuildingEdges` (neon line overlays). Postprocessing chain in `EffectStack.svelte`: HalfFloat HDR → GodRays → Bloom VERY_LARGE → ChromAb → ToneMap ACES → Vignette → Noise grain. Cesium-side: skyBox disabled (Milky Way arc removed), fog nightBrightness=0 across all archetypes (white horizon band killed), atmosphereLight 4.5→2.4. `SUN_PLACEMENT_M` consolidated in `sky.ts`. `computeSunDirection` memoised with ⚠ aliasing contract documented + test-pinned. Sky cubemap throttled to >0.5° sun movement. Cluster rebuild debounced 200ms. **`prng.ts` provides deterministic seeded RNG via mulberry32 + daySeed() — 3-Pi panorama continuity** (all 3 Pis on same day → same stars + cloud positions → no seam). 311/311 tests, 24 test files. | (May 28-30 session) |
 | 17 wing infrastructure + 3-Pi determinism completion | (1) `Wing.svelte` — visible 3D right wing in `world-three/`. Custom 8-vertex tapered BufferGeometry (root 8m chord × 1.2m thickness, tip 1.5m chord × 0.3m thickness, span 17m). Camera-anchored per WingContrail pattern; lit by scene AmbientLight (no per-component sun light — picks up env mood automatically). Bank rotation post-multiplied as local-z quaternion (matches old CSS `rotate()` axis). Right-wingtip nav lights gated by `nightFactor`: continuous green emerald + 60ms white anti-collision strobe pulsing every 1s. (2) `parallax.fuselageOffsetM` — new config field, applied to wing X (fore-aft fuselage axis): `left = -6m` (front passenger seat, sees trailing edge), `center = 0`, `right = +6m` (aft seat, sees leading edge). `fuselageOffsetForRole()` SSOT helper added next to `headingOffsetForRole()`. `setParallaxRole()` now drives both. (3) **3-Pi determinism BLOCKER fixed**: `Clouds.svelte` had 15+ `Math.random()` calls in build-once cluster generation (violation of invariant #4) — seeded with `createSeededRng(daySeed())` per the canonical `NightStars` pattern. Same fix applied to `Rain.svelte` droplet positions. Without this the 3-Pi cloud panorama seam failed silently. (4) Camera near `100 → 1.0` in `ThreeOverlay` so camera-anchored cabin-space geometry (Wing, future cabin details) renders without near-plane clipping. logarithmicDepthBuffer handles precision at distant Cesium tiles. (5) Legacy CSS `.wing-silhouette` deleted from `Pane.svelte` + playground duplicate + `Z.wing` enum. (6) Playground `?role=...` simulator bug fixed — direct mutation of `p.role` bypassed `setParallaxRole()` so `fuselageOffsetM` never updated; now routes through SSOT setter. 329/329 tests (5 new for `fuselageOffsetForRole`). | (Jun 8 session) |
+| 18 hybrid-v2 consolidation (branch `hybrid-v2`) | Visual + hardening sweep toward the P8 gate. Landed: real moon phase + real sun elevation (airMassFactor was a constant); moon/Venus/star Earth-occlusion + depth-test behind wing; Catmull-Rom flight-path smoothing; CSS rain-on-glass (RainSpatter + AtmosphericVeil retired); VIIRS-driven neon via the working NASA GIBS endpoint (`viirs-field.ts`; old map1.vis host dead); CityLightField full-metro bokeh rebuild; evening/night grade fixes (sunset peak ordering, SunGlow negative-opacity). **Night-light SSOT consolidation**: new `world-lighting/` (curves + altitude) + `$content/palettes/city-lights` family; `OsmBuildingEdges` removed. Ship-route perf hooks: `?overlay=1|0` (mounts ThreeOverlay behind `world.useThreeOverlay`, default off) + `?time=` pin. Deep-review hardening: alias-contract/disposal/hot-path fixes, per-frame moon-phase guard, `start()` re-entrancy, lab RAF ticks wrapped in `untrack()`. ADR-004 records the hybrid decision; P8 Pi-5 perf run is the open go/no-go. 367/367 tests, 32 files. | (Jun 11 – Jul session, ~75 commits past `pre-ship-v1`) |
