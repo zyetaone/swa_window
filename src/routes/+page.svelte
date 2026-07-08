@@ -12,6 +12,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import { createAeroWindow } from "$lib/model/aero-window.svelte";
 	import { isValidLocation } from "$content/locations";
+	import { isValidWeather } from "$lib/types";
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
@@ -164,6 +165,14 @@
 				model.syncToRealTime = false;
 				model.setTime(t);
 			}
+		}
+
+		// Pin weather via ?weather=clear — completes the reproducible-scenario
+		// trio with ?time + ?overlay so the perf/visual A/B isn't at the mercy
+		// of whatever the director randomised at boot.
+		const weatherParam = params.get("weather")?.toLowerCase();
+		if (isValidWeather(weatherParam)) {
+			model.setWeather(weatherParam);
 		}
 
 		// Perf-gate A/B (P8): force the hybrid Three overlay ON/OFF on the SHIP
