@@ -167,7 +167,7 @@ export class DeviceClient {
 	 * deviceId match on the peer list (which /api/devices already flags).
 	 */
 	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {
-		if (this.#peers.length === 0) return;
+		if (this.#destroyed || this.#peers.length === 0) return;
 		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
 		// /api/command is bearer-gated; the leader (a kiosk Pi) pulls its own
 		// token from the localhost peer-token route. Async IIFE keeps publishV2
