@@ -180,6 +180,16 @@ export class AeroWindow {
 			this.timeOfDay = 22;
 		}
 
+		// Move the flight to the resolved boot location. applyShowOpening only
+		// writes the `location` FIELD (no side-effect hooks by design), and
+		// #applyPersisted moves the flight only when a location was persisted —
+		// so a fresh boot orbited FlightSimEngine's class-field default (Dubai)
+		// while `location` said otherwise, showing the wrong city until the
+		// director's first flight (found in the Jul 8 visual A/B). Idempotent:
+		// the orbit seed is deterministic per location+day, so re-syncing after
+		// a persisted setLocation() recomputes the identical orbit.
+		this.flight.setLocationWithSky(this.location, this.skyState);
+
 		if (typeof window !== 'undefined') {
 			this.#fpsLastTime = performance.now();
 			this.updateTimeFromSystem();
