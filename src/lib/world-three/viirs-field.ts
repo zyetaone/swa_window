@@ -48,6 +48,16 @@ export interface ViirsField {
 	 *  noise, so callers can use a LOWER brightness floor for wider spread
 	 *  without picking up rural noise as orphan dots. */
 	sampleBilinear(lat: number, lon: number): number;
+	/**
+	 * Area-mean luminance averaged over a (2×radiusPx+1)² pixel neighbourhood
+	 * (RDT-192). A single sensor-noise pixel surrounded by dark cells returns a
+	 * mean far below the brightness floor, so it cannot spawn an orphan dot —
+	 * stronger noise kill than bilinear, which returns the full hot-pixel value
+	 * when sampled at its centre. Clamps at tile edges like sample().
+	 * O(radiusPx²), Pi-cheap for r=1. CityLightField currently ships on
+	 * sampleBilinear; A/B this as the floor test if orphan dots resurface.
+	 */
+	sampleArea(lat: number, lon: number, radiusPx?: number): number;
 }
 
 // Fractional WebMercator tile coordinates (so we can sample sub-tile pixels).
@@ -158,6 +168,24 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 					const top = lumAt(x0, y0) * (1 - dx) + lumAt(x1, y0) * dx;
 					const bot = lumAt(x0, y1) * (1 - dx) + lumAt(x1, y1) * dx;
 					return top * (1 - dy) + bot * dy;
+				},
+				sampleArea(la: number, lo: number, radiusPx = 1): number {
+					const fx = (lonToTileXf(lo, z) - tx) * 256;
+					const fy = (latToTileYf(la, z) - ty) * 256;
+					const cx = fx < 0 ? 0 : fx > 255 ? 255 : fx | 0;
+					const cy = fy < 0 ? 0 : fy > 255 ? 255 : fy | 0;
+					const r = radiusPx | 0;
+					let sum = 0;
+					for (let dy = -r; dy <= r; dy++) {
+						const py = cy + dy < 0 ? 0 : cy + dy > 255 ? 255 : cy + dy;
+						for (let dx = -r; dx <= r; dx++) {
+							const px = cx + dx < 0 ? 0 : cx + dx > 255 ? 255 : cx + dx;
+							const i = (py * 256 + px) * 4;
+							sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+						}
+					}
+					const count = (2 * r + 1) * (2 * r + 1);
+					return sum / (count * 255);
 				},
 			});
 		} catch {
