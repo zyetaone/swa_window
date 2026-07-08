@@ -430,6 +430,7 @@ $effect(() => {
 - `/api/assets` + `/api/assets/[filename]` — Asset upload + serve.
 - `/api/bundle/[hash]` — LAN peer-cache bundle blob.
 - `/api/buildings/:city` — OSM extrusion GeoJSON.
+- `/api/roads/:city` — OSM road-network GeoJSON (feeds the `world-three/` neon line overlays).
 - `/api/tiles/[...path]` — Tile proxy.
 - `/api/fleet/heartbeat` + `/api/devices` + `/api/status` + `/api/config` + `/api/command` + `/api/events` — REST + SSE fleet surface (no central broker). `/api/config` PATCH validates the path against a namespace allowlist (`atmosphere|camera|director|world|shell`) before publishing, blocking `__proto__` / `constructor.prototype` style writes at the wire. **Bearer-gated since Phase 15 (Day 1, commit `77f244f`)** — `requireAdminToken(request)` runs first; the kiosk browser fetches its own token via the localhost-only `/api/internal/peer-token` route.
 - `/api/content` POST + `/api/content/[id]` DELETE + `/api/assets` POST — admin-only mutating routes. Require `Authorization: Bearer $AERO_ADMIN_TOKEN`; return 503 if the env var is unset (fail closed). GET routes remain unauthenticated. Admin UI at `/admin/content` prompts for the token and caches in `sessionStorage`.

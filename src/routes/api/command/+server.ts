@@ -14,26 +14,31 @@
  * string. It publishes the full body to the SSE bus so the local browser
  * can handle it. Unknown types are ignored by the browser handler.
  *
- * ⚠ KNOWN GAP (tracked for the P8 hardware pass): unlike PATCH /api/config,
- * this route is NOT bearer-gated. Acceptable under the LAN-only / physical-
- * access threat model, but a compromised kiosk could fan fabricated
- * `director_decision`/`set_scene` to peers. Closing it requires `requireAdminToken`
- * here PLUS injecting the token into all three POST callers — the kiosk's own
- * browser (localhost peer-token), a remote admin laptop (sessionStorage prompt,
- * like the content routes), and the leader→follower fan-out (client.svelte.ts) —
- * verified on the fleet so neither 3-Pi sync nor the admin "force scene" breaks.
- * Deferred to the hardware pass for that reason; do NOT half-gate it.
+ * Bearer-gated (AERO_ADMIN_TOKEN), same as PATCH /api/config — a compromised
+ * peer can no longer fan fabricated `director_decision`/`set_scene` to the
+ * fleet. Both POST callers inject the token via the shared peer-token path:
+ * the kiosk's leader→follower fan-out (client.svelte.ts publishV2) and the
+ * admin dashboard (rest-admin.svelte.ts #postCommand) each spread
+ * `peerAuthHeader()` — the exact pattern rest-admin already uses for
+ * /api/config. Fail-closed: 503 when AERO_ADMIN_TOKEN is unset (matches the
+ * other admin routes), so a Pi that didn't opt in simply has no working
+ * command path rather than an open one.
+ *
+ * ⚠ Validate on the real 3-Pi rig (P8 pass): confirm leader→follower scene
+ * sync AND the admin "force scene" still land end-to-end with the gate on.
  */
 
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
+import { requireAdminToken } from '$lib/http/auth';
 import { publish } from '$lib/fleet/sse-bus.server';
 
 export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
+	requireAdminToken(request);
 	const origin = request.headers.get('origin');
 	const body = await readLimitedJson<{ type: string }>(request, 4096);
 

@@ -183,9 +183,10 @@ export class RestAdminStore {
 
 	async #postCommand(peer: DiscoveredPeer, body: { type: string; [k: string]: unknown }): Promise<void> {
 		try {
+			const authHeader = await peerAuthHeader();
 			const res = await fetch(`${urlFor(peer)}/api/command`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...authHeader },
 				body: JSON.stringify(body),
 			});
 			if (!res.ok) console.warn(`[admin] command to ${peer.deviceId} failed: ${res.status}`);

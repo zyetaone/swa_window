@@ -23,6 +23,7 @@ import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType
 import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor } from '$lib/fleet/peer-url';
+import { peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 
@@ -168,13 +169,19 @@ export class DeviceClient {
 	publishV2(msg: { v: 2; type: string; [k: string]: unknown }): void {
 		if (this.#peers.length === 0) return;
 		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
-		for (const peer of this.#peers) {
-			void fetch(`${urlFor(peer)}/api/command`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(msg),
-			}).catch(() => { /* follower unreachable — skip */ });
-		}
+		// /api/command is bearer-gated; the leader (a kiosk Pi) pulls its own
+		// token from the localhost peer-token route. Async IIFE keeps publishV2
+		// fire-and-forget/void — the header fetch is cached after warmup.
+		void (async () => {
+			const authHeader = await peerAuthHeader();
+			for (const peer of this.#peers) {
+				void fetch(`${urlFor(peer)}/api/command`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', ...authHeader },
+					body: JSON.stringify(msg),
+				}).catch(() => { /* follower unreachable — skip */ });
+			}
+		})();
 	}
 
 	async #refreshPeers(): Promise<void> {
