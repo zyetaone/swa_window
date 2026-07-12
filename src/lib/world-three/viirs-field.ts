@@ -30,12 +30,13 @@
  * cancel a registration on unmount.
  */
 
+import { VIIRS_GIBS_BASE } from '$lib/world/viirs-endpoint';
+
 const TILE_Z = 7;
-// Canonical GIBS WMTS REST endpoint (epsg3857/best). PNG tiles, CORS-clean so
-// the canvas read-back works. The older map1.vis.earthdata.nasa.gov/wmts-webmerc
-// host that the Cesium layer string still uses now returns InvalidParameter.
+// Endpoint SSOT shared with the Cesium imagery layer — see world/viirs-endpoint.
+// PNG tiles, CORS-clean so the canvas read-back works.
 const VIIRS_TILE = (z: number, y: number, x: number) =>
-	`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
+	`${VIIRS_GIBS_BASE}/${z}/${y}/${x}.png`;
 
 export interface ViirsField {
 	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core).

@@ -32,18 +32,11 @@
 export const EARTH_RADIUS_M = 6378137;
 // Soft Earth-limb fade band for celestial occlusion (moon/Venus fade vs pop).
 export const OCCLUSION_SOFTNESS_M = 6e4;
-export const FEET_PER_METER = 3.28084;
 // Directional lights in Three.js are parallel — only the position
-// VECTOR direction matters, not the magnitude. Keep these within the
+// VECTOR direction matters, not the magnitude. Keep this within the
 // camera's far plane (1e9) so stars actually render in the scene.
-export const SUN_DISTANCE_M = 1e8;         // 100 000 km — well past sky scale
 export const STARS_RADIUS_M = 5e8;         // 500 000 km — inside far plane
-export const SKY_SCALE_M  = 4.5e8;          // Three.js Sky.js — atmospheric dome
 export const CLOUD_DECK_M = 8000;           // clouds at ~8 km altitude
-
-// Sun direction + visibility + palette now live in world-three/sky.ts.
-// Re-exports for back-compat with callers that import from state.svelte.ts.
-export { computeSunDirection } from './sky';
 
 type Vec3 = [number, number, number];
 

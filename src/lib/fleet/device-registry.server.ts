@@ -3,7 +3,7 @@
  *
  * Replaces the `devices` Map that lived in the WS hub. Each Pi's own
  * SvelteKit server keeps a cached DeviceStatus for itself — the browser
- * POSTs it to `/api/_status` on a timer (the same ~2s heartbeat rhythm
+ * POSTs it to `/api/status` on a timer (the same ~2s heartbeat rhythm
  * the WS path used). Admin dashboard polls `/api/status` and reads this
  * cache.
  *

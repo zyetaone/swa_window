@@ -44,7 +44,8 @@ bun run start        # build + serve (production-like, what the Pi runs)
 src/lib/
 ├── world/              WHAT we see — the map underneath (Cesium confined here)
 │   ├── compose.ts      CesiumManager — imports cesium as type
-│   ├── config.ts       Ion token, imagery URLs, VIEWER_OPTIONS (imports cesium as type)
+│   ├── cesium-setup.ts Ion token, VIEWER_OPTIONS (imports cesium as type)
+│   ├── viirs-endpoint.ts  GIBS VIIRS URL SSOT — shared with world-three/viirs-field
 │   ├── shaders.ts      GLSL color grading (emissive city lights)
 │   ├── active.svelte.ts  Reactive holder — geo-effects consume here
 │   └── CesiumViewer.svelte  dynamic import('cesium') happens here
@@ -83,7 +84,7 @@ src/lib/
 │   ├── compositor.svelte    Mounts every Effect in z-order
 │   ├── layers.ts            Z-order SSOT (effect registry + Weather + Window all import this)
 │   ├── registry.ts          Static effect list (clouds, haze, lightning, micro-events, car-lights)
-│   ├── bundle/              Pushable content bundles (CRUD + 4-tier fetch)
+│   ├── bundle/              Pushable content bundles (CRUD + local cache + CF-Worker remote poll)
 │   └── effects/             ALL registered effects live here
 │       ├── clouds/         ArtsyClouds (CSS3D sprites) + effectiveCloudDensity rule
 │       ├── haze/            Atmospheric haze gradient
@@ -94,7 +95,7 @@ src/lib/
 │       └── sprite/          Cesium billboard at lat/lon (factory)
 │
 ├── fleet/              Remote Pi fleet management (REST + SSE, no broker)
-│   ├── protocol.ts                 v1 + v2 messages
+│   ├── protocol.ts                 Shared fleet types (post-WS: no wire unions — REST JSON shapes live next to their handlers)
 │   ├── client.svelte.ts            DeviceClient — SSE in, REST POST out
 │   ├── rest-admin.svelte.ts        RestAdminStore — admin dashboard
 │   ├── peer-sync.svelte.ts         $effect → POST PATCH /api/config to every peer
@@ -103,7 +104,7 @@ src/lib/
 │   ├── sse-bus.server.ts           In-process pub/sub for /api/events
 │   ├── device-registry.server.ts   Per-device live status
 │   ├── lan-peers.server.ts         mDNS discovery (started ONLY in `bun run server.ts`; `bun run dev` skips it so `/api/devices` shows only self)
-│   └── lan-bundle-cache.server.ts  4-tier offline-Pi bundle ladder
+│   └── lan-bundle-cache.server.ts  Local bundle-blob read for /api/bundle/[hash] (peer/remote tiers removed)
 │
 ├── world-three/        HYBRID THREE.JS PHOTOREAL OVERLAY (Phase 16+)
 │   │                   Transparent Three.js canvas mounted ABOVE Cesium, camera-
@@ -130,13 +131,13 @@ src/lib/
 │   └── altitude.ts     altitudeDetailMix — altitude crossfade. Warm hues are the
 │                        $content/palettes/city-lights family.
 │
-├── night/              Night rendering pipeline barrel — VIIRS + bloom + palette
-│   └── thresholds.ts   T constants — SSOT for DAWN_START/DAY_START/DAY_END/DUSK_END/DEEP_NIGHT
-│                        All four sky-state consumers (getSkyState, nightFactor, dawnDuskFactor,
-│                        isSunVisible) import T. Edit one constant to shift the dusk window.
-├── http/               Shared HTTP helpers — cors.ts, body.ts (size-limited reads)
+├── http/               Shared HTTP helpers — auth.ts (bearer), cors.ts, body.ts (size-limited
+│                        reads), peer-token.ts, geojson.server.ts (buildings+roads routes)
 │
-├── types.ts, utils.ts, game-loop.ts   Shared primitives at the root.
+├── types.ts, utils.ts, game-loop.ts   Shared primitives at the root. utils.ts owns the
+│                        `T` time-of-day constants (DAWN_START/DAY_START/DAY_END/DUSK_END/
+│                        DEEP_NIGHT) — SSOT for getSkyState/nightFactor/dawnDuskFactor and
+│                        world-lighting/curves. Edit one constant to shift the dusk window.
 
 content/                AUTHORED ARTIFACTS — what plays vs. how it plays
 ├── locations/          catalog.ts + per-location scene defaults
@@ -179,7 +180,7 @@ These are the rules the architecture was designed to preserve. If a future chang
 **Cesium is confined to `src/lib/world/`.** Several files reference `cesium` as a **type** only — `compose.ts`, `cesium-setup.ts`, `cloud-billboard-layer.ts`, `lightning-stage.ts`, and geo-effects such as `scene/effects/car-lights/CarLightsEffect.svelte` (via `typeof import('cesium')` on a parameter that receives the live instance). Type references erase at build, so the real invariant is: **only `world/CesiumViewer.svelte` does the actual runtime `import('cesium')`.** Verify runtime imports with `rg "import\('cesium'\)" src/lib/` — that hit should be CesiumViewer alone (a broader `rg "cesium"` also surfaces the type refs above, which are fine). The `world-three/` overlay never imports the package at all — it reaches Cesium through the `activeCesium` holder (`world/active.svelte.ts`), which is the invariant-#6 pull seam. The boundary is **runtime**, not merely directory.
 
 ### 2. Flat DTO boundary
-`model.applyPatch(patch)` and the v1 fleet protocol are flat DTOs that cross the wire and `localStorage`. Phase 6 added v2 path-targeted patches (`config_patch { path, value }`) additively — v1 never changes shape. Persistence and fleet back-compat depend on this. Don't nest v1.
+Flat DTOs cross the wire and `localStorage`: the persisted state shape (`aero-window-persistence.ts`), the legacy `DisplayConfig` admin-push DTO (`fleet/protocol.ts`), and the CF-Worker `ConfigPatch {path,value}` contract. Post-WS cleanup removed the v1/v2 wire-message unions — REST endpoints speak plain JSON shapes defined next to their handlers — but the flatness rule survives: these DTOs are decoded on fielded Pis and in old localStorage, so extend them additively, never nest or reshape.
 
 ### 3. `untrack()` in hot paths
 Every tick body wraps its work in `untrack(() => ...)` so 60 Hz config reads don't build reactive dependencies across the graph: `flight.svelte.ts:88`, `motion.svelte.ts:43`, `autopilot.svelte.ts:31`. If you add a new tick, wrap it too. Verify with `rg "^\s*untrack" src/lib/{camera,director}/`.
@@ -292,13 +293,10 @@ When the leader picks a new location, it emits `{v:2, type:'director_decision', 
 
 ## Fleet protocol
 
-**v1** (flat patches) and **v2** (path-targeted) coexist. Devices advertise both; servers can send either. See `src/lib/fleet/protocol.ts`.
-
-v2 messages:
-- `{v:2, type:'config_patch', path, value}` → `model.applyConfigPatch(path, value)`
-- `{v:2, type:'config_replace', layer, snapshot}` → per-leaf `applyConfigPatch`
-- `{v:2, type:'role_assign', deviceId, role, headingOffsetDeg?, fovDeg?, groupId?}`
-- `{v:2, type:'director_decision', scenarioId, locationId, weather?, decidedAtMs, transitionAtMs, groupId?}`
+Post-WS cleanup: there is **no versioned wire union** anymore. REST endpoints speak plain JSON shapes that live next to their handlers (`src/routes/api/*`); `fleet/protocol.ts` keeps only the shared types (`FleetClientModel`, legacy `DisplayConfig`, `DeviceCaps`, `DeviceInfo`). The live message surface:
+- `PATCH /api/config { path, value }` → `model.applyConfigPatch(path, value)` (bearer-gated; namespace allowlist)
+- `POST /api/command { type, ...payload }` → SSE fan-out; types: `director_decision` (leader→followers, keeps the old v2 shape for continuity), `set_scene`, `set_mode` (bearer-gated)
+- `POST /api/status` (device heartbeat) + `GET /api/devices` / SSE `/api/events`
 
 ## Tile caching strategy (ADR-002)
 

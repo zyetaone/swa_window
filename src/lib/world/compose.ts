@@ -11,6 +11,7 @@ import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world-lighting/curves';
+import { VIIRS_GIBS_BASE } from './viirs-endpoint';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
@@ -556,7 +557,7 @@ export class CesiumManager {
 			// from tileBase and were unaffected.
 			const viirsUrl = tileBase
 				? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
-				: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png';
+				: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`;
 			this.viirsLayer = this.viewer.imageryLayers.addImageryProvider(
 				new C.UrlTemplateImageryProvider({
 					url: viirsUrl,
