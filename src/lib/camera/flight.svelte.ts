@@ -10,7 +10,7 @@ import { clamp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
-import { createSeededRng, daySeed } from '$lib/world-three/prng';
+import { createSeededRng, daySeed, hashString } from '$lib/world-three/prng';
 
 /**
  * Stable 32-bit hash of a location id string (djb2). Combined with
@@ -18,12 +18,6 @@ import { createSeededRng, daySeed } from '$lib/world-three/prng';
  * compute an IDENTICAL orbit (same bearing, start angle, direction) while
  * the orbit still varies location-to-location and day-to-day.
  */
-function hashLocationId(id: string): number {
-	let h = 5381;
-	for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0;
-	return h >>> 0;
-}
-
 /**
  * Uniform Catmull-Rom interpolation of a scalar through 4 control points,
  * evaluated at local parameter t∈[0,1] between p1 and p2.
@@ -150,7 +144,7 @@ export class FlightSimEngine {
 		// stay position-locked (only their yaw offset differs). Was raw
 		// Math.random(), which diverged each Pi's camera position and broke
 		// the panorama. The day component keeps the orbit fresh day-to-day.
-		const rng = createSeededRng((daySeed() ^ hashLocationId(locationId)) >>> 0);
+		const rng = createSeededRng((daySeed() ^ hashString(locationId)) >>> 0);
 		this.orbitBearing = this.#computeOrbitBearing(loc.lat, loc.lon) + (rng() - 0.5) * 0.6;
 		this.orbitAngle = rng() * Math.PI * 2;
 		// Randomise rotation sense so the camera sweep isn't always the same

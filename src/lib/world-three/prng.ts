@@ -81,3 +81,11 @@ export function spherePoint(
 		radius * Math.sin(phi) * Math.sin(theta),
 	];
 }
+
+/** djb2 string hash → unsigned 32-bit. Pair with daySeed() to derive
+ *  per-entity deterministic seeds: `createSeededRng((daySeed() ^ hashString(id)) >>> 0)`. */
+export function hashString(id: string): number {
+	let h = 5381;
+	for (let i = 0; i < id.length; i++) h = ((h << 5) + h + id.charCodeAt(i)) | 0;
+	return h >>> 0;
+}
