@@ -11,6 +11,7 @@
  * - Sync functions (syncFromMode, syncFromEffects) are plain functions, not class methods
  */
 
+import type { ConfigNamespace } from './config-namespaces';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { headingOffsetForRole, fuselageOffsetForRole } from '$lib/fleet/parallax.svelte';
@@ -222,8 +223,13 @@ export const director = $state({
 		subsequentMaxDelay: 480,
 		weatherChangeChance: 0.2,
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
-		directorMinInterval: 100,      // 1:40
-		directorMaxInterval: 160,      // 2:40
+		// Jul-13 retune: 100/160 (avg ~2:10, passer-by cadence) → 240/360
+		// (avg ~5:00). The window lives in peripheral vision for desk-workers
+		// eight hours a day — a whole-world change every two minutes read as
+		// a slideshow, not calm ambience. Fleet-tunable via director.* if an
+		// install wants the livelier gallery pace back.
+		directorMinInterval: 240,      // 4:00
+		directorMaxInterval: 360,      // 6:00
 		// Restrict the director's auto-flight pool to locations where
 		// hasBuildings === true (i.e. cities with OSM building extrusions and
 		// real VIIRS night-light footprint). When false, the full pool —
@@ -392,7 +398,10 @@ export const shell = $state({
 export const config = $state({ atmosphere, camera, director, world, shell });
 
 // Flat namespace map — single dispatch point for all path-targeted patches.
-const NAMESPACES = { atmosphere, camera, director, world, shell } as const;
+// `satisfies` couples the keys to the framework-free CONFIG_NAMESPACE_KEYS
+// SSOT (also consumed by the /api/config wire allowlist): add or rename a
+// namespace in only one place and the compiler flags the other.
+const NAMESPACES = { atmosphere, camera, director, world, shell } as const satisfies Record<ConfigNamespace, object>;
 
 // ─── CRDT layer ─────────────────────────────────────────────────────────────
 
