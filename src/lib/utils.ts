@@ -142,15 +142,27 @@ export function nightFactor(timeOfDay: number): number {
 
 /**
  * Dawn/dusk factor 0..1 from decimal time of day.
- * Peaks at 0.5 during the transition band, 0 during full day/night.
- * Used by the night-rendering pipeline to tint the color-grading shader
- * toward warm amber at the terminator.
+ * CONTINUOUS triangles across both transition bands — 0 at every boundary,
+ * peaking at the authored hero times: dawn peaks at 06:30 (the defaultShow
+ * opening), dusk at 18:30 (golden hour). The old piecewise form peaked AT
+ * the day boundaries, so the warm grade snapped 0→1 in a single tick at
+ * 07:00 and 18:00 — a visible pop at the most-watched "going home" hour
+ * (Jul-12 review). Used by the night-rendering pipeline + lightingState to
+ * tint sky/globe/shader toward warm amber at the terminator.
  */
+const DAWN_PEAK = 6.5;
+const DUSK_PEAK = 18.5;
 export function dawnDuskFactor(timeOfDay: number): number {
 	if (timeOfDay >= T.DAY_START && timeOfDay <= T.DAY_END) return 0;
 	if (timeOfDay < T.DAWN_START || timeOfDay > T.DEEP_NIGHT) return 0;
-	if (timeOfDay < T.DAY_START) return (timeOfDay - T.DAWN_START) / (T.DAY_START - T.DAWN_START);
-	return (T.DEEP_NIGHT - timeOfDay) / (T.DEEP_NIGHT - T.DAY_END);
+	if (timeOfDay < T.DAY_START) {
+		return timeOfDay <= DAWN_PEAK
+			? (timeOfDay - T.DAWN_START) / (DAWN_PEAK - T.DAWN_START)
+			: (T.DAY_START - timeOfDay) / (T.DAY_START - DAWN_PEAK);
+	}
+	return timeOfDay <= DUSK_PEAK
+		? (timeOfDay - T.DAY_END) / (DUSK_PEAK - T.DAY_END)
+		: (T.DEEP_NIGHT - timeOfDay) / (T.DEEP_NIGHT - DUSK_PEAK);
 }
 
 /**

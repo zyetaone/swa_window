@@ -164,12 +164,16 @@
 	// Also gates noise + chromatic aberration: both are invisible in daylight
 	// but still consume GPU passes. NightFactor ramp fades them in gradually.
 	//
-	// GodRays sample count scales with visibility: 40 at dawn/dusk hero moments,
-	// 20 at midday, 8 when near-invisible — saves ~0.2ms GPU at night/noon.
+	// GodRays are a dawn/dusk HERO effect, not an all-day haze: opacity is
+	// driven by dawnDuskWeight (0 at flat day AND night, peaks in the golden
+	// bands) — NOT by sunGlowVisibility, whose deliberate 0.35 daytime floor
+	// exists for the sun-disc sprite and was washing the midday sky gray at
+	// ~52% ray opacity for 11 h/day (Jul-12 review, "murky midday").
+	// Sample count scales with the same weight: 40 at hero moments, 8 when off.
 	$effect(() => {
-		const vis = lightingState(model.timeOfDay, model.nightFactor).sunGlowVisibility * (1 - model.nightFactor * 0.95);
-		godRays.blendMode.opacity.value = Math.min(1, vis * 1.5);
-		godRays.samples = vis > 0.25 ? 40 : vis > 0.08 ? 20 : 8;
+		const dd = lightingState(model.timeOfDay, model.nightFactor).dawnDuskWeight * (1 - model.nightFactor * 0.95);
+		godRays.blendMode.opacity.value = Math.min(1, dd * 1.33);
+		godRays.samples = dd > 0.25 ? 40 : dd > 0.08 ? 20 : 8;
 		// Raise bloom threshold at night: clouds are dimmer at night and
 		// shouldn't bloom (they should read as silhouette against stars).
 		// Base 0.38 (day, cloud peaks bloom softly) → 0.62 (night, only

@@ -144,15 +144,20 @@ describe('dawnDuskFactor', () => {
 		expect(dawnDuskFactor(T.DEEP_NIGHT)).toBe(0);
 		expect(dawnDuskFactor(0)).toBe(0);
 	});
-	it('approaches 1 just inside the transition bands', () => {
-		expect(dawnDuskFactor(T.DAY_START - 0.01)).toBeCloseTo(1, 1);
-		expect(dawnDuskFactor(T.DAY_END + 0.01)).toBeCloseTo(1, 1);
+	it('is CONTINUOUS at the day boundaries — no 0→1 cliff (Jul-12 review)', () => {
+		// The old curve peaked AT the boundaries: dd(18.01) ≈ 1 while dd(18) = 0,
+		// a one-tick warm-grade pop at the most-watched hour. Now both sides of
+		// each boundary are near-zero.
+		expect(dawnDuskFactor(T.DAY_START - 0.01)).toBeLessThan(0.05);
+		expect(dawnDuskFactor(T.DAY_END + 0.01)).toBeLessThan(0.05);
 	});
-	it('ramps up from DAWN_START to DAY_START', () => {
-		expect(dawnDuskFactor((T.DAWN_START + T.DAY_START) / 2)).toBeCloseTo(0.5, 5);
+	it('peaks at the authored hero times (dawn 06:30, dusk 18:30)', () => {
+		expect(dawnDuskFactor(6.5)).toBeCloseTo(1, 5);
+		expect(dawnDuskFactor(18.5)).toBeCloseTo(1, 5);
 	});
-	it('ramps down from DAY_END to DEEP_NIGHT', () => {
-		expect(dawnDuskFactor((T.DAY_END + T.DEEP_NIGHT) / 2)).toBeCloseTo(0.5, 5);
+	it('ramps as a triangle through each band', () => {
+		expect(dawnDuskFactor(5.75)).toBeCloseTo(0.5, 5); // half-way up dawn rise
+		expect(dawnDuskFactor(19.75)).toBeCloseTo(0.5, 5); // half-way down dusk fall
 	});
 });
 

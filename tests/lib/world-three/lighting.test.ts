@@ -30,10 +30,9 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 	it('dawnDuskWeight peaks in the transition, is 0 at full day/night, capped at 0.75', () => {
 		expect(lightingState(12, 0).dawnDuskWeight).toBe(0); // full day
 		expect(lightingState(1, 1).dawnDuskWeight).toBe(0); // full night
-		// Just inside the dawn/dusk band (the warm peak sits adjacent to the
-		// day boundary, where dawnDuskFactor itself snaps to 0) → capped.
-		expect(lightingState(6.9, nightFactor(6.9)).dawnDuskWeight).toBeCloseTo(0.75, 5);
-		expect(lightingState(18.1, nightFactor(18.1)).dawnDuskWeight).toBeCloseTo(0.75, 5);
+		// At the authored hero times (dawnDuskFactor triangle peaks) → capped.
+		expect(lightingState(6.5, nightFactor(6.5)).dawnDuskWeight).toBeCloseTo(0.75, 5);
+		expect(lightingState(18.5, nightFactor(18.5)).dawnDuskWeight).toBeCloseTo(0.75, 5);
 		// Never exceeds the cap.
 		for (let t = 5; t <= 21; t += 0.25) {
 			expect(lightingState(t, nightFactor(t)).dawnDuskWeight).toBeLessThanOrEqual(0.75 + 1e-9);
