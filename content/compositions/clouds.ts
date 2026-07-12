@@ -100,7 +100,6 @@ const COMPOSITIONS: readonly CloudComposition[] = [
 	},
 ] as const;
 
-export const CLOUD_COMPOSITIONS = COMPOSITIONS;
 
 /**
  * Pick a cloud composition compatible with the given weather.

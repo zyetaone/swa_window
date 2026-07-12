@@ -3,11 +3,7 @@ import {
 	STREET_CORE,
 	STREET_HALO,
 	CITY_GLOW,
-	CITY_SODIUM,
-	CITY_AMBER,
-	CITY_WARM_WHITE,
 	hexOf,
-	type Rgb,
 } from '$content/palettes';
 
 describe('city-lights palette', () => {
@@ -28,11 +24,5 @@ describe('city-lights palette', () => {
 
 	it('the dome glow tint equals the original CityGlowDome Color', () => {
 		expect(CITY_GLOW).toEqual([1.0, 0.55, 0.2]);
-	});
-
-	it('canonical warm stops ascend in luminance (sodium → amber → warm-white)', () => {
-		const lum = (c: Rgb) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-		expect(lum(CITY_SODIUM)).toBeLessThan(lum(CITY_AMBER));
-		expect(lum(CITY_AMBER)).toBeLessThan(lum(CITY_WARM_WHITE));
 	});
 });

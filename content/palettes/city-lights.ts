@@ -27,11 +27,7 @@
 export type Rgb = readonly [number, number, number];
 
 /** Canonical 3-stop warm grade — mirrors the Cesium night shader stops. */
-export const CITY_SODIUM: Rgb = [1.0, 0.6, 0.2];
-export const CITY_AMBER: Rgb = [1.0, 0.8, 0.4];
-export const CITY_WARM_WHITE: Rgb = [1.0, 0.88, 0.72];
 /** Rare cool LED/mercury accent — the only non-warm note in a lit city. */
-export const CITY_COOL_LED: Rgb = [0.78, 0.86, 1.0];
 
 /** Diffuse skyglow tint thrown up into the haze (CityGlowDome) — a deeper,
  *  less-saturated amber than the point sources so it reads as glow, not lamps. */

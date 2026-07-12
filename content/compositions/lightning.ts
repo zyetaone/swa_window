@@ -62,7 +62,6 @@ const COMPOSITIONS: readonly LightningComposition[] = [
 	},
 ] as const;
 
-export const LIGHTNING_COMPOSITIONS = COMPOSITIONS;
 
 /**
  * Pick a lightning composition at storm start. Re-roll when hasLightning

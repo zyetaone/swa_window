@@ -17,7 +17,6 @@
 import type {
 	DisplayConfig,
 	DeviceInfo,
-	DeviceCaps,
 } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 import { urlFor } from '$lib/fleet/peer-url';
@@ -110,7 +109,6 @@ export class RestAdminStore {
 			this.devices = this.#peers.map((p) => ({
 				deviceId: p.deviceId,
 				hostname: p.host,
-				capabilities: {} as DeviceCaps,
 				currentMode: 'flight',
 				currentLocation: 'dubai' as LocationId,
 				fps: 0,

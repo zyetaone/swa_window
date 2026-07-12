@@ -165,7 +165,7 @@ export class FlightSimEngine {
 	}
 
 	// ====================================================================
-	// TICK (ISimulationEngine)
+	// TICK
 	// ====================================================================
 
 	tick(delta: number, ctx: SimulationContext): FlightPatch {

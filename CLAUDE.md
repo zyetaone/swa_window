@@ -222,7 +222,6 @@ model.config.shell.windowFrame         // master on/off for oval mask + rivets +
 model.config.shell.blindOpen           // live blind drag position (up=open)
 model.config.shell.hudVisible
 model.config.shell.sidePanelOpen
-model.config.shell.showWing
 model.config.shell.touchEnabled        // false default — gate for long-press accel + extras; basic blind drag is always on regardless (Council Q3, Phase 15)
 
 // Observability

@@ -73,7 +73,6 @@ interface CameraShape {
 		departureDurationSec: number;
 		transitDurationSec: number;
 		arrivalHoldMs: number;
-		defaultSpeed: number;
 		minSpeed: number;
 		maxSpeed: number;
 	};
@@ -128,7 +127,6 @@ const _camera: CameraShape = {
 		departureDurationSec: 2.0,
 		transitDurationSec: 2.0,
 		arrivalHoldMs: 8000,
-		defaultSpeed: 1.4,
 		minSpeed: 0.1,
 		maxSpeed: 3.0,
 	},
@@ -361,7 +359,6 @@ export const shell = $state({
 	blindOpen: true,
 	hudVisible: true,
 	sidePanelOpen: false,
-	showWing: true,
 	// Optional wall-clock display in the playground diag/HUD overlay.
 	// Off by default — operator can toggle via the playground lab's
 	// extraControls panel. Lab-scope only; doesn't affect the prod kiosk.

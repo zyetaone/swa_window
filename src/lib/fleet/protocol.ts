@@ -9,10 +9,6 @@
  *   FleetClientModel — narrow interface the device's SSE client needs
  *                      from AeroWindow.
  *   DisplayConfig    — flat admin-pushable override DTO (legacy v1).
- *   DeviceCaps       — browser-reported capabilities (used in rest-admin
- *                      typing, though we no longer send it as a register
- *                      message — device /api/status could expose a subset
- *                      if an admin UI needs it).
  *   DeviceInfo       — admin-side row shape for the device table.
  */
 
@@ -43,15 +39,6 @@ export interface FleetClientModel {
 	telemetry?: Telemetry;
 }
 
-export interface DeviceCaps {
-	webglVersion: number;
-	supportsHDR: boolean;
-	screenWidth: number;
-	screenHeight: number;
-	gpuRenderer: string;
-	userAgent: string;
-}
-
 /** Flat admin-pushable config DTO (legacy v1). Decomposed into typed setter calls in the fleet client. */
 export interface DisplayConfig {
 	altitude?: number;
@@ -68,7 +55,6 @@ export interface DisplayConfig {
 export interface DeviceInfo {
 	deviceId: string;
 	hostname: string;
-	capabilities: DeviceCaps;
 	currentMode: DisplayMode;
 	currentLocation: LocationId;
 	fps: number;
