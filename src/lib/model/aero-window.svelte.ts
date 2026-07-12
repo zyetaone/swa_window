@@ -15,8 +15,7 @@ import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
-import { applyShowOpening, type Show } from '$lib/show/load';
-import { startShow as runnerStart, stopShow as runnerStop, getActiveShow } from '$lib/show/runner.svelte';
+import { applyShowOpening } from '$lib/show/load';
 import { FlightSimEngine } from '$lib/camera/flight.svelte';
 import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
@@ -84,11 +83,6 @@ export class AeroWindow {
 
 	// Environment
 	weather = $state<WeatherType>('cloudy');
-
-	// Move 2 — active authored show. Null = director runs freely. Non-null =
-	// director suspends (see ctx.showActive in autopilot.svelte.ts). Show
-	// runner (Move 1) is the writer; AeroWindow just surfaces it to ctx.
-	activeShowId = $state<string | null>(null);
 
 	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
 	// Window.svelte does not consume this yet; add a display-path consumer here
@@ -277,30 +271,6 @@ export class AeroWindow {
 		this.flight.flyTo(locationId);
 	}
 
-	/**
-	 * Play an authored show timeline (Move 1). Sets activeShowId, which
-	 * suspends the director (Move 2 guard), and walks the show's cues at
-	 * their atMs offsets. On completion, activeShowId clears and the
-	 * director resumes from the show's final state.
-	 *
-	 * Shows with no cues just stamp the opening (`applyShowOpening` is
-	 * called by the caller — this method only starts the runner; it
-	 * doesn't replay the opening).
-	 */
-	playShow(show: Show, startAtMs: number = Date.now()): void {
-		runnerStart(this, show, startAtMs);
-	}
-
-	/** Stop any active show — director resumes immediately. */
-	stopShow(): void {
-		runnerStop();
-	}
-
-	/** Active show info (or null) — for admin UI / telemetry. */
-	get activeShow(): { showId: string; nextCueIdx: number; totalCues: number } | null {
-		return getActiveShow();
-	}
-
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
 		this.displayMode = mode;
 		if (payload && mode === 'video') this.videoUrl = payload;
@@ -431,7 +401,6 @@ export class AeroWindow {
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
 		c.camera                = _config.camera;
 		c.director              = _config.director;
-		c.showActive            = this.activeShowId !== null;
 		return c;
 	}
 

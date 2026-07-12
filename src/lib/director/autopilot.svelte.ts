@@ -41,14 +41,6 @@ export function directorTick(delta: number, ctx: SimulationContext): WorldPatch 
 		// apply via the fleet client. Without this gate, three Pis would
 		// each pick a different random scenario.
 		if (!ctx.isLeader || !ctx.director.autopilot.enabled) return;
-		// Move 2 — show precedence. While an authored show is active, the
-		// director suspends entirely. The show owns scene state until it
-		// completes; on completion the show runner calls directorReset(ctx)
-		// so timers re-arm from the show's final state — no fight, no
-		// silent override. Followers don't reach this branch (isLeader gate
-		// above) so showActive only needs to be set on the leader.
-		if (ctx.showActive) return;
-
 		const configs = tickRandomize(delta, ctx);
 		if (configs) patch.configs = configs;
 

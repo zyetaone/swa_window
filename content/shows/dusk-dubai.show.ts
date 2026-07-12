@@ -3,7 +3,7 @@
  *
  * Boot-baseline show (no cues). Used by the daily show rotation
  * (`pickDailyShow` in `content/shows/index.ts`) so the kiosk opens with
- * a different scene each day. Distinct from `sunset-dubai.show.ts` which
+ * a different scene each day.
  * is a timed cue sequence — this is just an opening state the director
  * inherits and wanders from.
  */

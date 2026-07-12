@@ -1,13 +1,10 @@
 /**
- * Coverage for the Move 2 show-precedence guard on the director.
- *
- * The director auto-cycles weather + location at intervals. When an
- * authored show is running, it must SUSPEND so the show owns scene
- * state without contention. The guard is one line in directorTick;
- * this test pins the contract so a future refactor that reorders the
- * early-returns surfaces as a CI signal.
+ * Coverage for directorTick's gates: followers never randomise (leader
+ * gate) and randomisation fires on the leader once the interval lapses.
+ * (The Move-2 show-precedence guard that used to live here was deleted
+ * with the show timeline runner — Jul-13 council.)
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { directorTick } from '$lib/director/autopilot.svelte';
 import type { SimulationContext } from '$lib/types';
 
@@ -48,34 +45,17 @@ function makeCtx(overrides: Partial<SimulationContext> = {}): SimulationContext 
 	};
 }
 
-describe('directorTick — show-precedence guard (Move 2)', () => {
-	beforeEach(() => {
-		// Tick once with no time elapsed to seed lazy timers without
-		// firing anything — gets each test to a known clean baseline.
-		directorTick(0, makeCtx({ showActive: true }));
-	});
-
-	it('returns empty patch when showActive is true even past randomize interval', () => {
-		// First tick seeds timers. Second tick with large delta + showActive
-		// would normally fire weather randomisation but must NOT.
-		directorTick(0.1, makeCtx({ showActive: true }));
-		const patch = directorTick(100, makeCtx({ showActive: true }));
+describe('directorTick — gates', () => {
+	it('returns empty patch when not leader', () => {
+		const patch = directorTick(100, makeCtx({ isLeader: false }));
 		expect(patch.configs).toBeUndefined();
 		expect(patch.nextLocation).toBeUndefined();
 	});
 
-	it('returns empty patch when not leader regardless of showActive', () => {
-		const patch = directorTick(100, makeCtx({ isLeader: false, showActive: false }));
-		expect(patch.configs).toBeUndefined();
-		expect(patch.nextLocation).toBeUndefined();
-	});
-
-	it('runs randomisation normally when showActive is false', () => {
-		// Two ticks: first seeds, second fires after the (1s) interval.
-		directorTick(0, makeCtx({ showActive: false }));
-		const patch = directorTick(5, makeCtx({ showActive: false }));
-		// With showActive=false + large dt past the interval, randomisation
-		// MUST fire. Verifying that the guard doesn't over-block by default.
+	it('runs randomisation on the leader once the interval lapses', () => {
+		// Two ticks: first seeds lazy timers, second fires past the (1s) interval.
+		directorTick(0, makeCtx());
+		const patch = directorTick(5, makeCtx());
 		expect(patch.configs).toBeDefined();
 		expect(patch.configs!.length).toBeGreaterThan(0);
 	});

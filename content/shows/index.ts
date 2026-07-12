@@ -17,9 +17,6 @@
  * `default.show.ts` is included in the rotation AND remains the named
  * fallback for any code path that wants a guaranteed-stable opening.
  *
- * `sunset-dubai.show.ts` (a timed-cue sequence, not a boot baseline) is
- * NOT in the rotation — it's an authored demo show triggered explicitly,
- * not a baseline. Including it would have cues firing on every boot.
  */
 
 import type { Show } from '$lib/show/load';

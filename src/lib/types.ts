@@ -80,11 +80,6 @@ export interface SimulationContext {
 	 *  Solo and center roles are leaders; left/right are followers that
 	 *  receive director_decision messages over the fleet. */
 	isLeader?: boolean;
-	/** Show-precedence guard (Move 2). When true, the director suspends
-	 *  weather randomisation + location auto-cycling so an authored show
-	 *  can drive scene state without contention. Set by AeroWindow from
-	 *  `model.activeShowId !== null` — the show runner toggles that. */
-	showActive?: boolean;
 }
 
 // ─── Engine patch types ──────────────────────────────────────────────────────
