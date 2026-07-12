@@ -26,24 +26,9 @@ import { urlFor } from '$lib/fleet/peer-url';
 import { peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
+import { resolveDeviceId } from '$lib/fleet/device-id';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
-
-function getDeviceId(): string {
-	const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-	const urlDeviceId = params.get('device');
-	if (urlDeviceId) {
-		localStorage.setItem('aero-device-id', urlDeviceId);
-		return urlDeviceId;
-	}
-	const key = 'aero-device-id';
-	let id = localStorage.getItem(key);
-	if (!id) {
-		id = `display-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-		localStorage.setItem(key, id);
-	}
-	return id;
-}
 
 interface ConfigPatchEvent {
 	path: string;
@@ -89,7 +74,7 @@ export class DeviceClient {
 
 	constructor(model: FleetClientModel) {
 		this.#model = model;
-		this.#deviceId = getDeviceId();
+		this.#deviceId = resolveDeviceId();
 		// Register the deviceId with the CRDT store so local writes stamp
 		// with the right sourceId for cross-device LWW tiebreaks.
 		setCRDTDeviceId(this.#deviceId);

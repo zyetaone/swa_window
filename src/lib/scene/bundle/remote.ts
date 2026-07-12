@@ -136,30 +136,7 @@ export function startRemotePoll(opts: RemotePollOptions): RemotePollHandle {
 	};
 }
 
-/**
- * Best-effort device ID resolver — uses, in order:
- *   1. localStorage `aero-device-id`
- *   2. `window.location.hostname` (e.g. `aero-display-04.local`)
- *   3. a freshly-generated UUID, persisted to localStorage
- */
-export function resolveDeviceId(): string {
-	if (typeof window === 'undefined') return 'unknown';
-	try {
-		const stored = window.localStorage.getItem('aero-device-id');
-		if (stored && stored.length > 0) return stored;
-	} catch {
-		/* localStorage unavailable */
-	}
-	const host = window.location.hostname;
-	if (host && host !== 'localhost' && host !== '127.0.0.1') return host;
-	const fresh =
-		typeof crypto !== 'undefined' && 'randomUUID' in crypto
-			? crypto.randomUUID()
-			: `aero-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-	try {
-		window.localStorage.setItem('aero-device-id', fresh);
-	} catch {
-		/* ignore */
-	}
-	return fresh;
-}
+// Device identity comes from the fleet SSOT — the OTA per-device config
+// queue and the CRDT sourceId MUST be the same identity (they diverged
+// when this file carried its own resolver with different precedence).
+export { resolveDeviceId } from '$lib/fleet/device-id';
