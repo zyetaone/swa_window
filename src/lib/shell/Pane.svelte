@@ -31,6 +31,28 @@
 	// simply disappear when false.
 	const frameVisible = $derived(model.config.shell.windowFrame);
 
+	// ── Overlay error boundary ──────────────────────────────────────────────
+	// A 24/7 unattended kiosk must not white-screen on a transient throw in the
+	// (experimental) Three overlay — a bad effect, a WebGL/material failure at
+	// mount. On error we log to the telemetry ring buffer and auto-reset the
+	// overlay a BOUNDED number of times (Cesium renders outside this boundary,
+	// so the base display stays alive the whole time). After the cap we leave
+	// the overlay down and let Cesium carry until the weekly reboot — never an
+	// infinite reset loop. Caveat: <svelte:boundary> only catches render/effect
+	// throws, not event-handler or setTimeout/RAF errors (Cesium's own loop).
+	let overlayResets = 0;
+	const MAX_OVERLAY_RESETS = 3;
+	function onOverlayError(error: unknown, reset: () => void): void {
+		model.telemetry.recordEvent('error', {
+			where: 'three-overlay',
+			message: error instanceof Error ? error.message : String(error),
+		});
+		if (overlayResets < MAX_OVERLAY_RESETS) {
+			overlayResets++;
+			setTimeout(reset, 4000); // one bounded retry after a beat
+		}
+	}
+
 	// ========================================================================
 	// GAME LOOP — single RAF driving model.tick()
 	// ========================================================================
@@ -177,9 +199,15 @@
 			     so it shakes with turbulence alongside Cesium (matches the lab's
 			     WindowChrome setup). Gated by the perf-validated fallback flag;
 			     when ON, the duplicate DOM clouds + star micro-events self-disable. -->
-			{#if model.config.world.useThreeOverlay}
-				<ThreeOverlay />
-			{/if}
+			<svelte:boundary onerror={onOverlayError}>
+				{#if model.config.world.useThreeOverlay}
+					<ThreeOverlay />
+				{/if}
+				{#snippet failed()}
+					<!-- Overlay is down; Cesium (outside this boundary) keeps the
+					     display alive. onOverlayError schedules a bounded auto-reset. -->
+				{/snippet}
+			</svelte:boundary>
 
 			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
 			<Compositor />
