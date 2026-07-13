@@ -12,7 +12,7 @@
  *   DeviceInfo       — admin-side row shape for the device table.
  */
 
-import type { LocationId, WeatherType, DisplayMode, QualityMode } from '$lib/types';
+import type { LocationId, WeatherType, DisplayMode, QualityMode, VantageBeat } from '$lib/types';
 import type { Telemetry } from '$lib/model/frame-telemetry.svelte';
 
 export interface FleetClientModel {
@@ -24,6 +24,9 @@ export interface FleetClientModel {
 	syncToRealTime: boolean;
 	/** Navigate to a location, optionally setting weather. */
 	applyScene(location: LocationId, weather?: WeatherType): void;
+	/** Schedule a night-city flyover beat locked to a shared transitionAtMs.
+	 *  Optional so test stubs and older models stay valid; the client feature-tests. */
+	scheduleFlyover?(beat: VantageBeat, transitionAtMs: number): void;
 	setDisplayMode(mode: DisplayMode, payload?: string): void;
 	setQualityMode(mode: QualityMode): void;
 	setAltitude(alt: number): void;

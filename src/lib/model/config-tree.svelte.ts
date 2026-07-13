@@ -237,6 +237,31 @@ export const director = $state({
 		// night — is used. Defaulted ON so an unattended kiosk install never
 		// wanders into a "lights off" moment between location changes.
 		nightLitCitiesOnly: true,
+		// ── Night-city flyover beat ──────────────────────────────────────
+		// Occasionally the leader pitches the camera DOWN over the lit city
+		// (the "descend over the night city" moment from /playground/three)
+		// then returns to orbit. Leader-decided + fleet-broadcast so all 3
+		// Pis enter/exit in lock-step (same seam as director_decision). The
+		// bounds below are the "controlled" in controlled-randomisation:
+		// the roll picks the interval, these walls own the range. Calm by
+		// default — a desk-worker sees it a few times a shift, not a ride.
+		vantage: {
+			enabled: true,
+			// Only fires at night (nightFactor > this) — the beat is a
+			// city-lights moment; by day it would be a downward tilt at
+			// bright terrain. Gates the whole thing to the evening/night loop.
+			minNightFactor: 0.6,
+			// Interval window in seconds between beats (~15–40 min).
+			minIntervalSec: 900,
+			maxIntervalSec: 2400,
+			// How long the flyover holds before auto-returning to orbit.
+			durationSec: 45,
+			// Camera look-down pitch while active (deg). compose.ts applies it.
+			pitchDeg: -60,
+			// Altitude to descend to for the beat (feet) — low enough to read
+			// the street grid, clamped to camera.altitude.min at apply time.
+			altitudeFt: 9000,
+		},
 	},
 	ambient: {
 		// Drift ranges per randomisation cycle.

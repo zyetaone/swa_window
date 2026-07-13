@@ -13,7 +13,7 @@
 
 import { untrack } from 'svelte';
 import { clamp, randomBetween, pickRandom } from '$lib/utils';
-import type { LocationId, SimulationContext, WorldPatch } from '$lib/types';
+import type { LocationId, SimulationContext, VantageBeat, WorldPatch } from '$lib/types';
 
 // ── Private timers ──────────────────────────────────────────────────────────
 // Both intervals are seeded on the FIRST tick from the live config's
@@ -29,6 +29,9 @@ let _nextRandomizeTime: number | null = null;
 
 let _directorTimer = 0;
 let _timeToNextLocation: number | null = null;
+
+let _vantageTimer = 0;
+let _timeToNextVantage: number | null = null;
 
 // ─── Tick ───────────────────────────────────────────────────────────────────
 
@@ -46,7 +49,14 @@ export function directorTick(delta: number, ctx: SimulationContext): WorldPatch 
 
 		if (ctx.isOrbitMode) {
 			const nextLoc = tickDirector(delta, ctx);
-			if (nextLoc) patch.nextLocation = nextLoc;
+			if (nextLoc) {
+				// A location change enters cruise mode — never fire a vantage
+				// beat the same frame (the beat needs orbit). Location wins.
+				patch.nextLocation = nextLoc;
+			} else {
+				const beat = tickVantage(delta, ctx);
+				if (beat) patch.vantageBeat = beat;
+			}
 		}
 	});
 	return patch;
@@ -56,6 +66,10 @@ export function directorReset(ctx: SimulationContext): void {
 	const ap = ctx.director.autopilot;
 	_directorTimer = 0;
 	_timeToNextLocation = randomBetween(ap.directorMinInterval, ap.directorMaxInterval);
+	// Arriving somewhere restarts the flyover cadence — no beat right after a
+	// cruise (lazy re-seed on the next tick).
+	_vantageTimer = 0;
+	_timeToNextVantage = null;
 }
 
 // ─── Weather randomisation ──────────────────────────────────────────────────
@@ -114,4 +128,39 @@ function tickDirector(delta: number, ctx: SimulationContext): LocationId | null 
 		return ctx.pickNextLocation!();
 	}
 	return null;
+}
+
+// ─── Night-city flyover beat ─────────────────────────────────────────────────
+
+/**
+ * Occasionally chooses to descend over the lit city (leader only, orbit only).
+ * Returns a VantageBeat when it fires; the leader broadcasts it and every Pi
+ * enters/exits in lock-step. The beat's parameters come straight from the
+ * admin-tunable `vantage` config — the roll only picks WHEN, the bounds own
+ * the pitch/altitude/duration. Only fires at night (the whole point is the
+ * city lights); by day the timer just idles.
+ */
+function tickVantage(delta: number, ctx: SimulationContext): VantageBeat | null {
+	const v = ctx.director.autopilot.vantage;
+	if (!v?.enabled) return null;
+
+	if (_timeToNextVantage === null) {
+		_timeToNextVantage = randomBetween(v.minIntervalSec, v.maxIntervalSec);
+		return null;
+	}
+	// Hold (and reset) the timer during the day or while a passenger is
+	// adjusting altitude — the flyover is a night-lights moment and must
+	// never fight a manual override. Resetting means the first beat waits a
+	// full interval INTO the night rather than firing the instant dusk lands.
+	if (ctx.nightFactor <= v.minNightFactor || ctx.userAdjustingAltitude) {
+		_vantageTimer = 0;
+		return null;
+	}
+
+	_vantageTimer += delta;
+	if (_vantageTimer < _timeToNextVantage) return null;
+
+	_vantageTimer = 0;
+	_timeToNextVantage = randomBetween(v.minIntervalSec, v.maxIntervalSec);
+	return { durationMs: v.durationSec * 1000, pitchDeg: v.pitchDeg, altitudeFt: v.altitudeFt };
 }

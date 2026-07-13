@@ -9,7 +9,7 @@
 import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
-import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext } from '$lib/types';
+import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
 import { effectiveCloudDensity } from '$lib/scene/effects/clouds';
 import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
@@ -245,6 +245,45 @@ export class AeroWindow {
 		this.onUserInteraction('atmosphere');
 	}
 
+	// ── Night-city flyover beat ─────────────────────────────────────────────
+	// enter/exit are the atomic edges; scheduleFlyover locks BOTH edges to a
+	// shared wall-clock instant so the leader and all followers pitch down and
+	// pop back at the same moment (no panorama tear). The leader schedules from
+	// its tick; each follower schedules from the fleet client's vantage_beat
+	// handler with the SAME transitionAtMs. Pending timers are cancelled on any
+	// location change and on destroy.
+	#flyoverTimers = new Set<ReturnType<typeof setTimeout>>();
+
+	enterFlyover(pitchDeg: number, altitudeFt: number): void {
+		this.config.camera.flyoverPitchDeg = pitchDeg;         // compose.ts applies it
+		this.flight.setFlyoverAltitude(Math.max(altitudeFt, this.config.camera.altitude.min));
+	}
+
+	exitFlyover(): void {
+		for (const id of this.#flyoverTimers) clearTimeout(id);
+		this.#flyoverTimers.clear();
+		this.config.camera.flyoverPitchDeg = 0;
+		this.flight.clearFlyoverAltitude();
+	}
+
+	/** Schedule enter@transitionAtMs and exit@transitionAtMs+durationMs. Called
+	 *  by the leader (tick) and every follower (fleet client) with the same
+	 *  transitionAtMs → all Pis lock-step. Cancels any beat already pending. */
+	scheduleFlyover(beat: VantageBeat, transitionAtMs: number): void {
+		this.exitFlyover();   // cancel any in-flight beat + its timers first
+		const enterDelay = Math.max(0, transitionAtMs - Date.now());
+		const enterId = setTimeout(() => {
+			this.#flyoverTimers.delete(enterId);
+			this.enterFlyover(beat.pitchDeg, beat.altitudeFt);
+			const exitId = setTimeout(() => {
+				this.#flyoverTimers.delete(exitId);
+				this.exitFlyover();
+			}, beat.durationMs);
+			this.#flyoverTimers.add(exitId);
+		}, enterDelay);
+		this.#flyoverTimers.add(enterId);
+	}
+
 	setFlightSpeed(n: number): void {
 		// Honor the cruise bounds defined in the config tree (admin-tunable
 		// SSOT). Earlier this hard-coded (0.1, 5) which contradicted the
@@ -277,6 +316,7 @@ export class AeroWindow {
 	}
 
 	applyScene(locationId: LocationId, weather?: WeatherType): void {
+		this.exitFlyover();   // a location change ends any active flyover beat
 		this.flight.flyTo(locationId);
 		if (weather) { this.weather = weather; this.#syncWeatherConfig(); }
 	}
@@ -342,6 +382,9 @@ export class AeroWindow {
 			}
 		}
 		if (directorPatch.nextLocation) {
+			// A new location cancels any active/pending flyover beat — the
+			// world is moving, so pop the camera back to the normal look.
+			this.exitFlyover();
 			// Phase 7 — if we're a panorama leader with connected followers,
 			// broadcast the decision BEFORE flying locally. transitionAtMs is
 			// 2.5s in the future so all three Pis can lock to the same wall-
@@ -360,6 +403,24 @@ export class AeroWindow {
 				});
 			}
 			this.flight.flyTo(directorPatch.nextLocation);
+		} else if (directorPatch.vantageBeat) {
+			// Leader chose a night-city flyover. Broadcast the same transitionAtMs
+			// to followers, then schedule locally off that instant so every Pi
+			// enters and exits in lock-step (single broadcast, both edges).
+			const now = Date.now();
+			const transitionAtMs = now + TRANSITION_DELAY_MS;
+			if (ctx.isLeader && this.#fleetBroadcast) {
+				this.#fleetBroadcast({
+					v: 2,
+					type: 'vantage_beat',
+					decidedAtMs: now,
+					transitionAtMs,
+					durationMs: directorPatch.vantageBeat.durationMs,
+					pitchDeg: directorPatch.vantageBeat.pitchDeg,
+					altitudeFt: directorPatch.vantageBeat.altitudeFt,
+				});
+			}
+			this.scheduleFlyover(directorPatch.vantageBeat, transitionAtMs);
 		}
 
 		this.telemetry.recordFrame(performance.now() - frameStart);
@@ -415,7 +476,8 @@ export class AeroWindow {
 	}
 
 	destroy(): void {
-		// override timestamps are module-level — nothing to teardown
+		// override timestamps are module-level — nothing to teardown there.
+		this.exitFlyover();   // cancel any pending flyover enter/exit timers
 	}
 }
 

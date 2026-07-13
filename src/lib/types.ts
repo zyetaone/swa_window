@@ -92,10 +92,27 @@ export interface FlightPatch {
 	resetDirector?: boolean;
 }
 
+/**
+ * A "night-city flyover" vantage beat — the director occasionally pitches the
+ * camera DOWN over the lit city for a while, then returns to orbit. Decided by
+ * the leader and broadcast (a `vantage_beat` fleet command carries the same
+ * fields + a shared `transitionAtMs`) so all 3 Pis enter/exit in lock-step.
+ */
+export interface VantageBeat {
+	/** How long the flyover holds before auto-returning to orbit, in ms. */
+	durationMs: number;
+	/** Camera look-down pitch while active, in degrees (e.g. -60). */
+	pitchDeg: number;
+	/** Altitude to descend to for the beat, in feet. */
+	altitudeFt: number;
+}
+
 export interface WorldPatch {
 	/** Path-targeted config patches from the director (clouds, haze, weather). */
 	configs?: Array<{ path: string; value: unknown }>;
 	nextLocation?: LocationId | null;
+	/** Set when the director chooses to enter a night-city flyover this frame. */
+	vantageBeat?: VantageBeat;
 }
 
 export interface MicroEventData {

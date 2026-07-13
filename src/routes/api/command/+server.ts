@@ -7,6 +7,8 @@
  *   type: 'director_decision' — leader telling follower which scenario/
  *     location to flyTo at a wall-clock `transitionAtMs`. Payload matches
  *     the v2 director_decision shape (kept for continuity).
+ *   type: 'vantage_beat'      — leader telling followers to enter a night-city
+ *     flyover (pitch down) at `transitionAtMs` for `durationMs`, then exit.
  *   type: 'set_scene'         — admin forcing a scene change.
  *   type: 'set_mode'          — admin switching display mode.
  *

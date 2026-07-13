@@ -78,6 +78,12 @@ export class FlightSimEngine {
 	orbitDirection = $state(1);
 
 	// --- Internal state (#private) ---
+	// Night-city flyover override. When set (feet), #tickAltitude drives the
+	// camera down to this altitude instead of the location's nightAltitude,
+	// and descends a bit faster so the descent reads within a ~45s beat.
+	// null = off (normal altitude logic). Deterministic (no random) so all 3
+	// Pis descend identically. Set/cleared by AeroWindow.enter/exitFlyover.
+	#flyoverAltitudeFt: number | null = null;
 	#cruiseElapsed = 0;
 	#arrivalHoldElapsed = 0;
 	#arrivalHoldTargetSec = 8;
@@ -156,6 +162,18 @@ export class FlightSimEngine {
 	setAltitude(alt: number, bounds: { min: number; max: number }): void {
 		if (!Number.isFinite(alt)) return;
 		this.altitude = clamp(alt, bounds.min, bounds.max);
+	}
+
+	/** Engage the night-city flyover altitude override (feet). #tickAltitude
+	 *  descends here instead of the location's nightAltitude until cleared. */
+	setFlyoverAltitude(ft: number): void {
+		if (!Number.isFinite(ft)) return;
+		this.#flyoverAltitudeFt = ft;
+	}
+
+	/** Release the flyover override — altitude returns to normal night logic. */
+	clearFlyoverAltitude(): void {
+		this.#flyoverAltitudeFt = null;
 	}
 
 	// ====================================================================
@@ -327,7 +345,12 @@ export class FlightSimEngine {
 		if (Number.isFinite(newLat)) this.lat = newLat;
 		if (Number.isFinite(newLon)) this.lon = newLon;
 
-		if (!ctx.userAdjustingAltitude) {
+		// A passenger override OR an active flyover beat suppresses the
+		// scenario's authored altitude — #tickAltitude then owns altitude
+		// (holds the manual value / drives the flyover descent). Without the
+		// flyover guard the scenario re-wrote the waypoint altitude every
+		// frame and the descent never happened.
+		if (!ctx.userAdjustingAltitude && this.#flyoverAltitudeFt === null) {
 			this.altitude =
 				catmullRom(p0.altitude, p1.altitude, p2.altitude, p3.altitude, t) +
 				Math.sin(ctx.time * 0.07) * 50;
@@ -358,6 +381,14 @@ export class FlightSimEngine {
 	#tickAltitude(delta: number, ctx: SimulationContext): void {
 		if (ctx.userAdjustingAltitude) return;
 		const altCfg = ctx.camera.altitude;
+		// Flyover beat override — descend to the beat's low altitude, a touch
+		// faster than the normal settle so it lands within the beat window.
+		// Clamped to the camera bounds. Deterministic → identical on all Pis.
+		if (this.#flyoverAltitudeFt !== null) {
+			const target = clamp(this.#flyoverAltitudeFt, altCfg.min, altCfg.max);
+			this.altitude += (target - this.altitude) * Math.min(delta * 0.12, 1);
+			return;
+		}
 		const loc = LOCATION_MAP.get(ctx.locationId);
 		const targetAlt = ctx.nightFactor > 0.5
 			? (loc?.nightAltitude ?? altCfg.default)

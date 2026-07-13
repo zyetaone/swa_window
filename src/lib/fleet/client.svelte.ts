@@ -287,6 +287,18 @@ export class DeviceClient {
 				}
 				break;
 			}
+			case 'vantage_beat': {
+				// Leader chose a night-city flyover. Schedule the enter/exit
+				// edges off the shared transitionAtMs (the model owns the timers
+				// and locks both edges to the same instant as the leader).
+				if (typeof msg.transitionAtMs !== 'number') break;
+				const durationMs = typeof msg.durationMs === 'number' ? msg.durationMs : 0;
+				const pitchDeg = typeof msg.pitchDeg === 'number' ? msg.pitchDeg : 0;
+				const altitudeFt = typeof msg.altitudeFt === 'number' ? msg.altitudeFt : 0;
+				if (durationMs <= 0 || pitchDeg === 0) break;   // nothing renderable
+				this.#model.scheduleFlyover?.({ durationMs, pitchDeg, altitudeFt }, msg.transitionAtMs);
+				break;
+			}
 		}
 	}
 }
