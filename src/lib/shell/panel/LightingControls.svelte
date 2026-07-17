@@ -73,6 +73,10 @@
 		bind:value={config.world.viirsBrightness}
 		formatValue={(v) => v.toFixed(2)}
 	/>
+	<!-- P8 perf-gate A/B: flip the photoreal Three.js overlay live in the space
+	     (wing / clouds / moon / neon city / postprocess) without a URL param.
+	     Local to this device — for a fleet-wide flip use admin /api/config. -->
+	<Toggle label="Photoreal Overlay (P8)" bind:checked={config.world.useThreeOverlay} />
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
 	<Toggle label="Cesium Clouds (Beta)" bind:checked={config.world.useCesiumClouds} />
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
