@@ -3,9 +3,24 @@ import { defineConfig } from 'vitest/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { normalizePath } from 'vite';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 const cesiumSource = 'node_modules/cesium/Build/Cesium';
 const cesiumBaseUrl = 'cesiumStatic';
+
+// Build-time commit stamp — surfaced fleet-wide via /api/status so an
+// operator can tell WHICH commit each Pi is running (staged-rollout +
+// remote-debugging prerequisite). APP_COMMIT env is the no-.git escape
+// hatch (tarball builds); 'unknown' the last resort.
+function gitCommit(): string {
+	try {
+		return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+			.toString()
+			.trim();
+	} catch {
+		return 'unknown';
+	}
+}
 
 export default defineConfig({
 	plugins: [
@@ -27,6 +42,7 @@ export default defineConfig({
 	},
 	define: {
 		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
+		__APP_COMMIT__: JSON.stringify(process.env.APP_COMMIT ?? gitCommit()),
 	},
 	build: {
 		// manualChunks removed — incompatible with bundleStrategy:'single'

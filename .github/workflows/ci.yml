@@ -7,8 +7,16 @@ on:
     branches: [main, master]
 
 # Least-privilege default token — only read access to repo contents.
+# The promote job elevates to contents:write for itself only.
 permissions:
   contents: read
+
+# Serialise runs per ref so the release promotion below converges to the
+# newest green sha. PRs cancel superseded runs; main runs all complete
+# (cancelling a main run could skip a promotion).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-check:
@@ -33,7 +41,39 @@ jobs:
       - name: Type check
         run: bun run check
 
+      - name: Test
+        run: bun run test
+
       - name: Build
         env:
           VITE_CESIUM_ION_TOKEN: ${{ secrets.VITE_CESIUM_ION_TOKEN }}
         run: bun run build
+
+  # ── Release promotion ────────────────────────────────────────────────────
+  # The Pi fleet's daily updater tracks the `release` branch, NOT main.
+  # This job is the deploy gate: only a green main run moves `release`.
+  # A red commit on main simply never reaches the fleet.
+  #
+  # `release` is exclusively CI-owned — never push to it by hand. force=true
+  # is correct here: the fleet consumes it with `git reset --hard`, so
+  # non-fast-forward moves (e.g. after a main history rewrite) are absorbed.
+  promote:
+    name: Promote to release
+    needs: build-and-check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Move release ref to ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/heads/release" --silent; then
+            gh api -X PATCH "repos/${{ github.repository }}/git/refs/heads/release" \
+              -f sha="${{ github.sha }}" -F force=true
+          else
+            # First green run bootstraps the branch.
+            gh api -X POST "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/heads/release" -f sha="${{ github.sha }}"
+          fi

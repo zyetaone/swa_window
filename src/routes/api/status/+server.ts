@@ -31,7 +31,9 @@ export const GET: RequestHandler = ({ request }) => {
 export const POST: RequestHandler = async ({ request }) => {
 	// Same-origin heartbeat from the local browser. No CORS — the browser
 	// uses fetch('/api/status', ...) which is same-origin.
-	const body = await readLimitedJson<DeviceStatus>(request, 2048);
+	// 4096: headroom for the telemetry summary (3×160-char lastErrors can
+	// double under JSON escaping) while still a tight DoS bound.
+	const body = await readLimitedJson<DeviceStatus>(request, 4096);
 	if (!body || typeof body.deviceId !== 'string') {
 		throw error(400, 'invalid status body');
 	}

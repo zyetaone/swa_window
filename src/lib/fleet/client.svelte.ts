@@ -27,6 +27,7 @@ import { peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 import { resolveDeviceId } from '$lib/fleet/device-id';
+import { APP_COMMIT } from '$lib/version';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
 
@@ -181,6 +182,19 @@ export class DeviceClient {
 
 	#sendStatus(): void {
 		if (this.#destroyed) return;
+		// Telemetry summary rides the heartbeat so a remote operator sees fps
+		// percentiles + the last few errors WITHOUT SSH (production-hardening).
+		// All additive optional fields — flat-DTO invariant #2 preserved.
+		const tel = this.#model.telemetry;
+		const lastErrors = tel
+			? tel.events
+					.filter((e) => e.kind === 'error')
+					.slice(-3)
+					.map((e) => {
+						try { return JSON.stringify(e.payload).slice(0, 160); }
+						catch { return String(e.payload).slice(0, 160); }
+					})
+			: undefined;
 		fetch('/api/status', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -193,6 +207,11 @@ export class DeviceClient {
 				weather: this.#model.weather,
 				uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
 				lastSeen: Date.now(),
+				commit: APP_COMMIT,
+				fpsP50: tel ? Math.round(tel.p50 * 10) / 10 : undefined,
+				fpsP95: tel ? Math.round(tel.p95 * 10) / 10 : undefined,
+				errorCount: tel?.counts.errors,
+				lastErrors,
 			}),
 		}).catch(() => { /* heartbeat best-effort — don't pollute console */ });
 	}

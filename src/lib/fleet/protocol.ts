@@ -64,6 +64,10 @@ export interface DeviceInfo {
 	uptime: number;
 	lastSeen: number;
 	online: boolean;
+	/** Optional hardening fields relayed from DeviceStatus (see below). */
+	commit?: string;
+	errorCount?: number;
+	lastErrors?: string[];
 }
 
 export interface DeviceStatus {
@@ -75,6 +79,18 @@ export interface DeviceStatus {
 	weather: WeatherType;
 	uptime: number;
 	lastSeen: number;
+	// ── Production-hardening additions (all OPTIONAL — flat-DTO invariant #2:
+	// extend additively, never reshape; fielded Pis decode older payloads). ──
+	/** Build commit sha the device is running ($lib/version APP_COMMIT). */
+	commit?: string;
+	/** Rolling fps percentiles from the telemetry ring (remote perf view). */
+	fpsP50?: number;
+	fpsP95?: number;
+	/** Total telemetry error-event count since boot. */
+	errorCount?: number;
+	/** Up to the 3 most recent error messages (truncated) — enough to know
+	 *  WHAT is failing on a fielded Pi without SSH. */
+	lastErrors?: string[];
 }
 
 /** Returned by GET /api/fleet/heartbeat?summary — rollup across the fleet. */

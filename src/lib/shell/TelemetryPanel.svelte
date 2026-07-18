@@ -7,6 +7,7 @@
 	 * separate concern (Phase 5.7+).
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { APP_COMMIT } from '$lib/version';
 
 	const model = useAeroWindow();
 	const telemetry = model.telemetry;
@@ -72,7 +73,7 @@
 {#if visible}
 	<div class="panel" role="dialog" aria-label="Telemetry">
 		<header>
-			<h3>Telemetry</h3>
+			<h3>Telemetry <span class="commit">{APP_COMMIT}</span></h3>
 			<div class="actions">
 				<button type="button" onclick={exportJson}>Export</button>
 				<button type="button" onclick={clearAll}>Clear</button>
@@ -152,6 +153,13 @@
 		padding: 10px 14px;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 		background: rgba(255, 255, 255, 0.02);
+	}
+
+	header h3 .commit {
+		font-family: ui-monospace, monospace;
+		font-size: 0.65rem;
+		opacity: 0.6;
+		margin-left: 0.4rem;
 	}
 
 	header h3 {
