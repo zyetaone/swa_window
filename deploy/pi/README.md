@@ -9,7 +9,7 @@ scripts in the parent directory — those remain for the single-Pi dev workflow.
 From a fresh Raspberry Pi OS Bookworm (64-bit) image with network:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zyetaone/z-aero-window/playground/maplibre-app/deploy/pi/install.sh \
+curl -fsSL https://raw.githubusercontent.com/zyetaone/z-aero-window/main/deploy/pi/install.sh \
 	| sudo bash -s -- --role left --group corridor-a
 ```
 
@@ -25,7 +25,7 @@ Arguments:
 | --- | --- | --- |
 | `--role` | `left` / `center` / `right` / `solo` | `solo` |
 | `--group` | any string, shared by the Pis that form one panorama | `default` |
-| `--branch` | git branch to deploy | `playground/maplibre-app` |
+| `--branch` | git branch to deploy | `main` |
 
 The installer is fully idempotent — rerun it to upgrade packages, pull the
 latest branch, rebuild, and regenerate systemd units. It never deletes data.
@@ -36,7 +36,7 @@ latest branch, rebuild, and regenerate systemd units. It never deletes data.
 | --- | --- |
 | `install.sh` | Top-level installer. Clones repo, installs apt deps, Bun, systemd units, cron jobs. |
 | `aero-xserver.service` | Minimal X on tty1, no desktop. |
-| `aero-app.service` | `bun run build && bun run start` in the install dir. |
+| `aero-app.service` | Serve-only (`bun run serve`). Builds happen in `install.sh` (initial) and `deploy/aero-updater.sh` (updates, with rollback + health probe) — NEVER in the unit, so a bad build can't crash-loop the kiosk dark. |
 | `aero-kiosk.service` | Chromium kiosk pointed at the local app. |
 | `health-check.sh` | Cron-driven 60s heartbeat → `POST /api/fleet/heartbeat` on the admin. |
 | `display-dim-schedule.sh` | 02:00 dim to 5%, 06:00 restore to 100%. ddcutil or sysfs backlight. |
@@ -48,8 +48,11 @@ latest branch, rebuild, and regenerate systemd units. It never deletes data.
 The kiosk launches Chromium against:
 
 ```
-http://localhost:3000/playground?role=${AERO_ROLE}&group=${AERO_GROUP}
+http://localhost:3000/?role=${AERO_ROLE}&group=${AERO_GROUP}
 ```
+
+(`/` is the ship route — full shell + fleet. The old `/playground` target
+was the MapLibre-era lab and is long gone from the production path.)
 
 Role assignment follows the Phase 7 parallax protocol described in
 `CLAUDE.md` — `left|center|right|solo`, with `center` as the autopilot leader
@@ -78,3 +81,11 @@ boot has to garbage-collect.
 | Daily 04:00 | Reboot |
 | Daily 06:00 | Restore display to 100% |
 | Sunday 03:00 | Clear Chromium shader/GPU cache (preserves tile cache) |
+
+## OTA updates (deploy/aero-updater.sh)
+
+Daily updates come from `deploy/aero-updater.sh` (systemd timer, 03:00). It
+tracks the **`release`** branch — which CI fast-forwards only after
+check + tests + build pass on `main` — and rolls back to the previous commit
+on install failure, build failure, or a failed post-restart health probe
+(`GET /api/status`). A red commit on `main` never reaches the fleet.

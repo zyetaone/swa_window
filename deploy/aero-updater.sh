@@ -2,8 +2,14 @@
 # =============================================================================
 # Zyeta Aero — OTA Updater
 #
-# Pulls latest code from git, installs dependencies, rebuilds if needed,
-# and restarts services. Runs as a systemd timer (daily) or on-demand.
+# Pulls CI-blessed code from git, installs dependencies, rebuilds, restarts
+# services, and VERIFIES the app came back — rolling back to the previous
+# commit on any failure (install, build, or post-restart health probe).
+# Runs as a systemd timer (daily) or on-demand.
+#
+# Deploy gate: tracks the `release` branch by default, which CI fast-forwards
+# ONLY after check + tests + build pass on main (.github/workflows/ci.yml).
+# A red commit on main never reaches the fleet.
 #
 # Usage:
 #   sudo bash aero-updater.sh              # Full update
@@ -15,16 +21,23 @@ set -euo pipefail
 INSTALL_DIR="/opt/zyeta-aero"
 REPO_DIR="${INSTALL_DIR}/app"
 LOG_FILE="/var/log/aero-updater.log"
-BRANCH="${AERO_BRANCH:-main}"
-FLEET_SERVER="${AERO_FLEET_SERVER:-}"
+BRANCH="${AERO_BRANCH:-release}"
 BUN_BIN="${AERO_BUN_BIN:-/home/kiosk/.bun/bin/bun}"
+# App port for the post-restart health probe. Config precedence mirrors the
+# service units: /etc/aero/config.env (deploy/pi scheme) then env, then 5173.
+if [[ -r /etc/aero/config.env ]]; then
+    # shellcheck disable=SC1091
+    source /etc/aero/config.env
+fi
+APP_PORT="${AERO_PORT:-${PORT:-5173}}"
+PROBE_URL="http://localhost:${APP_PORT}/api/status"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}"; }
 
 CHECK_ONLY=false
 if [[ "${1:-}" == "--check" ]]; then CHECK_ONLY=true; fi
 
-log "=== Aero Updater starting ==="
+log "=== Aero Updater starting (branch: ${BRANCH}) ==="
 
 # ─── 1. Check for updates ────────────────────────────────────────────────
 
@@ -40,9 +53,11 @@ if [[ ! -x "${BUN_BIN}" ]]; then
     exit 1
 fi
 
-# Fetch without merging
-git fetch origin "${BRANCH}" --quiet 2>&1 | tee -a "${LOG_FILE}" || {
-    log "WARN: git fetch failed (no network?) — skipping update"
+# Explicit refspec: fielded Pis were provisioned with single-branch shallow
+# clones whose default fetch refspec only covers their original branch — a
+# plain `git fetch origin release` would never materialise the remote ref.
+git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" --quiet 2>&1 | tee -a "${LOG_FILE}" || {
+    log "WARN: git fetch failed (no network, or '${BRANCH}' not published yet?) — skipping update"
     exit 0
 }
 
@@ -61,6 +76,47 @@ if [[ "${CHECK_ONLY}" == true ]]; then
     exit 0
 fi
 
+# ─── Helpers ─────────────────────────────────────────────────────────────
+
+restart_services() {
+    systemctl restart aero-app.service 2>/dev/null || true
+    systemctl restart aero-kiosk.service 2>/dev/null || true
+}
+
+# Probe the app's own status endpoint. curl -f treats server.ts's
+# "no build found" 503 as failure, so a half-written build/ can't pass.
+# 12 × 5s = up to 60s for Bun + SvelteKit handler to come up.
+probe_health() {
+    local i
+    for ((i = 1; i <= 12; i++)); do
+        if curl -fsS --max-time 3 "${PROBE_URL}" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 5
+    done
+    return 1
+}
+
+# Full rollback: previous commit + reinstall + rebuild + restart + verify.
+# Wired to EVERY failure class (install, build, post-restart probe) — the
+# old build-only rollback let a builds-fine-crashes-at-runtime commit ship,
+# and a double install failure left HEAD updated with a stale build
+# ("already up to date" on the next run while broken).
+rollback() {
+    log "ERROR: $1 — rolling back to ${LOCAL:0:8}"
+    git reset --hard "${LOCAL}" 2>&1 | tee -a "${LOG_FILE}"
+    "${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || true
+    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" \
+        || log "WARN: rollback build failed — previous build/ still on disk"
+    restart_services
+    if probe_health; then
+        log "Rollback verified — serving ${LOCAL:0:8}"
+    else
+        log "CRITICAL: health probe failed even after rollback — operator attention needed"
+    fi
+    exit 1
+}
+
 # ─── 2. Pull changes ─────────────────────────────────────────────────────
 
 log "Pulling changes..."
@@ -72,41 +128,35 @@ log "Updated to $(git rev-parse --short HEAD): $(git log -1 --format='%s')"
 log "Installing dependencies..."
 "${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || {
     log "WARN: bun install failed — trying without frozen lockfile"
-    "${BUN_BIN}" install 2>&1 | tee -a "${LOG_FILE}"
+    "${BUN_BIN}" install 2>&1 | tee -a "${LOG_FILE}" || rollback "bun install failed"
 }
 
 # ─── 4. Build ────────────────────────────────────────────────────────────
-# Ported 2026-04-09 from feat/offline-tiles (monorepo) to main (flat).
-# Original checked `packages/display/package.json` — main has a flat
-# SvelteKit project with the build script at the repo root, so we check
-# `package.json` directly. If you ever re-monorepo, update this check
-# to match your new layout.
 
 if [[ -f "package.json" ]] && command grep -q '"build"' package.json; then
     log "Building app..."
-    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" || {
-        log "ERROR: Build failed — rolling back"
-        git reset --hard "${LOCAL}" 2>&1 | tee -a "${LOG_FILE}"
-        exit 1
-    }
+    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" || rollback "build failed"
 fi
 
-# ─── 5. Restart services ─────────────────────────────────────────────────
+# ─── 5. Restart + verify ─────────────────────────────────────────────────
 
 log "Restarting services..."
-systemctl restart aero-app.service 2>/dev/null || true
-systemctl restart aero-kiosk.service 2>/dev/null || true
+restart_services
 
-log "=== Update complete ==="
+log "Probing ${PROBE_URL} ..."
+probe_health || rollback "health probe failed after restart"
 
-# ─── 6. Report to fleet server (if configured) ───────────────────────────
+log "=== Update complete — serving $(git rev-parse --short HEAD) ==="
 
-if [[ -n "${FLEET_SERVER}" ]]; then
-    DEVICE_NAME=$(hostname)
-    VERSION=$(git rev-parse --short HEAD)
-    curl -s -X POST "http://${FLEET_SERVER}:3001/api/health" \
-        -H "Content-Type: application/json" \
-        -d "{\"event\":\"updated\",\"device\":\"${DEVICE_NAME}\",\"version\":\"${VERSION}\"}" \
-        2>/dev/null || true
-    log "Reported update to fleet server"
+# ─── 6. Self-refresh the installed copy ──────────────────────────────────
+# provision-pi.sh installs a COPY of this script outside the repo; a git
+# pull updates the repo copy but the timer keeps running the stale one.
+# After a verified-green update, sync the installed copy.
+
+INSTALLED_COPY="${INSTALL_DIR}/aero-updater.sh"
+REPO_COPY="${REPO_DIR}/deploy/aero-updater.sh"
+if [[ -f "${REPO_COPY}" && -f "${INSTALLED_COPY}" ]] \
+    && ! cmp -s "${REPO_COPY}" "${INSTALLED_COPY}"; then
+    install -m 755 "${REPO_COPY}" "${INSTALLED_COPY}"
+    log "Self-refreshed installed updater copy from repo"
 fi

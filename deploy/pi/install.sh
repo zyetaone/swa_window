@@ -7,7 +7,7 @@
 # kiosk within ~10 min (plus tile cache download time).
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/zyetaone/z-aero-window/playground/maplibre-app/deploy/pi/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/zyetaone/z-aero-window/main/deploy/pi/install.sh | bash
 #   # or, locally:
 #   sudo bash deploy/pi/install.sh [--role left|center|right|solo] [--group corridor-a]
 #
@@ -25,7 +25,7 @@ set -euo pipefail
 AERO_ROLE="${AERO_ROLE:-solo}"
 AERO_GROUP="${AERO_GROUP:-default}"
 REPO_URL="${AERO_REPO_URL:-https://github.com/zyetaone/z-aero-window.git}"
-REPO_BRANCH="${AERO_REPO_BRANCH:-playground/maplibre-app}"
+REPO_BRANCH="${AERO_REPO_BRANCH:-main}"
 INSTALL_DIR="/opt/aero-window"
 PI_USER="${SUDO_USER:-pi}"
 BUN_BIN="/home/${PI_USER}/.bun/bin/bun"
@@ -94,9 +94,11 @@ chown "${PI_USER}:${PI_USER}" "${INSTALL_DIR}"
 
 if [[ -d "${INSTALL_DIR}/.git" ]]; then
 	echo "  repo present — fetching latest on ${REPO_BRANCH}"
-	sudo -u "${PI_USER}" git -C "${INSTALL_DIR}" fetch origin "${REPO_BRANCH}"
-	sudo -u "${PI_USER}" git -C "${INSTALL_DIR}" checkout "${REPO_BRANCH}"
-	sudo -u "${PI_USER}" git -C "${INSTALL_DIR}" pull --ff-only origin "${REPO_BRANCH}"
+	# Explicit refspec + checkout -B: the initial clone is single-branch, so a
+	# plain fetch never materialises a DIFFERENT branch, plain checkout then
+	# fails (pathspec), and pull --ff-only breaks after any force-push.
+	sudo -u "${PI_USER}" git -C "${INSTALL_DIR}" fetch origin "+refs/heads/${REPO_BRANCH}:refs/remotes/origin/${REPO_BRANCH}"
+	sudo -u "${PI_USER}" git -C "${INSTALL_DIR}" checkout -B "${REPO_BRANCH}" "origin/${REPO_BRANCH}"
 else
 	sudo -u "${PI_USER}" git clone --branch "${REPO_BRANCH}" --depth 20 "${REPO_URL}" "${INSTALL_DIR}"
 fi
@@ -111,6 +113,12 @@ sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' run build"
 
 echo "[5/7] Writing environment config..."
 install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" /etc/aero
+# Preserve hand-configured admin URL across re-runs — regenerating this file
+# used to wipe it, silently killing the WAN heartbeat.
+EXISTING_ADMIN_URL=""
+if [[ -r /etc/aero/config.env ]]; then
+	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+fi
 cat > /etc/aero/config.env <<EOF
 # Managed by deploy/pi/install.sh — re-run install to regenerate.
 AERO_ROLE=${AERO_ROLE}
@@ -118,6 +126,7 @@ AERO_GROUP=${AERO_GROUP}
 AERO_INSTALL_DIR=${INSTALL_DIR}
 AERO_USER=${PI_USER}
 AERO_PORT=3000
+AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
 EOF
 chmod 644 /etc/aero/config.env
 
@@ -186,4 +195,4 @@ echo "Logs (X):    journalctl -u aero-kiosk -f"
 echo "Reboot:      sudo reboot"
 echo ""
 echo "Role:        ${AERO_ROLE}   Group: ${AERO_GROUP}"
-echo "URL:         http://localhost:3000/playground?role=${AERO_ROLE}&group=${AERO_GROUP}"
+echo "URL:         http://localhost:3000/?role=${AERO_ROLE}&group=${AERO_GROUP}"

@@ -44,14 +44,26 @@ if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
 	TEMP_C=$(( TEMP_MILLI / 1000 ))
 fi
 
-# FPS — scrape local fleet health. The app aggregates display FPS there.
+# FPS + running commit — scrape the device's own /api/status (the browser
+# heartbeats fps + build commit there every 5s). The old target,
+# /api/fleet?health, never existed — WAN heartbeats reported fps 0 forever.
 # If the app is down, default to 0 so the admin sees it as failing.
 FPS=0
+COMMIT=""
 if command -v curl >/dev/null 2>&1; then
-	HEALTH_JSON="$(curl -fsS --max-time 2 "http://localhost:${AERO_PORT}/api/fleet?health" 2>/dev/null || echo '{}')"
-	# Cheap JSON scrape without jq dependency — avgFps is a number on one line.
-	FPS="$(echo "${HEALTH_JSON}" | tr ',' '\n' | grep -o '"avgFps":[0-9.]*' | cut -d':' -f2 || echo 0)"
+	STATUS_JSON="$(curl -fsS --max-time 2 "http://localhost:${AERO_PORT}/api/status" 2>/dev/null || echo '{}')"
+	# Cheap JSON scrapes without a jq dependency.
+	FPS="$(echo "${STATUS_JSON}" | tr ',' '\n' | command grep -o '"fps":[0-9.]*' | head -1 | cut -d':' -f2 || echo 0)"
 	FPS="${FPS:-0}"
+	COMMIT="$(echo "${STATUS_JSON}" | tr ',' '\n' | command grep -o '"commit":"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
+fi
+
+# Last error line from the app service journal — one line of WHY, not just
+# a crash count. Escaped for JSON embedding (quotes/backslashes stripped).
+LAST_ERROR=""
+if command -v journalctl >/dev/null 2>&1; then
+	LAST_ERROR="$(journalctl -u aero-app.service -p err -n 1 --no-pager -o cat 2>/dev/null \
+		| head -c 200 | tr -d '"\\' || true)"
 fi
 
 # Crash count — increment whenever aero-kiosk.service failed since boot.
@@ -64,7 +76,7 @@ fi
 # ─── POST to admin ───────────────────────────────────────────────────────────
 
 PAYLOAD=$(cat <<EOF
-{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT}}
+{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}"}
 EOF
 )
 

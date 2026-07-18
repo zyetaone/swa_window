@@ -14,9 +14,12 @@ Environment=NODE_ENV=production
 Environment=HOME=/home/__AERO_USER__
 Environment=PORT=3000
 
-# Build + serve in the same unit so the Pi always ships what's on disk.
-# `bun run build` is a no-op on an already-fresh build (Vite caches).
-ExecStart=/bin/bash -lc '__BUN_BIN__ run build && __BUN_BIN__ run start'
+# Serve-only — the unit must NEVER build. Building here meant a bad commit
+# put the Pi in a build-fail → Restart=always crash loop with a dark kiosk.
+# Builds happen exactly twice: install.sh (initial) and aero-updater.sh
+# (updates, with rollback + health probe). If build/ is missing, server.ts
+# serves a 503 instead of crashing — degraded, not looping.
+ExecStart=__BUN_BIN__ run serve
 
 Restart=always
 RestartSec=10

@@ -44,7 +44,7 @@ ExecStart=/usr/bin/chromium \
 	--disable-session-crashed-bubble \
 	--disable-features=TranslateUI \
 	--check-for-update-interval=31536000 \
-	--app=http://localhost:3000/playground?role=${AERO_ROLE}&group=${AERO_GROUP}
+	--app=http://localhost:3000/?role=${AERO_ROLE}&group=${AERO_GROUP}
 
 Restart=always
 RestartSec=10
