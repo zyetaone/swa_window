@@ -1,0 +1,17 @@
+[Unit]
+Description=Aero Window active auto-update poll
+
+[Timer]
+# Active CI/CD: poll the CI-blessed `release` branch every ~15 min so a push
+# lands on the fleet within minutes, not once a day. The updater exits in ~2s
+# when there's no change (a plain git fetch), so this is cheap — a rebuild +
+# restart happens ONLY on an actual new release. RandomizedDelaySec staggers
+# the fleet so all Pis don't fetch + (on a release) restart in lockstep.
+OnBootSec=3min
+OnUnitActiveSec=15min
+RandomizedDelaySec=90
+Persistent=true
+Unit=aero-updater.service
+
+[Install]
+WantedBy=timers.target

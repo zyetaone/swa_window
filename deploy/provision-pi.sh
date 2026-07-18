@@ -245,13 +245,16 @@ EOF
 
 cat > /etc/systemd/system/aero-updater.timer <<EOF
 [Unit]
-Description=Zyeta Aero Daily Update
+Description=Zyeta Aero active auto-update poll
 
 [Timer]
-OnBootSec=5min
-OnCalendar=*-*-* 03:00:00
+# Active CI/CD — poll the release branch every ~15 min (was daily 03:00).
+# No-change polls exit in ~2s; a rebuild+restart happens only on a real
+# new release. RandomizedDelaySec staggers the fleet.
+OnBootSec=3min
+OnUnitActiveSec=15min
+RandomizedDelaySec=90
 Persistent=true
-RandomizedDelaySec=1800
 Unit=aero-updater.service
 
 [Install]

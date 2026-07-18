@@ -1,0 +1,22 @@
+[Unit]
+Description=Aero Window OTA Updater (git pull + rebuild + verify, with rollback)
+Documentation=https://github.com/zyetaone/z-aero-window
+After=network-online.target aero-app.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs the repo's OWN copy of the updater — a git pull refreshes it in place,
+# so there's no stale-installed-copy problem (the provision-pi scheme needs a
+# self-refresh step; this one doesn't). Runs as root: it must systemctl
+# restart the app + kiosk units. The script sets git safe.directory for the
+# kiosk-owned repo.
+EnvironmentFile=-/etc/aero/config.env
+ExecStart=/bin/bash __AERO_INSTALL_DIR__/deploy/aero-updater.sh
+StandardOutput=journal
+StandardError=journal
+# A stuck update (e.g. a hung build) must not run forever.
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

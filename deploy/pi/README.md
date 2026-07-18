@@ -82,10 +82,24 @@ boot has to garbage-collect.
 | Daily 06:00 | Restore display to 100% |
 | Sunday 03:00 | Clear Chromium shader/GPU cache (preserves tile cache) |
 
-## OTA updates (deploy/aero-updater.sh)
+## Automatic updates (deploy/aero-updater.sh)
 
-Daily updates come from `deploy/aero-updater.sh` (systemd timer, 03:00). It
-tracks the **`release`** branch — which CI fast-forwards only after
-check + tests + build pass on `main` — and rolls back to the previous commit
-on install failure, build failure, or a failed post-restart health probe
-(`GET /api/status`). A red commit on `main` never reaches the fleet.
+`install.sh` installs `aero-updater.service` + `aero-updater.timer`, which
+**polls the `release` branch every ~15 min** (`OnUnitActiveSec=15min`). A
+no-change poll is a plain `git fetch` that exits in ~2s; a rebuild + restart
+happens ONLY when a new release actually lands, so a push reaches the whole
+fleet within minutes.
+
+`release` is fast-forwarded by CI only after check + tests + build pass on
+`main` (`.github/workflows/ci.yml`), so a red commit never reaches a Pi. On
+each real update the updater pulls → `bun install` → `bun run build` (compiles
+on-device) → restart, and **rolls back to the previous commit** on install
+failure, build failure, or a failed post-restart health probe
+(`GET /api/status`). The updater is layout-agnostic (reads `AERO_INSTALL_DIR`
+from `/etc/aero/config.env`), so the same script serves this scheme and the
+older `provision-pi.sh` layout.
+
+To change the cadence, edit `OnUnitActiveSec` in the timer (raise it to reduce
+mid-day restart blips, or keep it low for near-immediate rollout). A push during
+office hours causes a brief (~15-20 s) Chromium reload when that Pi applies the
+update.

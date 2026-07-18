@@ -127,6 +127,8 @@ AERO_INSTALL_DIR=${INSTALL_DIR}
 AERO_USER=${PI_USER}
 AERO_PORT=3000
 AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
+AERO_BUN_BIN=${BUN_BIN}
+AERO_BRANCH=release
 EOF
 chmod 644 /etc/aero/config.env
 
@@ -136,7 +138,7 @@ echo "[6/7] Installing systemd units + cron..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Copy units, rewriting placeholder paths for this install.
-for unit in aero-xserver.service aero-app.service aero-kiosk.service; do
+for unit in aero-xserver.service aero-app.service aero-kiosk.service aero-updater.service; do
 	sed \
 		-e "s|__AERO_USER__|${PI_USER}|g" \
 		-e "s|__AERO_INSTALL_DIR__|${INSTALL_DIR}|g" \
@@ -144,6 +146,8 @@ for unit in aero-xserver.service aero-app.service aero-kiosk.service; do
 		"${SCRIPT_DIR}/${unit}" > "/etc/systemd/system/${unit}"
 	chmod 644 "/etc/systemd/system/${unit}"
 done
+# The updater timer has no placeholders — copy verbatim.
+install -m 644 "${SCRIPT_DIR}/aero-updater.timer" /etc/systemd/system/aero-updater.timer
 
 # Helper scripts — installed to /usr/local/lib/aero so units have a stable path.
 install -d -m 755 /usr/local/lib/aero
@@ -172,6 +176,7 @@ chmod 644 /etc/cron.d/aero-display-dim
 echo "[7/7] Enabling services..."
 systemctl daemon-reload
 systemctl enable aero-xserver.service aero-app.service aero-kiosk.service
+systemctl enable --now aero-updater.timer
 
 # WiFi power-save off (idempotent write).
 install -d -m 755 /etc/NetworkManager/conf.d

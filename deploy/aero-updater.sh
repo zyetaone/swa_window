@@ -18,19 +18,28 @@
 
 set -euo pipefail
 
-INSTALL_DIR="/opt/zyeta-aero"
-REPO_DIR="${INSTALL_DIR}/app"
-LOG_FILE="/var/log/aero-updater.log"
-BRANCH="${AERO_BRANCH:-release}"
-BUN_BIN="${AERO_BUN_BIN:-/home/kiosk/.bun/bin/bun}"
-# App port for the post-restart health probe. Config precedence mirrors the
-# service units: /etc/aero/config.env (deploy/pi scheme) then env, then 5173.
+# Source device config FIRST — it supplies AERO_INSTALL_DIR / AERO_PORT /
+# AERO_BUN_BIN / AERO_BRANCH, so the layout is discovered, not hardcoded.
+# This is what lets ONE updater serve both provisioning schemes.
 if [[ -r /etc/aero/config.env ]]; then
     # shellcheck disable=SC1091
     source /etc/aero/config.env
 fi
+
+INSTALL_DIR="${AERO_INSTALL_DIR:-/opt/zyeta-aero}"
+LOG_FILE="/var/log/aero-updater.log"
+BRANCH="${AERO_BRANCH:-release}"
+BUN_BIN="${AERO_BUN_BIN:-/home/kiosk/.bun/bin/bun}"
 APP_PORT="${AERO_PORT:-${PORT:-5173}}"
 PROBE_URL="http://localhost:${APP_PORT}/api/status"
+
+# The repo lives either directly at INSTALL_DIR (deploy/pi scheme) or under
+# an /app subdir (provision-pi scheme). Detect by where .git actually is.
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    REPO_DIR="${INSTALL_DIR}"
+else
+    REPO_DIR="${INSTALL_DIR}/app"
+fi
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}"; }
 
@@ -52,6 +61,12 @@ if [[ ! -x "${BUN_BIN}" ]]; then
     log "ERROR: Bun runtime not found at ${BUN_BIN}"
     exit 1
 fi
+
+# The timer runs this as root but the repo is owned by the kiosk user; modern
+# git refuses operations on other-owned repos ("dubious ownership") without
+# this. Idempotent — only added once.
+git config --global --get-all safe.directory 2>/dev/null | command grep -qxF "${REPO_DIR}" \
+    || git config --global --add safe.directory "${REPO_DIR}"
 
 # Explicit refspec: fielded Pis were provisioned with single-branch shallow
 # clones whose default fetch refspec only covers their original branch — a
