@@ -466,6 +466,18 @@ AERO_WIFI_RESET_TOKEN=...     Pi-side bearer auth for POST /api/wifi/reset. Endp
 
 ## Pi 5 deployment
 
+- **Deploy gate**: the fleet updater (`deploy/aero-updater.sh`, daily timer) tracks the
+  **`release`** branch, which CI fast-forwards only after check + tests + build pass on
+  `main` (`.github/workflows/ci.yml` promote job). Pushing to `main` alone no longer
+  reaches the fleet; a red commit never deploys. The updater rolls back (reset +
+  rebuild + restart) on install/build/post-restart-probe failure. `release` is
+  CI-owned — never push to it by hand.
+- **Version stamp**: `__APP_COMMIT__` (vite define) → `$lib/version` → `/api/status`
+  heartbeat → admin device cards. ⚠ Never import `$lib/version` from `server.ts`
+  (not Vite-built).
+- **Liveness watchdog**: `src/lib/shell/liveness.ts` — 30s context-lost/fps-stall
+  check, bounded page reloads (3/hour sessionStorage budget shared by ALL
+  self-healing reload paths via `tryConsumeReloadBudget()`).
 - Hostname: `aero-display-00.local`
 - Services: `aero-xserver`, `aero-app` (:5173), `aero-kiosk` (Chromium)
 - Auto-starts on boot via systemd
