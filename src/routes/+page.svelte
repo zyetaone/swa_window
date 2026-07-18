@@ -133,6 +133,30 @@
 		model.config.shell.windowFrame = !model.config.shell.windowFrame;
 	}
 
+	// Global error capture (production hardening) — uncaught throws and
+	// unhandled rejections land in the telemetry ring, which the fleet
+	// heartbeat summarises to /api/status → visible on the admin health page
+	// WITHOUT SSH. Audience never sees anything (council: never break the
+	// fiction). Wired via <svelte:window> below per Svelte 5 best practices.
+	function handleGlobalError(e: Event) {
+		// svelte:window types onerror generically; the global error event IS
+		// an ErrorEvent — narrow to read message/filename (resource-load
+		// errors arrive as plain Events; still worth counting).
+		const ee = e instanceof ErrorEvent ? e : null;
+		model.telemetry.recordEvent("error", {
+			where: "window.onerror",
+			message: String(ee?.message ?? "resource error").slice(0, 200),
+			source: ee ? `${ee.filename ?? ""}:${ee.lineno ?? 0}` : "",
+		});
+	}
+	function handleUnhandledRejection(e: PromiseRejectionEvent) {
+		const r = e.reason;
+		model.telemetry.recordEvent("error", {
+			where: "unhandledrejection",
+			message: (r instanceof Error ? r.message : String(r)).slice(0, 200),
+		});
+	}
+
 	// Apply per-device config from URL search params (?location=dubai&altitude=30000)
 	if (typeof window !== "undefined") {
 		const params = new URLSearchParams(window.location.search);
@@ -222,7 +246,11 @@
 	/>
 </svelte:head>
 
-<svelte:window onkeydown={handleKey} />
+<svelte:window
+	onkeydown={handleKey}
+	onerror={handleGlobalError}
+	onunhandledrejection={handleUnhandledRejection}
+/>
 
 <main class={["app", !model.config.shell.windowFrame && "no-frame"]}>
 	<!-- Cabin wall with texture -->

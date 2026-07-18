@@ -418,6 +418,9 @@
 							<div class="card-header">
 								<span class={['status-dot', device.online && 'online']}></span>
 								<span class="hostname">{device.hostname || device.deviceId.slice(0, 8)}</span>
+								{#if device.commit}
+									<span class="commit-chip" title="running commit">{device.commit}</span>
+								{/if}
 							</div>
 
 							<div class="card-body">
@@ -442,6 +445,15 @@
 									</div>
 								</div>
 							</div>
+
+							{#if device.errorCount}
+								<div class="error-strip" title={device.lastErrors?.join('\n') ?? ''}>
+									⚠ {device.errorCount} error{device.errorCount === 1 ? '' : 's'}
+									{#if device.lastErrors?.length}
+										<span class="error-last">· {device.lastErrors[device.lastErrors.length - 1]}</span>
+									{/if}
+								</div>
+							{/if}
 
 							<div class="card-footer">
 								<span class="last-seen">
@@ -862,6 +874,29 @@
 	}
 
 	.fps-good { color: #86efac; }
+
+	/* Hardening surface — running-commit chip + error strip */
+	.commit-chip {
+		margin-left: auto;
+		font-family: ui-monospace, monospace;
+		font-size: 0.65rem;
+		padding: 0.1rem 0.35rem;
+		border-radius: 4px;
+		background: rgba(148, 163, 184, 0.15);
+		color: #94a3b8;
+	}
+	.error-strip {
+		margin: 0.35rem 0 0;
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		background: rgba(248, 113, 113, 0.12);
+		color: #fca5a5;
+		font-size: 0.7rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.error-last { opacity: 0.75; }
 	.fps-warn { color: #fbbf24; }
 
 	.card-footer {

@@ -87,6 +87,7 @@
 				<header>
 					<span class="id">{s.deviceId}</span>
 					<span class="role">{s.role} · {s.groupId}</span>
+					{#if s.commit}<span class="commit" title="running commit">{s.commit}</span>{/if}
 				</header>
 				<dl>
 					<div><dt>FPS</dt><dd style:color={fpsColor(s.fps)}>{s.fps.toFixed(0)}</dd></div>
@@ -94,6 +95,9 @@
 					<div><dt>Uptime</dt><dd>{s.uptime > 0 ? formatUptime(s.uptime) : '—'}</dd></div>
 					<div><dt>Crashes</dt><dd>{s.crashCount}</dd></div>
 				</dl>
+				{#if s.lastError}
+					<p class="last-error" title={s.lastError}>⚠ {s.lastError}</p>
+				{/if}
 				<footer>
 					last heartbeat {Math.round((Date.now() - s.receivedAt) / 1000)}s ago
 				</footer>
@@ -146,6 +150,26 @@
 	}
 	.id { font-weight: 600; }
 	.role { font-size: 0.8rem; color: #9ca3af; }
+	.commit {
+		margin-left: auto;
+		font-family: ui-monospace, monospace;
+		font-size: 0.7rem;
+		color: #94a3b8;
+		background: rgba(148, 163, 184, 0.12);
+		padding: 0.1rem 0.35rem;
+		border-radius: 4px;
+	}
+	.last-error {
+		margin: 0.4rem 0 0;
+		font-size: 0.72rem;
+		color: #fca5a5;
+		background: rgba(248, 113, 113, 0.1);
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0; }
 	dl > div { display: flex; justify-content: space-between; }
 	dt { color: #9ca3af; }

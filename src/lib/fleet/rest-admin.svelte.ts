@@ -144,6 +144,10 @@ export class RestAdminStore {
 						uptime: status.uptime ?? 0,
 						lastSeen: status.lastSeen ?? Date.now(),
 						online: status.online !== false,
+						// Hardening fields — absent from older fielded builds (optional).
+						commit: status.commit,
+						errorCount: status.errorCount,
+						lastErrors: status.lastErrors,
 					};
 				} catch {
 					return { deviceId: peer.deviceId, online: false };

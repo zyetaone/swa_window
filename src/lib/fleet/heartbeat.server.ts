@@ -33,6 +33,10 @@ export interface HeartbeatSample {
 	temp: number;
 	uptime: number;
 	crashCount: number;
+	/** Build commit the device is running (optional — older health-check.sh). */
+	commit?: string;
+	/** Last aero-app journal error line (optional; length-capped sender-side). */
+	lastError?: string;
 }
 
 /** How many samples we keep per device. 500 × 60s ≈ 8.3h. */
@@ -89,6 +93,11 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 		temp: numeric('temp'),
 		uptime: numeric('uptime'),
 		crashCount: numeric('crashCount'),
+		// Optional debug fields — length-capped here too (network-facing).
+		commit: typeof o.commit === 'string' ? o.commit.slice(0, 40) : undefined,
+		lastError: typeof o.lastError === 'string' && o.lastError.length > 0
+			? o.lastError.slice(0, 240)
+			: undefined,
 	};
 
 	const buf = samples.get(deviceId) ?? [];
