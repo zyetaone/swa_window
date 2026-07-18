@@ -15,6 +15,20 @@ import { startLanProxy } from './src/lib/fleet/lan-peers.server';
 
 const PORT = parseInt(process.env.PORT || '5173', 10);
 
+// Production hardening — a crash must be DEBUGGABLE, not silent. Log the
+// reason, then exit non-zero so systemd (Restart=always, RestartSec=10)
+// brings the process back; journalctl keeps the line for the operator.
+// NOTE: no $lib/version import here — server.ts is run by Bun directly,
+// not Vite-built, so Vite `define`s don't exist in this file.
+process.on('unhandledRejection', (reason) => {
+	console.error('[server] FATAL unhandledRejection:', reason);
+	process.exit(1);
+});
+process.on('uncaughtException', (err) => {
+	console.error('[server] FATAL uncaughtException:', err);
+	process.exit(1);
+});
+
 // mDNS peer discovery + announce. Silent-fails on platforms without
 // multicast (Docker-networked-host, some WSL2 setups) — the app keeps
 // running, it just can't find LAN peers. On the Pi, a straight multicast

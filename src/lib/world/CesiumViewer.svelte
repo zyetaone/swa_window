@@ -14,6 +14,7 @@
 	import { COLOR_GRADING_GLSL } from '$lib/world/shaders';
 	import { initCesiumGlobal } from '$lib/world/cesium-setup';
 	import { activeCesium } from '$lib/world/active.svelte';
+	import { registerLivenessCanvas, tryConsumeReloadBudget } from '$lib/shell/liveness';
 
 	const model = useAeroWindow();
 
@@ -25,6 +26,9 @@
 	let error = $state<string | null>(null);
 	let viewerContainer: HTMLDivElement;
 	let loadTimeout: ReturnType<typeof setTimeout> | null = null;
+	let autoRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+	let unregisterCanvas: (() => void) | null = null;
+	let removeContextLost: (() => void) | null = null;
 	let destroyed = false;
 
 	// Bounded auto-retry: a kiosk Pi often boots BEFORE the network / Cesium Ion
@@ -48,6 +52,22 @@
 					return;
 				}
 				activeCesium.manager = cesium;
+
+				// Production hardening — register the GL canvas with the liveness
+				// watchdog and log context-loss events. Cesium's canvas dying
+				// (GPU/driver reset overnight) makes GL calls silent no-ops —
+				// nothing throws, so only the watchdog's isContextLost() poll can
+				// notice; the listener adds the precise timestamp + telemetry.
+				{
+					const canvas = cesium.getViewer().canvas as HTMLCanvasElement;
+					unregisterCanvas = registerLivenessCanvas(canvas);
+					const onLost = (e: Event) => {
+						e.preventDefault(); // signal intent to restore
+						model.telemetry.recordEvent('error', { where: 'cesium', event: 'webglcontextlost' });
+					};
+					canvas.addEventListener('webglcontextlost', onLost);
+					removeContextLost = () => canvas.removeEventListener('webglcontextlost', onLost);
+				}
 
 				// Dev-only diagnostic hook: reach the live Cesium scene from the
 				// console / headless probe to bisect atmosphere defects.
@@ -75,6 +95,16 @@
 				if (!destroyed) {
 					error = e instanceof Error ? e.message : 'Unknown error';
 					loading = false;
+					// Terminal init failure on an unattended kiosk: the manual
+					// Retry button will never be pressed. Auto-reload in 60s —
+					// the usual cause is the network not being up yet at boot,
+					// which resolves itself. CONSUMES from the shared liveness
+					// reload budget (3/hour, sessionStorage) so a persistent
+					// fault can't 60s-reload-loop; past the cap, recovery falls
+					// to the nightly reboot.
+					if (tryConsumeReloadBudget()) {
+						autoRetryTimeout = setTimeout(() => window.location.reload(), 60_000);
+					}
 				}
 			}
 		}
@@ -83,6 +113,9 @@
 	onDestroy(() => {
 		destroyed = true;
 		if (loadTimeout) clearTimeout(loadTimeout);
+		if (autoRetryTimeout) clearTimeout(autoRetryTimeout);
+		removeContextLost?.();
+		unregisterCanvas?.();
 		activeCesium.manager = null;
 		cesium?.destroy();
 		cesium = null;

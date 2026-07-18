@@ -24,6 +24,7 @@
 	import Weather from './window/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	import { useMouseParallax } from './use-mouse-parallax.svelte';
+	import { startLivenessWatchdog } from './liveness';
 	const model = useAeroWindow();
 
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
@@ -64,6 +65,19 @@
 	$effect(() =>
 		subscribe((dt: number) => {
 			untrack(() => model.tick(dt));
+		}),
+	);
+
+	// Liveness watchdog (production hardening) — detects frozen-but-alive
+	// states the other watchdogs can't see: WebGL context loss (GL calls are
+	// silent no-ops, nothing throws) and silent render stalls (fps→0 without
+	// an exception). Bounded page reload (3/hour) restores the display; the
+	// audience sees the boot splash, never an error. Canvas registration
+	// happens in CesiumViewer/ThreeOverlay via registerLivenessCanvas().
+	$effect(() =>
+		startLivenessWatchdog({
+			getFps: () => untrack(() => model.measuredFps),
+			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
 		}),
 	);
 

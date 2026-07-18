@@ -25,6 +25,7 @@
 	import { Sky } from '@threlte/extras';
 	import { PerspectiveCamera, WebGLRenderer, Color, Vector3 } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { registerLivenessCanvas } from '$lib/shell/liveness';
 	import Clouds from './Clouds.svelte';
 	import CameraMirror from './CameraMirror.svelte';
 	import SunGlow from './SunGlow.svelte';
@@ -128,14 +129,23 @@
 
 <div class="three-overlay" aria-hidden="true">
 	<Canvas
-		createRenderer={(canvas) =>
-			new WebGLRenderer({
+		createRenderer={(canvas) => {
+			// Production hardening — register with the liveness watchdog +
+			// log context loss. A lost GL context makes draws silent no-ops
+			// (nothing throws), so only the watchdog's poll can notice.
+			registerLivenessCanvas(canvas as HTMLCanvasElement);
+			canvas.addEventListener('webglcontextlost', (e: Event) => {
+				e.preventDefault();
+				model.telemetry.recordEvent('error', { where: 'three-overlay', event: 'webglcontextlost' });
+			});
+			return new WebGLRenderer({
 				canvas,
 				antialias: true,
 				alpha: true,
 				powerPreference: 'high-performance',
 				logarithmicDepthBuffer: true,
-			})}
+			});
+		}}
 	>
 		<T.PerspectiveCamera
 			bind:ref={camera}
