@@ -19,7 +19,11 @@ ExecStartPre=/usr/bin/xset -display :0 s off -dpms s noblank
 
 # Chromium kiosk. Flags:
 #   --kiosk                     full-screen, no chrome
-#   --use-gl=angle --use-angle=gles    ANGLE GLES backend for Mali GPU
+#   --use-gl=egl                native EGL on V3D. Measured 7.5x faster than
+#                               --use-gl=angle --use-angle=gles on a Pi 5:
+#                               2 fps -> 15 fps, same scene, same panel.
+#                               (The Pi 5 GPU is VideoCore VII / V3D, not Mali;
+#                               the ANGLE-for-Mali rationale did not apply.)
 #   --enable-webgl              needed for MapLibre + Three
 #   --disk-cache-dir/size       2 GB warm tile cache survives reboots
 #   --incognito                 no user profile bleed across updates
@@ -27,8 +31,7 @@ ExecStartPre=/usr/bin/xset -display :0 s off -dpms s noblank
 #   --noerrdialogs / --disable-infobars / --hide-scrollbars  hide all UI
 ExecStart=/usr/bin/chromium \
 	--kiosk \
-	--use-gl=angle \
-	--use-angle=gles \
+	--use-gl=egl \
 	--enable-webgl \
 	--ignore-gpu-blocklist \
 	--enable-gpu-rasterization \
