@@ -24,6 +24,7 @@
 		type ContentBundle,
 		type ConfigPatch,
 	} from "$lib/scene/bundle/remote";
+	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/Pane.svelte";
 	import Controls from "$lib/shell/HUD.svelte";
 	import SidePanel from "$lib/shell/SidePanel.svelte";
@@ -290,6 +291,11 @@
 
 	<!-- Observability viewer (Shift+T to toggle) -->
 	<TelemetryPanel />
+
+	<!-- Held first frame — same artwork as the Plymouth theme and X root
+	     window, dissolving once the renderer reports real frames. Last child
+	     so it covers the shell without the shell needing to know about it. -->
+	<BootLockup />
 </main>
 
 <style>

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Aero Window
+Description=Held first frame — Aero Window × Zyeta × SWA
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/aero
+ScriptFile=/usr/share/plymouth/themes/aero/aero.script

@@ -1,0 +1,20 @@
+# Aero Window boot splash.
+#
+# Deliberately motionless: no spinner, no progress bar, no throbber. The splash,
+# the X root window and the app's BootLockup are the same still frame, so the
+# whole power-on reads as one image that dissolves into the live window rather
+# than three pictures in a row. Anything that animates here breaks that.
+
+splash = Image("aero-splash.png");
+
+# Scale to whatever panel this device drives — the source is 1920x1080 but the
+# corridor displays are not guaranteed to match.
+sprite = Sprite(splash.Scale(Window.GetWidth(), Window.GetHeight()));
+sprite.SetPosition(0, 0, -100);
+
+# Plymouth calls these; leaving them empty is what keeps the frame still.
+fun refresh_callback() { }
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun progress_callback(duration, progress) { }
+Plymouth.SetBootProgressFunction(progress_callback);
