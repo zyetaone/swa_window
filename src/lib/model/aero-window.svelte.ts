@@ -91,8 +91,12 @@ export class AeroWindow {
 	displayMode: DisplayMode = 'flight';
 	videoUrl    = '';
 
-	// Performance (delegated to world config — single source of truth)
-	measuredFps = $state(0);
+	// Performance. Derived from the telemetry median frame period rather than
+	// counted per wall-second: at the 2–4 fps the Pi panel actually runs, a
+	// per-second counter divides ~3 frames by a ~1 s window, so it lands on
+	// integers only (observed: 0/2/3/5/15) and over-reports by one frame
+	// (N frames span N-1 intervals). Perf work needs sub-integer resolution.
+	measuredFps = $derived(this.telemetry.fps);
 
 	// User-interaction override accessors (pauses auto-behavior for 8 s)
 	get userAdjustingAltitude()   { return hasActiveOverride('altitude'); }
@@ -108,8 +112,8 @@ export class AeroWindow {
 	// Read internally via #createContext to feed engines; no external consumer.
 	#time = 0;
 
-	// Private perf counters
-	#frameCount    = 0;
+	// Private perf counters. 0 = no frame seen yet, so the first frame only
+	// establishes the baseline and contributes no period sample.
 	#fpsLastTime   = 0;
 	// Auto-quality demotion is removed. qualityMode stays as a manual ops
 	// pick via model.config.world.qualityMode — no silent FPS-driven switches
@@ -185,7 +189,6 @@ export class AeroWindow {
 		this.flight.setLocationWithSky(this.location, this.skyState);
 
 		if (typeof window !== 'undefined') {
-			this.#fpsLastTime = performance.now();
 			this.updateTimeFromSystem();
 		}
 	}
@@ -465,14 +468,15 @@ export class AeroWindow {
 		return c;
 	}
 
+	// Feed the real, *unclamped* wall-clock gap between frames to telemetry.
+	// The game loop clamps its `dt` to 100 ms so the simulation stays stable
+	// through a stall — using that clamped value here would pin every reading
+	// below 10 fps at exactly 10 fps.
 	#reportFrame(now: number): void {
-		this.#frameCount++;
-		const elapsed = now - this.#fpsLastTime;
-		if (elapsed >= 1000) {
-			this.measuredFps = Math.round((this.#frameCount * 1000) / elapsed);
-			this.#frameCount = 0;
-			this.#fpsLastTime = now;
+		if (this.#fpsLastTime > 0) {
+			this.telemetry.recordFramePeriod(now - this.#fpsLastTime);
 		}
+		this.#fpsLastTime = now;
 	}
 
 	destroy(): void {

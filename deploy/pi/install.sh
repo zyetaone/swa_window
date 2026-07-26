@@ -33,13 +33,26 @@ BUN_BIN="/home/${PI_USER}/.bun/bin/bun"
 # never modified or removed — so a failed migration leaves it intact.
 LEGACY_DIR="/home/${PI_USER}/aero-window"
 
+# --units-only: reinstall ONLY the systemd units, helper scripts and cron
+# entries, skipping apt / bun / clone / build / config.env and the boot-partition
+# branding. This is the OTA path: aero-updater.sh calls it when a release changed
+# anything under deploy/, because `git pull` updates deploy/pi/*.service in the
+# REPO but nothing ever copied them to /etc/systemd/system — so unit-level fixes
+# (GPU flags, VT handling, ExecStart changes) reached devices and did nothing.
+# Deliberately excluded here: apt (slow, needs network), the build (the updater
+# just did it), config.env (would clobber hand-set tokens), and the cmdline.txt /
+# config.txt rewrites (a bad boot-partition edit is an unbootable Pi and the
+# updater's git-only rollback cannot undo it — that stays a human, on-console act).
+UNITS_ONLY=false
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--role)   AERO_ROLE="$2"; shift 2 ;;
 		--group)  AERO_GROUP="$2"; shift 2 ;;
 		--branch) REPO_BRANCH="$2"; shift 2 ;;
+		--units-only) UNITS_ONLY=true; shift ;;
 		--help|-h)
-			echo "Usage: install.sh [--role left|center|right|solo] [--group <id>] [--branch <git-branch>]"
+			echo "Usage: install.sh [--role left|center|right|solo] [--group <id>] [--branch <git-branch>] [--units-only]"
 			exit 0 ;;
 		*)  echo "Unknown argument: $1" >&2; exit 1 ;;
 	esac
@@ -59,6 +72,13 @@ echo "Branch:  ${REPO_BRANCH}"
 echo "User:    ${PI_USER}"
 echo "Target:  ${INSTALL_DIR}"
 echo ""
+
+if [[ "${UNITS_ONLY}" == true ]]; then
+	echo "--units-only: skipping packages / bun / clone / build / config.env."
+	echo ""
+fi
+
+if [[ "${UNITS_ONLY}" == false ]]; then
 
 # ─── Step 1: System packages (idempotent — apt-get only upgrades what changed) ──
 
@@ -187,6 +207,8 @@ EOF
 chown "root:${PI_USER}" /etc/aero/config.env
 chmod 640 /etc/aero/config.env
 
+fi  # end !UNITS_ONLY (steps 1-5)
+
 # ─── Step 6: Systemd units + cron jobs ────────────────────────────────────────
 
 echo "[6/7] Installing systemd units + cron..."
@@ -246,7 +268,7 @@ chmod 644 /etc/cron.d/aero-display-dim
 # instead of: rainbow firmware splash -> four raspberry logos -> kernel scroll
 # -> stock Plymouth -> black flash -> app. Suppressing those is the point.
 
-if [[ -d "${SCRIPT_DIR}/branding" ]]; then
+if [[ -d "${SCRIPT_DIR}/branding" && "${UNITS_ONLY}" == false ]]; then
 	echo "      + boot branding (Plymouth theme + quiet boot)"
 	install -d -m 755 /usr/share/plymouth/themes/aero
 	install -m 644 "${SCRIPT_DIR}/branding/aero.plymouth"   /usr/share/plymouth/themes/aero/aero.plymouth

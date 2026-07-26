@@ -158,6 +158,32 @@ if [[ -f "package.json" ]] && command grep -q '"build"' package.json; then
     "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" || rollback "build failed"
 fi
 
+# ─── 4b. Reinstall deploy config when it changed ─────────────────────────
+# Until this existed the CD pipeline shipped CODE but not CONFIGURATION: a
+# release could change deploy/pi/aero-kiosk.service, land on every Pi, and
+# change nothing — because /etc/systemd/system/ is only ever written by
+# install.sh. That is exactly how the ANGLE→EGL fix (7.5x framerate) reached
+# the fleet and left it running the old flags at 2 fps.
+#
+# Scoped to --units-only on purpose: units + helper scripts + cron, never apt,
+# never the build, never config.env (would clobber hand-set tokens), never the
+# cmdline.txt / config.txt rewrites. Runs BEFORE restart_services so the restart
+# picks up the new unit definitions rather than needing a second pass.
+#
+# Non-fatal: a failure here leaves the previous units in place and the new code
+# still starts. That is degraded, not broken — and far better than rolling back
+# a good build because a cron file could not be written.
+INSTALLER="${REPO_DIR}/deploy/pi/install.sh"
+if ! git diff --quiet "${LOCAL}" "${REMOTE}" -- deploy/ 2>/dev/null; then
+    if [[ -f "${INSTALLER}" ]]; then
+        log "deploy/ changed in this release — reinstalling units + cron"
+        bash "${INSTALLER}" --units-only 2>&1 | tee -a "${LOG_FILE}" \
+            || log "WARN: unit reinstall failed — keeping previous units"
+    fi
+else
+    log "deploy/ unchanged — units left as-is"
+fi
+
 # ─── 5. Restart + verify ─────────────────────────────────────────────────
 
 log "Restarting services..."
