@@ -10,10 +10,12 @@
  *   cleanup(); // removes stage, restores aero-color-grade
  */
 
+import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CesiumViewer = any;
 
-const HASH_PALETTE_SHADER = /* glsl */ `
+export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform sampler2D colorTexture;
 	uniform float u_nightFactor;
 	uniform float u_lightIntensity;
@@ -90,7 +92,7 @@ export function installHashPalette(
 	let prevAeroEnabled = true;
 	for (let i = 0; i < stages.length; i++) {
 		const s = stages.get(i) as { name?: string; enabled?: boolean } | null;
-		if (s && s.name === 'aero-color-grade') {
+		if (s && s.name === COLOR_GRADE_STAGE) {
 			aeroStage = s as { enabled: boolean };
 			prevAeroEnabled = aeroStage.enabled;
 			aeroStage.enabled = false;

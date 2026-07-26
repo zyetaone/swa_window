@@ -22,6 +22,7 @@ import { WEATHER_EFFECTS } from '$content/weather';
 import { pickCloudComposition, type CloudComposition } from '$content/compositions/clouds';
 import { subscribe } from '$lib/game-loop';
 import { createSeededRng, daySeed } from '$lib/world-three/prng';
+	import { randomBetween } from '$lib/utils';
 
 // Effect-component signature — compositor passes { model }. The wrapper
 // that used to unpack model into explicit props (CloudsEffect.svelte) is
@@ -85,11 +86,8 @@ const textureSets: Record<string, readonly string[]> = {
 // so per-event per-frame callers (cloud-wraparound resets in the animation
 // loop below) don't need to thread a seeded rng. Build-once callers (cloud
 // rebuild $effect) pass a daySeed-seeded rng to keep 3-Pi panorama in sync.
-function rand(min: number, max: number, rng: () => number = Math.random) {
-	return min + rng() * (max - min);
-}
 function randRange(r: readonly [number, number], rng: () => number = Math.random) {
-	return rand(r[0], r[1], rng);
+	return randomBetween(r[0], r[1], rng);
 }
 function randCount(r: readonly [number, number], rng: () => number = Math.random) {
 	return Math.floor(r[0] + rng() * (r[1] - r[0] + 1));
@@ -103,17 +101,17 @@ function createSprites(
 ): CloudSprite[] {
 	const sprites: CloudSprite[] = [];
 	for (let i = 0; i < count; i++) {
-		const y = rand(-5, 5, rng);
+		const y = randomBetween(-5, 5, rng);
 		sprites.push({
-			x: rand(-8, 8, rng),
+			x: randomBetween(-8, 8, rng),
 			y,
-			z: isHorizon ? rand(-80, 80, rng) : rand(-100, 100, rng),
-			rot: rand(0, 360, rng),
-			scale: isHorizon ? rand(0.5, 1.3, rng) : rand(0.5, 1.4, rng),
-			speed: isHorizon ? rand(0.01, 0.05, rng) : rand(0.015, 0.08, rng),
+			z: isHorizon ? randomBetween(-80, 80, rng) : randomBetween(-100, 100, rng),
+			rot: randomBetween(0, 360, rng),
+			scale: isHorizon ? randomBetween(0.5, 1.3, rng) : randomBetween(0.5, 1.4, rng),
+			speed: isHorizon ? randomBetween(0.01, 0.05, rng) : randomBetween(0.015, 0.08, rng),
 			texture: textures[Math.floor(rng() * textures.length)],
 			// Horizon sprites lower opacity so terrain shows through (haze, not wall)
-			opacity: isHorizon ? rand(0.18, 0.38, rng) : rand(0.55, 0.92, rng),
+			opacity: isHorizon ? randomBetween(0.18, 0.38, rng) : randomBetween(0.55, 0.92, rng),
 			brightness: isHorizon ? 0.8 + (y + 5) / 10 * 0.2 : 0.7 + (y + 5) / 10 * 0.35,
 		});
 	}
@@ -143,9 +141,9 @@ function createCloudFromBand(
 	const zNear = isHorizon ? -700 : -60;
 	const zFar = isHorizon ? -1600 : -400;
 	// High y (deeper in band) reads as closer, so lerp from far → near as t grows.
-	const z = zFar + (zNear - zFar) * t + rand(-80, 80, rng);
+	const z = zFar + (zNear - zFar) * t + randomBetween(-80, 80, rng);
 	return {
-		x: rand(-30, 130, rng),
+		x: randomBetween(-30, 130, rng),
 		y,
 		z,
 		vx: randRange(band.speedRange, rng),
@@ -205,17 +203,17 @@ $effect(() =>
 				cloud.x += cloud.vx * dt * speed * dir;
 
 				if (cloud.x > 130) {
-					cloud.x = rand(-30, -18);
-					cloud.y = rand(12, 75);
-					cloud.z = rand(-500, -80);
-					cloud.vx = rand(1.5, 6);
-					cloud.baseScale = rand(0.7, 1.5);
+					cloud.x = randomBetween(-30, -18);
+					cloud.y = randomBetween(12, 75);
+					cloud.z = randomBetween(-500, -80);
+					cloud.vx = randomBetween(1.5, 6);
+					cloud.baseScale = randomBetween(0.7, 1.5);
 				} else if (cloud.x < -30) {
-					cloud.x = rand(118, 130);
-					cloud.y = rand(12, 75);
-					cloud.z = rand(-500, -80);
-					cloud.vx = rand(1.5, 6);
-					cloud.baseScale = rand(0.7, 1.5);
+					cloud.x = randomBetween(118, 130);
+					cloud.y = randomBetween(12, 75);
+					cloud.z = randomBetween(-500, -80);
+					cloud.vx = randomBetween(1.5, 6);
+					cloud.baseScale = randomBetween(0.7, 1.5);
 				}
 
 				for (const s of cloud.sprites) {

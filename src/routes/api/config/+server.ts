@@ -56,7 +56,10 @@ export const PATCH: RequestHandler = async ({ request }) => {
 		throw error(400, 'invalid config patch body');
 	}
 	if (!isAllowedPath(body.path)) {
-		throw error(400, 'config path rejected: must match `<namespace>.<key>[…]` with namespace in (atmosphere, camera, director, world, shell)');
+		throw error(
+			400,
+			`config path rejected: must match \`<namespace>.<key>[…]\` with namespace in (${CONFIG_NAMESPACE_KEYS.join(', ')})`,
+		);
 	}
 
 	publish({

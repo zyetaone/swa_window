@@ -18,3 +18,15 @@ export const STATUS_INTERVAL_MS = 5000;
  * window. Bumping one without the other gives stale peer lists.
  */
 export const PEER_REFRESH_INTERVAL_MS = 30_000;
+
+/**
+ * How long after its last heartbeat a device still counts as online.
+ *
+ * Belongs here because it is derived from STATUS_INTERVAL_MS, not chosen
+ * independently: 3 min tolerates ~36 consecutive missed 5 s posts, so a Pi
+ * riding out a brief LAN partition or a page reload doesn't flicker offline.
+ * Was literal-duplicated as ONLINE_MS in the admin health page and
+ * ONLINE_THRESHOLD_MS in heartbeat.server.ts — two names, one number, and a
+ * dashboard that would silently disagree with the server if either moved.
+ */
+export const ONLINE_THRESHOLD_MS = 3 * 60_000;

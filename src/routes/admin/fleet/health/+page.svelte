@@ -13,6 +13,7 @@
 	import type { HeartbeatSample } from '$lib/fleet/heartbeat.server';
 	import type { FleetSummary } from '$lib/fleet/protocol';
 	import { formatUptime } from '$lib/utils';
+	import { ONLINE_THRESHOLD_MS } from '$lib/fleet/timings';
 
 	// $state.raw — samples is replaced wholesale on each poll response,
 	// never mutated in place. Skip the per-element proxy traversal.
@@ -21,7 +22,6 @@
 		total: 0, online: 0, offline: 0, avgFps: 0, maxTempC: 0, totalCrashes: 0,
 	});
 	let error = $state<string | null>(null);
-	const ONLINE_MS = 3 * 60_000;
 
 	async function poll() {
 		try {
@@ -42,7 +42,7 @@
 	onDestroy(() => clearInterval(interval));
 
 	function isOnline(s: HeartbeatSample): boolean {
-		return Date.now() - s.receivedAt < ONLINE_MS;
+		return Date.now() - s.receivedAt < ONLINE_THRESHOLD_MS;
 	}
 
 	function tempColor(c: number): string {

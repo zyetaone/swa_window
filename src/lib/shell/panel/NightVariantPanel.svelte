@@ -10,6 +10,7 @@
 	 */
 	import { untrack } from 'svelte';
 	import { clamp } from '$lib/utils';
+	import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
 	import { activeCesium } from '$lib/world/active.svelte';
 	import type { AeroWindow } from '$lib/model/aero-window.svelte';
 	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
@@ -330,7 +331,7 @@
 		const Cesium = mgr.getCesium(); const viewer = mgr.getViewer();
 		const stages = viewer.scene.postProcessStages;
 		let aeroStage: { enabled: boolean } | null = null;
-		const prevAeroEnabled = (() => { for (let i = 0; i < stages.length; i++) { const s = stages.get(i) as { name?: string; enabled?: boolean } | null; if (s && s.name === 'aero-color-grade') { aeroStage = s as { enabled: boolean }; const was = aeroStage.enabled; aeroStage.enabled = false; return was; } } return true; })();
+		const prevAeroEnabled = (() => { for (let i = 0; i < stages.length; i++) { const s = stages.get(i) as { name?: string; enabled?: boolean } | null; if (s && s.name === COLOR_GRADE_STAGE) { aeroStage = s as { enabled: boolean }; const was = aeroStage.enabled; aeroStage.enabled = false; return was; } } return true; })();
 		const stage = new Cesium.PostProcessStage({ name: 'night-lab-feb-hybrid', fragmentShader: G_SHADER, uniforms: { u_nightFactor: () => model.nightFactor, u_lightIntensity: () => model.nightLightScale, u_paletteSpread: () => tunablesG.paletteSpread, u_additiveStrength: () => tunablesG.additiveStrength, u_redSparkRate: () => tunablesG.redSparkRate, u_darkVoidStrength: () => tunablesG.darkVoidStrength, u_envLight: () => tunablesG.envLight, u_viirsMaskStrength: () => tunablesG.viirsMaskStrength } });
 		stages.add(stage);
 		return () => { if (!viewer.isDestroyed()) { stages.remove(stage); if (aeroStage) aeroStage.enabled = prevAeroEnabled; } };

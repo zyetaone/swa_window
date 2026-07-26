@@ -136,7 +136,6 @@ export function latestAll(): HeartbeatSample[] {
  * the last 3 intervals (= 3 × 60s = 3 min). Any longer and the Pi is
  * probably crashed or offline.
  */
-const ONLINE_THRESHOLD_MS = 3 * 60_000;
 
 function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
 	return now - sample.receivedAt < ONLINE_THRESHOLD_MS;
@@ -147,6 +146,7 @@ function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
  * these. Online count, average FPS across online devices, hottest CPU, etc.
  */
 import type { FleetSummary } from './protocol';
+import { ONLINE_THRESHOLD_MS } from './timings';
 
 export function summarize(now: number = Date.now()): FleetSummary {
 	const all = latestAll();

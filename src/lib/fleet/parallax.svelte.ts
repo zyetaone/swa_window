@@ -116,6 +116,22 @@ export function saveBinding(fingerprint: string, binding: DeviceBinding): void {
 	}
 }
 
+/**
+ * Forget a stored binding. The admin panel used to reach past this module and
+ * hand-roll localStorage against a copy of the key string — which meant
+ * renaming STORAGE_KEY_BINDINGS here would silently break deletion there.
+ */
+export function deleteBinding(fingerprint: string): void {
+	if (typeof window === 'undefined') return;
+	const map = readBindingsMap();
+	if (!(fingerprint in map)) return;
+	delete map[fingerprint];
+	writeBindingsMap(map);
+	if (fingerprint === getDeviceFingerprint()) {
+		window.localStorage.removeItem(STORAGE_KEY_SELF);
+	}
+}
+
 /** List every stored binding (for admin UI). */
 export function listBindings(): Array<{ fingerprint: string; binding: DeviceBinding }> {
 	const map = readBindingsMap();

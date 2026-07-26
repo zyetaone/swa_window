@@ -29,6 +29,7 @@ import {
 	type CloudComposition,
 } from '$content/compositions/clouds';
 import { createSeededRng, daySeed } from '$lib/world-three/prng';
+import { randomBetween, pickRandom } from '$lib/utils';
 
 const CLOUD_ALT_M = 8000;             // clouds sit ~26k ft up — typical mid-deck
 const CLOUD_RADIUS_DEG = 2.5;         // spread half-extent around the location
@@ -49,12 +50,6 @@ const TEXTURES = {
 // rng so all three Pis in a panorama group generate identical billboard
 // positions on the same day. Falls back to Math.random for any test or
 // non-3-Pi caller.
-function rand(min: number, max: number, rng: () => number = Math.random) {
-	return min + rng() * (max - min);
-}
-function pickRand<T>(arr: readonly T[], rng: () => number = Math.random): T {
-	return arr[Math.floor(rng() * arr.length)];
-}
 
 export class CloudBillboardLayer {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,13 +127,13 @@ export class CloudBillboardLayer {
 		const altGain = Math.max(0.7, Math.min(1.5, 30000 / Math.max(altitudeFt, 5000)));
 
 		for (let i = 0; i < horizonCount; i++) {
-			const dLat = rand(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
-			const dLon = rand(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
-			const scale = rand(composition.horizon.scaleRange[0], composition.horizon.scaleRange[1], rng);
-			const opacity = rand(0.55, 0.92, rng);
+			const dLat = randomBetween(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
+			const dLon = randomBetween(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
+			const scale = randomBetween(composition.horizon.scaleRange[0], composition.horizon.scaleRange[1], rng);
+			const opacity = randomBetween(0.55, 0.92, rng);
 			this.collection.add({
 				position: C.Cartesian3.fromDegrees(lon + dLon, lat + dLat, CLOUD_ALT_M),
-				image: pickRand(textures, rng),
+				image: pickRandom(textures, rng),
 				color: new C.Color(1, 1, 1, opacity),
 				scale: scale * altGain,
 				sizeInMeters: false,
@@ -154,13 +149,13 @@ export class CloudBillboardLayer {
 		// Mid clouds — closer to the camera, smaller spread.
 		const midRadius = CLOUD_RADIUS_DEG * 0.6;
 		for (let i = 0; i < midCount; i++) {
-			const dLat = rand(-midRadius, midRadius, rng);
-			const dLon = rand(-midRadius, midRadius, rng);
-			const scale = rand(composition.mid.scaleRange[0], composition.mid.scaleRange[1], rng);
-			const opacity = rand(0.65, 0.95, rng);
+			const dLat = randomBetween(-midRadius, midRadius, rng);
+			const dLon = randomBetween(-midRadius, midRadius, rng);
+			const scale = randomBetween(composition.mid.scaleRange[0], composition.mid.scaleRange[1], rng);
+			const opacity = randomBetween(0.65, 0.95, rng);
 			this.collection.add({
 				position: C.Cartesian3.fromDegrees(lon + dLon, lat + dLat, CLOUD_ALT_M * 0.7),
-				image: pickRand(textures, rng),
+				image: pickRandom(textures, rng),
 				color: new C.Color(1, 1, 1, opacity),
 				scale: scale * altGain,
 				width: CLOUD_SCALE_METRES_BASE * 0.7,

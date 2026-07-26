@@ -79,16 +79,21 @@ export function normalizeHeading(heading: number): number {
 
 /**
  * Random number between min and max (inclusive).
+ *
+ * `rng` exists for invariant #4 (3-Pi panorama determinism): any build-once
+ * visual content must draw from createSeededRng(daySeed()) so all three Pis
+ * generate the same scene. Without this parameter every seeded caller had to
+ * hand-roll its own copy — which is exactly what happened twice.
  */
-export function randomBetween(min: number, max: number): number {
-	return min + Math.random() * (max - min);
+export function randomBetween(min: number, max: number, rng: () => number = Math.random): number {
+	return min + rng() * (max - min);
 }
 
 /**
- * Pick a random element from an array.
+ * Pick a random element from an array. `rng` as above.
  */
-export function pickRandom<T>(arr: readonly T[]): T {
-	return arr[Math.floor(Math.random() * arr.length)];
+export function pickRandom<T>(arr: readonly T[], rng: () => number = Math.random): T {
+	return arr[Math.floor(rng() * arr.length)];
 }
 
 /**

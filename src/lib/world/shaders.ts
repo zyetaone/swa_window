@@ -28,6 +28,17 @@
  *   u_additiveStrength operator knob (config.world.additiveStrength)
  */
 
+/**
+ * Cesium postProcessStage name for the grade below.
+ *
+ * SSOT because it is an identity string, not a label: compose.ts registers
+ * the stage under it, while hash-palette.ts and NightVariantPanel look the
+ * stage UP by it in order to disable it before installing their own. Rename
+ * it in one place only and both lookups quietly match nothing — the grade
+ * stays enabled and double-applies under the replacement.
+ */
+export const COLOR_GRADE_STAGE = 'aero-color-grade';
+
 export const COLOR_GRADING_GLSL = `
 	uniform sampler2D colorTexture;
 	uniform float u_nightFactor;
