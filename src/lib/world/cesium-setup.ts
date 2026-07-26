@@ -25,27 +25,79 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
 const SENTINEL2_EOX_URL =
 	'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg';
 
-/**
- * Access the Cesium Ion token from environment variables.
- * Falls back to null if the default placeholder is detected.
- */
-export function getIonToken(): string | null {
+/** Build-time token — only present when VITE_CESIUM_ION_TOKEN was set at
+ *  `vite build`. That's the dev path; a CI-built artifact deliberately has
+ *  none, so the runtime endpoint below is what feeds a fielded Pi. */
+function buildTimeIonToken(): string | null {
 	const token = import.meta.env.VITE_CESIUM_ION_TOKEN;
 	if (!token || token === 'your-cesium-ion-token-here') return null;
 	return token;
 }
 
+// Resolved once by resolveIonToken() and cached for the tab's lifetime. Kept
+// as module state so getIonToken() can stay SYNCHRONOUS — compose.ts calls it
+// later, mid-scene, for the buildings tileset, and making that path async
+// would ripple through the whole Cesium layer for no benefit.
+let resolvedToken: string | null = null;
+let tokenResolved = false;
+
+/**
+ * Fetch the Ion token from the Pi's localhost-only endpoint, falling back to
+ * the build-time value. Safe to call repeatedly — resolves at most once.
+ *
+ * Order matters: runtime FIRST. A CI-built artifact has no build-time token,
+ * and a locally-built dev bundle has no server env — so whichever exists wins,
+ * and a Pi that has both prefers the one in /etc/aero/config.env (the value an
+ * operator can rotate without rebuilding).
+ */
+export async function resolveIonToken(): Promise<string | null> {
+	if (tokenResolved) return resolvedToken;
+	let runtime: string | null = null;
+	try {
+		const res = await fetch('/api/internal/ion-token', { cache: 'no-store' });
+		if (res.ok) {
+			const body = (await res.json()) as { token?: unknown };
+			if (typeof body.token === 'string' && body.token.length > 0) runtime = body.token;
+		}
+	} catch {
+		// Offline, non-localhost, or endpoint absent (older build) — fall through.
+	}
+	resolvedToken = runtime ?? buildTimeIonToken();
+	tokenResolved = true;
+	return resolvedToken;
+}
+
+/**
+ * Access the Cesium Ion token. Synchronous by design (see above).
+ *
+ * Before resolveIonToken() completes this returns the build-time token, which
+ * is null on a CI-built artifact — so call sites that gate features on it
+ * (compose.ts buildings/terrain) must run AFTER initCesiumGlobal, which they
+ * do: the manager is constructed on the line following it.
+ */
+export function getIonToken(): string | null {
+	return tokenResolved ? resolvedToken : buildTimeIonToken();
+}
+
 /**
  * Perform one-time global initialization for the Cesium module.
+ * Async since Phase 19: the Ion token is fetched at runtime so it no longer
+ * has to be baked into the bundle.
  */
-export function initCesiumGlobal(C: typeof CesiumType): void {
-	const token = getIonToken();
+export async function initCesiumGlobal(C: typeof CesiumType): Promise<void> {
+	const token = await resolveIonToken();
 	if (token) {
 		C.Ion.defaultAccessToken = token;
 	}
 
 	// Set base URL for static assets (workers, etc.)
 	(globalThis as any).CESIUM_BASE_URL = '/cesiumStatic';
+}
+
+/** Test-only reset hook — module state is per-process. */
+export function __resetIonTokenCacheForTests(): void {
+	resolvedToken = null;
+	tokenResolved = false;
 }
 
 /**
