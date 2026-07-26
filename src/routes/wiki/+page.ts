@@ -1,5 +1,5 @@
 /**
- * /architecture is static stakeholder documentation — render it on the
+ * /wiki is static stakeholder documentation — render it on the
  * server (ssr=true overrides the app-wide ssr=false) and ship ZERO client
  * JS for it (csr=false). Without this, the global bundleStrategy:'single'
  * inlined its ~50 KB of markup+scoped-CSS into the one bundle the Pi kiosk
