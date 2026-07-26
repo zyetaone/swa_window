@@ -14,12 +14,10 @@
  */
 
 import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-namespaces';
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { readLimitedJson } from '$lib/http/body';
-import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
-import { requireAdminToken } from '$lib/http/auth';
-import { publish } from '$lib/fleet/sse-bus.server';
+import { corsPreflight } from '$lib/http/cors';
+import { publishRoute } from '$lib/http/publish-route';
 
 interface ConfigPatchBody {
 	path: string;
@@ -47,11 +45,7 @@ function isAllowedPath(path: string): boolean {
 
 export const OPTIONS: RequestHandler = corsPreflight('PATCH, OPTIONS');
 
-export const PATCH: RequestHandler = async ({ request }) => {
-	requireAdminToken(request);
-	const origin = request.headers.get('origin');
-	const body = await readLimitedJson<ConfigPatchBody>(request, 4096);
-
+export const PATCH: RequestHandler = publishRoute<ConfigPatchBody>((body) => {
 	if (!body || typeof body.path !== 'string') {
 		throw error(400, 'invalid config patch body');
 	}
@@ -61,8 +55,7 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			`config path rejected: must match \`<namespace>.<key>[…]\` with namespace in (${CONFIG_NAMESPACE_KEYS.join(', ')})`,
 		);
 	}
-
-	publish({
+	return {
 		type: 'config_patch',
 		data: {
 			path: body.path,
@@ -70,7 +63,5 @@ export const PATCH: RequestHandler = async ({ request }) => {
 			timestamp: body.timestamp,
 			sourceId: body.sourceId,
 		},
-	});
-
-	return json({ ok: true }, { headers: lanCorsHeaders(origin) });
-};
+	};
+});

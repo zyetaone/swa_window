@@ -30,25 +30,16 @@
  * sync AND the admin "force scene" still land end-to-end with the gate on.
  */
 
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { readLimitedJson } from '$lib/http/body';
-import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
-import { requireAdminToken } from '$lib/http/auth';
-import { publish } from '$lib/fleet/sse-bus.server';
+import { corsPreflight } from '$lib/http/cors';
+import { publishRoute } from '$lib/http/publish-route';
 
 export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
-export const POST: RequestHandler = async ({ request }) => {
-	requireAdminToken(request);
-	const origin = request.headers.get('origin');
-	const body = await readLimitedJson<{ type: string }>(request, 4096);
-
+export const POST: RequestHandler = publishRoute<{ type: string }>((body) => {
 	if (!body || typeof body.type !== 'string') {
 		throw error(400, 'command body must include `type`');
 	}
-
-	publish({ type: 'command', data: body });
-
-	return json({ ok: true }, { headers: lanCorsHeaders(origin) });
-};
+	return { type: 'command', data: body };
+});
