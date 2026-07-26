@@ -146,11 +146,15 @@ sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' run build"
 
 echo "[5/7] Writing environment config..."
 install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" /etc/aero
-# Preserve hand-configured admin URL across re-runs — regenerating this file
-# used to wipe it, silently killing the WAN heartbeat.
+# Preserve hand-configured secrets across re-runs — regenerating this file
+# used to wipe them. AERO_ADMIN_URL silently killed the WAN heartbeat;
+# AERO_ADMIN_TOKEN silently 503s every admin endpoint (requireAdminToken is
+# fail-closed), which looks like a broken app rather than a wiped config.
 EXISTING_ADMIN_URL=""
+EXISTING_ADMIN_TOKEN=""
 if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+	EXISTING_ADMIN_TOKEN="$(command grep -oP '^AERO_ADMIN_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 fi
 
 # Tile cache. api/tiles resolves TILE_DIR env → /opt/zyeta-aero/tiles →
@@ -173,11 +177,15 @@ AERO_INSTALL_DIR=${INSTALL_DIR}
 AERO_USER=${PI_USER}
 AERO_PORT=3000
 AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
+AERO_ADMIN_TOKEN=${EXISTING_ADMIN_TOKEN}
 AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
 TILE_DIR=${TILE_DIR_VALUE}
 EOF
-chmod 644 /etc/aero/config.env
+# 0640 root:${PI_USER} — this file now carries the admin bearer token, so it
+# must not stay world-readable the way a pure-config file could.
+chown "root:${PI_USER}" /etc/aero/config.env
+chmod 640 /etc/aero/config.env
 
 # ─── Step 6: Systemd units + cron jobs ────────────────────────────────────────
 
