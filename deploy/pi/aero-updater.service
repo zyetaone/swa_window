@@ -12,6 +12,10 @@ Type=oneshot
 # restart the app + kiosk units. The script sets git safe.directory for the
 # kiosk-owned repo.
 EnvironmentFile=-/etc/aero/config.env
+# systemd hands a unit a near-empty environment, and git aborts with
+# "fatal: $HOME not set" before doing any work — so every timer fire failed
+# silently and the fleet never updated. Must be set explicitly.
+Environment=HOME=/root
 ExecStart=/bin/bash __AERO_INSTALL_DIR__/deploy/aero-updater.sh
 StandardOutput=journal
 StandardError=journal

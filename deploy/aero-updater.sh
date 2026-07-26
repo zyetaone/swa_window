@@ -18,6 +18,11 @@
 
 set -euo pipefail
 
+# git refuses to run without HOME ("fatal: $HOME not set") and systemd units
+# get a near-empty environment. The unit sets this too; kept here so a manual
+# `sudo bash aero-updater.sh` and any future caller are equally safe.
+export HOME="${HOME:-/root}"
+
 # Source device config FIRST — it supplies AERO_INSTALL_DIR / AERO_PORT /
 # AERO_BUN_BIN / AERO_BRANCH, so the layout is discovered, not hardcoded.
 # This is what lets ONE updater serve both provisioning schemes.
