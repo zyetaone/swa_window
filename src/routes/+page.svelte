@@ -37,12 +37,26 @@
 	import AtmosphereControls from "$lib/shell/panel/AtmosphereControls.svelte";
 	import LightingControls from "$lib/shell/panel/LightingControls.svelte";
 	import WeatherPicker from "$lib/shell/panel/WeatherPicker.svelte";
+	import LabControls from "$lib/shell/panel/LabControls.svelte";
+	import NightVariantPanel from "$lib/shell/panel/NightVariantPanel.svelte";
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in AeroWindow
 	const model = createAeroWindow();
 
-	// Real-time sync (moved out of AeroWindow for testability)
+	// Lab mode (?lab=1, DEV only) — see the param parsing in onMount.
+	let labMode = $state(false);
+	let labRenderer = $state<'cesium' | 'hybrid' | 'night-lab'>('cesium');
+
+	// The renderer selector is the ONLY lab writer of useThreeOverlay, and it
+	// writes nothing unless lab mode is on — otherwise it would clobber the
+	// config-tree default (and any ?overlay= / fleet config_patch) on the ship
+	// route. Night Lab needs the overlay: variants E/F render through Three.
+	$effect(() => {
+		if (!labMode) return;
+		model.config.world.useThreeOverlay = labRenderer !== 'cesium';
+	});
+
 	$effect(() => {
 		if (model.syncToRealTime && typeof window !== "undefined") {
 			const update = () => model.updateTimeFromSystem();
@@ -202,8 +216,10 @@
 		// Perf-gate A/B (P8): force the hybrid Three overlay ON/OFF on the SHIP
 		// route via ?overlay=1 / ?overlay=0, so the Pi-5 benchmark can measure the
 		// exact shipping tree BOTH ways from one URL each (the go/no-go is the
-		// delta). No param leaves the config-tree default (false) untouched — a
-		// normal kiosk/visitor never enables it.
+		// delta). No param leaves the config-tree default (now true) untouched.
+		// ?overlay=0 is therefore the per-Pi escape hatch on a device that can't
+		// hold framerate — it does NOT persist across reboot (not in PersistedState),
+		// so a struggling Pi needs it baked into the kiosk unit's URL.
 		const overlayParam = params.get("overlay");
 		if (overlayParam === "1" || overlayParam === "true") {
 			model.config.world.useThreeOverlay = true;
@@ -230,6 +246,28 @@
 		if (fromUrl) {
 			localStorage.setItem(ROLE_KEY, fromUrl);
 		}
+
+
+		// Hash palette A/B: ?hashpalette=0 disables the production night look
+		// to compare against aero-color-grade. ?hashpalette=1 re-enables it.
+		const hpParam = params.get('hashpalette');
+		if (hpParam === '1' || hpParam === 'true') {
+			model.config.world.useHashPalette = true;
+		} else if (hpParam === '0' || hpParam === 'false') {
+			model.config.world.useHashPalette = false;
+		}
+
+		// Lab mode: ?lab=1 replaces the deleted /playground routes. The renderer
+		// selector, wing tuner and night-variant harness now live in the ship
+		// route's own SidePanel rather than a parallel page, so what gets tuned
+		// is by construction what gets shipped. DEV-only — the {#if} below is
+		// statically false in a production build, so nothing here reaches the Pi.
+		const labParam = params.get('lab');
+		const isLab = import.meta.env.DEV && (labParam === '1' || labParam === 'true');
+		if (isLab) {
+			labRenderer = model.config.world.useThreeOverlay ? 'hybrid' : 'cesium';
+		}
+		labMode = isLab;
 	}
 </script>
 
@@ -259,7 +297,6 @@
 		<!-- Panel lines texture -->
 		<div class="cabin-texture"></div>
 
-		<!-- The window -->
 		<Pane />
 
 		<!-- Rivets/details around window -->
@@ -287,7 +324,17 @@
 		<LightingControls />
 		<div class="divider"></div>
 		<WeatherPicker />
+		{#if import.meta.env.DEV && labMode}
+			<div class="divider"></div>
+			<LabControls bind:mode={labRenderer} {model} />
+		{/if}
 	</SidePanel>
+
+	<!-- Night-variant harness — its own floating <aside>, so it sits beside the
+	     SidePanel rather than inside it. -->
+	{#if import.meta.env.DEV && labMode && labRenderer === 'night-lab'}
+		<NightVariantPanel {model} />
+	{/if}
 
 	<!-- Observability viewer (Shift+T to toggle) -->
 	<TelemetryPanel />

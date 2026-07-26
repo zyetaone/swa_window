@@ -42,7 +42,7 @@
 	import Rain from './Rain.svelte';
 	import Wing from './Wing.svelte';
 	import { computeSunDirection, sunElevationSin } from './sky';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 
 	type Vec3 = [number, number, number];
 
@@ -52,7 +52,7 @@
 	let camera: PerspectiveCamera | undefined = $state.raw();
 
 	// Environment ambient + IBL params now come from the unified lighting SSOT
-	// (world-three/lighting.ts) — the single owner of every day/dusk/night
+	// (world-lighting/curves.ts) — the single owner of every day/dusk/night
 	// response. Each value is its own $derived reading the raw model inputs so
 	// Svelte invalidation is correct; lightingState is memoised so the repeated
 	// calls collapse to ONE compute per frame.

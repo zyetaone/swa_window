@@ -4,7 +4,7 @@
  * palette.
  *
  * The time-of-day RESPONSE curves (visibility, mood phase, ambient) used to
- * live here too; they moved to world-three/lighting.ts — the single owner of
+ * live here too; they moved to world-lighting/curves.ts — the single owner of
  * every day/dusk/night response, keyed on the canonical T thresholds. This
  * file now holds only the inputs lighting.ts (and a few layers) build on.
  */
