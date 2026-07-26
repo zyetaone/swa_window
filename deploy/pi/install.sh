@@ -78,7 +78,15 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
 	git \
 	ca-certificates \
 	fonts-noto \
+	fonts-ubuntu \
+	fonts-jetbrains-mono \
+	plymouth \
 	cron
+
+# fonts-ubuntu + fonts-jetbrains-mono are NOT optional: the app declares both
+# (shell HUD, TelemetryOverlay, BootLockup). Pi OS ships neither, so without
+# them every panel silently falls back to DejaVu and the boot splash stops
+# matching the app's first frame. plymouth carries the boot theme below.
 
 # ─── Step 2: Bun runtime (installs only if missing) ───────────────────────────
 
@@ -222,6 +230,42 @@ cat > /etc/cron.d/aero-display-dim <<EOF
 0 6 * * * root /usr/local/lib/aero/display-dim-schedule.sh bright
 EOF
 chmod 644 /etc/cron.d/aero-display-dim
+
+# ─── Boot branding — one held frame from power-on to live window ──────────────
+#
+# The Plymouth theme, the X root window and the app's BootLockup all use the
+# SAME png, so the audience sees a single still image dissolve into the globe
+# instead of: rainbow firmware splash -> four raspberry logos -> kernel scroll
+# -> stock Plymouth -> black flash -> app. Suppressing those is the point.
+
+if [[ -d "${SCRIPT_DIR}/branding" ]]; then
+	echo "      + boot branding (Plymouth theme + quiet boot)"
+	install -d -m 755 /usr/share/plymouth/themes/aero
+	install -m 644 "${SCRIPT_DIR}/branding/aero.plymouth"   /usr/share/plymouth/themes/aero/aero.plymouth
+	install -m 644 "${SCRIPT_DIR}/branding/aero.script"     /usr/share/plymouth/themes/aero/aero.script
+	install -m 644 "${SCRIPT_DIR}/branding/aero-splash.png" /usr/share/plymouth/themes/aero/aero-splash.png
+	plymouth-set-default-theme aero >/dev/null 2>&1 || true
+
+	# Firmware rainbow splash off. Idempotent: only appended once.
+	if ! command grep -q "^disable_splash=1" /boot/firmware/config.txt 2>/dev/null; then
+		printf '\n# Boot branding — suppress the firmware rainbow.\ndisable_splash=1\n' \
+			>> /boot/firmware/config.txt
+	fi
+
+	# Raspberry logos, kernel scroll, console cursor off; hand over to Plymouth.
+	# cmdline.txt MUST stay a single line — a stray newline makes everything
+	# after it invisible to the kernel. So: slurp, dedupe, rewrite whole.
+	if [[ -w /boot/firmware/cmdline.txt ]]; then
+		CMDLINE="$(tr -d '\n' < /boot/firmware/cmdline.txt)"
+		for tok in logo.nologo quiet loglevel=3 vt.global_cursor_default=0 splash plymouth.ignore-serial-consoles; do
+			case " ${CMDLINE} " in
+				*" ${tok} "*) ;;                       # already present
+				*) CMDLINE="${CMDLINE} ${tok}" ;;
+			esac
+		done
+		printf '%s\n' "${CMDLINE}" > /boot/firmware/cmdline.txt
+	fi
+fi
 
 # ─── Step 7: Enable + start (idempotent — enable is a no-op on second run) ────
 

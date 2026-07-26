@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8">
+<!--
+  Source of truth for aero-splash.png.
+  Mirrors src/lib/shell/BootLockup.svelte exactly — if you restyle one, restyle
+  both and re-export, or the boot-to-app handoff will visibly step.
+
+  Re-export ON THE PI (its fonts, not your Mac's):
+    scp aero-splash.source.html pi@<host>:/tmp/splash.html
+    ssh pi@<host> 'chromium --headless --disable-gpu --hide-scrollbars \
+      --force-device-scale-factor=1 --window-size=1920,1080 \
+      --screenshot=/tmp/aero-splash.png file:///tmp/splash.html'
+  Requires: fonts-ubuntu, fonts-jetbrains-mono
+-->
+<style>
+  html,body{margin:0;padding:0;background:#000;}
+  .boot-lockup{
+    position:fixed; inset:0; display:grid; place-items:center; background:#000;
+    background-image: radial-gradient(ellipse 120% 60% at 50% 118%, rgba(48,76,178,.30) 0%, transparent 62%);
+  }
+  .lockup{display:flex;flex-direction:column;align-items:center;gap:4.6vw;width:62vw;text-align:center;}
+  .wordmark{display:flex;flex-direction:column;align-items:center;gap:.5vw;}
+  .word{
+    font-family:Ubuntu,"Ubuntu Sans",system-ui,sans-serif;font-weight:300;font-size:6.2vw;
+    white-space:nowrap;line-height:1;letter-spacing:.34em;text-transform:uppercase;
+    text-indent:.34em;color:#cccccc;
+  }
+  .rule-row{display:flex;align-items:center;gap:3.4vw;width:100%;}
+  .hair{flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(204,204,204,.42));}
+  .hair.right{background:linear-gradient(270deg,transparent,rgba(204,204,204,.42));}
+  .partners{display:flex;align-items:center;gap:2.2vw;font-size:1.85vw;}
+  .partner{
+    font-family:"JetBrains Mono",ui-monospace,monospace;font-weight:400;line-height:1;
+    letter-spacing:.3em;text-transform:uppercase;text-indent:.3em;color:#7e8496;
+  }
+  .cross{font-family:Ubuntu,"Ubuntu Sans",system-ui,sans-serif;font-weight:300;color:#304cb2;}
+</style>
+</head>
+<body>
+  <div class="boot-lockup">
+    <div class="lockup">
+      <div class="wordmark">
+        <span class="word">Aero</span>
+        <span class="word">Window</span>
+      </div>
+      <div class="rule-row">
+        <span class="hair"></span>
+        <span class="partners">
+          <span class="partner">Zyeta</span>
+          <span class="cross">&times;</span>
+          <span class="partner">SWA</span>
+        </span>
+        <span class="hair right"></span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
