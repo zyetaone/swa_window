@@ -26,8 +26,9 @@
 		visible = !visible;
 	}
 
-	const p50 = $derived(telemetry.p50);
-	const p95 = $derived(telemetry.p95);
+	const frameP50 = $derived(telemetry.frameMsP50);
+	const frameP95 = $derived(telemetry.frameMsP95);
+	const tickP50 = $derived(telemetry.tickMsP50);
 	const counts = $derived(telemetry.counts);
 	// Most recent first, cap visible to 50 entries.
 	const recentEvents = $derived([...telemetry.events].slice(-50).reverse());
@@ -84,15 +85,23 @@
 		<section class="stats">
 			<div class="stat">
 				<span class="label">Frame p50</span>
-				<span class="value">{p50.toFixed(2)} ms</span>
+				<span class="value">{frameP50.toFixed(1)} ms</span>
 			</div>
 			<div class="stat">
 				<span class="label">Frame p95</span>
-				<span class="value">{p95.toFixed(2)} ms</span>
+				<span class="value">{frameP95.toFixed(1)} ms</span>
 			</div>
 			<div class="stat">
 				<span class="label">FPS</span>
 				<span class="value">{model.measuredFps || '—'}</span>
+			</div>
+			<div class="stat">
+				<span class="label">FPS low</span>
+				<span class="value">{telemetry.fpsLow || '—'}</span>
+			</div>
+			<div class="stat">
+				<span class="label">Tick p50</span>
+				<span class="value">{tickP50.toFixed(2)} ms</span>
 			</div>
 		</section>
 
