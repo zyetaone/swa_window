@@ -57,6 +57,46 @@
 			: store.devices.map(d => d.deviceId);
 	}
 
+	// OTA update — trigger each device's own aero-updater.service now rather
+	// than waiting up to 15 min for its timer. Unlike the scene/mode pushes,
+	// this one reports: a device that 503s (AERO_ADMIN_TOKEN unset) or is
+	// unreachable would otherwise look identical to a successful update, since
+	// the expected outcome is "device goes offline for a minute" either way.
+	let updateResult = $state<{ ok: number; failed: string[] } | null>(null);
+	let updating = $state(false);
+
+	async function handleUpdateNow() {
+		const targets = getTargets();
+		if (targets.length === 0 || updating) return;
+		updating = true;
+		updateResult = null;
+		try {
+			const results = await Promise.all(
+				targets.map(async id => {
+					const peer = store.peers.find(p => p.deviceId === id);
+					if (!peer) return { id, ok: false, detail: 'peer not found' };
+					try {
+						const base = `http://${peer.host}:${peer.port}`;
+						const res = await fetch(`${base}/api/command`, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ type: 'update' }),
+						});
+						return { id, ok: res.ok, detail: res.ok ? '' : `HTTP ${res.status}` };
+					} catch (e) {
+						return { id, ok: false, detail: String(e) };
+					}
+				}),
+			);
+			updateResult = {
+				ok: results.filter(r => r.ok).length,
+				failed: results.filter(r => !r.ok).map(r => `${r.id.slice(0, 8)}: ${r.detail ?? 'failed'}`),
+			};
+		} finally {
+			updating = false;
+		}
+	}
+
 	// Actions
 	async function handlePushScene() {
 		const targets = getTargets();
@@ -118,6 +158,44 @@
 	const onlineCount = $derived(store.devices.filter(d => d.online).length);
 	const totalCount = $derived(store.devices.length);
 
+	// Live digital clock
+	let clockNow = $state(new Date());
+	$effect(() => {
+		const timer = setInterval(() => { clockNow = new Date(); }, 1000);
+		return () => clearInterval(timer);
+	});
+	const clockDisplay = $derived(
+		clockNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+	);
+
+	// FPS badge — best available: fleet health avg or live from device grid
+	const fpsBadge = $derived(
+		store.fleetHealth.avgFps > 0 ? `${store.fleetHealth.avgFps.toFixed(0)} fps` : '— fps'
+	);
+
+	// Device temps — polled from heartbeat endpoint, merged into cards
+	let deviceTemps = $state<Record<string, number>>({});
+	$effect(() => {
+		const poll = async () => {
+			try {
+				const res = await fetch('/api/fleet/heartbeat?summary');
+				if (!res.ok) return;
+				const data = await res.json();
+				// Store per-device temp from heartbeat summary
+				if (data.devices) {
+					const temps: Record<string, number> = {};
+					for (const d of data.devices) {
+						if (d.deviceId && d.temp != null) temps[d.deviceId] = d.temp;
+					}
+					deviceTemps = temps;
+				}
+			} catch { /* heartbeat endpoint may not be available */ }
+		};
+		poll();
+		const timer = setInterval(poll, 30000);
+		return () => clearInterval(timer);
+	});
+
 	const WEATHER_OPTIONS: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
 	const MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
 		{ value: 'flight', label: 'Flight Sim' },
@@ -148,11 +226,8 @@
 		formGroup = myBinding.groupId;
 	}
 
-	if (typeof window !== 'undefined') refreshBindings();
-
 	function handleSaveMyBinding() {
-		if (!formGroup.trim()) return;
-		saveBinding(myFingerprint, { role: formRole, groupId: formGroup.trim() });
+		handleSetBinding(myFingerprint, formRole, formGroup);
 		refreshBindings();
 	}
 
@@ -183,6 +258,8 @@
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
+			<span class="fps-badge" class:good={store.fleetHealth.avgFps >= 30}>{fpsBadge}</span>
+			<span class="clock-display">{clockDisplay}</span>
 			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
 				{store.connectionState === 'connected' ? 'REST' : store.connectionState}
 			</span>
@@ -192,25 +269,14 @@
 		</div>
 	</header>
 
-	<!-- Health Status Bar -->
 	{#if store.fleetHealth.total > 0 || store.alerts.length > 0}
 		<div class="health-bar">
 			<div class="health-stats">
-				<span class="health-stat">
-					<span class="health-dot online"></span>
-					{store.fleetHealth.online} online
-				</span>
-				<span class="health-stat">
-					<span class="health-dot offline"></span>
-					{store.fleetHealth.offline} offline
-				</span>
-				<span class="health-stat">
-					Avg FPS: <strong>{store.fleetHealth.avgFps}</strong>
-				</span>
+				<span class="health-stat"><span class="health-dot online"></span>{store.fleetHealth.online} online</span>
+				<span class="health-stat"><span class="health-dot offline"></span>{store.fleetHealth.offline} offline</span>
+				<span class="health-stat">Avg FPS: <strong>{store.fleetHealth.avgFps}</strong></span>
 				{#if store.serverUptime > 0}
-					<span class="health-stat server-uptime">
-						Server: {Math.floor(store.serverUptime / 3600)}h {Math.floor((store.serverUptime % 3600) / 60)}m
-					</span>
+					<span class="health-stat server-uptime">Server: {Math.floor(store.serverUptime / 3600)}h {Math.floor((store.serverUptime % 3600) / 60)}m</span>
 				{/if}
 			</div>
 			{#if store.alerts.length > 0}
@@ -344,6 +410,25 @@
 			</section>
 
 			<section class="control-section">
+				<h3>Software</h3>
+				<p class="section-caption">
+					Pulls the CI-approved <code>release</code> branch, rebuilds on the device and restarts.
+					Devices go offline ~1 min; confirm by their commit chip changing.
+				</p>
+				<button class="btn btn-secondary" onclick={handleUpdateNow} disabled={updating}>
+					{updating ? 'Triggering…' : `Update Now ${selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}`}
+				</button>
+				{#if updateResult}
+					<p class="update-result" class:has-failures={updateResult.failed.length > 0}>
+						{updateResult.ok} triggered{updateResult.failed.length ? `, ${updateResult.failed.length} failed` : ''}
+						{#if updateResult.failed.length}
+							<span class="update-failed">{updateResult.failed.join(' · ')}</span>
+						{/if}
+					</p>
+				{/if}
+			</section>
+
+			<section class="control-section">
 				<h3>Device Bindings</h3>
 				<div class="bindings-my">
 					<p class="bindings-caption">This device</p>
@@ -427,6 +512,10 @@
 								<div class="stat">
 									<span class="stat-label">Location</span>
 									<span class="stat-value">{device.currentLocation || '—'}</span>
+								</div>
+								<div class="stat">
+									<span class="stat-label">Temp</span>
+									<span class="stat-value">{deviceTemps[device.deviceId] != null ? `${deviceTemps[device.deviceId].toFixed(0)}°C` : '—'}</span>
 								</div>
 								<div class="stat">
 									<span class="stat-label">Mode</span>
@@ -522,6 +611,27 @@
 	.connection-badge.online {
 		background: #14532d;
 		color: #86efac;
+	}
+
+	.fps-badge {
+		font-size: 12px;
+		font-weight: 600;
+		padding: 4px 10px;
+		border-radius: 12px;
+		background: #27272a;
+		color: #a1a1aa;
+		font-family: ui-monospace, monospace;
+	}
+	.fps-badge.good {
+		background: #14532d;
+		color: #86efac;
+	}
+
+	.clock-display {
+		font-size: 13px;
+		font-family: ui-monospace, monospace;
+		color: #d4d4d8;
+		letter-spacing: 0.5px;
 	}
 
 	.device-count {
@@ -956,6 +1066,31 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		margin-bottom: 6px;
+	}
+	.section-caption {
+		font-size: 11px;
+		line-height: 1.45;
+		color: #71717a;
+		margin: 0 0 8px;
+	}
+	.section-caption code {
+		font-size: 10.5px;
+		color: #a1a1aa;
+	}
+	.update-result {
+		font-size: 11px;
+		color: #4ade80;
+		margin: 8px 0 0;
+	}
+	.update-result.has-failures {
+		color: #fbbf24;
+	}
+	.update-failed {
+		display: block;
+		font-size: 10.5px;
+		color: #71717a;
+		margin-top: 3px;
+		word-break: break-word;
 	}
 	.bindings-fp {
 		display: inline-block;

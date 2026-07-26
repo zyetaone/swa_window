@@ -35,7 +35,7 @@
 	} from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, sunElevationSin, moonPhaseFraction, SUN_PLACEMENT_M } from './sky';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 	import { earthOcclusionFactor } from './occlusion';
 	import { makeRadialTexture } from './texture-util';
 

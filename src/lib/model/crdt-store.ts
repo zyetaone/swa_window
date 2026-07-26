@@ -103,6 +103,3 @@ export function getCRDTDeviceId(): string {
 	return _deviceId;
 }
 
-export function createCRDTStore(root: Record<string, unknown>): CRDTStore {
-	return new CRDTStore(root);
-}

@@ -47,7 +47,7 @@
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { altitudeDetailMix } from '$lib/world-lighting/altitude';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 
 	/** Generic geo feature collection — buildSegments callbacks narrow F. */
 	interface FeatureCollection<T> {

@@ -1,17 +1,20 @@
 <script lang="ts">
-	// Static architecture documentation — no app context needed.
+	// Static project wiki — architecture, terms, lifecycle. No app context needed.
 </script>
 
 <svelte:head>
-	<title>Architecture — Aero Window</title>
-	<meta name="description" content="Game architecture documentation for the Aero Dynamic Window" />
+	<title>Wiki — Aero Window</title>
+	<meta
+		name="description"
+		content="Aero Dynamic Window — architecture, operating terms, and product lifecycle"
+	/>
 </svelte:head>
 
 <main class="arch-doc">
 	<!-- ═══════════════════════════════════════════════════════════════ HERO -->
 	<header class="hero">
 		<h1>Aero Window</h1>
-		<p class="subtitle">Game Architecture &amp; Foundations</p>
+		<p class="subtitle">Wiki — Architecture, Terms &amp; Lifecycle</p>
 		<p class="deck">A circadian-aware digital airplane window. Seven pillars built. Two more hiding in plain sight — Time and Networking, doing real work with no owner.</p>
 		<div class="hero-meta">
 			<span>SvelteKit 2 + Svelte 5 Runes</span>
@@ -609,6 +612,135 @@
 			<p><strong>Seven pillars stand.</strong> The architecture is clean — single RAF, single flat state tree, single compositor, single Z-source. The content pipeline is authorable by non-engineers. CRDT syncs 6 Pis without a central server.</p>
 			<p><strong>Two more pillars are hiding in plain sight.</strong> Time has six consumers and no owner — every smoothstep night gate reads it, the triptych sync depends on it, no module owns it. Networking is buried under State's CRDT bullet, but it's 12 files of fleet code with their own failure modes — LAN partition, mDNS race, NTP drift. Naming them is the v1.1 patch this architecture needs before the SWA install lands.</p>
 			<p><strong>Audio is a v2 feature, not the missing pillar.</strong> Interesting, but not load-bearing.</p>
+		</div>
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════ TERMS -->
+	<section>
+		<h2>Terms of Operation</h2>
+		<p class="hidden-blurb">
+			What the system does, what it needs, and what it owes third parties. This is the
+			operational statement of terms; where a signed supply or service agreement exists for
+			an install, that agreement governs and this section describes it rather than replacing
+			it.
+		</p>
+		<div class="omission-list">
+			<div class="omission-item">
+				<h4>No people are recorded</h4>
+				<p>
+					There is no camera, no microphone, no sensor pointed at the room. The display is
+					output-only. Nothing about who walks past it is measured, stored, or transmitted —
+					the only inputs are the clock, the config tree, and an optional touch on the blind.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Telemetry stays on the LAN</h4>
+				<p>
+					Each device posts a heartbeat — frame rate, uptime, commit hash, recent error
+					lines — to the admin surface on the local network. It contains no personal data
+					and leaves the premises only if the operator opts a device into the remote push
+					worker.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Network egress is bounded and listed</h4>
+				<p>
+					Map tiles, terrain and night-light imagery are packaged offline before install, so
+					a fielded device runs on a dark LAN. When a tile is missing it falls back to its
+					origin CDN. The full outbound list is Cesium Ion, EOX Sentinel-2, NASA GIBS,
+					OpenStreetMap, and — only when configured — the operator's own Cloudflare Worker.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Third-party data carries attribution</h4>
+				<p>
+					Terrain and imagery are licensed, not owned. Cesium Ion terrain is used under
+					Cesium's terms; Sentinel-2 Cloudless is © EOX IT Services under CC BY-NC-SA;
+					VIIRS Black Marble is NASA public-domain; road and building geometry is ©
+					OpenStreetMap contributors under ODbL. Attribution travels with any install or
+					screenshot that shows them.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Admin actions are token-gated</h4>
+				<p>
+					Every mutating endpoint — config patch, command fan-out, content upload, update
+					trigger, WiFi reset — requires a bearer token and returns 503 when its token is
+					unset, so an unconfigured device fails closed rather than open. Holding the token
+					means holding control of the wall; it is the operator's to protect.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Not a safety or information system</h4>
+				<p>
+					The view is composed, not reported. Sun position and moon phase are real; weather,
+					location, altitude and traffic are authored fiction on a rotation. Nothing on the
+					screen should be read as a forecast, a flight, or a status board.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════ LIFECYCLE -->
+	<section>
+		<h2>Product Lifecycle — 6 Months</h2>
+		<p class="hidden-blurb">
+			The supported lifecycle for an install is <strong>six months from handover</strong>,
+			covering the whole product — the Raspberry Pi 5 units and displays, the software on
+			them, and the authored content they play. The date is set per install and recorded with
+			the handover, not derived from this page.
+		</p>
+		<div class="verdict-stats">
+			<div class="verdict-stat">
+				<span class="big-num">6</span>
+				<span class="stat-label">months supported</span>
+			</div>
+			<div class="verdict-stat">
+				<span class="big-num">15</span>
+				<span class="stat-label">min update poll</span>
+			</div>
+			<div class="verdict-stat">
+				<span class="big-num">0</span>
+				<span class="stat-label">cloud services required</span>
+			</div>
+		</div>
+		<div class="omission-list">
+			<div class="omission-item">
+				<h4>During the term</h4>
+				<p>
+					Fixes and content ship over the air: CI gates every commit behind type-check,
+					tests and a boot smoke test, then advances the <code>release</code> branch, which
+					each device polls every 15 minutes and installs with automatic rollback on a bad
+					build. Hardware faults in the supplied units are covered, and the admin surface
+					stays supported for operator changes.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>At end of life</h4>
+				<p>
+					The wall does not go dark. Updates simply stop being published — the device keeps
+					running the last release it installed, with its packaged tiles, on the local
+					network, indefinitely and without any service to phone home to. What ends is new
+					work, not the display.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>What is not covered</h4>
+				<p>
+					Operating-system and firmware patching on the fielded devices, network and power
+					at the site, physical damage, and any content or location added after handover
+					are the operator's, unless a maintenance term says otherwise.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Continuing past six months</h4>
+				<p>
+					Extension is a renewal, not a default — a further support term, or handover of
+					the repository and provisioning scripts so the operator runs the pipeline itself.
+					Both paths are deliberate: nothing in the device requires our infrastructure to
+					keep working.
+				</p>
+			</div>
 		</div>
 	</section>
 

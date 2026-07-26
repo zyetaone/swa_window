@@ -23,7 +23,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { STARS_RADIUS_M, EARTH_RADIUS_M, OCCLUSION_SOFTNESS_M } from './state.svelte';
 	import { airMassFactor } from './sky';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 	import { createSeededRng, daySeed, spherePoint } from './prng';
 
 	const model = useAeroWindow();

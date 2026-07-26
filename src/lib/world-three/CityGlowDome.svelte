@@ -17,7 +17,7 @@
 	import { groundAltM } from '$content/locations';
 	import { CITY_GLOW } from '$content/palettes';
 	import { makeRadialTexture } from './texture-util';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 
 	const model = useAeroWindow();
 

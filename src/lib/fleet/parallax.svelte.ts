@@ -1,3 +1,4 @@
+import { hashString } from '$lib/world-three/prng';
 /**
  * Corridor — device-fingerprint → (role, groupId) binding resolver.
  *
@@ -27,14 +28,6 @@ const STORAGE_KEY_BINDINGS = 'aero.device.bindings'; // map: fingerprint → bin
 const STORAGE_KEY_SELF = 'aero.device.binding';      // resolved binding for THIS device
 const STORAGE_KEY_FP = 'aero.device.fingerprint';
 
-/** Simple djb2 hash — stable across page reloads, no crypto overhead. */
-function djb2(input: string): string {
-	let h = 5381;
-	for (let i = 0; i < input.length; i++) {
-		h = ((h << 5) + h + input.charCodeAt(i)) | 0;
-	}
-	return (h >>> 0).toString(16).padStart(8, '0');
-}
 
 /**
  * Device fingerprint — stable string derived from UA + screen + timezone.
@@ -46,7 +39,7 @@ export function getDeviceFingerprint(): string {
 	if (cached) return cached;
 	const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
 	const raw = `${navigator.userAgent}|${window.screen.width}x${window.screen.height}|${tz}`;
-	const fp = djb2(raw);
+	const fp = hashString(raw).toString(16).padStart(8, '0');
 	window.localStorage.setItem(STORAGE_KEY_FP, fp);
 	return fp;
 }

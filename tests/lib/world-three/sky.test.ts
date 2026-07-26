@@ -70,7 +70,7 @@ describe('computeSunDirection', () => {
 });
 
 // skyMood + sunVisibility retired from sky.ts — their day/dusk/night response
-// now lives in world-three/lighting.ts (lightingState), covered by lighting.test.ts.
+// now lives in world-lighting/curves.ts (lightingState), covered by lighting.test.ts.
 
 describe('sunElevationSin', () => {
 	it('peaks at noon and is maximally negative at midnight (equator)', () => {

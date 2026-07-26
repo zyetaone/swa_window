@@ -77,6 +77,7 @@
 	     (wing / clouds / moon / neon city / postprocess) without a URL param.
 	     Local to this device — for a fleet-wide flip use admin /api/config. -->
 	<Toggle label="Photoreal Overlay (P8)" bind:checked={config.world.useThreeOverlay} />
+	<Toggle label="Hash Palette (Night)" bind:checked={config.world.useHashPalette} />
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
 	<Toggle label="Cesium Clouds (Beta)" bind:checked={config.world.useCesiumClouds} />
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />

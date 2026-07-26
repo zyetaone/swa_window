@@ -24,7 +24,11 @@
 	import Weather from './window/Weather.svelte';
 	import Compositor from '$lib/scene/compositor.svelte';
 	import { useMouseParallax } from './use-mouse-parallax.svelte';
+	import { activeCesium } from '$lib/world/active.svelte';
+	import { installHashPalette } from '$lib/world-three/hash-palette';
+
 	import { startLivenessWatchdog } from './liveness';
+
 	const model = useAeroWindow();
 
 	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
@@ -62,11 +66,11 @@
 	// state inside model.tick() don't build a reactive dependency from this
 	// effect back onto AeroWindow — otherwise any config change re-subscribes
 	// the game loop, silently doubling tick frequency until the next subscribe.
-	$effect(() =>
-		subscribe((dt: number) => {
+	$effect(() => {
+		return subscribe((dt: number) => {
 			untrack(() => model.tick(dt));
-		}),
-	);
+		});
+	});
 
 	// Liveness watchdog (production hardening) — detects frozen-but-alive
 	// states the other watchdogs can't see: WebGL context loss (GL calls are
@@ -74,12 +78,30 @@
 	// an exception). Bounded page reload (3/hour) restores the display; the
 	// audience sees the boot splash, never an error. Canvas registration
 	// happens in CesiumViewer/ThreeOverlay via registerLivenessCanvas().
-	$effect(() =>
-		startLivenessWatchdog({
+	$effect(() => {
+		return startLivenessWatchdog({
 			getFps: () => untrack(() => model.measuredFps),
 			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
-		}),
-	);
+		});
+	});
+
+	// Hash-palette night post-process — installs the April-15 sodium/amber/
+	// warm-white palette shader when useHashPalette is true. Replaces
+	// aero-color-grade. Removed cleanly on toggle-off or teardown.
+	$effect(() => {
+		if (!model.config.world.useHashPalette) return;
+		const viewer = activeCesium.manager?.getViewer();
+		if (!viewer) return;
+		const cleanup = installHashPalette(
+			viewer,
+			() => model.nightFactor,
+			() => model.nightLightScale,
+			() => model.config.world.darkVoidStrength,
+			() => model.config.world.envLight,
+			() => model.config.world.additiveStrength,
+		);
+		return cleanup;
+	});
 
 	// ========================================================================
 	// DERIVED — presentation values
@@ -210,9 +232,9 @@
 
 			<!-- hybrid-v2 (Phase A): photoreal Three overlay — wing / clouds / moon /
 			     sky / postprocess, camera-mirrored from Cesium. Inside .scene-content
-			     so it shakes with turbulence alongside Cesium (matches the lab's
-			     WindowChrome setup). Gated by the perf-validated fallback flag;
-			     when ON, the duplicate DOM clouds + star micro-events self-disable. -->
+			     so it shakes with turbulence alongside Cesium. Gated by the
+			     perf-validated fallback flag; when ON, the duplicate DOM clouds
+			     + star micro-events self-disable. -->
 			<svelte:boundary onerror={onOverlayError}>
 				{#if model.config.world.useThreeOverlay}
 					<ThreeOverlay />
@@ -247,7 +269,7 @@
 		     vignette + recess rim, z:9–11. See shell/window/Glass.svelte. -->
 		<Glass {glassVignetteOpacity} />
 
-		<!-- UI overlays — timed reveal (no :hover on touch kiosks) -->
+		<!-- UI overlays — timed reveal (no :hover on touch kiosks). -->
 		{#if showHint}
 			<div class="click-hint visible">
 				<span>Pull the blind down to fly somewhere new</span>

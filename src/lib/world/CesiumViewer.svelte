@@ -42,7 +42,10 @@
 			try {
 				const CesiumModule = await import('cesium');
 				if (destroyed) return;
-				initCesiumGlobal(CesiumModule);
+				// Awaited: resolves the Ion token from the localhost-only runtime
+				// endpoint before any Ion-backed provider is constructed.
+				await initCesiumGlobal(CesiumModule);
+				if (destroyed) return;
 
 				cesium = new CesiumManager(model, CesiumModule, viewerContainer);
 				await cesium.start(COLOR_GRADING_GLSL);

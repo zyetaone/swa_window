@@ -172,9 +172,24 @@ install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" /etc/aero
 # fail-closed), which looks like a broken app rather than a wiped config.
 EXISTING_ADMIN_URL=""
 EXISTING_ADMIN_TOKEN=""
+EXISTING_ION_TOKEN=""
 if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_ADMIN_TOKEN="$(command grep -oP '^AERO_ADMIN_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+	EXISTING_ION_TOKEN="$(command grep -oP '^CESIUM_ION_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+fi
+
+# Cesium Ion token, served at RUNTIME by /api/internal/ion-token instead of
+# being inlined into the client bundle at build time. Seeded, in order, from:
+# an existing config.env value, the CESIUM_ION_TOKEN env of this run, or the
+# .env this installer already manages. Keeping it here (not in .env) is what
+# lets a device consume a CI-built, secret-free artifact.
+if [[ -z "${EXISTING_ION_TOKEN}" ]]; then
+	if [[ -n "${CESIUM_ION_TOKEN:-}" ]]; then
+		EXISTING_ION_TOKEN="${CESIUM_ION_TOKEN}"
+	elif [[ -r "${INSTALL_DIR}/.env" ]]; then
+		EXISTING_ION_TOKEN="$(command grep -oP '^VITE_CESIUM_ION_TOKEN=\K.*' "${INSTALL_DIR}/.env" 2>/dev/null || true)"
+	fi
 fi
 
 # Tile cache. api/tiles resolves TILE_DIR env → /opt/zyeta-aero/tiles →
@@ -201,6 +216,7 @@ AERO_ADMIN_TOKEN=${EXISTING_ADMIN_TOKEN}
 AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
 TILE_DIR=${TILE_DIR_VALUE}
+CESIUM_ION_TOKEN=${EXISTING_ION_TOKEN}
 EOF
 # 0640 root:${PI_USER} — this file now carries the admin bearer token, so it
 # must not stay world-readable the way a pure-config file could.

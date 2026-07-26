@@ -301,7 +301,7 @@ export class CesiumManager {
 			(v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		// Cesium's built-in moon is OFF — the Three-side Moon component (in
-		// world-three/Moon.svelte for the /playground/three composition) gives
+		// world-three/Moon.svelte for the playground hybrid composition) gives
 		// us a larger, anti-sun, nightFactor-tied moon with full visual
 		// control. Leaving Cesium's on would double-render the lunar disk.
 		if (v.scene.moon) v.scene.moon.show = false;
@@ -418,7 +418,6 @@ export class CesiumManager {
 						// fade in together with the imagery layers — no "ground
 						// goes dark before lights arrive" flicker.
 						u_nightFactor: () => this.model.nightFactor * this.getBootFade(),
-						u_lightIntensity: () => this.model.nightLightScale,
 						u_additiveStrength: () => this.model.config.world.additiveStrength,
 					},
 				});
@@ -1222,7 +1221,7 @@ export class CesiumManager {
 	/**
 	 * Render the OSM buildings tileset as a wireframe ("line marks"
 	 * tracing the building geometry) instead of filled cubes. Used by
-	 * the /playground/three composition lab to give the Tron-esque
+	 * the playground hybrid lab to give the Tron-esque
 	 * outline aesthetic while keeping the real OSM data. Cesium's
 	 * `debugWireframe` is officially a debug feature but is the standard
 	 * way to get wireframe rendering on a 3D Tiles primitive.

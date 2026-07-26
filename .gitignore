@@ -47,3 +47,4 @@ src/graphify-out/
 # Local agent tooling state (not project source)
 .context/
 .serena/
+.codex/

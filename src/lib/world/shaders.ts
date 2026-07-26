@@ -31,7 +31,6 @@
 export const COLOR_GRADING_GLSL = `
 	uniform sampler2D colorTexture;
 	uniform float u_nightFactor;
-	uniform float u_lightIntensity;
 	uniform float u_additiveStrength;
 	in vec2 v_textureCoordinates;
 

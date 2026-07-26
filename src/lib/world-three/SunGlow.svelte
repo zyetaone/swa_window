@@ -22,7 +22,7 @@
 	import { AdditiveBlending, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, airMassFactor, SUN_PLACEMENT_M } from './sky';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 	import { makeRadialTexture } from './texture-util';
 
 	const model = useAeroWindow();

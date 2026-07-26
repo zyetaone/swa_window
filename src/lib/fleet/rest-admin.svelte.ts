@@ -248,5 +248,44 @@ export class RestAdminStore {
 	async broadcastScene(location: LocationId, weather?: WeatherType): Promise<void> {
 		await Promise.all(this.#peers.map((p) => this.#postCommand(p, { type: 'set_scene', location, weather })));
 	}
+
+	/**
+	 * Trigger the OTA updater on one device NOW, instead of waiting up to 15 min
+	 * for its timer. Returns a result rather than console.warn-ing into the void
+	 * like the fire-and-forget command helpers above: the two likely failures are
+	 * operator-actionable and indistinguishable from "nothing happened" —
+	 * 503 means AERO_ADMIN_TOKEN is unset on THAT Pi, a network error means it's
+	 * unreachable. The caller surfaces both.
+	 *
+	 * A success here only means the update STARTED. The device will drop offline
+	 * while it rebuilds and restarts; the real confirmation is its commit chip
+	 * changing on the next status poll.
+	 */
+	async triggerUpdate(deviceId: string): Promise<{ ok: boolean; detail?: string }> {
+		const peer = this.#peerFor(deviceId);
+		if (!peer) return { ok: false, detail: 'device not discovered' };
+		try {
+			const authHeader = await peerAuthHeader();
+			const res = await fetch(`${urlFor(peer)}/api/update`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', ...authHeader },
+			});
+			if (res.ok) return { ok: true };
+			return {
+				ok: false,
+				detail: res.status === 503 ? 'AERO_ADMIN_TOKEN unset on device' : `HTTP ${res.status}`,
+			};
+		} catch (e) {
+			return { ok: false, detail: (e as Error).message };
+		}
+	}
+
+	/** Update every discovered device. Staggered is unnecessary — each Pi's own
+	 *  updater exits in ~2 s when `release` hasn't moved. */
+	async broadcastUpdate(): Promise<Array<{ deviceId: string; ok: boolean; detail?: string }>> {
+		return Promise.all(
+			this.#peers.map(async (p) => ({ deviceId: p.deviceId, ...(await this.triggerUpdate(p.deviceId)) })),
+		);
+	}
 }
 
