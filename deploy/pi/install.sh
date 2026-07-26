@@ -29,6 +29,9 @@ REPO_BRANCH="${AERO_REPO_BRANCH:-main}"
 INSTALL_DIR="/opt/aero-window"
 PI_USER="${SUDO_USER:-pi}"
 BUN_BIN="/home/${PI_USER}/.bun/bin/bun"
+# Pre-git hand-copied layout found on the first fielded Pi. Only read from —
+# never modified or removed — so a failed migration leaves it intact.
+LEGACY_DIR="/home/${PI_USER}/aero-window"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -103,9 +106,31 @@ else
 	sudo -u "${PI_USER}" git clone --branch "${REPO_BRANCH}" --depth 20 "${REPO_URL}" "${INSTALL_DIR}"
 fi
 
-# ─── Step 4: Bun install + build ──────────────────────────────────────────────
+# ─── Step 4: Build-time env + bun install + build ─────────────────────────────
 
 echo "[4/7] Installing dependencies + building..."
+
+# VITE_* vars are INLINED AT BUILD TIME (src/lib/world/cesium-setup.ts reads
+# import.meta.env.VITE_CESIUM_ION_TOKEN). This does not fail loudly once — the
+# updater rebuilds on EVERY release, so a missing .env silently ships a
+# tokenless build (no Ion terrain, no Ion imagery) forever. .env is gitignored,
+# so seeding it once survives the updater's `git reset --hard`.
+if [[ -f "${INSTALL_DIR}/.env" ]]; then
+	echo "  .env present — leaving as-is"
+elif [[ -n "${VITE_CESIUM_ION_TOKEN:-}" ]]; then
+	printf 'VITE_CESIUM_ION_TOKEN=%s\n' "${VITE_CESIUM_ION_TOKEN}" > "${INSTALL_DIR}/.env"
+	chown "${PI_USER}:${PI_USER}" "${INSTALL_DIR}/.env"
+	chmod 600 "${INSTALL_DIR}/.env"
+	echo "  wrote .env from VITE_CESIUM_ION_TOKEN"
+elif [[ -f "${LEGACY_DIR}/.env" ]]; then
+	install -m 600 -o "${PI_USER}" -g "${PI_USER}" "${LEGACY_DIR}/.env" "${INSTALL_DIR}/.env"
+	echo "  migrated .env from ${LEGACY_DIR}"
+else
+	echo "  WARNING: no .env and no VITE_CESIUM_ION_TOKEN in the environment."
+	echo "           Cesium Ion terrain + imagery will be DISABLED in this build."
+	echo "           Re-run as: sudo VITE_CESIUM_ION_TOKEN=... bash $0 ..."
+fi
+
 sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' install"
 sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' run build"
 
@@ -119,6 +144,19 @@ EXISTING_ADMIN_URL=""
 if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 fi
+
+# Tile cache. api/tiles resolves TILE_DIR env → /opt/zyeta-aero/tiles →
+# ./data/tiles — none of which is this install's dir, so leaving TILE_DIR unset
+# turns every tile into a remote fetch on a box whose whole point is offline
+# operation. data/ is gitignored, so the cache survives the updater's reset.
+TILE_DIR_VALUE="${INSTALL_DIR}/data/tiles"
+if [[ -d "${LEGACY_DIR}/data/tiles" && ! -d "${TILE_DIR_VALUE}" ]]; then
+	echo "  migrating tile cache from ${LEGACY_DIR}/data/tiles (copy — original left intact)"
+	install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" "${INSTALL_DIR}/data"
+	cp -a "${LEGACY_DIR}/data/tiles" "${TILE_DIR_VALUE}"
+	chown -R "${PI_USER}:${PI_USER}" "${TILE_DIR_VALUE}"
+fi
+
 cat > /etc/aero/config.env <<EOF
 # Managed by deploy/pi/install.sh — re-run install to regenerate.
 AERO_ROLE=${AERO_ROLE}
@@ -129,6 +167,7 @@ AERO_PORT=3000
 AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
 AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
+TILE_DIR=${TILE_DIR_VALUE}
 EOF
 chmod 644 /etc/aero/config.env
 
@@ -148,6 +187,19 @@ for unit in aero-xserver.service aero-app.service aero-kiosk.service aero-update
 done
 # The updater timer has no placeholders — copy verbatim.
 install -m 644 "${SCRIPT_DIR}/aero-updater.timer" /etc/systemd/system/aero-updater.timer
+
+# Retire units from superseded layouts. The loop above only OVERWRITES units it
+# still ships, so a unit that was dropped from the project survives a re-provision
+# and keeps auto-starting forever. aero-fleet ran the standalone WebSocket broker
+# deleted in Phase 9 (replaced by REST + SSE inside the app itself).
+DEAD_UNITS=(aero-fleet.service)
+for dead_unit in "${DEAD_UNITS[@]}"; do
+	if [[ -f "/etc/systemd/system/${dead_unit}" ]]; then
+		systemctl disable --now "${dead_unit}" >/dev/null 2>&1 || true
+		rm -f "/etc/systemd/system/${dead_unit}"
+		echo "  retired ${dead_unit} (superseded layout)"
+	fi
+done
 
 # Helper scripts — installed to /usr/local/lib/aero so units have a stable path.
 install -d -m 755 /usr/local/lib/aero
@@ -194,10 +246,21 @@ echo ""
 echo "============================================"
 echo "  Install complete"
 echo "============================================"
-echo "Start now:   sudo systemctl start aero-xserver aero-app aero-kiosk"
+if [[ -d "${LEGACY_DIR}" ]]; then
+	# Migrating a Pi off the pre-git layout: its old kiosk unit owns tty1/:0 via
+	# its own xinit, which this layout runs as a separate aero-xserver unit.
+	# Starting the new units now would fight it for the display — reboot instead.
+	echo "MIGRATION: a legacy install exists at ${LEGACY_DIR}."
+	echo "           REBOOT to switch over — do NOT 'systemctl start' the units"
+	echo "           now, the old kiosk still holds tty1/:0."
+	echo ""
+	echo "Reboot:      sudo reboot"
+else
+	echo "Start now:   sudo systemctl start aero-xserver aero-app aero-kiosk"
+	echo "Reboot:      sudo reboot"
+fi
 echo "Logs (app):  journalctl -u aero-app -f"
 echo "Logs (X):    journalctl -u aero-kiosk -f"
-echo "Reboot:      sudo reboot"
 echo ""
 echo "Role:        ${AERO_ROLE}   Group: ${AERO_GROUP}"
 echo "URL:         http://localhost:3000/?role=${AERO_ROLE}&group=${AERO_GROUP}"

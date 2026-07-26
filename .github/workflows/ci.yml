@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # This project uses Bun, not npm. `bun.lock` is the authoritative
       # lockfile. `package-lock.json` may exist in the tree for historical
@@ -48,6 +48,31 @@ jobs:
         env:
           VITE_CESIUM_ION_TOKEN: ${{ secrets.VITE_CESIUM_ION_TOKEN }}
         run: bun run build
+
+      # Boot the built artifact the way the Pi does (`bun run serve`, the exact
+      # ExecStart of aero-app.service) and issue a real request. A green build
+      # proves nothing about whether the server can SERVE it: server.ts once
+      # wrapped adapter-node's Connect middleware as if it were a fetch handler,
+      # so every request killed the process — a 10s systemd crash loop with a
+      # dark kiosk, shipped through a fully green CI run. Only a real request
+      # against a real build catches that class of bug.
+      - name: Smoke test built server
+        env:
+          AERO_DISABLE_LAN_PROXY: '1'
+          PORT: '3000'
+        run: |
+          bun run serve &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 2 http://localhost:3000/api/status >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://localhost:3000/api/status
+          curl -fsS --max-time 5 -o /dev/null http://localhost:3000/
+          # A second request proves the process survived the first, which is
+          # precisely what the middleware-contract bug broke.
+          curl -fsS --max-time 5 -o /dev/null http://localhost:3000/api/devices
+          kill "$SERVER_PID"
 
   # ── Release promotion ────────────────────────────────────────────────────
   # The Pi fleet's daily updater tracks the `release` branch, NOT main.
