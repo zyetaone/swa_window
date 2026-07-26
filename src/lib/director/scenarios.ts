@@ -23,7 +23,7 @@ for (const s of SCENARIOS) {
  * Pick a scenario for the given location, preferring one that matches the current sky state.
  * Falls back to 'any' scenarios, then any scenario for that location.
  */
-export function pickScenario(locationId: LocationId, skyState: SkyState): FlightScenario | null {
+export function pickScenario(locationId: LocationId, skyState: SkyState, rng: () => number = Math.random): FlightScenario | null {
 	const pool = SCENARIOS_BY_LOCATION.get(locationId);
 	if (!pool || pool.length === 0) return null;
 
@@ -38,7 +38,7 @@ export function pickScenario(locationId: LocationId, skyState: SkyState): Flight
 	const candidates = viable.length > 0 ? viable : scored;
 
 	const totalWeight = candidates.reduce((sum, c) => sum + Math.max(c.score, 0.5), 0);
-	let roll = Math.random() * totalWeight;
+	let roll = rng() * totalWeight;
 	for (const c of candidates) {
 		roll -= Math.max(c.score, 0.5);
 		if (roll <= 0) return c.scenario;

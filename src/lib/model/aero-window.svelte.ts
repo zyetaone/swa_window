@@ -366,6 +366,12 @@ export class AeroWindow {
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
 		if (flightPatch.resetDirector)           directorReset(ctx);
 
+		// Refresh heading/lat/lon AFTER flight.tick() so motionStep sees current values.
+		// flight.tick() needs ctx for camera/orbit config reads, but mutates heading/lat/lon.
+		ctx.heading = this.flight.heading;
+		ctx.lat    = this.flight.lat;
+		ctx.lon    = this.flight.lon;
+
 		motionStep(delta, ctx);
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';

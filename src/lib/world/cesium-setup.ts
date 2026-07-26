@@ -54,7 +54,7 @@ export async function resolveIonToken(): Promise<string | null> {
 	if (tokenResolved) return resolvedToken;
 	let runtime: string | null = null;
 	try {
-		const res = await fetch('/api/internal/ion-token', { cache: 'no-store' });
+		const res = await fetch('/api/internal/token?type=cesium', { cache: 'no-store' });
 		if (res.ok) {
 			const body = (await res.json()) as { token?: unknown };
 			if (typeof body.token === 'string' && body.token.length > 0) runtime = body.token;

@@ -82,7 +82,7 @@
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from './prng';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 
 	let {
 		density,

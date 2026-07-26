@@ -56,7 +56,7 @@
 	import { getViirsField, removeViirsWaiter, type ViirsField } from './viirs-field';
 	import { EARTH_RADIUS_M } from './state.svelte';
 	import { altitudeDetailMix } from '$lib/world-lighting/altitude';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 
 	let { location }: { location: LocationId } = $props();
 

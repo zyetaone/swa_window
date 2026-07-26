@@ -14,8 +14,10 @@
 	const model = useAeroWindow();
 
 	// Merge static (baked-in) + dynamic (bundles pushed at runtime).
-	// Reactive via bundleStore.effects — additions/removals re-render.
-	const allEffects = $derived([...EFFECTS, ...bundleStore.effects]);
+	// Dynamic effects are filtered: if a bundle registers an id already in the
+	// static registry, the static definition wins (no silent shadowing).
+	const staticIds = new Set(EFFECTS.map(e => e.id));
+	const allEffects = $derived([...EFFECTS, ...bundleStore.effects.filter(e => !staticIds.has(e.id))]);
 </script>
 
 {#each allEffects as effect (effect.id)}

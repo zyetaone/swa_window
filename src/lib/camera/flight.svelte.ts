@@ -91,6 +91,11 @@ export class FlightSimEngine {
 	#currentScenario: FlightScenario | null = null;
 	#scenarioWaypointIndex = 0;
 	#scenarioProgress = 0;
+	#scenarioLoopCount = 0;
+	static SCENARIO_MAX_LOOPS = 3;
+	// Scenario direction — toggled randomly on loop so the flight doesn't
+	// always trace the same waypoints in the same order.
+	#scenarioForward = true;
 
 	// --- Derived ---
 	// Single source of truth for travel direction. Everything downstream that
@@ -100,6 +105,9 @@ export class FlightSimEngine {
 	// movement. Currently the orbit rotation sense; cruise/scenario modes can
 	// override it here later without touching the consumers.
 	get travelSign(): number {
+		// During scenarios, direction comes from #scenarioForward (toggled on loop).
+		// During orbit, direction comes from orbitDirection (randomised per location).
+		if (this.#currentScenario) return this.#scenarioForward ? 1 : -1;
 		return this.orbitDirection;
 	}
 
@@ -310,8 +318,6 @@ export class FlightSimEngine {
 		const baseHeading = normalizeHeading((Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI);
 		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
-
-		this.pitch = this.#altitudePitch(ctx) + Math.sin(ctx.time * 0.03) * 1.5;
 	}
 
 	#tickScenario(delta: number, ctx: SimulationContext): void {
@@ -319,14 +325,14 @@ export class FlightSimEngine {
 		const waypoints = this.#currentScenario.waypoints;
 		const n = waypoints.length;
 		const idx = this.#scenarioWaypointIndex;
-		const nextIdx = (idx + 1) % n;
-		// Catmull-Rom control points: the active segment is p1→p2 (current→next);
-		// p0/p3 are the neighbouring waypoints (wrapped) that shape the tangents
-		// so velocity stays continuous across the join — no stop at the waypoint.
-		const p0 = waypoints[(idx - 1 + n) % n];
+		const fwd = this.#scenarioForward;
+		// Forward: nextIdx = (idx+1)%n, control points wrap forward.
+		// Reverse: nextIdx = (idx-1+n)%n, control points wrap backward.
+		const nextIdx = fwd ? (idx + 1) % n : (idx - 1 + n) % n;
+		const p0 = fwd ? waypoints[(idx - 1 + n) % n] : waypoints[(idx + 1) % n];
 		const p1 = waypoints[idx];
 		const p2 = waypoints[nextIdx];
-		const p3 = waypoints[(nextIdx + 1) % n];
+		const p3 = fwd ? waypoints[(nextIdx + 1) % n] : waypoints[(nextIdx - 1 + n) % n];
 
 		const duration = p2.duration > 0 ? p2.duration : 30;
 		this.#scenarioProgress += (delta * this.flightSpeed) / duration;
@@ -370,9 +376,19 @@ export class FlightSimEngine {
 			this.#scenarioProgress = 0;
 			this.#scenarioWaypointIndex = nextIdx;
 			if (nextIdx === 0 && this.#currentScenario.loop) {
-				const fresh = pickScenario(ctx.locationId, ctx.skyState);
-				if (fresh && fresh.id !== this.#currentScenario.id) {
-					this.#currentScenario = fresh;
+				this.#scenarioLoopCount++;
+				if (this.#scenarioLoopCount >= FlightSimEngine.SCENARIO_MAX_LOOPS) {
+					this.#currentScenario = null;
+					this.#scenarioLoopCount = 0;
+				} else {
+					const rng = createSeededRng((daySeed() ^ hashString(ctx.locationId)) >>> 0);
+					// Randomly flip direction on each loop — the flight doesn't
+					// always trace the same waypoints in the same order.
+					this.#scenarioForward = rng() < 0.5;
+					const fresh = pickScenario(ctx.locationId, ctx.skyState, rng);
+					if (fresh && fresh.id !== this.#currentScenario.id) {
+						this.#currentScenario = fresh;
+					}
 				}
 			}
 		}
@@ -413,8 +429,10 @@ export class FlightSimEngine {
 	}
 
 	#initScenario(locationId: LocationId, skyState: SkyState): void {
-		this.#currentScenario = pickScenario(locationId, skyState);
+		const rng = createSeededRng((daySeed() ^ hashString(locationId)) >>> 0);
+		this.#currentScenario = pickScenario(locationId, skyState, rng);
 		this.#scenarioWaypointIndex = 0;
-		this.#scenarioProgress = 0;
+		this.#scenarioLoopCount = 0;
+		this.#scenarioForward = true;
 	}
 }

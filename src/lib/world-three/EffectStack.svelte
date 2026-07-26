@@ -56,7 +56,7 @@
 	import { HalfFloatType, Vector2, Mesh, SphereGeometry, MeshBasicMaterial } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, SUN_PLACEMENT_M } from './sky';
-	import { lightingState } from './lighting';
+	import { lightingState } from '$lib/world-lighting/curves';
 	import { updateHybridDebug } from './lab-debug';
 
 	const model = useAeroWindow();

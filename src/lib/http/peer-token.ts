@@ -26,7 +26,7 @@ let resolved = false;
 
 async function fetchPeerToken(): Promise<string | null> {
 	try {
-		const res = await fetch('/api/internal/peer-token', { cache: 'no-store' });
+		const res = await fetch('/api/internal/token?type=admin', { cache: 'no-store' });
 		if (!res.ok) return null;
 		const body = (await res.json()) as { token?: unknown };
 		return typeof body.token === 'string' && body.token.length > 0 ? body.token : null;

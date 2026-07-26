@@ -15,7 +15,7 @@ import type { ConfigNamespace } from './config-namespaces';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { headingOffsetForRole, fuselageOffsetForRole } from '$lib/fleet/parallax.svelte';
-import { createCRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
+import { CRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath, readByPath } from '$lib/utils';
 
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ export const director = $state({
 		nightLitCitiesOnly: true,
 		// ── Night-city flyover beat ──────────────────────────────────────
 		// Occasionally the leader pitches the camera DOWN over the lit city
-		// (the "descend over the night city" moment from /playground/three)
+		// (the "descend over the night city" moment from the playground hybrid mode)
 		// then returns to orbit. Leader-decided + fleet-broadcast so all 3
 		// Pis enter/exit in lock-step (same seam as director_decision). The
 		// bounds below are the "controlled" in controlled-randomisation:
@@ -281,12 +281,25 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	// hybrid-v2 fallback switch (Phase A). false ⇒ ship route / renders Cesium
-	// only (byte-identical to pre-ship-v1). true ⇒ / mounts the Three overlay
+	// hybrid-v2 switch (Phase A). true ⇒ ship route / mounts the Three overlay
 	// (wing / clouds / moon / photoreal sky / postprocess), camera-mirrored from
-	// Cesium. Flipped to true only after the Pi 5 perf gate passes; the fleet can
-	// toggle it per-Pi via config_patch('world.useThreeOverlay', …).
-	useThreeOverlay: false,
+	// Cesium — the same composition /playground renders in hybrid mode. false ⇒
+	// / renders Cesium only (byte-identical to pre-ship-v1), still the escape
+	// hatch if a Pi can't hold framerate.
+	//
+	// ⚠ Flipped to true by operator decision BEFORE the P8 Pi-5 perf gate ran
+	// (ADR-004). Nothing auto-demotes: auto-quality was deleted, and the
+	// liveness watchdog only treats fps <= 0 as dead, so a Pi grinding at 8 fps
+	// is neither detected nor recovered. Per-Pi escape hatches, in order of
+	// reach: `?overlay=0` on the kiosk URL, the SidePanel toggle, or
+	// config_patch('world.useThreeOverlay', false) over the fleet — note none of
+	// these persist across a reboot, since the flag is not in PersistedState.
+	useThreeOverlay: true,
+	// Hash-palette night post-process — replaces aero-color-grade with the
+	// 3-stop sodium/amber/warm-white palette + 3% red sparks (Apr-15).
+	// Default true: this IS the production night look. Toggle off via SidePanel
+	// or ?hashpalette=0 to revert to aero-color-grade for comparison.
+	useHashPalette: true,
 	// Base imagery night-time saturation. Near-zero so the green Sentinel-2
 	// vegetation + blue water don't bleed through as a hue cast under the
 	// shader's navy mix. baseNightBrightness was removed in Phase 15.5 —
@@ -339,6 +352,11 @@ export const world = $state({
 	// dome (the same glow VIIRS + bloom already paint — a triple-count). 3.5
 	// keeps the city reading as glow without the saturated central blowout.
 	additiveStrength: 3.5,
+	// Hash-palette shader terrain knobs — exposed so operators can tune
+	// night ground visibility without editing GLSL. Lower darkVoid = more
+	// terrain visible at night. Higher envLight = brighter ambient floor.
+	darkVoidStrength: 0.15,  // was 0.3 — too aggressive, crushed terrain
+	envLight: 0.8,           // was 0.5 — too dim for terrain visibility
 	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
 	// nightExposure 0.75: 0.50 crushed everything once the shader's warm
 	// additive was lightMask-gated (the shader fix did most of the sky-
@@ -431,7 +449,7 @@ const NAMESPACES = { atmosphere, camera, director, world, shell } as const satis
 // ─── CRDT layer ─────────────────────────────────────────────────────────────
 
 const _configRoot: Record<string, unknown> = config as unknown as Record<string, unknown>;
-const crdt = createCRDTStore(_configRoot);
+const crdt = new CRDTStore(_configRoot);
 
 /**
  * Sync atmosphere.weather fields from a weather effect recipe.
