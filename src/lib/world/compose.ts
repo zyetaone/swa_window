@@ -11,11 +11,13 @@ import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
+import { altitudeDetailMix } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from './viirs-endpoint';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
 import { COLOR_GRADE_STAGE } from './shaders';
+import { getViirsField } from './viirs-field';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -1115,7 +1117,7 @@ export class CesiumManager {
 				this.tileset.show = this.model.config.world.buildingsEnabled;
 				this.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
-				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
+				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.REPLACE;
 				// Procedural lit-window shader — restored Feb 15 recipe via
 				// Cesium CustomShader API. Per-fragment grid math, no
 				// per-feature property dependency. Uniforms updated each
@@ -1128,6 +1130,11 @@ export class CesiumManager {
 							u_nightFactor:    { type: C.UniformType.FLOAT, value: 0.0 },
 							u_lightIntensity: { type: C.UniformType.FLOAT, value: 1.0 },
 							u_windowDensity:  { type: C.UniformType.FLOAT, value: 0.0 },
+							// 1.0 = "as bright as a metro core". Defaulting to 1
+							// means a device whose VIIRS tile never loads renders
+							// exactly as it did before this uniform existed —
+							// the gate can only ever dim, never brighten.
+							u_cityBrightness: { type: C.UniformType.FLOAT, value: 1.0 },
 							u_time:           { type: C.UniformType.FLOAT, value: 0.0 },
 						},
 						// Model-space normal isn't available in the fragment
@@ -1150,66 +1157,90 @@ export class CesiumManager {
 		} catch (e) { console.warn('[CesiumBuildings] OSM buildings unavailable:', (e as Error).message); }
 	}
 
+	/**
+	 * VIIRS luminance under the camera, 0..1 — the "how lit is HERE" input the
+	 * building shader has no other way to learn.
+	 *
+	 * Throttled to ~4 Hz and smoothed, for two different reasons. The throttle
+	 * is cost: sampling reads the decoded tile and the camera cartographic, and
+	 * neither changes meaningfully inside 250 ms at cruise. The smoothing is
+	 * looks: VIIRS is a ~1.2 km/px raster, so an un-smoothed sample makes whole
+	 * districts of windows switch state in one frame as the camera crosses a
+	 * pixel boundary. Bilinear sampling softens the grid spatially; this lerp
+	 * softens what is left temporally.
+	 *
+	 * Returns the last good value while a tile is still loading (and 1.0 before
+	 * the first ever sample), so terrain streaming never flashes the city dark.
+	 */
+	private cityBrightness = 1;
+	private cityBrightnessTimer = 0;
+	/** Sample VIIRS at camera position + 8 surrounding points (3×3 grid, 2km spacing).
+	 *  Averages to get a district-level brightness that varies smoothly as the
+	 *  camera moves. Updated every 500ms, lerped for smooth transitions. */
+	private sampleCityBrightness(): number {
+		const now = performance.now();
+		if (now - this.cityBrightnessTimer < 500) return this.cityBrightness;
+		this.cityBrightnessTimer = now;
+
+		const carto = this.viewer?.camera?.positionCartographic;
+		if (!carto) return this.cityBrightness;
+		const C = this.CesiumModule;
+		const lat = C.Math.toDegrees(carto.latitude);
+		const lon = C.Math.toDegrees(carto.longitude);
+		const field = getViirsField(lat, lon);
+		if (!field) return this.cityBrightness;
+
+		// 3×3 grid, ~2km spacing — captures district-level VIIRS variation
+		const STEP_DEG = 0.018; // ~2km at equator
+		let sum = 0, count = 0;
+		for (let dy = -1; dy <= 1; dy++) {
+			for (let dx = -1; dx <= 1; dx++) {
+				const s = field.sampleBilinear(lat + dy * STEP_DEG, lon + dx * STEP_DEG);
+				if (s > 0) { sum += s; count++; }
+			}
+		}
+		const target = count > 0 ? sum / count : field.sampleBilinear(lat, lon);
+		this.cityBrightness += (target - this.cityBrightness) * 0.3;
+		return this.cityBrightness;
+	}
+
 	private syncBuildings(dt: number): void {
 		if (!this.tileset) return;
-		const show = this.model.config.world.buildingsEnabled;
+		const w = this.model.config.world;
+		const show = w.buildingsEnabled;
 		if (show !== this.lastBuildingsShow) {
 			this.lastBuildingsShow = show;
 			this.tileset.show = show;
 		}
-
-		const w = this.model.config.world;
-		const lo = w.buildingEmissiveLowAltFt;
-		const hi = w.buildingEmissiveHighAltFt;
-		// TODO (post-Pi-perf-gate): adopt altitudeDetailMix SSOT — altBlend
-		// becomes (1 − altitudeDetailMix(altitude)), eliminating the lo/hi config keys.
-		const altBlend = clamp((this.model.flight.altitude - lo) / Math.max(hi - lo, 1), 0, 1);
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
+		// altitudeDetailMix SSOT — low-altitude weight, so per-window detail owns
+		// the city-approach band and hands off to the VIIRS raster at cruise.
+		const altFade = 1 - altitudeDetailMix(this.model.flight.altitude);
 
-		// Procedural shader path — update uniforms each frame. The shader
-		// composes window emission internally; we only drive the time +
-		// global gates here. Cheap; the shader handles the rest.
 		if (this.buildingsShader) {
 			const bootFade = this.getBootFade();
-			// Modulo a large multiple of 2π so the float32 GPU uniform keeps sub-radian
-		// precision across the kiosk's uptime — raw accumulation degrades past
-		// ~2^24 s (≈194 days) and the beacon fract() would freeze.
-		this.buildingsTime = (this.buildingsTime + dt) % (Math.PI * 4000); // frame-rate independent
-			// nightFactor is gated by bootFade so the emissive ramps in alongside
-			// VIIRS + road mask instead of snapping on while base tiles stream.
+			this.buildingsTime = (this.buildingsTime + dt) % (Math.PI * 4000);
 			this.buildingsShader.setUniform('u_nightFactor', nf * bootFade);
 			this.buildingsShader.setUniform('u_lightIntensity', scale);
-			// Window density — decoupled from nightLightScale. That knob
-			// (world.nightLightIntensity, default 3.0) already multiplies
-			// emissive BRIGHTNESS via u_lightIntensity; folding it into
-			// density too saturated tall towers to 100%-lit at deep night
-			// (adjustedDensity 0.4·3·1.3 = 1.56 → every window on = fake).
-			// Density now has its own dusk ramp: glow begins as nf passes
-			// ~0.35, reaching the 0.6 ceiling by deep night. The shader's
-			// height factor maps that to 0.78 raw on towers (~0.65 effective
-			// lit after the 20% dark-floor cull) and 0.24 on low-rise —
-			// "office tower at night" with believable dark-window variation.
-			// Tapers with altitude so the per-window detail owns the low
-			// city-approach band and hands off to the VIIRS raster at cruise.
-			// windowLightIntensity is the operator dial (default 1).
-			const duskRamp = smoothstep((nf - 0.3) / 0.65);
+			const duskRamp = smoothstep((nf - 0.15) / 0.7);
 			this.buildingsShader.setUniform(
 				'u_windowDensity',
-				0.6 * duskRamp * w.windowLightIntensity * (1 - altBlend),
+				0.65 * duskRamp * w.windowLightIntensity * altFade,
 			);
 			this.buildingsShader.setUniform('u_time', this.buildingsTime);
+			this.buildingsShader.setUniform('u_cityBrightness', this.sampleCityBrightness());
 			return;
 		}
 
 		// Fallback path when custom shader unavailable — uniform amber.
 		if (
 			Math.abs(nf - this.lastBuildingNightFactor) < 0.01 &&
-			Math.abs(altBlend - this.lastBuildingAltBlend) < 0.02
+			Math.abs(altFade - this.lastBuildingAltBlend) < 0.02
 		) return;
 		this.lastBuildingNightFactor = nf;
-		this.lastBuildingAltBlend = altBlend;
-		const alphaValue = (w.buildingEmissiveMax * nf * (1 - altBlend)).toFixed(3);
+		this.lastBuildingAltBlend = altFade;
+		const alphaValue = (w.buildingEmissiveMax * nf * altFade * 1.5).toFixed(3);
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
 			color: `color("rgb(255, 180, 90)", ${alphaValue})`,
 		});

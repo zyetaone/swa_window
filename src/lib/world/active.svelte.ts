@@ -34,5 +34,4 @@ export function useCesiumEffect(
 class ActiveCesium {
 	manager = $state<CesiumManager | null>(null);
 }
-
 export const activeCesium = new ActiveCesium();

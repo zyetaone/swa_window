@@ -28,7 +28,7 @@ import {
 	pickCloudComposition,
 	type CloudComposition,
 } from '$content/compositions/clouds';
-import { createSeededRng, daySeed } from '$lib/world-three/prng';
+import { createSeededRng, daySeed } from '$lib/world/prng';
 import { randomBetween, pickRandom } from '$lib/utils';
 
 const CLOUD_ALT_M = 8000;             // clouds sit ~26k ft up — typical mid-deck

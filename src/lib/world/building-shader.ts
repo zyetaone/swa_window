@@ -25,6 +25,13 @@
  *   u_lightIntensity operator knob (nightLightScale)
  *   u_windowDensity  fraction of windows lit (dusk ramp; peaks 0.6 at deep
  *                    night × world.windowLightIntensity, tapers with altitude)
+ *   u_cityBrightness 0..1 — VIIRS Black Marble luminance under the camera.
+ *                    Answers "how lit is HERE", which nothing else in this
+ *                    shader knows: every other input is temporal. Without it
+ *                    an outer district's towers blaze at full office
+ *                    brightness while the bokeh carpet and neon roads —
+ *                    which DO sample VIIRS — correctly fade out, so the
+ *                    layers visibly disagree about the same ground.
  *   u_time           seconds — drives flicker + aviation blink
  *
  * Why a customShader (not Cesium3DTileStyle):
@@ -64,7 +71,16 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Height-based window density: taller buildings = more lit (office towers).
 		float heightFactor = smoothstep(10.0, 80.0, buildingHeight);
-		float adjustedDensity = mix(u_windowDensity * 0.4, u_windowDensity * 1.3, heightFactor);
+
+		// District gate from VIIRS. Scales HOW MANY windows are lit rather than
+		// how bright each one is — the physical difference between a sparse
+		// outer district and a dense core is occupancy, not bulb wattage.
+		// Floored at 0.35: a building with every window dark reads as derelict
+		// rather than quiet, and OSM footprints exist in places VIIRS calls
+		// near-black. Ceiling stays 1.0 so a metro core is unchanged from
+		// before this gate existed.
+		float cityMix = mix(0.35, 1.0, u_cityBrightness);
+		float adjustedDensity = mix(u_windowDensity * 0.4, u_windowDensity * 1.3, heightFactor) * cityMix;
 
 		// In-plane horizontal coordinate for the window grid. Walls whose
 		// normal points along ±X vary in Y across the face (and vice versa);
@@ -139,7 +155,7 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Compose emission layers
 		vec3 emission = vec3(0.0);
-		emission += windowColor * windowMask * lit * isWall * flicker * windowBright * 2.2 * u_lightIntensity;
+		emission += windowColor * windowMask * lit * isWall * flicker * windowBright * 1.6 * u_lightIntensity;
 		emission += streetLampColor * streetGlow * isWall;
 		emission += aviationRed * rooftopLight * 4.0;
 
