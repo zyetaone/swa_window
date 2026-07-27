@@ -11,7 +11,7 @@
  */
 
 import mdns from 'multicast-dns';
-import { PEER_REFRESH_INTERVAL_MS } from './timings';
+import { PEER_REFRESH_INTERVAL_MS } from './protocol';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 

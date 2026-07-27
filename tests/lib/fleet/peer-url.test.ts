@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { urlFor } from '$lib/fleet/peer-url';
+import { urlFor } from '$lib/fleet/protocol';
 
 const originalLocation = window.location;
 const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');

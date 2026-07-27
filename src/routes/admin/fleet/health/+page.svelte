@@ -13,7 +13,7 @@
 	import type { HeartbeatSample } from '$lib/fleet/heartbeat.server';
 	import type { FleetSummary } from '$lib/fleet/protocol';
 	import { formatUptime } from '$lib/utils';
-	import { ONLINE_THRESHOLD_MS } from '$lib/fleet/timings';
+	import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
 
 	// $state.raw — samples is replaced wholesale on each poll response,
 	// never mutated in place. Skip the per-element proxy traversal.

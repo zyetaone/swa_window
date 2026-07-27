@@ -22,10 +22,9 @@ import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType, type QualityMode } from '$lib/types';
 import { setParallaxRole, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
-import { urlFor } from '$lib/fleet/peer-url';
+import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/protocol';
 import { peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
-import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
 import { resolveDeviceId } from '$lib/fleet/device-id';
 import { APP_COMMIT } from '$lib/version';
 

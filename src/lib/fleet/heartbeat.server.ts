@@ -146,7 +146,7 @@ function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
  * these. Online count, average FPS across online devices, hottest CPU, etc.
  */
 import type { FleetSummary } from './protocol';
-import { ONLINE_THRESHOLD_MS } from './timings';
+import { ONLINE_THRESHOLD_MS } from './protocol';
 
 export function summarize(now: number = Date.now()): FleetSummary {
 	const all = latestAll();

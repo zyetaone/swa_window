@@ -19,8 +19,7 @@ import type {
 	DeviceInfo,
 } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
-import { urlFor } from '$lib/fleet/peer-url';
-import { STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/timings';
+import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/protocol';
 import { peerAuthHeader } from '$lib/http/peer-token';
 
 type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';

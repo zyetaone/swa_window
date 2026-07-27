@@ -107,3 +107,20 @@ export interface FleetSummary {
 	maxTempC: number;
 	totalCrashes: number;
 }
+
+// ─── Shared fleet cadences ─────────────────────────────────────────────────
+// SSOT for "how often does each device poll." Must match mDNS announce interval.
+
+export const STATUS_INTERVAL_MS = 5000;
+export const PEER_REFRESH_INTERVAL_MS = 30_000;
+export const ONLINE_THRESHOLD_MS = 3 * 60_000;
+
+// ─── Peer URL helper ───────────────────────────────────────────────────────
+
+export interface PeerLike { host: string; port: number; self?: boolean; }
+
+export function urlFor(peer: PeerLike): string {
+	if (peer.self && typeof window !== 'undefined') return window.location.origin;
+	const proto = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+	return `${proto}//${peer.host}:${peer.port}`;
+}
