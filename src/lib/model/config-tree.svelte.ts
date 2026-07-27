@@ -17,7 +17,6 @@ export const CONFIG_NAMESPACE_KEYS = ['atmosphere', 'camera', 'director', 'world
 export type ConfigNamespace = (typeof CONFIG_NAMESPACE_KEYS)[number];
 import { WEATHER_EFFECTS } from '$content/weather';
 import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
-import { headingOffsetForRole, fuselageOffsetForRole } from '$lib/fleet/parallax.svelte';
 import { CRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath, readByPath } from '$lib/utils';
 
@@ -168,6 +167,21 @@ export const camera = $state(_camera);
 
 export type CameraConfig = typeof _camera;
 
+function headingOffsetForRole(role: DeviceRole, panoramaArcDeg = 44): number {
+	switch (role) {
+		case 'left':  return -panoramaArcDeg / 2 + panoramaArcDeg / 6;
+		case 'right': return  panoramaArcDeg / 2 - panoramaArcDeg / 6;
+		default:            return 0;
+	}
+}
+
+function fuselageOffsetForRole(role: DeviceRole): number {
+	switch (role) {
+		case 'left':  return -6;
+		case 'right': return  6;
+		default:            return 0;
+	}
+}
 export function setParallaxRole(role: DeviceRole): void {
 	camera.parallax.role = role;
 	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);

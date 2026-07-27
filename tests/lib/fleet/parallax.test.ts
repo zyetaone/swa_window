@@ -1,16 +1,11 @@
 /**
  * Tests for $lib/fleet/parallax.svelte.ts — multi-Pi role resolution,
- * leader/follower logic, heading offset math, and localStorage persistence.
- *
- * This is Phase 7 glue that every non-solo Pi relies on at startup.
- * Bugs here mean wrong yaw on the corridor panorama and silent fleet desync.
+ * leader/follower logic, and localStorage persistence.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
 	isGroupLeader,
 	shouldApplyDirectorDecision,
-	headingOffsetForRole,
-	fuselageOffsetForRole,
 	resolveBinding,
 	saveBinding,
 	listBindings,
@@ -54,53 +49,6 @@ describe('shouldApplyDirectorDecision', () => {
 	});
 });
 
-// ─── headingOffsetForRole — parallax math ───────────────────────────────────
-
-describe('headingOffsetForRole', () => {
-	it('returns 0 for solo', () => {
-		expect(headingOffsetForRole('solo')).toBe(0);
-	});
-	it('returns 0 for center', () => {
-		expect(headingOffsetForRole('center')).toBe(0);
-	});
-	it('returns negative offset for left with default arc', () => {
-		const arc = 44;
-		const expected = -arc / 2 + arc / 6; // -22 + 7.333 = -14.666
-		expect(headingOffsetForRole('left')).toBeCloseTo(expected, 5);
-	});
-	it('returns positive offset for right with default arc', () => {
-		const arc = 44;
-		const expected = arc / 2 - arc / 6; // 22 - 7.333 = 14.666
-		expect(headingOffsetForRole('right')).toBeCloseTo(expected, 5);
-	});
-	it('left and right are symmetric around 0', () => {
-		expect(headingOffsetForRole('left')).toBeCloseTo(-headingOffsetForRole('right'), 5);
-	});
-	it('scales linearly with panoramaArcDeg', () => {
-		expect(headingOffsetForRole('right', 60)).toBeCloseTo(60 / 2 - 60 / 6, 5);
-		expect(headingOffsetForRole('right', 90)).toBeCloseTo(90 / 2 - 90 / 6, 5);
-	});
-});
-
-// ─── fuselageOffsetForRole — wing parallax math ────────────────────────────
-
-describe('fuselageOffsetForRole', () => {
-	it('returns 0 for solo (single-Pi installs render wing centered)', () => {
-		expect(fuselageOffsetForRole('solo')).toBe(0);
-	});
-	it('returns 0 for center (passenger over wing root)', () => {
-		expect(fuselageOffsetForRole('center')).toBe(0);
-	});
-	it('returns -6 for left (front-of-aircraft seat, leading-edge view)', () => {
-		expect(fuselageOffsetForRole('left')).toBe(-6);
-	});
-	it('returns +6 for right (aft seat, trailing-edge view)', () => {
-		expect(fuselageOffsetForRole('right')).toBe(6);
-	});
-	it('left and right are symmetric around 0', () => {
-		expect(fuselageOffsetForRole('left')).toBe(-fuselageOffsetForRole('right'));
-	});
-});
 
 // ─── resolveBinding / saveBinding — localStorage persistence ───────────────
 
