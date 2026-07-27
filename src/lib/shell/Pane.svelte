@@ -14,7 +14,7 @@
 	import Glass from "./window/Glass.svelte";
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
-	import { useMouseParallax } from './use-mouse-parallax.svelte';
+	import { useMouseParallax } from '$lib/world/use-mouse-parallax.svelte';
 
 	const model = useAeroWindow();
 
