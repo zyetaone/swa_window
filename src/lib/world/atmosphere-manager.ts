@@ -3,13 +3,14 @@
  *
  * Owns the Cesium atmosphere state: scene.skyAtmosphere, scene.fog,
  * globe.baseColor, scene.light (moonlight swap), scene exposure.
- * Per-tick sync is idempotent via epsilon-gated setter calls.
+ * Per-tick sync is idempotent via EpsilonGate.
  */
 
 import type * as CesiumType from 'cesium';
 import { lerp } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
+import { EpsilonGate } from './util';
 
 interface WorldAtmosphereConfig {
 	skyDarken: number;
@@ -45,15 +46,15 @@ export class AtmosphereManager {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	#moonToSun: any = null;
 
-	#lastGlobeColor = '';
-	#lastFogDensity = -1;
-	#lastFogBrightness = -1;
-	#lastLightIntensity = -1;
-	#lastSkySatShift = 999;
-	#lastSkyBrShift = 999;
-	#lastAtmoKilled: boolean | null = null;
-	#lastExposure = -1;
-	#lastAtmoLight = -1;
+	#globeColor = new EpsilonGate<string>(0, '');
+	#fogDensity = new EpsilonGate<number>(0.00001, -1);
+	#fogBrightness = new EpsilonGate<number>(0.01, -1);
+	#lightIntensity = new EpsilonGate<number>(0.01, -1);
+	#skySatShift = new EpsilonGate<number>(0.01, 999);
+	#skyBrShift = new EpsilonGate<number>(0.01, 999);
+	#atmoKilled = new EpsilonGate<boolean>(0, false);
+	#exposure = new EpsilonGate<number>(0.005, -1);
+	#atmoLight = new EpsilonGate<number>(0.005, -1);
 	#moonPhaseTime = -1;
 	#moonPhaseCache = 1.0;
 
@@ -86,22 +87,21 @@ export class AtmosphereManager {
 		const v = this.#viewer;
 		const C = this.#C;
 		const dd = lightingState(t, nf).dawnDuskWeight;
+		const w = model.config.world;
 
 		// Globe color
 		const G = NIGHT_PALETTE.globeColor;
 		const r = lerp(lerp(G.day[0], G.night[0], nf), G.duskBias[0], dd * G.duskWeight);
 		const g = lerp(lerp(G.day[1], G.night[1], nf), G.duskBias[1], dd * G.duskWeight);
 		const b = lerp(lerp(G.day[2], G.night[2], nf), G.duskBias[2], dd * G.duskWeight);
-		const colorKey = `${r},${g},${b}`;
-		if (colorKey !== this.#lastGlobeColor) {
-			this.#lastGlobeColor = colorKey;
+		this.#globeColor.update(`${r},${g},${b}`, () => {
 			v.scene.globe.baseColor = C.Color.fromBytes(Math.round(r), Math.round(g), Math.round(b), 255);
-		}
+		});
 
 		// Sky atmosphere saturation/brightness
 		const S = NIGHT_PALETTE.skyAtmosphere;
 		const satShift = lerp(S.satShift.day, S.satShift.night, nf) + dd * S.satShift.duskBias;
-		let brShift = lerp(S.brShift.day, S.brShift.night, nf) * model.config.world.skyDarken + dd * S.brShift.duskBias;
+		let brShift = lerp(S.brShift.day, S.brShift.night, nf) * w.skyDarken + dd * S.brShift.duskBias;
 
 		const camAlt = model.flight.camAlt;
 		const lowAltNight = nf * Math.max(0, Math.min(1, (35000 - camAlt) / (35000 - 8000)));
@@ -109,40 +109,30 @@ export class AtmosphereManager {
 		brShift += (-1.0 - brShift) * deepNight * 0.6;
 		brShift += (-1.0 - brShift) * lowAltNight;
 
-		const satChanged = Math.abs(satShift - this.#lastSkySatShift) > 0.01;
-		const brChanged = Math.abs(brShift - this.#lastSkyBrShift) > 0.01;
-		if ((satChanged || brChanged) && v.scene.skyAtmosphere) {
-			if (satChanged) { v.scene.skyAtmosphere.saturationShift = satShift; this.#lastSkySatShift = satShift; }
-			if (brChanged) { v.scene.skyAtmosphere.brightnessShift = brShift; this.#lastSkyBrShift = brShift; }
-		}
+		this.#skySatShift.update(satShift, (val) => { if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.saturationShift = val; });
+		this.#skyBrShift.update(brShift, (val) => { if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.brightnessShift = val; });
 
 		// Deep-night atmosphere kill
 		const killAtmo = deepNight > 0.6;
-		if (killAtmo !== this.#lastAtmoKilled) {
-			this.#lastAtmoKilled = killAtmo;
-			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = !killAtmo;
+		this.#atmoKilled.update(killAtmo, (val) => {
+			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = !val;
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			(v.scene.globe as any).showGroundAtmosphere = !killAtmo;
-		}
+			(v.scene.globe as any).showGroundAtmosphere = !val;
+		});
 
 		// Fog
 		const fog = model.sceneFog;
-		const tDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + model.config.world.atmosphereLight * 0.001);
+		const tDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + w.atmosphereLight * 0.001);
 		const tBright = lerp(fog.dayBrightness, fog.nightBrightness, nf);
-		if (Math.abs(tDensity - this.#lastFogDensity) > 0.00001) {
-			this.#lastFogDensity = tDensity;
+		this.#fogDensity.update(tDensity, (val) => {
 			if (v.scene.fog) {
-				v.scene.fog.enabled = tDensity > 0.00001;
-				v.scene.fog.density = tDensity;
+				v.scene.fog.enabled = val > 0.00001;
+				v.scene.fog.density = val;
 			}
-		}
-		if (Math.abs(tBright - this.#lastFogBrightness) > 0.01) {
-			this.#lastFogBrightness = tBright;
-			if (v.scene.fog) v.scene.fog.minimumBrightness = tBright;
-		}
+		});
+		this.#fogBrightness.update(tBright, (val) => { if (v.scene.fog) v.scene.fog.minimumBrightness = val; });
 
 		// Moonlight
-		const w = model.config.world;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const Cany = C as any;
 		if (this.#moonPhaseTime !== t) {
@@ -168,25 +158,21 @@ export class AtmosphereManager {
 			C.Cartesian3.negate(this.#earthToMoon, this.#moonlight.direction);
 		} else {
 			const li = lerp(1.0, 0.02, nf);
-			if (Math.abs(li - this.#lastLightIntensity) > 0.01) {
-				this.#lastLightIntensity = li;
-				if (v.scene.light) v.scene.light.intensity = li;
-			}
+			this.#lightIntensity.update(li, (val) => { if (v.scene.light) v.scene.light.intensity = val; });
 		}
 
 		// Exposure + atmosphere light
 		const exp = NIGHT_PALETTE.scene.exposureDay + (w.nightExposure - NIGHT_PALETTE.scene.exposureDay) * nf;
-		if (Math.abs(exp - this.#lastExposure) > 0.005) {
-			this.#lastExposure = exp;
+		this.#exposure.update(exp, (val) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			(v.scene.postProcessStages as any).exposure = exp;
-		}
+			(v.scene.postProcessStages as any).exposure = val;
+		});
+
 		const atmo = (NIGHT_PALETTE.scene.atmosphereLightDay + (w.atmosphereLight - NIGHT_PALETTE.scene.atmosphereLightDay) * nf)
 			* (1 - lowAltNight * 0.9) * (1 - deepNight * 0.55);
-		if (Math.abs(atmo - this.#lastAtmoLight) > 0.005) {
-			this.#lastAtmoLight = atmo;
+		this.#atmoLight.update(atmo, (val) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			(v.scene.globe as any).atmosphereLightIntensity = atmo;
-		}
+			(v.scene.globe as any).atmosphereLightIntensity = val;
+		});
 	}
 }

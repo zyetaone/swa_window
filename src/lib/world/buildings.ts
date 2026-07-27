@@ -13,6 +13,7 @@ import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
 import { smoothstep } from '$lib/utils';
 import { altitudeDetailMix } from '$lib/world/altitude';
 import { CESIUM_QUALITY_PRESETS } from './model';
+import { EpsilonGate } from './util';
 
 type C = typeof CesiumType;
 
@@ -29,8 +30,8 @@ export class BuildingsManager {
 	#time = 0;
 	#cityBrightness = 1;
 	#cityBrightnessTimer = 0;
-	#lastShow = true;
-	#lastNightFactor = -1;
+	#show = new EpsilonGate<boolean>(0, true);
+	#nightFactor = new EpsilonGate<number>(0.02, -1);
 
 	constructor(Cesium: C, viewer: CesiumType.Viewer) {
 		this.#C = Cesium;
@@ -88,10 +89,7 @@ export class BuildingsManager {
 		bootFade: number,
 	): void {
 		if (!this.tileset) return;
-		if (buildingsEnabled !== this.#lastShow) {
-			this.#lastShow = buildingsEnabled;
-			this.tileset.show = buildingsEnabled;
-		}
+		this.#show.update(buildingsEnabled, (v) => { this.tileset!.show = v; });
 
 		if (this.#shader) {
 			this.#time = (this.#time + dt) % (Math.PI * 4000);
@@ -103,11 +101,11 @@ export class BuildingsManager {
 			return;
 		}
 
-		// Fallback: uniform amber style when shader unavailable
-		if (Math.abs(nf - this.#lastNightFactor) < 0.02) return;
-		this.#lastNightFactor = nf;
-		this.tileset.style = new this.#C.Cesium3DTileStyle({
-			color: `color("rgb(255, 200, 50)", ${Math.max(0.3, nf * 0.9).toFixed(2)})`,
+		// Fallback: uniform amber style when shader unavailable.
+		this.#nightFactor.update(nf, (v) => {
+			this.tileset!.style = new this.#C.Cesium3DTileStyle({
+				color: `color("rgb(255, 200, 50)", ${Math.max(0.3, v * 0.9).toFixed(2)})`,
+			});
 		});
 	}
 

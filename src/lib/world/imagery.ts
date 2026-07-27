@@ -3,7 +3,7 @@
  *
  * Owns base terrain imagery, VIIRS night lights, and CartoDB road mask.
  * Setup is async (per-tick sync is sync). All writes are idempotent
- * via epsilon guards to avoid per-frame GPU uniform uploads.
+ * via EpsilonGate to avoid per-frame GPU uniform uploads.
  */
 
 import type * as CesiumType from 'cesium';
@@ -12,6 +12,7 @@ import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
 import { getSatelliteImagery, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
+import { EpsilonGate } from './util';
 
 interface WorldConfig {
 	readonly baseNightSaturation: number;
@@ -34,15 +35,16 @@ export class ImageryManager {
 
 	#baseLayer: CesiumType.ImageryLayer | null = null;
 	#baseDaySaturation = 1.0;
-	#baseDayContrast = 1.0;
 	#viirsLayer: CesiumType.ImageryLayer | null = null;
 	#roadMaskLayer: CesiumType.ImageryLayer | null = null;
 
 	// Idempotency caches — skip Cesium setter calls when value unchanged.
 	#lastNightFactor = -1;
-	#lastViirsAlpha = -1;
-	#lastViirsBrightness = -1;
-	#lastViirsShow: boolean | null = null;
+	#viirsShow = new EpsilonGate<boolean>(0, false);
+	#viirsAlpha = new EpsilonGate<number>(0.001, -1);
+	#viirsBrightness = new EpsilonGate<number>(0.01, -1);
+	#roadAlpha = new EpsilonGate<number>(0.001, -1);
+	#roadBrightness = new EpsilonGate<number>(0.01, -1);
 
 	constructor(Cesium: C, viewer: CesiumType.Viewer) {
 		this.#C = Cesium;
@@ -56,32 +58,23 @@ export class ImageryManager {
 		const cfg = getSatelliteImagery();
 		console.info('[Imagery] base:', cfg.label);
 
-		const provider = new C.UrlTemplateImageryProvider({
-			url: cfg.url, maximumLevel: cfg.maxZoom, minimumLevel: 0,
-			...(cfg.webMercator ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-		});
-		this.#baseLayer = this.#viewer.imageryLayers.addImageryProvider(provider);
+		this.#baseLayer = this.#addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);
 		if (this.#baseLayer) {
 			this.#baseDaySaturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
-			this.#baseDayContrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
 			this.#baseLayer.saturation = this.#baseDaySaturation;
-			this.#baseLayer.contrast = this.#baseDayContrast;
+			this.#baseLayer.contrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
 			this.#baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
 			this.#baseLayer.brightness = 1.0;
 		}
 
 		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
 
-		// CartoDB road mask
 		try {
-			const cartoUrl = tileBase
-				? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
-				: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
-			this.#roadMaskLayer = this.#viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({
-					url: cartoUrl, maximumLevel: 18, minimumLevel: 0,
-					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-				}),
+			this.#roadMaskLayer = this.#addLayer(
+				tileBase
+					? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
+					: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+				18, 0, !!tileBase,
 			);
 			if (this.#roadMaskLayer) {
 				this.#roadMaskLayer.alpha = 0;
@@ -96,16 +89,12 @@ export class ImageryManager {
 			}
 		} catch (e) { console.warn('[Imagery] CartoDB roads failed:', e); }
 
-		// VIIRS night lights
 		try {
-			const viirsUrl = tileBase
-				? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
-				: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`;
-			this.#viirsLayer = this.#viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({
-					url: viirsUrl, maximumLevel: 8, minimumLevel: 3,
-					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-				}),
+			this.#viirsLayer = this.#addLayer(
+				tileBase
+					? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
+					: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`,
+				8, 3, !!tileBase,
 			);
 			if (this.#viirsLayer) {
 				this.#viirsLayer.alpha = 0;
@@ -122,6 +111,16 @@ export class ImageryManager {
 		} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
 	}
 
+	/** Wrap UrlTemplateImageryProvider construction — common URL template + WebMercator scheme. */
+	#addLayer(url: string, maximumLevel: number, minimumLevel: number, webMercator: boolean): CesiumType.ImageryLayer | null {
+		return this.#viewer.imageryLayers.addImageryProvider(
+			new this.#C.UrlTemplateImageryProvider({
+				url, maximumLevel, minimumLevel,
+				...(webMercator ? { tilingScheme: new this.#C.WebMercatorTilingScheme() } : {}),
+			}),
+		);
+	}
+
 	// ── Per-tick sync ────────────────────────────────────────────────────────
 
 	sync(model: ImageryTickInput, bootFade: number): void {
@@ -131,7 +130,6 @@ export class ImageryManager {
 		const firstNight = this.#lastNightFactor < 0.01 && nf > 0.01;
 		this.#lastNightFactor = nf;
 
-		// Base imagery — desaturate at night
 		const baseEase = smoothstep((nf - 0.45) / (0.9 - 0.45));
 		const w = model.config.world;
 		if (this.#baseLayer) {
@@ -139,7 +137,6 @@ export class ImageryManager {
 				this.#baseDaySaturation + (w.baseNightSaturation - this.#baseDaySaturation) * baseEase;
 		}
 
-		// VIIRS
 		if (this.#viirsLayer) {
 			const V = NIGHT_PALETTE.viirs;
 			const viirsEase = smoothstep(
@@ -151,37 +148,19 @@ export class ImageryManager {
 			const viirsShow = (show || firstNight) && viirsAlpha > 0.001;
 			const viirsBrightness = 5.0 * w.viirsBrightness;
 
-			if (viirsShow !== this.#lastViirsShow) {
-				this.#viirsLayer.show = viirsShow;
-				this.#lastViirsShow = viirsShow;
-			}
-			if (Math.abs(viirsAlpha - this.#lastViirsAlpha) > 0.001) {
-				this.#viirsLayer.alpha = viirsAlpha;
-				this.#lastViirsAlpha = viirsAlpha;
-			}
-			if (Math.abs(viirsBrightness - this.#lastViirsBrightness) > 0.01) {
-				this.#viirsLayer.brightness = viirsBrightness;
-				this.#lastViirsBrightness = viirsBrightness;
-			}
+			this.#viirsShow.update(viirsShow, (v) => { this.#viirsLayer!.show = v; });
+			this.#viirsAlpha.update(viirsAlpha, (v) => { this.#viirsLayer!.alpha = v; });
+			this.#viirsBrightness.update(viirsBrightness, (v) => { this.#viirsLayer!.brightness = v; });
 		}
 
-		// CartoDB road mask
 		if (this.#roadMaskLayer) {
 			const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(model.altitude);
+			const roadAlpha = (nf * scale * roadAltGate + (1 - nf) * 0.08 * roadAltGate) * bootFade;
+			const roadBrightness = 1.5 + nf * 1.5;
+
 			this.#roadMaskLayer.show = true;
-			this.#roadMaskLayer.alpha =
-				(nf * scale * roadAltGate + (1 - nf) * 0.08 * roadAltGate) * bootFade;
-			this.#roadMaskLayer.brightness = 1.5 + nf * 1.5;
+			this.#roadAlpha.update(roadAlpha, (v) => { this.#roadMaskLayer!.alpha = v; });
+			this.#roadBrightness.update(roadBrightness, (v) => { this.#roadMaskLayer!.brightness = v; });
 		}
-	}
-
-	// ── Accessors needed by compose.ts ───────────────────────────────────────
-
-	get colorGradeEnabled(): boolean | null {
-		return this.#lastViirsShow;
-	}
-
-	get viirsLayerHandle(): CesiumType.ImageryLayer | null {
-		return this.#viirsLayer;
 	}
 }
