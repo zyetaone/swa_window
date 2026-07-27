@@ -12,7 +12,7 @@
 
 import { json, error } from '@sveltejs/kit';
 import { listBundles, saveBundle } from '$lib/scene/bundle/disk.server';
-import { isContentBundle, BUNDLE_ID_PATTERN } from '$lib/scene/bundle/loader';
+import { isContentBundle, BUNDLE_ID_PATTERN } from '$lib/scene/bundle/types';
 import { readLimitedJson } from '$lib/http/body';
 import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';

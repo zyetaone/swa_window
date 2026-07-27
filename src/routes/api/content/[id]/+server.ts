@@ -8,7 +8,7 @@
 
 import { json, error } from '@sveltejs/kit';
 import { deleteBundle } from '$lib/scene/bundle/disk.server';
-import { BUNDLE_ID_PATTERN } from '$lib/scene/bundle/loader';
+import { BUNDLE_ID_PATTERN } from '$lib/scene/bundle/types';
 import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';
 

@@ -89,3 +89,22 @@ export interface SpriteBundle extends BundleBase {
 
 /** Union of all bundle shapes — extend when adding new BundleType. */
 export type ContentBundle = VideoBgBundle | SpriteBundle;
+
+/** Minimal shape guard — confirms the value looks like a ContentBundle before dispatch. */
+export function isContentBundle(value: unknown): value is ContentBundle {
+	if (!value || typeof value !== 'object') return false;
+	const v = value as Record<string, unknown>;
+	if (typeof v.id !== 'string' || v.id.length === 0) return false;
+	if (typeof v.type !== 'string') return false;
+	if (typeof v.kind !== 'string') return false;
+	if (typeof v.z !== 'number') return false;
+	return true;
+}
+
+/**
+ * Allowed bundle-id alphabet. Shared by POST /api/content and
+ * DELETE /api/content/[id] so the two routes can never drift apart on
+ * what "valid id" means. ASCII alnum + dash + underscore, 1..64 chars —
+ * safe as a filename segment without escaping.
+ */
+export const BUNDLE_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;

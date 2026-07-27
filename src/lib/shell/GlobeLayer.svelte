@@ -12,11 +12,11 @@
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
 	import Compositor from '$lib/scene/compositor.svelte';
-	import Weather from '../window/Weather.svelte';
+	import Weather from './window/Weather.svelte';
 	import { activeCesium } from '$lib/world/active.svelte';
 	import { installHashPalette } from '$lib/world/hash-palette';
-	import { startLivenessWatchdog } from '../liveness';
-	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '../overlay-recovery';
+	import { startLivenessWatchdog } from './liveness';
+	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from './overlay-recovery';
 
 	const model = useAeroWindow();
 

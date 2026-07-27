@@ -11,7 +11,29 @@
 
 import type { Effect } from '../types';
 import type { ContentBundle } from './types';
-import { createEffectFromBundle, isContentBundle } from './loader';
+import { isContentBundle } from './types';
+import { createVideoBgEffect, createSpriteEffect } from '../effects/factories';
+
+export function createEffectFromBundle(bundle: ContentBundle): Effect | null {
+	switch (bundle.type) {
+		case 'video-bg':
+			// Effect<TParams> is invariant in Props (Svelte's Component type is
+			// invariant on its props). We erase the TParams here so the caller
+			// can collect heterogeneously-parameterized effects in one array.
+			return createVideoBgEffect(bundle) as unknown as Effect;
+		case 'sprite':
+			return createSpriteEffect(bundle) as unknown as Effect;
+		default: {
+			// Exhaustiveness check — TS will fail here if a new BundleType is added
+			// without a matching case, reminding the implementer to handle it.
+			const _exhaustive: never = bundle;
+			void _exhaustive;
+			return null;
+		}
+	}
+}
+
+
 
 class BundleStore {
 	/** Installed bundles, keyed by bundle.id. */

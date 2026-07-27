@@ -11,7 +11,15 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
-import { getDeviceStatus, setDeviceStatus, type DeviceStatus } from '$lib/fleet/device-registry.server';
+import type { DeviceStatus } from '$lib/fleet/protocol';
+
+// In-process device status cache. Single device per Pi server.
+let cached: DeviceStatus | null = null;
+
+function getDeviceStatus(): DeviceStatus | null { return cached; }
+function setDeviceStatus(status: DeviceStatus): void {
+	cached = { ...status, lastSeen: Date.now() };
+}
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 

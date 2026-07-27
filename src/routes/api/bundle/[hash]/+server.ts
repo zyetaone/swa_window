@@ -19,8 +19,21 @@
 
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { readLocal } from '$lib/fleet/lan-bundle-cache.server';
 import { lanCorsHeaders } from '$lib/http/cors';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+function bundleCacheDir(): string {
+	return process.env.AERO_LAN_CACHE_DIR ?? './data/lan-cache';
+}
+
+function readLocal(hash: string): Promise<Uint8Array | null> {
+	if (!/^[a-f0-9]{16,128}$/i.test(hash)) return Promise.resolve(null);
+	const path = join(bundleCacheDir(), hash.slice(0, 2), `${hash}.bin`);
+	if (!existsSync(path)) return Promise.resolve(null);
+	return readFile(path).then((b) => new Uint8Array(b)).catch(() => null);
+}
 
 export const GET: RequestHandler = async ({ params, request }) => {
 	const hash = params.hash ?? '';
