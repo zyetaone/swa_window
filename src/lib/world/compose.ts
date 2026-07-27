@@ -105,6 +105,29 @@ export class CesiumManager {
 	getViewer(): CesiumType.Viewer { return this.#viewer; }
 	getCesium(): typeof CesiumType { return this.#C; }
 
+	/**
+	 * Camera state in a project-frame-friendly shape. CameraMirror (and any
+	 * other system that needs to mirror Cesium's camera each frame) reads
+	 * through this instead of reaching into `viewer.camera.positionWC`
+	 * directly. Plain `{x,y,z}` objects + a scalar fov, no Cesium types.
+	 */
+	getCameraRead(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number }; up: { x: number; y: number; z: number }; fovDeg: number } {
+		const cam = this.#viewer.camera;
+		const p = cam.positionWC;
+		const d = cam.directionWC;
+		const u = cam.upWC;
+		// Frustum is PerspectiveFrustum in CesiumManager's setup. Narrow cast
+		// to read fovy — same cast CameraMirror used inline.
+		const fovy = (cam.frustum as { fovy: number }).fovy;
+		const fovDeg = Number.isFinite(fovy) ? (fovy * 180) / Math.PI : NaN;
+		return {
+			position: { x: p.x, y: p.y, z: p.z },
+			direction: { x: d.x, y: d.y, z: d.z },
+			up: { x: u.x, y: u.y, z: u.z },
+			fovDeg,
+		};
+	}
+
 	// ── Start ────────────────────────────────────────────────────────────────
 
 	async start(COLOR_GRADING_GLSL: string): Promise<void> {

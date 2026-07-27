@@ -110,7 +110,7 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 
 	const hDelta = shortestAngleDelta(_prevHeading, heading);
 	const turnRate = delta > 0 ? hDelta / delta : 0;
-	const targetBank = clamp(turnRate * 0.3, -m.bankAngleMax, m.bankAngleMax);
+	const targetBank = clamp(turnRate * 0.45, -m.bankAngleMax, m.bankAngleMax);
 	_rawBankAngle += (targetBank - _rawBankAngle) * Math.min(m.bankSmoothing * delta, 1);
 	motion.bankAngle = _rawBankAngle;
 	_prevHeading = heading;

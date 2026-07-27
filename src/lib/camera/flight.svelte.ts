@@ -63,7 +63,7 @@ export class FlightSimEngine {
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
 	warpFactor = $state(0);
-	flightSpeed = $state(2.5);
+	flightSpeed = $state(4.0);
 
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);

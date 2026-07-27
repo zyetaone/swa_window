@@ -4,9 +4,10 @@
 	 * each frame.
 	 *
 	 * Mounted INSIDE a <Canvas> (it uses useTask) so it runs in Three.js's
-	 * render loop, right before the frame is drawn. Reads `activeCesium`
-	 * (the shared CesiumManager handle) and pulls the current camera
-	 * position/direction/up vector + frustum FOV.
+	 * render loop, right before the frame is drawn. Reads camera state via
+	 * `CesiumManager.getCameraRead()` so it never reaches into Cesium's
+	 * internal vector types — position/up/direction come back as plain
+	 * `{x,y,z}` objects.
 	 *
 	 * Coordinate transform — Cesium and our Three.js world use different
 	 * axis conventions:
@@ -20,8 +21,8 @@
 	 */
 	import { useTask } from '@threlte/core';
 	import { activeCesium } from '$lib/world/active.svelte';
-	import type { PerspectiveCamera } from 'three';
 	import type { CesiumManager } from '$lib/world/compose';
+	import type { PerspectiveCamera } from 'three';
 
 	let { camera }: { camera: PerspectiveCamera | undefined } = $props();
 
@@ -39,11 +40,10 @@
 
 	useTask(() => {
 		if (!mgr || !camera) return;
-		const viewer = mgr.getViewer();
-		const cam = viewer.camera;
-		const p = cam.positionWC;
-		const d = cam.directionWC;
-		const u = cam.upWC;
+		const c = mgr.getCameraRead();
+		const p = c.position;
+		const d = c.direction;
+		const u = c.up;
 
 		// Position + up vectors: swap (cy ↔ cz, negate the original cy).
 		camera.position.set(p.x, p.z, -p.y);
@@ -55,17 +55,9 @@
 		const tz = -(p.y + d.y * LOOK_AHEAD_M);
 		camera.lookAt(tx, ty, tz);
 
-		// FOV from Cesium's frustum. Cesium types this as a union of
-		// Perspective/Off-center/Orthographic; the live viewer always uses
-		// PerspectiveFrustum (CesiumManager doesn't switch), so a narrow
-		// cast to read `fovy` is safe here.
-		const fovy = (cam.frustum as { fovy: number }).fovy;
-		if (Number.isFinite(fovy)) {
-			const fovDeg = (fovy * 180) / Math.PI;
-			if (Math.abs(camera.fov - fovDeg) > 0.01) {
-				camera.fov = fovDeg;
-				camera.updateProjectionMatrix();
-			}
+		if (Number.isFinite(c.fovDeg) && Math.abs(camera.fov - c.fovDeg) > 0.01) {
+			camera.fov = c.fovDeg;
+			camera.updateProjectionMatrix();
 		}
 
 		camera.updateMatrixWorld();

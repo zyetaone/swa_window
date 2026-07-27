@@ -120,7 +120,7 @@ const _camera: CameraShape = {
 		// Flight drift in degrees/second at speed=1.0. 0.01 gives commercial-cruise
 		// pace at the default 1.4x. (A 0.017 bump read as "flying weird" — too fast
 		// a pan for the calm scenic mood — so kept at the gentle cruise value.)
-		driftRate: 0.01,
+		driftRate: 0.018,
 		major: 0.15,            // degrees (~17 km) long axis
 		minor: 0.06,            // degrees (~7 km) short axis — ~2.5:1 aspect
 		majorMin: 0.08,         // tightest orbit (dense city passes)
@@ -140,7 +140,7 @@ const _camera: CameraShape = {
 		// more ground"): bumped 6→10 for a more dramatic horizon roll when the
 		// scene rotates. The motion.svelte.ts tick still ramps softly via
 		// bankSmoothing — visible cabin tilt, not a snap.
-		bankAngleMax: 10.0,
+		bankAngleMax: 16.0,
 		bankSmoothing: 2.5,
 		// Bank → pitch coupling. Roll alone only TILTS the horizon — it can't
 		// show "more ground / more sky". This couples bank into camera pitch
