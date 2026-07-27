@@ -263,7 +263,7 @@ export const world = $state({
 		moonlightIntensity: 0.08,
 	nightExposure: 0.75,
 	darkVoidStrength: 0.03, // dark-crush floor
-	envLight: 2.0, // terrain ambient floor
+	envLight: 3.0, // terrain ambient floor (night visibility)
 		atmosphereLight: 1.6, // globe limb-scatter intensity
 		skyDarken: 1.8, // sky-atmosphere brightness shift
 	viirsBrightness: 2.0, // VIIRS layer brightness

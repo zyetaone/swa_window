@@ -88,7 +88,7 @@ export const COLOR_GRADING_GLSL = `
 		// signal the scene has into black an hour early. Starting later keeps
 		// the evening band present; the nf=1.0 deep-night value (0.85) is
 		// unchanged, so the load-bearing night-ground contract holds.
-		float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.55 * (1.0 - lightMask);
+		float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.35 * (1.0 - lightMask);
 		rgb = mix(rgb, deepNavy, baseDark);
 
 		// 3. 3-stop warm palette (sodium → amber → warm-white). Calm-amber
