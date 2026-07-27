@@ -8,7 +8,7 @@
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
-import { lerp, smoothstep, clamp, T } from '$lib/utils';
+import { lerp, smoothstep, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
 import { altitudeDetailMix } from '$lib/world/altitude';
@@ -153,7 +153,7 @@ export class CesiumManager {
 	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
 	//   as night falls. The vivid day EOX boost is kept via baseDay* caches so
 	//   we can lerp between day-vivid and night-dark.
-	// viirsLayer: NASA VIIRS Black Marble night lights — real satellite
+	// viirsLayer: NASA VIIRS night lights (see viirs-endpoint.ts) — real satellite
 	//   nightlight imagery (z3-z8, 500m/px). ColorToAlpha hides dark (unlit)
 	//   pixels; hue+saturation tint toward sodium amber. Only visible at
 	//   night via alpha gated on nightFactor.
@@ -540,17 +540,18 @@ export class CesiumManager {
 			console.warn('[CesiumManager] CartoDB roads layer failed:', e);
 		}
 
-		// VIIRS night lights layer — NASA Black Marble via tile-packager cache.
-		// Greyscale input → tinted amber via hue + saturation. ColorToAlpha
-		// drops the near-black pixels so unlit terrain shows through.
-		// Source: tools/tile-packager/src/sources.ts (viirs-night-lights).
+		// VIIRS night lights layer, via tile-packager cache when present.
+		// Greyscale radiance in → tinted downstream. ColorToAlpha drops the
+		// near-black pixels so unlit terrain shows through.
+		// Layer + pinned date: src/lib/world/viirs-endpoint.ts (the SSOT, which
+		// also records why the colorized Black Marble composite was dropped).
+		// Packaged copy: tools/tile-packager/src/sources.ts (viirs-night-lights).
 		//
-		// Upstream: swapped from VIIRS_CityLights_2012 (the legacy 2012 aggregate
-		// where India's lit footprint was roughly half of today's) to the current
-		// VIIRS_Black_Marble 2016 annual composite. Same z8 cap, same domain,
-		// same date stamp — the only practical change is the layer name and a
-		// dramatically larger / sharper night-light footprint over Hyderabad and
-		// the rest of South Asia.
+		// Lineage: VIIRS_CityLights_2012 → VIIRS_Black_Marble 2016 → the
+		// gap-filled BRDF-corrected Day/Night Band radiance now in the SSOT.
+		// The last hop is the one that mattered: greyscale radiance with a truly
+		// black background, rather than amber cities painted on lifted navy that
+		// read as "lit" to every consumer sampling this raster.
 		try {
 			// Canonical GIBS WMTS REST endpoint (epsg3857/best, PNG). The older
 			// map1.vis.earthdata.nasa.gov/wmts-webmerc host now returns
@@ -585,17 +586,17 @@ export class CesiumManager {
 				// bright spots and paints them with the high-res hash-palette.
 				// Kept 0.1 saturation so the shader's red-bias gate has a signal.
 				this.viirsLayer.hue = 0.0;
-				this.viirsLayer.saturation = 0.1;
-				// matches syncImagery's night value; sync owns this from frame 1
-				// (lastViirsBrightness starts at -1, so the first pass always writes).
-				this.viirsLayer.brightness = 2.2 * this.model.config.world.viirsBrightness;
-				// Lowered 1.4 → 1.1: a softer contrast curve spreads the VIIRS glow
-			// out from the hot CBD core into the suburbs ("spread NASA over the
-			// city") instead of crushing everything but the brightest cells black.
-			this.viirsLayer.contrast = 1.1;
-				// Phase 16: extremely sensitive threshold (0.02) to ensure
-				// grayscale city lights are not accidentally cut out.
-				this.viirsLayer.colorToAlphaThreshold = 0.02;
+				this.viirsLayer.saturation = 0.0;
+				// Base gain halved (5.0 → 2.5) with the source swap. The old x5 was
+				// compensating for Black Marble reading ~15/255 over Indian cities;
+				// the radiance product now in viirs-endpoint.ts reads a median
+				// 77/255 over Hyderabad, so keeping x5 would clip the metro core
+				// flat white and amplify background grain with it.
+				this.viirsLayer.brightness = 2.5 * this.model.config.world.viirsBrightness;
+				// Lower contrast spreads dim suburban lights instead of crushing them.
+				this.viirsLayer.contrast = 0.8;
+				// Ultra-low threshold to capture even faint VIIRS signal.
+				this.viirsLayer.colorToAlphaThreshold = 0.01;
 			}
 		} catch (e) {
 			console.warn('[CesiumManager] VIIRS layer failed:', e);
@@ -973,24 +974,18 @@ export class CesiumManager {
 				// smoothstepFloor === smoothstepCeil. smoothstep already clamps input.
 				(nf - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001),
 			);
-			// Phase 6 (altitude-gate VIIRS): smoothstep gate fades VIIRS to
-			// zero below 5kft so the building emissive (Phase 3) and future
-			// vector roads (Phase 5) own the city-light load at low altitude
-			// without VIIRS' photoreal aggregate overpainting them.
-			// TODO (post-Pi-perf-gate): adopt altitudeDetailMix from
-			// world/altitude.ts as the shared SSOT — same band
-			// that the Three-side NeonLineLayer/OsmRoads/OsmBuildingEdges now use.
-			const altGate = smoothstep(
-				(this.model.flight.altitude - w.viirsAltGateLowFt) /
-					Math.max(w.viirsAltGateHighFt - w.viirsAltGateLowFt, 1),
-			);
+			// Phase 6 (altitude-gate VIIRS): altitudeDetailMix crossfade.
+			// At cruise (mix=0) → VIIRS full brightness. At approach (mix=1) →
+			// VIIRS dims, buildings + roads take over. Shared SSOT with
+			// Three-side NeonLineLayer/OsmRoads/CityLightField.
+			const altGate = 1 - altitudeDetailMix(this.model.flight.altitude);
 			// Phase 9 viirsAlphaBoost — multiplies the post-Phase-6 alpha so the
 			// night map punches through the navy-mix that the new shader's
 			// lightMask still gates. Lerped by nf so day = no boost.
 			const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
 			const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0) * bootFade;
 			const viirsShow = (show || firstNight) && viirsAlpha > 0.001;
-			const viirsBrightness = 2.2 * w.viirsBrightness;
+			const viirsBrightness = 5.0 * w.viirsBrightness;
 			// Write-skip: only flush to the imagery layer when one of the
 			// three controlled values has changed by more than its just-
 			// noticeable epsilon. Tightens the per-frame GPU sync cost on
@@ -1026,17 +1021,9 @@ export class CesiumManager {
 		if (this.roadMaskLayer && this.model.config.world.useThreeOverlay) {
 			if (this.roadMaskLayer.show) this.roadMaskLayer.show = false;
 		} else if (this.roadMaskLayer) {
-			const altRampLowFt  = 15000;
-			const altRampHighFt = 35000;
-			const altRamp = clamp(
-				(this.model.flight.altitude - altRampLowFt) /
-					(altRampHighFt - altRampLowFt),
-				0,
-				1,
-			);
-			// 1.0 at low altitude → 0.4 at cruise.
-			// TODO (post-Pi-perf-gate): adopt altitudeDetailMix SSOT.
-			const roadAltGate = 1.0 - altRamp * 0.6;
+			// CartoDB roads: altitudeDetailMix SSOT. Roads = NEAR layer.
+			// At approach (mix=1) → fully visible. At cruise (mix=0) → 40% ghost.
+			const roadAltGate = 0.4 + 0.6 * altitudeDetailMix(this.model.flight.altitude);
 			// Roads have a small daytime baseline (12 %) so the city skeleton
 			// reads slightly through the satellite imagery at every hour, not
 			// only at night. At night the night component dominates; daytime

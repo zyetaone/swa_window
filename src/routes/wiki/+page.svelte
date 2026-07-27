@@ -362,7 +362,7 @@
 			<div class="night-stage">
 				<span class="stage-num">2</span>
 				<div>
-					<h4>VIIRS Black Marble</h4>
+					<h4>VIIRS Night Lights</h4>
 					<p>NASA city lights smoothstep in at 0.55–0.9, capped at 50% alpha. Terminator-aware (<code>dayAlpha=0</code> / <code>nightAlpha=1</code>) so lit cities stay lit. City-by-city reveal as night deepens.</p>
 				</div>
 			</div>
@@ -656,7 +656,7 @@
 				<p>
 					Terrain and imagery are licensed, not owned. Cesium Ion terrain is used under
 					Cesium's terms; Sentinel-2 Cloudless is © EOX IT Services under CC BY-NC-SA;
-					VIIRS Black Marble is NASA public-domain; road and building geometry is ©
+					VIIRS night-lights radiance is NASA public-domain; road and building geometry is ©
 					OpenStreetMap contributors under ODbL. Attribution travels with any install or
 					screenshot that shows them.
 				</p>

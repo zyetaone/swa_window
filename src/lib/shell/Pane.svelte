@@ -17,7 +17,7 @@
 	import { SKY_PALETTE } from "$content/palettes";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
-	import ThreeOverlay from "$lib/world-three/ThreeOverlay.svelte";
+	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
 	import Glass from "./window/Glass.svelte";
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
@@ -25,7 +25,7 @@
 	import Compositor from '$lib/scene/compositor.svelte';
 	import { useMouseParallax } from './use-mouse-parallax.svelte';
 	import { activeCesium } from '$lib/world/active.svelte';
-	import { installHashPalette } from '$lib/world-three/hash-palette';
+	import { installHashPalette } from '$lib/world/hash-palette';
 
 	import { startLivenessWatchdog } from './liveness';
 
@@ -221,7 +221,7 @@
 		>
 			<!-- Cesium terrain/buildings/city-light billboards. The DOM warm-
 			     glow dome that used to live here was removed once the Cesium
-			     side gained real night-light layering (VIIRS Black Marble +
+			     side gained real night-light layering (VIIRS night lights +
 			     altitude-blended CartoDB road mask + procedural building
 			     emissive + post-process pollution corona). The CSS dome
 			     painted a uniform amber tint across the entire pane regardless

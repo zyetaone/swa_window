@@ -11,7 +11,10 @@
  * - Sync functions (syncFromMode, syncFromEffects) are plain functions, not class methods
  */
 
-import type { ConfigNamespace } from './config-namespaces';
+
+/** Config namespace keys — SSOT shared with API allowlist. */
+export const CONFIG_NAMESPACE_KEYS = ['atmosphere', 'camera', 'director', 'world', 'shell'] as const;
+export type ConfigNamespace = (typeof CONFIG_NAMESPACE_KEYS)[number];
 import { WEATHER_EFFECTS } from '$content/weather';
 import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { headingOffsetForRole, fuselageOffsetForRole } from '$lib/fleet/parallax.svelte';
@@ -312,16 +315,12 @@ export const world = $state({
 	// 0.04·1·3 = 0.12 to B channel through pollution path — well under the
 	// shader's clamp(rgb,0,1) ceiling. VIIRS path has outer Math.min(...,1.0).
 	// Building shader fragment-clamps. No saturation regression at 3.0.
-	nightLightIntensity: 3.0,
-	// Bloom post-process — high contrast + negative brightness means only the
-	// top of the luminance range blooms. Sigma controls the Gaussian spread.
-	// Phase 11b (user "increase additive light and bloom"): brightness
-	// threshold raised slightly (-0.3 → -0.2 — a bit more of the dim range
-	// gets bloom) and sigma widened (2.2 → 3.0) so halos pool across more
-	// pixels and the lit-city look reads as glow, not pinpricks.
-	bloomContrast: 128,
-	bloomBrightness: -0.2,
-	bloomSigma: 3.0,
+	nightLightIntensity: 4.0,
+	// Bloom post-process — softened for atmospheric VIIRS terrain glow.
+	// Higher sigma = wider gaussian spread, lower contrast + brightness = more bloom.
+	bloomContrast: 80,
+	bloomBrightness: -0.5,
+	bloomSigma: 4.0,
 	buildingsEnabled: true,
 	// Phase 3 (variant E productionized) — buildings glow amber at low altitude
 	// (passenger-window mode) and fade above cruise altitude. The blend is on
@@ -349,19 +348,15 @@ export const world = $state({
 	// more headroom to read as photoreal city glow. 6.0 lands at "punch"
 	// without saturating to white.
 	// Lowered 6.0 → 3.5: 6.0 over-amplified the city core into one hot white
-	// dome (the same glow VIIRS + bloom already paint — a triple-count). 3.5
-	// keeps the city reading as glow without the saturated central blowout.
-	additiveStrength: 3.5,
-	// Hash-palette shader terrain knobs — exposed so operators can tune
-	// night ground visibility without editing GLSL. Lower darkVoid = more
-	// terrain visible at night. Higher envLight = brighter ambient floor.
-	darkVoidStrength: 0.15,  // was 0.3 — too aggressive, crushed terrain
-	envLight: 0.8,           // was 0.5 — too dim for terrain visibility
-	moonlightIntensity: 0.08,   // DirectionalLight peak intensity (full moon, deep night)
-	// nightExposure 0.75: 0.50 crushed everything once the shader's warm
-	// additive was lightMask-gated (the shader fix did most of the sky-
-	// brightness work). 0.75 gives the scene back its dynamic range
-	// while still being meaningfully dimmer than the prior 0.88.
+	// dome (the same glow VIIRS + bloom already paint — a triple-count).
+	// Bumped 3.5→5.0 for VIIRS terrain match — punchier additive emissive.
+	additiveStrength: 5.0,
+	// Hash-palette shader terrain knobs — softened for VIIRS terrain match.
+	// Low darkVoid + high envLight = terrain glows instead of crushing to black.
+	darkVoidStrength: 0.06,
+	envLight: 1.5,
+	moonlightIntensity: 0.08,
+	// nightExposure 0.75: dims the scene at night while keeping dynamic range.
 	nightExposure: 0.75,
 	// atmosphereLight 2.4: dropped 3.5 → 2.4 after user reported a
 	// persistent white horizon band at night even with skyBox disabled
@@ -380,9 +375,9 @@ export const world = $state({
 	// -0.96 next to Cesium's -1.0 clamp). The sky retains some atmospheric
 	// tint — a smooth fade into the horizon limb instead of pitch black.
 	skyDarken: 1.8,
-	viirsBrightness: 0.95,      // multiplier on viirsLayer.brightness (set at setup). Was 1.5 (×3.5 internal = 5.25×) which blew out CBD cores into bloom halos; 0.95 tames the harsh ground patches while keeping the city read.
+	viirsBrightness: 2.0,      // boosted for Indian cities (was 0.95 — too dim at z8)
 	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
-	// Phase 6 (altitude-gate VIIRS) — dim NASA Black Marble below cruise so
+	// Phase 6 (altitude-gate VIIRS) — dim the VIIRS raster below cruise so
 	// it doesn't compete with the building emissive at passenger-window
 	// altitudes. TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
 	viirsAltGateLowFt: 5000,

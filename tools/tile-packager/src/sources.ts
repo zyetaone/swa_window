@@ -19,11 +19,11 @@ export interface SourceConfig {
 	storagePath: string;
 	urlForTile(t: TileSpec): string;
 	zoomRange: [number, number];
-	/**
-	 * Optional per-request header supplier — e.g. Cesium Ion signed auth.
-	 * Called once when the source is first used so the token can be refreshed.
-	 */
 	prepareHeaders?: () => Promise<Record<string, string>>;
+	/** Apply brightness/contrast boost after download (for dim VIIRS tiles). */
+	postProcess?: boolean;
+	boostBrightness?: number;
+	boostContrast?: number;
 }
 
 export const SOURCES: Record<TileSource, SourceConfig> = {
@@ -49,9 +49,21 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 	'viirs-night-lights': {
 		source: 'viirs-night-lights',
 		storagePath: 'viirs-night-lights/{z}/{y}/{x}.jpg',
+		// Layer + pinned date MUST match src/lib/world/viirs-endpoint.ts — the
+		// packaged tiles and the remote fallback have to be the same raster, or
+		// a cache miss silently changes what the city looks like. See that file
+		// for why Black Marble was dropped (colorized, lifted navy background
+		// that cleared the "truly dark" floor over ocean and desert).
 		urlForTile: (t) =>
-			`https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_CityLights_2012/default/2016-01-01/GoogleMapsCompatible_Level8/${t.z}/${t.y}/${t.x}.jpg`,
-		zoomRange: [3, 8], // VIIRS only available up to z8
+			`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance/default/2026-07-15/GoogleMapsCompatible_Level8/${t.z}/${t.y}/${t.x}.png`,
+		zoomRange: [3, 8], // every GIBS night layer is capped at z8
+		// Boost halved (5.0 → 2.5). The old ×5 existed because Black Marble read
+		// ~15/255 over Indian cities; this radiance product reads a median 77/255
+		// over Hyderabad, so the old gain would clip the core to white and drag
+		// the background grain up with it.
+		postProcess: true,
+		boostBrightness: 2.5,
+		boostContrast: 1.5,
 	},
 	/**
 	 * Cesium Ion World Terrain (asset 1) — quantized-mesh tiles.

@@ -1,5 +1,5 @@
 /**
- * viirs-field — sample NASA VIIRS Black Marble night-lights as a brightness
+ * viirs-field — sample the NASA VIIRS night-lights raster as a brightness
  * field, so the stylised Three night-light layers DERIVE from the same
  * satellite ground-truth as the Cesium VIIRS imagery.
  *
