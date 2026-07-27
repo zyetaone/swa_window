@@ -132,6 +132,55 @@ export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as
 export type WeatherType = (typeof WEATHER_TYPES)[number];
 ```
 
+### Subsystem Manager Pattern (MRAX: Actions layer)
+
+Each engine / long-lived stateful component owns one Cesium primitive (or one
+logical concern) and is structured as a class with constructor-injected dependencies
+and a uniform `setup()` + `sync(model)` lifecycle:
+
+```typescript
+type C = typeof CesiumType;
+
+export class SomeManager {
+  readonly #C: C;
+  readonly #viewer: CesiumType.Viewer;
+  // private Cesium state + idempotency caches
+  #foo: CesiumType.Foo | null = null;
+  #barGate = new EpsilonGate<number>(0.001, -1);
+
+  constructor(Cesium: C, viewer: CesiumType.Viewer) {
+    this.#C = Cesium;
+    this.#viewer = viewer;
+  }
+
+  setup(): void {
+    // one-time Cesium work
+  }
+
+  sync(slice: SomeSlice): void {
+    // per-tick idempotent work; guards via EpsilonGate
+  }
+
+  destroy(): void { /* tear down */ }
+}
+```
+
+Rules:
+- **Constructor takes only `Cesium + Viewer`.** No service locator, no global $state.
+- **`setup()` is async when it touches I/O (terrain, network tiles).** Other cases are sync.
+- **`sync()` is sync, idempotent, takes a slice.** No DI, no side effects beyond Cesium mutations.
+- **Private state lives on the manager, not the orchestrator.** `compose.ts` owns nothing except viewers, ticks, and the post-process stage enumeration (bloom/AO/FXAA — those aren't sub-systems; they're per-viewer).
+- **`getViewer()` / `getCesium()` are low-level escape hatches.** Production kiosk paths shouldn't call them. Use typed APIs (`getCameraRead()`) instead. The NightVariantPanel playground is the exception — it intentionally mutates raw Cesium for live experimentation.
+
+Existing managers in `src/lib/world/`:
+- `ImageryManager` / `BuildingsManager` / `AtmosphereManager` / `TerrainManager` — full engines
+- `CameraManager` / `ColorGradeManager` / `LightningManager` / `CloudBillboardManager` — leaf subsystems
+
+When you add a new engine-side concern, the canonical layout is:
+1. Create `src/lib/world/<name>-manager.ts` exposing `<Name>Manager` class.
+2. Inject it into `CesiumManager`'s constructor + delegate `setup()` and `sync()` from `tick()`.
+3. If other libs need its data, expose typed read-only getters (`getCameraRead()` pattern).
+
 ### Effect Pattern
 
 Each scene effect is a self-contained Svelte component:
