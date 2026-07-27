@@ -47,7 +47,7 @@
 		<button type="button"
 			onclick={() => {
 				const turningOn = model.config.camera.flyoverPitchDeg === 0;
-				model.config.camera.flyoverPitchDeg = turningOn ? -60 : 0;
+				model.applyConfigPatch('camera.flyoverPitchDeg', turningOn ? -60 : 0);
 				if (turningOn) { model.setLocation(model.location); model.setTime(2); model.setAltitude(8000); model.onUserInteraction('altitude'); }
 			}}
 			style="font-size:11px;padding:4px 8px;background:rgba(127,174,255,0.12);border:1px solid rgba(127,174,255,0.3);border-radius:4px;color:#cdddff;cursor:pointer;width:100%;">

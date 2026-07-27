@@ -54,7 +54,7 @@
 	// route. Night Lab needs the overlay: variants E/F render through Three.
 	$effect(() => {
 		if (!labMode) return;
-		model.config.world.useThreeOverlay = labRenderer !== 'cesium';
+		model.applyConfigPatch('world.useThreeOverlay', labRenderer !== 'cesium');
 	});
 
 	$effect(() => {
@@ -145,7 +145,7 @@
 		if (e.key !== "f" && e.key !== "F") return;
 		const t = e.target as HTMLElement;
 		if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
-		model.config.shell.windowFrame = !model.config.shell.windowFrame;
+		model.applyConfigPatch('shell.windowFrame', !model.config.shell.windowFrame);
 	}
 
 	// Global error capture (production hardening) — uncaught throws and
@@ -222,9 +222,9 @@
 		// so a struggling Pi needs it baked into the kiosk unit's URL.
 		const overlayParam = params.get("overlay");
 		if (overlayParam === "1" || overlayParam === "true") {
-			model.config.world.useThreeOverlay = true;
+			model.applyConfigPatch('world.useThreeOverlay', true);
 		} else if (overlayParam === "0" || overlayParam === "false") {
-			model.config.world.useThreeOverlay = false;
+			model.applyConfigPatch('world.useThreeOverlay', false);
 		}
 
 		// Phase 7 — multi-Pi parallax role. URL wins over localStorage wins
@@ -240,8 +240,9 @@
 		const chosenRole: DeviceRole = fromUrl ?? fromStorage ?? "solo";
 
 		if (chosenRole !== "solo") {
+			model.applyConfigPatch('camera.parallax.role', chosenRole);
 			setParallaxRole(chosenRole);
-			model.config.shell.windowFrame = false;
+			model.applyConfigPatch('shell.windowFrame', false);
 		}
 		if (fromUrl) {
 			localStorage.setItem(ROLE_KEY, fromUrl);
@@ -252,9 +253,9 @@
 		// to compare against aero-color-grade. ?hashpalette=1 re-enables it.
 		const hpParam = params.get('hashpalette');
 		if (hpParam === '1' || hpParam === 'true') {
-			model.config.world.useHashPalette = true;
+			model.applyConfigPatch('world.useHashPalette', true);
 		} else if (hpParam === '0' || hpParam === 'false') {
-			model.config.world.useHashPalette = false;
+			model.applyConfigPatch('world.useHashPalette', false);
 		}
 
 		// Lab mode: ?lab=1 replaces the deleted /playground routes. The renderer
