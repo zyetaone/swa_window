@@ -31,8 +31,7 @@
 				import Venus from './Venus.svelte';
 		import OsmRoads from './OsmRoads.svelte';
 	import CityLightField from './CityLightField.svelte';
-	import EffectStack from './EffectStack.svelte';
-	import SparkleField from './SparkleField.svelte';
+		import SparkleField from './SparkleField.svelte';
 	import Meteors from './Meteors.svelte';
 	import Rain from './Rain.svelte';
 	import Wing from '$lib/shell/Wing.svelte';
