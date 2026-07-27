@@ -140,15 +140,6 @@ export function moonPhaseFraction(nowMs: number): number {
 	return f < 0 ? f + 1 : f;
 }
 
-/**
- * Illuminated fraction of the lunar disc: (1 − cos(2π·phase))/2.
- * 0 at new moon, 1 at full — matches compose.ts's Simon1994-derived
- * `moonPhase`, so Cesium moonlight intensity and the visual moon agree.
- */
-export function moonIlluminatedFraction(nowMs: number): number {
-	return (1 - Math.cos(moonPhaseFraction(nowMs) * Math.PI * 2)) * 0.5;
-}
-
 // SKY_PALETTE now lives in the framework-free $lib/world/curves (so the
 // Cesium side can read it too, not just Three). Re-exported here for the Three
 // layers + shell components that import it from '$lib/world/sky'.

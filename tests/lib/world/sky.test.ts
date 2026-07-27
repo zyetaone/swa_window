@@ -13,7 +13,6 @@ import {
 	sunElevationSin,
 	airMassFactor,
 	moonPhaseFraction,
-	moonIlluminatedFraction,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world/sky';
@@ -123,7 +122,7 @@ describe('airMassFactor', () => {
 	});
 });
 
-describe('moonPhaseFraction / moonIlluminatedFraction', () => {
+describe('moonPhaseFraction', () => {
 	const EPOCH_MS = Date.UTC(2000, 0, 6, 18, 14, 0); // reference new moon
 	const SYNODIC_MS = 29.530588853 * 86_400_000;
 
@@ -145,11 +144,6 @@ describe('moonPhaseFraction / moonIlluminatedFraction', () => {
 			expect(f).toBeGreaterThanOrEqual(0);
 			expect(f).toBeLessThan(1);
 		}
-	});
-	it('illuminated fraction matches the compose.ts (1 − cosΦ)/2 convention', () => {
-		expect(moonIlluminatedFraction(EPOCH_MS)).toBeCloseTo(0, 6); // new
-		expect(moonIlluminatedFraction(EPOCH_MS + SYNODIC_MS / 2)).toBeCloseTo(1, 6); // full
-		expect(moonIlluminatedFraction(EPOCH_MS + SYNODIC_MS / 4)).toBeCloseTo(0.5, 6); // quarter
 	});
 	it('is deterministic — same timestamp, same phase (3-Pi safety)', () => {
 		const t = Date.UTC(2026, 5, 12);
