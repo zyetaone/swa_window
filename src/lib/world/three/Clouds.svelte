@@ -350,7 +350,7 @@
 		const nf = nightFactor;
 		// Unified lighting SSOT — the cloud darkening / city-glow / moon-lift now
 		// read the same gates as every other Three layer (cityGlowAmount lights up
-		// at dusk in lock-step with CityGlowDome; moonContribution gates the grey
+		// at dusk in lock-step with the city-light bloom; moonContribution gates the grey
 		// moon-lift by actual moon presence instead of raw nf).
 		// Real local solar elevation — drives lightingState's ambient horizon
 		// boost AND liveSunBoost below. (Previously sunDirection was passed and

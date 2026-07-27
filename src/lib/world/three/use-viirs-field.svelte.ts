@@ -1,7 +1,7 @@
 /**
  * useViirsField — composable that loads the VIIRS field for a location
  * and reactively updates when the field becomes available. Used by
- * CityLightField, CityGlowDome, and NeonLineLayer.
+ * CityLightField and NeonLineLayer.
  */
 import { getViirsField, removeViirsWaiter, type ViirsField } from '$lib/world/viirs-field';
 import type { LocationId } from '$lib/types';

@@ -28,7 +28,7 @@
 	import { installHashPalette } from '$lib/world/hash-palette';
 
 	import { startLivenessWatchdog } from './liveness';
-	import { startOverlayRecovery, isOverlayPersistentlyDisabled } from './overlay-recovery';
+	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from './overlay-recovery';
 
 	const model = useAeroWindow();
 
@@ -95,9 +95,8 @@
 	});
 
 	// Overlay recovery — disables the Three overlay when sustained low fps
-	// indicates the Pi can't handle it. Separate from liveness (which only
-	// catches fps=0). The disable is persisted in sessionStorage so a fleet-
-	// deployed Pi doesn't re-engage the overlay on every boot cycle.
+	// indicates the Pi can't handle it. The disable is persisted in localStorage
+	// so a fleet-deployed Pi stays in Cesium-only mode across reboots.
 	$effect(() => {
 		return startOverlayRecovery({
 			getFps: () => untrack(() => model.measuredFps),
@@ -110,6 +109,15 @@
 				});
 			},
 		});
+	});
+
+	// When an operator manually re-enables the overlay (SidePanel toggle or
+	// URL param), clear the persisted disable flag so the next boot doesn't
+	// auto-disable it again.
+	$effect(() => {
+		if (model.config.world.useThreeOverlay) {
+			clearOverlayDisabled();
+		}
 	});
 
 	// Hash-palette night post-process — installs the April-15 sodium/amber/

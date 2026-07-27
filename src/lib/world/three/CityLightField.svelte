@@ -259,7 +259,7 @@
 	});
 
 	// ENU anchor applied to the group via matrix.copy (same pattern as
-	// CityGlowDome / OsmRoads) — T.Group's `matrix` prop only takes a number[].
+	// OsmRoads) — T.Group's `matrix` prop only takes a number[].
 	let group = $state.raw<ThreeGroup | undefined>();
 	$effect(() => {
 		if (group && anchorMatrix) applyEnuAnchor(group, anchorMatrix);

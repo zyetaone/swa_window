@@ -6,7 +6,7 @@
 	 * converts OSM LineString features into LineSegments endpoint pairs +
 	 * per-class colour. WARM sodium palette (was cool blue-white) so the roads
 	 * join the same warm city-light family as the VIIRS aggregate, the building
-	 * window emissive and the CityGlowDome — one cohesive luminous city instead
+	 * window emissive and the city-light field — one cohesive luminous city instead
 	 * of a cool neon grid fighting a warm skyline.
 	 *
 	 * Per-class colour contributes the urban hierarchy: motorway / trunk

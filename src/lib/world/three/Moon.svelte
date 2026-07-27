@@ -68,7 +68,7 @@
 	 * clouds are depthWrite:false by design, so they write nothing for the
 	 * moon to fail against, and render order is the only thing separating them.
 	 *
-	 * Going below CityGlowDome (-1) as well is intentional and correct — that
+	 * Going below the sky-layer z-slot (-1) as well is intentional and correct — that
 	 * dome is atmospheric haze over the city, which is also nearer than the
 	 * moon. The wing still occludes normally: it depth-writes, and the moon
 	 * shader includes the log-depth chunks.

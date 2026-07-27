@@ -301,7 +301,7 @@
 					const lat = lat0 + (-p[i + 2] / EARTH_RADIUS_M) * RAD;
 					// dark→0.3, bright→~1.0. Bright cores already get the VIIRS
 					// raster boost + Cesium emissive shader + two blooms — the
-					// core halo is owned by bloom + CityGlowDome, the neon must
+					// core halo is owned by bloom, the neon must
 					// not compound it. Ceiling pulled 1.15 → 1.0: under additive
 					// blending the >1 product was driving major-arterial cores
 					// past saturation (all 3 channels → white) even with the
