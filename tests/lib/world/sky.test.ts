@@ -12,7 +12,6 @@ import {
 	computeSunDirection,
 	sunElevationSin,
 	airMassFactor,
-	moonPhaseFraction,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world/sky';
@@ -122,34 +121,6 @@ describe('airMassFactor', () => {
 	});
 });
 
-describe('moonPhaseFraction', () => {
-	const EPOCH_MS = Date.UTC(2000, 0, 6, 18, 14, 0); // reference new moon
-	const SYNODIC_MS = 29.530588853 * 86_400_000;
-
-	it('is 0 at the reference new moon and wraps each synodic month', () => {
-		expect(moonPhaseFraction(EPOCH_MS)).toBeCloseTo(0, 6);
-		// Exactly one cycle later the float mod can land at 1 − ε — measure
-		// circular distance to 0 rather than the raw value.
-		for (const n of [1, 3]) {
-			const f = moonPhaseFraction(EPOCH_MS + n * SYNODIC_MS);
-			expect(Math.min(f, 1 - f)).toBeCloseTo(0, 6);
-		}
-	});
-	it('is 0.5 (full) half a synodic month after new', () => {
-		expect(moonPhaseFraction(EPOCH_MS + SYNODIC_MS / 2)).toBeCloseTo(0.5, 6);
-	});
-	it('stays in [0, 1) including for dates before the epoch', () => {
-		for (const ms of [EPOCH_MS - SYNODIC_MS * 2.3, EPOCH_MS + SYNODIC_MS * 321.7]) {
-			const f = moonPhaseFraction(ms);
-			expect(f).toBeGreaterThanOrEqual(0);
-			expect(f).toBeLessThan(1);
-		}
-	});
-	it('is deterministic — same timestamp, same phase (3-Pi safety)', () => {
-		const t = Date.UTC(2026, 5, 12);
-		expect(moonPhaseFraction(t)).toBe(moonPhaseFraction(t));
-	});
-});
 
 // environmentAmbient retired from sky.ts — ambient color/intensity now comes
 // from lightingState (lighting.test.ts pins the 0.12 + (1-nf)*0.78 curve).

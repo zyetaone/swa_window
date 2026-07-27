@@ -28,12 +28,9 @@
 	import { registerLivenessCanvas } from '$lib/shell/liveness';
 	import Clouds from './Clouds.svelte';
 	import CameraMirror from './CameraMirror.svelte';
-	import SunGlow from './SunGlow.svelte';
-	import LensFlare from './LensFlare.svelte';
-	import NightStars from './NightStars.svelte';
+			import NightStars from './NightStars.svelte';
 	import Venus from './Venus.svelte';
-	import Moon from './Moon.svelte';
-	import OsmRoads from './OsmRoads.svelte';
+		import OsmRoads from './OsmRoads.svelte';
 	import CityLightField from './CityLightField.svelte';
 	import EffectStack from './EffectStack.svelte';
 	import SparkleField from './SparkleField.svelte';

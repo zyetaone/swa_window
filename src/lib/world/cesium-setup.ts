@@ -237,5 +237,5 @@ export function applySceneDefaults(viewer: CesiumType.Viewer, C: C): void {
 	if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
 	if (v.scene.skyBox) (v.scene.skyBox as { show: boolean }).show = true;
 	if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
-	if (v.scene.moon) v.scene.moon.show = false;
+	if (v.scene.moon) v.scene.moon.show = true;
 }

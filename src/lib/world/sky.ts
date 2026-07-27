@@ -15,8 +15,8 @@ type Vec3 = [number, number, number];
 const SUN_TILT = 0.4;
 
 /**
- * World-space placement radius for sun-anchored layers (SunGlow core/halo,
- * LensFlare, EffectStack GodRays source, Moon at anti-sun direction).
+ * World-space placement radius for sun-anchored layers (EffectStack GodRays,
+ * Venus positioning). Sun/Moon/LensFlare are now Cesium billboards.
  *
  * Previously this 6e7 m constant was duplicated across SunGlow, LensFlare,
  * EffectStack, and Moon — silent drift risk if anyone changed one without
@@ -39,8 +39,8 @@ export const SUN_PLACEMENT_M = 6e7;
  *   t=18 → west of camera (dusk)
  *
  * Memoised: returns the same Vec3 array for identical (camLonDeg, timeOfDay)
- * inputs. Since multiple components (SunGlow, Moon, LensFlare,
- * ThreeOverlay, EffectStack) each compute this independently in their respective
+ * inputs. Multiple components (ThreeOverlay, EffectStack, Venus, Wing)
+ * each compute this independently in their respective
  * $derived / $effect blocks, the memo collapses 6-8 calls into 1 trig
  * evaluation per frame when inputs are shared.
  *
@@ -118,28 +118,8 @@ export function airMassFactor(latDeg: number, timeOfDay: number): number {
 	return 1.0 / Math.max(0.12, elev + 0.12);
 }
 
-/**
- * Mean lunar-phase fraction for a UTC timestamp (ms). 0 = new moon,
- * 0.25 = first quarter (waxing), 0.5 = full, 0.75 = last quarter (waning).
- *
- * Mean-synodic-month approximation anchored at the 2000-01-06 18:14 UTC new
- * moon — the same quantity world/compose.ts derives from Cesium's
- * Simon1994PlanetaryPositions (its `moonPhase = (1 − cos(elongation))/2` is
- * exactly `moonIlluminatedFraction` below). The mean-cycle approximation can
- * drift up to ~0.6 days from the true ephemeris (lunar orbit eccentricity);
- * for moonlight intensity + terminator shading that error is invisible.
- *
- * Deterministic from the wall clock — all 3 Pis on synced NTP compute the
- * same phase (invariant #4); no Math.random anywhere.
- */
-const SYNODIC_MONTH_DAYS = 29.530588853;
-const NEW_MOON_EPOCH_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
-export function moonPhaseFraction(nowMs: number): number {
-	const days = (nowMs - NEW_MOON_EPOCH_MS) / 86_400_000;
-	const f = (days / SYNODIC_MONTH_DAYS) % 1;
-	return f < 0 ? f + 1 : f;
-}
-
+// Moon phase: Cesium Simon1994PlanetaryPositions handles this via
+// atmosphere-manager.ts. Three-side moon billboard also uses Cesium.
 // SKY_PALETTE now lives in the framework-free $lib/world/curves (so the
 // Cesium side can read it too, not just Three). Re-exported here for the Three
 // layers + shell components that import it from '$lib/world/sky'.
