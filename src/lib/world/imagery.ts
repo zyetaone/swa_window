@@ -28,14 +28,13 @@ export interface ImageryModel {
 	};
 }
 
-/** Imagery layer handles. */
 export interface ImageryState {
 	baseLayer: CesiumType.ImageryLayer | null;
 	baseDaySaturation: number;
 	baseDayContrast: number;
 	viirsLayer: CesiumType.ImageryLayer | null;
 	roadMaskLayer: CesiumType.ImageryLayer | null;
-	// Write-skip caches
+	lastNightFactor: number;
 	lastViirsAlpha: number;
 	lastViirsBrightness: number;
 	lastViirsShow: boolean | null;
@@ -49,6 +48,7 @@ export function createImageryState(): ImageryState {
 		baseDayContrast: 1.0,
 		viirsLayer: null,
 		roadMaskLayer: null,
+		lastNightFactor: -1,
 		lastViirsAlpha: -1,
 		lastViirsBrightness: -1,
 		lastViirsShow: null,
@@ -56,7 +56,6 @@ export function createImageryState(): ImageryState {
 	};
 }
 
-/** Setup base terrain imagery, VIIRS night lights, and CartoDB road mask. */
 export async function setupImagery(
 	state: ImageryState,
 	C: typeof CesiumType,
@@ -83,7 +82,6 @@ export async function setupImagery(
 
 	const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
 
-	// CartoDB Dark road mask
 	try {
 		const cartoUrl = tileBase
 			? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
@@ -111,7 +109,6 @@ export async function setupImagery(
 		console.warn('[Imagery] CartoDB roads layer failed:', e);
 	}
 
-	// VIIRS night lights
 	try {
 		const viirsUrl = tileBase
 			? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
@@ -132,7 +129,7 @@ export async function setupImagery(
 			state.viirsLayer.colorToAlpha = C.Color.BLACK;
 			state.viirsLayer.hue = 0.0;
 			state.viirsLayer.saturation = 0.0;
-			state.viirsLayer.brightness = 2.5;
+			state.viirsLayer.brightness = 2.5 * world.viirsBrightness;
 			state.viirsLayer.contrast = 0.8;
 			state.viirsLayer.colorToAlphaThreshold = 0.01;
 		}
@@ -141,20 +138,20 @@ export async function setupImagery(
 	}
 }
 
-/** Per-tick imagery sync: night/altitude-gated alpha, brightness, roads. */
 export function syncImagery(state: ImageryState, model: ImageryModel, bootFade: number): void {
 	const nf = model.nightFactor;
 	const scale = model.nightLightScale;
-	const show = nf > 0.01;
 
-	// Base imagery tonemap
+	const show = nf > 0.01;
+	const firstNight = state.lastNightFactor < 0.01 && nf > 0.01;
+	state.lastNightFactor = nf;
+
 	const baseEase = smoothstep((nf - 0.45) / (0.9 - 0.45));
 	const w = model.config.world;
 	if (state.baseLayer) {
 		state.baseLayer.saturation = state.baseDaySaturation + (w.baseNightSaturation - state.baseDaySaturation) * baseEase;
 	}
 
-	// VIIRS lights
 	if (state.viirsLayer) {
 		const V = NIGHT_PALETTE.viirs;
 		const viirsEase = smoothstep(
@@ -163,7 +160,7 @@ export function syncImagery(state: ImageryState, model: ImageryModel, bootFade: 
 		const altGate = 1 - altitudeDetailMix(model.flight.altitude);
 		const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
 		const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0) * bootFade;
-		const viirsShow = show && viirsAlpha > 0.001;
+		const viirsShow = (show || firstNight) && viirsAlpha > 0.001;
 		const viirsBrightness = 5.0 * w.viirsBrightness;
 
 		if (viirsShow !== state.lastViirsShow) {
@@ -180,7 +177,6 @@ export function syncImagery(state: ImageryState, model: ImageryModel, bootFade: 
 		}
 	}
 
-	// CartoDB road mask
 	if (state.roadMaskLayer) {
 		const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(model.flight.altitude);
 		const ROAD_DAY_BASE = 0.08;

@@ -9,7 +9,6 @@ import { getIonToken } from './cesium-setup';
 import { getViirsField } from './viirs-field';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
 import { buildingWindowDensity } from './rules';
-import { altitudeDetailMix } from './altitude';
 import { CESIUM_QUALITY_PRESETS } from './model';
 
 export interface BuildingsState {
@@ -18,9 +17,8 @@ export interface BuildingsState {
 	buildingsTime: number;
 	cityBrightness: number;
 	cityBrightnessTimer: number;
-	lastBuildingsShow: boolean | null;
+	lastBuildingsShow: boolean;
 	lastBuildingNightFactor: number;
-	lastBuildingAltBlend: number;
 }
 
 export function createBuildingsState(): BuildingsState {
@@ -30,9 +28,8 @@ export function createBuildingsState(): BuildingsState {
 		buildingsTime: 0,
 		cityBrightness: 1,
 		cityBrightnessTimer: 0,
-		lastBuildingsShow: null,
-		lastBuildingNightFactor: 0,
-		lastBuildingAltBlend: 0,
+		lastBuildingsShow: true,
+		lastBuildingNightFactor: -1,
 	};
 }
 
@@ -42,7 +39,7 @@ export async function setupBuildings(
 	viewer: CesiumType.Viewer,
 	buildingsEnabled: boolean,
 ): Promise<void> {
-	if (!getIonToken()) { console.warn('[CesiumBuildings] Ion token missing'); return; }
+	if (!getIonToken()) { console.warn('[CesiumBuildings] Ion token missing — buildings disabled'); return; }
 	const C: any = CesiumModule;
 	try {
 		state.tileset = await CesiumModule.createOsmBuildingsAsync();
@@ -50,26 +47,28 @@ export async function setupBuildings(
 			state.tileset.show = buildingsEnabled;
 			state.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
 			state.tileset.shadows = CesiumModule.ShadowMode.ENABLED;
-			state.tileset.colorBlendMode = CesiumModule.Cesium3DTileColorBlendMode.REPLACE;
+			state.tileset.colorBlendMode = CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
 			try {
 				state.buildingsShader = new C.CustomShader({
 					mode: C.CustomShaderMode.MODIFY_MATERIAL,
-					lightingModel: C.LightingModel.UNLIT,
+					lightingModel: C.LightingModel.PBR,
 					uniforms: {
 						u_nightFactor: { type: C.UniformType.FLOAT, value: 0.0 },
 						u_lightIntensity: { type: C.UniformType.FLOAT, value: 1.0 },
 						u_windowDensity: { type: C.UniformType.FLOAT, value: 0.0 },
-						u_time: { type: C.UniformType.FLOAT, value: 0.0 },
 						u_cityBrightness: { type: C.UniformType.FLOAT, value: 1.0 },
+						u_time: { type: C.UniformType.FLOAT, value: 0.0 },
 					},
-					varyings: { v_normalMC: C.VaryingType.VEC3 },
+					varyings: {
+						v_normalMC: C.VaryingType.VEC3,
+					},
 					vertexShaderText: BUILDING_VERTEX_GLSL,
 					fragmentShaderText: BUILDING_SHADER_GLSL,
 				});
 				state.tileset.customShader = state.buildingsShader;
 			} catch (e) {
 				const msg = (e as any)?.message ?? String(e);
-				console.warn('[CesiumBuildings] Custom shader failed:', msg);
+				console.warn('[CesiumBuildings] Custom shader failed; falling back to uniform amber style:', msg);
 				state.buildingsShader = null;
 			}
 			viewer.scene.primitives.add(state.tileset);
@@ -112,7 +111,6 @@ export function syncBuildings(
 	altFt: number,
 	buildingsEnabled: boolean,
 	windowLightIntensity: number,
-	buildingEmissiveMax: number,
 	getBootFade: () => number,
 	CesiumModule: typeof CesiumType,
 	viewer: CesiumType.Viewer,
@@ -122,7 +120,6 @@ export function syncBuildings(
 		state.lastBuildingsShow = buildingsEnabled;
 		state.tileset.show = buildingsEnabled;
 	}
-	const altFade = 1 - altitudeDetailMix(altFt);
 
 	if (state.buildingsShader) {
 		const bootFade = getBootFade();
@@ -135,12 +132,10 @@ export function syncBuildings(
 		return;
 	}
 
-	if (Math.abs(nf - state.lastBuildingNightFactor) < 0.01 && Math.abs(altFade - state.lastBuildingAltBlend) < 0.02) return;
+	if (Math.abs(nf - state.lastBuildingNightFactor) < 0.02) return;
 	state.lastBuildingNightFactor = nf;
-	state.lastBuildingAltBlend = altFade;
-	const alphaValue = (buildingEmissiveMax * nf * altFade * 1.5).toFixed(3);
 	state.tileset.style = new CesiumModule.Cesium3DTileStyle({
-		color: `color("rgb(255, 180, 90)", ${alphaValue})`,
+		color: `color("rgb(255, 200, 50)", ${Math.max(0.3, nf * 0.9).toFixed(2)})`,
 	});
 }
 
@@ -150,7 +145,6 @@ export function setBuildingsWireframe(state: BuildingsState, enabled: boolean): 
 }
 
 export function disposeBuildings(state: BuildingsState): void {
-	// tileset is cleaned up by viewer.destroy()
 	state.tileset = null;
 	state.buildingsShader = null;
 }

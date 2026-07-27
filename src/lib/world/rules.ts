@@ -23,7 +23,7 @@ export function viirsAlpha(
 }
 
 /** VIIRS brightness — base multiplier × config value. */
-export function viirsBrightness(viirsBrightnessVal: number): number { return 2.5 * viirsBrightnessVal; }
+export function viirsBrightness(viirsBrightnessVal: number): number { return 5.0 * viirsBrightnessVal; }
 
 /** Building window density — dusk ramp × config × altitude fade. */
 export function buildingWindowDensity(nf: number, windowLightIntensity: number, altFt: number): number {
