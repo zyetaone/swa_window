@@ -16,8 +16,8 @@
 import { mkdir, writeFile, copyFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
-import { LOCATIONS } from '../../../src/lib/locations';
-import type { LocationId } from '../../../src/lib/locations';
+import { LOCATIONS } from '../../../content/locations';
+import type { LocationId } from '../../../content/locations';
 import { enumerateTiles, estimateBytes, formatBytes, type TileSource } from './rules';
 import { SOURCES, tileFilePath, fetchIonLayerJson, BUILDINGS_CONFIG, overpassToGeoJson } from './sources';
 import { STATIC_ASSETS, type AssetCategory } from './assets';
@@ -72,7 +72,6 @@ Tile sources:
   cartodb-dark      Night city-light overlay (free)
   viirs-night-lights  NASA VIIRS night lights (free, unused in app)
   cesium-terrain    Ion quantized-mesh terrain (requires CESIUM_ION_TOKEN env)
-  terrarium         AWS public PNG heightmap (free fallback for terrain)
 
 Static assets (copied from repo static/, no network):
   water-normals.jpg, cloud sprites, sky backdrops, weather map, optional

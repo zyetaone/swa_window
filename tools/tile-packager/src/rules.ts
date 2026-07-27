@@ -59,8 +59,6 @@ export const TILE_AVG_BYTES = {
 	// Cesium Ion quantized-mesh terrain — tiles contain only the mesh
 	// fragment for that square; lossy compressed. Small at low zoom.
 	'cesium-terrain': 8_000,
-	// AWS Terrarium PNG heightmap — RGB-encoded elevations, fixed size per tile.
-	'terrarium': 60_000,
 } as const;
 
 export type TileSource = keyof typeof TILE_AVG_BYTES;

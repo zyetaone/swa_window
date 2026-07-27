@@ -10,11 +10,12 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { lerp, smoothstep, clamp, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
-import { lightingState } from '$lib/world-lighting/curves';
+import { lightingState } from '$lib/world/curves';
 import { VIIRS_GIBS_BASE } from './viirs-endpoint';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
+import { COLOR_GRADE_STAGE } from './shaders';
 import {
 	getIonToken,
 	checkLocalTileServer,
@@ -406,12 +407,12 @@ export class CesiumManager {
 		}
 
 		try {
-			const existing = (v.scene.postProcessStages as any).find?.((s: any) => s.name === 'aero-color-grade');
+			const existing = (v.scene.postProcessStages as any).find?.((s: any) => s.name === COLOR_GRADE_STAGE);
 			if (existing) {
 				this.colorGradeStage = existing as CesiumType.PostProcessStage;
 			} else {
 				const stage = new this.CesiumModule.PostProcessStage({
-					name: 'aero-color-grade',
+					name: COLOR_GRADE_STAGE,
 					fragmentShader: glsl,
 					uniforms: {
 						// Boot-faded so the post-process additive/desat/crush all
@@ -975,7 +976,7 @@ export class CesiumManager {
 			// vector roads (Phase 5) own the city-light load at low altitude
 			// without VIIRS' photoreal aggregate overpainting them.
 			// TODO (post-Pi-perf-gate): adopt altitudeDetailMix from
-			// world-lighting/altitude.ts as the shared SSOT — same band
+			// world/altitude.ts as the shared SSOT — same band
 			// that the Three-side NeonLineLayer/OsmRoads/OsmBuildingEdges now use.
 			const altGate = smoothstep(
 				(this.model.flight.altitude - w.viirsAltGateLowFt) /
@@ -1077,7 +1078,13 @@ export class CesiumManager {
 		const useLocal = await checkLocalTileServer();
 		if (useLocal) {
 			try {
-				v.terrainProvider = await C.CesiumTerrainProvider.fromUrl(`${TILE_SERVER_URL}/terrain`, { requestVertexNormals: true, requestWaterMask: true });
+				// `cesium-terrain`, NOT `terrain` — this must match the packager's
+				// storagePath (tools/tile-packager/src/sources.ts), which is where
+				// index.ts also writes the layer.json this provider fetches first.
+				// The old `/terrain` path 404'd on layer.json, so the packaged
+				// quantized-mesh was never served and every device silently fell
+				// through to the Ion tier below.
+				v.terrainProvider = await C.CesiumTerrainProvider.fromUrl(`${TILE_SERVER_URL}/cesium-terrain`, { requestVertexNormals: true, requestWaterMask: true });
 				return;
 			} catch (e) { console.warn('[CesiumTerrain] Local failed, trying Ion:', e); }
 		}
@@ -1085,14 +1092,16 @@ export class CesiumManager {
 			try {
 				v.terrainProvider = await C.createWorldTerrainAsync({ requestVertexNormals: true, requestWaterMask: true });
 				return;
-			} catch (e) { console.warn('[CesiumTerrain] Ion failed, using free terrain:', e); }
+			} catch (e) { console.warn('[CesiumTerrain] Ion failed, using ellipsoid:', e); }
 		}
-		try {
-			v.terrainProvider = await C.CesiumTerrainProvider.fromUrl('https://s3.us-west-2.amazonaws.com/elevation-tiles-prod/terrarium', { requestVertexNormals: false, requestWaterMask: false });
-		} catch (e) {
-			console.warn('[CesiumTerrain] Free terrain unavailable, using ellipsoid:', e);
-			v.terrainProvider = new C.EllipsoidTerrainProvider();
-		}
+		// Flat Earth. There is deliberately no third tier: the AWS Terrarium
+		// bucket that used to sit here is a PNG heightmap, and CesiumTerrainProvider
+		// speaks quantized-mesh — it fetches <url>/layer.json, which that bucket
+		// returns 404 for. ADR-002 assumed "a custom heightmap provider" would
+		// bridge the two; none was ever written, so the tier could only ever
+		// throw and land here anyway, one failed round-trip later.
+		console.warn('[CesiumTerrain] No local cache and no Ion token — using ellipsoid (flat)');
+		v.terrainProvider = new C.EllipsoidTerrainProvider();
 	}
 
 	// ─── Building Setup & Sync ────────────────────────────────────────────────

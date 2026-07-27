@@ -76,19 +76,6 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 		},
 		zoomRange: [4, 12],
 	},
-	/**
-	 * AWS Terrarium — public S3 bucket with PNG-encoded elevation tiles.
-	 * Free, no auth. Cesium renders these via a custom height-map provider;
-	 * we cache them as a fallback so even if Cesium Ion is unavailable at
-	 * build time, the Pi still gets reasonable terrain.
-	 */
-	'terrarium': {
-		source: 'terrarium',
-		storagePath: 'terrarium/{z}/{x}/{y}.png',
-		urlForTile: (t) =>
-			`https://s3.us-west-2.amazonaws.com/elevation-tiles-prod/terrarium/${t.z}/${t.x}/${t.y}.png`,
-		zoomRange: [4, 12],
-	},
 };
 
 export function tileFilePath(cfg: SourceConfig, t: TileSpec): string {
