@@ -262,6 +262,18 @@ export class CesiumManager {
 
 	#setupPostProcess(glsl: string): void {
 		const v = this.#viewer;
+		// HBAO — Pi-5 tuned: fewer directions/steps than desktop defaults.
+		// Enabled per-tick in AtmosphereManager when altitude < 15 000 ft
+		// AND qualityMode !== "performance".
+		const ao = v.scene.postProcessStages.ambientOcclusion;
+		if (ao) {
+			ao.uniforms.intensity = 2.0;
+			ao.uniforms.bias = 0.1;
+			ao.uniforms.lengthCap = 0.26;
+			ao.uniforms.directionCount = 4;
+			ao.uniforms.stepCount = 16;
+			ao.enabled = false;
+		}
 		const bloom = v.scene.postProcessStages?.bloom;
 		if (bloom) {
 			const allow = this.#model.config.world.qualityMode !== 'performance';
@@ -307,6 +319,8 @@ export class CesiumManager {
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).fxaa.enabled = allow;
+			const ao = v.scene.postProcessStages.ambientOcclusion;
+			if (ao) ao.enabled = allow;
 		if (bloom && allow) {
 			const w = this.#model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;

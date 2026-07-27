@@ -17,6 +17,8 @@ interface WorldAtmosphereConfig {
 	moonlightIntensity: number;
 	nightExposure: number;
 	atmosphereLight: number;
+	ambientOcclusion: boolean;
+	qualityMode: string;
 }
 
 interface AtmosphereModel {
@@ -173,6 +175,16 @@ export class AtmosphereManager {
 		this.#atmoLight.update(atmo, (val) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(v.scene.globe as any).atmosphereLightIntensity = val;
-		});
-	}
+			});
+
+			// HBAO — only below 15 000 ft where buildings are visible, and only
+			// when quality permits. At cruise the check costs a boolean compare.
+			const ao = v.scene.postProcessStages.ambientOcclusion;
+			if (ao) {
+				const shouldEnable = w.ambientOcclusion
+					&& w.qualityMode !== 'performance'
+					&& camAlt < 15_000;
+				ao.enabled = shouldEnable;
+			}
+		}
 }

@@ -385,6 +385,7 @@ export const world = $state({
 	// the existing artsy DOM clouds keep shipping until the billboards
 	// look right side-by-side; flip to true to test.
 	useCesiumClouds: false,
+	ambientOcclusion: true,
 	qualityMode: 'performance' as QualityMode, // Pi 5 default — balanced/ultra for dev
 });
 
