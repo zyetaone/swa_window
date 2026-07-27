@@ -13,7 +13,7 @@
  */
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode, VantageBeat } from '$lib/types';
-import type { Telemetry } from '$lib/model/frame-telemetry.svelte';
+import type { Telemetry } from '$lib/model/telemetry.svelte';
 
 export interface FleetClientModel {
 	measuredFps: number;

@@ -14,7 +14,7 @@
 	import { isValidLocation } from "$content/locations";
 	import { isValidWeather } from "$lib/types";
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
-	import { savePersistedState } from "$lib/model/aero-window-persistence";
+	import { savePersistedState } from "$lib/model/persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import { bundleStore } from "$lib/scene/bundle/store.svelte";
 	import {

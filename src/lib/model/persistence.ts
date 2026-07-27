@@ -1,3 +1,9 @@
+/**
+ * AeroWindow persistence — localStorage save/load for the user's last
+ * session state. Pure data only — no runes, no class context, no DOM
+ * reactivity. Wire-up in +page.svelte (save on unload) and AeroWindow
+ * ctor (load on boot).
+ */
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
 import { isValidLocation } from '$content/locations';
 import { daySeed } from '$lib/world/prng';

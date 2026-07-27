@@ -9,21 +9,21 @@
 	 *   - Reactive effects that call CesiumManager methods
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { CesiumManager } from '$lib/world/compose';
-	import { COLOR_GRADING_GLSL } from '$lib/world/shaders';
-	import { initCesiumGlobal } from '$lib/world/cesium-setup';
-	import { activeCesium } from '$lib/world/active.svelte';
-	import { registerLivenessCanvas, tryConsumeReloadBudget } from '$lib/world/liveness';
+	import { useAeroWindow } from 'llib/model/aero-window.svelte';
+	import { CesiumManager } from 'llib/world/compose';
+	import { COLOR_GRADING_GLSL } from 'llib/world/shaders';
+	import { initCesiumGlobal } from 'llib/world/cesium-setup';
+	import { activeCesium } from 'llib/world/active.svelte';
+	import { registerLivenessCanvas, tryConsumeReloadBudget } from 'llib/world/liveness';
 
 	const model = useAeroWindow();
 
 	// ─── Cesium lifecycle ────────────────────────────────────────────────────
 
 	let cesium: CesiumManager | null = null;
-	let loading = $state(true);
-	let fadingOut = $state(false);
-	let error = $state<string | null>(null);
+	let loading = lstate(true);
+	let fadingOut = lstate(false);
+	let error = lstate<string | null>(null);
 	let viewerContainer: HTMLDivElement;
 	let loadTimeout: ReturnType<typeof setTimeout> | null = null;
 	let autoRetryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -126,7 +126,7 @@
 
 	// ─── Reactive effects ─────────────────────────────────────────────────────
 
-	$effect(() => {
+	leffect(() => {
 		if (!cesium) return;
 		cesium.applyQualityMode(model.qualityMode);
 	});

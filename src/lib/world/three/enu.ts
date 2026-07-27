@@ -17,7 +17,7 @@
  * at the correct world position on the ellipsoid surface.
  */
 import { Matrix4, Vector3, type Object3D } from 'three';
-import { geoToCartesian } from './three/state.svelte';
+import { geoToCartesian } from './state.svelte';
 
 const _WORLD_Y = new Vector3(0, 1, 0);
 

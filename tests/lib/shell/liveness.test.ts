@@ -11,7 +11,7 @@ import {
 	startLivenessWatchdog,
 	tryConsumeReloadBudget,
 	reloadBudgetAvailable,
-} from '$lib/world/liveness';
+} from '$lib/shell/liveness';
 
 beforeEach(() => {
 	vi.useFakeTimers();

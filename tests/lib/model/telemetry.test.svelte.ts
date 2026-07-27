@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Telemetry } from '$lib/model/frame-telemetry.svelte';
+import { Telemetry } from '$lib/model/telemetry.svelte';
 
 describe('Telemetry.recordFrame', () => {
 	it('starts empty with zero percentiles', () => {

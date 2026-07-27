@@ -11,7 +11,7 @@ import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
 import { effectiveCloudDensity } from '$lib/scene/effects/clouds';
-import { loadPersistedState, type PersistedState } from '$lib/model/aero-window-persistence';
+import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
@@ -24,7 +24,7 @@ import {
 	syncAtmosphereWeather,
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
-import { Telemetry } from '$lib/model/frame-telemetry.svelte';
+import { Telemetry } from '$lib/model/telemetry.svelte';
 
 const TRANSITION_DELAY_MS = 2500;
 

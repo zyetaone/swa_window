@@ -5,27 +5,27 @@
 	 * Owns the cabin chrome (oval frame, glass, blind, HUD) and composes
 	 * the scene. GlobeLayer handles Cesium + Three overlay + watchdogs.
 	 *
-	 * Z-order SSOT: $lib/scene/layers.ts.
+	 * Z-order SSOT: llib/scene/layers.ts.
 	 */
-	import { useAeroWindow } from "$lib/model/aero-window.svelte";
-	import { SKY_PALETTE } from "$content/palettes";
-	import { Z } from "$lib/scene/layers";
+	import { useAeroWindow } from "llib/model/aero-window.svelte";
+	import { SKY_PALETTE } from "lcontent/palettes";
+	import { Z } from "llib/scene/layers";
 	import GlobeLayer from "./GlobeLayer.svelte";
 	import Glass from "./window/Glass.svelte";
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
-	import { useMouseParallax } from '$lib/world/use-mouse-parallax.svelte';
+	import { useMouseParallax } from 'llib/world/use-mouse-parallax.svelte';
 
 	const model = useAeroWindow();
 
 	// ── Frame chrome ──────────────────────────────────────────────────────────
 
-	const frameVisible = $derived(model.config.shell.windowFrame);
-	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
+	const frameVisible = lderived(model.config.shell.windowFrame);
+	const skyBackground = lderived(SKY_PALETTE[model.skyState].background);
 
 	// ── Atmospheric CSS filters ───────────────────────────────────────────────
 
-	const filterString = $derived.by(() => {
+	const filterString = lderived.by(() => {
 		const timeBrightness =
 			model.skyState === "night" ? 1.0
 			: model.skyState === "dawn" || model.skyState === "dusk" ? 0.95
@@ -35,37 +35,37 @@
 		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
 		const w = model.flight.warpFactor;
 		const baseBlur = 0.35;
-		const base = `brightness(${brightness.toFixed(2)}) contrast(${hazeContrast.toFixed(2)}) saturate(${hazeSaturate.toFixed(2)}) blur(${baseBlur}px)`;
+		const base = `brightness(l{brightness.toFixed(2)}) contrast(l{hazeContrast.toFixed(2)}) saturate(l{hazeSaturate.toFixed(2)}) blur(l{baseBlur}px)`;
 		if (w < 0.01) return base;
-		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
+		return `l{base} blur(l{(w * 5).toFixed(1)}px) brightness(l{(1 + w * 0.3).toFixed(2)})`;
 	});
 
 	// ── Motion (turbulence, breathing, parallax) ──────────────────────────────
 
-	const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
-	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
-	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
-	const breathingY = $derived(model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude);
+	const turbulenceY = lderived(model.motion.motionOffsetY * 0.08);
+	const turbulenceX = lderived(model.motion.motionOffsetX * 0.08);
+	const turbulenceRotate = lderived(model.motion.motionOffsetY * 0.02);
+	const breathingY = lderived(model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude);
 	const parallax = useMouseParallax();
 
-	const motionTransform = $derived.by(() => {
+	const motionTransform = lderived.by(() => {
 		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
 		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
 		const rotate = turbulenceRotate;
 		const scale = 1 + model.motion.warpZoom;
-		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
+		return `translate(l{x.toFixed(2)}px, l{y.toFixed(2)}px) rotate(l{rotate.toFixed(3)}deg) scale(l{scale.toFixed(4)})`;
 	});
 
 	// ── Glass ─────────────────────────────────────────────────────────────────
 
-	const glassVignetteOpacity = $derived(
+	const glassVignetteOpacity = lderived(
 		model.skyState === "night" ? 0.3 : model.skyState === "day" ? 0.1 : 0.2,
 	);
 
 	// ── Timed click-hint ──────────────────────────────────────────────────────
 
-	let showHint = $state(false);
-	$effect(() => {
+	let showHint = lstate(false);
+	leffect(() => {
 		if (model.config.shell.blindOpen && !model.flight.isTransitioning) {
 			const showTimer = setTimeout(() => { showHint = true; }, 3000);
 			const hideTimer = setTimeout(() => { showHint = false; }, 8000);
