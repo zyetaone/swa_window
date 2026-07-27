@@ -4,7 +4,7 @@
  *
  * ─── WHY THIS LIVES HERE ────────────────────────────────────────────────────
  * Same cross-boundary pattern as world/curves.ts: both Cesium
- * (world/compose.ts) and Three (world-three/NeonLineLayer) need altitude-
+ * (world/compose.ts) and Three (world/three/NeonLineLayer) need altitude-
  * based fading. Framework-free — no `three`, no `cesium`, pure math.
  *
  * ─── THE FIVE GATES (all former callers) ────────────────────────────────────

@@ -170,7 +170,7 @@
 		// is used across all rebuilds within a day (weather/density change
 		// just changes counts + textures, not positions) — the day's
 		// "cloud field" stays mentally consistent. Matches NightStars'
-		// canonical pattern. See world-three/prng.ts for the full why.
+		// canonical pattern. See world/three/prng.ts for the full why.
 		const rng = createSeededRng(daySeed());
 
 		// Counts pulled back from the over-aggressive previous bump:

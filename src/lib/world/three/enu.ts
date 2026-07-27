@@ -1,5 +1,5 @@
 /**
- * world-three/enu — local ENU (East-North-Up) tangent-plane anchor math.
+ * world/three/enu — local ENU (East-North-Up) tangent-plane anchor math.
  *
  * Many city-anchored Three-side assets (CityLightField, CityGlowDome, OsmRoads,
  * Clouds) construct the same 3-line basis matrix to position

@@ -13,7 +13,7 @@
  * endpoint's job is to deliver the patch to the local browser.
  */
 
-import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-namespaces';
+import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-tree.svelte';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { corsPreflight } from '$lib/http/cors';
@@ -27,8 +27,8 @@ interface ConfigPatchBody {
 }
 
 // Allowlist of namespaces that a remote PATCH may write to — derived from
-// the framework-free key SSOT (config-namespaces.ts; deliberately NOT the
-// rune-bearing config-tree). Server-side check is belt-and-braces alongside
+// the framework-free key SSOT (CONFIG_NAMESPACE_KEYS in config-tree.svelte.ts).
+// Server-side check is belt-and-braces alongside
 // setByPath's __proto__/constructor/prototype rejection on the browser —
 // even if a future setByPath change weakens the defense, this gate stops
 // the dangerous path-prefix at the wire.

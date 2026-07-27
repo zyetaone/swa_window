@@ -16,7 +16,7 @@ const carLights: Effect = {
 	kind: 'earth',
 	z: Z.geo,
 	when: (model) => {
-		// Self-disable when the Three overlay is on (hybrid-v2): world-three/OsmRoads
+		// Self-disable when the Three overlay is on (hybrid-v2): world/three/OsmRoads
 		// neon owns the street dots, so the Cesium entities would double them.
 		if (model.config.world.useThreeOverlay) {
 			_carLightsMounted = false;

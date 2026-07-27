@@ -1,5 +1,5 @@
 /**
- * world-three/texture-util — procedural texture helpers shared by env
+ * world/three/texture-util — procedural texture helpers shared by env
  * layers (SunGlow core/halo, Moon core/halo, LensFlare).
  *
  * Previously each component had its own copy of `makeRadialTexture` —

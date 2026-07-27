@@ -12,7 +12,8 @@ import { lerp, smoothstep, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
 import { altitudeDetailMix } from '$lib/world/altitude';
-import { VIIRS_GIBS_BASE } from './viirs-endpoint';
+import { buildingWindowDensity } from './rules';
+import { VIIRS_GIBS_BASE } from './viirs-field';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
@@ -29,41 +30,7 @@ import {
 type WorldConfig = typeof world;
 
 // Cesium tile subdivision + preload tuning per quality mode. Sole consumer
-// is this file — lives next to the CesiumManager that actually applies it.
-interface CesiumQualityPreset {
-	maximumScreenSpaceError: number;
-	tileCacheSize: number;
-	preloadSiblings: boolean;
-	preloadAncestors: boolean;
-	loadingDescendantLimit: number;
-}
-
-const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
-	performance: {
-		maximumScreenSpaceError: 8,    // Bigger tiles, fewer LOD changes (low-end Pi)
-		tileCacheSize: 50,
-		preloadSiblings: false,
-		preloadAncestors: true,
-		loadingDescendantLimit: 4,
-	},
-	balanced: {
-		// MSSE 4 produced visible LOD seams at perspective angles. 5 keeps
-		// detail high while reducing per-tile LOD divergence.
-		maximumScreenSpaceError: 5,
-		tileCacheSize: 100,
-		preloadSiblings: true,         // eliminates LOD-boundary lines on camera move
-		preloadAncestors: true,
-		loadingDescendantLimit: 6,
-	},
-	ultra: {
-		maximumScreenSpaceError: 2,    // High detail — sharper edges
-		tileCacheSize: 200,
-		preloadSiblings: true,
-		preloadAncestors: true,
-		loadingDescendantLimit: 8,
-	},
-};
-
+import { CESIUM_QUALITY_PRESETS } from './model';
 interface CesiumModelView {
 	flight: {
 		lat: number;
@@ -147,7 +114,6 @@ export class CesiumManager {
 		const t = (performance.now() - this.bootStartMs) / CesiumManager.BOOT_FADE_MS;
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
-	private lastBuildingAltBlend = -1;
 	private lastNightFactor = -1;
 	// Imagery Layers
 	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
@@ -304,7 +270,7 @@ export class CesiumManager {
 			(v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
 		// Cesium's built-in moon is OFF — the Three-side Moon component (in
-		// world-three/Moon.svelte for the playground hybrid composition) gives
+		// world/three/Moon.svelte for the playground hybrid composition) gives
 		// us a larger, anti-sun, nightFactor-tied moon with full visual
 		// control. Leaving Cesium's on would double-render the lunar disk.
 		if (v.scene.moon) v.scene.moon.show = false;
@@ -1011,44 +977,15 @@ export class CesiumManager {
 			}
 		}
 
-		// CartoDB road mask — altitude-crossfaded against VIIRS via the shared
-		// altitudeDetailMix SSOT. VIIRS (above) is the FAR layer (1 − mix);
-		// CartoDB roads are a NEAR layer that floors at 0.4 at cruise so the
-		// street skeleton ghosts through the amber wash. At cruise (35k+)
-		// CartoDB holds at ~40%; on approach (<5k) it's fully lit.
-		// Hybrid dedup (night-light ultrathink, 3-lens consensus): the CartoDB
-		// raster road-mask is a WHITE global road skeleton that clashes with the
-		// Three OsmRoads AMBER neon tracing the same streets (different colour,
-		// different registration) — the #1 incoherence. When the Three overlay
-		// is active, the neon owns roads; hide the mask. The Cesium-only ship
-		// path (flag off until the Pi gate) keeps it as its sole global road
-		// source. (Uncovered lab locations lose sharp roads but keep VIIRS +
-		// bokeh, which reads MORE coherent than a clashing white grid.)
-		if (this.roadMaskLayer && this.model.config.world.useThreeOverlay) {
-			if (this.roadMaskLayer.show) this.roadMaskLayer.show = false;
-		} else if (this.roadMaskLayer) {
-			// CartoDB roads: altitudeDetailMix SSOT. Roads = NEAR layer.
-			// At approach (mix=1) → fully visible. At cruise (mix=0) → 40% ghost.
-			const roadAltGate = 0.4 + 0.6 * altitudeDetailMix(this.model.flight.altitude);
-			// Roads have a small daytime baseline (12 %) so the city skeleton
-			// reads slightly through the satellite imagery at every hour, not
-			// only at night. At night the night component dominates; daytime
-			// is just a hint of the road structure. Both rise together with
-			// the boot fade.
-			const ROAD_DAY_BASE = 0.12;
+		// CartoDB road mask — subtle global skeleton. OsmRoads neon adds local detail.
+		if (this.roadMaskLayer) {
+			const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(this.model.flight.altitude);
+			const ROAD_DAY_BASE = 0.08;
 			const nightComponent = nf * scale * roadAltGate;
-			const dayComponent   = (1 - nf) * ROAD_DAY_BASE * roadAltGate;
+			const dayComponent = (1 - nf) * ROAD_DAY_BASE * roadAltGate;
 			this.roadMaskLayer.show = true;
 			this.roadMaskLayer.alpha = (nightComponent + dayComponent) * bootFade;
-			// Brightness ceiling tamed: was lerp(1.6,4.0)*max(scale,0.5) = 12 at
-			// deep night (scale=nightLightIntensity=3), which blew dense road
-			// grids to a solid WHITE blob over metro cores. The mask is the
-			// GLOBAL road skeleton (covers everywhere, unlike the per-location
-			// Three neon), so it stays — just capped (~5 at deep night) so the
-			// white roads read as crisp lines, not a clipped sheet, while staying
-			// bright enough to carry uncovered areas. Live-tunable via
-			// world.nightLightIntensity (scale); fine-dial on hardware.
-			this.roadMaskLayer.brightness = lerp(1.6, 3.4, nf) * Math.min(1.6, Math.max(scale * 0.5, 0.6));
+			this.roadMaskLayer.brightness = 1.5 + nf * 1.5; // subtle: 1.5→3.0 at night
 		}
 
 		// Disable the color-grade PostProcessStage at full day — the shader is
@@ -1110,7 +1047,7 @@ export class CesiumManager {
 				this.tileset.show = this.model.config.world.buildingsEnabled;
 				this.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
 				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
-				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.REPLACE;
+				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
 				// Procedural lit-window shader — restored Feb 15 recipe via
 				// Cesium CustomShader API. Per-fragment grid math, no
 				// per-feature property dependency. Uniforms updated each
@@ -1118,7 +1055,7 @@ export class CesiumManager {
 				try {
 					this.buildingsShader = new C.CustomShader({
 						mode: C.CustomShaderMode.MODIFY_MATERIAL,
-						lightingModel: C.LightingModel.UNLIT,
+						lightingModel: C.LightingModel.PBR,
 						uniforms: {
 							u_nightFactor:    { type: C.UniformType.FLOAT, value: 0.0 },
 							u_lightIntensity: { type: C.UniformType.FLOAT, value: 1.0 },
@@ -1207,35 +1144,27 @@ export class CesiumManager {
 		}
 		const nf = this.model.nightFactor;
 		const scale = this.model.nightLightScale;
-		// altitudeDetailMix SSOT — low-altitude weight, so per-window detail owns
-		// the city-approach band and hands off to the VIIRS raster at cruise.
-		const altFade = 1 - altitudeDetailMix(this.model.flight.altitude);
 
 		if (this.buildingsShader) {
 			const bootFade = this.getBootFade();
 			this.buildingsTime = (this.buildingsTime + dt) % (Math.PI * 4000);
 			this.buildingsShader.setUniform('u_nightFactor', nf * bootFade);
 			this.buildingsShader.setUniform('u_lightIntensity', scale);
-			const duskRamp = smoothstep((nf - 0.15) / 0.7);
-			this.buildingsShader.setUniform(
-				'u_windowDensity',
-				0.65 * duskRamp * w.windowLightIntensity * altFade,
-			);
-			this.buildingsShader.setUniform('u_time', this.buildingsTime);
-			this.buildingsShader.setUniform('u_cityBrightness', this.sampleCityBrightness());
-			return;
+		this.buildingsShader.setUniform(
+			'u_windowDensity',
+			buildingWindowDensity(nf, w.windowLightIntensity, this.model.flight.altitude),
+		);
+		this.buildingsShader.setUniform('u_time', this.buildingsTime);
+		this.buildingsShader.setUniform('u_cityBrightness', this.sampleCityBrightness());
+		return;
 		}
 
 		// Fallback path when custom shader unavailable — uniform amber.
-		if (
-			Math.abs(nf - this.lastBuildingNightFactor) < 0.01 &&
-			Math.abs(altFade - this.lastBuildingAltBlend) < 0.02
-		) return;
+		// Fallback: bright amber — confirms buildings ARE loading even if shader fails.
+		if (Math.abs(nf - this.lastBuildingNightFactor) < 0.02) return;
 		this.lastBuildingNightFactor = nf;
-		this.lastBuildingAltBlend = altFade;
-		const alphaValue = (w.buildingEmissiveMax * nf * altFade * 1.5).toFixed(3);
 		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
-			color: `color("rgb(255, 180, 90)", ${alphaValue})`,
+			color: `color("rgb(255, 200, 50)", ${Math.max(0.3, nf * 0.9).toFixed(2)})`,
 		});
 	}
 

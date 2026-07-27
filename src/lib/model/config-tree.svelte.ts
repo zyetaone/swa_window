@@ -317,10 +317,9 @@ export const world = $state({
 	// Building shader fragment-clamps. No saturation regression at 3.0.
 	nightLightIntensity: 4.0,
 	// Bloom post-process — softened for atmospheric VIIRS terrain glow.
-	// Higher sigma = wider gaussian spread, lower contrast + brightness = more bloom.
-	bloomContrast: 80,
-	bloomBrightness: -0.5,
-	bloomSigma: 4.0,
+	bloomContrast: 128,
+	bloomBrightness: -0.3,
+	bloomSigma: 3.0, // enough bloom for building window glow
 	buildingsEnabled: true,
 	// Phase 3 (variant E productionized) — buildings glow amber at low altitude
 	// (passenger-window mode) and fade above cruise altitude. The blend is on
@@ -335,7 +334,6 @@ export const world = $state({
 	// u_windowDensity). 1.0 = tuned default (0.6 ceiling at deep night).
 	// Independent of nightLightIntensity, which scales emissive BRIGHTNESS —
 	// this one scales how MANY windows are lit.
-	windowLightIntensity: 1.0,
 	// Phase 9 (Apr-15 hash palette + Cesium API knobs productionized from
 	// night-lab Variants G + H). Defaults below were tuned in the lab against
 	// Hyderabad night view; operators can adjust via admin panel for on-site
@@ -351,13 +349,11 @@ export const world = $state({
 	// dome (the same glow VIIRS + bloom already paint — a triple-count).
 	// Bumped 3.5→5.0 for VIIRS terrain match — punchier additive emissive.
 	additiveStrength: 5.0,
-	// Hash-palette shader terrain knobs — softened for VIIRS terrain match.
-	// Low darkVoid + high envLight = terrain glows instead of crushing to black.
-	darkVoidStrength: 0.06,
-	envLight: 1.5,
+	// Hash-palette terrain: minimal crush, bright ambient → lights everywhere.
 	moonlightIntensity: 0.08,
-	// nightExposure 0.75: dims the scene at night while keeping dynamic range.
 	nightExposure: 0.75,
+	darkVoidStrength: 0.03,  // nearly no crush — terrain stays visible everywhere
+	envLight: 2.0,           // bright ambient floor so rural terrain isn't black
 	// atmosphereLight 2.4: dropped 3.5 → 2.4 after user reported a
 	// persistent white horizon band at night even with skyBox disabled
 	// and fog floor zeroed. The analytical globe.atmosphereLightIntensity
@@ -376,7 +372,8 @@ export const world = $state({
 	// tint — a smooth fade into the horizon limb instead of pitch black.
 	skyDarken: 1.8,
 	viirsBrightness: 2.0,      // boosted for Indian cities (was 0.95 — too dim at z8)
-	viirsAlphaBoost: 1.4,       // multiplier on viirsLayer.alpha (per-frame in syncImagery)
+	viirsAlphaBoost: 1.4,
+	windowLightIntensity: 1.5, // boosted — buildings are primary night lights
 	// Phase 6 (altitude-gate VIIRS) — dim the VIIRS raster below cruise so
 	// it doesn't compete with the building emissive at passenger-window
 	// altitudes. TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
@@ -388,7 +385,7 @@ export const world = $state({
 	// the existing artsy DOM clouds keep shipping until the billboards
 	// look right side-by-side; flip to true to test.
 	useCesiumClouds: false,
-	qualityMode: 'balanced' as QualityMode,
+	qualityMode: 'performance' as QualityMode, // Pi 5 default — balanced/ultra for dev
 });
 
 
@@ -457,12 +454,11 @@ export function syncAtmosphereWeather(
 ): void {
 	for (const [key, value] of Object.entries(fx)) {
 		const path = `atmosphere.weather.${key}`;
-		if (key === 'cloudDensityRange') {
-			atmosphere.weather.cloudDensityRange = [...value as [number, number]];
-		} else {
-			(atmosphere.weather as Record<string, unknown>)[key] = value;
-		}
-		crdt.set(path, value);
+		// Route through applyConfigPatch so all config writes go through one
+		// path: setByPath validation → idempotency skip → CRDT stamp. Previously
+		// this wrote directly and stamped CRDT separately — two mutation paths.
+		const newValue = key === 'cloudDensityRange' ? [...value as [number, number]] : value;
+		applyConfigPatch(path, newValue);
 	}
 }
 

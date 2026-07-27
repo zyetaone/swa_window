@@ -1,5 +1,5 @@
 /**
- * world-three/sky — geometry primitives for the Three-side env layers: the
+ * world/three/sky — geometry primitives for the Three-side env layers: the
  * sun-direction vector, the air-mass approximation, and the per-phase colour
  * palette.
  *

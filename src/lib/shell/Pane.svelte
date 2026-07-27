@@ -28,6 +28,7 @@
 	import { installHashPalette } from '$lib/world/hash-palette';
 
 	import { startLivenessWatchdog } from './liveness';
+	import { startOverlayRecovery, isOverlayPersistentlyDisabled } from './overlay-recovery';
 
 	const model = useAeroWindow();
 
@@ -35,6 +36,14 @@
 	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
 	// simply disappear when false.
 	const frameVisible = $derived(model.config.shell.windowFrame);
+
+	// ── Overlay auto-recovery: boot-time check ──────────────────────────────
+	// If the overlay was auto-disabled due to sustained low fps on a previous
+	// boot, keep it disabled. The SidePanel toggle can re-enable (which also
+	// clears the persistent flag).
+	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled()) {
+		model.config.world.useThreeOverlay = false;
+	}
 
 	// ── Overlay error boundary ──────────────────────────────────────────────
 	// A 24/7 unattended kiosk must not white-screen on a transient throw in the
@@ -82,6 +91,24 @@
 		return startLivenessWatchdog({
 			getFps: () => untrack(() => model.measuredFps),
 			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
+		});
+	});
+
+	// Overlay recovery — disables the Three overlay when sustained low fps
+	// indicates the Pi can't handle it. Separate from liveness (which only
+	// catches fps=0). The disable is persisted in sessionStorage so a fleet-
+	// deployed Pi doesn't re-engage the overlay on every boot cycle.
+	$effect(() => {
+		return startOverlayRecovery({
+			getFps: () => untrack(() => model.measuredFps),
+			disableOverlay: () => {
+				model.config.world.useThreeOverlay = false;
+				model.telemetry.recordEvent('error', {
+					where: 'overlay-recovery',
+					reason: 'sustained-low-fps',
+					fps: model.measuredFps,
+				});
+			},
 		});
 	});
 
@@ -170,7 +197,7 @@
 		// Bank is NOT applied to the DOM canvas anymore — rotating the whole
 		// scene-content rigidly spun the window view ("the canvas rotates on
 		// bank"). Bank now reads naturally: the Cesium camera roll (-bankAngle)
-		// tilts the HORIZON, and world-three/Wing banks the WING relative to it.
+		// tilts the HORIZON, and world/three/Wing banks the WING relative to it.
 		// The window frame — the passenger's fixed reference — stays put.
 		const rotate = turbulenceRotate;
 		const scale = 1 + model.motion.warpZoom;
@@ -254,7 +281,7 @@
 			     To re-enable: pass {rainOpacity} {frostAmount} below instead. -->
 			<Weather rainOpacity={0} {windAngle} frostAmount={0} />
 
-			<!-- Wing now lives in world-three/Wing.svelte as a real 3D mesh
+			<!-- Wing now lives in shell/Wing.svelte as a real 3D mesh
 			     (camera-anchored, with per-Pi fuselageOffsetM). The legacy
 			     CSS .wing-silhouette div was removed once the 3D wing
 			     landed — it was invisible in practice anyway. -->

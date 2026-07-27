@@ -203,3 +203,33 @@ describe('applyConfigPatch namespace isolation', () => {
 		expect(ok).toBe(false);
 	});
 });
+
+// ─── CRDT -> reactive propagation integration ────────────────────────────
+
+describe('applyConfigPatch reactive propagation', () => {
+	it('mutates the $state namespace so consumers read the new value', () => {
+		const original = atmosphere.clouds.density;
+		applyConfigPatch('atmosphere.clouds.density', 0.42);
+		expect(atmosphere.clouds.density).toBe(0.42);
+		applyConfigPatch('atmosphere.clouds.density', original);
+	});
+
+	it('returns true when value unchanged (idempotency)', () => {
+		const orig = atmosphere.clouds.density;
+		expect(applyConfigPatch('atmosphere.clouds.density', orig)).toBe(true);
+		expect(atmosphere.clouds.density).toBe(orig);
+	});
+
+	it('rejects type-mismatched patches', () => {
+		const ok = applyConfigPatch('atmosphere.clouds.density', 'potato');
+		expect(ok).toBe(false);
+	});
+
+	it('configSnapshot returns a deep copy (mutation-safe)', () => {
+		const snap = configSnapshot();
+		(snap.world as Record<string, unknown>).buildingsEnabled = !world.buildingsEnabled;
+		expect(world.buildingsEnabled).not.toBe(
+			(snap.world as Record<string, unknown>).buildingsEnabled,
+		);
+	});
+});

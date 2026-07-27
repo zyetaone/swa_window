@@ -1,5 +1,5 @@
 /**
- * world-three/occlusion — Earth-limb occlusion for celestial sprites/meshes.
+ * world/three/occlusion — Earth-limb occlusion for celestial sprites/meshes.
  *
  * Framework-free (no three.js / cesium imports): callers pass scalar
  * components so hot per-frame paths can feed Vector3 fields directly

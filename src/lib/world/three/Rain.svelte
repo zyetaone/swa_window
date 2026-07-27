@@ -56,7 +56,7 @@
 	// independent positions and the rain seam between adjacent screens
 	// is theoretically visible (300 droplets per Pi, mostly invisible at
 	// viewing distance but technically breaks the panorama-continuity
-	// contract documented in world-three/prng.ts).
+	// contract documented in world/three/prng.ts).
 	const positions = new Float32Array(RAIN_COUNT * 3);
 	const phases = new Float32Array(RAIN_COUNT);
 	const sizes = new Float32Array(RAIN_COUNT);

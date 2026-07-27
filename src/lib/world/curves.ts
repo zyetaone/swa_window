@@ -2,7 +2,7 @@
  * world/curves — THE cross-boundary single source of truth for how
  * time-of-day + nightFactor drive the whole scene's day/dusk/night response.
  *
- * ─── WHY THIS LIVES HERE (not in world-three/) ──────────────────────────────
+ * ─── WHY THIS LIVES HERE (not in world/three/) ──────────────────────────────
  * Both renderers need these curves: the Three.js overlay (clouds, veil,
  * sun-glow, stars, ambient, IBL sky) AND the Cesium side (compose.ts
  * skyAtmosphere / fog / exposure / atmosphereLight). They used to derive
@@ -12,7 +12,7 @@
  *
  * This module is FRAMEWORK-FREE — it imports neither `three` nor `cesium`, only
  * pure math from $lib/utils. That's what lets `world/` (Cesium, isolated per
- * invariant #1) and `world-three/` both import it without breaking the boundary:
+ * invariant #1) and `world/three/` both import it without breaking the boundary:
  * lighting math is framework-agnostic.
  *
  * ─── THE CORE ───────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ type Vec3 = [number, number, number];
 /**
  * Per-layer × per-phase RGB palette. `blendPhase` crossfades between the four
  * phase colours continuously (no hard switch → no seam). Lives here so the
- * curves are self-contained; world-three/sky.ts re-exports it for the few
+ * curves are self-contained; world/three/sky.ts re-exports it for the few
  * Three layers + shell components that read raw palette entries.
  */
 export const SKY_PALETTE = {
@@ -184,7 +184,7 @@ function blendPhase(out: Vec3, layer: keyof typeof SKY_PALETTE, t: number): void
  *
  * @param timeOfDay   decimal hours 0..24 (model.timeOfDay)
  * @param nightFactor 0..1 darkness (model.nightFactor — already the √-curve SSOT)
- * @param sunElevSin  optional sin(local solar elevation) — world-three/sky.ts
+ * @param sunElevSin  optional sin(local solar elevation) — world/three/sky.ts
  *                    `sunElevationSin(latDeg, timeOfDay)`. Feeds ONLY the
  *                    ambient horizon boost; everything phase-related is
  *                    time/nightFactor driven by design. Previously this took a

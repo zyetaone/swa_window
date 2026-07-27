@@ -1,5 +1,5 @@
 /**
- * world-three/state — composables for derived scene values.
+ * world/three/state — composables for derived scene values.
  *
  * Real-Earth scale (WGS84). Coordinates in metres, sphere at the actual
  * equatorial radius. This unlocks:

@@ -9,7 +9,7 @@ const clouds: Effect = {
 	id: 'clouds',
 	kind: 'sky',
 	z: Z.clouds,
-	// Self-disable when the Three overlay is on (hybrid-v2): world-three/Clouds
+	// Self-disable when the Three overlay is on (hybrid-v2): world/three/Clouds
 	// takes over, so the CSS3D deck would otherwise double the clouds.
 	when: (model) => model.config.world.showClouds && !model.config.world.useThreeOverlay,
 	component: Clouds,
