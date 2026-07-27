@@ -468,7 +468,7 @@
 		<div class="omission-list">
 			<div class="omission-item">
 				<h4>No ECS</h4>
-				<p>Entity-Component-System is overkill for a single-entity product. The window IS the entity. There is no second entity to justify the pattern.</p>
+				<p>Entity-Component-System is overkill for a single-entity product. The window IS the entity. There is no second entity to justify the pattern. What we <em>do</em> have is the Subsystem Manager Pattern (8 leaf subsystems in <code>src/lib/world/</code>) — the conceptual sibling of ECS for the single-entity case. Manager per Cesium primitive; orchestrator fans ticks.</p>
 			</div>
 			<div class="omission-item">
 				<h4>No event queue</h4>
@@ -536,6 +536,17 @@
 
 		<h3 class="hidden-h3">Hidden Pillar 9 — Networking</h3>
 		<p class="hidden-blurb">REST + SSE + CRDT + mDNS + peer-sync = <code>src/lib/fleet/</code> (12 files). The v1 framing rolls it under State's CRDT bullet — that describes the merge semantics, not the transport. Naming Networking makes field-failure modes first-class architectural concerns rather than footnotes.</p>
+		<div class="detail-box good">
+			<h4>✓ API security posture (v1.2)</h4>
+			<ul>
+				<li>18 routes, all reviewed; bearer-gated mutating endpoints fail-closed 503 when env unset</li>
+				<li>Stream-counted body caps via <code>readLimitedJson</code> / <code>readLimitedBlob</code> — rejects oversized payloads mid-stream, not just by Content-Length header</li>
+				<li>Auth runs BEFORE the body parser — unauthenticated callers never reach the buffer</li>
+				<li>LAN-only CORS via <code>lanCorsHeaders</code>; same-origin endpoints (buildings/roads/bundle) deliberately have no CORS to keep the LAN surface small</li>
+				<li>Path traversal on <code>/api/tiles/[...path]</code> defended with <code>realpathSync</code> + prefix check; hash format validated at <code>/api/bundle/[hash]</code> route boundary (defense-in-depth on top of the SSOT)</li>
+				<li>Two shared helpers own the surface: <code>http/auth.ts</code> (timing-safe bearer compare) and <code>http/publish-route.ts</code> (one handler covers PATCH /api/config + POST /api/command)</li>
+			</ul>
+		</div>
 		<div class="audio-map">
 			<div class="audio-pair">
 				<span class="audio-source">client.svelte.ts</span>
@@ -746,7 +757,7 @@
 
 	<footer class="arch-footer">
 		<p>Aero Dynamic Window · SvelteKit 2 + Cesium + Bun · Raspberry Pi 5 Kiosk · SWA Hyderabad install · 2026</p>
-		<p class="arch-footer-sub">v1.1 (2026-05-20). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order values sourced from <code>src/lib/scene/layers.ts</code>; sky-state thresholds from <code>src/lib/utils.ts</code>.</p>
+		<p class="arch-footer-sub">v1.2 (2026-07-28). Subsystem Manager Pattern now formalised across <code>src/lib/world/</code> (8 leaf managers + orchestrator). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order values sourced from <code>src/lib/scene/layers.ts</code>; sky-state thresholds from <code>src/lib/utils.ts</code>; subsystem pattern documented at <code>AGENTS.md</code>.</p>
 	</footer>
 </main>
 
@@ -798,6 +809,21 @@
 		max-width: 560px;
 		margin: 0 auto 24px;
 	}
+
+.deck-sub {
+		font-size: 13px;
+		color: #667090;
+		max-width: 720px;
+		margin: -16px auto 24px;
+		padding: 12px 16px;
+		border-left: 2px solid rgba(48,76,178,0.4);
+		background: rgba(48,76,178,0.04);
+		border-radius: 0 6px 6px 0;
+		text-align: left;
+	}
+
+.deck-sub strong { color: #8898cc; }
+.deck-sub code { font-family: "JetBrains Mono", monospace; font-size: 12px; color: #8098cc; }
 
 	.hero-meta {
 		display: flex;

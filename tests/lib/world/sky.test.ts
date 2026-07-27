@@ -11,7 +11,6 @@ import { describe, it, expect } from 'vitest';
 import {
 	computeSunDirection,
 	sunElevationSin,
-	airMassFactor,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world/sky';
@@ -99,27 +98,6 @@ describe('sunElevationSin', () => {
 	});
 });
 
-describe('airMassFactor', () => {
-	it('returns ~1 (thin air) when the sun is high overhead', () => {
-		// Equator noon: sin(elev) = cos(SUN_TILT) ≈ 0.921 → 1/(0.921+0.12).
-		const expected = 1 / (Math.cos(SUN_TILT) + 0.12);
-		expect(airMassFactor(0, 12)).toBeCloseTo(expected, 4);
-	});
-	it('hits the hard ceiling when the sun is below the horizon (night)', () => {
-		// At midnight sin(elev) is large negative; the elev clamp at −0.12
-		// + 0.12 = 0 would divide by zero — code clamps to Math.max(0.12, …).
-		const result = airMassFactor(0, 0);
-		expect(result).toBeCloseTo(1 / 0.12, 6); // ceiling reached exactly
-	});
-	it('decreases monotonically from sunrise to noon (real elevation physics)', () => {
-		// The whole point of the rewire: low sun → thick air → big factor.
-		const dawn = airMassFactor(17.4, 6.5);
-		const mid = airMassFactor(17.4, 9);
-		const noon = airMassFactor(17.4, 12);
-		expect(dawn).toBeGreaterThan(mid);
-		expect(mid).toBeGreaterThan(noon);
-	});
-});
 
 
 // environmentAmbient retired from sky.ts — ambient color/intensity now comes

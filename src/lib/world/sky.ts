@@ -113,10 +113,7 @@ export function sunElevationSin(latDeg: number, timeOfDay: number): number {
  * constant. Range: ~0.96 (sun overhead) → 1/0.12 ≈ 8.33 (sun at/below the
  * horizon, hard-capped by the elevation clamp).
  */
-export function airMassFactor(latDeg: number, timeOfDay: number): number {
-	const elev = Math.max(-0.12, Math.min(1, sunElevationSin(latDeg, timeOfDay)));
-	return 1.0 / Math.max(0.12, elev + 0.12);
-}
+
 
 // Moon phase: Cesium Simon1994PlanetaryPositions handles this via
 // atmosphere-manager.ts. Three-side moon billboard also uses Cesium.
