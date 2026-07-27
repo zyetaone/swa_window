@@ -79,7 +79,7 @@
 	import { LOCATION_MAP } from '$content/locations';
 	import { CLOUD_DECK_M } from './state.svelte';
 	import { sunElevationSin } from '$lib/world/sky';
-	import { enuAnchorMatrix } from './enu';
+	import { enuAnchorMatrix } from '$lib/world/enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
 	import { lightingState } from '$lib/world/curves';

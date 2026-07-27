@@ -4,7 +4,7 @@ import {
 	getScreenDriftSign,
 	setScreenDriftSign,
 	screenTravelSign,
-} from '$lib/world/three/screen-conventions';
+} from '$lib/world/screen-conventions';
 
 describe('screen-conventions — single travel-sign parity', () => {
 	beforeEach(() => setScreenDriftSign(DEFAULT_SCREEN_DRIFT_SIGN));
