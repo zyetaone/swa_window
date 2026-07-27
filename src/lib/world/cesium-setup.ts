@@ -6,6 +6,8 @@
 
 import type * as CesiumType from 'cesium';
 
+type C = typeof CesiumType;
+
 // Environment markers — exported ones are imported elsewhere; others are
 // private to this module's getSatelliteImagery().
 export const TILE_SERVER_URL = import.meta.env.VITE_TILE_SERVER_URL || null;
@@ -199,4 +201,41 @@ export async function checkLocalTileServer(): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Apply one-time scene recipes the kiosk always sets.
+ *
+ * Centralizes the 13 lines of post-construction scene configuration that
+ * used to live inline in CesiumManager.start():
+ *   - logarithmicDepthBuffer / highDynamicRange (Pi 5 depth precision + HDR)
+ *   - tonemapper=ACES + exposure=1.0 (calm-amber baseline)
+ *   - globe.enableLighting (terminator-driven night shading)
+ *   - requestRenderMode=false (model state mutates per RAF tick)
+ *   - skyBox/skyAtmosphere/sun on, moon off (Three owns moon)
+ *   - oceanNormalMapUrl for water shimmer
+ *   - screen-space input disabled (kiosk is blind + side panel only)
+ *
+ * Splitting this off keeps CesiumManager.start() readable and gives
+ * tests + playground one place to set a known-good scene baseline.
+ */
+export function applySceneDefaults(viewer: CesiumType.Viewer, C: C): void {
+	const v = viewer;
+	v.scene.logarithmicDepthBuffer = true;
+	v.scene.highDynamicRange = true;
+	v.scene.postProcessStages.fxaa.enabled = true;
+	v.scene.screenSpaceCameraController.enableInputs = false;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(v.scene.postProcessStages as any).tonemapper = (C as any).Tonemapper.ACES;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(v.scene.postProcessStages as any).exposure = 1.0;
+	v.scene.globe.enableLighting = true;
+	if (v.shadowMap) v.shadowMap.enabled = true;
+	v.scene.requestRenderMode = false;
+	v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
+
+	if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
+	if (v.scene.skyBox) (v.scene.skyBox as { show: boolean }).show = true;
+	if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
+	if (v.scene.moon) v.scene.moon.show = false;
 }

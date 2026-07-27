@@ -69,15 +69,6 @@ export const CLOUD_DECK_M = 8000;           // clouds at ~8 km altitude
 type Vec3 = [number, number, number];
 
 /**
- * Read flight-state values once per frame inside a useTask callback.
- * Wraps the three most-read model fields in a plain destructure so useTask
- * doesn't establish reactive deps. Used by CityLightField and NeonLineLayer.
- */
-export function readFlightFrame(model: { flight: { camAlt: number }; timeOfDay: number; nightFactor: number }) {
-	return { camAlt: model.flight.camAlt, nf: model.nightFactor, tod: model.timeOfDay };
-}
-
-/**
  * Convert geographic (lat°, lon°, altitude metres) → world Cartesian.
  *
  * Convention matches three-globe and the broader Three.js community —

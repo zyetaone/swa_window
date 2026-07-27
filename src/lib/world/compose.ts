@@ -16,7 +16,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
-import { VIEWER_OPTIONS } from './cesium-setup';
+import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
@@ -108,24 +108,7 @@ export class CesiumManager {
 		const C = this.#C;
 		const v = this.#viewer;
 
-		v.scene.logarithmicDepthBuffer = true;
-		v.scene.highDynamicRange = true;
-		v.scene.postProcessStages.fxaa.enabled = true;
-		v.scene.screenSpaceCameraController.enableInputs = false;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(v.scene.postProcessStages as any).tonemapper = (C as any).Tonemapper.ACES;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(v.scene.postProcessStages as any).exposure = 1.0;
-		v.scene.globe.enableLighting = true;
-		if (v.shadowMap) v.shadowMap.enabled = true;
-		v.scene.requestRenderMode = false;
-		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
-
-		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
-		if (v.scene.skyBox) (v.scene.skyBox as { show: boolean }).show = true;
-		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
-		if (v.scene.moon) v.scene.moon.show = false;
-
+		applySceneDefaults(v, C);
 		this.#atmosphere.init(C, v);
 		this.#scratchDest = new C.Cartesian3();
 

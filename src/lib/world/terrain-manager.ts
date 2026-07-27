@@ -4,13 +4,14 @@
 
 import type * as CesiumType from 'cesium';
 import { getIonToken, checkLocalTileServer, TILE_SERVER_URL } from './cesium-setup';
+import { EpsilonGate } from './util';
 
 type C = typeof CesiumType;
 
 export class TerrainManager {
 	readonly #C: C;
 	readonly #viewer: CesiumType.Viewer;
-	#lastExaggeration = -1;
+	#exaggeration = new EpsilonGate<number>(0.01, -1);
 
 	constructor(Cesium: C, viewer: CesiumType.Viewer) {
 		this.#C = Cesium;
@@ -40,9 +41,6 @@ export class TerrainManager {
 	}
 
 	sync(exaggeration: number): void {
-		if (Math.abs(exaggeration - this.#lastExaggeration) > 0.01) {
-			this.#lastExaggeration = exaggeration;
-			this.#viewer.scene.verticalExaggeration = exaggeration;
-		}
+		this.#exaggeration.update(exaggeration, (val) => { this.#viewer.scene.verticalExaggeration = val; });
 	}
 }
