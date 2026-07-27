@@ -6,6 +6,9 @@
  * Classes restricted to motorway / trunk / primary / secondary /
  * tertiary / residential — enough to build a city skeleton without
  * clutter from service / track / footway.
+ *
+ * Same-origin only — no CORS headers. Only this Pi's kiosk browser fetches
+ * GeoJSON; peer Pis ship pre-baked vector tiles via /api/tiles/.
  */
 import { serveCityGeojson } from '$lib/http/geojson.server';
 import type { RequestHandler } from './$types';

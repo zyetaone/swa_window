@@ -14,8 +14,11 @@
 
 import { json } from '@sveltejs/kit';
 import { spawn } from 'node:child_process';
+import { corsPreflight } from '$lib/http/cors';
 import { requireBearerToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';
+
+export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
 	requireBearerToken(request, 'AERO_WIFI_RESET_TOKEN', 'wifi reset endpoint');

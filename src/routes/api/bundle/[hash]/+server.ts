@@ -24,6 +24,9 @@ import { lanCorsHeaders } from '$lib/http/cors';
 
 export const GET: RequestHandler = async ({ params, request }) => {
 	const hash = params.hash ?? '';
+	// Same pattern readLocal enforces — duplicate at the boundary so a future
+	// loosening of the SSOT can't accidentally widen what reaches the file ops.
+	if (!/^[a-f0-9]{16,128}$/i.test(hash)) throw error(400, 'invalid hash');
 	const blob = await readLocal(hash);
 	if (!blob) throw error(404, 'not cached');
 	// The bundle system is content-addressed so the body is immutable per

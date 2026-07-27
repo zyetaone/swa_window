@@ -15,7 +15,7 @@
  * live on a different origin (e.g. a laptop on the LAN).
  */
 
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import {
 	recordHeartbeat,
@@ -24,21 +24,21 @@ import {
 	summarize,
 	DEVICE_ID_PATTERN,
 } from '$lib/fleet/heartbeat.server';
+import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
+
+// 64 KB — heartbeat payload is { deviceId, role, groupId, fps, temp, uptime,
+// crashCount }; 64 KB is 100× the realistic size yet still a tight DoS bound.
+const MAX_HEARTBEAT_BYTES = 64 * 1024;
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
 	const cors = lanCorsHeadersFull(request.headers.get('Origin'));
-	let body: unknown;
-	try {
-		body = await request.json();
-	} catch {
-		return json({ error: 'invalid json' }, { status: 400, headers: cors });
-	}
+	const body = await readLimitedJson<unknown>(request, MAX_HEARTBEAT_BYTES);
 	const sample = recordHeartbeat(body);
 	if (!sample) {
-		return json({ error: 'invalid payload' }, { status: 400, headers: cors });
+		throw error(400, 'invalid payload');
 	}
 	return json({ ok: true, receivedAt: sample.receivedAt }, { headers: cors });
 };
@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	const deviceId = url.searchParams.get('deviceId');
 	if (deviceId) {
 		if (!DEVICE_ID_PATTERN.test(deviceId)) {
-			return json({ error: 'invalid deviceId' }, { status: 400, headers: cors });
+			throw error(400, 'invalid deviceId');
 		}
 		return json(historyForDevice(deviceId), { headers: cors });
 	}
