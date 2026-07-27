@@ -1,34 +1,29 @@
 /**
  * CesiumManager — thin orchestrator for the Cesium globe.
  *
- * Sub-managers (constructor-injected with Cesium + Viewer):
- *   CameraManager           — orientation, parallax, scratch Cartesian3
- *   AtmosphereManager       — sky, fog, globe color, moonlight, exposure
- *   TerrainManager          — terrain provider + exaggeration
- *   ImageryManager          — base imagery, VIIRS, CartoDB roads
- *   BuildingsManager        — OSM 3D Tiles + procedural shader
- *   LightningManager        — post-process lightning flash
- *   CloudBillboardManager   — Cesium-native cloud bank
- *   ColorGradeManager       — post-process night grading
+ * Delegates to:
+ *   ImageryManager      — base imagery, VIIRS, CartoDB roads
+ *   BuildingsManager    — OSM 3D Tiles + procedural shader
+ *   AtmosphereManager   — sky, fog, globe color, moonlight, exposure
+ *   TerrainManager      — terrain provider + exaggeration
  *
- * Owns directly: viewer lifecycle, post-process stage enumeration
- * (bloom, AO, FXAA) plus the per-frame tick + quality transition.
+ * Owns directly: viewer lifecycle, camera sync, post-processing,
+ * cloud billboards, lightning, and the per-frame render loop.
  */
 
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
+import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
+import { LightningStage } from './lightning-stage';
+import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { ImageryManager } from './imagery';
 import { BuildingsManager } from './buildings';
 import { AtmosphereManager } from './atmosphere-manager';
 import { TerrainManager } from './terrain-manager';
-import { LightningManager } from './lightning-manager';
-import { CloudBillboardManager } from './cloud-billboard-manager';
-import { ColorGradeManager } from './color-grade-manager';
-import { CameraManager } from './camera-manager';
 
 type WorldConfig = typeof world;
 
@@ -66,16 +61,17 @@ export class CesiumManager {
 	readonly #model: CesiumModelView;
 	readonly #viewer: CesiumType.Viewer;
 
-	readonly #camera: CameraManager;
-	readonly #atmosphere: AtmosphereManager;
-	readonly #terrain: TerrainManager;
 	readonly #imagery: ImageryManager;
 	readonly #buildings: BuildingsManager;
-	readonly #lightning: LightningManager;
-	readonly #cloudBillboards: CloudBillboardManager;
-	readonly #colorGrade: ColorGradeManager;
+	readonly #atmosphere: AtmosphereManager;
+	readonly #terrain: TerrainManager;
 
+	#lightning: LightningStage | null = null;
+	#cloudBillboards: CloudBillboardLayer | null = null;
+	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
+	#lastColorGradeEnabled: boolean | null = null;
+
 	#lastPostRenderTime = performance.now();
 	#boundTick: (() => void) | null = null;
 	#started = false;
@@ -88,18 +84,17 @@ export class CesiumManager {
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	#scratchDest: any = null;
+
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 		this.#C = CesiumModule;
 		this.#model = model;
 		this.#viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
-		this.#camera = new CameraManager(CesiumModule, this.#viewer);
-		this.#atmosphere = new AtmosphereManager(CesiumModule, this.#viewer);
-		this.#terrain = new TerrainManager(CesiumModule, this.#viewer);
 		this.#imagery = new ImageryManager(CesiumModule, this.#viewer);
 		this.#buildings = new BuildingsManager(CesiumModule, this.#viewer);
-		this.#lightning = new LightningManager(CesiumModule, this.#viewer);
-		this.#cloudBillboards = new CloudBillboardManager(CesiumModule, this.#viewer);
-		this.#colorGrade = new ColorGradeManager(CesiumModule, this.#viewer, '' /* set in start */);
+		this.#atmosphere = new AtmosphereManager(CesiumModule, this.#viewer);
+		this.#terrain = new TerrainManager(CesiumModule, this.#viewer);
 	}
 
 	getViewer(): CesiumType.Viewer { return this.#viewer; }
@@ -110,31 +105,50 @@ export class CesiumManager {
 	async start(COLOR_GRADING_GLSL: string): Promise<void> {
 		if (this.#started) return;
 		this.#started = true;
+		const C = this.#C;
 		const v = this.#viewer;
 
-		applySceneDefaults(v, this.#C);
-		this.#atmosphere.init(this.#C, v);
-		this.#camera.setup();
+		applySceneDefaults(v, C);
+		this.#atmosphere.init(C, v);
+		this.#scratchDest = new C.Cartesian3();
 
 		this.#boundTick = this.#tick.bind(this);
 		v.scene.postRender.addEventListener(this.#boundTick);
 
-		// ColorGrade is constructed in the ctor with an empty GLSL; pass the
-		// real one to setup() now that we have it (start() is the only call
-		// site that has the shader source — it's loaded from the side panel).
-		(this.#colorGrade as { setup(glsl: string): void }).setup(COLOR_GRADING_GLSL);
-		this.#setupPostProcess();
+		this.#setupPostProcess(COLOR_GRADING_GLSL);
 		await this.#terrain.setup();
 		await this.#imagery.setup();
 		await this.#buildings.setup(this.#model.config.world.buildingsEnabled);
-		this.#lightning.setup();
-		this.#cloudBillboards.setup();
+
+		this.#lightning = new LightningStage(C, v);
+		this.#lightning.mount();
+		this.#cloudBillboards = new CloudBillboardLayer(C, v);
+		this.#cloudBillboards.mount();
 
 		this.#syncClock();
 		this.#tick();
 		v.resize();
 		v.scene.requestRender();
 	}
+
+	// ── Render Loop ──────────────────────────────────────────────────────────
+
+	#tick(): void {
+		const now = performance.now();
+		const dt = Math.min((now - this.#lastPostRenderTime) / 1000, 0.1);
+		this.#lastPostRenderTime = now;
+
+		this.#syncCamera();
+		this.#syncClockCheck();
+		this.#terrain.sync(this.#model.terrainExaggeration);
+		this.#syncImagery();
+		this.#syncCloudBillboards();
+		this.#syncLightning(dt);
+		this.#syncBuildings(dt);
+		this.#syncQuality();
+	}
+
+	// ── Clock ────────────────────────────────────────────────────────────────
 
 	#syncClock(): void {
 		const C = this.#C;
@@ -148,7 +162,7 @@ export class CesiumManager {
 		);
 	}
 
-	/** Clock-synced atmosphere + clock-change trigger. */
+	/** Sync clock when timeOfDay or longitude changed. Then sync atmosphere. */
 	#syncClockCheck(): void {
 		const m = this.#model;
 		const a = this.#atmosphere;
@@ -170,68 +184,87 @@ export class CesiumManager {
 		);
 	}
 
-	// ── Render Loop ──────────────────────────────────────────────────────────
+	// ── Delegated syncs ──────────────────────────────────────────────────────
 
-	#tick(): void {
-		const now = performance.now();
-		const dt = Math.min((now - this.#lastPostRenderTime) / 1000, 0.1);
-		this.#lastPostRenderTime = now;
+	#syncImagery(): void {
 		const m = this.#model;
+		this.#imagery.sync(
+			{
+				nightFactor: m.nightFactor, nightLightScale: m.nightLightScale,
+				altitude: m.flight.altitude,
+				config: { world: m.config.world },
+			},
+			this.#getBootFade(),
+		);
+		if (this.#colorGradeStage && this.#lastQualityMode !== 'performance') {
+			const should = m.nightFactor >= 0.001;
+			if (should !== this.#lastColorGradeEnabled) {
+				this.#colorGradeStage.enabled = should;
+				this.#lastColorGradeEnabled = should;
+			}
+		}
+	}
 
-		this.#camera.sync({
-			flight: m.flight,
-			motion: m.motion,
-			config: { camera: m.config.camera },
-		});
-		this.#syncClockCheck();
-		this.#terrain.sync(m.terrainExaggeration);
-
-		this.#imagery.sync({
-			nightFactor: m.nightFactor, nightLightScale: m.nightLightScale,
-			altitude: m.flight.altitude,
-			config: { world: m.config.world },
-		}, this.#getBootFade());
-
-		this.#cloudBillboards.sync({
-			lat: m.flight.lat, lon: m.flight.lon,
-			weather: m.weather,
-			density: m.config.atmosphere.clouds.density,
-			altitudeFt: m.flight.altitude,
-			enabled: m.config.world.useCesiumClouds,
-		});
-
-		this.#lightning.sync(dt, {
-			hasLightning: m.config.atmosphere.weather.hasLightning,
-			lightningDecayRate: m.config.atmosphere.weather.lightningDecayRate,
-			lightningMinInterval: m.config.atmosphere.weather.lightningMinInterval,
-			lightningMaxInterval: m.config.atmosphere.weather.lightningMaxInterval,
-		});
-
+	#syncBuildings(dt: number): void {
+		const m = this.#model;
 		this.#buildings.sync(
 			dt, m.nightFactor, m.nightLightScale, m.flight.altitude,
 			m.config.world.buildingsEnabled, m.config.world.windowLightIntensity,
 			this.#getBootFade(),
 		);
-
-		this.#colorGrade.sync(
-			{ nightFactor: m.nightFactor, bootFade: this.#getBootFade() },
-			{ additiveStrength: m.config.world.additiveStrength, qualityMode: m.config.world.qualityMode },
-		);
-
-		this.#syncQuality();
 	}
 
-	// ── Post-Process (bloom, AO, FXAA) ──────────────────────────────────────
-	//
-	// These aren't single subsystems (each is part of Cesium's post-process
-	// graph and tied to the viewer), so they're inlined here as a
-	// responsibility of the orchestrator. ColorGrade is its own manager.
+	#syncCloudBillboards(): void {
+		if (!this.#cloudBillboards) return;
+		const m = this.#model;
+		this.#cloudBillboards.update(
+			m.flight.lat, m.flight.lon, m.weather,
+			m.config.atmosphere.clouds.density, m.flight.altitude,
+			m.config.world.useCesiumClouds,
+		);
+	}
 
-	#setupPostProcess(): void {
+	#syncLightning(dt: number): void {
+		if (!this.#lightning) return;
+		this.#lightning.tick(dt,
+			this.#model.config.atmosphere.weather.hasLightning,
+			this.#model.config.atmosphere.weather.lightningDecayRate,
+			this.#model.config.atmosphere.weather.lightningMinInterval,
+			this.#model.config.atmosphere.weather.lightningMaxInterval,
+		);
+	}
+
+	// ── Camera ───────────────────────────────────────────────────────────────
+
+	#syncCamera(): void {
+		const f = this.#model.flight;
+		const parallaxHeading = this.#model.config.camera.effectiveHeading(f.camHeading);
+		const C = this.#C;
+		C.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048, undefined, this.#scratchDest);
+
+		const bankPitchCouple = this.#model.config.camera.motion.bankPitchCouple ?? 0;
+		const flyover = this.#model.config.camera.flyoverPitchDeg ?? 0;
+		const pitchDeg = flyover !== 0
+			? flyover - bankPitchCouple * this.#model.motion.bankAngle
+			: (f.camPitch - 90) - bankPitchCouple * this.#model.motion.bankAngle;
+
+		this.#viewer.camera.setView({
+			destination: this.#scratchDest,
+			orientation: {
+				heading: C.Math.toRadians((parallaxHeading + 90) % 360),
+				pitch: C.Math.toRadians(pitchDeg),
+				roll: C.Math.toRadians(-this.#model.motion.bankAngle),
+			},
+		});
+	}
+
+	// ── Post-Process ─────────────────────────────────────────────────────────
+
+	#setupPostProcess(glsl: string): void {
 		const v = this.#viewer;
-
 		// HBAO — Pi-5 tuned: fewer directions/steps than desktop defaults.
-		// Enabled per-tick in syncQuality when altitude < 15 000 ft.
+		// Enabled per-tick in AtmosphereManager when altitude < 15 000 ft
+		// AND qualityMode !== "performance".
 		const ao = v.scene.postProcessStages.ambientOcclusion;
 		if (ao) {
 			ao.uniforms.intensity = 2.0;
@@ -241,14 +274,11 @@ export class CesiumManager {
 			ao.uniforms.stepCount = 16;
 			ao.enabled = false;
 		}
-
-		// Bloom: enabled at non-performance quality modes so bright city-light
-		// pixels bleed into soft halos that merge between adjacent intersections.
 		const bloom = v.scene.postProcessStages?.bloom;
 		if (bloom) {
-			const allowBloom = this.#model.config.world.qualityMode !== 'performance';
-			bloom.enabled = allowBloom;
-			if (allowBloom) {
+			const allow = this.#model.config.world.qualityMode !== 'performance';
+			bloom.enabled = allow;
+			if (allow) {
 				const w = this.#model.config.world;
 				bloom.uniforms.contrast = w.bloomContrast;
 				bloom.uniforms.brightness = w.bloomBrightness;
@@ -258,6 +288,23 @@ export class CesiumManager {
 				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
 			}
 		}
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const existing = (v.scene.postProcessStages as any).find?.((s: { name: string }) => s.name === COLOR_GRADE_STAGE);
+			this.#colorGradeStage = existing ? existing as CesiumType.PostProcessStage : null;
+			if (!this.#colorGradeStage) {
+				const stage = new this.#C.PostProcessStage({
+					name: COLOR_GRADE_STAGE, fragmentShader: glsl,
+					uniforms: {
+						u_nightFactor: () => this.#model.nightFactor * this.#getBootFade(),
+						u_additiveStrength: () => this.#model.config.world.additiveStrength,
+					},
+				});
+				v.scene.postProcessStages.add(stage);
+				this.#colorGradeStage = stage as CesiumType.PostProcessStage;
+			}
+		} catch (e) { console.warn('[Cesium] Post-process failed:', e); }
+		this.#syncQuality();
 	}
 
 	#syncQuality(): void {
@@ -265,16 +312,15 @@ export class CesiumManager {
 		if (mode === this.#lastQualityMode) return;
 		this.#lastQualityMode = mode;
 		const allow = mode !== 'performance';
-		const v = this.#viewer;
-		const bloom = v.scene.postProcessStages?.bloom;
+		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
-		const ao = v.scene.postProcessStages.ambientOcclusion;
-		if (ao) ao.enabled = allow;
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow;
+		const v = this.#viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).fxaa.enabled = allow;
-
-		// Re-read bloom uniforms from config — previously only set at startup.
+			const ao = v.scene.postProcessStages.ambientOcclusion;
+			if (ao) ao.enabled = allow;
 		if (bloom && allow) {
 			const w = this.#model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;
@@ -299,9 +345,8 @@ export class CesiumManager {
 	setBuildingsWireframe(enabled: boolean): void { this.#buildings.setWireframe(enabled); }
 
 	destroy(): void {
-		this.#lightning.destroy();
-		this.#cloudBillboards.destroy();
-		this.#colorGrade.destroy();
+		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
+		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
 		if (!this.#viewer.isDestroyed()) {
 			if (this.#boundTick) this.#viewer.scene.postRender.removeEventListener(this.#boundTick);
 			this.#viewer.destroy();
