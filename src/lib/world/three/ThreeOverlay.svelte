@@ -33,34 +33,34 @@
 	 */
 	import { Canvas, T } from '@threlte/core';
 	import { PerspectiveCamera, WebGLRenderer, Color } from 'three';
-	import { useAeroWindow } from 'llib/model/aero-window.svelte';
-	import { registerLivenessCanvas } from 'llib/world/liveness';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { registerLivenessCanvas } from '$lib/shell/liveness';
 	import CameraMirror from './CameraMirror.svelte';
 	import Clouds from './Clouds.svelte';
-	import { computeSunDirection, sunElevationSin } from 'llib/world/sky';
-	import { lightingState } from 'llib/world/curves';
-	import Wing from 'llib/shell/Wing.svelte';
+	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
+	import { lightingState } from '$lib/world/curves';
+	import Wing from '$lib/shell/Wing.svelte';
 
 	type Vec3 = [number, number, number];
 
 	const model = useAeroWindow();
 
-	// lstate.raw — Three.js camera mutated each frame, must not be proxied.
-	let camera: PerspectiveCamera | undefined = lstate.raw();
+	// $state.raw — Three.js camera mutated each frame, must not be proxied.
+	let camera: PerspectiveCamera | undefined = $state.raw();
 
 	// Ambient lighting from the unified lighting SSOT (curves.ts) — Clouds
 	// cluster sprites use this so their tinted reads match the day/dusk/night
 	// palette instead of fighting it.
 	const _ambientTintScratch = new Color();
-	const ambientTint = lderived.by(() => {
+	const ambientTint = $derived.by(() => {
 		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
 		const s = lightingState(model.timeOfDay, model.nightFactor, elevSin);
 		return _ambientTintScratch.setRGB(s.ambientColor[0], s.ambientColor[1], s.ambientColor[2]);
 	});
-	const ambientIntensity = lderived(
+	const ambientIntensity = $derived(
 		lightingState(model.timeOfDay, model.nightFactor).ambientIntensity,
 	);
-	const sunDirection = lderived.by(() => {
+	const sunDirection = $derived.by(() => {
 		const d = computeSunDirection(model.flight.camLon, model.timeOfDay) as Vec3;
 		return [d[0], d[1], d[2]] as Vec3;
 	});

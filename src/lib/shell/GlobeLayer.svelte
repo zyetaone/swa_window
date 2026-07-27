@@ -7,16 +7,16 @@
 	 * (oval frame, glass, blind) and delegates the globe to this component.
 	 */
 	import { untrack } from "svelte";
-	import { useAeroWindow } from "llib/model/aero-window.svelte";
-	import { subscribe } from "llib/game-loop";
-	import CesiumViewer from "llib/world/CesiumViewer.svelte";
-	import ThreeOverlay from "llib/world/three/ThreeOverlay.svelte";
-	import Compositor from 'llib/scene/compositor.svelte';
+	import { useAeroWindow } from "$lib/model/aero-window.svelte";
+	import { subscribe } from "$lib/game-loop";
+	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
+	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
+	import Compositor from '$lib/scene/compositor.svelte';
 	import Weather from './window/Weather.svelte';
-	import { activeCesium } from 'llib/world/active.svelte';
-	import { installHashPalette } from 'llib/world/hash-palette';
-	import { startLivenessWatchdog } from 'llib/world/liveness';
-	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from 'llib/world/overlay-recovery';
+	import { activeCesium } from '$lib/world/active.svelte';
+	import { installHashPalette } from '$lib/world/hash-palette';
+	import { startLivenessWatchdog } from '$lib/shell/liveness';
+	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/shell/overlay-recovery';
 
 	const model = useAeroWindow();
 
@@ -40,14 +40,14 @@
 	}
 
 	// ── GAME LOOP ───────────────────────────────────────────────────────────
-	leffect(() => {
+	$effect(() => {
 		return subscribe((dt: number) => {
 			untrack(() => model.tick(dt));
 		});
 	});
 
 	// ── Liveness watchdog ───────────────────────────────────────────────────
-	leffect(() => {
+	$effect(() => {
 		return startLivenessWatchdog({
 			getFps: () => untrack(() => model.measuredFps),
 			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
@@ -55,7 +55,7 @@
 	});
 
 	// ── Overlay recovery ────────────────────────────────────────────────────
-	leffect(() => {
+	$effect(() => {
 		return startOverlayRecovery({
 			getFps: () => untrack(() => model.measuredFps),
 			disableOverlay: () => {
@@ -69,14 +69,14 @@
 		});
 	});
 
-	leffect(() => {
+	$effect(() => {
 		if (model.config.world.useThreeOverlay) {
 			clearOverlayDisabled();
 		}
 	});
 
 	// ── Hash-palette ────────────────────────────────────────────────────────
-	leffect(() => {
+	$effect(() => {
 		if (!model.config.world.useHashPalette) return;
 		const viewer = activeCesium.manager?.getViewer();
 		if (!viewer) return;
@@ -91,7 +91,7 @@
 		return cleanup;
 	});
 
-	const windAngle = lderived(model.config.atmosphere.weather.windAngle);
+	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 </script>
 
 <svelte:boundary onerror={onOverlayError}>

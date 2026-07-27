@@ -57,9 +57,9 @@
 		type Object3D,
 	} from 'three';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-	import { useAeroWindow } from 'llib/model/aero-window.svelte';
-	import { computeSunDirection, sunElevationSin, DEG2RAD } from 'llib/world/sky';
-	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from 'llib/world/screen-conventions';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { computeSunDirection, sunElevationSin, DEG2RAD } from '$lib/world/sky';
+	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/shell/screen-conventions';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
@@ -237,7 +237,7 @@
 		};
 	}
 
-	leffect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
+	$effect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
 
 	// ─── Night nav lights ───────────────────────────────────────────────
 	// Enlarged vs the body so the bloom pass blows them into a glowing point —
@@ -309,7 +309,7 @@
 	// from below — a gentle gradient that lifts the shadowed side. Only the wing
 	// (sole lit object in the overlay) sees it. Intensity set in the tick.
 	const fillLight = new HemisphereLight(0xbcd2ff, 0x2a2620, 0.0);
-	leffect(() => {
+	$effect(() => {
 		const scene = ctx.scene;
 		scene.add(keyLight, keyLight.target, fillLight);
 		return () => scene.remove(keyLight, keyLight.target, fillLight);
@@ -339,7 +339,7 @@
 
 	useTask((dt) => {
 		// The camera-mirror wrapper IS placement's parent (the <T.Group> below).
-		// Read it directly rather than via bind:ref — the bound lstate wasn't
+		// Read it directly rather than via bind:ref — the bound $state wasn't
 		// populating, so the whole tick was early-returning (no visibility swap,
 		// no bank). placement.parent is set as soon as the group mounts.
 		const group = placement.parent;
@@ -460,7 +460,7 @@
 		fillLight.intensity = 0.45 - nf * 0.28; // day 0.45 soft fill → night 0.17
 	});
 
-	leffect(() => () => {
+	$effect(() => () => {
 		navGeom.dispose();
 		strobeGeom.dispose();
 		navMat.dispose();

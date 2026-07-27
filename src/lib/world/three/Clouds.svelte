@@ -32,7 +32,7 @@
 	 *
 	 *   3. Material per-sprite (NOT cached, intentional):
 	 *      Each sprite owns its own SpriteMaterial so color/opacity can
-	 *      diverge per frame in the modulator leffect. This is the
+	 *      diverge per frame in the modulator $effect. This is the
 	 *      architectural bottleneck for sprite-batch draw calls (see the
 	 *      `InstancedMesh` note below).
 	 *
@@ -76,13 +76,13 @@
 		type Texture,
 		type Group as ThreeGroup,
 	} from 'three';
-	import { LOCATION_MAP } from 'lcontent/locations';
+	import { LOCATION_MAP } from '$content/locations';
 	import { CLOUD_DECK_M } from './state.svelte';
-	import { sunElevationSin } from 'llib/world/sky';
-	import { enuAnchorMatrix } from 'llib/world/enu';
-	import { useAeroWindow } from 'llib/model/aero-window.svelte';
-	import { createSeededRng, daySeed } from 'llib/world/prng';
-	import { lightingState } from 'llib/world/curves';
+	import { sunElevationSin } from '$lib/world/sky';
+	import { enuAnchorMatrix } from './enu';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { createSeededRng, daySeed } from '$lib/world/prng';
+	import { lightingState } from '$lib/world/curves';
 
 	let {
 		density,
@@ -96,14 +96,14 @@
 		ambientColor?: Color;
 		ambientIntensity?: number;
 		sunDirection?: [number, number, number];
-	} = lprops();
+	} = $props();
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
-	const weather = lderived(model.weather);
-	const location = lderived(model.location);
-	const driftSpeed = lderived(model.config.atmosphere.clouds.speed);
-	const opacityScale = lderived(model.config.atmosphere.clouds.opacityScale);
+	const weather = $derived(model.weather);
+	const location = $derived(model.location);
+	const driftSpeed = $derived(model.config.atmosphere.clouds.speed);
+	const opacityScale = $derived(model.config.atmosphere.clouds.opacityScale);
 
 	// Scratch vectors for the per-frame Mie-scatter loop. Reused
 	// each call so we don't allocate in the hot path.
@@ -133,8 +133,8 @@
 	// the actual fragment-level blur on cloud peaks; texture-side
 	// softening is deferred until we move clouds to a custom shader.
 
-	let anchorMatrix = lstate.raw<Matrix4 | null>(null);
-	let anchorGroup: ThreeGroup | undefined = lstate.raw();
+	let anchorMatrix = $state.raw<Matrix4 | null>(null);
+	let anchorGroup: ThreeGroup | undefined = $state.raw();
 
 	const driftGroup = new Group();
 	const rotSpeeds: number[] = [];
@@ -296,13 +296,13 @@
 	}
 
 	// ENU basis at the city's lat/lon, at cloud-deck altitude.
-	leffect(() => {
+	$effect(() => {
 		const loc = LOCATION_MAP.get(location);
 		if (!loc) { anchorMatrix = null; return; }
 		anchorMatrix = enuAnchorMatrix(loc.lat, loc.lon, CLOUD_DECK_M);
 	});
 
-	leffect(() => {
+	$effect(() => {
 		if (!anchorGroup || !anchorMatrix) return;
 		anchorGroup.matrixAutoUpdate = false;
 		anchorGroup.matrix.copy(anchorMatrix);
@@ -317,7 +317,7 @@
 	// adjusting the slider, which feels responsive without the stutter.
 	const REBUILD_DEBOUNCE_MS = 200;
 	let _rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
-	leffect(() => {
+	$effect(() => {
 		const w = weather;
 		const d = density;
 		void anchorMatrix;
@@ -341,9 +341,9 @@
 	});
 
 	// Cheap runtime modulation — no full rebuild.
-	// useTask instead of leffect: during flight, all deps (nightFactor,
+	// useTask instead of $effect: during flight, all deps (nightFactor,
 	// ambientColor, sunDirection, camera position) change every frame.
-	// leffect can fire multiple times per reactive flush when deps resolve
+	// $effect can fire multiple times per reactive flush when deps resolve
 	// at staggered times; useTask guarantees exactly one execution per
 	// render frame, avoiding the ~2.5µs Svelte dep-tracking overhead.
 	useTask(() => {
@@ -555,7 +555,7 @@
 		driftGroup.rotation.y += driftDelta;
 	});
 
-	leffect(() => () => clearClusters());
+	$effect(() => () => clearClusters());
 </script>
 
 {#if anchorMatrix}
