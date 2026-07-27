@@ -22,9 +22,28 @@
 	// the splash rather than a frozen or half-drawn globe while the watchdog
 	// reloads underneath.
 	const isLive = $derived(model.measuredFps > 0);
+
+	// Safety: if Cesium never renders a frame (WebGL failure, stalled init),
+	// dissolve after 15s. A half-rendered globe is better than a permanent
+	// black screen. Logged to telemetry so operators can diagnose remotely.
+	let forcedDissolve = $state(false);
+	let timedOut = $state(false);
+	$effect(() => {
+		if (isLive) return;
+		const t = setTimeout(() => {
+			timedOut = true;
+			forcedDissolve = true;
+			model.telemetry.recordEvent('error', {
+				where: 'boot-lockup',
+				reason: 'timed-out-after-15s',
+				fps: model.measuredFps,
+			});
+		}, 15_000);
+		return () => clearTimeout(t);
+	});
 </script>
 
-<div class={['boot-lockup', isLive && 'dissolved']} aria-hidden={isLive}>
+<div class={['boot-lockup', (isLive || forcedDissolve) && 'dissolved']} aria-hidden={isLive || forcedDissolve}>
 	<div class="lockup">
 		<div class="wordmark">
 			<span class="word">Aero</span>
