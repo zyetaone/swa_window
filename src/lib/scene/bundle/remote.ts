@@ -140,3 +140,20 @@ export function startRemotePoll(opts: RemotePollOptions): RemotePollHandle {
 // queue and the CRDT sourceId MUST be the same identity (they diverged
 // when this file carried its own resolver with different precedence).
 export { resolveDeviceId } from '$lib/fleet/device-id';
+
+// ─── Local content hydration ───────────────────────────────────────────────
+
+import { bundleStore } from './store.svelte';
+
+/** GET /api/content → install each bundle into the reactive store. */
+export async function hydrateFromServer(): Promise<void> {
+	try {
+		const res = await fetch('/api/content');
+		if (!res.ok) return;
+		const data = (await res.json()) as { bundles?: ContentBundle[] };
+		if (!Array.isArray(data.bundles)) return;
+		for (const bundle of data.bundles) bundleStore.install(bundle);
+	} catch {
+		// Network/device-off — silent. Stock effects continue to render.
+	}
+}

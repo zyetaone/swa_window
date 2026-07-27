@@ -16,9 +16,9 @@
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/aero-window-persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
-	import { hydrateFromServer } from "$lib/scene/bundle/client";
 	import { bundleStore } from "$lib/scene/bundle/store.svelte";
 	import {
+		hydrateFromServer,
 		startRemotePoll,
 		resolveDeviceId,
 		type ContentBundle,

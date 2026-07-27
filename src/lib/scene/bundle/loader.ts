@@ -9,8 +9,7 @@
 
 import type { Effect } from '../types';
 import type { ContentBundle } from './types';
-import { createVideoBgEffect } from '../effects/video-bg/factory';
-import { createSpriteEffect } from '../effects/sprite/factory';
+import { createVideoBgEffect, createSpriteEffect } from '../effects/factories';
 
 export function createEffectFromBundle(bundle: ContentBundle): Effect | null {
 	switch (bundle.type) {
