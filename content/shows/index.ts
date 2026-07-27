@@ -20,7 +20,7 @@
  */
 
 import type { Show } from '$lib/show/load';
-import { createSeededRng, daySeed, hashString } from '$lib/world-three/prng';
+import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 
 import { defaultShow } from './default.show';
 import { duskDubaiShow } from './dusk-dubai.show';
