@@ -42,7 +42,7 @@
 	// boot, keep it disabled. The SidePanel toggle can re-enable (which also
 	// clears the persistent flag).
 	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled()) {
-		model.config.world.useThreeOverlay = false;
+		model.applyConfigPatch('world.useThreeOverlay', false);
 	}
 
 	// ── Overlay error boundary ──────────────────────────────────────────────
