@@ -181,6 +181,30 @@ When you add a new engine-side concern, the canonical layout is:
 2. Inject it into `CesiumManager`'s constructor + delegate `setup()` and `sync()` from `tick()`.
 3. If other libs need its data, expose typed read-only getters (`getCameraRead()` pattern).
 
+### Three.js Side: Declarative Svelte Subsystems
+
+The Three.js overlay (`src/lib/world/three/`) deliberately does NOT use
+the Manager class pattern. Instead:
+
+- `ThreeOverlay.svelte` is the orchestrator — `<Canvas>` + scene mount +
+  camera setup + lifecycle. Same role as `CesiumManager`, but a `.svelte`.
+- Each visual subsystem (Moon, NightStars, Clouds, OsmRoads, …) is a
+  sibling `.svelte` component. Each owns its own Three objects via
+  `$state` and ticks itself with `useTask`. Mounting = including the
+  component in the template; destruction = removing it.
+- Shared reactive state lives in `lib/world/three/state.svelte.ts`
+  (constants + reactive slots). The CameraMirror reads Cesium via the
+  typed `getCameraRead()` API.
+
+This is the Svelte 5 idiomatic equivalent of the manager pattern —
+declarative lifecycle instead of imperative setup/sync/destroy. Three
+and Cesium can use the same conceptual pattern (subsystem per
+concern, orchestrator fan-out) without using the same *form*.
+
+If the Three overlay grows to >30 effects, revisit whether the
+`component-per-effect` model still scales, and consider hoisting shared
+per-frame work into a typed `ThreeOrchestrator` class with a tick loop.
+
 ### Effect Pattern
 
 Each scene effect is a self-contained Svelte component:
