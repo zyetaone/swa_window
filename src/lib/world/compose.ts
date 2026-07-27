@@ -581,10 +581,16 @@ export class CesiumManager {
 				this.viirsLayer.nightAlpha = 1;
 				// Dark pixels → transparent so only lit cells composite over terrain.
 				this.viirsLayer.colorToAlpha = C.Color.BLACK;
-				// Phase 16: desaturate VIIRS raster. Treating it as a grayscale-ish
-				// light-intensity mask. The post-process shader picks up these
-				// bright spots and paints them with the high-res hash-palette.
-				// Kept 0.1 saturation so the shader's red-bias gate has a signal.
+				// Treat the raster as a pure light-intensity mask; the post-process
+				// shader picks up the bright cells and paints them with the
+				// hash-palette. Now a no-op rather than a repair — the source is
+				// itself a greyscale radiance product (viirs-endpoint.ts) instead
+				// of the colorized composite this used to strip.
+				//
+				// The old comment here claimed "kept 0.1 saturation so the shader's
+				// red-bias gate has a signal" while the line below already set 0.0.
+				// That mismatch silently starved the gate; the gate has since been
+				// removed as unworkable (see hash-palette.ts).
 				this.viirsLayer.hue = 0.0;
 				this.viirsLayer.saturation = 0.0;
 				// Base gain halved (5.0 → 2.5) with the source swap. The old x5 was

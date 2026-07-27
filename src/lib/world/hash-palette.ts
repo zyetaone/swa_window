@@ -31,10 +31,27 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float brightGuard = smoothstep(0.75, 0.95, lum);
 		float lightMask = smoothstep(0.08, 0.65, lum);
 
-		// Chroma-bias VIIRS gate — warm pixels (red > blue) get palette treatment.
-		float redBias = clamp(rgb.r - rgb.b, 0.0, 1.0);
-		float viirsLikely = smoothstep(0.05, 0.3, redBias);
-		lightMask *= mix(1.0, viirsLikely, 0.85);
+		// The chroma-bias gate that used to live here is gone. It asked "is this
+		// pixel warm (red > blue)?" and cut lightMask to 15% when the answer was
+		// no — intended to find VIIRS pixels and skip cool ones. It could never
+		// work: compose.ts desaturates the VIIRS layer to greyscale BEFORE this
+		// stage runs, so ground night-lights arrived with red == blue and were
+		// permanently held at 15% of their palette treatment, while genuinely
+		// warm sources (building windows, car lights) got the full 100%. The
+		// ground looked flat next to the buildings for that reason alone.
+		//
+		// A comment in compose.ts still claims "kept 0.1 saturation so the
+		// shader's red-bias gate has a signal" while the line beneath it sets
+		// 0.0 — the signal was removed and the gate left in. Moot now regardless:
+		// the source is a greyscale RADIANCE product (viirs-endpoint.ts), so
+		// red == blue at the source and no saturation value could revive it.
+		//
+		// Luminance alone selects lights, which is what the gate was reaching for.
+		// Safe against amber-ing the sky: this is a CESIUM post-process stage, so
+		// the Three overlay (moon, stars, clouds) composites above it untouched.
+		//
+		// ⚠ This brightens ground night-lights ~6.7x in palette contribution.
+		// Intended, but it is a look change — verify at /?time=22 before shipping.
 
 		// Desat under lights to kill blue-base → purple bleed.
 		vec3 grayBase = vec3(lum);
