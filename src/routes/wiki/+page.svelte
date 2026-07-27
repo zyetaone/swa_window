@@ -810,21 +810,6 @@
 		margin: 0 auto 24px;
 	}
 
-.deck-sub {
-		font-size: 13px;
-		color: #667090;
-		max-width: 720px;
-		margin: -16px auto 24px;
-		padding: 12px 16px;
-		border-left: 2px solid rgba(48,76,178,0.4);
-		background: rgba(48,76,178,0.04);
-		border-radius: 0 6px 6px 0;
-		text-align: left;
-	}
-
-.deck-sub strong { color: #8898cc; }
-.deck-sub code { font-family: "JetBrains Mono", monospace; font-size: 12px; color: #8098cc; }
-
 	.hero-meta {
 		display: flex;
 		gap: 12px;

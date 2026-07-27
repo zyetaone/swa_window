@@ -163,10 +163,6 @@
 		     The sky is now Cesium's skyAtmosphere ONLY; the Threlte <Sky> below
 		     stays as invisible IBL environment. (AtmosphericVeil — a second
 		     Three-drawn warm-glow sky layer — was removed for that clean split.) -->
-		<SunGlow />
-		<Moon />
-		<LensFlare />
-		<NightStars ambientIntensity={ambientIntensity} />
 		<Venus />
 		<Meteors />
 		<!-- Far-layer bokeh carpet: thousands of soft warm dots over the whole
@@ -227,7 +223,6 @@
 
 		<!-- Postprocessing chain: godrays + bloom + chromatic + tonemap + grain.
 		     Replaces Threlte's autoRenderTask with EffectComposer.render(). -->
-		<EffectStack />
 	</Canvas>
 </div>
 
