@@ -121,6 +121,7 @@ export const BUILDING_SHADER_GLSL = `
 		vec3 retailColor = vec3(1.0, 0.82, 0.45);   // amber retail
 		vec3 screenColor = vec3(0.9, 0.85, 0.6);    // warm screen glow
 		vec3 officeWhite = vec3(1.0, 0.94, 0.78);   // warm white (never pure)
+		vec3 upperColor = mix(
 			mix(warmColor, coolColor, smoothstep(0.0, 0.4, colorMix)),
 			mix(screenColor, officeWhite, smoothstep(0.6, 1.0, colorMix)),
 			step(0.5, colorMix)
