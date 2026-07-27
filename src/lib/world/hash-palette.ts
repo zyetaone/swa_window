@@ -88,6 +88,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 
 		// Ambient floor — warm tint so terrain never goes pure black.
 		vec3 ambient = vec3(0.025, 0.022, 0.018) * u_envLight * u_nightFactor;
+		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}

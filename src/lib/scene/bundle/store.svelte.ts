@@ -12,7 +12,8 @@
 import type { Effect } from '../types';
 import type { ContentBundle } from './types';
 import { isContentBundle } from './types';
-import { createVideoBgEffect, createSpriteEffect } from '../effects/factories';
+import { createSpriteEffect } from '../effects/sprite/factory';
+import { createVideoBgEffect } from '../effects/video-bg/factory';
 
 export function createEffectFromBundle(bundle: ContentBundle): Effect | null {
 	switch (bundle.type) {

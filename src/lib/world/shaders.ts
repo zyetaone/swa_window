@@ -88,7 +88,7 @@ export const COLOR_GRADING_GLSL = `
 		// signal the scene has into black an hour early. Starting later keeps
 		// the evening band present; the nf=1.0 deep-night value (0.85) is
 		// unchanged, so the load-bearing night-ground contract holds.
-		float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.85 * (1.0 - lightMask);
+		float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.55 * (1.0 - lightMask);
 		rgb = mix(rgb, deepNavy, baseDark);
 
 		// 3. 3-stop warm palette (sodium → amber → warm-white). Calm-amber
@@ -118,17 +118,15 @@ export const COLOR_GRADING_GLSL = `
 		// central dome. Bloom now owns the glow halo entirely. u_lightIntensity
 		// still drives the building-window shader; only this corona is gone.)
 
-		// 4. Shadow crush + contrast bump at night so cities pop. Crush
-		//    softened (0.35 → 0.2) so suburb mid-tones survive — too-deep
-		//    crush collapsed the city silhouette into the sky.
-		float shadowCrush = 1.0 - 0.20 * u_nightFactor;
+		// 4. Shadow crush + contrast bump — softened to keep terrain visible.
+		float shadowCrush = 1.0 - 0.10 * u_nightFactor;
 		rgb = pow(max(rgb, 0.0), vec3(1.0 / shadowCrush));
-		// 0.25 → 0.16: full-strength contrast at deep night double-crushed
-		// the suburb mid-tones (pitch-black gaps between lit blocks) while
-		// pushing the already-additive road cores further toward clip. A
-		// gentler bump keeps the city "pop" without the Tron look.
-		float contrast = 1.0 + 0.16 * u_nightFactor;
+		float contrast = 1.0 + 0.10 * u_nightFactor;
 		rgb = (rgb - 0.5) * contrast + 0.5;
+
+		// 5. Ambient floor — warm tint so unlit terrain never goes pure black.
+		vec3 ambientFloor = vec3(0.040, 0.032, 0.020) * u_nightFactor;
+		rgb = max(rgb, ambientFloor);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}
