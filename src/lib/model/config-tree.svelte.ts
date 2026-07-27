@@ -60,8 +60,6 @@ export const atmosphere = $state({
 });
 
 
-
-
 // ─── Camera ──────────────────────────────────────────────────────────────────
 
 interface CameraShape {
@@ -117,15 +115,12 @@ interface CameraShape {
 
 const _camera: CameraShape = {
 	orbit: {
-		// Flight drift in degrees/second at speed=1.0. 0.01 gives commercial-cruise
-		// pace at the default 1.4x. (A 0.017 bump read as "flying weird" — too fast
-		// a pan for the calm scenic mood — so kept at the gentle cruise value.)
-		driftRate: 0.018,
-		major: 0.15,            // degrees (~17 km) long axis
-		minor: 0.06,            // degrees (~7 km) short axis — ~2.5:1 aspect
-		majorMin: 0.08,         // tightest orbit (dense city passes)
-		majorMax: 0.25,         // widest orbit (sweeping vistas)
-		breathePeriod: 180,     // seconds per full breathe cycle
+				driftRate: 0.018, // orbit lateral speed (deg/s at speed=1)
+		major: 0.15,
+		minor: 0.06,
+		majorMin: 0.08,
+		majorMax: 0.25,
+		breathePeriod: 180,
 	},
 	cruise: {
 		departureDurationSec: 2.0,
@@ -135,43 +130,21 @@ const _camera: CameraShape = {
 		maxSpeed: 3.0,
 	},
 	motion: {
-		// Banking — horizon tilt during orbit turns. Phase 10b (user direction
-		// "improve tilt on plane rotation, to the left more sky to the right
-		// more ground"): bumped 6→10 for a more dramatic horizon roll when the
-		// scene rotates. The motion.svelte.ts tick still ramps softly via
-		// bankSmoothing — visible cabin tilt, not a snap.
-		bankAngleMax: 16.0,
+				bankAngleMax: 16.0, // max horizon tilt on turns
 		bankSmoothing: 2.5,
-		// Bank → pitch coupling. Roll alone only TILTS the horizon — it can't
-		// show "more ground / more sky". This couples bank into camera pitch
-		// so a turn in one direction dips the view toward the ground, and the
-		// opposite turn lifts it toward the sky (applied in compose.ts
-		// syncCamera). 0.9 → a full 10° bank shifts pitch ~9°, a clear but
-		// not vertiginous ground/sky swing. Set 0 to disable.
-		bankPitchCouple: 0.9,
-		// Pitch breathing — slow nose up/down oscillation. Lifted 1.5 → 2.6 for
-		// richer "alive in flight" motion (the cabin gently rises/settles)
-		// without adding turbulence jolts (kept low per prior direction).
-		breathingPeriod: 22,
+				bankPitchCouple: 0.9, // tilt-to-pitch coupling (more ground/sky)
+				breathingPeriod: 22, // cabin nose up/down cycle
 		breathingAmplitude: 2.6,
-		// Engine micro-vibration — constant fine hum. 0.35 → 0.5 so the view
-		// has a subtle living shimmer at rest, not a dead-still frame.
-		engineVibeFreqX: 7,     // Hz
-		engineVibeFreqY: 11,    // Hz (different to avoid Lissajous lock)
-		engineVibeAmp: 0.5,     // pixels
-		// Turbulence bumps — occasional jolts. Phase 11 (user direction
-		// "turbulence to be lower"): cut amplitude and multipliers in half
-		// AGAIN after the Phase-10b softening. Office install reads as a
-		// floating cabin, not "we're hitting weather". The soft-onset
-		// envelope in motion.svelte.ts handles the perceptual jerk; these
-		// numbers handle the perceptual presence.
-		bumpMinInterval: 75,        // longer gaps between bumps
+				engineVibeFreqX: 7, // engine hum freq
+		engineVibeFreqY: 11, // offset to avoid Lissajous lock
+		engineVibeAmp: 0.5, // hum amplitude
+				bumpMinInterval: 75, // min sec between turbulence bumps
 		bumpMaxInterval: 260,
-		bumpDecay: 6,               // slower decay reads as a softer wash
-		bumpRingFreq: 7,            // lower osc freq → less rapid wobble
-		bumpAmplitude: 0.35,        // was 0.7 — halved again
+		bumpDecay: 6, // bump decay rate
+		bumpRingFreq: 7, // bump ring frequency
+		bumpAmplitude: 0.35, // bump amplitude
 		turbulenceMultipliers: { severe: 0.55, moderate: 0.3, light: 0.18 },
-		turbulenceOffsetY: 0.008,   // chatter range halved again
+		turbulenceOffsetY: 0.008, // turbulence chatter range
 	},
 	altitude: {
 		default: 35000,         // feet
@@ -183,13 +156,7 @@ const _camera: CameraShape = {
 		headingOffsetDeg: 0,
 		fovDeg: 60,
 		panoramaArcDeg: 44,
-		// Position offset along the fuselage axis (camera-local Z), in metres.
-		// Used by Wing.svelte so each Pi in a 3-Pi panorama sees a different
-		// portion of the same wing — front Pi (negative) sees leading edge,
-		// back Pi (positive) sees trailing edge. solo / center = 0.
-		// Heading offset rotates the view; fuselage offset translates the
-		// viewer along the fuselage so the wing perspective shifts.
-		fuselageOffsetM: 0,
+				fuselageOffsetM: 0, // multi-Pi wing perspective offset
 	},
 	flyoverPitchDeg: 0, // 0 = off (ship). Lab night-flyover sets ~−60 to look down.
 	effectiveHeading(this: typeof _camera, baseHeading: number): number {
@@ -218,37 +185,16 @@ export const director = $state({
 	},
 	autopilot: {
 		enabled: true,
-		// Timer windows in seconds. First change waits 2-5 min; subsequent
-		// changes 3-8 min. Director location cycles avg ~2:10 per location.
-		initialMinDelay: 120,
+				initialMinDelay: 120,
 		initialMaxDelay: 300,
 		subsequentMinDelay: 180,
 		subsequentMaxDelay: 480,
 		weatherChangeChance: 0.2,
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
-		// Jul-13 retune: 100/160 (avg ~2:10, passer-by cadence) → 240/360
-		// (avg ~5:00). The window lives in peripheral vision for desk-workers
-		// eight hours a day — a whole-world change every two minutes read as
-		// a slideshow, not calm ambience. Fleet-tunable via director.* if an
-		// install wants the livelier gallery pace back.
-		directorMinInterval: 240,      // 4:00
+				directorMinInterval: 240,      // 4:00
 		directorMaxInterval: 360,      // 6:00
-		// Restrict the director's auto-flight pool to locations where
-		// hasBuildings === true (i.e. cities with OSM building extrusions and
-		// real VIIRS night-light footprint). When false, the full pool —
-		// including ocean / mountain / desert archetypes that look dark at
-		// night — is used. Defaulted ON so an unattended kiosk install never
-		// wanders into a "lights off" moment between location changes.
-		nightLitCitiesOnly: true,
-		// ── Night-city flyover beat ──────────────────────────────────────
-		// Occasionally the leader pitches the camera DOWN over the lit city
-		// (the "descend over the night city" moment from the playground hybrid mode)
-		// then returns to orbit. Leader-decided + fleet-broadcast so all 3
-		// Pis enter/exit in lock-step (same seam as director_decision). The
-		// bounds below are the "controlled" in controlled-randomisation:
-		// the roll picks the interval, these walls own the range. Calm by
-		// default — a desk-worker sees it a few times a shift, not a ride.
-		vantage: {
+				nightLitCitiesOnly: true, // auto-flight only to lit cities at night
+				vantage: {
 			enabled: true,
 			// Only fires at night (nightFactor > this) — the beat is a
 			// city-lights moment; by day it would be a downward tilt at
@@ -284,148 +230,57 @@ export const director = $state({
 // ─── World ───────────────────────────────────────────────────────────────────
 
 export const world = $state({
-	// hybrid-v2 switch (Phase A). true ⇒ ship route / mounts the Three overlay
-	// (wing / clouds / moon / photoreal sky / postprocess), camera-mirrored from
-	// Cesium — the same composition /playground renders in hybrid mode. false ⇒
-	// / renders Cesium only (byte-identical to pre-ship-v1), still the escape
-	// hatch if a Pi can't hold framerate.
-	//
-	// ⚠ Flipped to true by operator decision BEFORE the P8 Pi-5 perf gate ran
-	// (ADR-004). Nothing auto-demotes: auto-quality was deleted, and the
-	// liveness watchdog only treats fps <= 0 as dead, so a Pi grinding at 8 fps
-	// is neither detected nor recovered. Per-Pi escape hatches, in order of
-	// reach: `?overlay=0` on the kiosk URL, the SidePanel toggle, or
-	// config_patch('world.useThreeOverlay', false) over the fleet — note none of
-	// these persist across a reboot, since the flag is not in PersistedState.
-	useThreeOverlay: true,
+		useThreeOverlay: true, // Three.js overlay on/off
 	// Hash-palette night post-process — replaces aero-color-grade with the
 	// 3-stop sodium/amber/warm-white palette + 3% red sparks (Apr-15).
 	// Default true: this IS the production night look. Toggle off via SidePanel
 	// or ?hashpalette=0 to revert to aero-color-grade for comparison.
 	useHashPalette: true,
-	// Base imagery night-time saturation. Near-zero so the green Sentinel-2
-	// vegetation + blue water don't bleed through as a hue cast under the
-	// shader's navy mix. baseNightBrightness was removed in Phase 15.5 —
-	// the shader's COLOR_GRADING_GLSL handles all darkening via mix(rgb,
-	// navy, smoothstep(0.45, 0.9, nf) * 0.85).
-	baseNightSaturation: 0.05,
-	// nightLightIntensity multiplies VIIRS alpha (and the shader's pollution
-	// corona) — the operator's "how lit do cities feel" knob. Bumped 0.6 → 3.0
-	// per ship-prep direction. Verified-safe: u_lightIntensity at 3.0 adds
-	// 0.04·1·3 = 0.12 to B channel through pollution path — well under the
-	// shader's clamp(rgb,0,1) ceiling. VIIRS path has outer Math.min(...,1.0).
-	// Building shader fragment-clamps. No saturation regression at 3.0.
-	nightLightIntensity: 4.0,
-	// Bloom post-process — softened for atmospheric VIIRS terrain glow.
-	bloomContrast: 128,
+		baseNightSaturation: 0.05, // keep near-zero to avoid hue bleed under night shader
+		nightLightIntensity: 4.0, // VIIRS + shader city-glow intensity
+		bloomContrast: 128,
 	bloomBrightness: -0.3,
-	bloomSigma: 3.0, // enough bloom for building window glow
+	bloomSigma: 3.0, // bloom spread
 	buildingsEnabled: true,
-	// Phase 3 (variant E productionized) — buildings glow amber at low altitude
-	// (passenger-window mode) and fade above cruise altitude. The blend is on
-	// raw flight.altitude in feet so it tracks descent/climb naturally during
-	// cruise→orbit transitions. Defaults from night-lab E_DEFAULTS.
-	// Window-density gate for the procedural building shader.
-	// TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
-	buildingEmissiveLowAltFt: 25000,
+		buildingEmissiveLowAltFt: 25000, // building glow altitude gate
 	buildingEmissiveHighAltFt: 55000,
-	buildingEmissiveMax: 0.6,
-	// Operator dial for the procedural lit-window density (building-shader
-	// u_windowDensity). 1.0 = tuned default (0.6 ceiling at deep night).
-	// Independent of nightLightIntensity, which scales emissive BRIGHTNESS —
-	// this one scales how MANY windows are lit.
-	// Phase 9 (Apr-15 hash palette + Cesium API knobs productionized from
-	// night-lab Variants G + H). Defaults below were tuned in the lab against
-	// Hyderabad night view; operators can adjust via admin panel for on-site
-	// fine-tune. The 6 shader uniforms (palette / chroma / dark void / env /
-	// ambient) feed COLOR_GRADING_GLSL; the 6 scene uniforms (moonlight /
-	// exposure / atmosphere / sky / viirs) drive compose.ts scene-lighting.
-	// Emissive boost on lit pixels. Feb-15's value of 2.5 was paired with
-	// multiple warm additive paths in the old shader (chroma boost + hash
-	// variance + palette stops); the simplified single-path shader needs
-	// more headroom to read as photoreal city glow. 6.0 lands at "punch"
-	// without saturating to white.
-	// Lowered 6.0 → 3.5: 6.0 over-amplified the city core into one hot white
-	// dome (the same glow VIIRS + bloom already paint — a triple-count).
-	// Bumped 3.5→5.0 for VIIRS terrain match — punchier additive emissive.
-	additiveStrength: 5.0,
-	// Hash-palette terrain: minimal crush, bright ambient → lights everywhere.
-	moonlightIntensity: 0.08,
+	buildingEmissiveMax: 0.6, // max window-glow intensity at night
+		additiveStrength: 5.0, // emissive boost on lit pixels
+		moonlightIntensity: 0.08,
 	nightExposure: 0.75,
-	darkVoidStrength: 0.03,  // nearly no crush — terrain stays visible everywhere
-	envLight: 2.0,           // bright ambient floor so rural terrain isn't black
-	// atmosphereLight 2.4: dropped 3.5 → 2.4 after user reported a
-	// persistent white horizon band at night even with skyBox disabled
-	// and fog floor zeroed. The analytical globe.atmosphereLightIntensity
-	// produces atmospheric scattering on the globe sphere — at horizon,
-	// where atmosphere depth is largest, the scattering peaks and reads
-	// as a horizon band. 2.4 keeps terrain visible (the 2.0 floor warning
-	// in earlier comments) while dimming the horizon scatter ~30%.
-	// Natural-night pass: dropped 2.4 → 1.6. The 2.4 default lit the horizon
-	// band too aggressively — combined with brShift driving the sky proper to
-	// near-black (skyDarken below), it created a "black sky / bright ring at
-	// horizon" stark line that read as unnatural. 1.6 softens the limb scatter
-	// ~33% while still showing the atmosphere band passengers expect.
-	atmosphereLight: 1.6,
-	// Natural-night pass: 2.4 → 1.8. brShift now lands at -0.72 (instead of
-	// -0.96 next to Cesium's -1.0 clamp). The sky retains some atmospheric
-	// tint — a smooth fade into the horizon limb instead of pitch black.
-	skyDarken: 1.8,
-	viirsBrightness: 2.0,      // boosted for Indian cities (was 0.95 — too dim at z8)
+	darkVoidStrength: 0.03, // dark-crush floor
+	envLight: 2.0, // terrain ambient floor
+		atmosphereLight: 1.6, // globe limb-scatter intensity
+		skyDarken: 1.8, // sky-atmosphere brightness shift
+	viirsBrightness: 2.0, // VIIRS layer brightness
 	viirsAlphaBoost: 1.4,
-	windowLightIntensity: 1.5, // boosted — buildings are primary night lights
-	// Phase 6 (altitude-gate VIIRS) — dim the VIIRS raster below cruise so
-	// it doesn't compete with the building emissive at passenger-window
-	// altitudes. TODO (post-Pi-perf-gate): replace with altitudeDetailMix SSOT.
-	viirsAltGateLowFt: 5000,
+	windowLightIntensity: 1.5, // procedural building-window brightness
+		viirsAltGateLowFt: 5000, // VIIRS dim-below-cruise altitude gate
 	viirsAltGateHighFt: 15000,
 	showClouds: true,
-	// Phase 11c (path 1 of Earth/Sky/Pane migration): cloud billboards
-	// as Cesium primitives instead of CSS3D DOM sprites. Default OFF so
-	// the existing artsy DOM clouds keep shipping until the billboards
-	// look right side-by-side; flip to true to test.
-	useCesiumClouds: false,
-	ambientOcclusion: true,
-	qualityMode: 'performance' as QualityMode, // Pi 5 default — balanced/ultra for dev
+		useCesiumClouds: false, // Cesium CloudCollection (experimental)
+	ambientOcclusion: true, // HBAO (altitude-gated)
+	qualityMode: 'performance' as QualityMode, // quality preset
 });
 
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
 export const shell = $state({
-	// Phase 10 (user direction): window frame OFF by default — full-bleed
-	// Cesium fills the viewport, the airplane-cabin oval is opt-in via the
-	// SidePanel toggle. Reverses the Phase 14 default. Show/bundle configs
-	// can still override for specific install presentations.
-	windowFrame: false,
+		windowFrame: false, // cabin oval border
 	blindOpen: true,
 	hudVisible: true,
 	sidePanelOpen: false,
-	// Optional wall-clock display in the playground diag/HUD overlay.
-	// Off by default — operator can toggle via the playground lab's
-	// extraControls panel. Lab-scope only; doesn't affect the prod kiosk.
-	clockVisible: false,
-	// Phase 10 interactivity prototype — cursor parallax. When true and a
-	// mouse is present (kiosk with hidden cursor effectively has none),
-	// scene-content gets a subtle ~12px max offset based on cursor position
-	// from viewport center. Smoothed via RAF lerp. Default ON in dev (we
-	// strip html.kiosk in dev), default ON in prod too — Chromium kiosk has
-	// no real mouse so behavior is unchanged. Operator can disable via
-	// SidePanel. The "look around" feel borrowed from Three.js demos.
-	mouseParallax: true,
-	// Auto-close the side panel after N ms of inactivity (no pointer move
-	// inside the panel). 15000 is the Game Designer's "non-demo reading-and-
-	// deciding threshold." 0 disables — on-site techs flip to 0 while
-	// debugging so the panel stays open. Activity = pointermove inside the
-	// panel; opening always resets the timer. Per v2 council (2026-05-21).
-	sidePanelAutoCloseMs: 15000,
+		clockVisible: false, // lab-scope wall-clock overlay
+		mouseParallax: true, // cursor parallax (no-op in kiosk)
+		sidePanelAutoCloseMs: 15000, // auto-close idle side panel
 	// Touch-contract gate (Q3 council 2026-05-20). false = passenger mode: basic
 	// blind drag is the ONLY touch interaction — the curtain metaphor. true =
 	// demo/operator mode: long-press acceleration + future multi-touch gestures
 	// become live. Lobby installs ship with false; operator iPad PATCHes shell.
 	// touchEnabled=true via /api/config for guided demos. Auto-revert timer
 	// (10-min) is a v1.1 follow-up; for v1 the toggle is sticky.
-	touchEnabled: false,
+	touchEnabled: false, // passenger-mode touch safety
 });
 
 
