@@ -10,7 +10,8 @@ import type * as CesiumType from 'cesium';
 import { getIonToken } from './cesium-setup';
 import { getViirsField } from './viirs-field';
 import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
-import { buildingWindowDensity } from './rules';
+import { smoothstep } from '$lib/utils';
+import { altitudeDetailMix } from '$lib/world/altitude';
 import { CESIUM_QUALITY_PRESETS } from './model';
 
 type C = typeof CesiumType;
@@ -96,7 +97,7 @@ export class BuildingsManager {
 			this.#time = (this.#time + dt) % (Math.PI * 4000);
 			this.#shader.setUniform('u_nightFactor', nf * bootFade);
 			this.#shader.setUniform('u_lightIntensity', scale);
-			this.#shader.setUniform('u_windowDensity', buildingWindowDensity(nf, windowLightIntensity, altFt));
+			this.#shader.setUniform('u_windowDensity', (1 - altitudeDetailMix(altFt)) * smoothstep((nf - 0.15) / 0.7) * windowLightIntensity);
 			this.#shader.setUniform('u_time', this.#time);
 			this.#shader.setUniform('u_cityBrightness', this.#sampleCityBrightness());
 			return;
