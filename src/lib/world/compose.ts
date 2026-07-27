@@ -1,36 +1,34 @@
 /**
  * CesiumManager — consolidated Cesium globe engine.
  *
- * Single file for: Viewer lifecycle, terrain, buildings, imagery,
- * atmosphere sync, post-processing, and the per-frame render loop.
+ * Orchestrator: Viewer lifecycle, terrain, atmosphere, post-processing,
+ * and the per-frame render loop. Imagery + buildings delegate to their
+ * own modules (imagery.ts, buildings.ts).
  */
 
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
-import { lerp, smoothstep, T } from '$lib/utils';
+import { lerp, T } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
-import { altitudeDetailMix } from '$lib/world/altitude';
-import { buildingWindowDensity } from './rules';
-import { VIIRS_GIBS_BASE } from './viirs-field';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
-import { BUILDING_SHADER_GLSL, BUILDING_VERTEX_GLSL } from './building-shader';
 import { COLOR_GRADE_STAGE } from './shaders';
-import { getViirsField } from './viirs-field';
 import {
 	getIonToken,
 	checkLocalTileServer,
 	TILE_SERVER_URL,
-	getSatelliteImagery,
 	VIEWER_OPTIONS,
 } from './cesium-setup';
+import { CESIUM_QUALITY_PRESETS } from './model';
+import { createImageryState, setupImagery, syncImagery } from './imagery';
+import type { ImageryModel, ImageryState } from './imagery';
+import { createBuildingsState, setupBuildings, syncBuildings, setBuildingsWireframe as applyBuildingsWireframe } from './buildings';
+import type { BuildingsState } from './buildings';
 
 type WorldConfig = typeof world;
 
-// Cesium tile subdivision + preload tuning per quality mode. Sole consumer
-import { CESIUM_QUALITY_PRESETS } from './model';
 interface CesiumModelView {
 	flight: {
 		lat: number;
@@ -47,7 +45,6 @@ interface CesiumModelView {
 	motion: {
 		bankAngle: number;
 	};
-	/** Phase 7 — used by compose.ts for camera.effectiveHeading() parallax offset. */
 	config: {
 		camera: {
 			effectiveHeading(baseHeading: number): number;
@@ -82,31 +79,18 @@ export class CesiumManager {
 	private readonly model: CesiumModelView;
 	private readonly viewer: CesiumType.Viewer;
 
-	// Camera lerp state (REMOVED — now SSOT in model.flight.cam*)
 	private lastPostRenderTime = performance.now();
 
-	// Asset state
-	private tileset: CesiumType.Cesium3DTileset | null = null;
-	// Procedural building shader — restored Feb-15 recipe. Per-fragment
-	// lit windows via model-space grid math. Owns 4 uniforms that we
-	// update from syncBuildings(). null if Ion token missing.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private buildingsShader: any = null;
-	// Wall-clock-seeded (seconds since local midnight-ish epoch) so the
-	// aviation-beacon blink + AC-hum flicker phase matches across the
-	// 3-Pi fleet — each Pi boots at a different instant; a 0-seed would
-	// desync the 2 s beacon blink across the panorama seam (invariant #4).
-	private buildingsTime = (Date.now() % 86_400_000) / 1000;
+	// State bags — buildings + imagery own their setup/sync logic downstream
+	private imageryState: ImageryState;
+	private buildingsState: BuildingsState;
 
-	// Boot-time fade — defeats the "amber lights glowing against a still-
-	// loading globe" flash on initial render. timeOfDay is initialised at
-	// noon ($state default), then updateTimeFromSystem() snaps it to the
-	// real wall-clock (often deep night) before the first frame. That makes
-	// nightFactor jump straight to 1.0 — VIIRS + road mask + procedural
-	// building emissive snap to full alpha while Sentinel-2 base tiles are
-	// still streaming. Result: amber dots floating against a black sphere
-	// for ~1–2s. This fade ramps 0→1 over the first 1.6s after the first
-	// syncImagery call, multiplied into every night-gated alpha below.
+	private lightningStage: LightningStage | null = null;
+	private cloudBillboardLayer: CloudBillboardLayer | null = null;
+	private colorGradeStage: CesiumType.PostProcessStage | null = null;
+	private lastQualityMode: QualityMode | null = null;
+
+	// Boot-time fade
 	private bootStartMs: number | null = null;
 	private static readonly BOOT_FADE_MS = 1600;
 	private getBootFade(): number {
@@ -114,51 +98,15 @@ export class CesiumManager {
 		const t = (performance.now() - this.bootStartMs) / CesiumManager.BOOT_FADE_MS;
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
-	private lastNightFactor = -1;
-	// Imagery Layers
-	// baseLayer: Sentinel-2 / ESRI / Mapbox terrain texture — dimmed + desaturated
-	//   as night falls. The vivid day EOX boost is kept via baseDay* caches so
-	//   we can lerp between day-vivid and night-dark.
-	// viirsLayer: NASA VIIRS night lights (see viirs-endpoint.ts) — real satellite
-	//   nightlight imagery (z3-z8, 500m/px). ColorToAlpha hides dark (unlit)
-	//   pixels; hue+saturation tint toward sodium amber. Only visible at
-	//   night via alpha gated on nightFactor.
-	// roadMaskLayer: CartoDB Dark with colorToAlpha(BLACK) — white road
-	//   geometry survives, everything else punches transparent. Restored
-	//   Phase 17 from Feb-15's recipe (the simpler thing that worked) after
-	//   the Overpass-fetching RoadLayer was deleted as over-engineered.
-	private baseLayer: CesiumType.ImageryLayer | null = null;
-	private baseDaySaturation = 1.0;
-	private baseDayContrast = 1.0;
-	private viirsLayer: CesiumType.ImageryLayer | null = null;
-	private roadMaskLayer: CesiumType.ImageryLayer | null = null;
-	private lightningStage: LightningStage | null = null;
-	// Path 1 cloud migration — Cesium-native billboard clouds behind the
-	// world.useCesiumClouds flag. Default OFF; the existing CSS3D clouds
-	// keep shipping until billboards look right.
-	private cloudBillboardLayer: CloudBillboardLayer | null = null;
-	private colorGradeStage: CesiumType.PostProcessStage | null = null;
-	private lastQualityMode: QualityMode | null = null;
 
-	// Phase 9: moonlight DirectionalLight that replaces scene.light at deep
-	// night. Snapshot the original SunLight so we can swap back at dawn.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// Moonlight
 	private moonlight: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private originalSunLight: any = null;
 	private isUsingMoonlight = false;
-	// Reusable Cartesian3s for moon-phase math (no per-frame allocation)
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private _sunPos: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private _moonPos: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private _earthToMoon: any = null;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private _moonToSun: any = null;
-	// Scratch Cartesian3 — reused by syncCamera every frame to avoid
-	// per-frame allocation from Cartesian3.fromDegrees().
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private _scratchDest: any = null;
 
 	// Effect sync caches
@@ -171,57 +119,28 @@ export class CesiumManager {
 	private lastAtmoKilled: boolean | null = null;
 	private lastExposure = -1;
 	private lastAtmoLight = -1;
-	private lastBuildingsShow = true;
 	private lastClockLon = -999;
 	private lastTimeOfDay = -1;
 	private started = false;
-	// Moon-phase (Simon1994) is a function of date, not the 60 Hz frame — cache it
-	// and recompute only when the clock time changes (see syncAtmosphere).
 	private _moonPhaseTime = -1;
 	private _moonPhaseCache = 1.0;
-	private lastBuildingNightFactor = -1;
 	private lastTerrainExaggeration = -1;
-	// VIIRS write-skip cache. syncImagery() runs every tick; writing
-	// the same alpha+brightness 60×/sec is a GPU sync cost we can
-	// avoid by hashing the last applied values.
-	private lastViirsAlpha = -1;
-	private lastViirsBrightness = -1;
-	private lastViirsShow: boolean | null = null;
-	// PostProcessStage `enabled` toggle cache. At day (nf < 0.001) the
-	// color-grade shader is mathematically pass-through (verified in
-	// shaders.ts) — disabling the stage outright lets Cesium skip the
-	// entire fullscreen render-to-texture pass on Pi 5. Only flip on
-	// transition to avoid per-frame setter overhead.
 	private lastColorGradeEnabled: boolean | null = null;
 
 	#boundTick: (() => void) | null = null;
 
-	/**
-	 * Construct the Cesium.Viewer directly into the visible `container`.
-	 *
-	 * Earlier versions used a hidden display:none div, then reparented the
-	 * widget into the visible container in start(). That left Cesium's first
-	 * frame measuring a 0×0 viewport and locking the camera at "space view"
-	 * until a user interaction triggered a re-evaluation. Constructing into
-	 * the live container side-steps that entirely.
-	 */
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 		this.CesiumModule = CesiumModule;
 		this.model = model;
 		this.viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
+		this.imageryState = createImageryState();
+		this.buildingsState = createBuildingsState();
 	}
 
-	/** Live Cesium.Viewer — exposed so scene effects can attach primitives/data sources. */
 	getViewer(): CesiumType.Viewer { return this.viewer; }
-
-	/** Bound Cesium module — exposed so scene effects can construct Cesium types. */
 	getCesium(): typeof CesiumType { return this.CesiumModule; }
 
 	async start(COLOR_GRADING_GLSL: string): Promise<void> {
-		// Re-entrancy guard: a second start() (rapid unmount→remount / HMR) would
-		// add duplicate imagery layers, terrain providers, and post-process stages
-		// on top of the first — N compositing copies accumulating over the kiosk's
-		// life. Start exactly once per manager; destroy() builds a fresh one.
 		if (this.started) return;
 		this.started = true;
 		const C = this.CesiumModule;
@@ -230,54 +149,19 @@ export class CesiumManager {
 		v.scene.logarithmicDepthBuffer = true;
 		v.scene.highDynamicRange = true;
 		v.scene.postProcessStages.fxaa.enabled = true;
-		// Disable Cesium's mouse/touch input on the globe. The flight engine
-		// drives camera position programmatically via Cartesian3.fromDegrees;
-		// user pan/rotate/zoom would fight that and let an accidental pointer
-		// drag rotate the world. The kiosk surface is the blind + side panel,
-		// not the globe itself.
 		v.scene.screenSpaceCameraController.enableInputs = false;
-		// Phase 9: ACES tonemap delivers richer blacks and brighter highlights
-		// than the default PBR_NEUTRAL — punches the calm-amber direction.
-		// Exposure starts neutral (1.0) and gets lerped by nightFactor in tick()
-		// toward world.nightExposure. Zero GPU cost vs. PBR_NEUTRAL default.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).tonemapper = (C as any).Tonemapper.ACES;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).exposure = 1.0;
-		// Globe lighting ON — terminator (day/night boundary) now renders on
-		// the globe, and terrain/buildings cast real shadows when the sun is
-		// low. Sun position is driven by syncClock (local-at-longitude UTC).
 		v.scene.globe.enableLighting = true;
 		if (v.shadowMap) v.shadowMap.enabled = true;
-		// Continuous render — our model state changes every RAF tick, and tick()
-		// is hooked to postRender. Without this, Cesium would only re-render
-		// when its OWN scene reports a change, missing model-driven updates and
-		// trapping the camera at its initial state.
 		v.scene.requestRenderMode = false;
 		v.scene.globe.oceanNormalMapUrl = C.buildModuleUrl('Assets/Textures/waterNormals.jpg');
 
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = true;
-		// Cesium skyBox ON — it ships the real Tycho-2 catalog texture (thousands
-		// of accurately-placed stars + the Milky Way arc), Cesium's native night
-		// sky. This is now the PRIMARY star field on BOTH paths: the ship route
-		// (Three overlay off) gets a real starry sky instead of empty black, and
-		// the hybrid lab uses Cesium's real catalog too. The Three NightStars are
-		// reduced to a few bright animated twinklers on top (Cesium's skyBox is
-		// static); the Three Milky Way was removed (Cesium's is real). Cesium owns
-		// the stars; Three owns moon/meteors/sparkles. (Was force-OFF in Phase 16
-		// when Three owned the whole star field.)
-		if (v.scene.skyBox)
-			(v.scene.skyBox as any).show = true;
+		if (v.scene.skyBox) (v.scene.skyBox as any).show = true;
 		if (v.scene.sun) { v.scene.sun.show = true; v.scene.sun.glowFactor = 2.0; }
-		// Cesium's built-in moon is OFF — the Three-side Moon component (in
-		// world/three/Moon.svelte for the playground hybrid composition) gives
-		// us a larger, anti-sun, nightFactor-tied moon with full visual
-		// control. Leaving Cesium's on would double-render the lunar disk.
 		if (v.scene.moon) v.scene.moon.show = false;
 
-		// Phase 9: snapshot the default SunLight so we can swap back at dawn,
-		// pre-build the warm moonlight DirectionalLight (no per-frame alloc),
-		// pre-allocate the Cartesian3s for moon-phase math.
 		this.originalSunLight = v.scene.light;
 		this.moonlight = new C.DirectionalLight({
 			direction: new C.Cartesian3(0, 0, -1),
@@ -286,7 +170,7 @@ export class CesiumManager {
 		});
 		this._sunPos = new C.Cartesian3();
 		this._moonPos = new C.Cartesian3();
-		this._earthToMoon = new C.Cartesian3(0, 0, -1); // valid downward dir if Simon1994 ever throws before first compute
+		this._earthToMoon = new C.Cartesian3(0, 0, -1);
 		this._moonToSun = new C.Cartesian3();
 		this._scratchDest = new C.Cartesian3();
 
@@ -295,42 +179,19 @@ export class CesiumManager {
 
 		this.setupPostProcess(COLOR_GRADING_GLSL);
 		await this.setupTerrain();
-		await this.setupImagery();
-		await this.setupBuildings();
+		await setupImagery(this.imageryState, C, v);
+		await setupBuildings(this.buildingsState, C, v, this.model.config.world.buildingsEnabled);
 		this.lightningStage = new LightningStage(C, v);
 		this.lightningStage.mount();
 		this.cloudBillboardLayer = new CloudBillboardLayer(C, v);
 		this.cloudBillboardLayer.mount();
 
-		// Phase 16: call tick once immediately to synchronize state (night,
-		// camera, imagery) BEFORE the first render frame, avoiding the
-		// "flash of day" on boot at night.
 		this.tick();
-
-		// Set Cesium clock to model time on first frame so sun position is
-		// right from the start (otherwise we render with wall-clock UTC
-		// briefly until the next timeOfDay change).
 		this.syncClock();
-
-		// Force resize + render — Cesium widget was attached to the visible
-		// container during start(), but its canvas may still report 0×0 from
-		// the hidden parent. Without an explicit resize+render, the first frame
-		// can lock the camera at 'space view' and tile requests for the model
-		// position never fire. This kick wakes Cesium up.
 		v.resize();
 		v.scene.requestRender();
 	}
 
-	/**
-	 * Sync Cesium's internal clock to the model's time-of-day, treating
-	 * timeOfDay as LOCAL solar time at the current view longitude.
-	 *
-	 * Cesium computes sun position from absolute UTC, so we have to
-	 * back-convert: UTC = localHour - longitude/15 (each 15° east shifts
-	 * solar noon one hour earlier in UTC). Without this, "Dubai 4 PM"
-	 * (timeOfDay=16) was being passed straight to UTC, putting the sun
-	 * over the Pacific and rendering Dubai as deep night with stars.
-	 */
 	private syncClock(): void {
 		const C = this.CesiumModule;
 		const localHour = ((this.model.timeOfDay % 24) + 24) % 24;
@@ -348,17 +209,10 @@ export class CesiumManager {
 		);
 	}
 
-
 	// ─── Post Process Setup ──────────────────────────────────────────────────
 	private setupPostProcess(glsl: string): void {
 		const v = this.viewer;
 
-		// Bloom: enabled at non-performance quality modes so bright city-light
-		// pixels bleed into soft halos that merge between adjacent intersections.
-		// contrast=128 + brightness=-0.3 restricts contribution to genuinely
-		// bright fragments (no bloom on dim terrain). sigma=3.5 widens Gaussian
-		// enough that adjacent road-intersection halos merge into pooled glow.
-		// Performance preset disables — Pi 5 GPU headroom is too tight there.
 		const bloom = v.scene.postProcessStages?.bloom;
 		if (bloom) {
 			const allowBloom = this.model.config.world.qualityMode !== 'performance';
@@ -383,9 +237,6 @@ export class CesiumManager {
 					name: COLOR_GRADE_STAGE,
 					fragmentShader: glsl,
 					uniforms: {
-						// Boot-faded so the post-process additive/desat/crush all
-						// fade in together with the imagery layers — no "ground
-						// goes dark before lights arrive" flicker.
 						u_nightFactor: () => this.model.nightFactor * this.getBootFade(),
 						u_additiveStrength: () => this.model.config.world.additiveStrength,
 					},
@@ -396,182 +247,42 @@ export class CesiumManager {
 		} catch (e) {
 			console.warn('[CesiumManager] Post-process failed:', e);
 		}
-		// Apply initial enable state to bloom + color-grade based on qualityMode.
 		this.syncQuality();
 	}
 
-	/**
-	 * Keep post-process stage enable-state in sync with `config.world.qualityMode`.
-	 *
-	 * `performance` mode disables bloom AND the color-grade shader — these are
-	 * the two GPU-heavy post-process stages and the autoQuality system flips
-	 * here when Pi 5 frame budget can't keep up. The night look degrades to
-	 * VIIRS + CartoDB + skyAtmosphere only; still legible, just without the
-	 * pollution corona / shadow crush / contrast boost layered on top.
-	 *
-	 * Called from tick() every frame but no-ops unless `qualityMode` has
-	 * changed since the last sync — Cesium tolerates per-frame writes to
-	 * `stage.enabled` but we skip them anyway to keep the hot path clean.
-	 */
 	private syncQuality(): void {
 		const mode = this.model.config.world.qualityMode;
-		if (mode === this.lastQualityMode) return;
+		if (mode === this.lastQualityMode) {
+			// Day-off color-grade toggle: disable at full day (nf < 0.001)
+			// when shader is identity passthrough, skip the fullscreen pass.
+			if (this.colorGradeStage && this.lastQualityMode !== 'performance') {
+				const nf = this.model.nightFactor;
+				const shouldEnable = nf >= 0.001;
+				if (shouldEnable !== this.lastColorGradeEnabled) {
+					this.colorGradeStage.enabled = shouldEnable;
+					this.lastColorGradeEnabled = shouldEnable;
+				}
+			}
+			return;
+		}
 		this.lastQualityMode = mode;
 		const allow = mode !== 'performance';
 		const bloom = this.viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
-		if (this.colorGradeStage) this.colorGradeStage.enabled = allow;
+		if (this.colorGradeStage) {
+			this.colorGradeStage.enabled = allow;
+			this.lastColorGradeEnabled = allow ? null : false;
+		}
 
-		// Shadow maps cost 3-5ms GPU on Pi 5 — invisible at cruise altitude.
-		// FXAA costs ~1ms — unnecessary since the post-process chain already
-		// applies bloom + color-grade smoothing.
 		const v = this.viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		(v.scene.postProcessStages as any).fxaa.enabled = allow;
 
-		// Re-read bloom uniforms from config — previously only set at startup,
-		// so admin panel changes to bloom controls were silently ignored.
 		if (bloom && allow) {
 			const w = this.model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;
 			bloom.uniforms.brightness = w.bloomBrightness;
 			bloom.uniforms.sigma = w.bloomSigma;
-		}
-	}
-
-	// ─── Imagery Setup ───────────────────────────────────────────────────────
-	private async setupImagery(): Promise<void> {
-		const C = this.CesiumModule;
-
-		// Source decision lives entirely in getSatelliteImagery():
-		//   TILE_SERVER_URL set  → local-cached EOX (z3-z12, WebMercator)
-		//   MAPBOX_TOKEN set     → Mapbox satellite
-		//   default              → remote EOX Sentinel-2
-		//   VITE_SENTINEL2=false → ESRI World Imagery
-		const cfg = getSatelliteImagery();
-		console.info('[CesiumManager] base imagery:', cfg.label);
-
-		const provider = new C.UrlTemplateImageryProvider({
-			url: cfg.url,
-			maximumLevel: cfg.maxZoom,
-			minimumLevel: 0,
-			...(cfg.webMercator ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-		});
-		this.baseLayer = this.viewer.imageryLayers.addImageryProvider(provider);
-		// EOX Sentinel-2 cloud-filtered composite is naturally muted at z6-z12.
-		// ESRI/Mapbox come pre-saturated. These per-source tweaks restore vivid
-		// terrain colors without crushing highlights. baseDay* values are the
-		// DAY target — syncImagery lerps toward dark/muted at night.
-		if (this.baseLayer) {
-			this.baseDaySaturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
-			this.baseDayContrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
-			this.baseLayer.saturation = this.baseDaySaturation;
-			this.baseLayer.contrast = this.baseDayContrast;
-			this.baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
-			this.baseLayer.brightness = 1.0;
-		}
-
-		const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
-
-		// CartoDB Dark — RESTORED Phase 17 from Feb-15's recipe. The dark
-		// basemap has WHITE road lines on a near-black background; we punch
-		// out the black with colorToAlpha(BLACK) and only the road grid
-		// survives. ×4 brightness at deep night makes them glow sharp. Free
-		// road geometry for the cost of one imagery layer + zero JS state
-		// (vs. the deleted Overpass-fetching RoadLayer billboard collection).
-		try {
-			const cartoUrl = tileBase
-				? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
-				: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
-			this.roadMaskLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({
-					url: cartoUrl,
-					maximumLevel: 18,
-					minimumLevel: 0,
-					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-				}),
-			);
-			if (this.roadMaskLayer) {
-				this.roadMaskLayer.alpha = 0;            // synced per-frame
-				this.roadMaskLayer.show = false;
-				this.roadMaskLayer.dayAlpha = 0;
-				this.roadMaskLayer.nightAlpha = 1;
-				this.roadMaskLayer.colorToAlpha = C.Color.BLACK;
-				this.roadMaskLayer.colorToAlphaThreshold = 0.0;
-				this.roadMaskLayer.saturation = 0.0;    // white/grey roads
-				this.roadMaskLayer.contrast = 1.5;
-				this.roadMaskLayer.brightness = 1.0;
-			}
-		} catch (e) {
-			console.warn('[CesiumManager] CartoDB roads layer failed:', e);
-		}
-
-		// VIIRS night lights layer, via tile-packager cache when present.
-		// Greyscale radiance in → tinted downstream. ColorToAlpha drops the
-		// near-black pixels so unlit terrain shows through.
-		// Layer + pinned date: src/lib/world/viirs-endpoint.ts (the SSOT, which
-		// also records why the colorized Black Marble composite was dropped).
-		// Packaged copy: tools/tile-packager/src/sources.ts (viirs-night-lights).
-		//
-		// Lineage: VIIRS_CityLights_2012 → VIIRS_Black_Marble 2016 → the
-		// gap-filled BRDF-corrected Day/Night Band radiance now in the SSOT.
-		// The last hop is the one that mattered: greyscale radiance with a truly
-		// black background, rather than amber cities painted on lifted navy that
-		// read as "lit" to every consumer sampling this raster.
-		try {
-			// Canonical GIBS WMTS REST endpoint (epsg3857/best, PNG). The older
-			// map1.vis.earthdata.nasa.gov/wmts-webmerc host now returns
-			// InvalidParameter (400), so the remote fallback silently rendered NO
-			// ground night-lights in dev / uncached deployments. Cached Pis read
-			// from tileBase and were unaffected.
-			const viirsUrl = tileBase
-				? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
-				: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`;
-			this.viirsLayer = this.viewer.imageryLayers.addImageryProvider(
-				new C.UrlTemplateImageryProvider({
-					url: viirsUrl,
-					maximumLevel: 8, // VIIRS data only available through z8
-					minimumLevel: 3,
-					...(tileBase ? { tilingScheme: new C.WebMercatorTilingScheme() } : {}),
-				}),
-			);
-			if (this.viirsLayer) {
-				this.viirsLayer.alpha = 0;
-				this.viirsLayer.show = false;
-				// Day/night separation. globe.enableLighting=true would otherwise
-				// MULTIPLY VIIRS by the sun-direction terminator shading, dimming
-				// the lit-cities data on the night side — exactly the opposite of
-				// what we want. dayAlpha=0 hides VIIRS on the lit hemisphere;
-				// nightAlpha=1 keeps it full-bright on the dark hemisphere.
-				this.viirsLayer.dayAlpha = 0;
-				this.viirsLayer.nightAlpha = 1;
-				// Dark pixels → transparent so only lit cells composite over terrain.
-				this.viirsLayer.colorToAlpha = C.Color.BLACK;
-				// Treat the raster as a pure light-intensity mask; the post-process
-				// shader picks up the bright cells and paints them with the
-				// hash-palette. Now a no-op rather than a repair — the source is
-				// itself a greyscale radiance product (viirs-endpoint.ts) instead
-				// of the colorized composite this used to strip.
-				//
-				// The old comment here claimed "kept 0.1 saturation so the shader's
-				// red-bias gate has a signal" while the line below already set 0.0.
-				// That mismatch silently starved the gate; the gate has since been
-				// removed as unworkable (see hash-palette.ts).
-				this.viirsLayer.hue = 0.0;
-				this.viirsLayer.saturation = 0.0;
-				// Base gain halved (5.0 → 2.5) with the source swap. The old x5 was
-				// compensating for Black Marble reading ~15/255 over Indian cities;
-				// the radiance product now in viirs-endpoint.ts reads a median
-				// 77/255 over Hyderabad, so keeping x5 would clip the metro core
-				// flat white and amplify background grain with it.
-				this.viirsLayer.brightness = 2.5 * this.model.config.world.viirsBrightness;
-				// Lower contrast spreads dim suburban lights instead of crushing them.
-				this.viirsLayer.contrast = 0.8;
-				// Ultra-low threshold to capture even faint VIIRS signal.
-				this.viirsLayer.colorToAlphaThreshold = 0.01;
-			}
-		} catch (e) {
-			console.warn('[CesiumManager] VIIRS layer failed:', e);
 		}
 	}
 
@@ -584,18 +295,23 @@ export class CesiumManager {
 		this.syncCamera(dt);
 		this.syncAtmosphere();
 		this.syncTerrainExaggeration();
-		this.syncImagery();
+		syncImagery(this.imageryState, this.model as unknown as ImageryModel, this.getBootFade());
 		this.syncCloudBillboards();
 		this.syncLightning(dt);
-		this.syncBuildings(dt);
+		syncBuildings(
+			this.buildingsState, dt,
+			this.model.nightFactor,
+			this.model.nightLightScale,
+			this.model.flight.altitude,
+			this.model.config.world.buildingsEnabled,
+			this.model.config.world.windowLightIntensity,
+			() => this.getBootFade(),
+			this.CesiumModule,
+			this.viewer,
+		);
 		this.syncQuality();
 	}
 
-	/**
-	 * Drive the Cesium-native cloud billboards. No-op when
-	 * world.useCesiumClouds is false (the default). Repaints only when
-	 * (location|weather|density|altitude-bucket) crosses a step.
-	 */
 	private syncCloudBillboards(): void {
 		if (!this.cloudBillboardLayer) return;
 		const m = this.model;
@@ -609,12 +325,6 @@ export class CesiumManager {
 		);
 	}
 
-	/**
-	 * Drive the lightning post-process stage. Composition picker fires
-	 * a strike, the stage's flash uniform decays. Falls back to weather
-	 * config when no composition is active (e.g. hasLightning was true
-	 * at boot before the picker rolled).
-	 */
 	private syncLightning(dt: number): void {
 		if (!this.lightningStage) return;
 		const w = this.model.config.atmosphere.weather;
@@ -630,37 +340,12 @@ export class CesiumManager {
 	private syncCamera(_dt: number): void {
 		const f = this.model.flight;
 		const mot = this.model.motion;
-
-		// Phase 7 — multi-Pi parallax. For solo role (default), parallax
-		// offset is 0 and this is a no-op. For left/center/right in a
-		// panorama, the per-device yaw shifts the view so three Pis tile
-		// into a continuous horizon band from the same shared flight state.
-		// Uses model.flight.camHeading (SSOT smoothed).
 		const parallaxHeading = this.model.config.camera.effectiveHeading(f.camHeading);
-		// The passenger faces out the SIDE window — SEAT_LOOK_DEG (90°) off the
-		// aircraft's nose (flight.noseHeadingDeg, smoothed + per-Pi-yawed into
-		// parallaxHeading). Naming the old magic `+ 90` makes the camera-vs-nose
-		// frame explicit (AircraftBody groundwork): camHeading = nose + seat-look.
 		const SEAT_LOOK_DEG = 90;
 
 		const C = this.CesiumModule;
-		// Cesium signature is fromDegrees(lon, lat, height, ellipsoid, result).
-		// Passing `_scratchDest` as the 4th positional made Cesium treat it as
-		// an ellipsoid (it has no .radiiSquared) → multiplyComponents got
-		// undefined as `left` → DeveloperError stopped rendering. Pass
-		// `undefined` for ellipsoid (defaults to WGS84) so `_scratchDest`
-		// lands in the result slot it was always meant for.
 		C.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048, undefined, this._scratchDest);
-		// Bank → pitch coupling. Roll (below) only tilts the horizon; coupling
-		// bank into pitch makes a turn actually reveal more GROUND (banking one
-		// way) or more SKY (the other). Positive bank dips the view downward
-		// (more negative pitch = more ground); negative bank lifts it. Applied
-		// at display time from the live bankAngle so it never feeds back into
-		// the pitch-smoothing loop. Coefficient is admin-tunable.
 		const bankPitchCouple = this.model.config.camera.motion.bankPitchCouple ?? 0;
-		// Flyover override (lab night-city preview): a non-zero flyoverPitchDeg
-		// pins the camera to look DOWN at the city instead of out the window.
-		// Ship default is 0 → normal wing-out pitch.
 		const flyover = this.model.config.camera.flyoverPitchDeg ?? 0;
 		const pitchDeg = flyover !== 0
 			? flyover - bankPitchCouple * mot.bankAngle
@@ -680,22 +365,9 @@ export class CesiumManager {
 		const v = this.viewer;
 		const C = this.CesiumModule;
 		const nf = m.nightFactor;
-		// P3 SSOT consolidation: the dawn/dusk warm weight is now the SHARED
-		// lightingState() value — the exact same `dawnDuskWeight` the Three
-		// overlay reads (a capped smoothstep of dawnDuskFactor) — instead of the
-		// raw `model.dawnDuskFactor` Cesium used to derive on its own. The two
-		// renderers' dusk weighting can no longer drift apart by construction.
-		// (No sunDir passed: only dawnDuskWeight is read here, which is purely
-		// time/nightFactor driven.) Numerically this scales the dusk biases a few
-		// % vs the old raw factor — the warm-dusk *magnitude* recalibration (now
-		// that AtmosphericVeil is gone and Cesium owns dusk solo) lives in the
-		// NIGHT_PALETTE.skyAtmosphere/globeColor duskBias targets, tuned live.
 		const dd = lightingState(m.timeOfDay, nf).dawnDuskWeight;
 		const isSunVisible = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 
-		// Sync clock on time-of-day OR longitude change (>0.5°). Previously
-		// only tracked timeOfDay — location changes across timezones left
-		// the sun position frozen at the old UTC offset.
 		if (this.lastTimeOfDay !== m.timeOfDay || Math.abs(this.lastClockLon - m.flight.lon) > 0.5) {
 			this.lastTimeOfDay = m.timeOfDay;
 			this.lastClockLon = m.flight.lon;
@@ -703,14 +375,9 @@ export class CesiumManager {
 			this.syncClock();
 		}
 
-		// Skybox ON — Cesium's Tycho-2 star catalog is the primary night sky
-		// (see setup() for rationale). Guarded: written once, skipped after.
 		if (v.scene.skyBox && (v.scene.skyBox as any).show !== true)
 			(v.scene.skyBox as any).show = true;
 
-		// Globe color: lerp day → night by nightFactor, then bias toward
-		// duskBias proportional to dawnDuskFactor × duskWeight. Targets live
-		// in $content/compositions/night.ts — edit there, not here.
 		const G = NIGHT_PALETTE.globeColor;
 		let r = lerp(lerp(G.day[0], G.night[0], nf), G.duskBias[0], dd * G.duskWeight);
 		let g = lerp(lerp(G.day[1], G.night[1], nf), G.duskBias[1], dd * G.duskWeight);
@@ -721,41 +388,16 @@ export class CesiumManager {
 			v.scene.globe.baseColor = C.Color.fromBytes(Math.round(r), Math.round(g), Math.round(b), 255);
 		}
 
-		// Cesium skyAtmosphere — saturation + brightness shift. Lerps day →
-		// night by nightFactor, then ADDS dawn/dusk bias (negative — pulls
-		// saturation slightly down to cancel cyan limb banding, brightness
-		// slightly down for the blue-hour beat). brightness ALSO scaled by
-		// world.skyDarken (operator on-site knob). Targets in NIGHT_PALETTE.
 		const S = NIGHT_PALETTE.skyAtmosphere;
 		const satShift = lerp(S.satShift.day, S.satShift.night, nf) + dd * S.satShift.duskBias;
 		let brShift = (lerp(S.brShift.day, S.brShift.night, nf) * this.model.config.world.skyDarken)
 			+ dd * S.brShift.duskBias;
-		// Altitude-gated night darkening. The Cesium analytical atmosphere
-		// (sky dome + ground limb) washes the view WHITE/orange at LOW altitude
-		// at night — you look UP through the lit limb. At cruise you look
-		// outward and it's correctly dark. `lowAltNight` ramps 0→1 only at
-		// night as altitude drops below ATMO_GATE_HI, so we floor the sky
-		// brightness toward −1 and (below) fade atmosphereLightIntensity to
-		// near-zero — killing the white horizon band without touching the
-		// (good) high-altitude look. Lowering atmosphereLight ALONE caused a
-		// "bright ring" before; flooring brShift in lock-step avoids it.
 		const ATMO_GATE_HI = 35000, ATMO_GATE_LO = 8000;
 		const lowAltNight = nf * Math.max(0, Math.min(1,
 			(ATMO_GATE_HI - m.flight.camAlt) / (ATMO_GATE_HI - ATMO_GATE_LO)));
-		// Deep-night sky floor — applies at ALL altitudes. The altitude gate
-		// above assumed the cruise horizon limb is naturally dark at night; it
-		// isn't — the analytical skyAtmosphere limb stays bright at 35k ft,
-		// leaving the white horizon band. `deepNight` ramps 0→1 only across the
-		// last stretch of nightFactor (0.7→1.0) so the warm dusk / blue-hour
-		// beat (nf<0.7) is untouched. `lowAltNight` still adds EXTRA darkening
-		// for the low-altitude up-look on top of this baseline.
 		const deepNight = Math.max(0, Math.min(1, (nf - 0.7) / 0.3));
 		brShift += (-1.0 - brShift) * deepNight * 0.6;
 		brShift += (-1.0 - brShift) * lowAltNight;
-		// Guard bug fix: previously only checked satShift, which is constant
-		// at deep night (-1.0). brShift changes from skyDarken slider were
-		// silently dropped, making the operator knob inert. Each shift now
-		// guards independently.
 		const satChanged = Math.abs(satShift - this.lastSkySatShift) > 0.01;
 		const brChanged = Math.abs(brShift - this.lastSkyBrShift) > 0.01;
 		if ((satChanged || brChanged) && v.scene.skyAtmosphere) {
@@ -769,21 +411,10 @@ export class CesiumManager {
 			}
 		}
 
-		// Deep-night atmosphere kill — the warm horizon BAND.
-		// Cesium's ANALYTICAL sky dome + ground limb compute a sunset-coloured
-		// horizon glow from the sun's (sub-horizon) position. brightnessShift
-		// and atmosphereLightIntensity only ATTENUATE it — proven empirically
-		// that even brShift=-1 + atmoLight≈0 still leaves the orange band; only
-		// disabling the passes removes it (atmosphere-bisect, Jun 14). At deep
-		// night the correct sky IS pure black + the Three star field, so disable
-		// both passes. Boolean, so cache-gated to flip ONCE deep in the night
-		// (deepNight>0.6 ≈ nf>0.88) where the atmosphere is already near-gone —
-		// the transition is a faint line vanishing, not a visible pop.
 		const killAtmo = deepNight > 0.6;
 		if (killAtmo !== this.lastAtmoKilled) {
 			this.lastAtmoKilled = killAtmo;
 			if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = !killAtmo;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(v.scene.globe as any).showGroundAtmosphere = !killAtmo;
 		}
 
@@ -795,15 +426,6 @@ export class CesiumManager {
 			if (v.scene.fog) {
 				v.scene.fog.enabled = targetDensity > 0.00001;
 				v.scene.fog.density = targetDensity;
-				// Phase 10 / 11b — visualDensityScalar adds aerial-perspective
-				// haze on the horizon without increasing tile-cull density
-				// (no pop-in). Day term carries the horizon-band haze the old
-				// DOM HazeEffect used to provide. The night term was 2.4 (→3.4×
-				// at deep night) which VEILED the city lights into a murky haze
-				// (atmosphere-bisect Jun 14: turning fog off revealed the amber
-				// roads underneath). Cut to 0.9 so the night ground stays crisp
-				// and the lights read; daytime aerial perspective is unchanged.
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				(v.scene.fog as any).visualDensityScalar = 1.0 + 0.9 * nf + m.config.atmosphere.haze.amount * 4;
 			}
 		}
@@ -812,19 +434,9 @@ export class CesiumManager {
 			if (v.scene.fog) v.scene.fog.minimumBrightness = targetBrightness;
 		}
 
-		// Phase 9 scene-lighting: at deep night swap to a warm moonlight
-		// DirectionalLight, modulated by computed lunar phase. Outside deep
-		// night, restore SunLight (whose direction is sun-position-driven).
-		// Skipping when isLeader=false won't matter (this fn is camera-side).
 		const w = this.model.config.world;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const Cany = C as any;
 
-		// Moon phase from real planetary positions. Cached + recomputed ONLY when
-		// the clock time changed — Simon1994 is a function of date, so running it
-		// every 60 Hz frame burned Pi CPU for an identical result between clock
-		// ticks. _earthToMoon (the moonlight direction below) updates on the same
-		// cadence, which is correct — the moon moves with time, not with frames.
 		if (this._moonPhaseTime !== m.timeOfDay) {
 			this._moonPhaseTime = m.timeOfDay;
 			try {
@@ -837,15 +449,13 @@ export class CesiumManager {
 				const cosPhase = C.Cartesian3.dot(this._earthToMoon, this._moonToSun);
 				this._moonPhaseCache = (1.0 - cosPhase) * 0.5;
 			} catch {
-				// keep last cached phase (defaults to 1.0)
+				// keep last cached phase
 			}
 		}
 		const moonPhase = this._moonPhaseCache;
 		const phaseFactor = 0.7 + 0.3 * moonPhase;
 		const moonlightIntensity = nf > 0.01 ? Math.max(w.moonlightIntensity * nf * phaseFactor, 0.035) : 0;
 
-		// Swap light source at the day↔night boundary (hysteresis to prevent
-		// flapping at the threshold).
 		if (nf > 0.85 && !this.isUsingMoonlight) {
 			v.scene.light = this.moonlight;
 			this.isUsingMoonlight = true;
@@ -856,11 +466,6 @@ export class CesiumManager {
 
 		if (this.isUsingMoonlight && this.moonlight) {
 			this.moonlight.intensity = moonlightIntensity;
-			// Phase 10 (Council Critic catch): we already compute the real moon
-			// position via Simon1994 above. Use it as the DirectionalLight
-			// direction instead of the hardcoded (0,0,-1) "straight down" — gives
-			// physically-correct moon-angle shadows on buildings + terrain.
-			// Light direction is FROM moon TO Earth, so negate _earthToMoon.
 			C.Cartesian3.negate(this._earthToMoon, this.moonlight.direction);
 		} else {
 			const targetIntensity = lerp(1.0, 0.02, nf);
@@ -870,15 +475,10 @@ export class CesiumManager {
 			}
 		}
 
-		// Exposure + atmosphereLight lerps. Day anchors live in NIGHT_PALETTE;
-		// night targets are operator-tunable so we read from world config.
-		// Cache-guarded: Cesium triggers GPU uniform uploads on property
-		// writes, so we skip when the value hasn't meaningfully changed.
 		const targetExposure
 			= NIGHT_PALETTE.scene.exposureDay + (w.nightExposure - NIGHT_PALETTE.scene.exposureDay) * nf;
 		if (Math.abs(targetExposure - this.lastExposure) > 0.005) {
 			this.lastExposure = targetExposure;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(v.scene.postProcessStages as any).exposure = targetExposure;
 		}
 		const targetAtmoLight
@@ -888,7 +488,6 @@ export class CesiumManager {
 			* (1 - deepNight * 0.55);
 		if (Math.abs(targetAtmoLight - this.lastAtmoLight) > 0.005) {
 			this.lastAtmoLight = targetAtmoLight;
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(v.scene.globe as any).atmosphereLightIntensity = targetAtmoLight;
 		}
 	}
@@ -901,108 +500,6 @@ export class CesiumManager {
 		}
 	}
 
-	private syncImagery(): void {
-		const nf = this.model.nightFactor;
-		const scale = this.model.nightLightScale;
-		const bootFade = this.getBootFade();
-
-		const show = nf > 0.01;
-		const firstNight = this.lastNightFactor < 0.01 && nf > 0.01;
-		this.lastNightFactor = nf;
-
-		// Base imagery tonemap — desaturate + darken EOX as night falls so the
-		// vivid green-yellow Sentinel-2 colors don't bleed through as a hue
-		// cast under the shader's navy tint. Same 0.45→0.9 smoothstep curve
-		// the (removed) CartoDB overlay used so the "blue hour" beat — sky
-		// commits to darkness before city lights ignite — survives.
-		const baseEase = smoothstep((nf - 0.45) / (0.9 - 0.45));
-
-		const w = this.model.config.world;
-		if (this.baseLayer) {
-			// Brightness lerp removed in Phase 15.5: the shader's mix() to navy
-			// (in COLOR_GRADING_GLSL) already darkens the scene at night. Keeping
-			// the imagery-layer brightness lerp would double-darken — visible as
-			// a too-dark navy floor with no detail. Saturation lerp stays —
-			// removes the green Sentinel-2 hue cast so the shader's navy tint
-			// reads cleanly. baseLayer.brightness stays at its day value of 1.0.
-			this.baseLayer.saturation = lerp(this.baseDaySaturation, w.baseNightSaturation, baseEase);
-		}
-
-		// VIIRS lights fade in at night. Cap at 0.5 (was 0.9) so the amber
-		// overlay reads as "lit terrain" rather than washing the whole
-		// surface with VIIRS colour. The shader-driven base darkening now
-		// carries the sky/ocean dim load; VIIRS is the additive accent
-		// confined to the lit cells by colorToAlpha.
-		//
-		// Smoothstep curve (NIGHT_PALETTE.viirs.smoothstepFloor..Ceil = 0.55..0.9).
-		// Floor at 0.55 prevents the "magenta leak" that hue-rotated colorToAlpha
-		// produced on bright city cores at early dusk. Thresholds + cap live
-		// in $content/compositions/night.ts for discoverability.
-		if (this.viirsLayer) {
-			const V = NIGHT_PALETTE.viirs;
-			const viirsEase = smoothstep(
-				// max(denominator, ε): guards against a NaN viirsAlpha (→ Cesium
-				// treats it as 1.0 on some drivers) if a palette ever sets
-				// smoothstepFloor === smoothstepCeil. smoothstep already clamps input.
-				(nf - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001),
-			);
-			// Phase 6 (altitude-gate VIIRS): altitudeDetailMix crossfade.
-			// At cruise (mix=0) → VIIRS full brightness. At approach (mix=1) →
-			// VIIRS dims, buildings + roads take over. Shared SSOT with
-			// Three-side NeonLineLayer/OsmRoads/CityLightField.
-			const altGate = 1 - altitudeDetailMix(this.model.flight.altitude);
-			// Phase 9 viirsAlphaBoost — multiplies the post-Phase-6 alpha so the
-			// night map punches through the navy-mix that the new shader's
-			// lightMask still gates. Lerped by nf so day = no boost.
-			const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
-			const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0) * bootFade;
-			const viirsShow = (show || firstNight) && viirsAlpha > 0.001;
-			const viirsBrightness = 5.0 * w.viirsBrightness;
-			// Write-skip: only flush to the imagery layer when one of the
-			// three controlled values has changed by more than its just-
-			// noticeable epsilon. Tightens the per-frame GPU sync cost on
-			// Pi 5; the admin SidePanel slider still feels live because the
-			// epsilon is below human perception (~0.5% alpha, ~1% bright).
-			if (viirsShow !== this.lastViirsShow) {
-				this.viirsLayer.show = viirsShow;
-				this.lastViirsShow = viirsShow;
-			}
-			if (Math.abs(viirsAlpha - this.lastViirsAlpha) > 0.001) {
-				this.viirsLayer.alpha = viirsAlpha;
-				this.lastViirsAlpha = viirsAlpha;
-			}
-			if (Math.abs(viirsBrightness - this.lastViirsBrightness) > 0.01) {
-				this.viirsLayer.brightness = viirsBrightness;
-				this.lastViirsBrightness = viirsBrightness;
-			}
-		}
-
-		// CartoDB road mask — subtle global skeleton. OsmRoads neon adds local detail.
-		if (this.roadMaskLayer) {
-			const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(this.model.flight.altitude);
-			const ROAD_DAY_BASE = 0.08;
-			const nightComponent = nf * scale * roadAltGate;
-			const dayComponent = (1 - nf) * ROAD_DAY_BASE * roadAltGate;
-			this.roadMaskLayer.show = true;
-			this.roadMaskLayer.alpha = (nightComponent + dayComponent) * bootFade;
-			this.roadMaskLayer.brightness = 1.5 + nf * 1.5; // subtle: 1.5→3.0 at night
-		}
-
-		// Disable the color-grade PostProcessStage at full day — the shader is
-		// already a verified passthrough at nf < 0.001 (see shaders.ts early-
-		// exit), and disabling the stage outright skips the entire fullscreen
-		// render-to-texture pass. syncQuality() owns the on/off in performance
-		// mode; we only force OFF here, never ON (so qualityMode override
-		// wins). Threshold matches the shader's so transitions stay seamless.
-		if (this.colorGradeStage && this.lastQualityMode !== 'performance') {
-			const shouldEnable = nf >= 0.001;
-			if (shouldEnable !== this.lastColorGradeEnabled) {
-				this.colorGradeStage.enabled = shouldEnable;
-				this.lastColorGradeEnabled = shouldEnable;
-			}
-		}
-	}
-
 	// ─── Terrain Setup ────────────────────────────────────────────────────────
 	private async setupTerrain(): Promise<void> {
 		const C = this.CesiumModule;
@@ -1010,12 +507,6 @@ export class CesiumManager {
 		const useLocal = await checkLocalTileServer();
 		if (useLocal) {
 			try {
-				// `cesium-terrain`, NOT `terrain` — this must match the packager's
-				// storagePath (tools/tile-packager/src/sources.ts), which is where
-				// index.ts also writes the layer.json this provider fetches first.
-				// The old `/terrain` path 404'd on layer.json, so the packaged
-				// quantized-mesh was never served and every device silently fell
-				// through to the Ion tier below.
 				v.terrainProvider = await C.CesiumTerrainProvider.fromUrl(`${TILE_SERVER_URL}/cesium-terrain`, { requestVertexNormals: true, requestWaterMask: true });
 				return;
 			} catch (e) { console.warn('[CesiumTerrain] Local failed, trying Ion:', e); }
@@ -1026,148 +517,9 @@ export class CesiumManager {
 				return;
 			} catch (e) { console.warn('[CesiumTerrain] Ion failed, using ellipsoid:', e); }
 		}
-		// Flat Earth. There is deliberately no third tier: the AWS Terrarium
-		// bucket that used to sit here is a PNG heightmap, and CesiumTerrainProvider
-		// speaks quantized-mesh — it fetches <url>/layer.json, which that bucket
-		// returns 404 for. ADR-002 assumed "a custom heightmap provider" would
-		// bridge the two; none was ever written, so the tier could only ever
-		// throw and land here anyway, one failed round-trip later.
 		console.warn('[CesiumTerrain] No local cache and no Ion token — using ellipsoid (flat)');
 		v.terrainProvider = new C.EllipsoidTerrainProvider();
 	}
-
-	// ─── Building Setup & Sync ────────────────────────────────────────────────
-	private async setupBuildings(): Promise<void> {
-		if (!getIonToken()) { console.warn('[CesiumBuildings] Ion token missing — buildings disabled'); return; }
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const C: any = this.CesiumModule;
-		try {
-			this.tileset = await this.CesiumModule.createOsmBuildingsAsync();
-			if (this.tileset) {
-				this.tileset.show = this.model.config.world.buildingsEnabled;
-				this.tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
-				this.tileset.shadows = this.CesiumModule.ShadowMode.ENABLED;
-				this.tileset.colorBlendMode = this.CesiumModule.Cesium3DTileColorBlendMode.HIGHLIGHT;
-				// Procedural lit-window shader — restored Feb 15 recipe via
-				// Cesium CustomShader API. Per-fragment grid math, no
-				// per-feature property dependency. Uniforms updated each
-				// frame in syncBuildings.
-				try {
-					this.buildingsShader = new C.CustomShader({
-						mode: C.CustomShaderMode.MODIFY_MATERIAL,
-						lightingModel: C.LightingModel.PBR,
-						uniforms: {
-							u_nightFactor:    { type: C.UniformType.FLOAT, value: 0.0 },
-							u_lightIntensity: { type: C.UniformType.FLOAT, value: 1.0 },
-							u_windowDensity:  { type: C.UniformType.FLOAT, value: 0.0 },
-							// 1.0 = "as bright as a metro core". Defaulting to 1
-							// means a device whose VIIRS tile never loads renders
-							// exactly as it did before this uniform existed —
-							// the gate can only ever dim, never brighten.
-							u_cityBrightness: { type: C.UniformType.FLOAT, value: 1.0 },
-							u_time:           { type: C.UniformType.FLOAT, value: 0.0 },
-						},
-						// Model-space normal isn't available in the fragment
-						// stage in modern Cesium; pass it through as a varying.
-						varyings: {
-							v_normalMC: C.VaryingType.VEC3,
-						},
-						vertexShaderText: BUILDING_VERTEX_GLSL,
-						fragmentShaderText: BUILDING_SHADER_GLSL,
-					});
-					this.tileset.customShader = this.buildingsShader;
-				} catch (e) {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const msg = (e as any)?.message ?? String(e);
-					console.warn('[CesiumBuildings] Custom shader failed; falling back to uniform amber style:', msg);
-					this.buildingsShader = null;
-				}
-				this.viewer.scene.primitives.add(this.tileset);
-			}
-		} catch (e) { console.warn('[CesiumBuildings] OSM buildings unavailable:', (e as Error).message); }
-	}
-
-	/**
-	 * VIIRS luminance under the camera, 0..1 — the "how lit is HERE" input the
-	 * building shader has no other way to learn.
-	 *
-	 * Throttled to ~4 Hz and smoothed, for two different reasons. The throttle
-	 * is cost: sampling reads the decoded tile and the camera cartographic, and
-	 * neither changes meaningfully inside 250 ms at cruise. The smoothing is
-	 * looks: VIIRS is a ~1.2 km/px raster, so an un-smoothed sample makes whole
-	 * districts of windows switch state in one frame as the camera crosses a
-	 * pixel boundary. Bilinear sampling softens the grid spatially; this lerp
-	 * softens what is left temporally.
-	 *
-	 * Returns the last good value while a tile is still loading (and 1.0 before
-	 * the first ever sample), so terrain streaming never flashes the city dark.
-	 */
-	private cityBrightness = 1;
-	private cityBrightnessTimer = 0;
-	/** Sample VIIRS at camera position + 8 surrounding points (3×3 grid, 2km spacing).
-	 *  Averages to get a district-level brightness that varies smoothly as the
-	 *  camera moves. Updated every 500ms, lerped for smooth transitions. */
-	private sampleCityBrightness(): number {
-		const now = performance.now();
-		if (now - this.cityBrightnessTimer < 500) return this.cityBrightness;
-		this.cityBrightnessTimer = now;
-
-		const carto = this.viewer?.camera?.positionCartographic;
-		if (!carto) return this.cityBrightness;
-		const C = this.CesiumModule;
-		const lat = C.Math.toDegrees(carto.latitude);
-		const lon = C.Math.toDegrees(carto.longitude);
-		const field = getViirsField(lat, lon);
-		if (!field) return this.cityBrightness;
-
-		// 3×3 grid, ~2km spacing — captures district-level VIIRS variation
-		const STEP_DEG = 0.018; // ~2km at equator
-		let sum = 0, count = 0;
-		for (let dy = -1; dy <= 1; dy++) {
-			for (let dx = -1; dx <= 1; dx++) {
-				const s = field.sampleBilinear(lat + dy * STEP_DEG, lon + dx * STEP_DEG);
-				if (s > 0) { sum += s; count++; }
-			}
-		}
-		const target = count > 0 ? sum / count : field.sampleBilinear(lat, lon);
-		this.cityBrightness += (target - this.cityBrightness) * 0.3;
-		return this.cityBrightness;
-	}
-
-	private syncBuildings(dt: number): void {
-		if (!this.tileset) return;
-		const w = this.model.config.world;
-		const show = w.buildingsEnabled;
-		if (show !== this.lastBuildingsShow) {
-			this.lastBuildingsShow = show;
-			this.tileset.show = show;
-		}
-		const nf = this.model.nightFactor;
-		const scale = this.model.nightLightScale;
-
-		if (this.buildingsShader) {
-			const bootFade = this.getBootFade();
-			this.buildingsTime = (this.buildingsTime + dt) % (Math.PI * 4000);
-			this.buildingsShader.setUniform('u_nightFactor', nf * bootFade);
-			this.buildingsShader.setUniform('u_lightIntensity', scale);
-		this.buildingsShader.setUniform(
-			'u_windowDensity',
-			buildingWindowDensity(nf, w.windowLightIntensity, this.model.flight.altitude),
-		);
-		this.buildingsShader.setUniform('u_time', this.buildingsTime);
-		this.buildingsShader.setUniform('u_cityBrightness', this.sampleCityBrightness());
-		return;
-		}
-
-		// Fallback path when custom shader unavailable — uniform amber.
-		// Fallback: bright amber — confirms buildings ARE loading even if shader fails.
-		if (Math.abs(nf - this.lastBuildingNightFactor) < 0.02) return;
-		this.lastBuildingNightFactor = nf;
-		this.tileset.style = new this.CesiumModule.Cesium3DTileStyle({
-			color: `color("rgb(255, 200, 50)", ${Math.max(0.3, nf * 0.9).toFixed(2)})`,
-		});
-	}
-
 
 	applyQualityMode(mode: QualityMode): void {
 		const p = CESIUM_QUALITY_PRESETS[mode];
@@ -1177,24 +529,11 @@ export class CesiumManager {
 		globe.preloadSiblings = p.preloadSiblings;
 		globe.preloadAncestors = p.preloadAncestors;
 		globe.loadingDescendantLimit = p.loadingDescendantLimit;
-		if (this.tileset) this.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
+		if (this.buildingsState.tileset) this.buildingsState.tileset.maximumScreenSpaceError = p.maximumScreenSpaceError;
 	}
 
-	/**
-	 * Render the OSM buildings tileset as a wireframe ("line marks"
-	 * tracing the building geometry) instead of filled cubes. Used by
-	 * the playground hybrid lab to give the Tron-esque
-	 * outline aesthetic while keeping the real OSM data. Cesium's
-	 * `debugWireframe` is officially a debug feature but is the standard
-	 * way to get wireframe rendering on a 3D Tiles primitive.
-	 *
-	 * Requires WEBGL_polygon_offset (WebGL1) or native WebGL2; modern
-	 * browsers all qualify. Silent no-op if the tileset isn't loaded yet.
-	 */
 	setBuildingsWireframe(enabled: boolean): void {
-		if (!this.tileset) return;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(this.tileset as any).debugWireframe = enabled;
+		applyBuildingsWireframe(this.buildingsState, enabled);
 	}
 
 	destroy(): void {
