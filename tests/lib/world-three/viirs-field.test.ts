@@ -15,7 +15,7 @@
  * its own longitude → its own z7 tile key (tile width at z7 is 2.8125°).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { despeckle, getViirsField, removeViirsWaiter } from '$lib/world-three/viirs-field';
+import { despeckle, getViirsField, removeViirsWaiter } from '$lib/world/viirs-field';
 
 class FakeImage {
 	static instances: FakeImage[] = [];

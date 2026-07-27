@@ -5,7 +5,7 @@
 	 * when ?lab=1 is active. Not bundled in production (import.meta.env.DEV gate).
 	 */
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
-	import DevWingTuner from '$lib/world-three/DevWingTuner.svelte';
+	import DevWingTuner from '$lib/world/three/DevWingTuner.svelte';
 	import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';

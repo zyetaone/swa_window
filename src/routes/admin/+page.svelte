@@ -11,6 +11,7 @@
 	import {
 		listBindings,
 		saveBinding,
+		deleteBinding,
 		getDeviceFingerprint,
 		resolveBinding,
 		type DeviceRole,
@@ -97,31 +98,48 @@
 		}
 	}
 
-	// Actions
+	// Actions — push results
+	let pushResult = $state<{ ok: number; failed: string[] } | null>(null);
+
 	async function handlePushScene() {
 		const targets = getTargets();
-		if (targets.length === store.devices.length && store.devices.length > 0) {
-			await store.broadcastScene(scene.location, scene.weather);
-		} else {
-			await Promise.all(targets.map(id => store.pushScene(id, scene.location, scene.weather)));
-		}
+		if (targets.length === 0) return;
+		pushResult = null;
+		try {
+			if (targets.length === store.devices.length && store.devices.length > 0) {
+				await store.broadcastScene(scene.location, scene.weather);
+				pushResult = { ok: targets.length, failed: [] };
+			} else {
+				const results = await Promise.all(targets.map(async id => {
+					try { await store.pushScene(id, scene.location, scene.weather); return { ok: true }; }
+					catch (e) { return { ok: false, detail: String(e) }; }
+				}));
+				pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+			}
+		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
 	async function handlePushMode() {
 		const targets = getTargets();
+		if (targets.length === 0) return;
 		let payload: string | undefined;
 		if (pushMode === 'video' && videoUrl) {
 			try { const u = new URL(videoUrl); if (!['http:', 'https:'].includes(u.protocol)) return; } catch { return; }
 			payload = videoUrl;
 		}
-		await Promise.all(targets.map(id => store.pushMode(id, pushMode, payload)));
+		pushResult = null;
+		try {
+			const results = await Promise.all(targets.map(async id => {
+				try { await store.pushMode(id, pushMode, payload); return { ok: true }; }
+				catch (e) { return { ok: false, detail: String(e) }; }
+			}));
+			pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
 	async function handlePushScene_Full() {
-		// One-shot push of the whole scene draft. Ambient config (clouds, haze,
-		// lights, quality, showClouds) propagates continuously via peer-sync,
-		// so it isn't included here — only scene-level overrides.
 		const targets = getTargets();
+		if (targets.length === 0) return;
 		const patch = {
 			altitude: scene.altitude,
 			timeOfDay: scene.timeOfDay,
@@ -129,7 +147,14 @@
 			syncToRealTime: scene.syncToRealTime,
 			weather: scene.weather,
 		};
-		await Promise.all(targets.map(id => store.pushSceneFull(id, patch)));
+		pushResult = null;
+		try {
+			const results = await Promise.all(targets.map(async id => {
+				try { await store.pushSceneFull(id, patch); return { ok: true }; }
+				catch (e) { return { ok: false, detail: String(e) }; }
+			}));
+			pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
 	function toggleSelectAll() {
@@ -238,14 +263,7 @@
 	}
 
 	function handleDeleteBinding(fp: string) {
-		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem('aero.device.bindings');
-		if (!raw) return;
-		try {
-			const map = JSON.parse(raw) as Record<string, DeviceBinding>;
-			delete map[fp];
-			window.localStorage.setItem('aero.device.bindings', JSON.stringify(map));
-		} catch { /* ignore */ }
+		deleteBinding(fp);
 		refreshBindings();
 	}
 </script>
@@ -398,6 +416,14 @@
 				<button class="btn btn-primary" onclick={handlePushScene_Full}>
 					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
+				{#if pushResult}
+					<p class="update-result" class:has-failures={pushResult.failed.length > 0}>
+						{pushResult.ok} pushed{pushResult.failed.length ? `, ${pushResult.failed.length} failed` : ''}
+						{#if pushResult.failed.length}
+							<span class="update-failed">{pushResult.failed.join(' · ')}</span>
+						{/if}
+					</p>
+				{/if}
 			</section>
 
 			<section class="control-section">

@@ -9,13 +9,9 @@
  *   ContentBundle → loader.ts → Effect → registry merge → compositor mount
  */
 
+import type { AeroWindow } from '$lib/model/aero-window.svelte';
 import type { LocationId, SkyState, WeatherType } from '$lib/types';
 import type { LayerKind } from '../types';
-
-/**
- * Bundle type — selects which factory in loader.ts processes the bundle.
- * Add a new type when adding a new parameterizable effect (see video-bg).
- */
 type BundleType = 'video-bg' | 'sprite';
 
 /**
@@ -32,6 +28,20 @@ export interface WhenPredicate {
 	skyState?: SkyState[];
 	/** Active only when weather matches one of these. */
 	weather?: WeatherType[];
+}
+
+/** Returns true when every specified constraint is satisfied by model's current state. */
+export function evalWhen(pred: WhenPredicate | undefined, model: AeroWindow): boolean {
+	if (!pred) return true;
+	if (pred.location && !pred.location.includes(model.location)) return false;
+	if (pred.nightFactor) {
+		const nf = model.nightFactor;
+		if (pred.nightFactor.min !== undefined && nf < pred.nightFactor.min) return false;
+		if (pred.nightFactor.max !== undefined && nf > pred.nightFactor.max) return false;
+	}
+	if (pred.skyState && !pred.skyState.includes(model.skyState)) return false;
+	if (pred.weather && !pred.weather.includes(model.weather)) return false;
+	return true;
 }
 
 /** Shared fields across all bundle types. */

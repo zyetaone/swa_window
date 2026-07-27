@@ -99,16 +99,16 @@
 	{location}
 	endpoint="/api/roads"
 	coreColor={hexOf(STREET_CORE)}
-	coreWidth={1.5}
+	coreWidth={1.8}
 	haloColor={hexOf(STREET_HALO)}
-	haloWidth={4.5}
-	haloOpacityMul={0.45}
-	intensityMul={0.6}
+	haloWidth={3.0}
+	haloOpacityMul={0.35}
+	intensityMul={0.8}
 	dashed
-	dashSize={32}
-	gapSize={38}
-	dashFlow={6}
-	depthFade={12000}
+	dashSize={24}
+	gapSize={28}
+	dashFlow={10}
+	depthFade={8000}
 	viirsModulate
 	buildSegments={buildRoadLines}
 />

@@ -9,7 +9,7 @@
  *      any rotation edit and could split a mixed-version panorama.)
  */
 import { describe, it, expect } from 'vitest';
-import { createSeededRng, daySeed, hashString } from '$lib/world-three/prng';
+import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 import { DAILY_ROTATION, pickDailyShow } from '$content/shows';
 
 describe('pickDailyShow', () => {

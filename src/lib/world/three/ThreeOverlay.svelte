@@ -35,12 +35,11 @@
 	import Moon from './Moon.svelte';
 	import OsmRoads from './OsmRoads.svelte';
 	import CityLightField from './CityLightField.svelte';
-	import CityGlowDome from './CityGlowDome.svelte';
 	import EffectStack from './EffectStack.svelte';
 	import SparkleField from './SparkleField.svelte';
 	import Meteors from './Meteors.svelte';
 	import Rain from './Rain.svelte';
-	import Wing from './Wing.svelte';
+	import Wing from '$lib/shell/Wing.svelte';
 	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
 	import { lightingState } from '$lib/world/curves';
 
@@ -175,9 +174,6 @@
 		<NightStars ambientIntensity={ambientIntensity} />
 		<Venus />
 		<Meteors />
-		<!-- City skyglow dome — warm amber glow over the city core at night,
-		     the low-frequency "vast city below" signal. Behind the neon lines. -->
-		<CityGlowDome />
 		<!-- Far-layer bokeh carpet: thousands of soft warm dots over the whole
 		     metro (VIIRS-placed, seeded). Strong at cruise, crossfades OUT toward
 		     the ground as the sharp neon detail (OsmRoads) resolves. Sits between

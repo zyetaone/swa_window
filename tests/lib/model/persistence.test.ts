@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { loadPersistedState, savePersistedState, STORAGE_KEY } from '$lib/model/aero-window-persistence';
-import { daySeed } from '$lib/world-three/prng';
+import { daySeed } from '$lib/world/prng';
 
 describe('loadPersistedState', () => {
 	beforeEach(() => {

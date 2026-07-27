@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	let token: string | undefined;
 
 	if (type === 'cesium') {
-		token = process.env.CESIUM_ION_TOKEN;
+		token = process.env.CESIUM_ION_TOKEN || import.meta.env.VITE_CESIUM_ION_TOKEN;
 		if (!token) throw error(503, 'CESIUM_ION_TOKEN not set');
 	} else if (type === 'admin') {
 		token = process.env.AERO_ADMIN_TOKEN;

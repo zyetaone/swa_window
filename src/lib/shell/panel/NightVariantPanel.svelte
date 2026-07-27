@@ -34,13 +34,9 @@
 	let stackH = $state(true);
 	let variant = $state<VariantId>('A');
 
-	// ─── Global tunables ──────────────────────────────────────────────────────
 
+	// Global tunables — read/write model directly, no proxy $state needed.
 	const GLOBAL_DEFAULTS = { timeOfDay: 22.0, altitude: 28000 };
-	const globals = $state({ ...GLOBAL_DEFAULTS });
-
-	$effect(() => { model.timeOfDay = globals.timeOfDay; });
-	$effect(() => { model.flight.altitude = globals.altitude; });
 
 	// ─── Variant defaults ─────────────────────────────────────────────────────
 
@@ -138,7 +134,7 @@
 
 	function resetCamera(): void {
 		model.flight.setLocationWithSky('hyderabad', 'night');
-		globals.altitude = GLOBAL_DEFAULTS.altitude;
+		model.flight.altitude = GLOBAL_DEFAULTS.altitude;
 	}
 
 	function resetVariantDefaults(): void {
@@ -149,7 +145,7 @@
 
 	function resetStackH(): void { Object.assign(tunablesH, H_DEFAULTS); }
 	function resetAll(): void {
-		Object.assign(globals, GLOBAL_DEFAULTS);
+		model.timeOfDay = GLOBAL_DEFAULTS.timeOfDay; model.flight.altitude = GLOBAL_DEFAULTS.altitude;
 		Object.assign(tunablesA, A_DEFAULTS); Object.assign(tunablesB, B_DEFAULTS);
 		Object.assign(tunablesC, C_DEFAULTS); Object.assign(tunablesD, D_DEFAULTS);
 		Object.assign(tunablesE, E_DEFAULTS); Object.assign(tunablesF, F_DEFAULTS);
@@ -168,8 +164,8 @@
 
 	// ─── Slider handlers ─────────────────────────────────────────────────────
 
-	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) { globals.timeOfDay = parseFloat(e.currentTarget.value); }
-	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) { globals.altitude = parseFloat(e.currentTarget.value); }
+	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) { model.timeOfDay = parseFloat(e.currentTarget.value); }
+	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) { model.flight.altitude = parseFloat(e.currentTarget.value); }
 
 	// ─── Variant A: push to prod config ───────────────────────────────────────
 
@@ -388,8 +384,8 @@
 
 	<fieldset class="globals">
 		<legend>Global</legend>
-		<RangeSlider label="Time of day" value={globals.timeOfDay} min={15.0} max={24.0} step={0.25} formatValue={(v: number) => `${v.toFixed(2)}h`} oninput={onGlobalTime} />
-		<RangeSlider label="Altitude" value={globals.altitude} min={10000} max={65000} step={500} formatValue={(v: number) => `${Math.round(v).toLocaleString()} ft`} oninput={onGlobalAlt} />
+		<RangeSlider label="Time of day" value={model.timeOfDay} min={15.0} max={24.0} step={0.25} formatValue={(v: number) => `${v.toFixed(2)}h`} oninput={onGlobalTime} />
+		<RangeSlider label="Altitude" value={model.flight.altitude} min={10000} max={65000} step={500} formatValue={(v: number) => `${Math.round(v).toLocaleString()} ft`} oninput={onGlobalAlt} />
 	</fieldset>
 
 	<fieldset class="variants" role="radiogroup" aria-label="Rendering variant">
@@ -475,7 +471,7 @@
 	<div class="readout">
 		<div><span class="k">FPS</span><span class="v">{fps || '–'}</span></div>
 		<div><span class="k">Altitude</span><span class="v">{altitudeFt.toLocaleString()} ft</span></div>
-		<div><span class="k">Time</span><span class="v">{globals.timeOfDay.toFixed(2)}h</span></div>
+		<div><span class="k">Time</span><span class="v">{model.timeOfDay.toFixed(2)}h</span></div>
 		<div><span class="k">Night factor</span><span class="v">{nfPct}%</span></div>
 		<div><span class="k">Active</span><span class="v">{currentVariant.id}</span></div>
 		{#if variant === 'E'}<div><span class="k">Alt blend</span><span class="v">{(altitudeBlend * 100).toFixed(0)}%</span></div>{/if}

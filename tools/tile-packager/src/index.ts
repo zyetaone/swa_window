@@ -14,6 +14,7 @@
  */
 
 import { mkdir, writeFile, copyFile, stat } from 'node:fs/promises';
+import sharp from 'sharp';
 import { existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { LOCATIONS } from '../../../content/locations';
@@ -106,7 +107,7 @@ async function main() {
 	// Plan: enumerate all (source, location, tile) triples upfront for accurate total.
 	// Each job carries its source config so the worker knows whether to attach
 	// auth headers (e.g. Cesium Ion Bearer token) at fetch time.
-	type Job = { url: string; path: string; bytes: number; sourceKey: TileSource };
+	type Job = { url: string; path: string; bytes: number; sourceKey: TileSource; postProcess?: boolean; boostBrightness?: number; boostContrast?: number };
 	const allJobs: Job[] = [];
 	for (const loc of locations) {
 		for (const cfg of sources) {
@@ -117,6 +118,9 @@ async function main() {
 					path: join(args.output, tileFilePath(cfg, t)),
 					bytes: estimateBytes(1, cfg.source),
 					sourceKey: cfg.source,
+					postProcess: cfg.postProcess,
+					boostBrightness: cfg.boostBrightness,
+					boostContrast: cfg.boostContrast,
 				});
 			}
 		}
@@ -188,12 +192,19 @@ async function main() {
 			try {
 				await mkdir(dirname(job.path), { recursive: true });
 				const res = await fetch(job.url, headers ? { headers } : undefined);
-				if (!res.ok) {
-					failed++;
-					continue;
-				}
 				const buf = new Uint8Array(await res.arrayBuffer());
-				await Bun.write(job.path, buf);
+				if (job.postProcess && buf.length > 100) {
+					// Boost dim VIIRS tiles: brightness × boostBrightness, contrast × boostContrast.
+					// Skip tiny responses (error pages, empty tiles).
+					const boosted = await sharp(buf)
+						.modulate({ brightness: job.boostBrightness ?? 5, saturation: 0 })
+						.linear(job.boostContrast ?? 1.5, -(job.boostContrast! - 1) * 0.5)
+						.jpeg({ quality: 85 })
+						.toBuffer();
+					await Bun.write(job.path, boosted);
+				} else {
+					await Bun.write(job.path, buf);
+				}
 				downloaded++;
 			} catch {
 				failed++;

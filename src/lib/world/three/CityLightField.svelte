@@ -53,7 +53,7 @@
 	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
 	import { smoothstep } from '$lib/utils';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
-	import { getViirsField, removeViirsWaiter, type ViirsField } from '$lib/world/viirs-field';
+	import { useViirsField } from './use-viirs-field.svelte';
 	import { EARTH_RADIUS_M } from './state.svelte';
 	import { altitudeDetailMix } from '$lib/world/altitude';
 	import { lightingState } from '$lib/world/curves';
@@ -67,18 +67,12 @@
 	// kept probabilistically so density tracks the real light distribution while
 	// still covering the whole lit area. Capped + seeded-subsampled for the Pi
 	// (one draw call regardless of metro size).
-	const PATCH_M = 42000; // ~42 km — whole metro + lit fringe
-	const GRID = 200; // 200² candidates → ~210 m spacing, finer VIIRS sampling
-	const MAX_POINTS = 6000; // more dots in bright areas, fewer in dark
-	// VIIRS brightness floor — pixels below this are truly dark (no lights).
-	// Bumped from 0.05 to 0.12 so only genuine lit areas get dots.
-	const BRIGHT_FLOOR = 0.12;
-	// Flat baseline keep-probability — dots that survive even in dim areas.
-	// Lowered from 0.22 to 0.08 so dark suburbs don't get uniform fake dots.
-	const KEEP_BASELINE = 0.08;
-	// Brightness at which dots reach 100% keep-probability.
-	// Matches VIIRS urban core intensity for Hyderabad (the calibration city).
-	const BRIGHT_FULL = 0.45;
+	const PATCH_M = 80000; // 80 km — covers metro + suburbs, not excessive
+	const GRID = 200;
+	const MAX_POINTS = 800; // drastically reduced — VIIRS imagery + buildings are primary
+	const BRIGHT_FLOOR = 0.25; // only genuinely bright VIIRS pixels get dots
+	const KEEP_BASELINE = 0.02; // nearly zero dots in dim areas
+	const BRIGHT_FULL = 0.55;
 	const RAD = Math.PI / 180;
 
 	let geometry = $state.raw<BufferGeometry | null>(null);
@@ -86,20 +80,13 @@
 	let pendingDispose: BufferGeometry | null = null;
 
 	// VIIRS field for the active location (loaded async; rebuild on ready).
-	let viirsField = $state.raw<ViirsField | null>(null);
-	$effect(() => {
-		const loc = LOCATION_MAP.get(location);
-		if (!loc) { viirsField = null; return; }
-		const onReady = () => { viirsField = getViirsField(loc.lat, loc.lon); };
-		viirsField = getViirsField(loc.lat, loc.lon, onReady);
-		return () => removeViirsWaiter(loc.lat, loc.lon, onReady);
-	});
+	const viirsField = useViirsField(() => location);
 
 	// Build the point cloud from the VIIRS field. Deterministic: one seeded RNG
 	// for placement, jitter, twinkle phase, size + colour variance → identical on
 	// every Pi for a given day. Rebuilds on location change or VIIRS arrival.
 	$effect(() => {
-		const vf = viirsField;
+		const vf = viirsField.current;
 		const loc = LOCATION_MAP.get(location);
 		if (!loc || !vf) { geometry = null; return; }
 
@@ -196,7 +183,7 @@
 		uniforms: {
 			uTime: { value: 0 },
 			uIntensity: { value: 0 },
-			uPixel: { value: 16.0 }, // smaller base point-size scale (was 26)
+			uPixel: { value: 8.0 }, // tiny dots — VIIRS imagery is the primary light
 		},
 		vertexShader: /* glsl */ `
 			#include <common>
@@ -223,7 +210,7 @@
 				// attenuation. Small, clamped to a tight range so dots stay
 				// crisp points and never bloom into a milky blob.
 				float dist = max(-mv.z, 1.0);
-				gl_PointSize = clamp(uPixel * aSize * (0.45 + aBright) * tw * (150000.0 / dist), 1.0, 9.0);
+				gl_PointSize = clamp(uPixel * aSize * (0.45 + aBright) * tw * (150000.0 / dist), 0.5, 4.0);
 				vBright = aBright;
 				vWarm = aWarm;
 				// Alpha tracks brightness → the dim outskirts are faint and the

@@ -44,7 +44,7 @@
 	import type { LocationId } from '$lib/types';
 	import { enuAnchorMatrix, applyEnuAnchor } from './enu';
 	import { EARTH_RADIUS_M } from './state.svelte';
-	import { getViirsField, removeViirsWaiter, type ViirsField } from '$lib/world/viirs-field';
+	import { useViirsField } from './use-viirs-field.svelte';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { altitudeDetailMix } from '$lib/world/altitude';
 	import { lightingState } from '$lib/world/curves';
@@ -128,17 +128,7 @@
 	// onReady waiter is deregistered on cleanup — otherwise a still-pending
 	// tile load would hold this closure (and a stale `viirsField` write target)
 	// until it resolved.
-	let viirsField = $state.raw<ViirsField | null>(null);
-	$effect(() => {
-		if (!viirsModulate) { viirsField = null; return; }
-		const loc = LOCATION_MAP.get(location);
-		if (!loc) { viirsField = null; return; }
-		const onReady = () => {
-			viirsField = getViirsField(loc.lat, loc.lon);
-		};
-		viirsField = getViirsField(loc.lat, loc.lon, onReady);
-		return () => removeViirsWaiter(loc.lat, loc.lon, onReady);
-	});
+	const viirsField = useViirsField(() => location, () => viirsModulate);
 
 	// Snapshot the material-static props at construction time. These are
 	// per-mount constants — LineMaterial is constructed ONCE and never
@@ -268,7 +258,7 @@
 	$effect(() => {
 		const raw = rawFeatures;
 		// Read viirsField so this effect re-runs (rebuilds) once the tile loads.
-		const vfield = viirsModulate ? viirsField : null;
+		const vfield = viirsModulate ? viirsField.current : null;
 		// Dispose the previous build exactly once: pendingDispose is nulled
 		// immediately, so a re-run (or the unmount cleanup) can't double-dispose.
 		pendingDispose?.dispose();

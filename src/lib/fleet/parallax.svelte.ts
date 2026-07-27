@@ -1,4 +1,4 @@
-import { hashString } from '$lib/world-three/prng';
+import { hashString } from '$lib/world/prng';
 /**
  * Corridor — device-fingerprint → (role, groupId) binding resolver.
  *

@@ -5,7 +5,7 @@
 
 import type { Effect } from '../../types';
 import type { SpriteBundle } from '../../bundle/types';
-import { evalWhen } from '../../bundle/when';
+import { evalWhen } from '../../bundle/types';
 import Component from './effect.svelte';
 
 export interface SpriteParams {

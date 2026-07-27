@@ -1,6 +1,6 @@
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
 import { isValidLocation } from '$content/locations';
-import { daySeed } from '$lib/world-three/prng';
+import { daySeed } from '$lib/world/prng';
 
 // Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
 // Hardcoded here (one-time startup concern) to keep persistence.ts free of

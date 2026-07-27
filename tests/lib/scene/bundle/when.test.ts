@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evalWhen } from '$lib/scene/bundle/when';
+import { evalWhen } from '$lib/scene/bundle/types';
 import type { WhenPredicate } from '$lib/scene/bundle/types';
 import type { AeroWindow } from '$lib/model/aero-window.svelte';
 

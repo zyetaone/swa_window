@@ -16,7 +16,7 @@ import {
 	moonIlluminatedFraction,
 	SKY_PALETTE,
 	SUN_PLACEMENT_M,
-} from '$lib/world-three/sky';
+} from '$lib/world/sky';
 
 const SUN_TILT = 0.4; // matches the private constant in sky.ts
 

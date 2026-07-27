@@ -1,5 +1,17 @@
 /**
- * viirs-field — sample the NASA VIIRS night-lights raster as a brightness
+ * NASA GIBS night-lights WMTS endpoint — THE single copy.
+ *
+ * Consumed by BOTH renderers: world/compose.ts (Cesium night-lights imagery
+ * layer, `{z}/{y}/{x}` UrlTemplate tokens) and world/viirs-field.ts (per-tile
+ * canvas sampling that drives the bokeh carpet, neon roads, building window
+ * density and the city glow dome). Framework-free on purpose. The host
+ * already moved once — the old map1.vis.earthdata.nasa.gov/wmts-webmerc now
+ * returns InvalidParameter — and had to be fixed in two places, hence SSOT.
+ *
+ * ── Why NOT VIIRS_Black_Marble ──────────────────────────────────────────
+ * Black Marble is a COLORIZED product: amber cities painted over a lifted
+ * navy background. Measured at z8, its Sahara tile is a flat fill — median
+ * 36/255, 99th percentile 38/255, not one pixel below 8. That background is
  * field, so the stylised Three night-light layers DERIVE from the same
  * satellite ground-truth as the Cesium VIIRS imagery.
  *
@@ -30,11 +42,27 @@
  * cancel a registration on unmount.
  */
 
-import { VIIRS_GIBS_BASE } from './viirs-endpoint';
+
+export const VIIRS_GIBS_LAYER =
+	'VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance';
+
+/**
+ * Pinned acquisition date — this layer is daily (2018-01-05 onward).
+ *
+ * A floating date breaks invariant #4: three Pis booting either side of
+ * midnight UTC would fetch different rasters, and their bokeh, neon and
+ * window density would disagree across the panorama seam. Pinning also keeps
+ * the packaged tiles and the remote fallback byte-identical.
+ *
+ * To re-pin: choose a date, then verify coverage across the location catalog
+ * before shipping — a single day can be gap-filled unevenly by region. Keep
+ * it in step with tools/tile-packager/src/sources.ts.
+ */
+export const VIIRS_GIBS_DATE = '2026-07-15';
+
+export const VIIRS_GIBS_BASE = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_GIBS_LAYER}/default/${VIIRS_GIBS_DATE}/GoogleMapsCompatible_Level8`;
 
 const TILE_Z = 7;
-// Endpoint SSOT shared with the Cesium imagery layer — see world/viirs-endpoint.
-// PNG tiles, CORS-clean so the canvas read-back works.
 const VIIRS_TILE = (z: number, y: number, x: number) =>
 	`${VIIRS_GIBS_BASE}/${z}/${y}/${x}.png`;
 

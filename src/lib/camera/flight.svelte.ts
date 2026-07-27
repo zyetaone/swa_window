@@ -10,7 +10,7 @@ import { clamp, normalizeHeading, shortestAngleDelta } from '$lib/utils';
 import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, FlightScenario } from '$lib/types';
 import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
-import { createSeededRng, daySeed, hashString } from '$lib/world-three/prng';
+import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 
 /**
  * Stable 32-bit hash of a location id string (djb2). Combined with

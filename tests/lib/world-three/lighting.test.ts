@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { lightingState } from '$lib/world-lighting/curves';
-import { SKY_PALETTE } from '$lib/world-lighting/curves';
+import { lightingState } from '$lib/world/curves';
+import { SKY_PALETTE } from '$lib/world/curves';
 import { nightFactor } from '$lib/utils';
 
 // NOTE: lightingState returns a SHARED, mutated-in-place object. Any test that

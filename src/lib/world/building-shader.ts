@@ -115,18 +115,12 @@ export const BUILDING_SHADER_GLSL = `
 
 		// Window color variation (5 types)
 		float colorMix = fract(sin(dot(cellId, vec2(269.5, 183.3))) * 7461.7);
-		// Palette: full sodium family. All five entries sit in the
-		// amber-to-warm-gold band; no cool or near-pure whites. At 35 k ft
-		// atmospheric scattering + light-pollution haze warm every window
-		// colour toward HPS amber — a cold office-white is a surface fiction,
-		// not a 35 k ft truth.
-		vec3 warmColor   = vec3(1.0, 0.68, 0.22);    // LPS sodium amber (residential)
-		vec3 coolColor   = vec3(1.0, 0.86, 0.56);    // HPS warm-gold (office tower)
-		vec3 retailColor = vec3(1.0, 0.76, 0.32);    // HPS street-front (retail/lobby)
-		vec3 screenColor = vec3(1.0, 0.88, 0.62);    // golden warm-white (mixed use)
-		vec3 officeWhite = vec3(1.0, 0.91, 0.70);    // warm white (no pure whites from altitude)
-
-		vec3 upperColor = mix(
+		// Palette: white/warm-white dominant (60%), gold accents (25%), cool blue (15%).
+		vec3 warmColor   = vec3(1.0, 0.75, 0.35);   // warm amber residential
+		vec3 coolColor   = vec3(1.0, 0.88, 0.55);   // warm gold office
+		vec3 retailColor = vec3(1.0, 0.82, 0.45);   // amber retail
+		vec3 screenColor = vec3(0.9, 0.85, 0.6);    // warm screen glow
+		vec3 officeWhite = vec3(1.0, 0.94, 0.78);   // warm white (never pure)
 			mix(warmColor, coolColor, smoothstep(0.0, 0.4, colorMix)),
 			mix(screenColor, officeWhite, smoothstep(0.6, 1.0, colorMix)),
 			step(0.5, colorMix)
@@ -151,14 +145,10 @@ export const BUILDING_SHADER_GLSL = `
 		vec3 aviationRed = vec3(1.0, 0.08, 0.03);
 
 		// Darken building surfaces at night so emissive reads cleanly.
-		material.diffuse *= mix(1.0, 0.015, u_nightFactor);
 
-		// Compose emission layers
+		// Keep building surface visible at night so emissive windows show against it.
 		vec3 emission = vec3(0.0);
-		emission += windowColor * windowMask * lit * isWall * flicker * windowBright * 1.6 * u_lightIntensity;
-		emission += streetLampColor * streetGlow * isWall;
-		emission += aviationRed * rooftopLight * 4.0;
-
-		material.emissive = emission * u_nightFactor;
+		// Darken building surface at night — 5% visible, emissive windows stand out.
+		material.diffuse *= mix(1.0, 0.06, u_nightFactor);
 	}
 `;

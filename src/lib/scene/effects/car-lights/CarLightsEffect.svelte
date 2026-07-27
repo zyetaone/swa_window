@@ -11,7 +11,7 @@
 	import { LOCATION_MAP } from '$content/locations';
 	import { useCesiumEffect } from '$lib/world/active.svelte';
 	import { CAR_LIGHTS_NIGHT_THRESHOLD } from '$lib/utils';
-	import { createSeededRng, daySeed } from '$lib/world-three/prng';
+	import { createSeededRng, daySeed } from '$lib/world/prng';
 	import type { EffectProps } from '../../types';
 	import { seedDots, lightClass, lightColorBytes } from './rules';
 

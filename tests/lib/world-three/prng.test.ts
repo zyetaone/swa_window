@@ -8,7 +8,7 @@
  * determinism surfaces as a CI signal.
  */
 import { describe, it, expect } from 'vitest';
-import { createSeededRng, daySeed, spherePoint } from '$lib/world-three/prng';
+import { createSeededRng, daySeed, spherePoint } from '$lib/world/prng';
 
 describe('createSeededRng', () => {
 	it('produces uniform [0, 1) values', () => {

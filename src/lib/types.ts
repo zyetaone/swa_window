@@ -18,27 +18,23 @@ import type { CameraConfig, DirectorConfig } from './model/config-tree.svelte';
 
 export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const;
 export type WeatherType = typeof WEATHER_TYPES[number];
-export function isValidWeather(v: unknown): v is WeatherType {
-	return typeof v === 'string' && (WEATHER_TYPES as readonly string[]).includes(v);
-}
+export function isValidWeather(v: unknown): v is WeatherType { return validateConst(WEATHER_TYPES, v); }
 
-const DISPLAY_MODES = ['flight', 'screensaver', 'video'] as const;
+export const DISPLAY_MODES = ['flight', 'screensaver', 'video'] as const;
 export type DisplayMode = typeof DISPLAY_MODES[number];
-export function isValidDisplayMode(v: unknown): v is DisplayMode {
-	return typeof v === 'string' && (DISPLAY_MODES as readonly string[]).includes(v);
-}
+export function isValidDisplayMode(v: unknown): v is DisplayMode { return validateConst(DISPLAY_MODES, v); }
 
 export const QUALITY_MODES = ['performance', 'balanced', 'ultra'] as const;
 export type QualityMode = typeof QUALITY_MODES[number];
-export function isValidQualityMode(v: unknown): v is QualityMode {
-	return typeof v === 'string' && (QUALITY_MODES as readonly string[]).includes(v);
-}
+export function isValidQualityMode(v: unknown): v is QualityMode { return validateConst(QUALITY_MODES, v); }
 
-/** Multi-Pi parallax role (Phase 7). solo = single device, no offset; center = broadcasting leader (no yaw offset); left/right = followers with per-side yaw offset. */
-export const DEVICE_ROLES = ['solo', 'left', 'center', 'right'] as const;
+export const DEVICE_ROLES = ['left', 'center', 'right', 'solo'] as const;
 export type DeviceRole = typeof DEVICE_ROLES[number];
-export function isValidDeviceRole(v: unknown): v is DeviceRole {
-	return typeof v === 'string' && (DEVICE_ROLES as readonly string[]).includes(v);
+export function isValidDeviceRole(v: unknown): v is DeviceRole { return validateConst(DEVICE_ROLES, v); }
+
+/** Generic const-array validator — shared by all isValid* type guards. */
+function validateConst<T extends string>(arr: readonly T[], v: unknown): v is T {
+	return typeof v === 'string' && (arr as readonly string[]).includes(v);
 }
 
 // ─── Core domain types ───────────────────────────────────────────────────────

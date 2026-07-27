@@ -21,7 +21,7 @@ import type { EffectProps } from '$lib/scene/types';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { pickCloudComposition, type CloudComposition } from '$content/compositions/clouds';
 import { subscribe } from '$lib/game-loop';
-import { createSeededRng, daySeed } from '$lib/world-three/prng';
+import { createSeededRng, daySeed } from '$lib/world/prng';
 	import { randomBetween } from '$lib/utils';
 
 // Effect-component signature — compositor passes { model }. The wrapper
