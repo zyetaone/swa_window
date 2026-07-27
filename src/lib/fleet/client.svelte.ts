@@ -20,7 +20,7 @@
 import type { FleetClientModel } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType, type QualityMode } from '$lib/types';
-import { setParallaxRoleWithSync, applyConfigPatch } from '$lib/model/config-tree.svelte';
+import { setParallaxRole, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor } from '$lib/fleet/peer-url';
 import { peerAuthHeader } from '$lib/http/peer-token';
@@ -273,11 +273,9 @@ export class DeviceClient {
 				break;
 			}
 			case 'role_assign': {
-				// Validate against the DeviceRole union — earlier we accepted any
-				// string, which let a malformed fleet message land bogus values
-				// straight into the CRDT + camera config.
 				if (isValidDeviceRole(msg.role)) {
-					setParallaxRoleWithSync(msg.role);
+					applyConfigPatch('camera.parallax.role', msg.role);
+					setParallaxRole(msg.role);
 				}
 				if (typeof msg.headingOffsetDeg === 'number') {
 					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);

@@ -514,16 +514,6 @@ export function applyConfigPatch(
 	return true;
 }
 
-/**
- * Syncs parallax role across CRDT, local state, and heading-offset side-effect.
- * Called directly by fleet role_assign so the heading-offset propagates atomically.
- */
-export function setParallaxRoleWithSync(role: DeviceRole): void {
-	crdt.set('camera.parallax.role', role);
-	setByPath(camera as unknown as Record<string, unknown>, 'parallax.role', role);
-	setParallaxRole(role);
-}
-
 /** Export device ID for use in fleet message sourceId field. */
 export { setCRDTDeviceId, getCRDTDeviceId };
 
