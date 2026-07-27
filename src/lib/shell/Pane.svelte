@@ -2,168 +2,34 @@
 	/**
 	 * Pane — the airplane window pane.
 	 *
-	 * Owns the RAF tick loop (single game clock) and composes everything
-	 * the cabin occupant sees: Cesium globe (terrain, buildings, lights),
-	 * scene effects (clouds, lightning, micro-events), pane widgets
-	 * (Weather backdrop, Glass vignette, Blind shade), and the wing
-	 * silhouette.
+	 * Owns the cabin chrome (oval frame, glass, blind, HUD) and composes
+	 * the scene. GlobeLayer handles Cesium + Three overlay + watchdogs.
 	 *
-	 * Z-order SSOT: $lib/scene/layers.ts. Imported by the effect registry,
-	 * Weather.svelte, and this file.
+	 * Z-order SSOT: $lib/scene/layers.ts.
 	 */
-	import { untrack } from "svelte";
-	import { Z } from "$lib/scene/layers";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
-	import { subscribe } from "$lib/game-loop";
-	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
-	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
+	import { Z } from "$lib/scene/layers";
+	import GlobeLayer from "./GlobeLayer.svelte";
 	import Glass from "./window/Glass.svelte";
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
-	import Weather from './window/Weather.svelte';
-	import Compositor from '$lib/scene/compositor.svelte';
 	import { useMouseParallax } from './use-mouse-parallax.svelte';
-	import { activeCesium } from '$lib/world/active.svelte';
-	import { installHashPalette } from '$lib/world/hash-palette';
-
-	import { startLivenessWatchdog } from './liveness';
-	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from './overlay-recovery';
 
 	const model = useAeroWindow();
 
-	// Window frame on/off (Phase 5b) — CSS visibility toggle. Blind still works
-	// in both modes; frame bits (oval mask, rivets, glass, vignette, recess)
-	// simply disappear when false.
+	// ── Frame chrome ──────────────────────────────────────────────────────────
+
 	const frameVisible = $derived(model.config.shell.windowFrame);
-
-	// ── Overlay auto-recovery: boot-time check ──────────────────────────────
-	// If the overlay was auto-disabled due to sustained low fps on a previous
-	// boot, keep it disabled. The SidePanel toggle can re-enable (which also
-	// clears the persistent flag).
-	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled()) {
-		model.applyConfigPatch('world.useThreeOverlay', false);
-	}
-
-	// ── Overlay error boundary ──────────────────────────────────────────────
-	// A 24/7 unattended kiosk must not white-screen on a transient throw in the
-	// (experimental) Three overlay — a bad effect, a WebGL/material failure at
-	// mount. On error we log to the telemetry ring buffer and auto-reset the
-	// overlay a BOUNDED number of times (Cesium renders outside this boundary,
-	// so the base display stays alive the whole time). After the cap we leave
-	// the overlay down and let Cesium carry until the weekly reboot — never an
-	// infinite reset loop. Caveat: <svelte:boundary> only catches render/effect
-	// throws, not event-handler or setTimeout/RAF errors (Cesium's own loop).
-	let overlayResets = 0;
-	const MAX_OVERLAY_RESETS = 3;
-	function onOverlayError(error: unknown, reset: () => void): void {
-		model.telemetry.recordEvent('error', {
-			where: 'three-overlay',
-			message: error instanceof Error ? error.message : String(error),
-		});
-		if (overlayResets < MAX_OVERLAY_RESETS) {
-			overlayResets++;
-			setTimeout(reset, 4000); // one bounded retry after a beat
-		}
-	}
-
-	// ========================================================================
-	// GAME LOOP — single RAF driving model.tick()
-	// ========================================================================
-
-	// Tick body wrapped in untrack() so 60 Hz reads of config/flight/weather
-	// state inside model.tick() don't build a reactive dependency from this
-	// effect back onto AeroWindow — otherwise any config change re-subscribes
-	// the game loop, silently doubling tick frequency until the next subscribe.
-	$effect(() => {
-		return subscribe((dt: number) => {
-			untrack(() => model.tick(dt));
-		});
-	});
-
-	// Liveness watchdog (production hardening) — detects frozen-but-alive
-	// states the other watchdogs can't see: WebGL context loss (GL calls are
-	// silent no-ops, nothing throws) and silent render stalls (fps→0 without
-	// an exception). Bounded page reload (3/hour) restores the display; the
-	// audience sees the boot splash, never an error. Canvas registration
-	// happens in CesiumViewer/ThreeOverlay via registerLivenessCanvas().
-	$effect(() => {
-		return startLivenessWatchdog({
-			getFps: () => untrack(() => model.measuredFps),
-			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
-		});
-	});
-
-	// Overlay recovery — disables the Three overlay when sustained low fps
-	// indicates the Pi can't handle it. The disable is persisted in localStorage
-	// so a fleet-deployed Pi stays in Cesium-only mode across reboots.
-	$effect(() => {
-		return startOverlayRecovery({
-			getFps: () => untrack(() => model.measuredFps),
-			disableOverlay: () => {
-				model.config.world.useThreeOverlay = false;
-				model.telemetry.recordEvent('error', {
-					where: 'overlay-recovery',
-					reason: 'sustained-low-fps',
-					fps: model.measuredFps,
-				});
-			},
-		});
-	});
-
-	// When an operator manually re-enables the overlay (SidePanel toggle or
-	// URL param), clear the persisted disable flag so the next boot doesn't
-	// auto-disable it again.
-	$effect(() => {
-		if (model.config.world.useThreeOverlay) {
-			clearOverlayDisabled();
-		}
-	});
-
-	// Hash-palette night post-process — installs the April-15 sodium/amber/
-	// warm-white palette shader when useHashPalette is true. Replaces
-	// aero-color-grade. Removed cleanly on toggle-off or teardown.
-	$effect(() => {
-		if (!model.config.world.useHashPalette) return;
-		const viewer = activeCesium.manager?.getViewer();
-		if (!viewer) return;
-		const cleanup = installHashPalette(
-			viewer,
-			() => model.nightFactor,
-			() => model.nightLightScale,
-			() => model.config.world.darkVoidStrength,
-			() => model.config.world.envLight,
-			() => model.config.world.additiveStrength,
-		);
-		return cleanup;
-	});
-
-	// ========================================================================
-	// DERIVED — presentation values
-	// ========================================================================
-	//
-	// One gesture, one meaning: pull the blind down → fly somewhere new.
-	// Wiring lives in useBlind.svelte (the composable that already owns the
-	// drag + keyboard machinery). The window viewport itself is not a button —
-	// taps and long-presses no longer do anything. If someone wants to tweak
-	// speed, the admin panel slider handles it.
-
-	// --- Sky ---
-
 	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
 
-	// --- Atmospheric effects ---
-
-	// Frost (disabled — Weather receives 0 below). If re-enabling:
-	// frostAmount = clamp((altitude - frostStartAltitude) / (frostMaxAltitude - frostStartAltitude), 0, 1)
+	// ── Atmospheric CSS filters ───────────────────────────────────────────────
 
 	const filterString = $derived.by(() => {
 		const timeBrightness =
-			model.skyState === "night"
-				? 1.0
-				: model.skyState === "dawn" || model.skyState === "dusk"
-					? 0.95
-					: 1.0;
+			model.skyState === "night" ? 1.0
+			: model.skyState === "dawn" || model.skyState === "dusk" ? 0.95
+			: 1.0;
 		const hazeContrast = 1 - model.config.atmosphere.haze.amount * 0.08;
 		const hazeSaturate = 1 - model.config.atmosphere.haze.amount * 0.1;
 		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
@@ -174,52 +40,30 @@
 		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
 	});
 
-	// --- Weather --- Phase 10: rainOpacity kept for easy re-enable, currently
-	// passed 0 to Weather below. windAngle still used (it's the only one
-	// Weather reads when rainOpacity > 0; harmless when 0).
-	// const _rainOpacity = $derived(model.config.atmosphere.weather.rainOpacity);
-	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
+	// ── Motion (turbulence, breathing, parallax) ──────────────────────────────
 
-	// --- Motion (unified from 4 independent layers) ---
-
-	// Turbulence shakes the window (shell/frame) — but the translation is
-	// kept light on the scene-content so it doesn't briefly cancel the
-	// Cesium camera's forward motion and make the plane "appear to stop"
-	// during bumps. Bank rotation and breathing still carry full effect.
 	const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
 	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
 	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
-	const breathingY = $derived(
-		model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude,
-	);
-
-	// Phase 10 — cursor parallax (game-engine-style "look around" interactivity).
-	// Adds a subtle DOM translate on .scene-content based on cursor position
-	// from viewport center. Gated by config.shell.mouseParallax. Smoothed via
-	// internal RAF lerp in the composable so it doesn't fight turbulence.
+	const breathingY = $derived(model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude);
 	const parallax = useMouseParallax();
 
 	const motionTransform = $derived.by(() => {
 		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
 		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
-		// Bank is NOT applied to the DOM canvas anymore — rotating the whole
-		// scene-content rigidly spun the window view ("the canvas rotates on
-		// bank"). Bank now reads naturally: the Cesium camera roll (-bankAngle)
-		// tilts the HORIZON, and world/three/Wing banks the WING relative to it.
-		// The window frame — the passenger's fixed reference — stays put.
 		const rotate = turbulenceRotate;
 		const scale = 1 + model.motion.warpZoom;
 		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
 	});
 
-
-	// --- Glass ---
+	// ── Glass ─────────────────────────────────────────────────────────────────
 
 	const glassVignetteOpacity = $derived(
 		model.skyState === "night" ? 0.3 : model.skyState === "day" ? 0.1 : 0.2,
 	);
 
-	// --- Timed click-hint (touch kiosks have no :hover) ---
+	// ── Timed click-hint ──────────────────────────────────────────────────────
+
 	let showHint = $state(false);
 	$effect(() => {
 		if (model.config.shell.blindOpen && !model.flight.isTransitioning) {
@@ -230,11 +74,6 @@
 		showHint = false;
 		return undefined;
 	});
-
-	// ========================================================================
-	// BLIND LOGIC — see useBlind composable
-	// ========================================================================
-
 </script>
 
 <div
@@ -243,68 +82,23 @@
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
 >
-	<!-- The oval window. Passive surface — user gestures live on the Blind. -->
 	<div
 		class="window-viewport"
 		style:background={skyBackground}
 	>
-		<!-- Scene content — shifts with turbulence/bank, clipped by the fixed viewport -->
 		<div
 			class="scene-content"
 			style:transform={motionTransform}
 			style:filter={filterString}
 		>
-			<!-- Cesium terrain/buildings/city-light billboards. The DOM warm-
-			     glow dome that used to live here was removed once the Cesium
-			     side gained real night-light layering (VIIRS night lights +
-			     altitude-blended CartoDB road mask + procedural building
-			     emissive + post-process pollution corona). The CSS dome
-			     painted a uniform amber tint across the entire pane regardless
-			     of where the lights actually were — duplicative now. -->
 			<div class="render-layer" style:z-index={Z.cesium}>
-				<CesiumViewer />
+				<GlobeLayer />
 			</div>
-
-			<!-- hybrid-v2 (Phase A): photoreal Three overlay — wing / clouds / moon /
-			     sky / postprocess, camera-mirrored from Cesium. Inside .scene-content
-			     so it shakes with turbulence alongside Cesium. Gated by the
-			     perf-validated fallback flag; when ON, the duplicate DOM clouds
-			     + star micro-events self-disable. -->
-			<svelte:boundary onerror={onOverlayError}>
-				{#if model.config.world.useThreeOverlay}
-					<ThreeOverlay />
-				{/if}
-				{#snippet failed()}
-					<!-- Overlay is down; Cesium (outside this boundary) keeps the
-					     display alive. onOverlayError schedules a bounded auto-reset. -->
-				{/snippet}
-			</svelte:boundary>
-
-			<!-- Scene effects (clouds, lightning, micro-events, haze, car-lights) -->
-			<Compositor />
-
-			<!-- Rain + frost — Phase 10 (user direction): weather effects pulled
-			     off the glass for the SWA install. Code kept in place; passing
-			     0/0 means Weather's `{#if > 0}` guards prevent any DOM render.
-			     To re-enable: pass {rainOpacity} {frostAmount} below instead. -->
-			<Weather rainOpacity={0} {windAngle} frostAmount={0} />
-
-			<!-- Wing now lives in shell/Wing.svelte as a real 3D mesh
-			     (camera-anchored, with per-Pi fuselageOffsetM). The legacy
-			     CSS .wing-silhouette div was removed once the 3D wing
-			     landed — it was invisible in practice anyway. -->
 		</div>
 
-		<!-- Water beads on the glass — CSS backdrop-filter refraction. Renderer-
-		     agnostic (ships on both the Cesium-only and hybrid paths); only mounts
-		     its blur layers while actually raining. Replaces the old Three shader. -->
 		<RainGlass />
-
-		<!-- Fixed to glass (not affected by turbulence) — glass-surface +
-		     vignette + recess rim, z:9–11. See shell/window/Glass.svelte. -->
 		<Glass {glassVignetteOpacity} />
 
-		<!-- UI overlays — timed reveal (no :hover on touch kiosks). -->
 		{#if showHint}
 			<div class="click-hint visible">
 				<span>Pull the blind down to fly somewhere new</span>
@@ -312,61 +106,44 @@
 		{/if}
 	</div>
 
-	<!-- Blind — pull-down shade with slats + pull-tab + from→to chevrons.
-	     Uses useBlind() composable internally; styles own their CSS. -->
 	<Blind />
 </div>
 
 <style>
 	.window-container {
-		/* Shape tokens — shared by container, viewport, blind */
-		--frame-width: 24px; /* Thicker, more substantial rim */
-		--window-radius: 160px; /* Fixed stadium curvature */
-		--inner-radius: 136px; /* 160px - 24px = 136px (Exact concentric fit) */
+		--frame-width: 24px;
+		--window-radius: 160px;
+		--inner-radius: 136px;
 
 		position: absolute;
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-
-		/* Maximize size - Expansive View */
-		height: 82vh; /* Primary size driver */
-		width: auto; /* Derived from aspect */
-		aspect-ratio: 2 / 3; /* Classic aircraft oval */
-		max-width: 85vw; /* Mobile safety constraint */
-
+		height: 82vh;
+		width: auto;
+		aspect-ratio: 2 / 3;
+		max-width: 85vw;
 		border-radius: var(--window-radius);
 		overflow: hidden;
 		z-index: 10;
 
-		/* Metallic frame — visible in the gap between container and viewport */
 		background: linear-gradient(
 			135deg,
 			#d8d8dd 0%,
 			#b0b0b5 50%,
 			#909098 100%
 		);
-
-		/* Deep embedded shadow - Symmetrical (No directional offsets) */
 		box-shadow:
 			inset 0 0 30px rgba(0, 0, 0, 0.6),
-			/* Inner depth */ inset 0 0 4px rgba(0, 0, 0, 0.3),
-			/* Sharp rim */ 0 0 40px rgba(0, 0, 0, 0.5); /* Outer wall drop shadow */
+			inset 0 0 4px rgba(0, 0, 0, 0.3),
+			0 0 40px rgba(0, 0, 0, 0.5);
 	}
 
 	@media (orientation: portrait) {
-		.window-container {
-			width: 85vw;
-			height: auto;
-			max-height: 85vh;
-		}
+		.window-container { width: 85vw; height: auto; max-height: 85vh; }
 	}
-
 	@media (orientation: landscape) {
-		.window-container {
-			height: 88vh;
-			width: auto;
-		}
+		.window-container { height: 88vh; width: auto; }
 	}
 
 	.window-viewport {
@@ -378,17 +155,9 @@
 		border: none;
 		padding: 0;
 		cursor: pointer;
-
 		transition: background 1s ease;
 	}
 
-	.window-viewport:disabled {
-		cursor: not-allowed;
-		opacity: 0.6;
-		pointer-events: none;
-	}
-
-	/* Scene content — moves with turbulence, slightly oversized to prevent edge gaps */
 	.scene-content {
 		position: absolute;
 		inset: -4px;
@@ -409,10 +178,6 @@
 		height: 100% !important;
 	}
 
-	/* Glass recess rim — on TOP of everything, creates the depth illusion */
-
-	/* --- UI overlays --- */
-
 	.click-hint {
 		position: absolute;
 		bottom: 10%;
@@ -424,9 +189,7 @@
 		transition: opacity 0.8s ease;
 	}
 
-	.click-hint.visible {
-		opacity: 1;
-	}
+	.click-hint.visible { opacity: 1; }
 
 	.click-hint span {
 		background: var(--sw-blue);
@@ -439,28 +202,13 @@
 		border: 1px solid rgba(255, 255, 255, 0.2);
 	}
 
-	/* Blind styles live inside window/Blind.svelte. */
-
-	/* ─── Window frame on/off ────────────────────────────────────────────────
-	   When config.shell.windowFrame = false, all cabin-style chrome
-	   disappears and the oval clip becomes a full rectangle — edge-to-edge
-	   Cesium render. The blind still works (its clip rect goes square too)
-	   so the user can still pull it down across the whole viewport. Mode
-	   used for the 3-Pi panorama where the oval would break the seam.
-
-	   Glass.svelte + Blind.svelte elements are in child-component scope, so
-	   we reach into them via :global(). The 3D wing is in the Three.js
-	   overlay and stays visible in no-frame mode (the 3-Pi panorama uses
-	   no-frame and explicitly wants the wing). */
 	.window-container.no-frame :global(.glass-surface),
 	.window-container.no-frame :global(.vignette),
 	.window-container.no-frame :global(.glass-recess) {
 		visibility: hidden;
 	}
+
 	.window-container.no-frame {
-		/* Full-bleed: no oval, no metallic rim, no aspect cap. The Cesium
-		   canvas + atmosphere fill the entire viewport. Blind still works
-		   (drag-snap composable doesn't depend on the oval shape). */
 		top: 0;
 		left: 0;
 		transform: none;
@@ -473,10 +221,12 @@
 		background: transparent;
 		box-shadow: none;
 	}
+
 	.window-container.no-frame .window-viewport {
 		border-radius: 0 !important;
 		box-shadow: none !important;
 	}
+
 	.window-container.no-frame :global(.blind-clip),
 	.window-container.no-frame :global(.blind-overlay) {
 		border-radius: 0;
