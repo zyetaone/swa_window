@@ -275,6 +275,12 @@ export const world = $state({
 		useCesiumClouds: true, // Cesium cloud billboards (1 draw call, GPU-instanced)
 	ambientOcclusion: true, // HBAO (altitude-gated)
 	qualityMode: 'performance' as QualityMode, // quality preset
+		// Wing mirror parity — flips the wing when travel direction reverses.
+		// 1 = natural pose, -1 = mirrored pose. Toggle via Lighting panel.
+		wingDriftSign: 1,
+		// Wing horizontal position in Three.js camera-local space.
+		// -5.3 = default (root near foreground), adjust via Lighting panel.
+		wingXBase: -5.3,
 });
 
 

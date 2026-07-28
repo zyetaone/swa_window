@@ -109,6 +109,7 @@
 	// Mutable X base — the tuner drives this via __wing.setXBase; the tick
 	// re-derives holder.position.x from it every frame.
 	let xBase = WING_X_BASE;
+	const wingCfgXBase = $derived(model.config.world.wingXBase);
 
 	// Convert a GLB material to a LIT DoubleSide MeshLambertMaterial, keeping its
 	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
@@ -355,16 +356,23 @@
 		// wing always sweeps WITH the world drift and banks INTO the turn — by
 		// construction, not by four separate signs happening to agree.
 		const travelSign = untrack(() => model.flight.travelSign);
-		const screenSign = screenTravelSign(travelSign);
+		const wingSign = untrack(() => model.config.world.wingDriftSign) ?? 1;
+		const screenSign = screenTravelSign(travelSign) * wingSign;
 		// Seat / window position slides the wing fore-aft along the fuselage axis
 		// (holder X). A forward seat (negative offset) shows more trailing edge;
 		// an aft seat (positive) more leading edge. Reads the per-role offset the
 		// model already computes (parallax.fuselageOffsetM) — 0 for solo, ±6 m for
 		// the left/right panorama roles.
 		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
-		holder.position.x = xBase + seatOffset;
-		// screenSign ≥ 0 → un-mirrored "good" pose; < 0 → mirrored (reverse travel).
-		holder.scale.x = screenSign >= 0 ? 1 : -1;
+		const mirrorX = screenSign >= 0 ? 1 : -1;
+		// screenSign ≥ 0 → un-mirrored pose; < 0 → mirrored (reverse travel).
+		// X-position flips with mirror so wing stays on the same window side.
+		holder.position.x = (wingCfgXBase + seatOffset) * mirrorX;
+		holder.scale.x = mirrorX;
+		// Flip X-position so the mirrored wing stays on the same side of the window.
+		const mirrorX = screenSign >= 0 ? 1 : -1;
+		holder.scale.x = mirrorX;
+		holder.position.x = (xBase + seatOffset) * mirrorX;
 
 		// Mirror the camera world transform onto the group.
 		const cam = ctx.camera.current;

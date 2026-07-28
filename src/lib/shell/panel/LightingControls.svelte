@@ -83,4 +83,8 @@
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
 	<Toggle label="Touch (Demo Mode)" bind:checked={config.shell.touchEnabled} />
 	<Toggle label="Cursor Parallax" bind:checked={config.shell.mouseParallax} />
+	<!-- Wing position + mirror — adjust how the wing sits in the window -->
+	<RangeSlider id="wingX" label="Wing Position" min={-12} max={2} step={0.1} bind:value={config.world.wingXBase} formatValue={(v) => v.toFixed(1)} />
+	<!-- Wing mirror: flip the screen-drift sign when the wing mirror looks wrong -->
+	<Toggle label="Wing Mirror Flip" checked={config.world.wingDriftSign === -1} onchange={(e) => config.world.wingDriftSign = e.currentTarget.checked ? -1 : 1} />
 </section>
