@@ -169,12 +169,32 @@ Three rules:
 > Phase 3 (camera) + Phase 4 (orchestrator slim-down) pending.
 > `CesiumManager` class remains as the orchestrator; Phase 4 will
 > slim it to ~10 lines of imperative tick + delegated sync.
+
+> **Phase 3 shipped**: camera extracted to `world/camera.svelte.ts`
+> (module-level state + `setupCamera()` + `syncCamera(slice)` +
+> `getCameraRead()`). The scratch `Cartesian3` is preserved as an
+> allocation optimisation. `CameraMirror.svelte` reads via the typed
+> `getCameraRead()` API (no Cesium types cross the boundary).
+
+> **Phase 4 shipped**: `compose.ts` is now ~340 lines (was 670+). The
+> `#tick` method is 8 lines of imperative dispatch (was 50+). The
+> `CesiumManager` class is the orchestrator only — every leaf concern
+> (atmosphere, terrain, imagery, buildings, lightning, clouds,
+> color-grade, camera) lives in its own `.svelte.ts` file with
+> `setup()/sync()` exported functions. `CesiumManager` owns:
+>   - the `Cesium.Viewer` instance (single viewer invariant)
+>   - the post-process stage enumeration (HBAO, bloom, FXAA)
+>   - the quality-mode transition (one-shot, fires on change)
+>   - the public `applyQualityMode()` + `setBuildingsWireframe()` API
+>   - the destroy / cleanup contract
+> The orchestrator is no longer the source of leaf logic — it
+> delegates.
 | `world/imagery.ts` | `world/imagery.ts` (hybrid) | **2** [shipped] |
 | `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
 | `world/atmosphere-manager.ts` | `world/atmosphere.svelte.ts` (hybrid) | **2** [shipped] |
 | `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | **2** [shipped] |
-| `world/camera-manager.ts` | `world/camera.svelte.ts` | 3 |
-| `world/compose.ts` | (kept, slimmed) | 4 |
+| `world/camera-manager.ts` | `world/camera.svelte.ts` | **3** [shipped] |
+| `world/compose.ts` | (kept, slimmed) | **4** [shipped] |
 
 **Hybrid** = class for async setup (Ion token, terrain provider, 3D
 Tiles init), `$effect` for per-frame sync. Async I/O does not fit

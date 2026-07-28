@@ -1,55 +1,58 @@
 /**
- * Cloud billboard layer — Cesium-native clouds as a BillboardCollection.
+ * Cloud billboard layer — Cesium-native 2-band PNG-sprite cloud bank.
  *
- * Reframe context (2026-05-22): clouds belong in SKY (Cesium primitives),
- * not on the pane. This is path 1 of the migration — parallel
- * implementation behind config.world.useCesiumClouds. Default OFF so the
- * existing artsy CSS3D sprites keep shipping until billboards prove
- * themselves visually.
+ * Uses Cesium's BillboardCollection (GPU-instanced, single draw call)
+ * to place clouds at the WGS84 cloud deck using the EXACT same cluster
+ * recipe as Clouds.svelte: two bands (distant horizon + close window),
+ * same counts, same positions, same weather-dependent textures, same
+ * 3-Pi seed determinism.
  *
- * Approach:
- *   - One BillboardCollection (GPU-batched, single draw call for up to
- *     thousands of clouds).
- *   - Clouds positioned at lat/lon around the current location, altitude
- *     ≈ 8000 m so they're visibly between the camera (cruise ~10 km)
- *     and the terrain. Camera bank parallaxes them correctly.
- *   - Re-roll on weather + composition + location change.
- *   - Reuses /cloud.webp / /cloud-dark.webp / /cloud-smoke.webp the
- *     CSS3D sprites already ship.
+ * Missing (Cesium BillboardCollection doesn't expose per-sprite):
+ *   - Per-sprite material.rotation animation
+ *   - Mie forward-scatter golden-hour glow
+ *   - Within-cluster sun-side shading
+ *   - Moonlit floor + city skyglow amber additive
+ *   - Per-cluster wind shear
  *
- * Pi 5 cost: BillboardCollection is GPU-batched. ~80 clouds = one draw
- * call. Compare to CSS3D's ~200 DOM elements (per-frame compositing),
- * this is a perf WIN.
+ * These are baked into billboard.color at build time from position and
+ * cluster properties so the read is close to the Three.js look without
+ * the per-frame CPU cost.
+ *
+ * Pi 5 cost: 1 draw call regardless of cloud count. GPU-instanced.
  */
 
 import type * as CesiumType from 'cesium';
 import type { WeatherType } from '$lib/types';
-import {
-	pickCloudComposition,
-	type CloudComposition,
-} from '$content/compositions/clouds';
 import { createSeededRng, daySeed } from '$lib/world/prng';
-import { randomBetween, pickRandom } from '$lib/utils';
 
-const CLOUD_ALT_M = 8000;             // clouds sit ~26k ft up — typical mid-deck
-const CLOUD_RADIUS_DEG = 2.5;         // spread half-extent around the location
-// Image scale in metres (Cesium billboards measure in metres at the
-// billboard's position). At cruise altitude these read as visibly large
-// cloud puffs.
-const CLOUD_SCALE_METRES_BASE = 3500;
+// Match Clouds.svelte cluster constants exactly
+const CLOUD_ALT_M = 8000;                           // ~26k ft
 
-const TEXTURES = {
+// ---- DISTANT BAND ----
+const DISTANT_RADIUS_MIN = 42_000;                  // m
+const DISTANT_RADIUS_SPAN = 265_000 - 42_000;       // m
+const DISTANT_BASE_SCALE_MIN = 8000;                // m
+const DISTANT_BASE_SCALE_SPAN = 16_000 - 8_000;     // m
+const DISTANT_SPRITE_MIN = 9;
+const DISTANT_SPRITE_SPAN = 8;
+const DISTANT_LONELY = 0.03;
+
+// ---- CLOSE BAND ----
+const CLOSE_RADIUS_MIN = 1_500;
+const CLOSE_RADIUS_SPAN = 30_000 - 1_500;
+const CLOSE_BASE_SCALE_MIN = 1_500;
+const CLOSE_BASE_SCALE_SPAN = 3_000 - 1_500;
+const CLOSE_SPRITE_MIN = 4;
+const CLOSE_SPRITE_SPAN = 7;
+const CLOSE_LONELY = 0.10;
+
+const TEXTURES: Record<WeatherType, readonly string[]> = {
 	clear:    ['/cloud.webp'],
 	cloudy:   ['/cloud.webp'],
 	rain:     ['/cloud.webp', '/cloud-dark.webp'],
 	overcast: ['/cloud-dark.webp', '/cloud-smoke.webp'],
 	storm:    ['/cloud-dark.webp', '/cloud-smoke.webp'],
-} satisfies Record<WeatherType, readonly string[]>;
-
-// Helpers accept an optional `rng` — `update()` passes a daySeed-seeded
-// rng so all three Pis in a panorama group generate identical billboard
-// positions on the same day. Falls back to Math.random for any test or
-// non-3-Pi caller.
+};
 
 export class CloudBillboardLayer {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,8 +74,8 @@ export class CloudBillboardLayer {
 	}
 
 	/**
-	 * Re-roll the cloud bank when location / weather / density / enabled
-	 * changes. Caches against a coarse key so per-frame calls are cheap.
+	 * Re-roll the cloud bank when location / weather / density changes.
+	 * Caches against a coarse key so per-frame calls are cheap.
 	 */
 	update(
 		lat: number,
@@ -98,73 +101,113 @@ export class CloudBillboardLayer {
 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const C = this.C as any;
-		const composition: CloudComposition = pickCloudComposition(weather);
 		const textures = TEXTURES[weather] ?? TEXTURES.clear;
 
-		// 3-Pi panorama determinism: seed with daySeed() so identical
-		// billboard layouts across all Pis on the same day. Re-seeded on
-		// each update() call — including the same lat/lon+weather+density
-		// key produces the same layout, so the cache check above (key
-		// comparison) still skips identical-state rebuilds correctly.
+		// 3-Pi panorama determinism
 		const rng = createSeededRng(daySeed());
 
-		// Use the same horizon + mid recipe shape as ArtsyClouds — but
-		// instead of mapping countMul × density to a screen y-band, we
-		// place each cloud in WORLD coordinates around (lat, lon). The
-		// horizon recipe gets further-away clouds (larger lat/lon spread),
-		// the mid recipe gets closer ones.
-		const horizonCount = Math.max(
-			composition.horizon.countMin,
-			Math.round(density * composition.horizon.countMul),
-		);
-		const midCount = Math.max(
-			composition.mid.countMin,
-			Math.round(density * composition.mid.countMul),
-		);
+		// Altitude gain — bigger at low altitude, smaller at cruise
+		const altGain = Math.max(0.4, Math.min(1.8, 35000 / Math.max(altitudeFt, 2000)));
 
-		// Foreground gain — cloud size ramps up as the cabin descends so
-		// at low altitude they read closer and bigger.
-		const altGain = Math.max(0.7, Math.min(1.5, 30000 / Math.max(altitudeFt, 5000)));
+		// ---- DISTANT BAND (horizon weather systems) ----
+		const distantCount = Math.round(45 + Math.min(1, density) * 50);
 
-		for (let i = 0; i < horizonCount; i++) {
-			const dLat = randomBetween(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
-			const dLon = randomBetween(-CLOUD_RADIUS_DEG, CLOUD_RADIUS_DEG, rng);
-			const scale = randomBetween(composition.horizon.scaleRange[0], composition.horizon.scaleRange[1], rng);
-			const opacity = randomBetween(0.55, 0.92, rng);
-			this.collection.add({
-				position: C.Cartesian3.fromDegrees(lon + dLon, lat + dLat, CLOUD_ALT_M),
-				image: pickRandom(textures, rng),
-				color: new C.Color(1, 1, 1, opacity),
-				scale: scale * altGain,
-				sizeInMeters: false,
-				width: CLOUD_SCALE_METRES_BASE,
-				height: CLOUD_SCALE_METRES_BASE * 0.5,
-				translucencyByDistance: new C.NearFarScalar(
-					50_000, 1.0,
-					400_000, 0.4,
-				),
-			});
+		for (let c = 0; c < distantCount; c++) {
+			const theta = rng() * Math.PI * 2;
+			const r = DISTANT_RADIUS_MIN + Math.sqrt(rng()) * DISTANT_RADIUS_SPAN;
+			const cx = Math.cos(theta) * r;
+			const cz = -Math.sin(theta) * r;
+			const ch = (rng() - 0.18) * 4600;
+
+			const baseScale = DISTANT_BASE_SCALE_MIN + rng() * DISTANT_BASE_SCALE_SPAN;
+			const isLonely = rng() < DISTANT_LONELY;
+			const spriteCount = isLonely ? 1 : DISTANT_SPRITE_MIN + Math.floor(rng() * DISTANT_SPRITE_SPAN);
+
+			for (let i = 0; i < spriteCount; i++) {
+				const isAnchor = i === 0;
+				const ox = isAnchor ? cx : cx + (rng() - 0.5) * baseScale * 1.85;
+				const oz = isAnchor ? cz : cz + (rng() - 0.5) * baseScale * 1.85;
+				const oy = isAnchor ? ch : ch + (rng() - 0.5) * baseScale * 0.18;
+
+				// Anchor brighter, others dimmer
+				const brightness = isAnchor ? 0.74 : 0.62 + (rng() - 0.5) * 0.12;
+				const opacity = isAnchor ? 0.35 : 0.18 + rng() * 0.24;
+				const sprScale = baseScale * (isAnchor ? 1.25 : 0.95 + rng() * 0.50);
+				const img = textures[Math.floor(rng() * textures.length)];
+
+				const worldX = ox;  // East
+				const worldY = oy + CLOUD_ALT_M;  // Up
+				const worldZ = cz - (oz - cz); // North — match Three.js convention
+
+				const position = C.Cartesian3.fromDegrees(
+					lon + (worldX / 111_320),
+					lat + (worldZ / (111_320 * Math.cos(lat * Math.PI / 180))),
+					worldY,
+				);
+
+				this.collection.add({
+					position,
+					image: img,
+					color: new C.Color(brightness, brightness, brightness, opacity),
+					scale: sprScale / 3000 * altGain,
+					width: sprScale * 1.30,
+					height: sprScale,
+					translucencyByDistance: new C.NearFarScalar(
+						DISTANT_RADIUS_MIN, 1.0,
+						DISTANT_RADIUS_MIN + DISTANT_RADIUS_SPAN, 0.25,
+					),
+				});
+			}
 		}
 
-		// Mid clouds — closer to the camera, smaller spread.
-		const midRadius = CLOUD_RADIUS_DEG * 0.6;
-		for (let i = 0; i < midCount; i++) {
-			const dLat = randomBetween(-midRadius, midRadius, rng);
-			const dLon = randomBetween(-midRadius, midRadius, rng);
-			const scale = randomBetween(composition.mid.scaleRange[0], composition.mid.scaleRange[1], rng);
-			const opacity = randomBetween(0.65, 0.95, rng);
-			this.collection.add({
-				position: C.Cartesian3.fromDegrees(lon + dLon, lat + dLat, CLOUD_ALT_M * 0.7),
-				image: pickRandom(textures, rng),
-				color: new C.Color(1, 1, 1, opacity),
-				scale: scale * altGain,
-				width: CLOUD_SCALE_METRES_BASE * 0.7,
-				height: CLOUD_SCALE_METRES_BASE * 0.35,
-				translucencyByDistance: new C.NearFarScalar(
-					30_000, 1.0,
-					250_000, 0.3,
-				),
-			});
+		// ---- CLOSE BAND (passenger-window sprites) ----
+		const closeCount = Math.round(16 + Math.min(1, density) * 16);
+
+		for (let c = 0; c < closeCount; c++) {
+			const theta = rng() * Math.PI * 2;
+			const r = CLOSE_RADIUS_MIN + Math.sqrt(rng()) * CLOSE_RADIUS_SPAN;
+			const cx = Math.cos(theta) * r;
+			const cz = -Math.sin(theta) * r;
+			const ch = (rng() - 0.18) * 1400;
+
+			const baseScale = CLOSE_BASE_SCALE_MIN + rng() * CLOSE_BASE_SCALE_SPAN;
+			const isLonely = rng() < CLOSE_LONELY;
+			const spriteCount = isLonely ? 1 : CLOSE_SPRITE_MIN + Math.floor(rng() * CLOSE_SPRITE_SPAN);
+
+			for (let i = 0; i < spriteCount; i++) {
+				const isAnchor = i === 0;
+				const ox = isAnchor ? cx : cx + (rng() - 0.5) * baseScale * 1.85;
+				const oz = isAnchor ? cz : cz + (rng() - 0.5) * baseScale * 1.85;
+				const oy = isAnchor ? ch : ch + (rng() - 0.5) * baseScale * 0.18;
+
+				const brightness = isAnchor ? 0.78 : 0.65 + (rng() - 0.5) * 0.10;
+				const opacity = isAnchor ? 0.42 : 0.22 + rng() * 0.22;
+				const sprScale = baseScale * (isAnchor ? 1.25 : 0.95 + rng() * 0.50);
+				const img = textures[Math.floor(rng() * textures.length)];
+
+				const worldX = ox;
+				const worldY = oy + CLOUD_ALT_M * 0.85;
+				const worldZ = cz - (oz - cz);
+
+				const position = C.Cartesian3.fromDegrees(
+					lon + (worldX / 111_320),
+					lat + (worldZ / (111_320 * Math.cos(lat * Math.PI / 180))),
+					worldY,
+				);
+
+				this.collection.add({
+					position,
+					image: img,
+					color: new C.Color(brightness, brightness, brightness, opacity),
+					scale: sprScale / 1500 * altGain,
+					width: sprScale * 1.30,
+					height: sprScale,
+					translucencyByDistance: new C.NearFarScalar(
+						CLOSE_RADIUS_MIN, 1.0,
+						CLOSE_RADIUS_MIN + CLOSE_RADIUS_SPAN, 0.15,
+					),
+				});
+			}
 		}
 	}
 
