@@ -19,7 +19,7 @@ import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
-import { CloudBillboardLayer } from './cloud-billboard-layer';
+import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
 import { installHashPalette } from './hash-palette';
@@ -63,7 +63,7 @@ export class CesiumManager {
 	readonly #viewer: CesiumType.Viewer;
 
 	#lightning: LightningStage | null = null;
-	#cloudBillboards: CloudBillboardLayer | null = null;
+	// Cesium clouds are module-level state in cloud-billboard-layer.ts (not tracked here).
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
 	#lastColorGradeEnabled: boolean | null = null;
@@ -146,8 +146,7 @@ export class CesiumManager {
 
 		this.#lightning = new LightningStage(C, v);
 		this.#lightning.mount();
-		this.#cloudBillboards = new CloudBillboardLayer(C, v);
-		this.#cloudBillboards.mount();
+		mountCesiumClouds();
 
 		this.#syncClock();
 		this.#tick();
@@ -238,9 +237,8 @@ export class CesiumManager {
 	}
 
 	#syncCloudBillboards(): void {
-		if (!this.#cloudBillboards) return;
 		const m = this.#model;
-		this.#cloudBillboards.update(
+		updateCesiumClouds(
 			m.flight.lat, m.flight.lon, m.weather,
 			m.config.atmosphere.clouds.density, m.flight.altitude,
 			m.config.world.useCesiumClouds,
@@ -369,7 +367,7 @@ export class CesiumManager {
 
 	destroy(): void {
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
-		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
+		destroyCesiumClouds();
 		if (!this.#viewer.isDestroyed()) {
 			if (this.#boundTick) this.#viewer.scene.postRender.removeEventListener(this.#boundTick);
 			this.#viewer.destroy();
