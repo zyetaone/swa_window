@@ -45,18 +45,18 @@ export class FlightSimEngine {
 	// --- Position (raw simulation state) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
-	altitude = $state<number>(10_000);
+	altitude = $state<number>(5_000);
 	heading = $state(45);
-	pitch = $state(75);
+	pitch = $state(60);
 
 	// --- Smoothed Camera (SSOT for rendering) ---
 	// These values lerp toward the raw state above to provide "heavy camera"
 	// feel and absorb teleports/jitters. SSOT for Cesium + DOM.
 	camLat = $state(25.2048);
 	camLon = $state(55.2708);
-	camAlt = $state(10_000);
+	camAlt = $state(5_000);
 	camHeading = $state(45);
-	camPitch = $state(75);
+	camPitch = $state(60);
 	#camInitialized = false;
 
 	// --- Flight mode (reactive) ---
