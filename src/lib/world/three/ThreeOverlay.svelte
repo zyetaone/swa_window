@@ -12,7 +12,7 @@
 	import { registerLivenessCanvas } from '$lib/world/lifecycle-liveness';
 	import CameraMirror from './CameraMirror.svelte';
 	import Clouds from './Clouds.svelte';
-	import Wing from '$lib/shell/Wing.svelte';
+	import Wing from './Wing.svelte';
 	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
 	import { lightingState } from '$lib/world/curves';
 
