@@ -19,6 +19,7 @@ import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
+import { mountLightning, destroyLightning, tickLightning } from './effects/lightning.svelte';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
@@ -138,6 +139,7 @@ export class CesiumManager {
 
 		this.#lightning = new LightningStage(C, v);
 		this.#lightning.mount();
+		mountLightning();
 		this.#cloudBillboards = new CloudBillboardLayer(C, v);
 		this.#cloudBillboards.mount();
 
@@ -240,13 +242,12 @@ export class CesiumManager {
 	}
 
 	#syncLightning(dt: number): void {
-		if (!this.#lightning) return;
-		this.#lightning.tick(dt,
-			this.#model.config.atmosphere.weather.hasLightning,
-			this.#model.config.atmosphere.weather.lightningDecayRate,
-			this.#model.config.atmosphere.weather.lightningMinInterval,
-			this.#model.config.atmosphere.weather.lightningMaxInterval,
-		);
+		tickLightning(dt, {
+			hasLightning: this.#model.config.atmosphere.weather.hasLightning,
+			lightningDecayRate: this.#model.config.atmosphere.weather.lightningDecayRate,
+			lightningMinInterval: this.#model.config.atmosphere.weather.lightningMinInterval,
+			lightningMaxInterval: this.#model.config.atmosphere.weather.lightningMaxInterval,
+		});
 	}
 
 	// ── Camera ───────────────────────────────────────────────────────────────
@@ -360,6 +361,7 @@ export class CesiumManager {
 	setBuildingsWireframe(enabled: boolean): void { setBuildingsWireframe(enabled); }
 
 	destroy(): void {
+		destroyLightning();
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
 		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
 		if (!this.#viewer.isDestroyed()) {
