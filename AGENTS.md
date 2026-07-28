@@ -1,5 +1,10 @@
 # Repository Guidelines
 
+> See `docs/ARCHITECTURE.md` for the canonical engine-stack architecture
+> (five layers, single-Viewer rule, reactive-feature pattern, manager →
+> feature migration map). New features must follow the pattern:
+> `$state` (state) → `$derived` (computation) → `$effect` (Cesium sync only).
+
 ## Project Overview
 
 Aero Dynamic Window renders a **circadian-aware digital airplane window display** for office wellbeing. It composites CesiumJS globe/terrain/buildings with an optional Three.js photoreal overlay, CSS effect layers, and cabin chrome (oval frame, blind, wing silhouette). Designed for **Raspberry Pi 5 fleet deployment** in headless Chromium kiosk mode. Active branch: `hybrid-v2`.

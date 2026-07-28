@@ -7,6 +7,18 @@
 	 *   - Loading overlay + error + retry UI
 	 *   - Container mount/unmount lifecycle
 	 *   - Reactive effects that call CesiumManager methods
+	 *
+	 * ─── INVARIANT: exactly one Cesium Viewer per process ──────────────
+	 * No other file in the codebase calls `new CesiumModule.Viewer(...)`.
+	 * The Viewer is the single GPU render context — instantiating a
+	 * second one doubles GPU memory and produces no coherent compositing
+	 * result.
+	 *
+	 * If you think you need a second canvas, that's a signal you should
+	 * be designing a different pattern (screenshot pipeline, DataSource,
+	 * custom render-target) — not a second Viewer.
+	 *
+	 * See docs/ARCHITECTURE.md "Single-Viewer Rule" for rationale.
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
