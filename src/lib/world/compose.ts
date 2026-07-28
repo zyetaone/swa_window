@@ -21,6 +21,7 @@ import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
 import { mountLightning, destroyLightning, tickLightning } from './effects/lightning.svelte';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
+import { mountClouds, destroyClouds, updateClouds } from './effects/clouds.svelte';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
 import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
@@ -142,6 +143,7 @@ export class CesiumManager {
 		mountLightning();
 		this.#cloudBillboards = new CloudBillboardLayer(C, v);
 		this.#cloudBillboards.mount();
+		mountClouds();
 
 		this.#syncClock();
 		this.#tick();
@@ -235,6 +237,11 @@ export class CesiumManager {
 		if (!this.#cloudBillboards) return;
 		const m = this.#model;
 		this.#cloudBillboards.update(
+			m.flight.lat, m.flight.lon, m.weather,
+			m.config.atmosphere.clouds.density, m.flight.altitude,
+			m.config.world.useCesiumClouds,
+		);
+		updateClouds(
 			m.flight.lat, m.flight.lon, m.weather,
 			m.config.atmosphere.clouds.density, m.flight.altitude,
 			m.config.world.useCesiumClouds,
@@ -362,6 +369,7 @@ export class CesiumManager {
 
 	destroy(): void {
 		destroyLightning();
+		destroyClouds();
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
 		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
 		if (!this.#viewer.isDestroyed()) {
