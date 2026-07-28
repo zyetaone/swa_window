@@ -16,6 +16,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
+import { mountColorGrade, syncColorGrade, destroyColorGrade } from './effects/color-grade.svelte';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
@@ -222,6 +223,10 @@ export class CesiumManager {
 				this.#lastColorGradeEnabled = should;
 			}
 		}
+		syncColorGrade(
+			{ nightFactor: m.nightFactor, bootFade: this.#getBootFade() },
+			{ additiveStrength: m.config.world.additiveStrength, qualityMode: m.config.world.qualityMode },
+		);
 	}
 
 	#syncBuildings(dt: number): void {
@@ -311,22 +316,13 @@ export class CesiumManager {
 				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
 			}
 		}
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const existing = (v.scene.postProcessStages as any).find?.((s: { name: string }) => s.name === COLOR_GRADE_STAGE);
-			this.#colorGradeStage = existing ? existing as CesiumType.PostProcessStage : null;
-			if (!this.#colorGradeStage) {
-				const stage = new this.#C.PostProcessStage({
-					name: COLOR_GRADE_STAGE, fragmentShader: glsl,
-					uniforms: {
-						u_nightFactor: () => this.#model.nightFactor * this.#getBootFade(),
-						u_additiveStrength: () => this.#model.config.world.additiveStrength,
-					},
-				});
-				v.scene.postProcessStages.add(stage);
-				this.#colorGradeStage = stage as CesiumType.PostProcessStage;
-			}
-		} catch (e) { console.warn('[Cesium] Post-process failed:', e); }
+		// Color-grade stage (delegated to effects/color-grade.svelte.ts)
+		mountColorGrade(glsl);
+		// Capture the stage so the legacy `qualityMode` transition still
+		// disables it via `syncQuality()`. Removed in Phase 4 when
+		// `qualityMode` becomes a `$effect`.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		this.#colorGradeStage = (v.scene.postProcessStages as any).find?.((s: { name: string }) => s.name === COLOR_GRADE_STAGE) ?? null;
 		this.#syncQuality();
 	}
 
@@ -370,6 +366,7 @@ export class CesiumManager {
 	destroy(): void {
 		destroyLightning();
 		destroyClouds();
+		destroyColorGrade();
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
 		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
 		if (!this.#viewer.isDestroyed()) {
