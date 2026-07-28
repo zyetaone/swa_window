@@ -11,7 +11,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { VideoBgBundle } from '$lib/scene/bundle/types';
-import * as disk from '$lib/scene/bundle/disk.server';
+import * as disk from '$lib/server/scene/bundle/disk';
 
 let tmp: string;
 

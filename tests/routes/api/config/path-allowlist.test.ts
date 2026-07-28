@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // vi.mock factories are hoisted above imports; vi.hoisted lets the spy
 // reference survive that hoisting.
 const { publishSpy } = vi.hoisted(() => ({ publishSpy: vi.fn() }));
-vi.mock('$lib/fleet/sse-bus.server', () => ({
+vi.mock('$lib/server/fleet/sse-bus', () => ({
 	publish: publishSpy,
 	subscribe: vi.fn(),
 	subscriberCount: vi.fn(() => 0),

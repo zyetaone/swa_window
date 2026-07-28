@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import { readLimitedJson } from './body';
 import { lanCorsHeaders } from './cors';
 import { requireAdminToken } from './auth';
-import { publish, type SseEvent } from '$lib/fleet/sse-bus.server';
+import { publish, type SseEvent } from '$lib/server/fleet/sse-bus';
 
 /**
  * 4 KB. Both payloads are small structured JSON (a config path + scalar, or a

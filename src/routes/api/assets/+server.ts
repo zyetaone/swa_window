@@ -14,7 +14,7 @@
  */
 
 import { json, error } from '@sveltejs/kit';
-import { listAssets, saveAsset, isAllowedExtension } from '$lib/scene/bundle/assets.server';
+import { listAssets, saveAsset, isAllowedExtension } from '$lib/server/scene/bundle/assets';
 import { readLimitedBlob } from '$lib/http/body';
 import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';

@@ -6,7 +6,7 @@
  * GeoJSON; peer Pis ship pre-baked vector tiles via /api/tiles/. The
  * unexported GeoJSON endpoints stay unexposed to keep the LAN surface small.
  */
-import { serveCityGeojson } from '$lib/http/geojson.server';
+import { serveCityGeojson } from '$lib/server/scene/bundle/geojson';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params }) => serveCityGeojson(params.city, 'buildings');

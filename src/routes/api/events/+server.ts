@@ -11,7 +11,7 @@
  */
 
 import type { RequestHandler } from './$types';
-import { subscribe, replayTo, type SseEvent } from '$lib/fleet/sse-bus.server';
+import { subscribe, replayTo, type SseEvent } from '$lib/server/fleet/sse-bus';
 
 export const GET: RequestHandler = () => {
 	let unsubscribe: (() => void) | null = null;

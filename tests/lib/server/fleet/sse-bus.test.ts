@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { publish, subscribe, subscriberCount, replayTo, bufferSize, clearBuffer, type SseEvent } from '$lib/fleet/sse-bus.server';
+import { publish, subscribe, subscriberCount, replayTo, bufferSize, clearBuffer, type SseEvent } from '$lib/server/fleet/sse-bus';
 
 describe('sse-bus', () => {
 	// The bus is module-scope, shared across tests. Each test cleans up its

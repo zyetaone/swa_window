@@ -333,7 +333,7 @@ export class CesiumManager {
 		const allow = mode !== 'performance';
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
-		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow;
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = true; // always on — warm palette is load-bearing
 		const v = this.#viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any

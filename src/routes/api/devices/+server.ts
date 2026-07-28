@@ -12,7 +12,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders } from '$lib/http/cors';
-import { listPeers } from '$lib/fleet/lan-peers.server';
+import { listPeers } from '$lib/server/fleet/lan-peers';
 
 export const GET: RequestHandler = ({ request, url }) => {
 	const origin = request.headers.get('origin');

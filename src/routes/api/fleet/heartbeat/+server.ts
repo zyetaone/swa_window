@@ -23,7 +23,7 @@ import {
 	latestAll,
 	summarize,
 	DEVICE_ID_PATTERN,
-} from '$lib/fleet/heartbeat.server';
+} from '$lib/server/fleet/heartbeat';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
 

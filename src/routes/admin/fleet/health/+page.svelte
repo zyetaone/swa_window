@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import type { HeartbeatSample } from '$lib/fleet/heartbeat.server';
+	import type { HeartbeatSample } from '$lib/server/fleet/heartbeat';
 	import type { FleetSummary } from '$lib/fleet/protocol';
 	import { formatUptime } from '$lib/utils';
 	import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';

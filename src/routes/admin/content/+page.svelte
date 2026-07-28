@@ -11,7 +11,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import type { ContentBundle } from '$lib/scene/bundle/types';
-	import type { AssetInfo } from '$lib/scene/bundle/assets.server';
+	import type { AssetInfo } from '$lib/server/scene/bundle/assets';
 	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
 
 	// $state.raw — both arrays are only ever reassigned wholesale from fetch

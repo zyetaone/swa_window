@@ -20,8 +20,8 @@
 import { readdir, readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ContentBundle } from './types';
-import { isContentBundle } from './types';
+import type { ContentBundle } from '$lib/scene/bundle/types';
+import { isContentBundle } from '$lib/scene/bundle/types';
 
 /** Read lazily so tests can redirect via AERO_BUNDLES_DIR between cases. */
 function bundlesDir(): string {

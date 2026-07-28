@@ -4,7 +4,7 @@
  */
 
 import { error } from '@sveltejs/kit';
-import { readAsset, mimeFor } from '$lib/scene/bundle/assets.server';
+import { readAsset, mimeFor } from '$lib/server/scene/bundle/assets';
 import type { RequestHandler } from './$types';
 
 // Allow content-addressed names (16-hex hash + ext) — strict to avoid path traversal.
