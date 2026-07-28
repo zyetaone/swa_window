@@ -12,6 +12,7 @@
 	import { registerLivenessCanvas } from '$lib/shell/liveness';
 	import CameraMirror from './CameraMirror.svelte';
 	import Clouds from './Clouds.svelte';
+	import Wing from '$lib/shell/Wing.svelte';
 	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
 	import { lightingState } from '$lib/world/curves';
 
@@ -73,6 +74,8 @@
 			ambientIntensity={ambientIntensity}
 			sunDirection={sunDirection}
 		/>
+
+		<Wing />
 	</Canvas>
 </div>
 

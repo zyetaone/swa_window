@@ -92,8 +92,9 @@ export function computeSunDirection(camLonDeg: number, timeOfDay: number): Vec3 
  *   t=6 / t=18   → ~0 at the equator (sunrise / sunset)
  *   t=0 midnight → max negative (except polar-summer latitudes)
  */
+export const DEG2RAD = Math.PI / 180;
+
 export function sunElevationSin(latDeg: number, timeOfDay: number): number {
-	const DEG2RAD = Math.PI / 180;
 	const lat = latDeg * DEG2RAD;
 	const hourAngle = ((timeOfDay - 12) / 24) * Math.PI * 2;
 	return (
