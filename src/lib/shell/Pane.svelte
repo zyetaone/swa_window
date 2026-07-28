@@ -87,7 +87,7 @@
 			style:transform={motionTransform}
 			style:filter={filterString}
 		>
-			<div class="render-layer" style:z-index={Z.cesium}>
+			<div class="render-layer" style:z-index="0">
 				<GlobeLayer />
 			</div>
 		</div>
