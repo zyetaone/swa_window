@@ -369,10 +369,6 @@
 		// X-position flips with mirror so wing stays on the same window side.
 		holder.position.x = (wingCfgXBase + seatOffset) * mirrorX;
 		holder.scale.x = mirrorX;
-		// Flip X-position so the mirrored wing stays on the same side of the window.
-		const mirrorX = screenSign >= 0 ? 1 : -1;
-		holder.scale.x = mirrorX;
-		holder.position.x = (xBase + seatOffset) * mirrorX;
 
 		// Mirror the camera world transform onto the group.
 		const cam = ctx.camera.current;
