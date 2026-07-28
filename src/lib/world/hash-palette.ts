@@ -29,7 +29,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
 		float brightGuard = smoothstep(0.75, 0.95, lum);
-		float lightMask = smoothstep(0.08, 0.65, lum);
+		float lightMask = smoothstep(0.15, 0.65, lum);
 
 		// The chroma-bias gate that used to live here is gone. It asked "is this
 		// pixel warm (red > blue)?" and cut lightMask to 15% when the answer was

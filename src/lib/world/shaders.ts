@@ -39,7 +39,7 @@ export const COLOR_GRADING_GLSL = `
 			float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
 			// 1. lightMask — gates warm additive paths to bright pixels only.
-			float lightMask = smoothstep(0.08, 0.5, lum);
+			float lightMask = smoothstep(0.15, 0.5, lum);
 
 			// 2. Desat under lights — kill blue-base/amber-light → purple bleed.
 			vec3 grayBase = vec3(lum);

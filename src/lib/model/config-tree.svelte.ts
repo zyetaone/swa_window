@@ -259,7 +259,7 @@ export const world = $state({
 		buildingEmissiveLowAltFt: 25000, // building glow altitude gate
 	buildingEmissiveHighAltFt: 55000,
 	buildingEmissiveMax: 0.6, // max window-glow intensity at night
-		additiveStrength: 5.0, // emissive boost on lit pixels
+		additiveStrength: 3.0, // emissive boost on lit pixels
 		moonlightIntensity: 0.08,
 	nightExposure: 0.75,
 	darkVoidStrength: 0.01, // dark-crush floor (nearly off)
