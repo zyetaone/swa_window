@@ -74,18 +74,24 @@ Owns **how it looks**. Renders terrain, buildings, atmosphere, night lights, and
 ## Render layers (bottom → top)
 
 ```
-Cesium Globe
+Cesium Globe (100% native)
   terrain → imagery → OSM buildings → skyAtmosphere → fog
        │
-  Post-Processing
+  Post-Processing (all Cesium postProcessStages)
   FXAA → bloom → HBAO (altitude-gated) → color-grade → ACES tonemap
        │
-  Three.js Overlay (flag-gated, transparent canvas above Cesium)
-  camera-mirrored → Clouds.svelte → decorative effects
+  Three.js Overlay (clouds only, transparent canvas above Cesium)
+  camera-mirrored → Clouds.svelte
        │
   DOM Chrome
-  oval frame → glass vignette → blind shade → wing silhouette → HUD
+  oval frame → glass vignette → blind shade → HUD
 ```
+
+Everything visual runs through Cesium. The Three.js bridge exists solely
+for the 2-band PNG-sprite cloud cluster system — one component that Cesium
+cannot replicate visually. Wing, SunGlow, Moon, LensFlare, NightStars,
+EffectStack, DOM compositor, and all decorative overlays have been deleted
+in favor of Cesium-native equivalents.
 
 ## Frame update loop
 
@@ -148,7 +154,7 @@ src/lib/
   director/      autopilot — weather randomiser, location cycler, flyover beats
   fleet/         multi-Pi fleet protocol — REST, SSE, mDNS, CRDT peer sync
   http/          server middleware — auth, body readers, CORS, route factory
-  shell/         cabin chrome — oval frame, glass, blind, HUD, sidepanel, watchdogs
+  shell/         cabin chrome — oval frame, glass, blind, HUD, sidepanel, watchdogs (84L GlobeLayer)
   show/          authored boot baseline — Show type + applyShowOpening
   game-loop.ts   RAF subscriber pattern — single tick clock for the entire app
 
