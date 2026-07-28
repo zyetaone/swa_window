@@ -9,7 +9,7 @@
 	import { Canvas, T } from '@threlte/core';
 	import { PerspectiveCamera, WebGLRenderer, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { registerLivenessCanvas } from '$lib/shell/liveness';
+	import { registerLivenessCanvas } from '$lib/world/lifecycle-liveness';
 	import CameraMirror from './CameraMirror.svelte';
 	import Clouds from './Clouds.svelte';
 	import Wing from '$lib/shell/Wing.svelte';

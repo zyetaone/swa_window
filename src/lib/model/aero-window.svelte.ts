@@ -10,7 +10,6 @@ import { createContext } from 'svelte';
 import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
-import { effectiveCloudDensity } from '$lib/world/cloud-util';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
@@ -26,6 +25,8 @@ import {
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
 
+
+function effectiveCloudDensity(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
 const TRANSITION_DELAY_MS = 2500;
 
 // ─── User override state ──────────────────────────────────────────────────────

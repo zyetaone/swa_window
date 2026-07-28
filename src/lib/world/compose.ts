@@ -17,7 +17,6 @@ import { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
-import { CESIUM_QUALITY_PRESETS } from './model';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
@@ -25,6 +24,7 @@ import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, up
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
+import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 
 type WorldConfig = typeof world;
 

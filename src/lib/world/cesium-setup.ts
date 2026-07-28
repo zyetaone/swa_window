@@ -5,6 +5,7 @@
  */
 
 import type * as CesiumType from 'cesium';
+import type { QualityMode } from '$lib/types';
 
 type C = typeof CesiumType;
 
@@ -219,6 +220,38 @@ export async function checkLocalTileServer(): Promise<boolean> {
  * Splitting this off keeps CesiumManager.start() readable and gives
  * tests + playground one place to set a known-good scene baseline.
  */
+export interface CesiumQualityPreset {
+	maximumScreenSpaceError: number;
+	tileCacheSize: number;
+	preloadSiblings: boolean;
+	preloadAncestors: boolean;
+	loadingDescendantLimit: number;
+}
+
+export const CESIUM_QUALITY_PRESETS: Record<QualityMode, CesiumQualityPreset> = {
+	performance: {
+		maximumScreenSpaceError: 8,
+		tileCacheSize: 50,
+		preloadSiblings: false,
+		preloadAncestors: true,
+		loadingDescendantLimit: 4,
+	},
+	balanced: {
+		maximumScreenSpaceError: 5,
+		tileCacheSize: 100,
+		preloadSiblings: true,
+		preloadAncestors: true,
+		loadingDescendantLimit: 6,
+	},
+	ultra: {
+		maximumScreenSpaceError: 2,
+		tileCacheSize: 200,
+		preloadSiblings: true,
+		preloadAncestors: true,
+		loadingDescendantLimit: 8,
+	},
+};
+
 export function applySceneDefaults(viewer: CesiumType.Viewer, C: C): void {
 	const v = viewer;
 	v.scene.logarithmicDepthBuffer = true;

@@ -11,8 +11,8 @@
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
-	import { startLivenessWatchdog } from '$lib/shell/liveness';
-	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/shell/overlay-recovery';
+import { startLivenessWatchdog } from '$lib/world/lifecycle-liveness';
+import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/world/lifecycle-overlay-recovery';
 
 	const model = useAeroWindow();
 

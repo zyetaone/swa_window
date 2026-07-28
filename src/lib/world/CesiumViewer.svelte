@@ -26,7 +26,7 @@
 	import { COLOR_GRADING_GLSL } from '$lib/world/shaders';
 	import { initCesiumGlobal } from '$lib/world/cesium-setup';
 	import { activeCesium } from '$lib/world/active.svelte';
-	import { registerLivenessCanvas, tryConsumeReloadBudget } from '$lib/shell/liveness';
+	import { registerLivenessCanvas, tryConsumeReloadBudget } from '$lib/world/lifecycle-liveness';
 
 	const model = useAeroWindow();
 

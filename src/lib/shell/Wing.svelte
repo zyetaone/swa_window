@@ -59,7 +59,7 @@
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, sunElevationSin, DEG2RAD } from '$lib/world/sky';
-	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/shell/screen-conventions';
+	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();
