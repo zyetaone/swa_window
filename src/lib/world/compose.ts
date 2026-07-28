@@ -19,11 +19,11 @@ import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
-import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
-import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
+import { initImagery, setupImagery, syncImagery } from './imagery';
+import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
 import { installHashPalette } from './hash-palette';
-import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
-import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
+import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere';
+import { initTerrain, setupTerrain, syncTerrain } from './terrain';
 import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 
 type WorldConfig = typeof world;
