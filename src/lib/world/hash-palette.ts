@@ -55,7 +55,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 
 		// Desat under lights to kill blue-base → purple bleed.
 		vec3 grayBase = vec3(lum);
-		rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
+		rgb = mix(rgb, grayBase, lightMask * 0.4 * u_nightFactor);
 
 		// Per-pixel UV hash for palette variance.
 		float hash = fract(sin(dot(v_textureCoordinates * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
@@ -87,7 +87,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
 
 		// Ambient floor — warm tint so terrain never goes pure black.
-		vec3 ambient = vec3(0.050, 0.040, 0.028) * u_envLight * u_nightFactor;
+		vec3 ambient = vec3(0.065, 0.052, 0.038) * u_envLight * u_nightFactor;
 		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);

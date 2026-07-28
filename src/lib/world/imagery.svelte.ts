@@ -55,10 +55,10 @@ export async function setupImagery(): Promise<void> {
 
 	_baseLayer = _addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);
 	if (_baseLayer) {
-		_baseDaySaturation = cfg.label.startsWith('eox') ? 1.4 : 1.15;
+		_baseDaySaturation = cfg.label.startsWith('eox') ? 1.6 : 1.25;
 		_baseLayer.saturation = _baseDaySaturation;
-		_baseLayer.contrast = cfg.label.startsWith('eox') ? 1.2 : 1.05;
-		_baseLayer.gamma = cfg.label.startsWith('eox') ? 1.05 : 1.0;
+		_baseLayer.contrast = cfg.label.startsWith('eox') ? 1.3 : 1.1;
+		_baseLayer.gamma = cfg.label.startsWith('eox') ? 1.1 : 1.0;
 		_baseLayer.brightness = 1.0;
 	}
 

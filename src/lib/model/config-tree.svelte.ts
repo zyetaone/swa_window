@@ -250,10 +250,10 @@ export const world = $state({
 	// Default true: this IS the production night look. Toggle off via SidePanel
 	// or ?hashpalette=0 to revert to aero-color-grade for comparison.
 	useHashPalette: true,
-		baseNightSaturation: 0.05, // keep near-zero to avoid hue bleed under night shader
+		baseNightSaturation: 0.30, // keep some colour at dusk, shader desat handles night
 		nightLightIntensity: 5.0, // VIIRS + shader city-glow intensity
 		bloomContrast: 128,
-	bloomBrightness: -0.3,
+	bloomBrightness: -0.1, // less darkening, brighter glow
 	bloomSigma: 4.5, // bloom spread (wider VIIRS glow)
 	buildingsEnabled: true,
 		buildingEmissiveLowAltFt: 25000, // building glow altitude gate

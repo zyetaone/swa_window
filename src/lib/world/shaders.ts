@@ -43,7 +43,7 @@ export const COLOR_GRADING_GLSL = `
 
 			// 2. Desat under lights — kill blue-base/amber-light → purple bleed.
 			vec3 grayBase = vec3(lum);
-			rgb = mix(rgb, grayBase, lightMask * 0.8 * u_nightFactor);
+			rgb = mix(rgb, grayBase, lightMask * 0.4 * u_nightFactor);
 
 			// 3. BASE DARKENING — pull unlit terrain toward deep navy.
 			//    Gated by (1 - lightMask) so city lights survive.
@@ -62,7 +62,7 @@ export const COLOR_GRADING_GLSL = `
 			rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
 			// 5. Ambient floor — one mechanism to keep terrain visible at night.
-			rgb = max(rgb, vec3(0.060, 0.055, 0.040) * u_nightFactor);
+			rgb = max(rgb, vec3(0.080, 0.070, 0.055) * u_nightFactor);
 
 			out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 		}
