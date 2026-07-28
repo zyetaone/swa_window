@@ -150,6 +150,7 @@ export class CloudBillboardLayer {
 					image: img,
 					color: new C.Color(brightness, brightness, brightness, opacity),
 					scale: sprScale / 3000 * altGain,
+					sizeInMeters: true,
 					width: sprScale * 1.30,
 					height: sprScale,
 					translucencyByDistance: new C.NearFarScalar(
@@ -200,6 +201,7 @@ export class CloudBillboardLayer {
 					image: img,
 					color: new C.Color(brightness, brightness, brightness, opacity),
 					scale: sprScale / 1500 * altGain,
+					sizeInMeters: true,
 					width: sprScale * 1.30,
 					height: sprScale,
 					translucencyByDistance: new C.NearFarScalar(
