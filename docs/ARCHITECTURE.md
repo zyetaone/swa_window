@@ -150,6 +150,13 @@ Three rules:
 | `world/lightning-stage.ts` | `world/effects/lightning.svelte.ts` | **1** [shipped] |
 | `world/cloud-billboard-layer.ts` | `world/effects/clouds.svelte.ts` | **1** [shipped] |
 | (color-grade in `compose.ts`) | `world/effects/color-grade.svelte.ts` | **1** [shipped] |
+
+> Phase 1 shipped: lightning, clouds, color-grade are now reactive
+> features in `world/effects/`. The legacy imperative classes
+> (`LightningStage`, `CloudBillboardLayer`, inline color-grade block
+> in `compose.ts`) are still present alongside the new modules and
+> still receive the same sync calls — they will be removed in Phase 2
+> once all four async-setup subsystems migrate together.
 | `world/imagery.ts` | `world/imagery.ts` (hybrid) | 2 |
 | `world/buildings.ts` | `world/buildings.ts` (hybrid) | 2 |
 | `world/atmosphere-manager.ts` | `world/atmosphere.svelte.ts` (hybrid) | 2 |
