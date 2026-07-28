@@ -47,7 +47,7 @@ export const COLOR_GRADING_GLSL = `
 
 			// 3. BASE DARKENING — pull unlit terrain toward deep navy.
 			//    Gated by (1 - lightMask) so city lights survive.
-			vec3 deepNavy = vec3(0.018, 0.035, 0.060);
+			vec3 deepNavy = vec3(0.022, 0.025, 0.030);
 			float baseDark = smoothstep(0.55, 0.92, u_nightFactor) * 0.40 * (1.0 - lightMask);
 			rgb = mix(rgb, deepNavy, baseDark);
 
@@ -62,7 +62,7 @@ export const COLOR_GRADING_GLSL = `
 			rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
 
 			// 5. Ambient floor — one mechanism to keep terrain visible at night.
-			rgb = max(rgb, vec3(0.055, 0.045, 0.030) * u_nightFactor);
+			rgb = max(rgb, vec3(0.060, 0.055, 0.040) * u_nightFactor);
 
 			out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 		}

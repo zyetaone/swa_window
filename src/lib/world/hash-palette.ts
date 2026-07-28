@@ -76,7 +76,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 
 		// Base darkening — lightMask guards cities.
 		float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.45;
-		rgb = mix(rgb, vec3(0.03, 0.06, 0.10), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
+		rgb = mix(rgb, vec3(0.035, 0.040, 0.045), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
 
 		// Dark void crush for unlit terrain.
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
