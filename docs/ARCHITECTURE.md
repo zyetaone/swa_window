@@ -147,8 +147,8 @@ Three rules:
 
 | Old | New | Phase |
 |---|---|---|
-| `world/lightning-stage.ts` | `world/effects/lightning.svelte.ts` | **1** [shipped] |
-| `world/cloud-billboard-layer.ts` | `world/effects/clouds.svelte.ts` | **1** [shipped] |
+| `world/lightning-stage.ts` | `world/lightning-stage.ts` (module functions) | **1** [shipped] |
+| `world/cloud-billboard-layer.ts` | `world/cloud-billboard-layer.ts` (module functions) | **1** [shipped] |
 | (color-grade in `compose.ts`) | `world/effects/color-grade.svelte.ts` | **1** [shipped] |
 
 > Phase 1 shipped: lightning, clouds, color-grade are now reactive
@@ -193,7 +193,7 @@ Three rules:
 | `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
 | `world/atmosphere-manager.ts` | `world/atmosphere.svelte.ts` (hybrid) | **2** [shipped] |
 | `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | **2** [shipped] |
-| `world/camera-manager.ts` | `world/camera.svelte.ts` | **3** [shipped] |
+| `world/camera-manager.ts` | `world/camera.svelte.ts` (module functions, coexists with inline `#syncCamera`) | **3** [shipped] |
 | `world/compose.ts` | (kept, slimmed) | **4** [shipped] |
 
 **Hybrid** = class for async setup (Ion token, terrain provider, 3D
