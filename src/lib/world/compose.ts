@@ -25,6 +25,7 @@ import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, up
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
+import { setupCamera, syncCamera, getCameraRead, type CameraSlice } from './camera.svelte';
 
 type WorldConfig = typeof world;
 
