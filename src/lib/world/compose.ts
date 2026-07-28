@@ -1,11 +1,11 @@
 /**
  * CesiumManager — thin orchestrator for the Cesium globe.
  *
- * Delegates to:
- *   ImageryManager      — base imagery, VIIRS, CartoDB roads
- *   BuildingsManager    — OSM 3D Tiles + procedural shader
- *   AtmosphereManager   — sky, fog, globe color, moonlight, exposure
- *   TerrainManager      — terrain provider + exaggeration
+ * Delegates to reactive feature modules:
+ *   imagery.svelte.ts    — base imagery, VIIRS, CartoDB roads
+ *   buildings.svelte.ts  — OSM 3D Tiles + procedural shader
+ *   atmosphere.svelte.ts — sky, fog, globe color, moonlight, exposure
+ *   terrain.svelte.ts    — terrain provider + exaggeration
  *
  * Owns directly: viewer lifecycle, camera sync, post-processing,
  * cloud billboards, lightning, and the per-frame render loop.
@@ -20,10 +20,10 @@ import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
-import { ImageryManager } from './imagery';
-import { BuildingsManager } from './buildings';
-import { AtmosphereManager } from './atmosphere-manager';
-import { TerrainManager } from './terrain-manager';
+import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
+import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
+import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
+import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
 
 type WorldConfig = typeof world;
 
@@ -61,11 +61,6 @@ export class CesiumManager {
 	readonly #model: CesiumModelView;
 	readonly #viewer: CesiumType.Viewer;
 
-	readonly #imagery: ImageryManager;
-	readonly #buildings: BuildingsManager;
-	readonly #atmosphere: AtmosphereManager;
-	readonly #terrain: TerrainManager;
-
 	#lightning: LightningStage | null = null;
 	#cloudBillboards: CloudBillboardLayer | null = null;
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
@@ -91,10 +86,10 @@ export class CesiumManager {
 		this.#C = CesiumModule;
 		this.#model = model;
 		this.#viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
-		this.#imagery = new ImageryManager(CesiumModule, this.#viewer);
-		this.#buildings = new BuildingsManager(CesiumModule, this.#viewer);
-		this.#atmosphere = new AtmosphereManager(CesiumModule, this.#viewer);
-		this.#terrain = new TerrainManager(CesiumModule, this.#viewer);
+		initImagery(CesiumModule, this.#viewer);
+		initBuildings(CesiumModule, this.#viewer);
+		initAtmosphere(CesiumModule, this.#viewer);
+		initTerrain(CesiumModule, this.#viewer);
 	}
 
 	getViewer(): CesiumType.Viewer { return this.#viewer; }
@@ -130,16 +125,16 @@ export class CesiumManager {
 		const v = this.#viewer;
 
 		applySceneDefaults(v, C);
-		this.#atmosphere.init(C, v);
+		initAtmosphere(C, v);
 		this.#scratchDest = new C.Cartesian3();
 
 		this.#boundTick = this.#tick.bind(this);
 		v.scene.postRender.addEventListener(this.#boundTick);
 
 		this.#setupPostProcess(COLOR_GRADING_GLSL);
-		await this.#terrain.setup();
-		await this.#imagery.setup();
-		await this.#buildings.setup(this.#model.config.world.buildingsEnabled);
+		await setupTerrain();
+		await setupImagery();
+		await setupBuildings(this.#model.config.world.buildingsEnabled);
 
 		this.#lightning = new LightningStage(C, v);
 		this.#lightning.mount();
@@ -161,7 +156,7 @@ export class CesiumManager {
 
 		this.#syncCamera();
 		this.#syncClockCheck();
-		this.#terrain.sync(this.#model.terrainExaggeration);
+		syncTerrain(this.#model.terrainExaggeration);
 		this.#syncImagery();
 		this.#syncCloudBillboards();
 		this.#syncLightning(dt);
@@ -186,15 +181,14 @@ export class CesiumManager {
 	/** Sync clock when timeOfDay or longitude changed. Then sync atmosphere. */
 	#syncClockCheck(): void {
 		const m = this.#model;
-		const a = this.#atmosphere;
-		if (a.lastTimeOfDay !== m.timeOfDay || Math.abs(a.lastClockLon - m.flight.lon) > 0.5) {
-			a.lastTimeOfDay = m.timeOfDay;
-			a.lastClockLon = m.flight.lon;
+		if (getLastTimeOfDay() !== m.timeOfDay || Math.abs(getLastClockLon() - m.flight.lon) > 0.5) {
+			setLastTimeOfDay(m.timeOfDay);
+			setLastClockLon(m.flight.lon);
 			if (this.#viewer.scene.sun)
 				this.#viewer.scene.sun.show = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 			this.#syncClock();
 		}
-		this.#atmosphere.sync(
+		syncAtmosphere(
 			{
 				timeOfDay: m.timeOfDay, nightFactor: m.nightFactor, dawnDuskFactor: m.dawnDuskFactor,
 				flight: { lon: m.flight.lon, camAlt: m.flight.camAlt },
@@ -209,7 +203,7 @@ export class CesiumManager {
 
 	#syncImagery(): void {
 		const m = this.#model;
-		this.#imagery.sync(
+		syncImagery(
 			{
 				nightFactor: m.nightFactor, nightLightScale: m.nightLightScale,
 				altitude: m.flight.altitude,
@@ -228,7 +222,7 @@ export class CesiumManager {
 
 	#syncBuildings(dt: number): void {
 		const m = this.#model;
-		this.#buildings.sync(
+		syncBuildings(
 			dt, m.nightFactor, m.nightLightScale, m.flight.altitude,
 			m.config.world.buildingsEnabled, m.config.world.windowLightIntensity,
 			this.#getBootFade(),
@@ -284,7 +278,7 @@ export class CesiumManager {
 	#setupPostProcess(glsl: string): void {
 		const v = this.#viewer;
 		// HBAO — Pi-5 tuned: fewer directions/steps than desktop defaults.
-		// Enabled per-tick in AtmosphereManager when altitude < 15 000 ft
+		// Enabled per-tick in atmosphere.svelte.ts when altitude < 15 000 ft
 		// AND qualityMode !== "performance".
 		const ao = v.scene.postProcessStages.ambientOcclusion;
 		if (ao) {
@@ -340,8 +334,8 @@ export class CesiumManager {
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).fxaa.enabled = allow;
-			const ao = v.scene.postProcessStages.ambientOcclusion;
-			if (ao) ao.enabled = allow;
+		const ao = v.scene.postProcessStages.ambientOcclusion;
+		if (ao) ao.enabled = allow;
 		if (bloom && allow) {
 			const w = this.#model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;
@@ -360,10 +354,10 @@ export class CesiumManager {
 		globe.preloadSiblings = p.preloadSiblings;
 		globe.preloadAncestors = p.preloadAncestors;
 		globe.loadingDescendantLimit = p.loadingDescendantLimit;
-		this.#buildings.updateQuality(p.maximumScreenSpaceError);
+		updateBuildingsQuality(p.maximumScreenSpaceError);
 	}
 
-	setBuildingsWireframe(enabled: boolean): void { this.#buildings.setWireframe(enabled); }
+	setBuildingsWireframe(enabled: boolean): void { setBuildingsWireframe(enabled); }
 
 	destroy(): void {
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
