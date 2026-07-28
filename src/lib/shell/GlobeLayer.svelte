@@ -11,9 +11,7 @@
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
-	import Compositor from '$lib/scene/compositor.svelte';
-	import Weather from './window/Weather.svelte';
-	import { activeCesium } from '$lib/world/active.svelte';
+			import { activeCesium } from '$lib/world/active.svelte';
 	import { installHashPalette } from '$lib/world/hash-palette';
 	import { startLivenessWatchdog } from '$lib/shell/liveness';
 	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/shell/overlay-recovery';
@@ -105,6 +103,4 @@
 	<CesiumViewer />
 </div>
 
-<Compositor />
 
-<Weather rainOpacity={0} {windAngle} frostAmount={0} />

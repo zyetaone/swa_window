@@ -11,7 +11,7 @@
 
 import type { AeroWindow } from '$lib/model/aero-window.svelte';
 import type { LocationId, SkyState, WeatherType } from '$lib/types';
-import type { LayerKind } from '../types';
+type LayerKind = 'earth' | 'sky' | 'pane';
 type BundleType = 'video-bg' | 'sprite';
 
 /**

@@ -16,8 +16,7 @@
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
-	import { bundleStore } from "$lib/scene/bundle/store.svelte";
-	import {
+		import {
 		hydrateFromServer,
 		startRemotePoll,
 		resolveDeviceId,
@@ -105,34 +104,7 @@
 		};
 	});
 
-	// Pull any bundles the server has persisted to disk. Silent-fail if the
-	// endpoint is unreachable — stock effects always render regardless.
-	onMount(() => {
-		void hydrateFromServer();
-	});
-
-	// Phase 5.7 — Cloudflare Push Worker poll (over-the-internet bundle/config push).
-	// Opt-in via VITE_PUSH_WORKER_URL. Silent no-op if unset.
-	//   onBundles: install each into bundleStore — picked up reactively by the compositor.
-	//   onConfigs: feed each { path, value } through model.applyConfigPatch (RootConfig path-targeted).
-	onMount(() => {
-		const url = import.meta.env.VITE_PUSH_WORKER_URL;
-		if (!url) return;
-		const handle = startRemotePoll({
-			deviceId: resolveDeviceId(),
-			pushWorkerUrl: url,
-			onBundles: (bundles: ContentBundle[]) => {
-				for (const bundle of bundles) bundleStore.install(bundle);
-			},
-			onConfigs: (patches: ConfigPatch[]) => {
-				for (const { path, value } of patches) {
-					model.applyConfigPatch(path, value);
-				}
-			},
-		});
-		return () => handle.stop();
-	});
-
+	
 	// Clean up model timers on page teardown
 	onDestroy(() => model.destroy());
 
