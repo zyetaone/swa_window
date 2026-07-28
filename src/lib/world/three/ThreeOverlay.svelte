@@ -2,34 +2,9 @@
 	/**
 	 * ThreeOverlay — Three.js canvas for Clouds cluster sprites.
 	 *
-	 * Three.js stays ONLY for things Cesium genuinely can't do:
-	 *   - Wing (camera-anchored SWA 737 GLB with yaw-stripped positioning
-	 *     for 3-Pi panorama continuity — Cesium's Model API doesn't elegantly
-	 *     handle this pattern).
-	 *   - Clouds (PNG-sprite cluster composition at the cloud deck —
-	 *     artistic-density CSS3D-style reads that don't match Cesium's
-	 *     BillboardCollection aesthetic. CloudBillboardManager handles
-	 *     the Cesium-native alternative behind the `useCesiumClouds` flag.)
-	 *
-	 * Cesium handles everything else natively:
-	 *   - Stars     → scene.skyBox (Tycho-2 catalog)
-	 *   - Sun glow  → scene.sun
-	 *   - Moon      → scene.moon
-	 *   - Bloom + tonemap → postProcessStages.bloom + tonemapper = ACES
-	 *   - Lightning → LightningStage (post-process)
-	 *   - Roads, Meteors, Rain, Sparkles, Venus → all migrated to Cesium
-	 *     billboards in src/lib/world/
-	 *
 	 * Camera sync via <CameraMirror> — copies Cesium's camera state into
-	 * our PerspectiveCamera each frame via getCameraRead() (typed read API,
-	 * not raw viewer.camera.*WC). The canvas itself is transparent
-	 * (`alpha: true` + `background: transparent`) so Cesium shows through
-	 * everywhere Three.js doesn't draw.
-	 *
-	 * Logarithmic depth + far 1e9 keep WGS84 scale precision. Near 1.0 so
-	 * camera-anchored cabin-space geometry renders without near-plane
-	 * clipping. logarithmicDepthBuffer is designed for huge dynamic
-	 * ranges — precision at distant Cesium tiles is unaffected.
+	 * our PerspectiveCamera each frame via getCameraRead(). The canvas is
+	 * transparent so Cesium shows through everywhere Three.js doesn't draw.
 	 */
 	import { Canvas, T } from '@threlte/core';
 	import { PerspectiveCamera, WebGLRenderer, Color } from 'three';
@@ -39,7 +14,7 @@
 	import Clouds from './Clouds.svelte';
 	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
 	import { lightingState } from '$lib/world/curves';
-	
+
 	type Vec3 = [number, number, number];
 
 	const model = useAeroWindow();
@@ -47,9 +22,6 @@
 	// $state.raw — Three.js camera mutated each frame, must not be proxied.
 	let camera: PerspectiveCamera | undefined = $state.raw();
 
-	// Ambient lighting from the unified lighting SSOT (curves.ts) — Clouds
-	// cluster sprites use this so their tinted reads match the day/dusk/night
-	// palette instead of fighting it.
 	const _ambientTintScratch = new Color();
 	const ambientTint = $derived.by(() => {
 		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
@@ -94,10 +66,6 @@
 
 		<CameraMirror {camera} />
 
-		<!-- PNG-sprite cloud clusters at the WGS84 cloud deck. The Three-side
-		     ArtsyClouds style is the curated sky read for the ship route;
-		     CloudBillboardManager (Cesium BillboardCollection) is the
-		     alternative behind world.useCesiumClouds for hardware gate. -->
 		<Clouds
 			density={model.effectiveCloudDensity}
 			nightFactor={model.nightFactor}
@@ -105,10 +73,6 @@
 			ambientIntensity={ambientIntensity}
 			sunDirection={sunDirection}
 		/>
-
-		<!-- SWA 737 wing GLB — camera-anchored with yaw-stripped positioning
-		     for 3-Pi panorama continuity. -->
-		<Wing />
 	</Canvas>
 </div>
 
