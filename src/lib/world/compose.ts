@@ -16,15 +16,13 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
-import { mountColorGrade, syncColorGrade, destroyColorGrade } from './effects/color-grade.svelte';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
 import { LightningStage } from './lightning-stage';
-import { mountLightning, destroyLightning, tickLightning } from './effects/lightning.svelte';
 import { CloudBillboardLayer } from './cloud-billboard-layer';
-import { mountClouds, destroyClouds, updateClouds } from './effects/clouds.svelte';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
+import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
 
@@ -135,16 +133,17 @@ export class CesiumManager {
 		v.scene.postRender.addEventListener(this.#boundTick);
 
 		this.#setupPostProcess(COLOR_GRADING_GLSL);
+		if (this.#model.config.world.useHashPalette) {
+			installHashPalette(v, () => this.#model.nightFactor, () => this.#model.nightLightScale, () => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight, () => this.#model.config.world.additiveStrength);
+		}
 		await setupTerrain();
 		await setupImagery();
 		await setupBuildings(this.#model.config.world.buildingsEnabled);
 
 		this.#lightning = new LightningStage(C, v);
 		this.#lightning.mount();
-		mountLightning();
 		this.#cloudBillboards = new CloudBillboardLayer(C, v);
 		this.#cloudBillboards.mount();
-		mountClouds();
 
 		this.#syncClock();
 		this.#tick();
@@ -223,10 +222,6 @@ export class CesiumManager {
 				this.#lastColorGradeEnabled = should;
 			}
 		}
-		syncColorGrade(
-			{ nightFactor: m.nightFactor, bootFade: this.#getBootFade() },
-			{ additiveStrength: m.config.world.additiveStrength, qualityMode: m.config.world.qualityMode },
-		);
 	}
 
 	#syncBuildings(dt: number): void {
@@ -246,20 +241,16 @@ export class CesiumManager {
 			m.config.atmosphere.clouds.density, m.flight.altitude,
 			m.config.world.useCesiumClouds,
 		);
-		updateClouds(
-			m.flight.lat, m.flight.lon, m.weather,
-			m.config.atmosphere.clouds.density, m.flight.altitude,
-			m.config.world.useCesiumClouds,
-		);
 	}
 
 	#syncLightning(dt: number): void {
-		tickLightning(dt, {
-			hasLightning: this.#model.config.atmosphere.weather.hasLightning,
-			lightningDecayRate: this.#model.config.atmosphere.weather.lightningDecayRate,
-			lightningMinInterval: this.#model.config.atmosphere.weather.lightningMinInterval,
-			lightningMaxInterval: this.#model.config.atmosphere.weather.lightningMaxInterval,
-		});
+		if (!this.#lightning) return;
+		this.#lightning.tick(dt,
+			this.#model.config.atmosphere.weather.hasLightning,
+			this.#model.config.atmosphere.weather.lightningDecayRate,
+			this.#model.config.atmosphere.weather.lightningMinInterval,
+			this.#model.config.atmosphere.weather.lightningMaxInterval,
+		);
 	}
 
 	// ── Camera ───────────────────────────────────────────────────────────────
@@ -316,13 +307,22 @@ export class CesiumManager {
 				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
 			}
 		}
-		// Color-grade stage (delegated to effects/color-grade.svelte.ts)
-		mountColorGrade(glsl);
-		// Capture the stage so the legacy `qualityMode` transition still
-		// disables it via `syncQuality()`. Removed in Phase 4 when
-		// `qualityMode` becomes a `$effect`.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		this.#colorGradeStage = (v.scene.postProcessStages as any).find?.((s: { name: string }) => s.name === COLOR_GRADE_STAGE) ?? null;
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const existing = (v.scene.postProcessStages as any).find?.((s: { name: string }) => s.name === COLOR_GRADE_STAGE);
+			this.#colorGradeStage = existing ? existing as CesiumType.PostProcessStage : null;
+			if (!this.#colorGradeStage) {
+				const stage = new this.#C.PostProcessStage({
+					name: COLOR_GRADE_STAGE, fragmentShader: glsl,
+					uniforms: {
+						u_nightFactor: () => this.#model.nightFactor * this.#getBootFade(),
+						u_additiveStrength: () => this.#model.config.world.additiveStrength,
+					},
+				});
+				v.scene.postProcessStages.add(stage);
+				this.#colorGradeStage = stage as CesiumType.PostProcessStage;
+			}
+		} catch (e) { console.warn('[Cesium] Post-process failed:', e); }
 		this.#syncQuality();
 	}
 
@@ -364,9 +364,6 @@ export class CesiumManager {
 	setBuildingsWireframe(enabled: boolean): void { setBuildingsWireframe(enabled); }
 
 	destroy(): void {
-		destroyLightning();
-		destroyClouds();
-		destroyColorGrade();
 		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
 		if (this.#cloudBillboards) { this.#cloudBillboards.destroy(); this.#cloudBillboards = null; }
 		if (!this.#viewer.isDestroyed()) {

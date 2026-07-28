@@ -11,8 +11,6 @@
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
-			import { activeCesium } from '$lib/world/active.svelte';
-	import { installHashPalette } from '$lib/world/hash-palette';
 	import { startLivenessWatchdog } from '$lib/shell/liveness';
 	import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/shell/overlay-recovery';
 
@@ -72,24 +70,6 @@
 			clearOverlayDisabled();
 		}
 	});
-
-	// ── Hash-palette ────────────────────────────────────────────────────────
-	$effect(() => {
-		if (!model.config.world.useHashPalette) return;
-		const viewer = activeCesium.manager?.getViewer();
-		if (!viewer) return;
-		const cleanup = installHashPalette(
-			viewer,
-			() => model.nightFactor,
-			() => model.nightLightScale,
-			() => model.config.world.darkVoidStrength,
-			() => model.config.world.envLight,
-			() => model.config.world.additiveStrength,
-		);
-		return cleanup;
-	});
-
-	const windAngle = $derived(model.config.atmosphere.weather.windAngle);
 </script>
 
 <svelte:boundary onerror={onOverlayError}>
@@ -102,5 +82,3 @@
 <div class="render-layer">
 	<CesiumViewer />
 </div>
-
-
