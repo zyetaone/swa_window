@@ -5,12 +5,10 @@
 	 * Owns the cabin chrome (oval frame, glass, blind, HUD) and composes
 	 * the scene. GlobeLayer handles Cesium + Three overlay + watchdogs.
 	 *
-	 * Z-order SSOT: $lib/scene/layers.ts.
-	 */
+		 */
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
-	import { Z } from "$lib/scene/layers";
-	import GlobeLayer from "./GlobeLayer.svelte";
+		import GlobeLayer from "./GlobeLayer.svelte";
 	import Glass from "./window/Glass.svelte";
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";

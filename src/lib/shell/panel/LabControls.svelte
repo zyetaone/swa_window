@@ -5,8 +5,7 @@
 	 * when ?lab=1 is active. Not bundled in production (import.meta.env.DEV gate).
 	 */
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
-	import DevWingTuner from '$lib/world/three/DevWingTuner.svelte';
-	import type { AeroWindow } from '$lib/model/aero-window.svelte';
+		import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';
 	const ROLE_FOV = { left: 42, center: 45, right: 42, solo: 45 } as const;
@@ -31,8 +30,7 @@
 
 {#if mode === 'hybrid'}
 	{#if import.meta.env.DEV}
-		<DevWingTuner />
-	{/if}
+		{/if}
 
 	<fieldset>
 		<legend>HUD</legend>
