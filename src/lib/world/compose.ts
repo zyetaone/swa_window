@@ -18,7 +18,7 @@ import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { CESIUM_QUALITY_PRESETS } from './model';
-import { LightningStage } from './lightning-stage';
+import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery.svelte';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings.svelte';
@@ -62,7 +62,7 @@ export class CesiumManager {
 	readonly #model: CesiumModelView;
 	readonly #viewer: CesiumType.Viewer;
 
-	#lightning: LightningStage | null = null;
+	// Lightning stage is module-level state in lightning-stage.ts (not tracked here).
 	// Cesium clouds are module-level state in cloud-billboard-layer.ts (not tracked here).
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
@@ -144,8 +144,7 @@ export class CesiumManager {
 		await setupImagery();
 		await setupBuildings(this.#model.config.world.buildingsEnabled);
 
-		this.#lightning = new LightningStage(C, v);
-		this.#lightning.mount();
+		mountLightning();
 		mountCesiumClouds();
 
 		this.#syncClock();
@@ -246,13 +245,12 @@ export class CesiumManager {
 	}
 
 	#syncLightning(dt: number): void {
-		if (!this.#lightning) return;
-		this.#lightning.tick(dt,
-			this.#model.config.atmosphere.weather.hasLightning,
-			this.#model.config.atmosphere.weather.lightningDecayRate,
-			this.#model.config.atmosphere.weather.lightningMinInterval,
-			this.#model.config.atmosphere.weather.lightningMaxInterval,
-		);
+		tickLightning(dt, {
+			hasLightning: this.#model.config.atmosphere.weather.hasLightning,
+			lightningDecayRate: this.#model.config.atmosphere.weather.lightningDecayRate,
+			lightningMinInterval: this.#model.config.atmosphere.weather.lightningMinInterval,
+			lightningMaxInterval: this.#model.config.atmosphere.weather.lightningMaxInterval,
+		});
 	}
 
 	// ── Camera ───────────────────────────────────────────────────────────────
@@ -366,7 +364,7 @@ export class CesiumManager {
 	setBuildingsWireframe(enabled: boolean): void { setBuildingsWireframe(enabled); }
 
 	destroy(): void {
-		if (this.#lightning) { this.#lightning.destroy(); this.#lightning = null; }
+		destroyLightning();
 		destroyCesiumClouds();
 		if (!this.#viewer.isDestroyed()) {
 			if (this.#boundTick) this.#viewer.scene.postRender.removeEventListener(this.#boundTick);

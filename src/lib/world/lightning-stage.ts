@@ -1,29 +1,22 @@
 /**
- * Lightning post-process stage — Cesium-native scene-wide flash.
+ * lightning — Cesium-native post-process stage for ambient scene flash.
  *
- * Reframe context (2026-05-22): replaces the prior DOM Lightning.svelte,
- * which painted a CSS radial gradient over the Cesium canvas. That
- * approach lit only the rendered frame (no occlusion, no parallax) and
- * read as "tint on the glass" rather than "the world is being lit."
- *
- * The new stage runs in Cesium's post-process pipeline AFTER the scene
- * has rendered. A single uniform `u_flash` rises from 0 to ~0.9 at
- * strike onset, then decays. The shader adds a soft warm-white wash
- * weighted by an off-center radial centered at (u_strike_x, u_strike_y)
- * so the brightest part of the flash sits roughly where the strike
- * appears in screen space — same intuition as the DOM ellipse before,
- * but now the wash is part of the scene image and IS the lit world.
+ * Reactive feature: shader uniforms come from module-level state read
+ * via uniform callbacks; the strike timer is an imperative RAF loop
+ * because it's time-driven simulation (not a state-driven effect).
  *
  * Composition picker (sheet / forked / distant) drives the timing,
  * intensity, and x/y placement — same recipes as before.
  */
 
-import type * as CesiumType from 'cesium';
 import { randomBetween, clamp } from '$lib/utils';
 import {
 	pickLightningComposition,
 	type LightningComposition,
 } from '$content/compositions/lightning';
+import { activeCesium } from './active.svelte';
+
+const STAGE_NAME = 'aero-lightning';
 
 const LIGHTNING_GLSL = /* glsl */ `
 	uniform sampler2D colorTexture;
@@ -34,130 +27,120 @@ const LIGHTNING_GLSL = /* glsl */ `
 
 	void main() {
 		vec4 color = texture(colorTexture, v_textureCoordinates);
-		if (u_flash < 0.001) {
-			out_FragColor = color;
-			return;
-		}
+		if (u_flash < 0.001) { out_FragColor = color; return; }
 
-		// Distance from this fragment to the strike center, in normalised
-		// screen space. A wide ellipse so the flash reads as ambient
-		// world-lighting rather than a hard halo.
 		vec2 d = v_textureCoordinates - vec2(u_strike_x, u_strike_y);
-		d.x *= 1.2;        // slight horizontal stretch
+		d.x *= 1.2;
 		float dist = length(d);
 		float radial = 1.0 - smoothstep(0.0, 1.0, dist);
 
-		// Cool blue-white wash — matches the previous DOM gradient's
-		// (200, 200, 255) → (150, 150, 230) palette.
-		vec3 flashColor = mix(
-			vec3(0.59, 0.59, 0.90),
-			vec3(0.78, 0.78, 1.0),
-			radial,
-		);
+		vec3 flashColor = mix(vec3(0.59, 0.59, 0.90), vec3(0.78, 0.78, 1.0), radial);
 
-		// Additive blend, saturated by u_flash. Centre fragments get full
-		// contribution; edges still receive ~30% of the flash for the
-		// "the sky just lit up" feel.
 		float gain = u_flash * (0.3 + 0.7 * radial);
 		out_FragColor = vec4(color.rgb + flashColor * gain, color.a);
 	}
 `;
 
-export class LightningStage {
-	private flash = 0;        // 0..1 current flash intensity
-	private x = 0.5;          // strike screen-x (0..1)
-	private y = 0.4;          // strike screen-y
-	private timer = 0;
-	private nextStrike = 10;
-	private composition: LightningComposition | null = null;
-	private prevHasLightning = false;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private stage: any = null;
+export interface WeatherSlice {
+	hasLightning: boolean;
+	lightningDecayRate: number;
+	lightningMinInterval: number;
+	lightningMaxInterval: number;
+}
 
-	constructor(
-		private C: typeof CesiumType,
-		private viewer: CesiumType.Viewer,
-	) {}
+// Module-private state — uniform callbacks read these each frame.
+let _flash = 0;
+let _x = 0.5;
+let _y = 0.4;
 
-	mount(): void {
-		if (this.stage) return;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const C = this.C as any;
-		this.stage = new C.PostProcessStage({
-			name: 'aero-lightning',
-			fragmentShader: LIGHTNING_GLSL,
-			uniforms: {
-				u_flash: () => this.flash,
-				u_strike_x: () => this.x,
-				u_strike_y: () => this.y,
-			},
-		});
-		this.stage.enabled = false;     // toggled on when first strike fires
-		this.viewer.scene.postProcessStages.add(this.stage);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _stage: any = null;
+let _timer = 0;
+let _nextStrike = 10;
+let _composition: LightningComposition | null = null;
+let _prevHasLightning = false;
+
+/**
+ * One-time mount: create the PostProcessStage and add it to the scene.
+ * Idempotent.
+ */
+export function mountLightning(): void {
+	if (_stage) return;
+	const mgr = activeCesium.manager;
+	if (!mgr) return;
+	const viewer = mgr.getViewer();
+	const C = mgr.getCesium() as any;
+	_stage = new C.PostProcessStage({
+		name: STAGE_NAME,
+		fragmentShader: LIGHTNING_GLSL,
+		uniforms: {
+			u_flash: () => _flash,
+			u_strike_x: () => _x,
+			u_strike_y: () => _y,
+		},
+	});
+	_stage.enabled = false;
+	viewer.scene.postProcessStages.add(_stage);
+}
+
+/**
+ * Per-frame strike timing + flash decay. Imperative because it's
+ * time-driven simulation, not state sync.
+ */
+export function tickLightning(delta: number, weather: WeatherSlice): void {
+	if (!_stage) return;
+
+	if (weather.hasLightning && !_prevHasLightning) {
+		_composition = pickLightningComposition();
+	} else if (!weather.hasLightning && _prevHasLightning) {
+		_composition = null;
+	}
+	_prevHasLightning = weather.hasLightning;
+
+	if (!weather.hasLightning) {
+		_flash = 0;
+		_stage.enabled = false;
+		return;
 	}
 
-	/**
-	 * Per-frame tick — drives the strike timer and the flash decay envelope.
-	 *
-	 * @param delta            seconds since last call
-	 * @param hasLightning     model.config.atmosphere.weather.hasLightning
-	 * @param defaultDecayRate model.config.atmosphere.weather.lightningDecayRate
-	 * @param defaultMin       lightningMinInterval fallback
-	 * @param defaultMax       lightningMaxInterval fallback
-	 */
-	tick(
-		delta: number,
-		hasLightning: boolean,
-		defaultDecayRate: number,
-		defaultMin: number,
-		defaultMax: number,
-	): void {
-		if (!this.stage) return;
+	_stage.enabled = true;
 
-		// Roll a new composition when storm starts; clear when it ends.
-		if (hasLightning && !this.prevHasLightning) {
-			this.composition = pickLightningComposition();
-		} else if (!hasLightning && this.prevHasLightning) {
-			this.composition = null;
-		}
-		this.prevHasLightning = hasLightning;
+	const c = _composition;
+	const decayRate = c?.decayRate ?? weather.lightningDecayRate;
 
-		if (!hasLightning) {
-			this.flash = 0;
-			this.stage.enabled = false;
-			return;
-		}
-
-		this.stage.enabled = true;
-
-		const c = this.composition;
-		const decayRate = c?.decayRate ?? defaultDecayRate;
-
-		this.timer += delta;
-		if (this.flash > 0) {
-			this.flash = clamp(this.flash - delta * decayRate, 0, 1);
-		}
-		if (this.flash < 0.01 && this.timer > this.nextStrike) {
-			if (c) {
-				this.flash = randomBetween(c.intensityRange[0], c.intensityRange[1]);
-				// Recipes are in percent (0..100); shader wants 0..1.
-				this.x = randomBetween(c.xRange[0], c.xRange[1]) / 100;
-				this.y = randomBetween(c.yRange[0], c.yRange[1]) / 100;
-				this.nextStrike = randomBetween(c.intervalRange[0], c.intervalRange[1]);
-			} else {
-				this.flash = randomBetween(0.5, 1);
-				this.x = randomBetween(20, 80) / 100;
-				this.y = randomBetween(15, 65) / 100;
-				this.nextStrike = randomBetween(defaultMin, defaultMax);
-			}
-			this.timer = 0;
-		}
+	_timer += delta;
+	if (_flash > 0) {
+		_flash = clamp(_flash - delta * decayRate, 0, 1);
 	}
-
-	destroy(): void {
-		if (this.stage) {
-			this.viewer.scene.postProcessStages.remove(this.stage);
-			this.stage = null;
+	if (_flash < 0.01 && _timer > _nextStrike) {
+		if (c) {
+			_flash = randomBetween(c.intensityRange[0], c.intensityRange[1]);
+			// Recipes are in percent (0..100); shader wants 0..1.
+			_x = randomBetween(c.xRange[0], c.xRange[1]) / 100;
+			_y = randomBetween(c.yRange[0], c.yRange[1]) / 100;
+			_nextStrike = randomBetween(c.intervalRange[0], c.intervalRange[1]);
+		} else {
+			_flash = randomBetween(0.5, 1);
+			_x = randomBetween(20, 80) / 100;
+			_y = randomBetween(15, 65) / 100;
+			_nextStrike = randomBetween(
+				weather.lightningMinInterval,
+				weather.lightningMaxInterval,
+			);
 		}
+		_timer = 0;
 	}
+}
+
+/** Tear down the post-process stage. Idempotent. */
+export function destroyLightning(): void {
+	if (!_stage) return;
+	const mgr = activeCesium.manager;
+	if (mgr) mgr.getViewer().scene.postProcessStages.remove(_stage);
+	_stage = null;
+	_timer = 0;
+	_nextStrike = 10;
+	_composition = null;
+	_prevHasLightning = false;
+	_flash = 0;
 }
