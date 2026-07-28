@@ -26,27 +26,42 @@ import {
 } from '$content/compositions/lightning';
 
 const LIGHTNING_GLSL = /* glsl */ `
-		uniform sampler2D colorTexture;
-		uniform float u_flash;
-		uniform float u_strike_x;
-		uniform float u_strike_y;
-		in vec2 v_textureCoordinates;
+	uniform sampler2D colorTexture;
+	uniform float u_flash;
+	uniform float u_strike_x;
+	uniform float u_strike_y;
+	in vec2 v_textureCoordinates;
 
-		void main() {
-			vec4 color = texture(colorTexture, v_textureCoordinates);
-			if (u_flash < 0.001) { out_FragColor = color; return; }
-
-			vec2 d = v_textureCoordinates - vec2(u_strike_x, u_strike_y);
-			d.x *= 1.2;
-			float dist = length(d);
-			float radial = 1.0 - smoothstep(0.0, 1.0, dist);
-
-			vec3 flashColor = mix(vec3(0.59, 0.59, 0.90), vec3(0.78, 0.78, 1.0), radial);
-
-			float gain = u_flash * (0.3 + 0.7 * radial);
-			out_FragColor = vec4(color.rgb + flashColor * gain, color.a);
+	void main() {
+		vec4 color = texture(colorTexture, v_textureCoordinates);
+		if (u_flash < 0.001) {
+			out_FragColor = color;
+			return;
 		}
-	`;
+
+		// Distance from this fragment to the strike center, in normalised
+		// screen space. A wide ellipse so the flash reads as ambient
+		// world-lighting rather than a hard halo.
+		vec2 d = v_textureCoordinates - vec2(u_strike_x, u_strike_y);
+		d.x *= 1.2;        // slight horizontal stretch
+		float dist = length(d);
+		float radial = 1.0 - smoothstep(0.0, 1.0, dist);
+
+		// Cool blue-white wash — matches the previous DOM gradient's
+		// (200, 200, 255) → (150, 150, 230) palette.
+		vec3 flashColor = mix(
+			vec3(0.59, 0.59, 0.90),
+			vec3(0.78, 0.78, 1.0),
+			radial,
+		);
+
+		// Additive blend, saturated by u_flash. Centre fragments get full
+		// contribution; edges still receive ~30% of the flash for the
+		// "the sky just lit up" feel.
+		float gain = u_flash * (0.3 + 0.7 * radial);
+		out_FragColor = vec4(color.rgb + flashColor * gain, color.a);
+	}
+`;
 
 export class LightningStage {
 	private flash = 0;        // 0..1 current flash intensity
