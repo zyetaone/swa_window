@@ -16,13 +16,6 @@
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/persistence";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
-		import {
-		hydrateFromServer,
-		startRemotePoll,
-		resolveDeviceId,
-		type ContentBundle,
-		type ConfigPatch,
-	} from "$lib/scene/bundle/remote";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/Pane.svelte";
 	import Controls from "$lib/shell/HUD.svelte";
