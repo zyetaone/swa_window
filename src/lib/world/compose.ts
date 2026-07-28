@@ -73,15 +73,14 @@ export class CesiumManager {
 	#started = false;
 
 	#bootStartMs: number | null = null;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	#scratchDest: any = null;
 	static readonly BOOT_FADE_MS = 1600;
 	#getBootFade(): number {
 		if (this.#bootStartMs === null) this.#bootStartMs = performance.now();
 		const t = (performance.now() - this.#bootStartMs) / CesiumManager.BOOT_FADE_MS;
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	#scratchDest: any = null;
 
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 		this.#C = CesiumModule;

@@ -70,7 +70,6 @@ export function computeSunDirection(camLonDeg: number, timeOfDay: number): Vec3 
 	return _sunMemo.result;
 }
 
-export const DEG2RAD = Math.PI / 180;
 
 /**
  * Sine of the LOCAL solar elevation for an observer at `latDeg`, at solar
@@ -94,6 +93,7 @@ export const DEG2RAD = Math.PI / 180;
  *   t=0 midnight → max negative (except polar-summer latitudes)
  */
 export function sunElevationSin(latDeg: number, timeOfDay: number): number {
+	const DEG2RAD = Math.PI / 180;
 	const lat = latDeg * DEG2RAD;
 	const hourAngle = ((timeOfDay - 12) / 24) * Math.PI * 2;
 	return (

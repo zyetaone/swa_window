@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * ThreeOverlay — Three.js canvas for wing GLB + Clouds cluster sprites.
+	 * ThreeOverlay — Three.js canvas for Clouds cluster sprites.
 	 *
 	 * Three.js stays ONLY for things Cesium genuinely can't do:
 	 *   - Wing (camera-anchored SWA 737 GLB with yaw-stripped positioning
@@ -39,8 +39,7 @@
 	import Clouds from './Clouds.svelte';
 	import { computeSunDirection, sunElevationSin } from '$lib/world/sky';
 	import { lightingState } from '$lib/world/curves';
-	import Wing from '$lib/shell/Wing.svelte';
-
+	
 	type Vec3 = [number, number, number];
 
 	const model = useAeroWindow();
