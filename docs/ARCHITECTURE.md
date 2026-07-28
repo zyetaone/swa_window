@@ -157,10 +157,22 @@ Three rules:
 > in `compose.ts`) are still present alongside the new modules and
 > still receive the same sync calls — they will be removed in Phase 2
 > once all four async-setup subsystems migrate together.
-| `world/imagery.ts` | `world/imagery.ts` (hybrid) | 2 |
-| `world/buildings.ts` | `world/buildings.ts` (hybrid) | 2 |
-| `world/atmosphere-manager.ts` | `world/atmosphere.svelte.ts` (hybrid) | 2 |
-| `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | 2 |
+
+> **Phase 2 shipped**: imagery, buildings, atmosphere, terrain all
+> converted to hybrid (module-level state + `init()` + `setup()` +
+> `sync()` functions, no class). Async I/O is correctly modeled —
+> `setupImagery()` awaits the Sentinel-2 tile provider, etc. Per-tick
+> sync uses `EpsilonGate` for idempotent Cesium setter calls. The
+> class shell is gone; the lifecycle is explicit in the function
+> signatures.
+
+> Phase 3 (camera) + Phase 4 (orchestrator slim-down) pending.
+> `CesiumManager` class remains as the orchestrator; Phase 4 will
+> slim it to ~10 lines of imperative tick + delegated sync.
+| `world/imagery.ts` | `world/imagery.ts` (hybrid) | **2** [shipped] |
+| `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
+| `world/atmosphere-manager.ts` | `world/atmosphere.svelte.ts` (hybrid) | **2** [shipped] |
+| `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | **2** [shipped] |
 | `world/camera-manager.ts` | `world/camera.svelte.ts` | 3 |
 | `world/compose.ts` | (kept, slimmed) | 4 |
 
