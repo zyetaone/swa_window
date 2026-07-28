@@ -7,7 +7,7 @@
  * The most "you are flying" beat in the rotation.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const nightCloudsShow: Show = {
 	id: 'night-clouds',

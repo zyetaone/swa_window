@@ -13,32 +13,12 @@
  * default, not a user interaction, so it does NOT fire onUserInteraction.
  */
 
+import type { Show } from '$content/shows';
 import type { LocationId, WeatherType } from '$lib/types';
 
-/**
- * Show — the authored artifact that drives what an installation plays.
- *
- * A show is a boot-baseline: an `opening` tuple "played" once at boot to
- * set the device's starting state; the director runs freely after that.
- * (A timed-cue "timeline" flavour existed — runner.svelte.ts + Cue types —
- * but never gained a live trigger and was deleted in the Jul-13 council;
- * revive from git history at that commit if authored choreography returns.)
- */
-export interface Show {
-	/** Stable identifier — matches the filename (minus `.show.ts`). */
-	id: string;
-	/** Human-readable name shown in admin UI. */
-	name: string;
-	/** Short curator description of the show's vibe. */
-	description?: string;
-	/** Opening state — applied at device boot before persistence restore. */
-	opening: {
-		location: LocationId;
-		weather: WeatherType;
-		/** Decimal 0-24 in LOCAL solar time at the opening location. */
-		timeOfDay: number;
-	};
-}
+// Re-export so existing callers (admin panel, etc.) keep their import
+// surface without needing to know about the content/control split.
+export type { Show };
 
 /** Narrow interface — only the fields applyShowOpening actually touches. */
 interface ShowApplyTarget {

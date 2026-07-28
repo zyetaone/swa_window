@@ -8,7 +8,7 @@
  * inherits and wanders from.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const duskDubaiShow: Show = {
 	id: 'dusk-dubai',

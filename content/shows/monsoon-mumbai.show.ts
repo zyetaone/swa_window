@@ -6,7 +6,7 @@
  * different mood from the clear-sky shows.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const monsoonMumbaiShow: Show = {
 	id: 'monsoon-mumbai',

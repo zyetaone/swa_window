@@ -19,7 +19,8 @@
  *
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
+export type { Show };
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 
 import { defaultShow } from './default.show';

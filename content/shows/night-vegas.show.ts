@@ -6,7 +6,7 @@
  * with the dawn / day shows in the rotation.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const nightVegasShow: Show = {
 	id: 'night-vegas',

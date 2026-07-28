@@ -6,7 +6,7 @@
  * raking light — classic alpine cinema beat.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const dawnHimalayasShow: Show = {
 	id: 'dawn-himalayas',

@@ -6,7 +6,7 @@
  * an airplane" scenes a real window-seat passenger would remember.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const pacificEveningShow: Show = {
 	id: 'pacific-evening',

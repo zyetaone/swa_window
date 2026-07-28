@@ -9,7 +9,7 @@
  * consistent with the dawn-Hyderabad default.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const middayPhoenixShow: Show = {
 	id: 'midday-phoenix',

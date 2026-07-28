@@ -7,7 +7,7 @@
  * constructor — edit here to change the opening, not there.
  */
 
-import type { Show } from '$lib/show/load';
+import type { Show } from './types';
 
 export const defaultShow: Show = {
 	id: 'default',
