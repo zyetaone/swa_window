@@ -45,7 +45,7 @@ export class FlightSimEngine {
 	// --- Position (raw simulation state) ---
 	lat = $state(25.2048);
 	lon = $state(55.2708);
-	altitude = $state<number>(35_000);
+	altitude = $state<number>(10_000);
 	heading = $state(45);
 	pitch = $state(75);
 
@@ -54,7 +54,7 @@ export class FlightSimEngine {
 	// feel and absorb teleports/jitters. SSOT for Cesium + DOM.
 	camLat = $state(25.2048);
 	camLon = $state(55.2708);
-	camAlt = $state(35_000);
+	camAlt = $state(10_000);
 	camHeading = $state(45);
 	camPitch = $state(75);
 	#camInitialized = false;

@@ -272,7 +272,7 @@ export const world = $state({
 		viirsAltGateLowFt: 5000, // VIIRS dim-below-cruise altitude gate
 	viirsAltGateHighFt: 15000,
 	showClouds: true,
-		useCesiumClouds: false, // Cesium CloudCollection (experimental)
+		useCesiumClouds: true, // Cesium CloudCollection (experimental)
 	ambientOcclusion: true, // HBAO (altitude-gated)
 	qualityMode: 'performance' as QualityMode, // quality preset
 });
