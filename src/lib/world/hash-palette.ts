@@ -76,7 +76,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 
 		// Base darkening — lightMask guards cities.
 		float darkenAmount = smoothstep(0.45, 0.9, u_nightFactor) * 0.45;
-		rgb = mix(rgb, vec3(0.02, 0.04, 0.08), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
+		rgb = mix(rgb, vec3(0.03, 0.06, 0.10), darkenAmount * (1.0 - lightMask) * (1.0 - brightGuard));
 
 		// Dark void crush for unlit terrain.
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
@@ -87,7 +87,7 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
 
 		// Ambient floor — warm tint so terrain never goes pure black.
-		vec3 ambient = vec3(0.035, 0.028, 0.020) * u_envLight * u_nightFactor;
+		vec3 ambient = vec3(0.050, 0.040, 0.028) * u_envLight * u_nightFactor;
 		rgb = max(rgb, ambient);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);

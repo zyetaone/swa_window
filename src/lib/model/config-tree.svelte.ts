@@ -251,10 +251,10 @@ export const world = $state({
 	// or ?hashpalette=0 to revert to aero-color-grade for comparison.
 	useHashPalette: true,
 		baseNightSaturation: 0.05, // keep near-zero to avoid hue bleed under night shader
-		nightLightIntensity: 4.0, // VIIRS + shader city-glow intensity
+		nightLightIntensity: 5.0, // VIIRS + shader city-glow intensity
 		bloomContrast: 128,
 	bloomBrightness: -0.3,
-	bloomSigma: 3.0, // bloom spread
+	bloomSigma: 4.5, // bloom spread (wider VIIRS glow)
 	buildingsEnabled: true,
 		buildingEmissiveLowAltFt: 25000, // building glow altitude gate
 	buildingEmissiveHighAltFt: 55000,
@@ -262,17 +262,17 @@ export const world = $state({
 		additiveStrength: 5.0, // emissive boost on lit pixels
 		moonlightIntensity: 0.08,
 	nightExposure: 0.75,
-	darkVoidStrength: 0.03, // dark-crush floor
-	envLight: 3.0, // terrain ambient floor (night visibility)
+	darkVoidStrength: 0.01, // dark-crush floor (nearly off)
+	envLight: 4.0, // terrain ambient floor (night visibility)
 		atmosphereLight: 1.6, // globe limb-scatter intensity
 		skyDarken: 1.8, // sky-atmosphere brightness shift
-	viirsBrightness: 2.0, // VIIRS layer brightness
+	viirsBrightness: 3.0, // VIIRS layer brightness
 	viirsAlphaBoost: 1.4,
 	windowLightIntensity: 1.5, // procedural building-window brightness
 		viirsAltGateLowFt: 5000, // VIIRS dim-below-cruise altitude gate
 	viirsAltGateHighFt: 15000,
 	showClouds: true,
-		useCesiumClouds: true, // Cesium CloudCollection (experimental)
+		useCesiumClouds: true, // Cesium cloud billboards (1 draw call, GPU-instanced)
 	ambientOcclusion: true, // HBAO (altitude-gated)
 	qualityMode: 'performance' as QualityMode, // quality preset
 });

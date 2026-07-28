@@ -70,6 +70,7 @@
 			clearOverlayDisabled();
 		}
 	});
+	const fps = $derived(Math.round(model.measuredFps));
 </script>
 
 <svelte:boundary onerror={onOverlayError}>
@@ -82,3 +83,8 @@
 <div class="render-layer">
 	<CesiumViewer />
 </div>
+
+	<div class="fps-badge">FPS {fps}</div>
+<style>
+	.fps-badge { position: absolute; top: 8px; left: 8px; z-index: 100; background: rgba(0,0,0,0.55); color: #0f0; font: 11px monospace; padding: 2px 6px; border-radius: 3px; pointer-events: none; }
+</style>

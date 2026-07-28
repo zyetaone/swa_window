@@ -26,13 +26,13 @@ import type { WeatherType } from '$lib/types';
 import { createSeededRng, daySeed } from '$lib/world/prng';
 
 // Match Clouds.svelte cluster constants exactly
-const CLOUD_ALT_M = 8000;                           // ~26k ft
+const CLOUD_ALT_M = 7_000;                           // ~26k ft
 
 // ---- DISTANT BAND ----
 const DISTANT_RADIUS_MIN = 42_000;                  // m
 const DISTANT_RADIUS_SPAN = 265_000 - 42_000;       // m
-const DISTANT_BASE_SCALE_MIN = 8000;                // m
-const DISTANT_BASE_SCALE_SPAN = 16_000 - 8_000;     // m
+const DISTANT_BASE_SCALE_MIN = 18_000;                // m
+const DISTANT_BASE_SCALE_SPAN = 32_000 - 18_000;     // m
 const DISTANT_SPRITE_MIN = 9;
 const DISTANT_SPRITE_SPAN = 8;
 const DISTANT_LONELY = 0.03;
@@ -40,8 +40,8 @@ const DISTANT_LONELY = 0.03;
 // ---- CLOSE BAND ----
 const CLOSE_RADIUS_MIN = 1_500;
 const CLOSE_RADIUS_SPAN = 30_000 - 1_500;
-const CLOSE_BASE_SCALE_MIN = 1_500;
-const CLOSE_BASE_SCALE_SPAN = 3_000 - 1_500;
+const CLOSE_BASE_SCALE_MIN = 3_000;
+const CLOSE_BASE_SCALE_SPAN = 6_000 - 3_000;
 const CLOSE_SPRITE_MIN = 4;
 const CLOSE_SPRITE_SPAN = 7;
 const CLOSE_LONELY = 0.10;
@@ -110,7 +110,7 @@ export class CloudBillboardLayer {
 		const altGain = Math.max(0.4, Math.min(1.8, 35000 / Math.max(altitudeFt, 2000)));
 
 		// ---- DISTANT BAND (horizon weather systems) ----
-		const distantCount = Math.round(45 + Math.min(1, density) * 50);
+		const distantCount = Math.round(60 + Math.min(1, density) * 50);
 
 		for (let c = 0; c < distantCount; c++) {
 			const theta = rng() * Math.PI * 2;
@@ -155,14 +155,14 @@ export class CloudBillboardLayer {
 					height: sprScale,
 					translucencyByDistance: new C.NearFarScalar(
 						DISTANT_RADIUS_MIN, 1.0,
-						DISTANT_RADIUS_MIN + DISTANT_RADIUS_SPAN, 0.25,
+						DISTANT_RADIUS_MIN + DISTANT_RADIUS_SPAN, 0.45,
 					),
 				});
 			}
 		}
 
 		// ---- CLOSE BAND (passenger-window sprites) ----
-		const closeCount = Math.round(16 + Math.min(1, density) * 16);
+		const closeCount = Math.round(24 + Math.min(1, density) * 16);
 
 		for (let c = 0; c < closeCount; c++) {
 			const theta = rng() * Math.PI * 2;
@@ -206,7 +206,7 @@ export class CloudBillboardLayer {
 					height: sprScale,
 					translucencyByDistance: new C.NearFarScalar(
 						CLOSE_RADIUS_MIN, 1.0,
-						CLOSE_RADIUS_MIN + CLOSE_RADIUS_SPAN, 0.15,
+						CLOSE_RADIUS_MIN + CLOSE_RADIUS_SPAN, 0.35,
 					),
 				});
 			}
