@@ -80,18 +80,18 @@ Cesium Globe (100% native)
   Post-Processing (all Cesium postProcessStages)
   FXAA → bloom → HBAO (altitude-gated) → color-grade → ACES tonemap
        │
-  Three.js Overlay (clouds only, transparent canvas above Cesium)
-  camera-mirrored → Clouds.svelte
+  Three.js Overlay (Wing + Clouds, transparent canvas above Cesium)
+  camera-mirrored → Clouds.svelte + Wing.svelte
        │
   DOM Chrome
   oval frame → glass vignette → blind shade → HUD
 ```
 
-Everything visual runs through Cesium. The Three.js bridge exists solely
-for the 2-band PNG-sprite cloud cluster system — one component that Cesium
-cannot replicate visually. Wing, SunGlow, Moon, LensFlare, NightStars,
-EffectStack, DOM compositor, and all decorative overlays have been deleted
-in favor of Cesium-native equivalents.
+Everything visual runs through Cesium. The Three.js bridge exists for two things Cesium cannot replicate visually:
+the 2-band PNG-sprite cloud cluster system and the SW 737 wing GLB
+with camera-anchored 3-Pi panorama positioning. SunGlow, Moon, LensFlare,
+NightStars, EffectStack, and the DOM compositor have been deleted in favor
+of Cesium-native equivalents.
 
 ## Frame update loop
 
@@ -169,3 +169,19 @@ tools/
   tile-packager/ offline tile downloader for fielded Pi deployment
   perf/          Pi 5 performance benchmarks and checklists
 ```
+
+
+## Performance Notes
+
+- **Two WebGL contexts**: Cesium (opaque globe) + Three.js (transparent canvas).
+  Adds ~50-100 MB GPU memory for the second framebuffer. Profiling on Pi 5
+  hardware is pending. The `useThreeOverlay` config toggle allows falling back
+  to Cesium-only rendering if the Pi cannot maintain framerate.
+- **Wing Cesium Model port**: Wing.svelte (475L) uses Three.js GLTFLoader.
+  Cesium"s `Model.fromGltfAsync()` could load the same GLB natively, saving
+  the second WebGL context. Camera-anchored per-frame positioning would use
+  `model.modelMatrix` updates. Deferred — the Three.js bridge is already
+  alive for Clouds, so Wing benefits for free.
+- **Tile 404s**: Sentinel-2 tile server misses some zoom levels at edges.
+  Normal — Cesium degrades gracefully to lower-LOD tiles. A local tile
+  cache (tools/tile-packager) eliminates network dependency for fielded Pis.
