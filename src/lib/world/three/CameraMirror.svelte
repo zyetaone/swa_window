@@ -41,6 +41,7 @@
 	useTask(() => {
 		if (!mgr || !camera) return;
 		const c = mgr.getCameraRead();
+		if (!c) return;
 		const p = c.position;
 		const d = c.direction;
 		const u = c.up;

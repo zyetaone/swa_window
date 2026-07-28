@@ -25,6 +25,7 @@ import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, up
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere.svelte';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain.svelte';
+import { setupCamera, syncCamera, getCameraRead, type CameraSlice } from './camera.svelte';
 
 type WorldConfig = typeof world;
 
@@ -80,9 +81,6 @@ export class CesiumManager {
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	#scratchDest: any = null;
-
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 		this.#C = CesiumModule;
 		this.#model = model;
@@ -95,27 +93,7 @@ export class CesiumManager {
 
 	getViewer(): CesiumType.Viewer { return this.#viewer; }
 	getCesium(): typeof CesiumType { return this.#C; }
-
-	/**
-	 * Camera state in a project-frame-friendly shape. CameraMirror (and any
-	 * other system that needs to mirror Cesium's camera each frame) reads
-	 * through this instead of reaching into `viewer.camera.positionWC`
-	 * directly. Plain `{x,y,z}` objects + a scalar fov, no Cesium types.
-	 */
-	getCameraRead(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number }; up: { x: number; y: number; z: number }; fovDeg: number } {
-		const cam = this.#viewer.camera;
-		const p = cam.positionWC;
-		const d = cam.directionWC;
-		const u = cam.upWC;
-		const fovy = (cam.frustum as { fovy: number }).fovy;
-		const fovDeg = Number.isFinite(fovy) ? (fovy * 180) / Math.PI : NaN;
-		return {
-			position: { x: p.x, y: p.y, z: p.z },
-			direction: { x: d.x, y: d.y, z: d.z },
-			up: { x: u.x, y: u.y, z: u.z },
-			fovDeg,
-		};
-	}
+	getCameraRead() { return getCameraRead(); }
 
 	// ── Start ────────────────────────────────────────────────────────────────
 
@@ -127,7 +105,7 @@ export class CesiumManager {
 
 		applySceneDefaults(v, C);
 		initAtmosphere(C, v);
-		this.#scratchDest = new C.Cartesian3();
+		setupCamera();
 
 		this.#boundTick = this.#tick.bind(this);
 		v.scene.postRender.addEventListener(this.#boundTick);
@@ -256,25 +234,13 @@ export class CesiumManager {
 	// ── Camera ───────────────────────────────────────────────────────────────
 
 	#syncCamera(): void {
-		const f = this.#model.flight;
-		const parallaxHeading = this.#model.config.camera.effectiveHeading(f.camHeading);
-		const C = this.#C;
-		C.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048, undefined, this.#scratchDest);
-
-		const bankPitchCouple = this.#model.config.camera.motion.bankPitchCouple ?? 0;
-		const flyover = this.#model.config.camera.flyoverPitchDeg ?? 0;
-		const pitchDeg = flyover !== 0
-			? flyover - bankPitchCouple * this.#model.motion.bankAngle
-			: (f.camPitch - 90) - bankPitchCouple * this.#model.motion.bankAngle;
-
-		this.#viewer.camera.setView({
-			destination: this.#scratchDest,
-			orientation: {
-				heading: C.Math.toRadians((parallaxHeading + 90) % 360),
-				pitch: C.Math.toRadians(pitchDeg),
-				roll: C.Math.toRadians(-this.#model.motion.bankAngle),
-			},
-		});
+		const m = this.#model;
+		const slice: CameraSlice = {
+			flight: m.flight,
+			motion: m.motion,
+			config: { camera: m.config.camera },
+		};
+		syncCamera(slice);
 	}
 
 	// ── Post-Process ─────────────────────────────────────────────────────────
