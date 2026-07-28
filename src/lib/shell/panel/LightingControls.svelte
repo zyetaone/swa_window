@@ -76,10 +76,10 @@
 	<!-- P8 perf-gate A/B: flip the photoreal Three.js overlay live in the space
 	     (wing / clouds / moon / neon city / postprocess) without a URL param.
 	     Local to this device — for a fleet-wide flip use admin /api/config. -->
-	<Toggle label="Photoreal Overlay (P8)" bind:checked={config.world.useThreeOverlay} />
+	<Toggle label="Three.js Overlay" bind:checked={config.world.useThreeOverlay} />
 	<Toggle label="Hash Palette (Night)" bind:checked={config.world.useHashPalette} />
 	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
-	<Toggle label="Cesium Clouds (Beta)" bind:checked={config.world.useCesiumClouds} />
+	<Toggle label="Cesium Clouds (auto-off when Three.js overlay active)" bind:checked={config.world.useCesiumClouds} />
 	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
 	<Toggle label="Touch (Demo Mode)" bind:checked={config.shell.touchEnabled} />
 	<Toggle label="Cursor Parallax" bind:checked={config.shell.mouseParallax} />
