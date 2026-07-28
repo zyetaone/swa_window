@@ -240,7 +240,7 @@ export class CesiumManager {
 		updateCesiumClouds(
 			m.flight.lat, m.flight.lon, m.weather,
 			m.config.atmosphere.clouds.density, m.flight.altitude,
-			m.config.world.useCesiumClouds,
+			m.config.world.useCesiumClouds && !m.config.world.useThreeOverlay,
 		);
 	}
 
