@@ -14,6 +14,7 @@ import {
 	pickLightningComposition,
 	type LightningComposition,
 } from '$content/compositions/lightning';
+import { createSeededRng, daySeed } from './prng';
 import { activeCesium } from './active.svelte';
 
 const STAGE_NAME = 'aero-lightning';
@@ -60,6 +61,33 @@ let _nextStrike = 10;
 let _composition: LightningComposition | null = null;
 let _prevHasLightning = false;
 
+// Deterministic strike sequence (invariant #4). Lightning is a FULL-SCREEN
+// flash, so if each Pi rolled its own timings the panorama would flash
+// out of sync — the most visible seam of any effect. All three Pis share
+// daySeed() and receive the same broadcast weather, so seeding the storm
+// from (daySeed ^ stormIndex) makes them agree with no extra messaging.
+//
+// `_stormIndex` counts hasLightning false→true transitions. It stays in
+// step across Pis because `hasLightning` is derived from the leader's
+// broadcast weather, so every device sees the same transitions.
+let _stormIndex = 0;
+let _rng: () => number = Math.random;
+
+const STORM_SALT = 0x5c07;
+
+/** Reset the strike sequence for a new storm. Exported for tests. */
+export function beginStorm(index: number = _stormIndex): void {
+	_rng = createSeededRng((daySeed() ^ (index * STORM_SALT)) >>> 0);
+	_composition = pickLightningComposition(_rng);
+	_timer = 0;
+	_flash = 0;
+	_nextStrike = randomBetween(
+		_composition.intervalRange[0],
+		_composition.intervalRange[1],
+		_rng,
+	);
+}
+
 /**
  * One-time mount: create the PostProcessStage and add it to the scene.
  * Idempotent.
@@ -91,7 +119,8 @@ export function tickLightning(delta: number, weather: WeatherSlice): void {
 	if (!_stage) return;
 
 	if (weather.hasLightning && !_prevHasLightning) {
-		_composition = pickLightningComposition();
+		beginStorm(_stormIndex);
+		_stormIndex++;
 	} else if (!weather.hasLightning && _prevHasLightning) {
 		_composition = null;
 	}
@@ -114,18 +143,19 @@ export function tickLightning(delta: number, weather: WeatherSlice): void {
 	}
 	if (_flash < 0.01 && _timer > _nextStrike) {
 		if (c) {
-			_flash = randomBetween(c.intensityRange[0], c.intensityRange[1]);
+			_flash = randomBetween(c.intensityRange[0], c.intensityRange[1], _rng);
 			// Recipes are in percent (0..100); shader wants 0..1.
-			_x = randomBetween(c.xRange[0], c.xRange[1]) / 100;
-			_y = randomBetween(c.yRange[0], c.yRange[1]) / 100;
-			_nextStrike = randomBetween(c.intervalRange[0], c.intervalRange[1]);
+			_x = randomBetween(c.xRange[0], c.xRange[1], _rng) / 100;
+			_y = randomBetween(c.yRange[0], c.yRange[1], _rng) / 100;
+			_nextStrike = randomBetween(c.intervalRange[0], c.intervalRange[1], _rng);
 		} else {
-			_flash = randomBetween(0.5, 1);
-			_x = randomBetween(20, 80) / 100;
-			_y = randomBetween(15, 65) / 100;
+			_flash = randomBetween(0.5, 1, _rng);
+			_x = randomBetween(20, 80, _rng) / 100;
+			_y = randomBetween(15, 65, _rng) / 100;
 			_nextStrike = randomBetween(
 				weather.lightningMinInterval,
 				weather.lightningMaxInterval,
+				_rng,
 			);
 		}
 		_timer = 0;

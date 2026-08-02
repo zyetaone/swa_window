@@ -66,7 +66,14 @@ const COMPOSITIONS: readonly LightningComposition[] = [
 /**
  * Pick a lightning composition at storm start. Re-roll when hasLightning
  * flips from false → true so each storm session has one character.
+ *
+ * `rng` is injectable so callers on the 3-Pi panorama can pass a seeded
+ * generator: lightning is a FULL-SCREEN flash, so all three screens must
+ * agree on the storm's character or the seam is obvious. Defaults to
+ * Math.random for single-screen callers and tests.
  */
-export function pickLightningComposition(): LightningComposition {
-	return COMPOSITIONS[Math.floor(Math.random() * COMPOSITIONS.length)];
+export function pickLightningComposition(
+	rng: () => number = Math.random,
+): LightningComposition {
+	return COMPOSITIONS[Math.floor(rng() * COMPOSITIONS.length)];
 }
