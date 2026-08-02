@@ -11,6 +11,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
+import { isLoopback } from '$lib/http/loopback';
 import type { DeviceStatus } from '$lib/fleet/protocol';
 
 // In-process device status cache. Single device per Pi server.
@@ -41,8 +42,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	// server, and a LAN attacker shouldn't be able to poison the admin
 	// dashboard's view of any Pi. Browser POSTs are same-origin and hit
 	// the server on localhost. Remote IPs (LAN attackers) get 403.
-	const addr = getClientAddress();
-	if (addr !== '127.0.0.1' && addr !== '::1') {
+	if (!isLoopback(getClientAddress())) {
 		throw error(403, 'forbidden: localhost only');
 	}
 	// Same-origin heartbeat from the local browser. No CORS — the browser

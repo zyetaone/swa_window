@@ -17,12 +17,10 @@
  */
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-const LOCALHOST = new Set(['127.0.0.1', '::1']);
+import { isLoopback } from '$lib/http/loopback';
 
 export const GET: RequestHandler = async ({ url, getClientAddress }) => {
-	const addr = getClientAddress();
-	if (!LOCALHOST.has(addr)) throw error(403, 'forbidden: localhost only');
+	if (!isLoopback(getClientAddress())) throw error(403, 'forbidden: localhost only');
 
 	const type = url.searchParams.get('type');
 	let token: string | undefined;
