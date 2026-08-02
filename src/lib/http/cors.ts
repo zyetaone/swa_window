@@ -54,7 +54,14 @@ export function lanCorsHeadersFull(
 	return {
 		...base,
 		'Access-Control-Allow-Methods': methods,
-		'Access-Control-Allow-Headers': 'Content-Type',
+		// `Authorization` is REQUIRED here, not optional. Every mutating route
+		// behind this preflight is bearer-gated (publishRoute → requireAdminToken),
+		// and the admin dashboard reaches peer Pis cross-origin
+		// (admin-laptop.local → aero-display-01.local). Omitting it makes the
+		// browser fail the preflight and drop the request before it is ever sent,
+		// so cross-device pushes silently no-op while same-origin curl works —
+		// which is exactly why this went unnoticed.
+		'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 	};
 }
 

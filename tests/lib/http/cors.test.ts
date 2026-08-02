@@ -78,7 +78,20 @@ describe('lanCorsHeadersFull', () => {
 	it('adds Allow-Methods + Allow-Headers when origin is allowed', () => {
 		const h = lanCorsHeadersFull('http://x.local', 'PATCH, OPTIONS');
 		expect(h['Access-Control-Allow-Methods']).toBe('PATCH, OPTIONS');
-		expect(h['Access-Control-Allow-Headers']).toBe('Content-Type');
+		expect(h['Access-Control-Allow-Headers']).toBe('Content-Type, Authorization');
+	});
+
+	// Regression: every route behind this preflight is bearer-gated, and the
+	// admin dashboard talks to peer Pis cross-origin. Dropping Authorization
+	// from the allowlist makes browsers fail the preflight and never send the
+	// request, so cross-device pushes silently no-op while curl still works.
+	it('allows the Authorization header the bearer-gated routes require', () => {
+		for (const methods of ['PATCH, OPTIONS', 'POST, OPTIONS', undefined]) {
+			const h = methods
+				? lanCorsHeadersFull('http://x.local', methods)
+				: lanCorsHeadersFull('http://x.local');
+			expect(h['Access-Control-Allow-Headers']).toMatch(/\bAuthorization\b/i);
+		}
 	});
 
 	it('emits nothing when origin is denied', () => {
