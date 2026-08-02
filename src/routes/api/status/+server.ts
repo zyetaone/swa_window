@@ -36,11 +36,17 @@ export const GET: RequestHandler = ({ request }) => {
 	);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, getClientAddress }) => {
+	// Scope to the Pi's own browser: the device status is local to this
+	// server, and a LAN attacker shouldn't be able to poison the admin
+	// dashboard's view of any Pi. Browser POSTs are same-origin and hit
+	// the server on localhost. Remote IPs (LAN attackers) get 403.
+	const addr = getClientAddress();
+	if (addr !== '127.0.0.1' && addr !== '::1') {
+		throw error(403, 'forbidden: localhost only');
+	}
 	// Same-origin heartbeat from the local browser. No CORS — the browser
 	// uses fetch('/api/status', ...) which is same-origin.
-	// 4096: headroom for the telemetry summary (3×160-char lastErrors can
-	// double under JSON escaping) while still a tight DoS bound.
 	const body = await readLimitedJson<DeviceStatus>(request, 4096);
 	if (!body || typeof body.deviceId !== 'string') {
 		throw error(400, 'invalid status body');

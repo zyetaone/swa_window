@@ -26,6 +26,7 @@ import {
 } from '$lib/server/fleet/heartbeat';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
+import { requireBearerToken } from '$lib/http/auth';
 
 // 64 KB — heartbeat payload is { deviceId, role, groupId, fps, temp, uptime,
 // crashCount }; 64 KB is 100× the realistic size yet still a tight DoS bound.
@@ -34,6 +35,10 @@ const MAX_HEARTBEAT_BYTES = 64 * 1024;
 export const OPTIONS: RequestHandler = corsPreflight('GET, POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
+	// Shared LAN secret (AERO_FLEET_TOKEN). Distinct from AERO_ADMIN_TOKEN so
+	// health-check.sh / peer-telemetry scripts can have a lower-privilege
+	// credential than the admin dashboard.
+	requireBearerToken(request, 'AERO_FLEET_TOKEN', 'fleet heartbeat');
 	const cors = lanCorsHeadersFull(request.headers.get('Origin'));
 	const body = await readLimitedJson<unknown>(request, MAX_HEARTBEAT_BYTES);
 	const sample = recordHeartbeat(body);
