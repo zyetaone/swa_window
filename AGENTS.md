@@ -135,71 +135,71 @@ export const WEATHER_TYPES = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as
 export type WeatherType = (typeof WEATHER_TYPES)[number];
 ```
 
-### Subsystem Manager Pattern (MRAX: Actions layer)
+### Cesium Subsystem Pattern (`src/lib/world/`)
 
-Each engine / long-lived stateful component owns one Cesium primitive (or one
-logical concern) and is structured as a class with constructor-injected dependencies
-and a uniform `setup()` + `sync(model)` lifecycle:
+Each Cesium concern (imagery, buildings, terrain, atmosphere, lightning,
+cloud billboards) is a **module of functions over module-private state**, not
+a class. `compose.ts` (`CesiumManager`) is the only class: it owns the viewer,
+the tick loop, and the post-process stage enumeration, and fans out to the
+subsystem modules.
+
+The uniform lifecycle is three exported functions:
 
 ```typescript
 type C = typeof CesiumType;
 
-export class SomeManager {
-  readonly #C: C;
-  readonly #viewer: CesiumType.Viewer;
-  // private Cesium state + idempotency caches
-  #foo: CesiumType.Foo | null = null;
-  #barGate = new EpsilonGate<number>(0.001, -1);
+// module-private Cesium state + idempotency caches
+let _cs: C;
+let _viewer: CesiumType.Viewer;
+let _layer: CesiumType.ImageryLayer | null = null;
+const _alphaGate = new EpsilonGate<number>(0.001, -1);
 
-  constructor(Cesium: C, viewer: CesiumType.Viewer) {
-    this.#C = Cesium;
-    this.#viewer = viewer;
-  }
-
-  setup(): void {
-    // one-time Cesium work
-  }
-
-  sync(slice: SomeSlice): void {
-    // per-tick idempotent work; guards via EpsilonGate
-  }
-
-  destroy(): void { /* tear down */ }
+/** Dependency injection. Called once by CesiumManager before setup. */
+export function initThing(Cesium: C, viewer: CesiumType.Viewer): void {
+  _cs = Cesium; _viewer = viewer;
 }
+
+/** One-time Cesium work. async only when it touches I/O (network, terrain). */
+export async function setupThing(): Promise<void> { /* … */ }
+
+/** Per-tick, idempotent, takes a flat slice. Guard writes with EpsilonGate. */
+export function syncThing(slice: ThingTickInput): void { /* … */ }
 ```
 
 Rules:
-- **Constructor takes only `Cesium + Viewer`.** No service locator, no global $state.
-- **`setup()` is async when it touches I/O (terrain, network tiles).** Other cases are sync.
-- **`sync()` is sync, idempotent, takes a slice.** No DI, no side effects beyond Cesium mutations.
-- **Private state lives on the manager, not the orchestrator.** `compose.ts` owns nothing except viewers, ticks, and the post-process stage enumeration (bloom/AO/FXAA — those aren't sub-systems; they're per-viewer).
-- **`getViewer()` / `getCesium()` are low-level escape hatches.** Production kiosk paths shouldn't call them. Use typed APIs (`getCameraRead()`) instead. The NightVariantPanel playground is the exception — it intentionally mutates raw Cesium for live experimentation.
+- **`init*` takes only `Cesium + Viewer`.** No service locator, no global `$state`.
+- **`sync*` is sync, idempotent, and takes a flat readonly slice** (`ImageryTickInput`
+  is the reference shape). No DI, no side effects beyond Cesium mutations.
+- **State stays module-private in the subsystem, not on the orchestrator.**
+- **`getViewer()` / `getCesium()` are escape hatches.** Kiosk paths should use typed
+  APIs (`getCameraRead()`). `NightVariantPanel` is the deliberate exception: it
+  mutates raw Cesium for live experimentation.
 
-Existing managers in `src/lib/world/`:
-- `ImageryManager` / `BuildingsManager` / `AtmosphereManager` / `TerrainManager` — full engines
-- `CameraManager` / `ColorGradeManager` / `LightningManager` / `CloudBillboardManager` — leaf subsystems
+Why modules rather than classes: each subsystem is a singleton in practice
+(one viewer per page), so a class buys only ceremony. If a second viewer ever
+has to coexist, that is the moment to promote these to instantiable classes.
 
-When you add a new engine-side concern, the canonical layout is:
-1. Create `src/lib/world/<name>-manager.ts` exposing `<Name>Manager` class.
-2. Inject it into `CesiumManager`'s constructor + delegate `setup()` and `sync()` from `tick()`.
-3. If other libs need its data, expose typed read-only getters (`getCameraRead()` pattern).
+Adding a new engine-side concern:
+1. Create `src/lib/world/<name>.ts` exporting `init<Name>` / `setup<Name>` / `sync<Name>`.
+2. Call them from `CesiumManager`'s `start()` and `#tick()`.
+3. If other libs need its data, expose a typed read-only getter (`getCameraRead()` pattern).
 
 ### Three.js Side: Declarative Svelte Subsystems
 
 The Three.js overlay (`src/lib/world/three/`) deliberately does NOT use
-the Manager class pattern. Instead:
+the imperative init/setup/sync form. Instead:
 
 - `ThreeOverlay.svelte` is the orchestrator — `<Canvas>` + scene mount +
   camera setup + lifecycle. Same role as `CesiumManager`, but a `.svelte`.
-- Each visual subsystem (Moon, NightStars, Clouds, OsmRoads, …) is a
+- Each visual subsystem (CameraMirror, Clouds, Wing, …) is a
   sibling `.svelte` component. Each owns its own Three objects via
   `$state` and ticks itself with `useTask`. Mounting = including the
   component in the template; destruction = removing it.
-- Shared reactive state lives in `lib/world/three/state.svelte.ts`
-  (constants + reactive slots). The CameraMirror reads Cesium via the
+- Shared state lives in `lib/world/three/state.ts` (constants +
+  geo helpers; no runes, hence no `.svelte.ts`). CameraMirror reads Cesium via the
   typed `getCameraRead()` API.
 
-This is the Svelte 5 idiomatic equivalent of the manager pattern —
+This is the Svelte 5 idiomatic equivalent of the subsystem pattern —
 declarative lifecycle instead of imperative setup/sync/destroy. Three
 and Cesium can use the same conceptual pattern (subsystem per
 concern, orchestrator fan-out) without using the same *form*.
