@@ -11,8 +11,8 @@
  */
 
 import type { WeatherType } from '$lib/types';
+import type * as CesiumType from 'cesium';
 import { createSeededRng, daySeed } from './prng';
-import { activeCesium } from './active.svelte';
 
 const CLOUD_ALT_M = 7_000; // ~26k ft
 
@@ -43,21 +43,24 @@ const TEXTURES: Record<WeatherType, readonly string[]> = {
 };
 
 // Module-private state.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _collection: any = null;
+let _C: typeof CesiumType | null = null;
+let _viewer: CesiumType.Viewer | null = null;
+let _collection: CesiumType.BillboardCollection | null = null;
 let _lastKey = '';
 let _mounted = false;
 
 /**
  * One-time mount: create the BillboardCollection and add it to the
- * scene. Idempotent.
+ * scene. Idempotent. Accepts the live Cesium + Viewer from CesiumManager
+ * so the module mounts BEFORE `activeCesium.manager` is published.
  */
-export function mountCesiumClouds(): void {
+export function mountCesiumClouds(
+	C: typeof CesiumType,
+	viewer: CesiumType.Viewer,
+): void {
 	if (_mounted) return;
-	const mgr = activeCesium.manager;
-	if (!mgr) return;
-	const viewer = mgr.getViewer();
-	const C = mgr.getCesium() as any;
+	_C = C;
+	_viewer = viewer;
 	_collection = viewer.scene.primitives.add(new C.BillboardCollection());
 	_mounted = true;
 }
@@ -88,9 +91,8 @@ export function updateCesiumClouds(
 
 	_collection.removeAll();
 
-	const mgr = activeCesium.manager;
-	if (!mgr) return;
-	const C = mgr.getCesium() as any;
+	const C = _C;
+	if (!C) return;
 	const textures = TEXTURES[weather] ?? TEXTURES.clear;
 
 	// 3-Pi panorama determinism
@@ -205,9 +207,12 @@ export function updateCesiumClouds(
 /** Tear down the collection. Idempotent. */
 export function destroyCesiumClouds(): void {
 	if (!_collection) return;
-	const mgr = activeCesium.manager;
-	if (mgr) mgr.getViewer().scene.primitives.remove(_collection);
+	if (_viewer && !_viewer.isDestroyed?.()) {
+		_viewer.scene.primitives.remove(_collection);
+	}
 	_collection = null;
+	_C = null;
+	_viewer = null;
 	_mounted = false;
 	_lastKey = '';
 }

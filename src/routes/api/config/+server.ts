@@ -13,7 +13,7 @@
  * endpoint's job is to deliver the patch to the local browser.
  */
 
-import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-tree.svelte';
+import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-namespaces';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { corsPreflight } from '$lib/http/cors';

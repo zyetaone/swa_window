@@ -3,6 +3,7 @@
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
 	import { config } from '$lib/model/config-tree.svelte';
 	import { formatTime, formatUptime } from '$lib/utils';
+	import { peerAuthHeader } from '$lib/http/peer-token';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
@@ -78,9 +79,12 @@
 					if (!peer) return { id, ok: false, detail: 'peer not found' };
 					try {
 						const base = `http://${peer.host}:${peer.port}`;
+						// /api/command is bearer-gated like every mutating route;
+						// without this header the push is a guaranteed 401/503.
+						const authHeader = await peerAuthHeader();
 						const res = await fetch(`${base}/api/command`, {
 							method: 'POST',
-							headers: { 'Content-Type': 'application/json' },
+							headers: { 'Content-Type': 'application/json', ...authHeader },
 							body: JSON.stringify({ type: 'update' }),
 						});
 						return { id, ok: res.ok, detail: res.ok ? '' : `HTTP ${res.status}` };

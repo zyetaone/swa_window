@@ -20,6 +20,7 @@ import { EpsilonGate } from './util';
 
 interface WorldConfig {
 	readonly baseNightSaturation: number; readonly viirsAlphaBoost: number; readonly viirsBrightness: number;
+	readonly useThreeOverlay: boolean;
 }
 
 export interface ImageryTickInput {
@@ -43,15 +44,20 @@ const _viirsAlpha = new EpsilonGate<number>(0.001, -1);
 const _viirsBrightness = new EpsilonGate<number>(0.01, -1);
 const _roadAlpha = new EpsilonGate<number>(0.001, -1);
 const _roadBrightness = new EpsilonGate<number>(0.01, -1);
-
 export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
+	_viirsShow.reset();
+	_viirsAlpha.reset();
+	_viirsBrightness.reset();
+	_roadAlpha.reset();
+	_roadBrightness.reset();
+	_lastNightFactor = -1;
 }
 
 export async function setupImagery(): Promise<void> {
 	const C = _cs;
 	const cfg = getSatelliteImagery();
-	console.info('[Imagery] base:', cfg.label);
+
 
 	_baseLayer = _addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);
 	if (_baseLayer) {
@@ -108,11 +114,11 @@ function _addLayer(url: string, maximumLevel: number, minimumLevel: number, webM
 		}),
 	);
 }
-
 export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	const nf = model.nightFactor;
 	const scale = model.nightLightScale;
 	const show = nf > 0.01;
+	const prev = _lastNightFactor;
 	_lastNightFactor = nf;
 
 	const w = model.config.world;
@@ -128,20 +134,18 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 		const altGate = 1 - altitudeDetailMix(model.altitude);
 		const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
 		const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0) * bootFade;
-		const viirsShow = (show || (_lastNightFactor < 0.01 && nf > 0.01)) && viirsAlpha > 0.001;
+		const viirsShow = (show || (prev < 0.01 && nf > 0.01)) && viirsAlpha > 0.001;
 		const viirsBrightness = 5.0 * w.viirsBrightness;
 
 		_viirsShow.update(viirsShow, (v) => { _viirsLayer!.show = v; });
 		_viirsAlpha.update(viirsAlpha, (v) => { _viirsLayer!.alpha = v; });
 		_viirsBrightness.update(viirsBrightness, (v) => { _viirsLayer!.brightness = v; });
 	}
-
 	if (_roadMaskLayer) {
 		const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(model.altitude);
 		const roadAlpha = (nf * scale * roadAltGate + (1 - nf) * 0.08 * roadAltGate) * bootFade;
 		const roadBrightness = 1.5 + nf * 1.5;
-
-		_roadMaskLayer.show = true;
+		_roadMaskLayer.show = !w.useThreeOverlay;
 		_roadAlpha.update(roadAlpha, (v) => { _roadMaskLayer!.alpha = v; });
 		_roadBrightness.update(roadBrightness, (v) => { _roadMaskLayer!.brightness = v; });
 	}

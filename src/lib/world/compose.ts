@@ -144,8 +144,8 @@ export class CesiumManager {
 		await setupImagery();
 		await setupBuildings(this.#model.config.world.buildingsEnabled);
 
-		mountLightning();
-		mountCesiumClouds();
+		mountLightning(C, v);
+		mountCesiumClouds(C, v);
 
 		this.#syncClock();
 		this.#tick();
@@ -199,6 +199,7 @@ export class CesiumManager {
 				timeOfDay: m.timeOfDay, nightFactor: m.nightFactor, dawnDuskFactor: m.dawnDuskFactor,
 				flight: { lon: m.flight.lon, camAlt: m.flight.camAlt },
 				config: { world: m.config.world },
+				hazeAmount: m.config.atmosphere.haze.amount,
 				sceneFog: m.sceneFog,
 			},
 			this.#viewer.clock.currentTime,

@@ -239,8 +239,17 @@ export class DeviceClient {
 		catch { return; }
 
 		this.#model.telemetry?.recordEvent('fleet_in', { type: msg.type });
-
 		switch (msg.type) {
+			case 'update': {
+				// Fan the OTA trigger to the local /api/update endpoint. The
+				// server-side handler is the only path that actually runs
+				// aero-updater.sh — keeps the browser out of the upgrade loop.
+				void (async () => {
+					const headers = await peerAuthHeader();
+					await fetch('/api/update', { method: 'POST', headers });
+				})();
+				break;
+			}
 			case 'set_scene': {
 				if (!isValidLocation(msg.location)) break;
 				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;

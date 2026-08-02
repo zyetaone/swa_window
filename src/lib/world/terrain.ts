@@ -40,6 +40,13 @@ export async function setupTerrain(): Promise<void> {
 			return;
 		} catch (e) { console.warn('[Terrain] Ion failed, using ellipsoid:', e); }
 	}
+	// NOTE: there is no free public quantized-mesh fallback to slot in here.
+	// A previous attempt pointed at `cesium-terrain-cache.s3.amazonaws.com`,
+	// which returns NoSuchBucket — it only added a failed round-trip to every
+	// tokenless boot. ADR-002's answer is the PACKAGED tile cache above
+	// (checkLocalTileServer), not a runtime third-party host. If a real
+	// fallback is ever wanted, package Terrarium heightmaps via
+	// tools/tile-packager and serve them from TILE_SERVER_URL.
 	console.warn('[Terrain] No cache/token — flat ellipsoid');
 	v.terrainProvider = new C.EllipsoidTerrainProvider();
 }

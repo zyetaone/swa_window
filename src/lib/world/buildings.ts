@@ -135,12 +135,14 @@ const BUILDING_SHADER_GLSL = `
 		float rooftopLight = isRoof * isTall * blink;
 		vec3 aviationRed = vec3(1.0, 0.08, 0.03);
 
-		// Darken building surfaces at night so emissive reads cleanly.
+		// Build the window emission: lit windows + street-level ambient + aviation lights.
+		vec3 emission = (windowColor * windowBright * flicker * lit) * u_lightIntensity
+			+ streetLampColor * streetGlow * u_nightFactor
+			+ aviationRed * rooftopLight * u_nightFactor;
 
-		// Keep building surface visible at night so emissive windows show against it.
-		vec3 emission = vec3(0.0);
-		// Darken building surface at night — 5% visible, emissive windows stand out.
+		// Darken building surfaces at night so emissive reads cleanly.
 		material.diffuse *= mix(1.0, 0.06, u_nightFactor);
+		material.emissive = emission * u_nightFactor;
 	}
 `;
 

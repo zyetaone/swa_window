@@ -20,8 +20,7 @@
 	 * relative to where Cesium is showing terrain.
 	 */
 	import { useTask } from '@threlte/core';
-	import { activeCesium } from '$lib/world/active.svelte';
-	import type { CesiumManager } from '$lib/world/compose';
+	import { getCameraRead } from '$lib/world/camera';
 	import type { PerspectiveCamera } from 'three';
 
 	let { camera }: { camera: PerspectiveCamera | undefined } = $props();
@@ -31,16 +30,9 @@
 	// keeps the lookAt direction numerically well-conditioned at WGS84 scale.
 	const LOOK_AHEAD_M = 200_000;
 
-	// Cache the manager via $effect so useTask doesn't establish a reactive
-	// read inside its 60 Hz callback. Re-runs only when the manager mounts /
-	// unmounts (page navigation, HMR), which is the only thing that should
-	// invalidate the cached viewer.
-	let mgr: CesiumManager | null = $state.raw(null);
-	$effect(() => { mgr = activeCesium.manager; });
-
 	useTask(() => {
-		if (!mgr || !camera) return;
-		const c = mgr.getCameraRead();
+		if (!camera) return;
+		const c = getCameraRead();
 		if (!c) return;
 		const p = c.position;
 		const d = c.direction;

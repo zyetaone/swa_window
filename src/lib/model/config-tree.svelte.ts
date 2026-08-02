@@ -12,9 +12,7 @@
  */
 
 
-/** Config namespace keys — SSOT shared with API allowlist. */
-export const CONFIG_NAMESPACE_KEYS = ['atmosphere', 'camera', 'director', 'world', 'shell'] as const;
-export type ConfigNamespace = (typeof CONFIG_NAMESPACE_KEYS)[number];
+import { type ConfigNamespace } from './config-namespaces';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types';
 import { CRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';

@@ -25,6 +25,13 @@ export interface AtmosphereModel {
 	timeOfDay: number; nightFactor: number; dawnDuskFactor: number;
 	flight: { lon: number; camAlt: number };
 	config: { world: AtmosphereConfigSlice };
+	/**
+	 * `atmosphere.haze.amount` (0..0.15). Flattened onto the slice rather
+	 * than nested: haze lives in the ATMOSPHERE namespace, not `world`, so
+	 * reading it off `config.world` silently yields undefined and the haze
+	 * slider stops driving fog at all.
+	 */
+	hazeAmount: number;
 	sceneFog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
 }
 
@@ -58,9 +65,17 @@ export function getLastTimeOfDay(): number { return _lastTimeOfDay; }
 export function setLastTimeOfDay(v: number): void { _lastTimeOfDay = v; }
 export function getLastClockLon(): number { return _lastClockLon; }
 export function setLastClockLon(v: number): void { _lastClockLon = v; }
-
 export function initAtmosphere(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
+	_globeColor.reset();
+	_fogDensity.reset();
+	_fogBrightness.reset();
+	_lightIntensity.reset();
+	_skySatShift.reset();
+	_skyBrShift.reset();
+	_atmoKilled.reset();
+	_exposure.reset();
+	_atmoLight.reset();
 	_originalSunLight = viewer.scene.light;
 	_moonlight = new Cesium.DirectionalLight({
 		direction: new Cesium.Cartesian3(0, 0, -1),
@@ -98,7 +113,6 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 
 	_skySatShift.update(satShift, (val) => { if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.saturationShift = val; });
 	_skyBrShift.update(brShift, (val) => { if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.brightnessShift = val; });
-
 	const killAtmo = deepNight > 0.6;
 	_atmoKilled.update(killAtmo, (val) => {
 		if (v.scene.skyAtmosphere) v.scene.skyAtmosphere.show = !val;
@@ -107,13 +121,16 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 	});
 
 	const fog = model.sceneFog;
-	const tDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + w.atmosphereLight * 0.001);
+	const haze = model.hazeAmount;
+	const tDensity = lerp(fog.dayDensity, fog.nightDensity, nf) * (1 + haze * 8);
 	const tBright = lerp(fog.dayBrightness, fog.nightBrightness, nf);
 	_fogDensity.update(tDensity, (val) => {
 		if (v.scene.fog) { v.scene.fog.enabled = val > 0.00001; v.scene.fog.density = val; }
 	});
+	// Per-pass visual density — sharper at night, plus an additive haze boost.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(v.scene.fog as any).visualDensityScalar = 1 + 0.9 * nf + haze * 4;
 	_fogBrightness.update(tBright, (val) => { if (v.scene.fog) v.scene.fog.minimumBrightness = val; });
-
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const Cany = C as any;
 	if (_moonPhaseTime !== t) {

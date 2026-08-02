@@ -22,7 +22,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { startLanProxy } from './src/lib/fleet/lan-peers.server';
+import { startLanProxy } from './src/lib/server/fleet/lan-peers';
 
 // adapter-node reads PORT/HOST from env at import time and defaults PORT to
 // 3000. Set this project's default BEFORE importing it so `bun run serve`

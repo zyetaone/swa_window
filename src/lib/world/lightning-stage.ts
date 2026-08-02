@@ -10,12 +10,12 @@
  */
 
 import { randomBetween, clamp } from '$lib/utils';
+import type * as CesiumType from 'cesium';
 import {
 	pickLightningComposition,
 	type LightningComposition,
 } from '$content/compositions/lightning';
 import { createSeededRng, daySeed } from './prng';
-import { activeCesium } from './active.svelte';
 
 const STAGE_NAME = 'aero-lightning';
 
@@ -53,13 +53,12 @@ export interface WeatherSlice {
 let _flash = 0;
 let _x = 0.5;
 let _y = 0.4;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _stage: any = null;
-let _timer = 0;
-let _nextStrike = 10;
+let _viewer: CesiumType.Viewer | null = null;
+let _stage: CesiumType.PostProcessStage | null = null;
 let _composition: LightningComposition | null = null;
 let _prevHasLightning = false;
+let _timer = 0;
+let _nextStrike = 10;
 
 // Deterministic strike sequence (invariant #4). Lightning is a FULL-SCREEN
 // flash, so if each Pi rolled its own timings the panorama would flash
@@ -90,14 +89,14 @@ export function beginStorm(index: number = _stormIndex): void {
 
 /**
  * One-time mount: create the PostProcessStage and add it to the scene.
- * Idempotent.
+ * Idempotent. Accepts the live Cesium + Viewer from CesiumManager so the
+ * module mounts BEFORE `activeCesium.manager` is published by the viewer.
  */
-export function mountLightning(): void {
+export function mountLightning(C: typeof CesiumType, viewer: CesiumType.Viewer): void {
 	if (_stage) return;
-	const mgr = activeCesium.manager;
-	if (!mgr) return;
-	const viewer = mgr.getViewer();
-	const C = mgr.getCesium() as any;
+	// Keep the viewer so destroyLightning can detach the stage without
+	// depending on activeCesium (which may already be cleared at teardown).
+	_viewer = viewer;
 	_stage = new C.PostProcessStage({
 		name: STAGE_NAME,
 		fragmentShader: LIGHTNING_GLSL,
@@ -147,6 +146,10 @@ export function tickLightning(delta: number, weather: WeatherSlice): void {
 			// Recipes are in percent (0..100); shader wants 0..1.
 			_x = randomBetween(c.xRange[0], c.xRange[1], _rng) / 100;
 			_y = randomBetween(c.yRange[0], c.yRange[1], _rng) / 100;
+			// The composition owns the cadence — that is what makes 'sheet'
+			// (slow, high, dim) read differently from 'forked' (fast, low,
+			// bright). Falling back to the generic weather interval here
+			// collapsed all three recipes onto one rhythm.
 			_nextStrike = randomBetween(c.intervalRange[0], c.intervalRange[1], _rng);
 		} else {
 			_flash = randomBetween(0.5, 1, _rng);
@@ -165,12 +168,14 @@ export function tickLightning(delta: number, weather: WeatherSlice): void {
 /** Tear down the post-process stage. Idempotent. */
 export function destroyLightning(): void {
 	if (!_stage) return;
-	const mgr = activeCesium.manager;
-	if (mgr) mgr.getViewer().scene.postProcessStages.remove(_stage);
+	if (_viewer && !_viewer.isDestroyed?.()) {
+		_viewer.scene.postProcessStages.remove(_stage);
+	}
 	_stage = null;
+	_viewer = null;
 	_timer = 0;
 	_nextStrike = 10;
+	_flash = 0;
 	_composition = null;
 	_prevHasLightning = false;
-	_flash = 0;
 }
