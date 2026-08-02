@@ -42,19 +42,9 @@ export const atmosphere = $state({
 		cloudDensityRange: [...WEATHER_EFFECTS.cloudy.cloudDensityRange] as [number, number],
 		nightCloudFloor: WEATHER_EFFECTS.cloudy.nightCloudFloor,
 		filterBrightness: WEATHER_EFFECTS.cloudy.filterBrightness,
-		frostStartAltitude: 25000,   // feet
-		frostMaxAltitude:   40000,   // feet
 		lightningMinInterval: 5,     // seconds
 		lightningMaxInterval: 30,
 		lightningDecayRate:   8,
-	},
-	microEvents: {
-		// Moments of surprise for attentive viewers.
-		minInterval: 100,            // seconds between events (lower bound)
-		maxInterval: 300,
-		shootingStarDuration: 1.5,
-		birdDuration: 8,
-		contrailDuration: 12,
 	},
 });
 
@@ -64,8 +54,6 @@ export const atmosphere = $state({
 interface CameraShape {
 	orbit: {
 		driftRate: number;
-		major: number;
-		minor: number;
 		majorMin: number;
 		majorMax: number;
 		breathePeriod: number;
@@ -115,8 +103,6 @@ interface CameraShape {
 const _camera: CameraShape = {
 	orbit: {
 				driftRate: 0.018, // orbit lateral speed (deg/s at speed=1)
-		major: 0.15,
-		minor: 0.06,
 		majorMin: 0.08,
 		majorMax: 0.25,
 		breathePeriod: 180,
@@ -256,8 +242,6 @@ export const world = $state({
 	bloomBrightness: -0.1, // less darkening, brighter glow
 	bloomSigma: 4.5, // bloom spread (wider VIIRS glow)
 	buildingsEnabled: true,
-		buildingEmissiveLowAltFt: 25000, // building glow altitude gate
-	buildingEmissiveHighAltFt: 55000,
 	buildingEmissiveMax: 0.6, // max window-glow intensity at night
 		additiveStrength: 3.0, // emissive boost on lit pixels
 		moonlightIntensity: 0.08,
@@ -269,8 +253,6 @@ export const world = $state({
 	viirsBrightness: 3.0, // VIIRS layer brightness
 	viirsAlphaBoost: 1.4,
 	windowLightIntensity: 1.5, // procedural building-window brightness
-		viirsAltGateLowFt: 5000, // VIIRS dim-below-cruise altitude gate
-	viirsAltGateHighFt: 15000,
 	showClouds: true,
 		useCesiumClouds: true, // Cesium cloud billboards (1 draw call, GPU-instanced)
 	ambientOcclusion: true, // HBAO (altitude-gated)
@@ -290,7 +272,6 @@ export const shell = $state({
 		windowFrame: false, // cabin oval border
 	blindOpen: true,
 	hudVisible: true,
-	sidePanelOpen: false,
 		clockVisible: false, // lab-scope wall-clock overlay
 		mouseParallax: true, // cursor parallax (no-op in kiosk)
 		sidePanelAutoCloseMs: 15000, // auto-close idle side panel
