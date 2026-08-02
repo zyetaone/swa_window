@@ -41,9 +41,10 @@ What remains and is live:
 - `server/scene/bundle/disk.ts` — server-side persistence
 - `/api/content`, `/api/content/[id]`, `/api/assets` — CRUD over the above
 
-`scene/bundle/store.svelte.ts` and `scene/bundle/remote.ts` (Cloudflare
-push polling) are retained but currently unreachable from any entrypoint.
-Delete them, or re-wire a mount point, before claiming bundle support.
+The in-memory `bundleStore` and the Cloudflare push-poll client were deleted
+on 2026-08-02 (unreachable from any entrypoint since the compositor went).
+`tools/aero-push-worker/` still exists; re-wire a device-side poller and a
+mount point before claiming remote bundle support again.
 
 ## Geo effect access pattern
 

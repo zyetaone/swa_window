@@ -283,7 +283,6 @@ $effect(() => {
   - `TILE_DIR` — offline tile cache (default `/opt/zyeta-aero/tiles` on Pi)
   - `AERO_ADMIN_TOKEN` — bearer auth for admin routes (fail-closed: 503 if unset)
   - `AERO_WIFI_RESET_TOKEN` — bearer auth for WiFi reset (fail-closed)
-  - `VITE_PUSH_WORKER_URL` — optional Cloudflare Worker for OTA push
 - **CSP**: Locked-down Content-Security-Policy with `unsafe-eval` (required by Cesium protobufjs), `blob:` workers, and connections to all major tile providers.
 
 ## Multi-Pi parallax
@@ -343,7 +342,6 @@ Heuristic dev utilities — verify hits before deleting:
 | `node tools/reachability-scan.mjs` | modules unreachable from any entrypoint |
 | `node tools/config-key-scan.mjs` | config-tree keys nothing reads |
 | `node tools/doc-path-scan.mjs` | file paths in docs that no longer exist |
-| `node tools/orphan-scan.mjs` | modules no other file mentions by name |
 
 
 ## Testing & QA

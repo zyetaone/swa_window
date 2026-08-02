@@ -46,6 +46,10 @@ while (stack.length) {
 	for (const dep of importsOf(f)) if (!seen.has(dep)) stack.push(dep);
 }
 
-const dead = [...tracked].filter((f) => isModule(f) && !seen.has(f)).sort();
+// Deliberately parked, documented at its definition site. Keep this list
+// short: each entry is a claim that dead code is intentional.
+const PARKED = new Set(['content/shows/night-clouds.show.ts']);
+
+const dead = [...tracked].filter((f) => isModule(f) && !seen.has(f) && !PARKED.has(f)).sort();
 console.log(`entrypoints: ${entries.length}  reachable: ${seen.size}  UNREACHABLE: ${dead.length}`);
 for (const f of dead) console.log('  ', f);
