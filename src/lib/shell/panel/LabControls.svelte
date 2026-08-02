@@ -29,9 +29,6 @@
 </fieldset>
 
 {#if mode === 'hybrid'}
-	{#if import.meta.env.DEV}
-		{/if}
-
 	<fieldset>
 		<legend>HUD</legend>
 		<label style="display:flex;align-items:center;gap:6px;font-size:11px;">

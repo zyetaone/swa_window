@@ -11,13 +11,13 @@
  *   matrix = makeBasis(east, up, -north) * translate(geoToCartesian)
  *
  * The negated-north basis column matches the Three.js sphere UV wrap that
- * geoToCartesian (in world/three/state.svelte.ts) already accounts for.
+ * geoToCartesian (in world/three/state.ts) already accounts for.
  * Once this matrix is set on a Group with `matrixAutoUpdate = false`, child
  * meshes positioned in local ENU coordinates (x=east, y=up, z=-north) land
  * at the correct world position on the ellipsoid surface.
  */
 import { Matrix4, Vector3, type Object3D } from 'three';
-import { geoToCartesian } from './state.svelte';
+import { geoToCartesian } from './state';
 
 const _WORLD_Y = new Vector3(0, 1, 0);
 

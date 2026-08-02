@@ -7,7 +7,7 @@
  *   3. env var must be set → otherwise 503 (fail-closed)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GET, OPTIONS } from '../../../../src/routes/api/internal/token/+server';
 
 const TOKEN = 'kiosk-bearer-token';
@@ -24,11 +24,15 @@ function call(clientAddress: string, type = 'admin') {
 beforeEach(() => {
 	delete process.env.AERO_ADMIN_TOKEN;
 	delete process.env.CESIUM_ION_TOKEN;
+	// The route falls back to the build-time VITE_ token; blank it so the
+	// fail-closed path is testable on machines with a populated .env.
+	vi.stubEnv('VITE_CESIUM_ION_TOKEN', '');
 });
 
 afterEach(() => {
 	delete process.env.AERO_ADMIN_TOKEN;
 	delete process.env.CESIUM_ION_TOKEN;
+	vi.unstubAllEnvs();
 });
 
 describe('GET /api/internal/token', () => {

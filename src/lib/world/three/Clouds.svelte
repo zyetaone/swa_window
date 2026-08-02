@@ -77,7 +77,7 @@
 		type Group as ThreeGroup,
 	} from 'three';
 	import { LOCATION_MAP } from '$content/locations';
-	import { CLOUD_DECK_M } from './state.svelte';
+	import { CLOUD_DECK_M } from './state';
 	import { sunElevationSin } from '$lib/world/sky';
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';

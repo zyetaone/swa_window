@@ -27,11 +27,9 @@
 	// dissolve after 15s. A half-rendered globe is better than a permanent
 	// black screen. Logged to telemetry so operators can diagnose remotely.
 	let forcedDissolve = $state(false);
-	let timedOut = $state(false);
 	$effect(() => {
 		if (isLive) return;
 		const t = setTimeout(() => {
-			timedOut = true;
 			forcedDissolve = true;
 			model.telemetry.recordEvent('error', {
 				where: 'boot-lockup',
