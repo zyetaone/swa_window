@@ -1,6 +1,6 @@
 # Aero Window Codemap
 
-**Last Updated:** 2026-04-26
+**Last Updated:** 2026-08-02
 
 ## Quick Navigation
 
@@ -8,20 +8,22 @@
 |----------|-------|
 | [File Inventory](files.md) | Source layout — folder by folder, top files by size |
 | [Architecture](architecture.md) | Layer diagram, data flow, key interfaces |
-| [Scene composition](scene.md) | Effect contract, registry, z-layer SSOT |
+| [Scene composition](scene.md) | Live layer composition in Pane.svelte + bundle wire contract |
 | [Content API](content-api.md) | Bundle CRUD + LAN cache + remote push |
 | [Security boundaries](security.md) | Trust zones, validation, CSP, sensitive data |
 
-> The authoritative architecture lives in `CLAUDE.md` at the repo root.
+> The authoritative architecture lives in `AGENTS.md` at the repo root.
 > CODEMAPS summarise per-concern slices.
 
-## Codebase stats (live as of phase 11)
+## Codebase stats (2026-08-02)
 
 | Tree | Files | Lines |
 |------|------:|------:|
-| `src/lib/` | 78 | 9,183 |
-| `src/routes/` | 22 | 2,782 |
-| `content/` | 8 | 316 |
+| `src/lib/` | 86 | 13,222 |
+| `src/routes/` | 25 | 4,826 |
+| `content/` | 22 | 940 |
+
+Regenerate with `git ls-files <dir> | xargs wc -l | tail -1`.
 
 ## Architecture at a glance
 

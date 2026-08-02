@@ -1,14 +1,16 @@
 # File Inventory
 
-**Last Updated:** 2026-04-26
-**Totals:** `src/lib/` 78 files / 9,183 lines · `src/routes/` 22 / 2,782 · `content/` 8 / 316
+**Last Updated:** 2026-08-02
+**Totals:** `src/lib/` 86 files / 13,222 lines · `src/routes/` 25 / 4,826 · `content/` 22 / 940
+
+> Per-file line counts below drift fast; treat them as ordering hints, not
+> facts. Regenerate with `git ls-files src content | xargs wc -l | sort -rn`.
 
 ## src/lib/ — Domain library
 
 The library is organised by domain folder. Each domain owns its own
-state, logic, and (where relevant) Svelte components. There are 4 shared
-files at the root: `types.ts`, `utils.ts`, `game-loop.ts`, plus
-`night/index.ts` (a deliberate cross-cutting barrel for night rendering).
+state, logic, and (where relevant) Svelte components. The shared root files
+are `types.ts`, `utils.ts`, `game-loop.ts`, and `version.ts`.
 
 ### Top-15 files by size
 

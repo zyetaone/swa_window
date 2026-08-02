@@ -26,9 +26,9 @@
       v     v    v                           v
  ┌────────┐┌──────────┐ ┌──────────────────────────────┐
  │CAMERA  ││DIRECTOR  │ │ SCENE                        │
- │flight  ││autopilot │ │ compositor + registry +      │
- │motion  ││scenarios │ │ layers (Z SSOT) +            │
- │        ││          │ │ effects/* + bundle/*         │
+ │flight  ││autopilot │ │ SCENE                        │
+ │motion  ││scenarios │ │ bundle/* (wire types + store)│
+ │        ││          │ │ DOM effects live in shell/   │
  └────────┘└──────────┘ └──────────────┬───────────────┘
                                        │
                                        v
@@ -147,15 +147,8 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 │
 ├── Pane.svelte ── useAeroWindow(), game-loop subscription
 │   ├── CesiumViewer.svelte ── runtime import('cesium')
-│   ├── Compositor.svelte ── iterates registered Effects + bundleStore
-│   │   ├── effects/clouds (ArtsyClouds — CSS3D sprites)
-│   │   ├── effects/haze
-│   │   ├── effects/lightning
-│   │   ├── effects/micro-events
-│   │   ├── effects/car-lights (geo)
-│   │   ├── effects/sprite (factory, bundle-driven)
-│   │   └── effects/video-bg (factory, bundle-driven)
-│   ├── window/Weather (rain + frost CSS)
+│   ├── GlobeLayer.svelte ── hosts CesiumViewer
+│   ├── window/RainGlass (CSS water beads, mounted only while raining)
 │   ├── window/Glass (vignette + recess)
 │   └── window/Blind ── useBlind composable
 │
@@ -192,8 +185,10 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 ### `SimulationContext` (`src/lib/types.ts`)
 The per-frame snapshot every engine tick receives. Carries `time`, `delta`, `heading`, `altitude`, `weather`, `turbulenceLevel`, plus full `camera` + `director` config slices, plus `isLeader`. Pre-allocated; reused each frame.
 
-### `Effect<TParams>` (`src/lib/scene/types.ts`)
-The compositor contract. `{ id, kind: 'atmo' | 'geo', z, when(model) → boolean, component }`. Effects mount/unmount via the `when` predicate. Geo effects render inside Cesium so the `z` is inert.
+### Scene effects (no registry)
+The `Effect`/`Compositor` registry was removed. DOM effects are plain Svelte
+components composed directly in `shell/Pane.svelte` and mounted with `{#if}`.
+Geo effects render inside Cesium via manager classes in `world/`.
 
 ### `Show` (`src/lib/show/load.ts`)
 The authored experience primitive. Today carries an `opening: { location, weather, timeOfDay }`. Documented growth surface: `scenes`, `cues`, `rotation`, `palette`.
@@ -213,17 +208,5 @@ durations: model.config.camera.cruise.{departureDurationSec, transitDurationSec}
 
 ## Z-layer system
 
-The single source: `src/lib/scene/layers.ts` exports `Z` as a `const` object. Every consumer (effect registry, `Pane.svelte`, `Weather.svelte`) imports from there.
-
-```
-z:0   Cesium canvas (terrain, buildings, VIIRS overlay, geo effects)
-z:0   atmospheric haze (DOM-stack above Cesium, below clouds)
-z:1   clouds (CSS3D sprites)
-z:2   rain + lightning
-z:3   micro-events (stars, birds, contrails)
-z:5   frost (high altitude)
-z:7   wing silhouette
-z:9   glass vignette
-z:10  outer vignette
-z:11  inner glass-recess rim
-```
+There is no shared Z table. Layer order is local CSS in `shell/Pane.svelte`
+(Cesium render-layer at `z-index: 0`, then `RainGlass`, `Glass`, `Blind`).

@@ -21,7 +21,7 @@ Cesium globe (terrain, buildings, VIIRS night-lights, post-process color grade)
 ```
 
 - **Cesium** is confined to `src/lib/world/` — only `CesiumViewer.svelte` does `import('cesium')` at runtime; all other files reference it as a type only.
-- **Three.js overlay** (`src/lib/world-three/`) mounts a transparent `<Canvas>` above Cesium. Camera is **pulled** from Cesium each frame (Cesium drives; Three mirrors). Always on at `/playground/three`; on `/` gated behind `config.world.useThreeOverlay` (default `false`, pending P8 Pi-5 perf gate).
+- **Three.js overlay** (`src/lib/world/three/`) mounts a transparent `<Canvas>` above Cesium. Camera is **pulled** from Cesium each frame (Cesium drives; Three mirrors). Gated behind `config.world.useThreeOverlay` (default `true`).
 
 ### State Management
 
@@ -32,7 +32,6 @@ Single `$state`-based reactive tree:
 | `src/lib/model/aero-window.svelte.ts` | `AeroWindow` class — root simulation state, owns `tick()` loop, orchestrates engines, CRDT config patching, fleet broadcast, persistence |
 | `src/lib/model/config-tree.svelte.ts` | Flat reactive config — five `$state` namespaces: `atmosphere`, `camera`, `director`, `world`, `shell`. All tuning numbers live here inline at their defaults. **No `constants.ts` — the config tree IS the SSOT.** |
 | `src/lib/model/crdt-store.ts` | CRDT LWW-register store for cross-device config reconciliation |
-| `src/lib/model/config-namespaces.ts` | Framework-free SSOT of namespace keys — shared between config-tree and `/api/config` server route allowlist |
 
 Context-based DI: `createAeroWindow()` in `+page.svelte`, `useAeroWindow()` in any descendant.
 
@@ -72,12 +71,11 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 | Directory | Purpose |
 |---|---|
 | `src/lib/world/` | Cesium globe — terrain, imagery, shaders, VIIRS endpoint. **Cesium runtime import confined here.** |
-| `src/lib/world-three/` | Three.js photoreal overlay — clouds, wing, sky-extras, neon, postprocessing. Flag-gated. |
-| `src/lib/world-lighting/` | Night-light intensity curves + altitude crossfade — SSOT shared by every city-light layer |
+| `src/lib/world/three/` | Three.js overlay — CameraMirror, Clouds, Wing. Flag-gated on `config.world.useThreeOverlay`. |
 | `src/lib/camera/` | Flight simulation engine (orbit + cruise FSM) + motion module (bank, breathing, turbulence) |
 | `src/lib/director/` | Autopilot — weather randomiser + location cycler + night-city flyover beat |
 | `src/lib/model/` | Reactive state graph — AeroWindow, config-tree, CRDT store, telemetry, persistence |
-| `src/lib/scene/` | Scene composition — effect registry, compositor, z-order SSOT, per-effect folders |
+| `src/lib/scene/bundle/` | Pushed content-bundle wire types + server-side disk store (no runtime mount point) |
 | `src/lib/shell/` | UI surround — Pane, HUD, SidePanel, Blind, Glass, Weather effects |
 | `src/lib/fleet/` | Remote Pi fleet management — REST client, SSE, peer sync, heartbeat, mDNS discovery |
 | `src/lib/http/` | Shared HTTP helpers — auth, CORS, body parsing, peer token |
@@ -97,7 +95,7 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 | `bun run check` | Type-check with `svelte-check` |
 | `bun run check:watch` | Type-check in watch mode |
 | `bun run test` | Run all tests (alias: `bun x vitest run`) |
-| `bun x vitest run tests/lib/world-three/sky.test.ts` | Run single test file |
+| `bun x vitest run tests/lib/world/sky.test.ts` | Run single test file |
 | `bun x vitest run -t "memoises sun"` | Run tests matching a pattern |
 | `bun run serve` | Full LAN server via Bun (`server.ts` — starts mDNS peer discovery) |
 | `bun run start` | `build` + `serve` (production-like, what the Pi runs) |
@@ -212,12 +210,15 @@ per-frame work into a typed `ThreeOrchestrator` class with a tick loop.
 
 ### Effect Pattern
 
-Each scene effect is a self-contained Svelte component:
+There is no effect registry. DOM effects are plain Svelte components composed
+directly in `shell/Pane.svelte` (`GlobeLayer`, `RainGlass`, `Glass`, `Blind`),
+each of which:
 - Owns its own `$state` — no global mutation
-- Receives `{ model, params? }` as its only prop
-- Subscribes to game-loop directly via `$effect(() => subscribe(...))`
-- Mounts/unmounts via a `when` predicate evaluated against `model.*`
-- Registered in `src/lib/scene/registry.ts`; z-index set in `src/lib/scene/layers.ts`
+- Takes `model` (or a narrow prop slice) as its only input
+- Subscribes to the game-loop via `$effect(() => subscribe(...))`
+- Mounts/unmounts via an `{#if}` predicate on `model.*`
+
+Z-order is local to `Pane.svelte`, not a shared table.
 
 ### Geo-Positioned Effects (Cesium-Native)
 
@@ -239,24 +240,10 @@ $effect(() => {
 1. **Cesium isolation** — only `world/CesiumViewer.svelte` does runtime `import('cesium')`
 2. **Flat DTO boundary** — config DTOs are flat; extend additively, never nest or reshape
 3. **`untrack()` in hot paths** — every tick body wraps work in `untrack(() => ...)`
-4. **Deterministic 3-Pi panorama** — use `createSeededRng(daySeed())` from `world-three/prng.ts`, not `Math.random()`
+4. **Deterministic 3-Pi panorama** — use `createSeededRng(daySeed())` from `world/prng.ts`, not `Math.random()`
 5. **Sun-direction memo aliasing** — `computeSunDirection()` returns a shared mutated array; read-and-derive synchronously, never store the reference
-6. **Ship-vs-lab boundary** — `world-three/` changes are lab-only; `compose.ts`, `flight.svelte.ts`, `config-tree.svelte.ts` are shared (affect ship)
+6. **Shared blast radius** — `compose.ts`, `flight.svelte.ts`, `config-tree.svelte.ts` affect every surface; change them deliberately
 
-### CSS Z-Layer Order
-
-Single source of truth at `src/lib/scene/layers.ts`:
-```
-z:0   Cesium globe + atmospheric haze
-z:1   Clouds (CSS3D sprites)
-z:2   Rain + Lightning
-z:3   Micro-events
-z:5   Frost
-z:7   Wing silhouette
-z:9   Glass vignette
-z:10  Vignette
-z:11  Glass recess rim
-```
 
 ## Important Files
 
@@ -264,17 +251,14 @@ z:11  Glass recess rim
 |---|---|
 | `src/lib/model/aero-window.svelte.ts` | Root simulation state — `createAeroWindow()` / `useAeroWindow()` |
 | `src/lib/model/config-tree.svelte.ts` | All tunable config — the SSOT for every number |
-| `src/lib/model/config-namespaces.ts` | Namespace SSOT shared with server allowlist |
 | `src/lib/shell/Pane.svelte` | Layer compositor + RAF tick subscription |
 | `src/lib/game-loop.ts` | Single RAF loop — subscriber pattern, visibility-aware |
-| `src/lib/scene/registry.ts` | Static effect registry |
-| `src/lib/scene/layers.ts` | Z-order SSOT |
 | `src/lib/types.ts` | Core domain types — const-array-derived unions, SimulationContext |
 | `src/lib/utils.ts` | Shared utilities, `T` time-of-day constants (DAWN_START, DAY_START, etc.) |
 | `src/lib/world/compose.ts` | CesiumManager — imports cesium as type |
-| `src/lib/world-three/sky.ts` | `computeSunDirection` (memoised, alias contract), environment ambient |
-| `src/lib/world-three/prng.ts` | Seeded RNG for 3-Pi determinism |
-| `src/lib/world-lighting/curves.ts` | City light intensity curves |
+| `src/lib/world/sky.ts` | `computeSunDirection` (memoised, alias contract), sky palette |
+| `src/lib/world/prng.ts` | Seeded RNG for 3-Pi determinism |
+| `src/lib/world/curves.ts` | Time-of-day response curves — cross-renderer SSOT |
 | `src/lib/camera/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM |
 | `src/lib/director/autopilot.svelte.ts` | Weather randomiser + location cycler |
 | `src/lib/fleet/client.svelte.ts` | DeviceClient — SSE + REST fleet communication |
@@ -301,6 +285,66 @@ z:11  Glass recess rim
   - `AERO_WIFI_RESET_TOKEN` — bearer auth for WiFi reset (fail-closed)
   - `VITE_PUSH_WORKER_URL` — optional Cloudflare Worker for OTA push
 - **CSP**: Locked-down Content-Security-Policy with `unsafe-eval` (required by Cesium protobufjs), `blob:` workers, and connections to all major tile providers.
+
+## Multi-Pi parallax
+
+Three Pis side-by-side form one continuous panoramic window: same shared
+state (location / altitude / weather / time / flightMode), per-device camera yaw.
+
+Role assignment, in priority order:
+1. `?role=left|center|right|solo` URL parameter
+2. `localStorage['aero.device.role']` persisted from a prior URL param
+3. Default `'solo'` (zero offset — identical to single-Pi mode)
+
+| Role | Yaw offset | Frame | Autopilot | Receives `director_decision` |
+|---|---|---|---|---|
+| `solo` | 0° | on | yes | — |
+| `center` | 0° | off | yes (leader) | — |
+| `left` | −(arc/2 − arc/6)° | off | no (follower) | yes, applied at `transitionAtMs` |
+| `right` | +(arc/2 − arc/6)° | off | no (follower) | yes, applied at `transitionAtMs` |
+
+The leader emits `{v:2, type:'director_decision', locationId, transitionAtMs: now+2500}`;
+followers schedule it for that wall-clock instant. The 2.5 s window absorbs ~±200 ms NTP drift.
+
+## Tile caching (ADR-002)
+
+Every external tile source is cached locally at build time, with the remote
+origin as fallback, so a fielded device ships without an Ion token. Packaged
+via `tools/tile-packager/`: `eox-sentinel2` (z3-12), `cesium-terrain` (Ion
+quantized-mesh, token needed at BUILD time only), `terrarium` (AWS PNG
+heightmap fallback), `viirs-night-lights` (packaged, not currently wired),
+and per-location Overpass → GeoJSON buildings served at `/api/buildings/:city`.
+Budget: ~1.2 GB per Pi. See `docs/ADR-002-zero-cost-caching-strategy.md`.
+
+## Pi 5 deployment
+
+- **Deploy gate**: the fleet updater (`deploy/aero-updater.sh`, daily timer) tracks
+  the **`release`** branch, which CI fast-forwards only after check + tests + build
+  pass on `main`. A red commit never deploys. The updater rolls back (reset +
+  rebuild + restart) on install/build/post-restart-probe failure. `release` is
+  CI-owned — never push to it by hand.
+- **Version stamp**: `__APP_COMMIT__` (vite define) → `$lib/version` → `/api/status`
+  heartbeat → admin device cards. Never import `$lib/version` from `server.ts`
+  (not Vite-built).
+- **Liveness watchdog**: `src/lib/world/lifecycle-liveness.ts` — 30 s context-lost /
+  fps-stall check with bounded page reloads (3/hour sessionStorage budget shared by
+  ALL self-healing reload paths via `tryConsumeReloadBudget()`).
+- Hostname `aero-display-00.local`; systemd services `aero-xserver`, `aero-app`
+  (:5173), `aero-kiosk` (Chromium), auto-started on boot.
+- Chromium: `--kiosk --use-gl=angle --use-angle=gles --enable-webgl`; 2 GB disk
+  cache at `/home/pi/.cache/aero-tiles`. CMA 512 MB.
+
+## Repo hygiene scanners
+
+Heuristic dev utilities — verify hits before deleting:
+
+| Command | Finds |
+|---|---|
+| `node tools/reachability-scan.mjs` | modules unreachable from any entrypoint |
+| `node tools/config-key-scan.mjs` | config-tree keys nothing reads |
+| `node tools/doc-path-scan.mjs` | file paths in docs that no longer exist |
+| `node tools/orphan-scan.mjs` | modules no other file mentions by name |
+
 
 ## Testing & QA
 

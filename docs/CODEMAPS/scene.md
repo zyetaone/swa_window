@@ -1,99 +1,59 @@
 # Scene Composition Codemap
 
-**Last updated:** 2026-04-26 (phase 11 — atmosphere/ folded into scene/effects/)
+**Last updated:** 2026-08-02
 
-## Architecture
+> **The Effect registry / Compositor architecture this document used to
+> describe no longer exists.** `scene/registry.ts`, `scene/types.ts`,
+> `scene/layers.ts`, `scene/effects/*`, and `Compositor.svelte` were all
+> deleted. Read the history for that design; what follows is the live shape.
+
+## Live architecture
 
 ```
 +page.svelte
-└── Pane.svelte
-    ├── CesiumViewer.svelte           → publishes activeCesium.manager
-    ├── Compositor.svelte             → iterates EFFECTS + bundleStore.effects
-    │   └── for each Effect:
-    │       ├── if when(model) → mount component
-    │       └── pass { model, params } as props
-    └── window/Weather                  → backdrop CSS (rain, frost) — not a registered Effect
+└── Pane.svelte                      → layer order is local CSS, no Z table
+    ├── GlobeLayer.svelte
+    │   └── CesiumViewer.svelte      → publishes activeCesium.manager
+    ├── RainGlass.svelte             → CSS water beads, mounted only while raining
+    ├── Glass.svelte                 → vignette + recess rim
+    └── Blind.svelte                 → useBlind composable
 ```
 
-## Effect contract (`src/lib/scene/types.ts`)
+Effects are plain Svelte components composed directly in `Pane.svelte`.
+There is no registry, no `when` predicate contract, and no shared `Z`
+constant. Each component:
 
-```typescript
-export type LayerKind = 'geo' | 'atmo' | 'window' | 'frame';
+- owns its internal `$state` (timers, transient visuals),
+- subscribes to the game loop itself via `$effect(() => subscribe(...))`,
+- reads reactive model state through `useAeroWindow()` or a narrow prop,
+- mounts/unmounts through an `{#if}` in `Pane.svelte`.
 
-export interface Effect<TParams = undefined> {
-  id: string;
-  kind: LayerKind;
-  z: number;                              // imported from scene/layers.ts (Z SSOT)
-  when?: (model: AeroWindow) => boolean;
-  component: Component<EffectProps<TParams>>;
-  params?: TParams;
-}
-```
+Adding a DOM effect = add the component and one `{#if}` line. Adding a
+geo effect = add a manager class under `world/` (see AGENTS.md).
 
-Effects ARE Svelte components — not plugins. They:
-- Own internal `$state` (timers, transient visuals)
-- Subscribe to the game loop directly via `$effect(() => subscribe(...))` if they need a tick
-- Read reactive model state through the `model` prop (passed by Compositor)
-- Mount/unmount cleanly — Svelte tears down `$effect`-owned timers/cleanups on unmount
+## Content bundles
 
-## Static effects (`src/lib/scene/registry.ts`)
+`scene/bundle/` is now a **wire contract only** — the DOM compositor that
+mounted bundles is gone, so pushed bundles have no runtime mount point.
+What remains and is live:
 
-The registry is a 5-element `readonly Effect[]`:
+- `scene/bundle/types.ts` — `ContentBundle` shape + `isContentBundle` guard
+- `server/scene/bundle/disk.ts` — server-side persistence
+- `/api/content`, `/api/content/[id]`, `/api/assets` — CRUD over the above
 
-| Effect | Kind | Z | `when` predicate | Owns |
-|---|---|---|---|---|
-| `carLights` | geo  | `Z.geo` (=0) | `hasBuildings && nightFactor > 0.15` | Cesium point entities — procedural city lights |
-| `atmosphericHaze` | atmo | `Z.haze` (=0) | always | Horizon-band gradient that softens LOD seams |
-| `clouds` | atmo | `Z.clouds` (=1) | `model.config.world.showClouds` | ArtsyClouds (CSS3D sprites) |
-| `lightning` | atmo | `Z.lightning` (=2) | `WEATHER_EFFECTS[weather].hasLightning` | Strike timer + radial flash |
-| `microEvents` | atmo | `Z.microEvents` (=3) | always | Event scheduler — stars / birds / contrails |
-
-Adding a stock effect: drop a folder under `scene/effects/<name>/`, export a named `Effect` from `index.ts`, add one line to `registry.ts`. Z-index goes in `scene/layers.ts`.
-
-## Dynamic effects (bundles)
-
-Pushed via `POST /api/content`, hydrated on boot via `bundle/client.ts::hydrateFromServer()`.
-
-```
-ContentBundle JSON
-  → loader.createEffectFromBundle      (dispatch on bundle.type)
-  → Effect<Params>                     (with closures + component)
-  → bundleStore.install                (reactive add to $state)
-  → Compositor merges                  ([...EFFECTS, ...bundleStore.effects])
-  → mount                              (when predicate true)
-```
-
-Bundle types live alongside their `Effect` factory:
-
-- **video-bg** — `scene/effects/video-bg/{factory.ts, effect.svelte}`. Full-scene HTML5 video loop. Params inlined into `factory.ts` (no separate `types.ts` file as of phase 11).
-- **sprite** — `scene/effects/sprite/{factory.ts, effect.svelte}`. Cesium Billboard at lat/lon, optional altitude or clamp-to-ground.
-
-Adding a new bundle type:
-1. Extend the `BundleType` union in `scene/bundle/types.ts` — exhaustiveness check forces every consumer to handle the new variant.
-2. Create `scene/effects/<type>/{factory.ts, effect.svelte}`.
-3. Add `case '<type>': return create<Type>Effect(bundle) as Effect;` to `bundle/loader.ts`.
-
-## Z-layer SSOT (`src/lib/scene/layers.ts`)
-
-```typescript
-export const Z = {
-  cesium: 0, geo: 0, haze: 0, clouds: 1, rain: 2, lightning: 2,
-  microEvents: 3, frost: 5, wing: 7, glassVignette: 9, vignette: 10,
-  glassRecess: 11,
-} as const;
-```
-
-Every consumer imports from here: effect registry, `Pane.svelte`, `Weather.svelte`, every `scene/effects/*/index.ts`. Geo effects render inside Cesium so the `z` value is informational only.
+`scene/bundle/store.svelte.ts` and `scene/bundle/remote.ts` (Cloudflare
+push polling) are retained but currently unreachable from any entrypoint.
+Delete them, or re-wire a mount point, before claiming bundle support.
 
 ## Geo effect access pattern
 
-Geo-positioned effects (`kind: 'geo'`) render inside the Cesium canvas, not the DOM. They consume the live viewer through the reactive `activeCesium` holder:
+Cesium-side effects consume the live viewer through the reactive holder:
 
 ```typescript
 import { activeCesium } from '$lib/world/active.svelte';
 
 $effect(() => {
-  const mgr = activeCesium.manager;          // reactive — re-runs when Cesium becomes ready
+  const mgr = activeCesium.manager;          // reactive — re-runs when Cesium is ready
   if (!mgr) return;
   const Cesium = mgr.getCesium();
   const viewer = mgr.getViewer();
@@ -103,14 +63,14 @@ $effect(() => {
 });
 ```
 
-`CesiumViewer.svelte` sets `activeCesium.manager = mgr` after `mgr.start()` and clears it on destroy.
+`CesiumViewer.svelte` sets `activeCesium.manager` after `mgr.start()` and
+clears it on destroy.
 
 ## Why this shape
 
-- **Effects own their state.** Adding an effect does not grow `AeroWindow`, `config-tree`, or `autopilot`.
-- **Compositor is dumb.** It iterates and mounts. No business logic, no special cases.
-- **Static + dynamic merge.** `[...EFFECTS, ...bundleStore.effects]` — same code path for stock and pushed effects.
-- **Bundle JSON is dataset-shaped.** Humans author it, AI generates it, HTTP delivers it, disk caches it.
-- **Pi-friendly.** Geo effects ride Cesium's GPU primitives. DOM effects stay under a few dozen nodes.
-- **Z-order has one home.** `scene/layers.ts` is the single source — drift across registry / Window / Weather / individual effects is impossible by construction.
-- **All effects colocated.** Phase 11 collapsed `atmosphere/` into `scene/effects/`. The registry imports its effects through relative paths from `registry.ts:./effects/*`. Discoverability is local.
+- **Effects own their state.** Adding one does not grow `AeroWindow`,
+  `config-tree`, or `autopilot`.
+- **No indirection tax.** With effects countable on two hands, a registry
+  bought nothing that reading `Pane.svelte` top-to-bottom does not.
+- **Pi-friendly.** Geo effects ride Cesium GPU primitives; DOM effects
+  stay under a few dozen nodes and unmount when inactive.
