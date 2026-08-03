@@ -20,6 +20,10 @@ const _exaggeration = new EpsilonGate<number>(0.01, -1);
 export function initTerrain(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium;
 	_viewer = viewer;
+	// See buildings/atmosphere/imagery: the gate outlives the viewer, so a
+	// remount must force the next write through or exaggeration stays at the
+	// new viewer's default.
+	_exaggeration.reset();
 }
 
 export async function setupTerrain(): Promise<void> {

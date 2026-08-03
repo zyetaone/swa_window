@@ -36,6 +36,13 @@ const _nightFactor = new EpsilonGate<number>(0.02, -1);
 
 export function initBuildings(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
+	// Gates are module-level singletons but the VIEWER is not: on remount
+	// (auto-retry, HMR, page nav) the fresh viewer has Cesium defaults while
+	// the gates still hold the previous viewer's last-written values, so the
+	// first sync sees "unchanged" and skips applying them. Same fix as
+	// atmosphere/imagery.
+	_show.reset();
+	_nightFactor.reset();
 }
 
 const BUILDING_VERTEX_GLSL = `

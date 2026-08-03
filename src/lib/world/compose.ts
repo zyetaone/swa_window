@@ -13,7 +13,11 @@
 
 import type * as CesiumType from 'cesium';
 import type { LocationId, WeatherType, QualityMode } from '$lib/types';
-import { world } from '$lib/model/config-tree.svelte';
+// Type-only: `world` is a live $state rune object, and compose.ts is a plain
+// .ts module. A value import would put a runtime edge from the orchestrator to
+// the reactive config module for no reason — the only use is `typeof world`
+// below. `import type` erases entirely at build.
+import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';

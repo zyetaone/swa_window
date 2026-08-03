@@ -239,7 +239,15 @@ $effect(() => {
 
 1. **Cesium isolation** — only `world/CesiumViewer.svelte` does runtime `import('cesium')`
 2. **Flat DTO boundary** — config DTOs are flat; extend additively, never nest or reshape
-3. **`untrack()` in hot paths** — every tick body wraps work in `untrack(() => ...)`
+3. **`untrack()` in reactive hot paths** — a tick body must not create reactive
+   dependencies. This applies where the tick runs *inside* a reactive scope
+   (`$effect`, `$derived`, `$effect.pre`): wrap model reads in `untrack(() => ...)`,
+   as `flight.svelte.ts`, `motion.svelte.ts`, and `autopilot.svelte.ts` do.
+   It does **not** apply to Threlte `useTask` callbacks: those are invoked from
+   `renderer.setAnimationLoop`, outside any tracking scope, so reads there create
+   no dependency (`Clouds.svelte` relies on this). `Wing.svelte` still wraps its
+   reads — harmless, but not required. Do not "fix" `useTask` bodies by adding
+   `untrack`; verify the call site's scope first.
 4. **Deterministic 3-Pi panorama** — use `createSeededRng(daySeed())` from `world/prng.ts`, not `Math.random()`
 5. **Sun-direction memo aliasing** — `computeSunDirection()` returns a shared mutated array; read-and-derive synchronously, never store the reference
 6. **Shared blast radius** — `compose.ts`, `flight.svelte.ts`, `config-tree.svelte.ts` affect every surface; change them deliberately
