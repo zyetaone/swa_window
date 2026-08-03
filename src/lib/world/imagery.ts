@@ -46,6 +46,14 @@ const _roadAlpha = new EpsilonGate<number>(0.001, -1);
 const _roadBrightness = new EpsilonGate<number>(0.01, -1);
 export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
+	// Drop layer handles from the PREVIOUS viewer. They belong to a viewer
+	// that is being (or has been) destroyed; keeping them means setupImagery
+	// skips re-adding — `if (_baseLayer)` is truthy — and every later sync
+	// writes into layers that are no longer in any scene. Nothing throws, the
+	// globe just renders bare.
+	_baseLayer = null;
+	_viirsLayer = null;
+	_roadMaskLayer = null;
 	_viirsShow.reset();
 	_viirsAlpha.reset();
 	_viirsBrightness.reset();

@@ -36,6 +36,11 @@ const _nightFactor = new EpsilonGate<number>(0.02, -1);
 
 export function initBuildings(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
+	// Same reason as imagery: the tileset + custom shader belong to the
+	// previous viewer's scene. Holding them past a remount makes syncBuildings
+	// push uniforms into a primitive no longer attached to anything.
+	tileset = null;
+	_shader = null;
 	// Gates are module-level singletons but the VIEWER is not: on remount
 	// (auto-retry, HMR, page nav) the fresh viewer has Cesium defaults while
 	// the gates still hold the previous viewer's last-written values, so the

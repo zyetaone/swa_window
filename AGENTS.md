@@ -171,6 +171,12 @@ Rules:
 - **`sync*` is sync, idempotent, and takes a flat readonly slice** (`ImageryTickInput`
   is the reference shape). No DI, no side effects beyond Cesium mutations.
 - **State stays module-private in the subsystem, not on the orchestrator.**
+- **`init*` must reset every piece of viewer-scoped module state.** The module
+  is a process singleton; the viewer is not. On remount (auto-retry, HMR, page
+  nav) any retained `EpsilonGate` value makes the first write look redundant and
+  get skipped, and any retained Cesium handle (layer, tileset, shader) points at
+  a destroyed scene, so later syncs write into nothing. Neither case throws —
+  the globe simply renders wrong. Null the handles and `.reset()` the gates.
 - **`getViewer()` / `getCesium()` are escape hatches.** Kiosk paths should use typed
   APIs (`getCameraRead()`). `NightVariantPanel` is the deliberate exception: it
   mutates raw Cesium for live experimentation.
