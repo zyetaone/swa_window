@@ -123,6 +123,53 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		applyConfigPatch('camera.parallax.role', orig);
 	});
 
+	// The role is not a plain leaf: headingOffsetDeg (panorama yaw) and
+	// fuselageOffsetM (seat position) DERIVE from it. A patch that set the
+	// role but left the previous role's offsets in place would misalign the
+	// 3-Pi seam with nothing logged, so the derivation lives inside
+	// applyConfigPatch rather than in each caller.
+	it('derives parallax offsets when the role is patched directly', () => {
+		const orig = camera.parallax.role;
+
+		applyConfigPatch('camera.parallax.role', 'solo');
+		expect(camera.parallax.headingOffsetDeg).toBe(0);
+		expect(camera.parallax.fuselageOffsetM).toBe(0);
+
+		applyConfigPatch('camera.parallax.role', 'left');
+		const leftHeading = camera.parallax.headingOffsetDeg;
+		const leftFuselage = camera.parallax.fuselageOffsetM;
+		expect(leftHeading).toBeLessThan(0);
+
+		applyConfigPatch('camera.parallax.role', 'right');
+		expect(camera.parallax.headingOffsetDeg).toBe(-leftHeading);
+		expect(camera.parallax.fuselageOffsetM).toBe(-leftFuselage);
+
+		// Back to solo — offsets must return to zero, not stay at 'right'.
+		applyConfigPatch('camera.parallax.role', 'solo');
+		expect(camera.parallax.headingOffsetDeg).toBe(0);
+		expect(camera.parallax.fuselageOffsetM).toBe(0);
+
+		applyConfigPatch('camera.parallax.role', orig);
+	});
+
+	it('derives parallax offsets on a winning remote (CRDT) role patch', () => {
+		const orig = camera.parallax.role;
+		applyConfigPatch('camera.parallax.role', 'solo');
+
+		// +1000 ms: the local 'solo' write above stamped Date.now(), and an
+		// equal timestamp falls to the lexicographic sourceId tiebreak. A real
+		// remote assignment arrives later than the local state it replaces.
+		const ok = applyConfigPatch('camera.parallax.role', 'right', {
+			timestamp: Date.now() + 1000,
+			sourceId: 'admin-test',
+		});
+		expect(ok).toBe(true);
+		expect(camera.parallax.role).toBe('right');
+		expect(camera.parallax.headingOffsetDeg).toBeGreaterThan(0);
+
+		applyConfigPatch('camera.parallax.role', orig);
+	});
+
 	it('rejects a path outside the five known layers without mutating state', () => {
 		const before = configSnapshot();
 		const ok = applyConfigPatch('wrongroot.something', 1);

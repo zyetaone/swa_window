@@ -45,6 +45,24 @@ LEGACY_DIR="/home/${PI_USER}/aero-window"
 # updater's git-only rollback cannot undo it — that stays a human, on-console act).
 UNITS_ONLY=false
 
+# One-time backup of a boot-partition file before this script first edits it.
+# The header above notes that a bad boot-partition edit is an unbootable Pi and
+# the updater's git-only rollback cannot undo it — so leave the operator a copy
+# they can restore from a rescue boot or by pulling the SD card.
+#
+# `.aero-orig` (not a timestamped name) on purpose: this must capture the
+# PRE-AERO state exactly once. Re-provisioning a device that already has our
+# tokens applied would otherwise overwrite the pristine copy with a modified
+# one, which is the moment the backup stops being worth anything.
+backup_boot_file() {
+	local f="$1"
+	[[ -f "${f}" ]] || return 0
+	[[ -e "${f}.aero-orig" ]] && return 0
+	cp -p "${f}" "${f}.aero-orig" 2>/dev/null \
+		&& echo "      + backed up $(basename "${f}") → $(basename "${f}").aero-orig" \
+		|| echo "      ! could not back up ${f} (continuing)"
+}
+
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--role)   AERO_ROLE="$2"; shift 2 ;;
@@ -293,6 +311,7 @@ if [[ -d "${SCRIPT_DIR}/branding" && "${UNITS_ONLY}" == false ]]; then
 	plymouth-set-default-theme aero >/dev/null 2>&1 || true
 
 	# Firmware rainbow splash off. Idempotent: only appended once.
+	backup_boot_file /boot/firmware/config.txt
 	if ! command grep -q "^disable_splash=1" /boot/firmware/config.txt 2>/dev/null; then
 		printf '\n# Boot branding — suppress the firmware rainbow.\ndisable_splash=1\n' \
 			>> /boot/firmware/config.txt
@@ -302,6 +321,7 @@ if [[ -d "${SCRIPT_DIR}/branding" && "${UNITS_ONLY}" == false ]]; then
 	# cmdline.txt MUST stay a single line — a stray newline makes everything
 	# after it invisible to the kernel. So: slurp, dedupe, rewrite whole.
 	if [[ -w /boot/firmware/cmdline.txt ]]; then
+		backup_boot_file /boot/firmware/cmdline.txt
 		CMDLINE="$(tr -d '\n' < /boot/firmware/cmdline.txt)"
 		for tok in logo.nologo quiet loglevel=3 vt.global_cursor_default=0 splash plymouth.ignore-serial-consoles; do
 			case " ${CMDLINE} " in
@@ -329,6 +349,7 @@ EOF
 
 # Screen blanking off for the kiosk session (idempotent grep-guard).
 if ! grep -q "consoleblank=0" /boot/firmware/cmdline.txt 2>/dev/null; then
+	backup_boot_file /boot/firmware/cmdline.txt
 	sed -i 's/$/ consoleblank=0/' /boot/firmware/cmdline.txt || true
 fi
 

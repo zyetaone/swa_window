@@ -11,6 +11,7 @@ import {
 	startLivenessWatchdog,
 	tryConsumeReloadBudget,
 	reloadBudgetAvailable,
+	registerLivenessCanvas,
 } from '$lib/world/lifecycle-liveness';
 
 beforeEach(() => {
@@ -86,5 +87,34 @@ describe('liveness watchdog', () => {
 		expect(reload).not.toHaveBeenCalled();
 		expect(events.some((e) => (e as { reloadBudgetExhausted?: boolean }).reloadBudgetExhausted)).toBe(true);
 		stop();
+	});
+	// Regression: a canvas left registered after its owner unmounts keeps
+	// reporting a LOST context forever, so the watchdog sees "dead" on every
+	// check and burns the hourly reload budget trying to recover a canvas that
+	// no longer exists. ThreeOverlay used to discard this unregister handle.
+	it('unregistering a canvas stops its dead context from forcing reloads', () => {
+		// A canvas whose WebGL context is permanently lost — i.e. an orphan
+		// left behind by a remount.
+		const orphan = {
+			getContext: () => ({ isContextLost: () => true }),
+		} as unknown as HTMLCanvasElement;
+
+		const unregister = registerLivenessCanvas(orphan);
+
+		// While registered, healthy fps is not enough: the lost context alone
+		// marks the app dead, so the watchdog reloads.
+		const a = run({ fps: [60, 60, 60] });
+		vi.advanceTimersByTime(2000);
+		expect(a.reload).toHaveBeenCalled();
+		a.stop();
+
+		// After the owner unmounts and unregisters, the same healthy fps is
+		// correctly read as alive.
+		unregister();
+		sessionStorage.clear();
+		const b = run({ fps: [60, 60, 60] });
+		vi.advanceTimersByTime(3000);
+		expect(b.reload).not.toHaveBeenCalled();
+		b.stop();
 	});
 });

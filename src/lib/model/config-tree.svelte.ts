@@ -168,8 +168,7 @@ function fuselageOffsetForRole(role: DeviceRole): number {
 }
 export function setParallaxRole(role: DeviceRole): void {
 	camera.parallax.role = role;
-	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);
-	camera.parallax.fuselageOffsetM = fuselageOffsetForRole(role);
+	applyRoleDerived(role);
 }
 
 
@@ -335,7 +334,14 @@ export function applyConfigPatch(
 	value: unknown,
 	remote?: { timestamp: number; sourceId: string },
 ): boolean {
-	if (remote) return crdt.merge({ path, value, ...remote });
+	if (remote) {
+		const merged = crdt.merge({ path, value, ...remote });
+		// A remote role assignment must derive its offsets too — see the note
+		// on the local path below. Only when the merge actually won (an older
+		// timestamp is rejected, and must not move the offsets).
+		if (merged && path === 'camera.parallax.role') applyRoleDerived(value as DeviceRole);
+		return merged;
+	}
 
 	const idx = path.indexOf('.');
 	if (idx < 0) return false;
@@ -366,7 +372,22 @@ export function applyConfigPatch(
 	// so a failed write left a stale CRDT timestamp with no config change.
 	if (!setByPath(rootRec, rest, value)) return false;
 	crdt.set(path, value);
+
+	// `camera.parallax.role` is not a leaf value — it DERIVES headingOffsetDeg
+	// and fuselageOffsetM. A bare patch would set the role while leaving the
+	// old role's yaw/seat offsets in place, which silently breaks the 3-Pi
+	// panorama alignment (the seam moves, nothing errors). Callers used to be
+	// responsible for pairing applyConfigPatch with setParallaxRole; doing it
+	// here means the remote/CRDT path gets it too, and there is one way to be
+	// right instead of a convention to remember.
+	if (ns === 'camera' && rest === 'parallax.role') applyRoleDerived(value as DeviceRole);
 	return true;
+}
+
+/** Recompute the values that DERIVE from the panorama role. */
+function applyRoleDerived(role: DeviceRole): void {
+	camera.parallax.headingOffsetDeg = headingOffsetForRole(role, camera.parallax.panoramaArcDeg);
+	camera.parallax.fuselageOffsetM = fuselageOffsetForRole(role);
 }
 
 /** Export device ID for use in fleet message sourceId field. */

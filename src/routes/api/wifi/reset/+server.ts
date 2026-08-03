@@ -39,9 +39,13 @@ function scheduleReset(): void {
 	}
 	setTimeout(() => {
 		// Delete every saved 802-11-wireless connection.
+		// `sudo -n` (non-interactive), matching /api/update: stdio is 'ignore'
+		// and the child is detached, so an interactive password prompt has no
+		// TTY to read from and would hang the purge forever with the operator
+		// seeing nothing. -n fails fast and loudly instead.
 		const purge = spawn(
 			'sh',
-			['-c', `for c in $(nmcli -t -f NAME,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}'); do sudo nmcli c delete "$c" || true; done && sudo /sbin/reboot`],
+			['-c', `for c in $(nmcli -t -f NAME,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}'); do sudo -n nmcli c delete "$c" || true; done && sudo -n /sbin/reboot`],
 			{ detached: true, stdio: 'ignore' },
 		);
 		purge.unref();

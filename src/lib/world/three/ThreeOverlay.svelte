@@ -23,6 +23,21 @@
 	// $state.raw — Three.js camera mutated each frame, must not be proxied.
 	let camera: PerspectiveCamera | undefined = $state.raw();
 
+	// Teardown handles for the GL canvas we hand to the liveness watchdog.
+	// Without these, a remount (svelte:boundary reset, HMR, auto-retry) leaves
+	// the OLD canvas in the watchdog's Set. That canvas's context is lost by
+	// definition, so `anyContextLost()` stays true forever and the watchdog
+	// burns the hourly reload budget trying to recover a canvas that is gone.
+	let unregisterCanvas: (() => void) | null = null;
+	let removeContextLost: (() => void) | null = null;
+
+	$effect(() => () => {
+		removeContextLost?.();
+		unregisterCanvas?.();
+		removeContextLost = null;
+		unregisterCanvas = null;
+	});
+
 	const _ambientTintScratch = new Color();
 	const ambientTint = $derived.by(() => {
 		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
@@ -41,11 +56,17 @@
 <div class="three-overlay" aria-hidden="true">
 	<Canvas
 		createRenderer={(canvas) => {
-			registerLivenessCanvas(canvas as HTMLCanvasElement);
-			canvas.addEventListener('webglcontextlost', (e: Event) => {
+			// Drop any handles from a previous renderer before replacing them,
+			// so a re-created renderer can't orphan the earlier registration.
+			removeContextLost?.();
+			unregisterCanvas?.();
+			unregisterCanvas = registerLivenessCanvas(canvas as HTMLCanvasElement);
+			const onLost = (e: Event) => {
 				e.preventDefault();
 				model.telemetry.recordEvent('error', { where: 'three-overlay', event: 'webglcontextlost' });
-			});
+			};
+			canvas.addEventListener('webglcontextlost', onLost);
+			removeContextLost = () => canvas.removeEventListener('webglcontextlost', onLost);
 			return new WebGLRenderer({
 				canvas,
 				antialias: true,
