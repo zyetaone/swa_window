@@ -13,7 +13,10 @@
  *   ./data/assets/                   (dev default)
  *
  * Mime sniffing is by extension only — we trust the uploader on a LAN device.
- * Auth is left to a later phase before any product ships.
+ * Auth: the ROUTES that call this are bearer-gated (POST /api/assets uses
+ * requireAdminToken). This module is deliberately unauthenticated itself —
+ * it is server-internal and must not grow its own gate, or the check ends up
+ * in two places that can disagree.
  */
 
 import { readdir, readFile, writeFile, mkdir, stat } from 'node:fs/promises';

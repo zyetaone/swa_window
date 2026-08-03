@@ -1,5 +1,5 @@
 /**
- * LAN-scoped CORS helper.
+ * mDNS-scoped CORS helper.
  *
  * Policy: allow cross-origin requests only from origins that match the
  * LAN-local pattern (*.local optionally with a port, or localhost). This
@@ -7,6 +7,14 @@
  *   - Admin dashboards on a laptop (http://admin-laptop.local:5173)
  *   - Pi-to-Pi bundle proxying (http://aero-display-01.local)
  *   - Dev machines (http://localhost:5173)
+ *
+ * NOT covered, deliberately: numeric RFC1918 origins such as
+ * http://192.168.1.42:5173. An operator who reaches /admin by IP instead of
+ * by hostname gets no CORS reflection, and every cross-device push from that
+ * tab is blocked by the browser. If that becomes a real deployment path,
+ * widen this regex CONSCIOUSLY — do not treat the gap as a bug to patch in
+ * passing. The bearer token is the actual authorization boundary; this
+ * allowlist is defence in depth, and widening it costs some of that.
  *
  * Requests with NO Origin header (same-origin fetches, curl, Pi health-check
  * shell scripts) are not cross-origin at all — no CORS header is needed and

@@ -22,7 +22,8 @@ import type { RequestHandler } from './$types';
 import { lanCorsHeaders } from '$lib/http/cors';
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 
 function bundleCacheDir(): string {
 	return process.env.AERO_LAN_CACHE_DIR ?? './data/lan-cache';
@@ -32,6 +33,17 @@ function readLocal(hash: string): Promise<Uint8Array | null> {
 	if (!/^[a-f0-9]{16,128}$/i.test(hash)) return Promise.resolve(null);
 	const path = join(bundleCacheDir(), hash.slice(0, 2), `${hash}.bin`);
 	if (!existsSync(path)) return Promise.resolve(null);
+	// Symlink-escape guard, mirroring the tiles route. The hash pattern already
+	// blocks traversal in the URL, but the cache directory is written by peer
+	// sync, so a planted symlink could still point outside it. Compare REAL
+	// paths, not the joined string.
+	try {
+		const root = realpathSync(resolve(bundleCacheDir()));
+		const real = realpathSync(path);
+		if (real !== root && !real.startsWith(root + '/')) return Promise.resolve(null);
+	} catch {
+		return Promise.resolve(null);
+	}
 	return readFile(path).then((b) => new Uint8Array(b)).catch(() => null);
 }
 

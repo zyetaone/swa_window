@@ -26,7 +26,13 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	let token: string | undefined;
 
 	if (type === 'cesium') {
-		token = process.env.CESIUM_ION_TOKEN || import.meta.env.VITE_CESIUM_ION_TOKEN;
+		// Runtime env ONLY. Reading import.meta.env.VITE_CESIUM_ION_TOKEN here
+		// would inline the build machine's token into the SERVER bundle, which
+		// is exactly what this endpoint exists to avoid (see the note above).
+		// It was also redundant: resolveIonToken() in world/cesium-setup.ts
+		// already falls back to the build-time token client-side when this
+		// endpoint returns nothing, so a dev build keeps working.
+		token = process.env.CESIUM_ION_TOKEN;
 		if (!token) throw error(503, 'CESIUM_ION_TOKEN not set');
 	} else if (type === 'admin') {
 		token = process.env.AERO_ADMIN_TOKEN;
