@@ -115,6 +115,43 @@ export const STATUS_INTERVAL_MS = 5000;
 export const PEER_REFRESH_INTERVAL_MS = 30_000;
 export const ONLINE_THRESHOLD_MS = 3 * 60_000;
 
+/**
+ * How far ahead the leader schedules a synchronised transition. The window
+ * absorbs ~±200 ms of NTP drift across the panorama. SSOT for both the sender
+ * (AeroWindow's director broadcast) and the receiver's sanity bound below.
+ */
+export const TRANSITION_DELAY_MS = 2500;
+
+/**
+ * Upper bound on how far in the future a peer may schedule us. Generous
+ * relative to TRANSITION_DELAY_MS so ordinary clock skew still lands, but
+ * bounded.
+ */
+export const MAX_TRANSITION_LEAD_MS = 60_000;
+
+/**
+ * Convert a peer's absolute `transitionAtMs` into a setTimeout delay that is
+ * always sane.
+ *
+ * Two failure modes this exists to prevent, both from a peer whose clock is
+ * wrong (dead RTC, pre-NTP boot) rather than from malice:
+ *
+ *  - FAR FUTURE: a delay above 2^31-1 ms overflows setTimeout's 32-bit field
+ *    and the callback fires IMMEDIATELY — the opposite of the intent, and it
+ *    desynchronises the panorama at the exact moment the schedule exists to
+ *    keep it together. Anything merely large (an hour, a day) would instead
+ *    freeze that Pi's scene until the timer eventually resolved.
+ *  - PAST: already-late decisions should apply now, not schedule negatively.
+ *
+ * Returns a delay in [0, MAX_TRANSITION_LEAD_MS].
+ */
+export function transitionDelayMs(transitionAtMs: number, now: number = Date.now()): number {
+	if (!Number.isFinite(transitionAtMs)) return 0;
+	const delay = transitionAtMs - now;
+	if (delay <= 0) return 0;
+	return Math.min(delay, MAX_TRANSITION_LEAD_MS);
+}
+
 // ─── Peer URL helper ───────────────────────────────────────────────────────
 
 export interface PeerLike { host: string; port: number; self?: boolean; }

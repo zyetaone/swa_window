@@ -24,10 +24,12 @@ import {
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
+import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
 
 
 function effectiveCloudDensity(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
-const TRANSITION_DELAY_MS = 2500;
+// Re-exported from the fleet protocol so sender + receiver share one number:
+// the receiver bounds incoming schedules against it (transitionDelayMs).
 
 // ─── User override state ──────────────────────────────────────────────────────
 
@@ -275,7 +277,10 @@ export class AeroWindow {
 	 *  transitionAtMs → all Pis lock-step. Cancels any beat already pending. */
 	scheduleFlyover(beat: VantageBeat, transitionAtMs: number): void {
 		this.exitFlyover();   // cancel any in-flight beat + its timers first
-		const enterDelay = Math.max(0, transitionAtMs - Date.now());
+		// Clamped for the same reason as director_decision: a peer with a bad
+		// clock must not freeze the beat for hours or overflow setTimeout into
+		// firing instantly. transitionDelayMs is the shared bound.
+		const enterDelay = transitionDelayMs(transitionAtMs);
 		const enterId = setTimeout(() => {
 			this.#flyoverTimers.delete(enterId);
 			this.enterFlyover(beat.pitchDeg, beat.altitudeFt);

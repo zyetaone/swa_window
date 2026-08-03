@@ -22,7 +22,7 @@ import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType, type QualityMode } from '$lib/types';
 import { setParallaxRole, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
-import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/protocol';
+import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS, transitionDelayMs } from '$lib/fleet/protocol';
 import { peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { resolveDeviceId } from '$lib/fleet/device-id';
@@ -298,9 +298,14 @@ export class DeviceClient {
 				const loc = msg.locationId;
 				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
 				const transitionAtMs = typeof msg.transitionAtMs === 'number' ? msg.transitionAtMs : Date.now();
-				const delay = transitionAtMs - Date.now();
-				if (delay < -50) {
-					console.warn(`[fleet] director_decision arrived ${-delay}ms late; applying immediately`);
+				const rawLead = transitionAtMs - Date.now();
+				// Clamped: a peer with a wrong clock could otherwise schedule us
+				// hours out (scene frozen) or past setTimeout's 32-bit ceiling
+				// (fires immediately, desyncing the very panorama the schedule
+				// protects). See transitionDelayMs.
+				const delay = transitionDelayMs(transitionAtMs);
+				if (rawLead < -50) {
+					console.warn(`[fleet] director_decision arrived ${-rawLead}ms late; applying immediately`);
 					this.#model.applyScene(loc, weather);
 				} else {
 					// Track the handle so disconnect() can cancel pending
@@ -309,7 +314,7 @@ export class DeviceClient {
 						this.#pendingTransitions.delete(id);
 						if (this.#destroyed) return;
 						this.#model.applyScene(loc, weather);
-					}, Math.max(0, delay));
+					}, delay);
 					this.#pendingTransitions.add(id);
 				}
 				break;
