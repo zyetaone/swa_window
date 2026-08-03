@@ -240,7 +240,14 @@ export class FlightSimEngine {
 		this.warpFactor = t * t * (3 - 2 * t);
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
-		if (this.#cruiseElapsed > cruiseCfg.transitDurationSec) {
+		// Exit on the DEPARTURE knob, which is the one the ramp above is scaled
+		// to. This used to read transitDurationSec: identical today (both 2.0s)
+		// so the bug is invisible, but raising departureDurationSec alone would
+		// cut the smoothstep off mid-ramp — at departure=4s the phase ends with
+		// warpFactor ≈ 0.5 and #tickTransit's decay starts from there, so the
+		// warp visibly snaps instead of easing. A duration knob must gate its
+		// own phase.
+		if (this.#cruiseElapsed > warpDuration) {
 			patch.blindOpen = false;
 			this.flightMode = 'cruise_transit';
 			this.#cruiseElapsed = 0;
