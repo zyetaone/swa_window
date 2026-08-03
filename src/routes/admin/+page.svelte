@@ -4,6 +4,8 @@
 	import { config } from '$lib/model/config-tree.svelte';
 	import { formatTime, formatUptime } from '$lib/utils';
 	import { peerAuthHeader } from '$lib/http/peer-token';
+	import { urlFor } from '$lib/fleet/protocol';
+	import { fanOut } from '$lib/fleet/fan-out';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
@@ -73,30 +75,27 @@
 		updating = true;
 		updateResult = null;
 		try {
-			const results = await Promise.all(
-				targets.map(async id => {
-					const peer = store.peers.find(p => p.deviceId === id);
-					if (!peer) return { id, ok: false, detail: 'peer not found' };
-					try {
-						const base = `http://${peer.host}:${peer.port}`;
-						// /api/command is bearer-gated like every mutating route;
-						// without this header the push is a guaranteed 401/503.
-						const authHeader = await peerAuthHeader();
-						const res = await fetch(`${base}/api/command`, {
-							method: 'POST',
-							headers: { 'Content-Type': 'application/json', ...authHeader },
-							body: JSON.stringify({ type: 'update' }),
-						});
-						return { id, ok: res.ok, detail: res.ok ? '' : `HTTP ${res.status}` };
-					} catch (e) {
-						return { id, ok: false, detail: String(e) };
-					}
-				}),
-			);
-			updateResult = {
-				ok: results.filter(r => r.ok).length,
-				failed: results.filter(r => !r.ok).map(r => `${r.id.slice(0, 8)}: ${r.detail ?? 'failed'}`),
-			};
+			updateResult = await fanOut(targets, async (id) => {
+				const peer = store.peers.find((p) => p.deviceId === id);
+				if (!peer) throw new Error('peer not found');
+				// urlFor is the SSOT for peer URLs. Hand-building the string here
+				// diverged twice: it hardcoded `http:` (a browser on an HTTPS admin
+				// page blocks that as mixed content) and ignored the `self` case,
+				// where urlFor returns window.location.origin so the dashboard can
+				// update the Pi it is served from.
+				//
+				// /api/command is bearer-gated like every mutating route; without
+				// the auth header the push is a guaranteed 401/503.
+				const authHeader = await peerAuthHeader();
+				const res = await fetch(`${urlFor(peer)}/api/command`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', ...authHeader },
+					body: JSON.stringify({ type: 'update' }),
+				});
+				// fanOut treats a throw as failure, so a non-2xx must throw rather
+				// than resolve — otherwise an unreachable Pi reports as updated.
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			});
 		} finally {
 			updating = false;
 		}
@@ -114,11 +113,8 @@
 				await store.broadcastScene(scene.location, scene.weather);
 				pushResult = { ok: targets.length, failed: [] };
 			} else {
-				const results = await Promise.all(targets.map(async id => {
-					try { await store.pushScene(id, scene.location, scene.weather); return { ok: true }; }
-					catch (e) { return { ok: false, detail: String(e) }; }
-				}));
-				pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+				pushResult = await fanOut(targets, (id) =>
+					store.pushScene(id, scene.location, scene.weather));
 			}
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
@@ -133,11 +129,7 @@
 		}
 		pushResult = null;
 		try {
-			const results = await Promise.all(targets.map(async id => {
-				try { await store.pushMode(id, pushMode, payload); return { ok: true }; }
-				catch (e) { return { ok: false, detail: String(e) }; }
-			}));
-			pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+			pushResult = await fanOut(targets, (id) => store.pushMode(id, pushMode, payload));
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
@@ -153,11 +145,7 @@
 		};
 		pushResult = null;
 		try {
-			const results = await Promise.all(targets.map(async id => {
-				try { await store.pushSceneFull(id, patch); return { ok: true }; }
-				catch (e) { return { ok: false, detail: String(e) }; }
-			}));
-			pushResult = { ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).map((r, i) => `${targets[i].slice(0, 8)}: ${(r as any).detail}`) };
+			pushResult = await fanOut(targets, (id) => store.pushSceneFull(id, patch));
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
