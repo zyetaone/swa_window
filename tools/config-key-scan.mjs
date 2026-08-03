@@ -9,10 +9,23 @@ const sources = tracked.filter((f) => /\.(ts|svelte|js|mjs)$/.test(f) && f !== C
 const corpus = sources.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 
 const keys = new Set();
-for (const line of fs.readFileSync(CONFIG, 'utf8').split('\n')) {
+const configText = fs.readFileSync(CONFIG, 'utf8');
+for (const line of configText.split('\n')) {
 	const m = /^\s+([a-zA-Z][a-zA-Z0-9_]*):\s*[^{]/.exec(line);
 	if (m) keys.add(m[1]);
 }
+
+// A key can legitimately be consumed inside config-tree itself (e.g.
+// `panoramaArcDeg` feeds headingOffsetForRole). Excluding the defining file
+// wholesale reported those as unused forever, which trains readers to ignore
+// this tool. So: strip the DECLARATION lines, then look for any remaining
+// mention in the same file.
+const configWithoutDecls = configText
+	.split('\n')
+	.filter((l) => !/^\s+[a-zA-Z][a-zA-Z0-9_]*:\s*[^{]/.test(l))
+	.join('\n');
+
 for (const k of [...keys].sort()) {
-	if (!corpus.includes(k)) console.log('UNUSED config key:', k);
+	if (corpus.includes(k) || configWithoutDecls.includes(k)) continue;
+	console.log('UNUSED config key:', k);
 }
