@@ -558,7 +558,7 @@
 	$effect(() => () => clearClusters());
 </script>
 
-{#if anchorMatrix}
+{#if anchorMatrix && model.config.world.showClouds}
 	<T.Group bind:ref={anchorGroup}>
 		<T is={driftGroup} />
 	</T.Group>

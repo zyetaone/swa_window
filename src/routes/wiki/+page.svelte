@@ -622,7 +622,7 @@
 				<span class="audio-target">$effect → POST config to every peer</span>
 			</div>
 			<div class="audio-pair">
-				<span class="audio-source">heartbeat.server.ts</span>
+				<span class="audio-source">server/fleet/heartbeat.ts</span>
 				<span class="audio-arrow">→</span>
 				<span class="audio-target">60s ring buffer per device</span>
 			</div>
@@ -632,12 +632,12 @@
 				<span class="audio-target">URL / fingerprint / self role binding</span>
 			</div>
 			<div class="audio-pair">
-				<span class="audio-source">sse-bus.server.ts</span>
+				<span class="audio-source">server/fleet/sse-bus.ts</span>
 				<span class="audio-arrow">→</span>
 				<span class="audio-target">in-process pub/sub</span>
 			</div>
 			<div class="audio-pair">
-				<span class="audio-source">lan-peers.server.ts</span>
+				<span class="audio-source">server/fleet/lan-peers.ts</span>
 				<span class="audio-arrow">→</span>
 				<span class="audio-target">mDNS announcement</span>
 			</div>
