@@ -19,6 +19,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 // below. `import type` erases entirely at build.
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
+import { SEAT_LOOK_DEG } from '$lib/camera/screen-conventions';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
@@ -270,12 +271,15 @@ export class CesiumManager {
 		const flyover = this.#model.config.camera.flyoverPitchDeg ?? 0;
 		const pitchDeg = flyover !== 0
 			? flyover - bankPitchCouple * this.#model.motion.bankAngle
+			// camPitch is measured from straight-down; Cesium's is from the
+			// horizon. The -90 is that frame conversion — NOT the seat-look yaw
+			// below, which is a different 90 with a different meaning.
 			: (f.camPitch - 90) - bankPitchCouple * this.#model.motion.bankAngle;
 
 		this.#viewer.camera.setView({
 			destination: this.#scratchDest,
 			orientation: {
-				heading: C.Math.toRadians((parallaxHeading + 90) % 360),
+				heading: C.Math.toRadians((parallaxHeading + SEAT_LOOK_DEG) % 360),
 				pitch: C.Math.toRadians(pitchDeg),
 				roll: C.Math.toRadians(-this.#model.motion.bankAngle),
 			},

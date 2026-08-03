@@ -38,6 +38,20 @@
 /** Baked after the one-time lab calibration. ±1. */
 export const DEFAULT_SCREEN_DRIFT_SIGN = 1;
 
+/**
+ * Degrees the camera looks off the aircraft's nose heading to face out the
+ * SIDE window. 90° = straight out the side, which is the whole premise of the
+ * product (a window seat, not a cockpit).
+ *
+ * Named here rather than left as a bare `+ 90` in compose.ts because that file
+ * also contains a `- 90` that means something entirely different (Cesium pitch
+ * is measured from the horizon, ours from straight down). Two unrelated 90s in
+ * one function is exactly how a frame-convention bug gets introduced by someone
+ * "cleaning up" the wrong one. `flight.svelte.ts:noseHeadingDeg` already refers
+ * to this constant by name in prose.
+ */
+export const SEAT_LOOK_DEG = 90;
+
 // Runtime value — equals the default in production; the lab toggle mutates it
 // during calibration only.
 let _screenDriftSign = DEFAULT_SCREEN_DRIFT_SIGN;

@@ -151,7 +151,13 @@ export const camera = $state(_camera);
 
 export type CameraConfig = typeof _camera;
 
-function headingOffsetForRole(role: DeviceRole, panoramaArcDeg = 44): number {
+// `panoramaArcDeg` is REQUIRED, not defaulted. It used to default to 44,
+// duplicating the config literal above: if an installation ever retunes
+// `camera.parallax.panoramaArcDeg`, a defaulted call site would keep computing
+// yaw from the stale 44 and the 3-Pi seam would drift with nothing to point
+// at. The sole caller already passes the live config value; making the
+// parameter mandatory means a future caller cannot silently pick the old one.
+function headingOffsetForRole(role: DeviceRole, panoramaArcDeg: number): number {
 	switch (role) {
 		case 'left':  return -panoramaArcDeg / 2 + panoramaArcDeg / 6;
 		case 'right': return  panoramaArcDeg / 2 - panoramaArcDeg / 6;
