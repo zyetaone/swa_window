@@ -362,6 +362,13 @@ pure math):
   and rejected as a wrong abstraction (role-differentiated hues across 5
   representations); the module is the documented reference + the cheap Three
   consumers import it. Hex round-trip test-pinned.
+  > **Deleted 2026-08-04.** Every consumer named here (CityGlowDome, OsmRoads,
+  > CityLightField) was removed by the later Three-overlay and DOM-compositor
+  > sweeps, leaving a palette with no readers — alive only via a barrel
+  > re-export and its own test. The reasoning above stands as the record of why
+  > the merge was rejected; the file itself is recoverable from git history if
+  > those layers return. This ADR is a historical decision record and is
+  > otherwise left as written.
 
 **Night-light layer set** (Three overlay): `CityLightField` (VIIRS-placed bokeh
 carpet, bilinear-sampled, seeded for 3-Pi), `CityGlowDome` (diffuse skyglow),
