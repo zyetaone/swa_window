@@ -13,6 +13,7 @@
 import type { WeatherType } from '$lib/types';
 import type * as CesiumType from 'cesium';
 import { createSeededRng, daySeed } from './prng';
+import { spriteOffset, spriteScale } from './cloud-sprite-placement';
 
 const CLOUD_ALT_M = 7_000; // ~26k ft
 
@@ -117,13 +118,11 @@ export function updateCesiumClouds(
 
 		for (let i = 0; i < spriteCount; i++) {
 			const isAnchor = i === 0;
-			const ox = isAnchor ? cx : cx + (rng() - 0.5) * baseScale * 1.85;
-			const oz = isAnchor ? cz : cz + (rng() - 0.5) * baseScale * 1.85;
-			const oy = isAnchor ? ch : ch + (rng() - 0.5) * baseScale * 0.18;
+			const { ox, oy, oz } = spriteOffset(i, cx, ch, cz, baseScale, rng);
 
 			const brightness = isAnchor ? 0.74 : 0.62 + (rng() - 0.5) * 0.12;
 			const opacity = isAnchor ? 0.35 : 0.18 + rng() * 0.24;
-			const sprScale = baseScale * (isAnchor ? 1.25 : 0.95 + rng() * 0.50);
+			const sprScale = spriteScale(i, baseScale, rng);
 			const img = textures[Math.floor(rng() * textures.length)];
 
 			const worldX = ox;
@@ -168,13 +167,11 @@ export function updateCesiumClouds(
 
 		for (let i = 0; i < spriteCount; i++) {
 			const isAnchor = i === 0;
-			const ox = isAnchor ? cx : cx + (rng() - 0.5) * baseScale * 1.85;
-			const oz = isAnchor ? cz : cz + (rng() - 0.5) * baseScale * 1.85;
-			const oy = isAnchor ? ch : ch + (rng() - 0.5) * baseScale * 0.18;
+			const { ox, oy, oz } = spriteOffset(i, cx, ch, cz, baseScale, rng);
 
 			const brightness = isAnchor ? 0.78 : 0.65 + (rng() - 0.5) * 0.10;
 			const opacity = isAnchor ? 0.42 : 0.22 + rng() * 0.22;
-			const sprScale = baseScale * (isAnchor ? 1.25 : 0.95 + rng() * 0.50);
+			const sprScale = spriteScale(i, baseScale, rng);
 			const img = textures[Math.floor(rng() * textures.length)];
 
 			const worldX = ox;

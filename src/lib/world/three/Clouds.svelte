@@ -83,6 +83,7 @@
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
+	import { spriteOffset, spriteScale } from '$lib/world/cloud-sprite-placement';
 	import { lightingState } from '$lib/world/curves';
 
 	let {
@@ -231,16 +232,13 @@
 			// offset like the others) — fixes a long-standing misnaming.
 			// Now the cluster has a guaranteed bright core; the surrounding
 			// sprites fill outward from it for true accumulation geometry.
-			const isAnchor = i === 0;
-			const ox = isAnchor ? cx : cx + (rng() - 0.5) * baseScale * 1.85;
-			const oz = isAnchor ? cz : cz + (rng() - 0.5) * baseScale * 1.85;
-			const oy = isAnchor ? ch : ch + (rng() - 0.5) * baseScale * 0.18;
+			const { ox, oy, oz } = spriteOffset(i, cx, ch, cz, baseScale, rng);
 
 			const idx = pool[Math.floor(rng() * pool.length)];
 			// Per-sprite scale: [0.95, 1.45]× for non-anchors, anchor at
 			// 1.25× (pulled from 1.35× — less individual dominance, more
 			// even soft mass).
-			const sprScale = baseScale * (isAnchor ? 1.25 : 0.95 + rng() * 0.50);
+			const sprScale = spriteScale(i, baseScale, rng);
 			const sprX = sprScale * 1.30;
 			const sprY = sprScale;
 
