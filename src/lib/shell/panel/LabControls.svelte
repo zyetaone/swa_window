@@ -5,10 +5,14 @@
 	 * when ?lab=1 is active. Not bundled in production (import.meta.env.DEV gate).
 	 */
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
+	import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
 		import type { AeroWindow } from '$lib/model/aero-window.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';
-	const ROLE_FOV = { left: 42, center: 45, right: 42, solo: 45 } as const;
+	// Record<DeviceRole, …> rather than a bare object literal: adding a role to
+	// DEVICE_ROLES becomes a compile error here until it gets an FOV, instead of
+	// an undefined lookup that silently writes NaN into camera.parallax.fovDeg.
+	const ROLE_FOV: Record<DeviceRole, number> = { left: 42, center: 45, right: 42, solo: 45 };
 
 	let {
 		mode = $bindable('cesium' as LabMode),
@@ -54,13 +58,14 @@
 		<legend>3-Pi Role</legend>
 		<select value={model.config.camera.parallax.role}
 			onchange={(e) => {
-				const role = (e.currentTarget as HTMLSelectElement).value as keyof typeof ROLE_FOV;
+				const role = (e.currentTarget as HTMLSelectElement).value as DeviceRole;
 				setParallaxRole(role); model.config.camera.parallax.fovDeg = ROLE_FOV[role];
 			}}>
-			<option value="solo">solo</option>
-			<option value="left">left</option>
-			<option value="center">center</option>
-			<option value="right">right</option>
+			<!-- Iterated from the DEVICE_ROLES SSOT so the lab picker can never
+			     offer a different set than the roles the app actually accepts. -->
+			{#each DEVICE_ROLES as role (role)}
+				<option value={role}>{role}</option>
+			{/each}
 		</select>
 	</fieldset>
 {:else if mode === 'cesium'}

@@ -8,6 +8,7 @@
 	import { fanOut } from '$lib/fleet/fan-out';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
+	import { WEATHER_TYPES, DISPLAY_MODES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS } from '$content/locations';
 	import { onDestroy } from 'svelte';
@@ -212,12 +213,20 @@
 		return () => clearInterval(timer);
 	});
 
-	const WEATHER_OPTIONS: WeatherType[] = ['clear', 'cloudy', 'rain', 'overcast', 'storm'];
-	const MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
-		{ value: 'flight', label: 'Flight Sim' },
-		{ value: 'screensaver', label: 'Screensaver' },
-		{ value: 'video', label: 'Video' },
-	];
+	// Derived from the const-array SSOTs in $lib/types, not re-listed. A hand
+	// written copy silently goes stale the day a weather type or display mode is
+	// added: the kiosk's own WeatherPicker already iterates WEATHER_TYPES, so the
+	// admin would offer a different set than the device it is driving.
+	const WEATHER_OPTIONS: readonly WeatherType[] = WEATHER_TYPES;
+	const MODE_LABELS: Record<DisplayMode, string> = {
+		flight: 'Flight Sim',
+		screensaver: 'Screensaver',
+		video: 'Video',
+	};
+	// Record<DisplayMode, string> is exhaustive-checked, so adding a mode to
+	// DISPLAY_MODES is a compile error here until it gets a label.
+	const MODE_OPTIONS: { value: DisplayMode; label: string }[] =
+		DISPLAY_MODES.map((value) => ({ value, label: MODE_LABELS[value] }));
 
 	// ─── Device Bindings (SWA corridor Day 5) ─────────────────────────────────
 	// Persistent fingerprint → (role, groupId) map. Admin edits this locally in

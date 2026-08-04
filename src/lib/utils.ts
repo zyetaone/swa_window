@@ -40,23 +40,6 @@ export const T = {
 } as const;
 
 /**
- * nightFactor floor below which the car-lights geo-effect is hidden.
- * Dots fade in around dusk (nf crosses 0.2) and stay visible through
- * night → dawn until nf drops below 0.2 again.
- */
-export const CAR_LIGHTS_NIGHT_THRESHOLD = 0.2;
-
-/**
- * Hysteresis band for the compositor's car-lights `when:` predicate.
- * Mount when nightFactor crosses ABOVE _HI; unmount when it crosses
- * BELOW _LO. Without hysteresis a single threshold causes the 350-
- * entity CustomDataSource to teardown/rebuild on every-frame jitter
- * across the boundary at dusk.
- */
-export const CAR_LIGHTS_MOUNT_LO = 0.10;
-export const CAR_LIGHTS_MOUNT_HI = 0.20;
-
-/**
  * Clamp a value between min and max.
  */
 export function clamp(value: number, min: number, max: number): number {
