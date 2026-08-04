@@ -191,10 +191,32 @@ install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" /etc/aero
 EXISTING_ADMIN_URL=""
 EXISTING_ADMIN_TOKEN=""
 EXISTING_ION_TOKEN=""
+EXISTING_FLEET_TOKEN=""
 if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_ADMIN_TOKEN="$(command grep -oP '^AERO_ADMIN_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_ION_TOKEN="$(command grep -oP '^CESIUM_ION_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+	EXISTING_FLEET_TOKEN="$(command grep -oP '^AERO_FLEET_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+fi
+
+# Shared LAN secret for the telemetry heartbeat. Distinct from
+# AERO_ADMIN_TOKEN so health-check.sh holds a credential that can only report
+# metrics, never push scenes or trigger an OTA.
+#
+# AUTO-GENERATED rather than left blank: POST /api/fleet/heartbeat is
+# fail-closed, so an unset token means every heartbeat 503s and the fleet
+# health dashboard is permanently empty — while each Pi looks fine locally,
+# because health-check.sh swallows curl errors on purpose. A silent monitoring
+# blackout is worse than a generated secret. Operators who want a fleet-wide
+# shared value can overwrite it; re-runs preserve whatever is already there.
+if [[ -z "${EXISTING_FLEET_TOKEN}" ]]; then
+	if [[ -n "${AERO_FLEET_TOKEN:-}" ]]; then
+		EXISTING_FLEET_TOKEN="${AERO_FLEET_TOKEN}"
+	elif command -v openssl >/dev/null 2>&1; then
+		EXISTING_FLEET_TOKEN="$(openssl rand -hex 24)"
+	else
+		EXISTING_FLEET_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+	fi
 fi
 
 # Cesium Ion token, served at RUNTIME by /api/internal/ion-token instead of
@@ -231,6 +253,7 @@ AERO_USER=${PI_USER}
 AERO_PORT=3000
 AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
 AERO_ADMIN_TOKEN=${EXISTING_ADMIN_TOKEN}
+AERO_FLEET_TOKEN=${EXISTING_FLEET_TOKEN}
 AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
 TILE_DIR=${TILE_DIR_VALUE}

@@ -247,7 +247,10 @@ export class DeviceClient {
 				void (async () => {
 					const headers = await peerAuthHeader();
 					await fetch('/api/update', { method: 'POST', headers });
-				})();
+				})().catch((e) => {
+					// Best-effort trigger — the app may already be restarting.
+					console.warn('[fleet] OTA trigger failed:', e);
+				});
 				break;
 			}
 			case 'set_scene': {

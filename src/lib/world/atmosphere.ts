@@ -47,6 +47,7 @@ let _sunPos: any = null, _moonPos: any = null, _earthToMoon: any = null, _moonTo
 
 const _globeColor = new EpsilonGate<string>(0, '');
 const _fogDensity = new EpsilonGate<number>(0.00001, -1);
+const _fogVisualScalar = new EpsilonGate<number>(0.005, -1);
 const _fogBrightness = new EpsilonGate<number>(0.01, -1);
 const _lightIntensity = new EpsilonGate<number>(0.01, -1);
 const _skySatShift = new EpsilonGate<number>(0.01, 999);

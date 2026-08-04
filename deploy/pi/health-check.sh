@@ -26,6 +26,12 @@ AERO_ROLE="${AERO_ROLE:-solo}"
 AERO_GROUP="${AERO_GROUP:-default}"
 AERO_PORT="${AERO_PORT:-3000}"
 AERO_ADMIN_URL="${AERO_ADMIN_URL:-}"
+# Shared LAN secret for POST /api/fleet/heartbeat. The route is bearer-gated
+# and FAIL-CLOSED: without this header every heartbeat is a 503 and the admin
+# health dashboard sits permanently empty while each Pi reports success (the
+# curl below swallows errors by design). Provisioned into config.env by
+# install.sh.
+AERO_FLEET_TOKEN="${AERO_FLEET_TOKEN:-}"
 DEVICE_ID="$(hostname)"
 
 # ─── Measurements ────────────────────────────────────────────────────────────
@@ -81,10 +87,22 @@ EOF
 )
 
 if [[ -n "${AERO_ADMIN_URL}" ]] && command -v curl >/dev/null 2>&1; then
-	curl -fsS --max-time 3 -X POST \
-		-H "Content-Type: application/json" \
-		-d "${PAYLOAD}" \
-		"${AERO_ADMIN_URL}/api/fleet/heartbeat" >/dev/null 2>&1 || true
+	# Two explicit branches rather than an "${ARGS[@]}" array: this script runs
+	# under `set -u`, and expanding an EMPTY array that way is an unbound-variable
+	# error on bash < 4.4 (still the default /bin/bash on some hosts). A health
+	# check must not be the thing that breaks on an old shell.
+	if [[ -n "${AERO_FLEET_TOKEN}" ]]; then
+		curl -fsS --max-time 3 -X POST \
+			-H "Content-Type: application/json" \
+			-H "Authorization: Bearer ${AERO_FLEET_TOKEN}" \
+			-d "${PAYLOAD}" \
+			"${AERO_ADMIN_URL}/api/fleet/heartbeat" >/dev/null 2>&1 || true
+	else
+		curl -fsS --max-time 3 -X POST \
+			-H "Content-Type: application/json" \
+			-d "${PAYLOAD}" \
+			"${AERO_ADMIN_URL}/api/fleet/heartbeat" >/dev/null 2>&1 || true
+	fi
 fi
 
 # Always exit 0 — a health check that fails the cron job just creates noise.

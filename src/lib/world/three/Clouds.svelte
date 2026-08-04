@@ -65,6 +65,7 @@
 	 * ─────────────────────────────────────────────────────────────────────
 	 */
 	import { T, useTask, useThrelte } from '@threlte/core';
+	import { untrack } from 'svelte';
 	import { useTexture } from '@threlte/extras';
 	import {
 		Matrix4,

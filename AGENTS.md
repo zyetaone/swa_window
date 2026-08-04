@@ -297,6 +297,10 @@ $effect(() => {
   - `TILE_DIR` — offline tile cache (default `/opt/zyeta-aero/tiles` on Pi)
   - `AERO_ADMIN_TOKEN` — bearer auth for admin routes (fail-closed: 503 if unset)
   - `AERO_WIFI_RESET_TOKEN` — bearer auth for WiFi reset (fail-closed)
+  - `AERO_FLEET_TOKEN` — bearer auth for the telemetry heartbeat (fail-closed).
+    Lower privilege than the admin token: reports metrics, cannot push scenes or
+    trigger OTA. Auto-generated per device by `install.sh`; set it explicitly to
+    share one value fleet-wide.
 - **CSP**: Locked-down Content-Security-Policy with `unsafe-eval` (required by Cesium protobufjs), `blob:` workers, and connections to all major tile providers.
 
 ## Multi-Pi parallax
