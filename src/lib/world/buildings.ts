@@ -195,8 +195,9 @@ export async function setupBuildings(
 			_shader = null;
 		}
 
-		// Opt-in night IBL (see world/night-ibl.ts). Default-off, and a no-op on
-		// a Cesium build without the API, so this cannot change today's look
+		// Opt-in night IBL TUNING (see world/night-ibl.ts). Cesium already runs
+		// the environment map by default; this retunes it for night. Default-off
+		// and a no-op on a Cesium without the API, so today's look is unchanged
 		// until the flag is turned on deliberately.
 		if (useDynamicEnvironmentMap) {
 			const ok = enableNightIbl(_cs, tileset);

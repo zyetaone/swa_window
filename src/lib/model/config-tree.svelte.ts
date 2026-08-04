@@ -258,12 +258,13 @@ export const world = $state({
 	windowLightIntensity: 1.5, // procedural building-window brightness
 	showClouds: true,
 		useCesiumClouds: true, // Cesium cloud billboards (1 draw call, GPU-instanced)
-	// OFF by default — opt-in night-lighting prototype. Cesium 1.125+ can
-	// generate an environment map from the live sun + atmosphere, which keeps
-	// building FACES readable after sunset (today they fall to flat ambient and
-	// the skyline reads as silhouettes with glowing dots). Costs GPU work when
-	// the sun moves, so it stays behind a flag until the look is approved on
-	// real hardware. See world/night-ibl.ts.
+	// OFF by default — opt-in night-lighting TUNING. Cesium already generates a
+	// dynamic environment map for the buildings tileset (its own default is
+	// enabled=true; verified on the live scene). What this flag adds is night
+	// tuning: a higher atmosphereScatteringIntensity so the environment term
+	// carries the facades once the direct sun is gone, plus a warm groundColor
+	// so the bounce reads as a lit city rather than neutral. Off until the look
+	// is approved on real hardware. See world/night-ibl.ts.
 	useDynamicEnvironmentMap: false,
 	ambientOcclusion: true, // HBAO (altitude-gated)
 	qualityMode: 'performance' as QualityMode, // quality preset

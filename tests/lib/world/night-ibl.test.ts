@@ -88,10 +88,23 @@ describe('night-ibl', () => {
 		expect(m.enabled).toBe(false);
 	});
 
-	it('defaults raise the environment contribution above neutral', () => {
-		// At night the direct sun term is ~0, so a value of 1.0 would leave
-		// facades as flat ambient — the problem this exists to fix.
-		expect(NIGHT_IBL_DEFAULTS.atmosphereScatteringIntensity).toBeGreaterThan(1);
+	// The value of this module is TUNING, not activation: Cesium's own default
+	// is `enabled = true` with atmosphereScatteringIntensity 2.0. Verified on
+	// the live scene, where the tileset reported enabled=true / intensity=2
+	// before this module touched it. So the tuning must actually DIFFER from
+	// stock, or the flag is a no-op dressed up as a feature.
+	const CESIUM_STOCK_INTENSITY = 2.0;
+
+	it('tunes the environment ABOVE Cesium stock, or it is pointless', () => {
+		expect(NIGHT_IBL_DEFAULTS.atmosphereScatteringIntensity)
+			.toBeGreaterThan(CESIUM_STOCK_INTENSITY);
+	});
+
+	it('regenerates far more often than Cesium stock (3600 s) so dusk is not stale', () => {
+		expect(NIGHT_IBL_DEFAULTS.maximumSecondsDifference).toBeLessThan(3600);
+	});
+
+	it('bounces a non-zero, physically sane amount of ground light', () => {
 		expect(NIGHT_IBL_DEFAULTS.groundAlbedo).toBeGreaterThan(0);
 		expect(NIGHT_IBL_DEFAULTS.groundAlbedo).toBeLessThanOrEqual(1);
 	});

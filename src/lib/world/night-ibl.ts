@@ -7,11 +7,19 @@
  * AGENTS.md flags as high blast radius (every surface renders through it).
  * Enable with `world.useDynamicEnvironmentMap`, compare, then decide.
  *
- * ─── WHAT IT IS ─────────────────────────────────────────────────────────────
+ * ─── WHAT IT IS, AND WHAT IT IS *NOT* ───────────────────────────────────────
  * Cesium 1.125+ ships `DynamicEnvironmentMapManager`, which generates an
  * environment map on the GPU from the scene's CURRENT sun position and
  * atmosphere, then derives specular mipmaps + spherical-harmonic diffuse
  * irradiance from it. Tilesets expose one as `tileset.environmentMapManager`.
+ *
+ * ⚠ CORRECTION (found by probing the live scene, not by reading): this is
+ * ALREADY ON. Cesium's own default is `enabled = true`, confirmed both in the
+ * type docs (`@property [enabled = true]`) and by inspecting the running
+ * tileset, which reported `enabled: true` before this module touched anything.
+ * So the feature is not "unadopted" — what is unadopted is TUNING it for the
+ * night case. This module therefore does not switch a capability on; it
+ * retunes an already-active one.
  *
  * Verified present in the installed Cesium (1.143):
  *   Source/Cesium.d.ts → `export class DynamicEnvironmentMapManager`
@@ -26,10 +34,11 @@
  * after the sun is down, so facades still catch the residual sky and the
  * skyline keeps its shape.
  *
- * `atmosphereScatteringIntensity` is the useful knob: raising it increases the
- * environment's contribution relative to the (near-zero) direct sun, which is
- * exactly the night case. `groundColor` tints the bounce from below — a warm
- * value approximates a lit city throwing light back up at the buildings.
+ * `atmosphereScatteringIntensity` is the useful knob, and Cesium's default is
+ * 2.0. Raising it increases the environment's contribution relative to the
+ * (near-zero) direct sun, which is exactly the night case. `groundColor` tints
+ * the bounce from below — a warm value approximates a lit city throwing light
+ * back up at the buildings, which the stock neutral default does not.
  *
  * ─── COST, AND WHY IT IS GATED ──────────────────────────────────────────────
  * The map regenerates when the sun moves or the model moves "significantly",

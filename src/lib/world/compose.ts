@@ -18,7 +18,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 // below. `import type` erases entirely at build.
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
-import { syncCamera } from './camera';
+import { syncCamera, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
@@ -32,18 +32,17 @@ import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 
 type WorldConfig = typeof world;
 
-interface CesiumModelView {
-	flight: {
+// The camera-facing half of this view is DERIVED from CameraSyncSlice rather
+// than re-typed. It was duplicated field-for-field, so adding a term to the
+// camera sync (a new motion coupling, another pose field) meant editing the
+// same shape in two files, and TypeScript would happily accept them drifting
+// apart — compose would still compile while passing a slice the sync no longer
+// fully describes.
+interface CesiumModelView extends CameraSyncSlice {
+	flight: CameraSyncSlice['flight'] & {
 		lat: number; lon: number; altitude: number; heading: number; pitch: number;
-		camLat: number; camLon: number; camAlt: number; camHeading: number; camPitch: number;
 	};
-	motion: { bankAngle: number };
-	config: {
-		camera: {
-			effectiveHeading(baseHeading: number): number;
-			motion: { bankPitchCouple: number };
-			flyoverPitchDeg: number;
-		};
+	config: CameraSyncSlice['config'] & {
 		world: WorldConfig;
 		atmosphere: {
 			haze: { amount: number };
