@@ -24,6 +24,7 @@ import {
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
+import { isGroupLeader } from '$lib/fleet/parallax.svelte';
 import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
 
 
@@ -384,10 +385,13 @@ export class AeroWindow {
 		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay, {
 			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly,
 		});
-		// Phase 7 — solo + center are leaders (run autopilot). left + right
-		// are followers (wait for director_decision from leader).
-		const role = this.config.camera.parallax.role;
-		ctx.isLeader = role === 'solo' || role === 'center';
+		// Phase 7 — solo + center are leaders (run autopilot); left/right follow
+		// the leader's director_decision. The rule lives in fleet/parallax as
+		// isGroupLeader: it was ALSO inlined here, so the panorama's leader
+		// definition existed in two places. If they ever disagreed, two Pis
+		// would both run the autopilot and fight over the location, or none
+		// would and the wall would freeze on one scene.
+		ctx.isLeader = isGroupLeader(this.config.camera.parallax.role);
 		const directorPatch = directorTick(delta, ctx);
 
 		if (directorPatch.configs) {
