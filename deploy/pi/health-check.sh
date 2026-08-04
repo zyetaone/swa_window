@@ -25,7 +25,13 @@ fi
 AERO_ROLE="${AERO_ROLE:-solo}"
 AERO_GROUP="${AERO_GROUP:-default}"
 AERO_PORT="${AERO_PORT:-3000}"
-AERO_ADMIN_URL="${AERO_ADMIN_URL:-}"
+# Where the heartbeat is POSTed. Defaults to THIS device rather than empty:
+# the heartbeat store is per-server and in-memory, so posting to ourselves is
+# what makes this Pi's own /admin/fleet/health page work. An empty value meant
+# a fresh install had no telemetry anywhere until an operator hand-edited
+# config.env — and nothing surfaced that, because the POST below is
+# fire-and-forget by design. Point it at a central admin to aggregate a fleet.
+AERO_ADMIN_URL="${AERO_ADMIN_URL:-http://localhost:${AERO_PORT}}"
 # Shared LAN secret for POST /api/fleet/heartbeat. The route is bearer-gated
 # and FAIL-CLOSED: without this header every heartbeat is a 503 and the admin
 # health dashboard sits permanently empty while each Pi reports success (the
