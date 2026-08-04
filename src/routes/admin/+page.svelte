@@ -3,8 +3,6 @@
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
 	import { config } from '$lib/model/config-tree.svelte';
 	import { formatTime, formatUptime } from '$lib/utils';
-	import { peerAuthHeader } from '$lib/http/peer-token';
-	import { urlFor } from '$lib/fleet/protocol';
 	import { fanOut } from '$lib/fleet/fan-out';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
@@ -76,26 +74,21 @@
 		updating = true;
 		updateResult = null;
 		try {
+			// store.triggerUpdate hits the device's /api/update DIRECTLY — the
+			// server that actually spawns aero-updater.service.
+			//
+			// This used to POST {type:'update'} to /api/command instead, which
+			// relays through SSE to that Pi's BROWSER, which then calls its own
+			// /api/update. That path needs the kiosk tab alive and subscribed,
+			// and the browser is the least reliable relay imaginable during an
+			// update that restarts the app under it. It also reported success
+			// for "message accepted", not "updater started". triggerUpdate
+			// already existed for this and was dead code.
 			updateResult = await fanOut(targets, async (id) => {
-				const peer = store.peers.find((p) => p.deviceId === id);
-				if (!peer) throw new Error('peer not found');
-				// urlFor is the SSOT for peer URLs. Hand-building the string here
-				// diverged twice: it hardcoded `http:` (a browser on an HTTPS admin
-				// page blocks that as mixed content) and ignored the `self` case,
-				// where urlFor returns window.location.origin so the dashboard can
-				// update the Pi it is served from.
-				//
-				// /api/command is bearer-gated like every mutating route; without
-				// the auth header the push is a guaranteed 401/503.
-				const authHeader = await peerAuthHeader();
-				const res = await fetch(`${urlFor(peer)}/api/command`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json', ...authHeader },
-					body: JSON.stringify({ type: 'update' }),
-				});
-				// fanOut treats a throw as failure, so a non-2xx must throw rather
-				// than resolve — otherwise an unreachable Pi reports as updated.
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const { ok, detail } = await store.triggerUpdate(id);
+				// fanOut counts a throw as failure, so a refusal must throw or an
+				// unreachable Pi reports as updated.
+				if (!ok) throw new Error(detail ?? 'update failed');
 			});
 		} finally {
 			updating = false;
