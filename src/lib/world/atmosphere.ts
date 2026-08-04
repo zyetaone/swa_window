@@ -77,6 +77,12 @@ export function initAtmosphere(Cesium: C, viewer: CesiumType.Viewer): void {
 	_atmoKilled.reset();
 	_exposure.reset();
 	_atmoLight.reset();
+	_fogVisualScalar.reset();
+	// Not a gate, but the same re-init class: if the old viewer died at deep
+	// night with moonlight active, a stuck `true` keeps the moonlight branch
+	// from ever attaching to the fresh scene and the night globe renders
+	// day-lit until nf < 0.65 self-heals.
+	_isUsingMoonlight = false;
 	_originalSunLight = viewer.scene.light;
 	_moonlight = new Cesium.DirectionalLight({
 		direction: new Cesium.Cartesian3(0, 0, -1),

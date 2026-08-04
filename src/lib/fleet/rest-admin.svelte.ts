@@ -245,10 +245,6 @@ export class RestAdminStore {
 		}
 	}
 
-	async broadcastScene(location: LocationId, weather?: WeatherType): Promise<void> {
-		await Promise.all(this.#peers.map((p) => this.#postCommand(p, { type: 'set_scene', location, weather })));
-	}
-
 	/**
 	 * Trigger the OTA updater on one device NOW, instead of waiting up to 15 min
 	 * for its timer. Returns a result rather than console.warn-ing into the void

@@ -13,5 +13,20 @@ ExecStart=/home/pi/aero-window/deploy/aero-wifi-portal.sh
 User=root
 TimeoutStartSec=10min
 
+# Hardening — compatible with root. These tighten the surface without
+# restricting what hostapd/dnsmasq/nmcli need to touch. The captive-
+# portal service still has User=root because wifi-connect demands it.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+
 [Install]
 WantedBy=multi-user.target

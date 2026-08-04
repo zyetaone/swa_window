@@ -5,10 +5,9 @@
  *   imagery.svelte.ts    — base imagery, VIIRS, CartoDB roads
  *   buildings.svelte.ts  — OSM 3D Tiles + procedural shader
  *   atmosphere.svelte.ts — sky, fog, globe color, moonlight, exposure
- *   terrain.svelte.ts    — terrain provider + exaggeration
- *
- * Owns directly: viewer lifecycle, camera sync, post-processing,
+ * Owns directly: viewer lifecycle, post-processing,
  * cloud billboards, lightning, and the per-frame render loop.
+ * (Camera sync lives in ./camera — see syncCamera().)
  */
 
 import type * as CesiumType from 'cesium';
@@ -19,7 +18,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 // below. `import type` erases entirely at build.
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
-import { SEAT_LOOK_DEG } from '$lib/camera/screen-conventions';
+import { syncCamera } from './camera';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
@@ -84,11 +83,9 @@ export class CesiumManager {
 		const t = (performance.now() - this.#bootStartMs) / CesiumManager.BOOT_FADE_MS;
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	#scratchDest: any = null;
-
+	#scratchDest: CesiumType.Cartesian3 | null = null;
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
+
 		this.#C = CesiumModule;
 		this.#model = model;
 		this.#viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
@@ -261,29 +258,16 @@ export class CesiumManager {
 
 	// ── Camera ───────────────────────────────────────────────────────────────
 
+	/** Thin orchestrator wrapper — body lives in ./camera so the math is
+	 * testable in isolation. The viewer + scratch buffer stay here because
+	 * they belong to the Cesium instance. */
 	#syncCamera(): void {
-		const f = this.#model.flight;
-		const parallaxHeading = this.#model.config.camera.effectiveHeading(f.camHeading);
-		const C = this.#C;
-		C.Cartesian3.fromDegrees(f.camLon, f.camLat, f.camAlt * 0.3048, undefined, this.#scratchDest);
-
-		const bankPitchCouple = this.#model.config.camera.motion.bankPitchCouple ?? 0;
-		const flyover = this.#model.config.camera.flyoverPitchDeg ?? 0;
-		const pitchDeg = flyover !== 0
-			? flyover - bankPitchCouple * this.#model.motion.bankAngle
-			// camPitch is measured from straight-down; Cesium's is from the
-			// horizon. The -90 is that frame conversion — NOT the seat-look yaw
-			// below, which is a different 90 with a different meaning.
-			: (f.camPitch - 90) - bankPitchCouple * this.#model.motion.bankAngle;
-
-		this.#viewer.camera.setView({
-			destination: this.#scratchDest,
-			orientation: {
-				heading: C.Math.toRadians((parallaxHeading + SEAT_LOOK_DEG) % 360),
-				pitch: C.Math.toRadians(pitchDeg),
-				roll: C.Math.toRadians(-this.#model.motion.bankAngle),
-			},
-		});
+		if (!this.#scratchDest) return;
+		syncCamera(
+			{ flight: this.#model.flight, motion: this.#model.motion, config: this.#model.config },
+			{ Cesium: this.#C, viewer: this.#viewer },
+			this.#scratchDest,
+		);
 	}
 
 	// ── Post-Process ─────────────────────────────────────────────────────────

@@ -109,13 +109,12 @@
 		if (targets.length === 0) return;
 		pushResult = null;
 		try {
-			if (targets.length === store.devices.length && store.devices.length > 0) {
-				await store.broadcastScene(scene.location, scene.weather);
-				pushResult = { ok: targets.length, failed: [] };
-			} else {
-				pushResult = await fanOut(targets, (id) =>
-					store.pushScene(id, scene.location, scene.weather));
-			}
+			// One code path for 1..N targets: broadcastScene() was the same
+			// per-peer POSTs under Promise.all, but one rejecting peer failed
+			// the whole report (ok: 0 with 2 of 3 applied). fanOut attributes
+			// success/failure per target.
+			pushResult = await fanOut(targets, (id) =>
+				store.pushScene(id, scene.location, scene.weather));
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
