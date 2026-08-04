@@ -266,6 +266,30 @@ chmod 640 /etc/aero/config.env
 
 fi  # end !UNITS_ONLY (steps 1-5)
 
+# ─── Step 5b: additive config.env keys (runs in BOTH modes) ──────────────────
+# Keys the app grows AFTER a device was provisioned must still reach it via
+# OTA: aero-updater.sh re-runs this installer with --units-only, which skips
+# the full config.env write above (it would reset AERO_ROLE/GROUP — the
+# updater passes no --role --group — and drop operator-added keys). Without
+# this block, a Pi imaged before AERO_FLEET_TOKEN existed never gets one:
+# POST /api/fleet/heartbeat is fail-closed and health-check.sh swallows curl
+# errors, so the fleet health page stays silently empty forever.
+#
+# Append-only and idempotent: existing values (including a fleet-shared token
+# hand-provisioned by the operator) are preserved; '=.' treats an empty value
+# as missing. systemd EnvironmentFile last-wins, so appending is safe even if
+# a duplicate somehow exists.
+if [[ -f /etc/aero/config.env ]] && ! command grep -q '^AERO_FLEET_TOKEN=.' /etc/aero/config.env; then
+	ADDED_FLEET_TOKEN=""
+	if command -v openssl >/dev/null 2>&1; then
+		ADDED_FLEET_TOKEN="$(openssl rand -hex 24)"
+	else
+		ADDED_FLEET_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+	fi
+	echo "AERO_FLEET_TOKEN=${ADDED_FLEET_TOKEN}" >> /etc/aero/config.env
+	echo "  added missing AERO_FLEET_TOKEN to /etc/aero/config.env (generated)"
+fi
+
 # ─── Step 6: Systemd units + cron jobs ────────────────────────────────────────
 
 echo "[6/7] Installing systemd units + cron..."
