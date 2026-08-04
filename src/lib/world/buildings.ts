@@ -14,6 +14,7 @@ import { getIonToken } from './cesium-setup';
 import { getViirsField } from './viirs-field';
 import { smoothstep } from '$lib/utils';
 import { altitudeDetailMix } from '$lib/world/altitude';
+import { enableNightIbl } from './night-ibl';
 import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { EpsilonGate } from './util';
 
@@ -158,7 +159,10 @@ const BUILDING_SHADER_GLSL = `
 	}
 `;
 
-export async function setupBuildings(buildingsEnabled: boolean): Promise<void> {
+export async function setupBuildings(
+	buildingsEnabled: boolean,
+	useDynamicEnvironmentMap = false,
+): Promise<void> {
 	if (!getIonToken()) { console.warn('[Buildings] Ion token missing — disabled'); return; }
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const C = _cs as any;
@@ -189,6 +193,14 @@ export async function setupBuildings(buildingsEnabled: boolean): Promise<void> {
 		} catch (e) {
 			console.warn('[Buildings] Custom shader failed:', (e as { message?: string })?.message ?? String(e));
 			_shader = null;
+		}
+
+		// Opt-in night IBL (see world/night-ibl.ts). Default-off, and a no-op on
+		// a Cesium build without the API, so this cannot change today's look
+		// until the flag is turned on deliberately.
+		if (useDynamicEnvironmentMap) {
+			const ok = enableNightIbl(_cs, tileset);
+			console.info(`[Buildings] dynamic environment map: ${ok ? 'enabled' : 'unavailable'}`);
 		}
 
 		_viewer.scene.primitives.add(tileset);

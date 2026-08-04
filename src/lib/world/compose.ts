@@ -144,7 +144,10 @@ export class CesiumManager {
 		}
 		await setupTerrain();
 		await setupImagery();
-		await setupBuildings(this.#model.config.world.buildingsEnabled);
+		await setupBuildings(
+			this.#model.config.world.buildingsEnabled,
+			this.#model.config.world.useDynamicEnvironmentMap,
+		);
 
 		mountLightning(C, v);
 		mountCesiumClouds(C, v);
