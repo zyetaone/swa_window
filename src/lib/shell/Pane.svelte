@@ -13,8 +13,27 @@
 	import RainGlass from "./window/RainGlass.svelte";
 	import Blind from "./window/Blind.svelte";
 	import { useMouseParallax } from '$lib/shell/use-mouse-parallax.svelte';
+	import CabinClock from "./hud/CabinClock.svelte";
+	import { doubleTap } from '$lib/shell/use-double-tap';
 
 	const model = useAeroWindow();
+
+	// Double-tap anywhere on the pane toggles the cabin clock. Attached on the
+	// window CONTAINER, not the viewport: `<Blind />` is a SIBLING of
+	// `.window-viewport`, and when the blind is open it lays a full-window
+	// `.blind-grab` overlay on top to catch drag-to-close. A listener on the
+	// viewport therefore never sees a tap in the middle of the window — the
+	// overlay is not a descendant, so nothing bubbles to it. The container is
+	// the nearest ancestor of BOTH, which is where the gesture has to live.
+	// (Found by probing the running kiosk: taps landed on `.blind-grab` and the
+	// handler never fired.)
+	//
+	// Routed through applyConfigPatch so the change is CRDT-stamped and
+	// fleet-synced like every other config write — double-tap one Pi in a
+	// panorama and all three agree.
+	function toggleClock() {
+		model.applyConfigPatch?.('shell.clockVisible', !model.config.shell.clockVisible);
+	}
 
 	// ── Frame chrome ──────────────────────────────────────────────────────────
 
@@ -77,6 +96,7 @@
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
+	use:doubleTap={{ onDoubleTap: toggleClock }}
 >
 	<div
 		class="window-viewport"
@@ -94,6 +114,10 @@
 
 		<RainGlass />
 		<Glass {glassVignetteOpacity} />
+
+		{#if model.config.shell.clockVisible}
+			<CabinClock />
+		{/if}
 
 		{#if showHint}
 			<div class="click-hint visible">

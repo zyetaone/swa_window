@@ -11,20 +11,17 @@
 	 * the surface; this is just a faint glance of time + place.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
 
 	const model = useAeroWindow();
 
-	// Wall-clock time — re-renders every 30 s (display granularity is
-	// minutes). Reading `_tick` inside the derived ties it to the interval.
-	let _tick = $state(0);
-	$effect(() => {
-		const id = setInterval(() => { _tick++; }, 30_000);
-		return () => clearInterval(id);
-	});
-	const wallClockTime = $derived.by(() => {
-		void _tick;
-		return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-	});
+	// Shared wall clock. This used to run its own 30 s interval plus a `_tick`
+	// counter read inside the derived purely to force invalidation — a pattern
+	// that also let this card and the CabinClock disagree by up to 30 s. The
+	// module's $state makes the dependency direct, and one interval serves
+	// every consumer.
+	$effect(() => subscribeWallClock());
+	const wallClockTime = $derived(formatClock(wallClockNow()));
 </script>
 
 <div class="blind-info">
@@ -66,7 +63,7 @@
 		font-size: 0.65rem;
 		letter-spacing: 0.22em;
 		text-transform: uppercase;
-		color: rgba(40, 40, 50, 0.16);
+		color: rgba(40, 40, 50, 0.3);
 		margin-top: 0.75rem;
 	}
 </style>
