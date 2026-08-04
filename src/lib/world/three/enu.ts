@@ -16,24 +16,10 @@
  * meshes positioned in local ENU coordinates (x=east, y=up, z=-north) land
  * at the correct world position on the ellipsoid surface.
  */
-import { Matrix4, Vector3, type Object3D } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { geoToCartesian } from './state';
 
 const _WORLD_Y = new Vector3(0, 1, 0);
-
-/**
- * Pin a Three Group/Object to a precomputed ENU anchor matrix. The two steps
- * MUST run in this order: disabling `matrixAutoUpdate` first stops Three from
- * recomposing `matrix` from position/quaternion/scale each frame, so the basis
- * we copy in survives. Every city-anchored layer (CityLightField,
- * NeonLineLayer) shared this exact 2-line body inside its own `$effect` — the
- * `$effect` wrappers stay per-component (they own the reactive deps); only this
- * non-obvious imperative core is hoisted here.
- */
-export function applyEnuAnchor(group: Object3D, matrix: Matrix4): void {
-	group.matrixAutoUpdate = false;
-	group.matrix.copy(matrix);
-}
 
 /**
  * Build the ENU anchor matrix at (lat°, lon°, alt m). Pure: every call

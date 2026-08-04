@@ -31,39 +31,6 @@
 
 export const EARTH_RADIUS_M = 6378137;
 // Soft Earth-limb fade band for celestial occlusion (moon/Venus fade vs pop).
-/**
- * Width of the Earth-limb fade for celestial bodies, in RADIANS of elevation
- * above the horizon. 0.018 rad ≈ 1.03°, about half a moon-width at the
- * current disc size: the body is fully hidden at or below the horizon and
- * reaches full brightness a moon-width above it, which reads as setting
- * rather than popping.
- *
- * Replaces OCCLUSION_SOFTNESS_M, which was denominated in metres of a ray's
- * closest approach — a unit whose usable range is capped by the camera's own
- * altitude (10 km at cruise), so no band wider than that could ever be
- * traversed. See earthOcclusionFactor for the full reasoning.
- */
-export const OCCLUSION_FADE_RAD = 0.018;
-
-/**
- * Limb-fade band for the STAR field only, in metres of closest approach.
- *
- * NightStars occludes per-star on the GPU — it reimplements the limb test in
- * GLSL rather than calling earthOcclusionFactor, because 1,200 stars can't
- * each take a CPU round-trip. That shader still speaks metres, so this
- * constant stays for it.
- *
- * ⚠ Two implementations of one idea. The CPU path (moon, Venus) now measures
- * elevation in radians because the metre form cannot fade on the visible side
- * — see earthOcclusionFactor. The star shader has the same flaw, but stars
- * are sub-pixel points where a hard cut is invisible, so converting it was
- * not worth doing blind. Convert it when the star field is next touched.
- */
-export const OCCLUSION_SOFTNESS_M = 6e4;
-// Directional lights in Three.js are parallel — only the position
-// VECTOR direction matters, not the magnitude. Keep this within the
-// camera's far plane (1e9) so stars actually render in the scene.
-export const STARS_RADIUS_M = 5e8;         // 500 000 km — inside far plane
 export const CLOUD_DECK_M = 8000;           // clouds at ~8 km altitude
 
 type Vec3 = [number, number, number];
