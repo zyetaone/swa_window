@@ -360,6 +360,7 @@ Heuristic dev utilities — verify hits before deleting:
 | `node tools/reachability-scan.mjs` | modules unreachable from any entrypoint |
 | `node tools/config-key-scan.mjs` | config-tree keys nothing reads |
 | `node tools/doc-path-scan.mjs` | file paths in docs that no longer exist |
+| `node tools/dead-export-scan.mjs` | exported symbols with no non-test, non-barrel consumer |
 
 
 ## Testing & QA

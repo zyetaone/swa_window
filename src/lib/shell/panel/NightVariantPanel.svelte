@@ -7,6 +7,24 @@
 	 *
 	 * Variants represent genuinely different aesthetic choices, not parameter
 	 * tweaks on the same idea. Variant G is the Apr-15 hash-palette resurrection.
+	 *
+	 * ─── ON THE DUPLICATED GLSL ─────────────────────────────────────────────
+	 * The fragment shader below overlaps heavily with `world/hash-palette.ts`
+	 * (same luminance/brightGuard preamble, same sodium→amber→warm-white stops,
+	 * same dark-void and pollution tail). That is DELIBERATE and must not be
+	 * "de-duplicated" into a shared string.
+	 *
+	 * This copy is a variant EXPLORER: it exposes extra uniforms production does
+	 * not have (u_paletteSpread, u_redSparkRate, u_viirsMaskStrength) and keeps
+	 * knobs production has already settled — e.g. the red-bias VIIRS gate, which
+	 * hash-palette.ts deleted with a long note explaining why it could never
+	 * work there. Sharing the source would force the lab to inherit production's
+	 * decisions, which is exactly the thing it exists to question; the copies are
+	 * SUPPOSED to diverge as experiments run.
+	 *
+	 * The direction of travel is one-way: when a variant wins, its constants are
+	 * hand-carried into `world/hash-palette.ts`, which stays the single source
+	 * for what actually ships. Nothing imports this file's GLSL.
 	 */
 	import { untrack } from 'svelte';
 	import { clamp } from '$lib/utils';
