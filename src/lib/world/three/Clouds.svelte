@@ -348,163 +348,165 @@
 	// at staggered times; useTask guarantees exactly one execution per
 	// render frame, avoiding the ~2.5µs Svelte dep-tracking overhead.
 	useTask(() => {
-		const nf = nightFactor;
-		// Unified lighting SSOT — the cloud darkening / city-glow / moon-lift now
-		// read the same gates as every other Three layer (cityGlowAmount lights up
-		// at dusk in lock-step with the city-light bloom; moonContribution gates the grey
-		// moon-lift by actual moon presence instead of raw nf).
-		// Real local solar elevation — drives lightingState's ambient horizon
-		// boost AND liveSunBoost below. (Previously sunDirection was passed and
-		// its constant [1] component froze the horizon response mid-state.)
-		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
-		const L = lightingState(model.timeOfDay, model.nightFactor, elevSin);
-		const ambR = ambientColor?.r ?? 1;
-		const ambG = ambientColor?.g ?? 1;
-		const ambB = ambientColor?.b ?? 1;
-		const ambI = ambientIntensity;
-		const opaScale = opacityScale;
-
-		// nightDark multiplier: 0.55 read MILKY/daylit at deep night (the
-		// lit term held 45% brightness which, summed with the moonLit floor
-		// + bloom, blew clouds to bright grey-white). Pulled to 0.78 so the
-		// daylit lit-term collapses to ~22% at nf=1 — clouds read as DIM
-		// grey-blue masses, not white. The moonLit floor below (also dropped)
-		// supplies the only night visibility, keeping them as silhouetted
-		// moonlit deck rather than a black void. Dawn/dusk (nf<1) ramps in
-		// proportionally so day/golden-hour are unchanged. The cool channel
-		// shifts are deepened (coolG/coolB) to push the residual toward the
-		// blue-grey of a moonlit night sky instead of neutral grey.
-		const nightDark = 1 - nf * 0.78;
-		const coolG = 1 - nf * 0.22;
-		const coolB = 1 - nf * 0.08;
-
-		// City skyglow factor — when over a city archetype at night, light
-		// pollution from the urban core below reflects off cloud bases as a
-		// warm-amber wash. Combined with cluster density (more clouds = more
-		// reflective surface), this gives the unmistakable "Las Vegas glow"
-		// or "Dubai amber clouds" effect. Hyderabad too. hasBuildings is the
-		// SSOT for "urban illuminated archetype." Gated by nf so day is
-		// unaffected. Outdoor / desert / ocean / himalaya locations stay
-		// neutral grey.
-		const loc = LOCATION_MAP.get(model.location);
-		const cityFactor = loc?.hasBuildings ? 1 : 0;
-		// 0.22: tuned so peak amber additive on R is ~0.15 of baseB at
-		// dense-cloud full-night over a city. Combined with the EffectStack
-		// VERY_LARGE bloom kernel, this reads as a recognizable warm wash
-		// without driving the underside to saturation white. Increase to
-		// 0.35 for "Las Vegas dramatic" effect, lower for subtler glow.
-		const cityGlowStrength = L.cityGlowAmount * cityFactor * density * 0.22;
-
-		// Overall sun-lit brightness lift — scales with the REAL local solar
-		// elevation (high sun = brighter deck, horizon sun = dimmer). The old
-		// version dotted sunDirection with an up-ish pseudo-normal, but
-		// sunDirection's y is the CONSTANT polar-axis projection — the boost
-		// was frozen at one mid-state value all day. (sunDirection itself is
-		// still used below for the AZIMUTHAL terms — Mie forward-scatter and
-		// sun-side cluster shading — where the world direction is meaningful.)
-		const sd = sunDirection;
-		const liveSunBoost = Math.max(0, elevSin) * (1 - nf) * 0.52;
-
-		// Per-sprite Mie forward-scatter — clouds whose direction-from-camera
-		// closely aligns with the sun direction get a sharp warm glow boost.
-		// This is the "golden hour cloud" / "sun-shining-through-cloud" effect.
-		// pow(dot, 6) makes the peak sharp so only clouds NEAR the sun bloom;
-		// clouds away from the sun stay neutral. Gated by (1-nf) so it's
-		// inactive at night.
-		const sun = sd && sd.length === 3 ? sd : null;
-		const camPos = ctx.camera.current.position;
-		const mieGain = sun ? (1 - nf) * 0.85 : 0;
-		const children = driftGroup.children;
-		const n = ownedMaterials.length;
-
-		// Compute drift-group world origin once — all sprites share the same
-		// ancestor chain (sprite → driftGroup → anchorGroup → scene). Using
-		// applyMatrix4(driftGroup.matrixWorld) is ~3× faster than per-sprite
-		// getWorldPosition() which walks the parent chain for each sprite.
-		// updateWorldMatrix(parents=true, children=false): we only need driftGroup's
-		// OWN matrixWorld current for getWorldPosition — the old updateMatrixWorld()
-		// recursed into all ~1840 sprite descendants every frame for nothing.
-		driftGroup.updateWorldMatrix(true, false);
-		driftGroup.getWorldPosition(_driftWorldPos);
-
-		for (let i = 0; i < n; i++) {
-			const mat = ownedMaterials[i];
-			const sprite = children[i];
-			const baseB = (mat.userData.baseBrightness ?? 1) as number;
-			const baseO = (mat.userData.baseOpacity ?? 1) as number;
-
-			let mie = 0;
-			let sunSide = 0;
-			if (sun && sprite) {
-				_spriteWorld.copy(sprite.position).applyMatrix4(driftGroup.matrixWorld);
-				_viewVec.subVectors(_spriteWorld, camPos).normalize();
-				const dot = Math.max(0, _viewVec.x * sun[0] + _viewVec.y * sun[1] + _viewVec.z * sun[2]);
-				// Sharp peak when sun is directly behind cloud from cam POV.
-				// dot^6 via repeated multiply — V8 inlines integer-power mul
-				// roughly 4× faster than Math.pow on Pi 5's V8 build. The
-				// inner loop runs 1840×/frame so this is non-trivial.
-				const d2 = dot * dot;
-				const d4 = d2 * d2;
-				const fwd = d4 * d2;
-				mie = fwd * mieGain;
-
-				// Within-cluster sun-side shading. The sprite's offset from
-				// cluster center (stored as a normalized pseudo-normal at
-				// build time) dotted with the sun direction tells us
-				// whether this sprite is on the sun face (positive dot) or
-				// the shadow face (negative dot). Sun-face sprites get a
-				// brightness boost; shadow-face stay neutral. Smoothstep'd
-				// soft terminator (-0.2..0.6 dot range) avoids hard mid-
-				// cluster contrast. Gated by (1-nf) so night clusters
-				// don't get directional shading from a non-visible sun.
-				const nx = (mat.userData.offsetNX ?? 0) as number;
-				const ny = (mat.userData.offsetNY ?? 0) as number;
-				const nz = (mat.userData.offsetNZ ?? 0) as number;
-				const sunDot = nx * sun[0] + ny * sun[1] + nz * sun[2];
-				const t = Math.max(0, Math.min(1, (sunDot + 0.2) / 0.8));
-				sunSide = t * t * (3 - 2 * t) * (1 - nf) * 0.30;
+	untrack(() => {
+			const nf = nightFactor;
+			// Unified lighting SSOT — the cloud darkening / city-glow / moon-lift now
+			// read the same gates as every other Three layer (cityGlowAmount lights up
+			// at dusk in lock-step with the city-light bloom; moonContribution gates the grey
+			// moon-lift by actual moon presence instead of raw nf).
+			// Real local solar elevation — drives lightingState's ambient horizon
+			// boost AND liveSunBoost below. (Previously sunDirection was passed and
+			// its constant [1] component froze the horizon response mid-state.)
+			const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
+			const L = lightingState(model.timeOfDay, model.nightFactor, elevSin);
+			const ambR = ambientColor?.r ?? 1;
+			const ambG = ambientColor?.g ?? 1;
+			const ambB = ambientColor?.b ?? 1;
+			const ambI = ambientIntensity;
+			const opaScale = opacityScale;
+	
+			// nightDark multiplier: 0.55 read MILKY/daylit at deep night (the
+			// lit term held 45% brightness which, summed with the moonLit floor
+			// + bloom, blew clouds to bright grey-white). Pulled to 0.78 so the
+			// daylit lit-term collapses to ~22% at nf=1 — clouds read as DIM
+			// grey-blue masses, not white. The moonLit floor below (also dropped)
+			// supplies the only night visibility, keeping them as silhouetted
+			// moonlit deck rather than a black void. Dawn/dusk (nf<1) ramps in
+			// proportionally so day/golden-hour are unchanged. The cool channel
+			// shifts are deepened (coolG/coolB) to push the residual toward the
+			// blue-grey of a moonlit night sky instead of neutral grey.
+			const nightDark = 1 - nf * 0.78;
+			const coolG = 1 - nf * 0.22;
+			const coolB = 1 - nf * 0.08;
+	
+			// City skyglow factor — when over a city archetype at night, light
+			// pollution from the urban core below reflects off cloud bases as a
+			// warm-amber wash. Combined with cluster density (more clouds = more
+			// reflective surface), this gives the unmistakable "Las Vegas glow"
+			// or "Dubai amber clouds" effect. Hyderabad too. hasBuildings is the
+			// SSOT for "urban illuminated archetype." Gated by nf so day is
+			// unaffected. Outdoor / desert / ocean / himalaya locations stay
+			// neutral grey.
+			const loc = LOCATION_MAP.get(model.location);
+			const cityFactor = loc?.hasBuildings ? 1 : 0;
+			// 0.22: tuned so peak amber additive on R is ~0.15 of baseB at
+			// dense-cloud full-night over a city. Combined with the EffectStack
+			// VERY_LARGE bloom kernel, this reads as a recognizable warm wash
+			// without driving the underside to saturation white. Increase to
+			// 0.35 for "Las Vegas dramatic" effect, lower for subtler glow.
+			const cityGlowStrength = L.cityGlowAmount * cityFactor * density * 0.22;
+	
+			// Overall sun-lit brightness lift — scales with the REAL local solar
+			// elevation (high sun = brighter deck, horizon sun = dimmer). The old
+			// version dotted sunDirection with an up-ish pseudo-normal, but
+			// sunDirection's y is the CONSTANT polar-axis projection — the boost
+			// was frozen at one mid-state value all day. (sunDirection itself is
+			// still used below for the AZIMUTHAL terms — Mie forward-scatter and
+			// sun-side cluster shading — where the world direction is meaningful.)
+			const sd = sunDirection;
+			const liveSunBoost = Math.max(0, elevSin) * (1 - nf) * 0.52;
+	
+			// Per-sprite Mie forward-scatter — clouds whose direction-from-camera
+			// closely aligns with the sun direction get a sharp warm glow boost.
+			// This is the "golden hour cloud" / "sun-shining-through-cloud" effect.
+			// pow(dot, 6) makes the peak sharp so only clouds NEAR the sun bloom;
+			// clouds away from the sun stay neutral. Gated by (1-nf) so it's
+			// inactive at night.
+			const sun = sd && sd.length === 3 ? sd : null;
+			const camPos = ctx.camera.current.position;
+			const mieGain = sun ? (1 - nf) * 0.85 : 0;
+			const children = driftGroup.children;
+			const n = ownedMaterials.length;
+	
+			// Compute drift-group world origin once — all sprites share the same
+			// ancestor chain (sprite → driftGroup → anchorGroup → scene). Using
+			// applyMatrix4(driftGroup.matrixWorld) is ~3× faster than per-sprite
+			// getWorldPosition() which walks the parent chain for each sprite.
+			// updateWorldMatrix(parents=true, children=false): we only need driftGroup's
+			// OWN matrixWorld current for getWorldPosition — the old updateMatrixWorld()
+			// recursed into all ~1840 sprite descendants every frame for nothing.
+			driftGroup.updateWorldMatrix(true, false);
+			driftGroup.getWorldPosition(_driftWorldPos);
+	
+			for (let i = 0; i < n; i++) {
+				const mat = ownedMaterials[i];
+				const sprite = children[i];
+				const baseB = (mat.userData.baseBrightness ?? 1) as number;
+				const baseO = (mat.userData.baseOpacity ?? 1) as number;
+	
+				let mie = 0;
+				let sunSide = 0;
+				if (sun && sprite) {
+					_spriteWorld.copy(sprite.position).applyMatrix4(driftGroup.matrixWorld);
+					_viewVec.subVectors(_spriteWorld, camPos).normalize();
+					const dot = Math.max(0, _viewVec.x * sun[0] + _viewVec.y * sun[1] + _viewVec.z * sun[2]);
+					// Sharp peak when sun is directly behind cloud from cam POV.
+					// dot^6 via repeated multiply — V8 inlines integer-power mul
+					// roughly 4× faster than Math.pow on Pi 5's V8 build. The
+					// inner loop runs 1840×/frame so this is non-trivial.
+					const d2 = dot * dot;
+					const d4 = d2 * d2;
+					const fwd = d4 * d2;
+					mie = fwd * mieGain;
+	
+					// Within-cluster sun-side shading. The sprite's offset from
+					// cluster center (stored as a normalized pseudo-normal at
+					// build time) dotted with the sun direction tells us
+					// whether this sprite is on the sun face (positive dot) or
+					// the shadow face (negative dot). Sun-face sprites get a
+					// brightness boost; shadow-face stay neutral. Smoothstep'd
+					// soft terminator (-0.2..0.6 dot range) avoids hard mid-
+					// cluster contrast. Gated by (1-nf) so night clusters
+					// don't get directional shading from a non-visible sun.
+					const nx = (mat.userData.offsetNX ?? 0) as number;
+					const ny = (mat.userData.offsetNY ?? 0) as number;
+					const nz = (mat.userData.offsetNZ ?? 0) as number;
+					const sunDot = nx * sun[0] + ny * sun[1] + nz * sun[2];
+					const t = Math.max(0, Math.min(1, (sunDot + 0.2) / 0.8));
+					sunSide = t * t * (3 - 2 * t) * (1 - nf) * 0.30;
+				}
+	
+				// Per-channel warm shift on the Mie boost: warm-amber tint
+				// (R strongest, G mid, B suppressed) so golden-hour clouds
+				// read warm instead of just brighter. sunSide adds a near-
+				// neutral white-warm directional brighten (R≈G≈B with slight
+				// blue suppression) — gives clusters a sun-lit hemisphere.
+				const litR = baseB * (1 + liveSunBoost * 0.85 + mie * 1.40 + sunSide * 1.05);
+				const litG = baseB * (1 + liveSunBoost * 0.85 + mie * 0.95 + sunSide * 1.00);
+				const litB = baseB * (1 + liveSunBoost * 0.85 + mie * 0.42 + sunSide * 0.85);
+	
+				// Moonlit floor — additive grey-blue lift gated by nightFactor.
+				// Without this, the ambient pipeline crushes clouds to ~1-2% per
+				// channel — black silhouettes. But the prior 0.16 coefficient
+				// over-lifted: combined with the (then higher) nightDark floor +
+				// bloom it read as milky white. Dropped 0.16 → 0.085 so the deck
+				// stays DIM — visible as grey-blue mass, not a bright wash. The
+				// blue bias is carried in the per-channel mix below (B > R) so it
+				// reads as cool moonlight Rayleigh scatter, not neutral white.
+				const moonLit = L.moonContribution * baseB * 0.085;
+	
+				// City skyglow — warm-amber additive on cluster underside.
+				// Strong on R, mid on G, weak on B → reads as sodium-amber
+				// light pollution. Scaled by per-sprite baseB so denser cluster
+				// cores glow stronger than wispy edges. cityGlowStrength is
+				// already gated by nf + cityFactor + density so this is a clean
+				// linear contribution: at full night over Hyderabad with 80%
+				// cloud density, the underside picks up ~24% warm bias.
+				const cityLitR = cityGlowStrength * baseB * 1.00;
+				const cityLitG = cityGlowStrength * baseB * 0.55;
+				const cityLitB = cityGlowStrength * baseB * 0.18;
+	
+				// Moonlit per-channel mix biased COOL (R suppressed, B lifted) so
+				// the dim night deck reads grey-blue like real moonlit cumulus,
+				// not neutral/warm grey. R 0.82 < G 1.0 < B 1.22.
+				mat.color.setRGB(
+					litR * nightDark         * ambR * ambI + moonLit * 0.82 + cityLitR,
+					litG * nightDark * coolG * ambG * ambI + moonLit * 1.00 + cityLitG,
+					litB * nightDark * coolB * ambB * ambI + moonLit * 1.22 + cityLitB,
+				);
+				mat.opacity = baseO * opaScale;
 			}
-
-			// Per-channel warm shift on the Mie boost: warm-amber tint
-			// (R strongest, G mid, B suppressed) so golden-hour clouds
-			// read warm instead of just brighter. sunSide adds a near-
-			// neutral white-warm directional brighten (R≈G≈B with slight
-			// blue suppression) — gives clusters a sun-lit hemisphere.
-			const litR = baseB * (1 + liveSunBoost * 0.85 + mie * 1.40 + sunSide * 1.05);
-			const litG = baseB * (1 + liveSunBoost * 0.85 + mie * 0.95 + sunSide * 1.00);
-			const litB = baseB * (1 + liveSunBoost * 0.85 + mie * 0.42 + sunSide * 0.85);
-
-			// Moonlit floor — additive grey-blue lift gated by nightFactor.
-			// Without this, the ambient pipeline crushes clouds to ~1-2% per
-			// channel — black silhouettes. But the prior 0.16 coefficient
-			// over-lifted: combined with the (then higher) nightDark floor +
-			// bloom it read as milky white. Dropped 0.16 → 0.085 so the deck
-			// stays DIM — visible as grey-blue mass, not a bright wash. The
-			// blue bias is carried in the per-channel mix below (B > R) so it
-			// reads as cool moonlight Rayleigh scatter, not neutral white.
-			const moonLit = L.moonContribution * baseB * 0.085;
-
-			// City skyglow — warm-amber additive on cluster underside.
-			// Strong on R, mid on G, weak on B → reads as sodium-amber
-			// light pollution. Scaled by per-sprite baseB so denser cluster
-			// cores glow stronger than wispy edges. cityGlowStrength is
-			// already gated by nf + cityFactor + density so this is a clean
-			// linear contribution: at full night over Hyderabad with 80%
-			// cloud density, the underside picks up ~24% warm bias.
-			const cityLitR = cityGlowStrength * baseB * 1.00;
-			const cityLitG = cityGlowStrength * baseB * 0.55;
-			const cityLitB = cityGlowStrength * baseB * 0.18;
-
-			// Moonlit per-channel mix biased COOL (R suppressed, B lifted) so
-			// the dim night deck reads grey-blue like real moonlit cumulus,
-			// not neutral/warm grey. R 0.82 < G 1.0 < B 1.22.
-			mat.color.setRGB(
-				litR * nightDark         * ambR * ambI + moonLit * 0.82 + cityLitR,
-				litG * nightDark * coolG * ambG * ambI + moonLit * 1.00 + cityLitG,
-				litB * nightDark * coolB * ambB * ambI + moonLit * 1.22 + cityLitB,
-			);
-			mat.opacity = baseO * opaScale;
-		}
+	});
 	});
 
 	// Per-frame: rotate each sprite + wind-drift around city vertical.

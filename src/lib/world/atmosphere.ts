@@ -129,8 +129,10 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 		if (v.scene.fog) { v.scene.fog.enabled = val > 0.00001; v.scene.fog.density = val; }
 	});
 	// Per-pass visual density — sharper at night, plus an additive haze boost.
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	(v.scene.fog as any).visualDensityScalar = 1 + 0.9 * nf + haze * 4;
+	_fogVisualScalar.update(1 + 0.9 * nf + haze * 4, (val) => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		if (v.scene.fog) (v.scene.fog as any).visualDensityScalar = val;
+	});
 	_fogBrightness.update(tBright, (val) => { if (v.scene.fog) v.scene.fog.minimumBrightness = val; });
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const Cany = C as any;

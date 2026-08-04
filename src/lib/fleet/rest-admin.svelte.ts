@@ -182,20 +182,21 @@ export class RestAdminStore {
 		return this.#peers.find((p) => p.deviceId === deviceId);
 	}
 
+	// Throws on non-2xx or network error so caller's fanOut() (which treats a
+	// throw as failure) reports truthfully. Missing-peer-token is allowed to
+	// resolve silently — `getPeerToken` falls back to the operator's session
+	// and the failing-peer hint belongs in the per-peer handler, not here.
 	async #postCommand(peer: DiscoveredPeer, body: { type: string; [k: string]: unknown }): Promise<void> {
-		try {
-			const authHeader = await peerAuthHeader();
-			const res = await fetch(`${urlFor(peer)}/api/command`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...authHeader },
-				body: JSON.stringify(body),
-			});
-			if (!res.ok) console.warn(`[admin] command to ${peer.deviceId} failed: ${res.status}`);
-		} catch (e) {
-			console.warn(`[admin] command to ${peer.deviceId} network error:`, (e as Error).message);
+		const authHeader = await peerAuthHeader();
+		const res = await fetch(`${urlFor(peer)}/api/command`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', ...authHeader },
+			body: JSON.stringify(body),
+		});
+		if (!res.ok) {
+			throw new Error(`HTTP ${res.status} from ${peer.deviceId}`);
 		}
 	}
-
 	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;

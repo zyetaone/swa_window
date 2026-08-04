@@ -11,6 +11,8 @@
  *     flyover (pitch down) at `transitionAtMs` for `durationMs`, then exit.
  *   type: 'set_scene'         — admin forcing a scene change.
  *   type: 'set_mode'          — admin switching display mode.
+ *   type: 'update'            — admin triggering an on-demand OTA pull; the
+ *     browser fans it to the local /api/update endpoint (server-side only).
  *
  * The endpoint doesn't validate the payload shape beyond needing a `type`
  * string. It publishes the full body to the SSE bus so the local browser

@@ -6,7 +6,7 @@
  * entries; admin then directly fetch()es each peer's REST endpoints.
  *
  * Replaces the WS-broker device registry with the mDNS primitive that's
- * already in lan-peers.server.ts — no central state required.
+ * already in server/fleet/lan-peers.ts — no central state required.
  */
 
 import { json } from '@sveltejs/kit';
