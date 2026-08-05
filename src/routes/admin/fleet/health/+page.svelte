@@ -57,7 +57,6 @@
 
 	function fpsColor(fps: number): string {
 		if (fps === 0) return '#6b7280';
-		if (fps < 30) return '#f59e0b';
 		if (fps < 55) return '#f59e0b';
 		return '#22c55e';
 	}

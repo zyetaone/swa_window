@@ -50,12 +50,11 @@ import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabl
 		});
 	});
 
-	// ── Overlay recovery ────────────────────────────────────────────────────
 	$effect(() => {
 		return startOverlayRecovery({
 			getFps: () => untrack(() => model.measuredFps),
 			disableOverlay: () => {
-				model.config.world.useThreeOverlay = false;
+				model.applyConfigPatch('world.useThreeOverlay', false);
 				model.telemetry.recordEvent('error', {
 					where: 'overlay-recovery',
 					reason: 'sustained-low-fps',

@@ -47,8 +47,7 @@ export const DEFAULT_SCREEN_DRIFT_SIGN = 1;
  * also contains a `- 90` that means something entirely different (Cesium pitch
  * is measured from the horizon, ours from straight down). Two unrelated 90s in
  * one function is exactly how a frame-convention bug gets introduced by someone
- * "cleaning up" the wrong one. `flight.svelte.ts:noseHeadingDeg` already refers
- * to this constant by name in prose.
+ * "cleaning up" the wrong one.
  */
 export const SEAT_LOOK_DEG = 90;
 

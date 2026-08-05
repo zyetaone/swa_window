@@ -39,7 +39,6 @@
 	// Lab mode (?lab=1, DEV only) — see the param parsing in onMount.
 	let labMode = $state(false);
 	let labRenderer = $state<'cesium' | 'hybrid' | 'night-lab'>('cesium');
-
 	// The renderer selector is the ONLY lab writer of useThreeOverlay, and it
 	// writes nothing unless lab mode is on — otherwise it would clobber the
 	// config-tree default (and any ?overlay= / fleet config_patch) on the ship

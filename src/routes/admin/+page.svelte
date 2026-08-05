@@ -239,8 +239,8 @@
 	}
 
 	function handleSaveMyBinding() {
+		// handleSetBinding already calls refreshBindings().
 		handleSetBinding(myFingerprint, formRole, formGroup);
-		refreshBindings();
 	}
 
 	function handleSetBinding(fp: string, role: DeviceRole, groupId: string) {
@@ -281,9 +281,6 @@
 				<span class="health-stat"><span class="health-dot online"></span>{store.fleetHealth.online} online</span>
 				<span class="health-stat"><span class="health-dot offline"></span>{store.fleetHealth.offline} offline</span>
 				<span class="health-stat">Avg FPS: <strong>{store.fleetHealth.avgFps}</strong></span>
-				{#if store.serverUptime > 0}
-					<span class="health-stat server-uptime">Server: {Math.floor(store.serverUptime / 3600)}h {Math.floor((store.serverUptime % 3600) / 60)}m</span>
-				{/if}
 			</div>
 			{#if store.alerts.length > 0}
 				<div class="alerts">
@@ -696,10 +693,6 @@
 
 	.health-dot.online { background: #22c55e; }
 	.health-dot.offline { background: #ef4444; }
-
-	.server-uptime {
-		color: #71717a;
-	}
 
 	.alerts {
 		display: flex;

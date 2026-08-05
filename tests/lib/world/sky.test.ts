@@ -11,9 +11,9 @@ import { describe, it, expect } from 'vitest';
 import {
 	computeSunDirection,
 	sunElevationSin,
-	SKY_PALETTE,
 	SUN_PLACEMENT_M,
 } from '$lib/world/sky';
+import { SKY_PALETTE } from '$lib/world/curves';
 
 const SUN_TILT = 0.4; // matches the private constant in sky.ts
 

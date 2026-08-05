@@ -81,13 +81,13 @@
 
 	let showHint = $state(false);
 	$effect(() => {
-		if (model.config.shell.blindOpen && !model.flight.isTransitioning) {
-			const showTimer = setTimeout(() => { showHint = true; }, 3000);
-			const hideTimer = setTimeout(() => { showHint = false; }, 8000);
-			return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+		if (!model.config.shell.blindOpen || model.flight.isTransitioning) {
+			showHint = false;
+			return;
 		}
-		showHint = false;
-		return undefined;
+		const showTimer = setTimeout(() => { showHint = true; }, 3000);
+		const hideTimer = setTimeout(() => { showHint = false; }, 8000);
+		return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
 	});
 </script>
 

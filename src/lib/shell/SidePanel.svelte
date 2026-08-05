@@ -26,6 +26,10 @@
 	let panelOpen = $state(false);
 	let closing = $state(false);
 	let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+	let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	import { onDestroy } from 'svelte';
+
 
 	function resetDismissTimer() {
 		if (dismissTimer) clearTimeout(dismissTimer);
@@ -42,7 +46,7 @@
 
 	// Tab button: kept as bind:this because closePanel() needs to refocus it
 	// AFTER the panel unmounts (no live element to dispatch from at that point).
-	let tabButtonEl: HTMLButtonElement | undefined = $state();
+	let tabButtonEl: HTMLButtonElement | undefined;
 
 	function openPanel() {
 		panelOpen = true;
@@ -52,13 +56,20 @@
 	function closePanel() {
 		if (closing) return;
 		clearDismissTimer();
+		if (closeTimer) clearTimeout(closeTimer);
 		closing = true;
-		setTimeout(() => {
+		closeTimer = setTimeout(() => {
 			panelOpen = false;
 			closing = false;
 			tabButtonEl?.focus();
+			closeTimer = null;
 		}, 200);
 	}
+
+	onDestroy(() => {
+		if (dismissTimer) clearTimeout(dismissTimer);
+		if (closeTimer) clearTimeout(closeTimer);
+	});
 
 	function togglePanel() {
 		if (panelOpen) closePanel();
@@ -66,7 +77,6 @@
 	}
 
 	const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
 	/**
 	 * Focus trap + Escape + Tab-cycle attachment for the modal panel. Replaces
 	 * the earlier bind:this + $effect + onkeydown trio: lifecycle (mount/

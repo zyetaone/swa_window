@@ -106,12 +106,11 @@
 	placement.position.set(0, WING_Y_BASE, WING_Z_BASE);
 	holder.position.x = WING_X_BASE;
 
-	// Mutable X base — the tuner drives this via __wing.setXBase; the tick
-	// re-derives holder.position.x from it every frame.
-	let xBase = WING_X_BASE;
-	const wingCfgXBase = $derived(model.config.world.wingXBase);
+	// Mutable X base — the dev tuner drives this via __wing.setXBase; the tick
+	// re-derives holder.position.x from it every frame. $state so Svelte
+	// tracks the dev write as a reactive dep — the tick re-evaluates.
+	let xBase = $state(WING_X_BASE);
 
-	// Convert a GLB material to a LIT DoubleSide MeshLambertMaterial, keeping its
 	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
 	// responds to the scene AmbientLight + the dawn/moon key light below, so the
 	// wing reads as a dimensional 3D surface (lit edge + shadowed edge) whose
@@ -365,12 +364,7 @@
 		// the left/right panorama roles.
 		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
 		const mirrorX = screenSign >= 0 ? 1 : -1;
-		// screenSign ≥ 0 → un-mirrored pose; < 0 → mirrored (reverse travel).
-		// X-position flips with mirror so wing stays on the same window side.
-		holder.position.x = (wingCfgXBase + seatOffset) * mirrorX;
-		holder.scale.x = mirrorX;
-
-		// Mirror the camera world transform onto the group.
+		holder.position.x = (xBase + seatOffset) * mirrorX;
 		const cam = ctx.camera.current;
 		group.position.copy(cam.position);
 		group.quaternion.copy(cam.quaternion);

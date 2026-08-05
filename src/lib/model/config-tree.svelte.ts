@@ -173,6 +173,9 @@ function fuselageOffsetForRole(role: DeviceRole): number {
 	}
 }
 export function setParallaxRole(role: DeviceRole): void {
+	// Deliberately bypasses applyConfigPatch / the CRDT stamp: the parallax
+	// role is device-local (each Pi knows which pane it is), so broadcasting
+	// it to peers would be wrong.
 	camera.parallax.role = role;
 	applyRoleDerived(role);
 }
@@ -363,21 +366,14 @@ export function applyConfigPatch(
 	const rest = path.slice(idx + 1);
 	const root = NAMESPACES[ns];
 	if (!root) return false;
-
-	// Idempotency: when the value is already what we're being asked to set,
-	// skip the CRDT stamp + setByPath. Saves a per-keystroke peer-sync PATCH
-	// on slider snap-back, a telemetry event, and the downstream $effect
-	// invalidations. Object.is so NaN-vs-NaN counts as "unchanged."
 	const rootRec = root as unknown as Record<string, unknown>;
 	const existing = readByPath(rootRec, rest);
 
 	// Idempotency: when the value is already what we're being asked to set,
 	// skip the CRDT stamp + setByPath. Saves a per-keystroke peer-sync PATCH
-	// on slider snap-back, a telemetry event, and the downstream $effect
-	// invalidations. Object.is so NaN-vs-NaN counts as "unchanged."
+
 	if (Object.is(existing, value)) return true;
 
-	// Type guard: reject patches whose value type doesn't match the existing
 	// config leaf. Prevents 'potato' → number field from corrupting runtime.
 	if (typeof value !== typeof existing) return false;
 
@@ -434,6 +430,7 @@ export function configSnapshot() {
 		shell:     deepSnapshot(shell as unknown as Record<string, unknown>),
 	};
 }
+
 
 // ─── Public types (for consumers that need the shape, not the class) ──────────
 // CameraConfig is already declared at line 140 (aliased to typeof _camera).

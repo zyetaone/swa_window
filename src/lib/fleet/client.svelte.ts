@@ -63,11 +63,11 @@ export class DeviceClient {
 	// timeout still resolves and calls applyScene() on a torn-down model —
 	// either crashes or pins the model + scene in memory beyond GC.
 	#pendingTransitions = new Set<ReturnType<typeof setTimeout>>();
-	#state: ConnectionState = $state('disconnected');
+	#connection: ConnectionState = $state('disconnected');
 
 	/** Reactive connection state — mirrors old WS transport's `state`. */
 	get connectionState(): ConnectionState {
-		return this.#state;
+		return this.#connection;
 	}
 
 	get isDestroyed(): boolean { return this.#destroyed; }
@@ -98,20 +98,20 @@ export class DeviceClient {
 			this.#eventSource.close();
 			this.#eventSource = null;
 		}
-		this.#state = 'connecting';
+		this.#connection = 'connecting';
 		this.#eventSource = new EventSource('/api/events');
 
 		this.#eventSource.addEventListener('open', () => {
-			this.#state = 'connected';
+			this.#connection = 'connected';
 		});
 
 		this.#eventSource.addEventListener('connected', () => {
-			this.#state = 'connected';
+			this.#connection = 'connected';
 		});
 
 		this.#eventSource.addEventListener('error', () => {
 			// EventSource auto-reconnects; we just reflect the state.
-			this.#state = this.#destroyed ? 'disconnected' : 'retrying';
+			this.#connection = this.#destroyed ? 'disconnected' : 'retrying';
 		});
 
 		this.#eventSource.addEventListener('config_patch', (ev) => {
@@ -132,7 +132,7 @@ export class DeviceClient {
 		this.#pendingTransitions.clear();
 		this.#eventSource?.close();
 		this.#eventSource = null;
-		this.#state = 'disconnected';
+		this.#connection = 'disconnected';
 	}
 
 	destroy(): void {

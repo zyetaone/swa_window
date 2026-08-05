@@ -9,10 +9,10 @@
 	 * sessionStorage caches the token after first prompt; on 401 we clear
 	 * and re-prompt.
 	 */
-	import { onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
+	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
 	import type { ContentBundle } from '$lib/scene/bundle/types';
 	import type { AssetInfo } from '$lib/server/scene/bundle/assets';
-	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
 
 	// $state.raw — both arrays are only ever reassigned wholesale from fetch
 	// responses; never mutated in place. Avoids the proxy traversal cost.
@@ -22,9 +22,12 @@
 	let dragging = $state(false);
 	let busy = $state(false);
 
+	let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
 	function flash(kind: 'ok' | 'err', msg: string) {
 		toast = { kind, msg };
-		setTimeout(() => { toast = null; }, 3500);
+		if (toastTimer) clearTimeout(toastTimer);
+		toastTimer = setTimeout(() => { toast = null; toastTimer = null; }, 3500);
 	}
 
 	async function refresh() {
@@ -147,9 +150,11 @@
 
 	let fileInput: HTMLInputElement;
 
-	onMount(refresh);
-</script>
+	onDestroy(() => {
+		if (toastTimer) clearTimeout(toastTimer);
+	});
 
+</script>
 <svelte:head>
 	<title>Aero — Content</title>
 </svelte:head>
@@ -274,12 +279,13 @@
 		font-weight: 500;
 	}
 	.dropzone {
-		display: flex;
-		align-items: center;
-		gap: 12px;
+		display: flex; align-items: center; gap: 12px;
 		padding: 16px;
 		background: #16181d;
 		border: 1px dashed #3f3f46;
+		border-radius: 6px;
+	}
+	.upload-btn {
 		padding: 8px 16px;
 		background: #2563eb;
 		border: none;

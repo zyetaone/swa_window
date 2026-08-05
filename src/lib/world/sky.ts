@@ -118,7 +118,3 @@ export function sunElevationSin(latDeg: number, timeOfDay: number): number {
 
 // Moon phase: Cesium Simon1994PlanetaryPositions handles this via
 // atmosphere-manager.ts. Three-side moon billboard also uses Cesium.
-// SKY_PALETTE now lives in the framework-free $lib/world/curves (so the
-// Cesium side can read it too, not just Three). Re-exported here for the Three
-// layers + shell components that import it from '$lib/world/sky'.
-export { SKY_PALETTE } from '$lib/world/curves';

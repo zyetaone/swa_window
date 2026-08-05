@@ -8,24 +8,26 @@
 	 * config-tree.svelte.ts as aesthetic constants — change via admin code
 	 * push if ever needed, not via slider.
 	 *
-	 * Binds directly to the module-scope config rune via bind:value (now that
-	 * RangeSlider exposes value as $bindable). One source of truth — no
-	 * oninput callback duplication.
+	 * Routes operator writes through model.applyConfigPatch so every config
+	 * change is CRDT-stamped (peer Pis see the flip via peer-sync) and
+	 * prototype-pollution-hardened. Direct `config.X = v` writes (the
+	 * previous bind: idiom) skip the gate and silently break fleet sync.
 	 */
-	import { config } from '$lib/model/config-tree.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import Toggle from './Toggle.svelte';
 	import RangeSlider from './RangeSlider.svelte';
-</script>
 
+	const model = useAeroWindow();
+</script>
 <section>
 	<h4>Lighting</h4>
-	<RangeSlider
-		id="nightLight"
+		<RangeSlider
 		label="Night Lights (VIIRS scale)"
 		min={0}
 		max={5.0}
 		step={0.1}
-		bind:value={config.world.nightLightIntensity}
+		value={model.config.world.nightLightIntensity}
+		oninput={(e) => model.applyConfigPatch('world.nightLightIntensity', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(1)}
 	/>
 	<RangeSlider
@@ -34,7 +36,8 @@
 		min={0}
 		max={15}
 		step={0.25}
-		bind:value={config.world.additiveStrength}
+		value={model.config.world.additiveStrength}
+		oninput={(e) => model.applyConfigPatch('world.additiveStrength', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(1)}
 	/>
 	<RangeSlider
@@ -43,7 +46,8 @@
 		min={0.035}
 		max={0.3}
 		step={0.005}
-		bind:value={config.world.moonlightIntensity}
+		value={model.config.world.moonlightIntensity}
+		oninput={(e) => model.applyConfigPatch('world.moonlightIntensity', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(3)}
 	/>
 	<RangeSlider
@@ -52,7 +56,8 @@
 		min={0.5}
 		max={4.0}
 		step={0.05}
-		bind:value={config.world.skyDarken}
+		value={model.config.world.skyDarken}
+		oninput={(e) => model.applyConfigPatch('world.skyDarken', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<RangeSlider
@@ -61,7 +66,8 @@
 		min={0.4}
 		max={1.5}
 		step={0.025}
-		bind:value={config.world.nightExposure}
+		value={model.config.world.nightExposure}
+		oninput={(e) => model.applyConfigPatch('world.nightExposure', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<RangeSlider
@@ -70,21 +76,25 @@
 		min={0.5}
 		max={3.0}
 		step={0.05}
-		bind:value={config.world.viirsBrightness}
+		value={model.config.world.viirsBrightness}
+		oninput={(e) => model.applyConfigPatch('world.viirsBrightness', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<!-- P8 perf-gate A/B: flip the photoreal Three.js overlay live in the space
 	     (wing / clouds / moon / neon city / postprocess) without a URL param.
 	     Local to this device — for a fleet-wide flip use admin /api/config. -->
-	<Toggle label="Three.js Overlay" bind:checked={config.world.useThreeOverlay} />
-	<Toggle label="Hash Palette (Night)" bind:checked={config.world.useHashPalette} />
-	<Toggle label="3D Buildings" bind:checked={config.world.buildingsEnabled} />
-	<Toggle label="Cesium Clouds (auto-off when Three.js overlay active)" bind:checked={config.world.useCesiumClouds} />
-	<Toggle label="Window Frame" bind:checked={config.shell.windowFrame} />
-	<Toggle label="Touch (Demo Mode)" bind:checked={config.shell.touchEnabled} />
-	<Toggle label="Cursor Parallax" bind:checked={config.shell.mouseParallax} />
+	<Toggle label="Three.js Overlay" checked={model.config.world.useThreeOverlay} onchange={(e) => model.applyConfigPatch('world.useThreeOverlay', e.currentTarget.checked)} />
+	<Toggle label="Hash Palette (Night)" checked={model.config.world.useHashPalette} onchange={(e) => model.applyConfigPatch('world.useHashPalette', e.currentTarget.checked)} />
+	<Toggle label="3D Buildings" checked={model.config.world.buildingsEnabled} onchange={(e) => model.applyConfigPatch('world.buildingsEnabled', e.currentTarget.checked)} />
+	<Toggle label="Cesium Clouds (auto-off when Three.js overlay active)" checked={model.config.world.useCesiumClouds} onchange={(e) => model.applyConfigPatch('world.useCesiumClouds', e.currentTarget.checked)} />
+	<Toggle label="Window Frame" checked={model.config.shell.windowFrame} onchange={(e) => model.applyConfigPatch('shell.windowFrame', e.currentTarget.checked)} />
+	<Toggle label="Touch (Demo Mode)" checked={model.config.shell.touchEnabled} onchange={(e) => model.applyConfigPatch('shell.touchEnabled', e.currentTarget.checked)} />
+	<Toggle label="Cursor Parallax" checked={model.config.shell.mouseParallax} onchange={(e) => model.applyConfigPatch('shell.mouseParallax', e.currentTarget.checked)} />
 	<!-- Wing position + mirror — adjust how the wing sits in the window -->
-	<RangeSlider id="wingX" label="Wing Position" min={-12} max={2} step={0.1} bind:value={config.world.wingXBase} formatValue={(v) => v.toFixed(1)} />
+	<RangeSlider id="wingX" label="Wing Position" min={-12} max={2} step={0.1}
+		value={model.config.world.wingXBase}
+		oninput={(e) => model.applyConfigPatch('world.wingXBase', parseFloat(e.currentTarget.value))}
+		formatValue={(v) => v.toFixed(1)} />
 	<!-- Wing mirror: flip the screen-drift sign when the wing mirror looks wrong -->
-	<Toggle label="Wing Mirror Flip" checked={config.world.wingDriftSign === -1} onchange={(e) => config.world.wingDriftSign = e.currentTarget.checked ? -1 : 1} />
+	<Toggle label="Wing Mirror Flip" checked={model.config.world.wingDriftSign === -1} onchange={(e) => model.applyConfigPatch('world.wingDriftSign', e.currentTarget.checked ? -1 : 1)} />
 </section>

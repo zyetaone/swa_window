@@ -63,16 +63,15 @@ export class RestAdminStore {
 	devices = $state.raw<DeviceInfo[]>([]);
 	fleetHealth = $state<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
 	alerts = $state.raw<HealthAlert[]>([]);
-	serverUptime = 0;
 
 	#peers: DiscoveredPeer[] = [];
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
 	#discoveryInterval: ReturnType<typeof setInterval> | null = null;
 	#destroyed = false;
 	#sourceId: string;
-	#state = $state<ConnectionState>('connecting');
+	#connection = $state<ConnectionState>('connecting');
 
-	get connectionState(): ConnectionState { return this.#state; }
+	get connectionState(): ConnectionState { return this.#connection; }
 	get isDestroyed(): boolean { return this.#destroyed; }
 	/** Discovered peer addresses. Read by peer-sync's $effect. */
 	get peers(): ReadonlyArray<DiscoveredPeer> { return this.#peers; }
@@ -98,7 +97,7 @@ export class RestAdminStore {
 	/** Initial discover + status fetch. Also exposed so admin UI can manually refresh. */
 	async refresh(): Promise<void> {
 		if (this.#destroyed) return;
-		this.#state = 'connecting';
+		this.#connection = 'connecting';
 		try {
 			const res = await fetch('/api/devices', { cache: 'no-store' });
 			if (!res.ok) throw new Error(`devices ${res.status}`);
@@ -116,10 +115,10 @@ export class RestAdminStore {
 				online: false,
 			}));
 			await this.#pollStatus();
-			this.#state = this.devices.some((d) => d.online) ? 'connected' : 'degraded';
+			this.#connection = this.devices.some((d) => d.online) ? 'connected' : 'degraded';
 		} catch (e) {
 			console.warn('[admin] refresh failed:', (e as Error).message);
-			this.#state = 'disconnected';
+			this.#connection = 'disconnected';
 		}
 	}
 

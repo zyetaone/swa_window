@@ -7,7 +7,7 @@
  */
 
 import { createContext } from 'svelte';
-import { clamp, getSkyState, nightFactor, dawnDuskFactor } from '$lib/utils';
+import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
@@ -28,7 +28,7 @@ import { isGroupLeader } from '$lib/fleet/parallax.svelte';
 import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
 
 
-function effectiveCloudDensity(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
+function effectiveCloudDensityFor(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
 // Re-exported from the fleet protocol so sender + receiver share one number:
 // the receiver bounds incoming schedules against it (transitionDelayMs).
 
@@ -138,8 +138,8 @@ export class AeroWindow {
 	sceneFog = $derived(this.currentLocation.scene.fog);
 	terrainExaggeration = $derived(this.currentLocation.scene.terrain.exaggeration);
 
-	nightFactor = $derived(nightFactor(this.timeOfDay));
-	dawnDuskFactor = $derived(dawnDuskFactor(this.timeOfDay));
+	nightFactor = $derived(nightFactorAt(this.timeOfDay));
+	dawnDuskFactor = $derived(dawnDuskFactorAt(this.timeOfDay));
 
 	// Rename alias — nightLightScale is the reactive reading used by
 	// compose.ts shader uniforms. Plain getter (not $derived) because
@@ -147,7 +147,7 @@ export class AeroWindow {
 	get nightLightScale() { return this.config.world.nightLightIntensity; }
 
 	effectiveCloudDensity = $derived(
-		effectiveCloudDensity(this.weather, this.config.atmosphere.clouds.density, this.skyState),
+		effectiveCloudDensityFor(this.weather, this.config.atmosphere.clouds.density, this.skyState),
 	);
 
 	// ── Constructor ───────────────────────────────────────────────────────────
@@ -262,14 +262,14 @@ export class AeroWindow {
 	#flyoverTimers = new Set<ReturnType<typeof setTimeout>>();
 
 	enterFlyover(pitchDeg: number, altitudeFt: number): void {
-		this.config.camera.flyoverPitchDeg = pitchDeg;         // compose.ts applies it
+		_applyConfigPatch('camera.flyoverPitchDeg', pitchDeg);   // CRDT-stamped so peer Pis see the flyover
 		this.flight.setFlyoverAltitude(Math.max(altitudeFt, this.config.camera.altitude.min));
 	}
 
 	exitFlyover(): void {
 		for (const id of this.#flyoverTimers) clearTimeout(id);
 		this.#flyoverTimers.clear();
-		this.config.camera.flyoverPitchDeg = 0;
+		_applyConfigPatch('camera.flyoverPitchDeg', 0);
 		this.flight.clearFlyoverAltitude();
 	}
 
@@ -479,8 +479,6 @@ export class AeroWindow {
 		c.haze         = this.config.atmosphere.haze.amount;
 		c.warpFactor   = this.flight.warpFactor;
 		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
-		c.camera                = _config.camera;
-		c.director              = _config.director;
 		return c;
 	}
 

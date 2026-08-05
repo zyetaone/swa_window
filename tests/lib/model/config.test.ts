@@ -10,13 +10,40 @@
 import { describe, it, expect } from 'vitest';
 import {
 	applyConfigPatch,
-	configSnapshot,
 	atmosphere,
 	camera,
 	director,
 	world,
 	shell,
 } from '$lib/model/config-tree.svelte';
+
+// Test-only snapshot helpers — moved out of the production module (their
+// only consumer is this file).
+function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const [k, v] of Object.entries(obj)) {
+		if (v === null || v === undefined) {
+			out[k] = v;
+		} else if (Array.isArray(v)) {
+			out[k] = [...v];
+		} else if (typeof v === 'object') {
+			out[k] = deepSnapshot(v as Record<string, unknown>);
+		} else {
+			out[k] = v;
+		}
+	}
+	return out;
+}
+
+function configSnapshot() {
+	return {
+		atmosphere: deepSnapshot(atmosphere as unknown as Record<string, unknown>),
+		camera:    deepSnapshot(camera as unknown as Record<string, unknown>),
+		director:  deepSnapshot(director as unknown as Record<string, unknown>),
+		world:     deepSnapshot(world as unknown as Record<string, unknown>),
+		shell:     deepSnapshot(shell as unknown as Record<string, unknown>),
+	};
+}
 
 // ─── applyConfigPatch — layer dispatch ──────────────────────────────────────
 

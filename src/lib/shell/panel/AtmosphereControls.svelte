@@ -1,44 +1,46 @@
 <script lang="ts">
 	/**
 	 * AtmosphereControls — cloud density / cloud speed / haze sliders.
-	 *
-	 * Binds directly to the module-scope config rune — no AeroWindow model
-	 * context required. Any surface (device side-panel, admin editor,
-	 * marketing preview) can mount this component and get the same reactive
-	 * binding on the same `$state` leaves. Ranges pull from the config tree's
-	 * own min/max SSOT.
+	 * Routes operator writes through model.applyConfigPatch — see
+	 * docs/ARCHITECTURE.md non-goals: `applyConfigPatch` is the single
+	 * write gate for the CRDT LWW merge and the prototype-pollution
+	 * defense. Direct `config.X = v` skips the gate and silently
+	 * breaks fleet sync.
 	 */
-	import { config } from '$lib/model/config-tree.svelte';
+	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import RangeSlider from './RangeSlider.svelte';
-</script>
 
-<section>
+	const model = useAeroWindow();
+</script>
+	<section>
 	<h4>Atmosphere</h4>
-	<RangeSlider
-		id="clouds"
+		<RangeSlider
 		label="Cloud Cover"
 		min={0}
 		max={1.0}
 		step={0.05}
-		bind:value={config.atmosphere.clouds.density}
+		value={model.config.atmosphere.clouds.density}
+		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 	<RangeSlider
 		id="cloudSpeed"
 		label="Cloud Speed"
-		min={config.director.ambient.cloudSpeedMin}
-		max={config.director.ambient.cloudSpeedMax}
+		min={model.config.director.ambient.cloudSpeedMin}
+		max={model.config.director.ambient.cloudSpeedMax}
 		step={0.1}
-		bind:value={config.atmosphere.clouds.speed}
+		value={model.config.atmosphere.clouds.speed}
+		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(1) + 'x'}
 	/>
 	<RangeSlider
 		id="haze"
 		label="Haze"
-		min={config.atmosphere.haze.min}
-		max={config.atmosphere.haze.max}
+		min={model.config.atmosphere.haze.min}
+		max={model.config.atmosphere.haze.max}
 		step={0.005}
-		bind:value={config.atmosphere.haze.amount}
+		value={model.config.atmosphere.haze.amount}
+		oninput={(e) => model.applyConfigPatch('atmosphere.haze.amount', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 </section>

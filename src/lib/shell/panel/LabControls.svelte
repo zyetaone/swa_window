@@ -27,7 +27,14 @@
 
 <fieldset>
 	<legend>Renderer</legend>
-	<select class="lab-select" value={mode} onchange={(e) => { mode = (e.currentTarget as HTMLSelectElement).value as LabMode; }}>
+	<select class="lab-select" value={mode} onchange={(e) => {
+		const next = (e.currentTarget as HTMLSelectElement).value as LabMode;
+		mode = next;
+		// The renderer selector is the ONLY lab writer of useThreeOverlay — the
+		// write lives here (user interaction) rather than a page-level $effect.
+		// Night Lab needs the overlay: variants E/F render through Three.
+		model.applyConfigPatch('world.useThreeOverlay', next !== 'cesium');
+	}}>
 		<option value="cesium">Cesium (DOM effects)</option>
 		<option value="hybrid">Hybrid (Cesium + Three)</option>
 		<option value="night-lab">Night Lab (variants)</option>
@@ -37,7 +44,7 @@
 {#if mode === 'hybrid'}
 	<fieldset>
 		<legend>HUD</legend>
-		<Toggle label="Show clock" bind:checked={model.config.shell.clockVisible} />
+	<Toggle label="Show clock" checked={model.config.shell.clockVisible} onchange={(e) => model.applyConfigPatch('shell.clockVisible', e.currentTarget.checked)} />
 	</fieldset>
 
 	<fieldset>
@@ -57,7 +64,7 @@
 		<select class="lab-select" value={model.config.camera.parallax.role}
 			onchange={(e) => {
 				const role = (e.currentTarget as HTMLSelectElement).value as DeviceRole;
-				setParallaxRole(role); model.config.camera.parallax.fovDeg = ROLE_FOV[role];
+				setParallaxRole(role); model.applyConfigPatch('camera.parallax.fovDeg', ROLE_FOV[role]);
 			}}>
 			<!-- Iterated from the DEVICE_ROLES SSOT so the lab picker can never
 			     offer a different set than the roles the app actually accepts. -->
@@ -69,8 +76,8 @@
 {:else if mode === 'cesium'}
 	<fieldset>
 		<legend>Clouds</legend>
-		<RangeSlider label="Density" bind:value={model.config.atmosphere.clouds.density} min={0} max={1} step={0.01} />
-		<RangeSlider label="Speed" bind:value={model.config.atmosphere.clouds.speed} min={0.1} max={3} step={0.1} />
+	<RangeSlider label="Density" value={model.config.atmosphere.clouds.density} oninput={(e) => model.applyConfigPatch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))} min={0} max={1} step={0.01} />
+	<RangeSlider label="Speed" value={model.config.atmosphere.clouds.speed} oninput={(e) => model.applyConfigPatch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))} min={0.1} max={3} step={0.1} />
 	</fieldset>
 {/if}
 
