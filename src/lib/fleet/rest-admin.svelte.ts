@@ -61,7 +61,7 @@ export class RestAdminStore {
 	// reassignment (this.devices = this.devices.map(...)) — fine-grained
 	// proxy reactivity buys nothing and costs traversal overhead.
 	devices = $state.raw<DeviceInfo[]>([]);
-	fleetHealth = $state<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
+	fleetHealth = $state.raw<FleetHealth>({ total: 0, online: 0, offline: 0, avgFps: 0, lowFpsCount: 0 });
 	alerts = $state.raw<HealthAlert[]>([]);
 
 	#peers: DiscoveredPeer[] = [];

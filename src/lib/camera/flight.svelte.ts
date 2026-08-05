@@ -13,12 +13,6 @@ import { pickScenario } from '$lib/director/scenarios';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 
 /**
- * Stable 32-bit hash of a location id string (djb2). Combined with
- * daySeed() to seed the per-location orbit so all 3 Pis in a panorama
- * compute an IDENTICAL orbit (same bearing, start angle, direction) while
- * the orbit still varies location-to-location and day-to-day.
- */
-/**
  * Uniform Catmull-Rom interpolation of a scalar through 4 control points,
  * evaluated at local parameter t∈[0,1] between p1 and p2.
  *
@@ -96,7 +90,7 @@ export class FlightSimEngine {
 	#flyoverAltitudeFt: number | null = null;
 	#cruiseElapsed = 0;
 	#arrivalHoldElapsed = 0;
-	#arrivalHoldTargetSec = 8;
+	#arrivalHoldTargetSec = 0;
 	#preWarpSpeed = 1.0;
 	#currentScenario: FlightScenario | null = null;
 	#scenarioWaypointIndex = 0;
@@ -121,19 +115,6 @@ export class FlightSimEngine {
 		return this.orbitDirection;
 	}
 
-	/**
-	 * The aircraft's TRUE nose direction (= compass direction of travel), in
-	 * degrees. This is exactly what `heading` already is — the velocity tangent
-	 * (atan2 of the orbit tangent × orbitDirection) — exposed under an unambiguous
-	 * name so the frame is explicit: the camera looks SEAT_LOOK_DEG (90°) off this
-	 * to face out the SIDE window (compose.ts:syncCamera), and the wing mounts
-	 * rigidly in THIS body frame (no reflection chain). AircraftBody-frame SSOT
-	 * groundwork (docs/analysis/flight-architecture-simplification.md) — consumed
-	 * once camera + wing migrate to the body frame, post-perf-gate.
-	 */
-	get noseHeadingDeg(): number {
-		return this.heading;
-	}
 	isTransitioning = $derived(this.flightMode !== 'orbit' && this.flightMode !== 'arrival_hold');
 	cruiseDestinationName = $derived(
 		this.cruiseTargetId ? (LOCATION_MAP.get(this.cruiseTargetId)?.name ?? this.cruiseTargetId) : null
@@ -275,7 +256,7 @@ export class FlightSimEngine {
 			this.cruiseTargetId = null;
 			this.flightMode = 'arrival_hold';
 			this.#arrivalHoldElapsed = 0;
-			this.#arrivalHoldTargetSec = (ctx.camera.cruise.arrivalHoldMs ?? 8000) / 1000;
+			this.#arrivalHoldTargetSec = ctx.camera.cruise.arrivalHoldMs / 1000;
 			this.warpFactor = 0;
 			this.flightSpeed = this.#preWarpSpeed;
 			patch.locationArrived = arrivedAt;

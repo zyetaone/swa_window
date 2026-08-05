@@ -10,7 +10,7 @@
 	import { WEATHER_TYPES, DISPLAY_MODES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS } from '$content/locations';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import {
 		listBindings,
 		saveBinding,
@@ -30,8 +30,8 @@
 	// local `scene` state because it's a one-shot command ("go there"), not an
 	// ambient config value. The "Push Scene" button dispatches on demand.
 	const store = new RestAdminStore();
-	const stopPeerSync = startPeerSync(store);
-	onDestroy(() => { stopPeerSync(); store.destroy(); });
+	startPeerSync(store);
+	onDestroy(() => store.destroy());
 
 	// Selection state
 	let selectedDevices = $state<Set<string>>(new Set());
@@ -237,6 +237,7 @@
 		formRole = myBinding.role;
 		formGroup = myBinding.groupId;
 	}
+	onMount(refreshBindings);
 
 	function handleSaveMyBinding() {
 		// handleSetBinding already calls refreshBindings().

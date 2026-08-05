@@ -301,7 +301,10 @@ export const shell = $state({
 
 // ─── Root ────────────────────────────────────────────────────────────────────
 
-export const config = $state({ atmosphere, camera, director, world, shell });
+// The root wrapper is a plain object on purpose: its fields are never
+// reassigned (all mutation goes through setByPath into the namespaces), so
+// the reactivity already lives in the five $state namespace proxies.
+export const config = { atmosphere, camera, director, world, shell };
 
 // Flat namespace map — single dispatch point for all path-targeted patches.
 // `satisfies` couples the keys to the framework-free CONFIG_NAMESPACE_KEYS
@@ -402,35 +405,6 @@ function applyRoleDerived(role: DeviceRole): void {
 
 /** Export device ID for use in fleet message sourceId field. */
 export { setCRDTDeviceId, getCRDTDeviceId };
-
-// ─── Auto-quality stepping ─────────────────────────────────────────────────────
-
-function deepSnapshot(obj: Record<string, unknown>): Record<string, unknown> {
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(obj)) {
-		if (v === null || v === undefined) {
-			out[k] = v;
-		} else if (Array.isArray(v)) {
-			out[k] = [...v];
-		} else if (typeof v === 'object') {
-			out[k] = deepSnapshot(v as Record<string, unknown>);
-		} else {
-			out[k] = v;
-		}
-	}
-	return out;
-}
-
-export function configSnapshot() {
-	return {
-		atmosphere: deepSnapshot(atmosphere as unknown as Record<string, unknown>),
-		camera:    deepSnapshot(camera as unknown as Record<string, unknown>),
-		director:  deepSnapshot(director as unknown as Record<string, unknown>),
-		world:     deepSnapshot(world as unknown as Record<string, unknown>),
-		shell:     deepSnapshot(shell as unknown as Record<string, unknown>),
-	};
-}
-
 
 // ─── Public types (for consumers that need the shape, not the class) ──────────
 // CameraConfig is already declared at line 140 (aliased to typeof _camera).

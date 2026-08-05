@@ -68,7 +68,7 @@
 	const tunablesD = $state({ ...D_DEFAULTS });
 	const E_DEFAULTS = { lowAltitudeFt: 15000, highAltitudeFt: 25000, viirsDimMin: 0.3, buildingEmissiveMax: 0.6 };
 	const tunablesE = $state({ ...E_DEFAULTS });
-	const F_DEFAULTS = { intensity: 5.0, glowWidth: 7.0, viirsDim: 0.5, motorwayBoost: 2.5, residentialBoost: 1.5 };
+	const F_DEFAULTS = { intensity: 5.0, glowWidth: 7.0 };
 	const tunablesF = $state({ ...F_DEFAULTS });
 	const G_DEFAULTS = { paletteSpread: 0.25, additiveStrength: 7.0, redSparkRate: 0.03, darkVoidStrength: 0.3, envLight: 0.5, viirsMaskStrength: 0.85 };
 	const tunablesG = $state({ ...G_DEFAULTS });
@@ -387,7 +387,6 @@
 
 	// ─── Readouts ────────────────────────────────────────────────────────────
 
-	const currentVariant = $derived(VARIANTS.find((v) => v.id === variant) ?? VARIANTS[0]);
 	const fps = $derived(Math.round(model.measuredFps));
 	const altitudeFt = $derived(Math.round(model.flight.altitude));
 	const nfPct = $derived(Math.round(model.nightFactor * 100));
@@ -445,9 +444,6 @@
 		{:else if variant === 'F'}
 			<RangeSlider label="Intensity" value={tunablesF.intensity} min={0.1} max={10.0} step={0.1} formatValue={(v: number) => v.toFixed(2)} oninput={setF('intensity')} />
 			<RangeSlider label="Glow width" value={tunablesF.glowWidth} min={0.5} max={12.0} step={0.1} formatValue={(v: number) => v.toFixed(1)} oninput={setF('glowWidth')} />
-			<RangeSlider label="VIIRS dim" value={tunablesF.viirsDim} min={0.0} max={1.0} step={0.05} formatValue={(v: number) => v.toFixed(2)} oninput={setF('viirsDim')} />
-			<RangeSlider label="Motorway boost" value={tunablesF.motorwayBoost} min={0.1} max={6.0} step={0.1} formatValue={(v: number) => v.toFixed(1)} oninput={setF('motorwayBoost')} />
-			<RangeSlider label="Residential boost" value={tunablesF.residentialBoost} min={0.1} max={6.0} step={0.1} formatValue={(v: number) => v.toFixed(1)} oninput={setF('residentialBoost')} />
 			{#if roadsError}<p class="roads-error" role="alert">Roads fetch failed: {roadsError}</p>{/if}
 		{:else if variant === 'G'}
 			<RangeSlider label="Palette spread" value={tunablesG.paletteSpread} min={0.0} max={0.6} step={0.02} formatValue={(v: number) => v.toFixed(2)} oninput={setG('paletteSpread')} />
@@ -491,7 +487,7 @@
 		<div><span class="k">Altitude</span><span class="v">{altitudeFt.toLocaleString()} ft</span></div>
 		<div><span class="k">Time</span><span class="v">{model.timeOfDay.toFixed(2)}h</span></div>
 		<div><span class="k">Night factor</span><span class="v">{nfPct}%</span></div>
-		<div><span class="k">Active</span><span class="v">{currentVariant.id}</span></div>
+		<div><span class="k">Active</span><span class="v">{variant}</span></div>
 		{#if variant === 'E'}<div><span class="k">Alt blend</span><span class="v">{(altitudeBlend * 100).toFixed(0)}%</span></div>{/if}
 		{#if variant === 'F'}<div><span class="k">Roads</span><span class="v">{roadsFeatureCount || '—'}</span></div>{/if}
 	</div>
