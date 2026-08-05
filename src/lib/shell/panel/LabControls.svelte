@@ -7,6 +7,8 @@
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
 		import type { AeroWindow } from '$lib/model/aero-window.svelte';
+	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
+	import Toggle from '$lib/shell/panel/Toggle.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';
 	// Record<DeviceRole, …> rather than a bare object literal: adding a role to
@@ -25,7 +27,7 @@
 
 <fieldset>
 	<legend>Renderer</legend>
-	<select value={mode} onchange={(e) => { mode = (e.currentTarget as HTMLSelectElement).value as LabMode; }}>
+	<select class="lab-select" value={mode} onchange={(e) => { mode = (e.currentTarget as HTMLSelectElement).value as LabMode; }}>
 		<option value="cesium">Cesium (DOM effects)</option>
 		<option value="hybrid">Hybrid (Cesium + Three)</option>
 		<option value="night-lab">Night Lab (variants)</option>
@@ -35,28 +37,24 @@
 {#if mode === 'hybrid'}
 	<fieldset>
 		<legend>HUD</legend>
-		<label style="display:flex;align-items:center;gap:6px;font-size:11px;">
-			<input type="checkbox" bind:checked={model.config.shell.clockVisible} />
-			Show clock
-		</label>
+		<Toggle label="Show clock" bind:checked={model.config.shell.clockVisible} />
 	</fieldset>
 
 	<fieldset>
 		<legend>Night city flyover</legend>
-		<button type="button"
+		<button type="button" class="lab-btn"
 			onclick={() => {
 				const turningOn = model.config.camera.flyoverPitchDeg === 0;
 				model.applyConfigPatch('camera.flyoverPitchDeg', turningOn ? -60 : 0);
 				if (turningOn) { model.setLocation(model.location); model.setTime(2); model.setAltitude(8000); model.onUserInteraction('altitude'); }
-			}}
-			style="font-size:11px;padding:4px 8px;background:rgba(127,174,255,0.12);border:1px solid rgba(127,174,255,0.3);border-radius:4px;color:#cdddff;cursor:pointer;width:100%;">
+			}}>
 			{model.config.camera.flyoverPitchDeg !== 0 ? '✓ Flyover active' : 'Night City Flyover'}
 		</button>
 	</fieldset>
 
 	<fieldset>
 		<legend>3-Pi Role</legend>
-		<select value={model.config.camera.parallax.role}
+		<select class="lab-select" value={model.config.camera.parallax.role}
 			onchange={(e) => {
 				const role = (e.currentTarget as HTMLSelectElement).value as DeviceRole;
 				setParallaxRole(role); model.config.camera.parallax.fovDeg = ROLE_FOV[role];
@@ -71,11 +69,36 @@
 {:else if mode === 'cesium'}
 	<fieldset>
 		<legend>Clouds</legend>
-		<label style="font-size:11px;">Density
-			<input type="range" bind:value={model.config.atmosphere.clouds.density} min="0" max="1" step="0.01" style="width:100%;" />
-		</label>
-		<label style="font-size:11px;">Speed
-			<input type="range" bind:value={model.config.atmosphere.clouds.speed} min="0.1" max="3" step="0.1" style="width:100%;" />
-		</label>
+		<RangeSlider label="Density" bind:value={model.config.atmosphere.clouds.density} min={0} max={1} step={0.01} />
+		<RangeSlider label="Speed" bind:value={model.config.atmosphere.clouds.speed} min={0.1} max={3} step={0.1} />
 	</fieldset>
 {/if}
+
+<style>
+	/* Picker-btn surface, matching the shared panel family. */
+	.lab-select {
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 5px;
+		color: rgba(255, 255, 255, 0.85);
+		font-size: 0.75rem;
+		padding: 0.45rem 0.75rem;
+		width: 100%;
+	}
+
+	/* Same visual language as NightVariantPanel's .reset button. */
+	.lab-btn {
+		width: 100%;
+		font-size: 11px;
+		padding: 6px;
+		background: rgba(127, 174, 255, 0.12);
+		border: 1px solid rgba(127, 174, 255, 0.3);
+		border-radius: 6px;
+		color: #cdddff;
+		cursor: pointer;
+		transition: background 0.2s ease;
+	}
+	.lab-btn:hover {
+		background: rgba(127, 174, 255, 0.22);
+	}
+</style>

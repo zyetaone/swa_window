@@ -141,7 +141,7 @@
 		{@attach focusTrap}
 	>
 		<header>
-			<h2>Sky Portal</h2>
+			<h2>Aero Window</h2>
 		</header>
 
 		<!-- Flight Data -->
@@ -216,7 +216,13 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
+		opacity: 0.35;
 		transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	.panel-tab:hover,
+	.panel-tab:focus-visible {
+		opacity: 1;
 	}
 
 	.panel-tab:hover {
@@ -317,12 +323,9 @@
 	h2 {
 		margin: 0;
 		font-size: 1.4rem;
-		font-weight: 700;
-		background: linear-gradient(135deg, #fff 0%, #ccc 100%);
-		-webkit-background-clip: text;
-		background-clip: text;
-		-webkit-text-fill-color: transparent;
-		letter-spacing: -0.01em;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.92);
+		letter-spacing: 0.02em;
 	}
 
 	/* --- Flight Data --- */

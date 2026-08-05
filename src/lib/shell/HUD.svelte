@@ -2,7 +2,7 @@
 	/**
 	 * HUD — dispatcher between two display modes:
 	 *   Blind OPEN  → TelemetryOverlay (cinematic ALT / GS / LOC readout)
-	 *   Blind CLOSED → BlindInfoCard (centered Sky Portal + time + hint)
+	 *   Blind CLOSED → BlindInfoCard (centered Aero Window + time + hint)
 	 *
 	 * Also owns the aria-live region for flight-transition screen-reader
 	 * announcements — that lives here (not in either card) because it

@@ -504,7 +504,7 @@
 </aside>
 
 <style>
-	.panel { position: absolute; top: 16px; left: 16px; width: 320px; max-height: calc(100vh - 32px); overflow-y: auto; background: rgba(10, 10, 15, 0.92); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 16px; z-index: 30; backdrop-filter: blur(8px); color: #eee; font-family: system-ui, sans-serif; }
+	.panel { position: absolute; top: 16px; left: 16px; width: 320px; max-height: calc(100vh - 32px); overflow-y: auto; background: rgba(10, 10, 30, 0.88); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 16px; z-index: 30; backdrop-filter: blur(8px); color: #eee; }
 	.panel header h2 { font-size: 14px; margin: 0 0 4px; color: #fff; letter-spacing: 0.5px; }
 	.panel header .hint { margin: 0 0 12px; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
 	fieldset { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; margin: 0 0 12px; padding: 8px 10px; }
@@ -520,7 +520,7 @@
 	.readout > div { display: flex; justify-content: space-between; }
 	.readout .k { color: #666; }
 	.readout .v { color: #7faeff; }
-	.reset { display: block; width: 100%; padding: 8px; background: rgba(127, 174, 255, 0.12); border: 1px solid rgba(127, 174, 255, 0.3); border-radius: 6px; color: #cdddff; font-size: 12px; font-family: system-ui, sans-serif; cursor: pointer; transition: background 0.2s ease; }
+	.reset { display: block; width: 100%; padding: 8px; background: rgba(127, 174, 255, 0.12); border: 1px solid rgba(127, 174, 255, 0.3); border-radius: 6px; color: #cdddff; font-size: 12px; cursor: pointer; transition: background 0.2s ease; }
 	.reset:hover { background: rgba(127, 174, 255, 0.22); }
 	.reset.small { padding: 6px; font-size: 11px; }
 	footer { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }

@@ -91,9 +91,13 @@
         transition: transform 0.1s;
     }
 
+    .control input[type="range"]:hover::-webkit-slider-thumb {
+        transform: scale(1.08);
+    }
+
     .control input[type="range"]:active::-webkit-slider-thumb {
         transform: scale(1.15);
-        background: var(--sw-blue);
+        background: var(--sw-blue, #3b82f6);
         border-color: white;
     }
 

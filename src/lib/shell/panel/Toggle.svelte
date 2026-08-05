@@ -32,9 +32,9 @@
         align-items: center;
         gap: 0.6rem;
         cursor: pointer;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         user-select: none;
-        opacity: 0.9;
+        opacity: 0.8;
         transition: opacity 0.2s;
     }
 
@@ -88,11 +88,16 @@
     }
 
     input:checked + .slider {
-        background-color: var(--sw-blue);
+        background-color: var(--sw-blue, #3b82f6);
         border-color: rgba(255, 255, 255, 0.3);
     }
 
     input:checked + .slider:before {
         transform: translateX(20px);
+    }
+
+    .toggle-switch input:focus-visible + .slider {
+        outline: 2px solid var(--sw-yellow, #ffbf27);
+        outline-offset: 2px;
     }
 </style>

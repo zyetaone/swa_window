@@ -84,7 +84,9 @@ import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabl
 	<CesiumViewer />
 </div>
 
+{#if import.meta.env.DEV}
 	<div class="fps-badge">FPS {fps}</div>
+{/if}
 <style>
 	.fps-badge { position: absolute; top: 8px; left: 8px; z-index: 100; background: rgba(0,0,0,0.55); color: #0f0; font: 11px monospace; padding: 2px 6px; border-radius: 3px; pointer-events: none; }
 </style>

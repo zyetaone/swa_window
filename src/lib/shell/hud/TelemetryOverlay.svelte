@@ -60,7 +60,7 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: space-between;
-		background: radial-gradient(ellipse at top right, rgba(0, 0, 0, 0.35) 0%, transparent 70%);
+		background: radial-gradient(ellipse at top right, rgba(0, 0, 0, 0.18) 0%, transparent 55%);
 	}
 	.status-group {
 		align-self: flex-end;
@@ -97,9 +97,9 @@
 		color: rgba(255, 255, 255, 0.7);
 	}
 	.mode-badge.cruising {
-		border-color: rgba(48, 76, 178, 0.4);
-		color: rgba(48, 76, 178, 0.85);
-		box-shadow: 0 0 10px rgba(48, 76, 178, 0.15);
+		border-color: rgba(158, 178, 255, 0.45);
+		color: rgba(158, 178, 255, 0.95);
+		box-shadow: 0 0 10px rgba(48, 76, 178, 0.25);
 	}
 	.telemetry-grid {
 		display: flex;

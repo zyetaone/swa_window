@@ -212,14 +212,16 @@
 	.click-hint.visible { opacity: 1; }
 
 	.click-hint span {
-		background: var(--sw-blue);
-		color: white;
+		background: rgba(10, 10, 30, 0.72);
+		backdrop-filter: blur(8px);
+		color: rgba(255, 255, 255, 0.88);
 		padding: 10px 20px;
 		border-radius: 20px;
-		font-size: 13px;
+		font-size: 12px;
+		letter-spacing: 0.04em;
 		white-space: nowrap;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+		border: 1px solid rgba(255, 255, 255, 0.16);
 	}
 
 	.window-container.no-frame :global(.glass-surface),

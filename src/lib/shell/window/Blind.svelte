@@ -26,6 +26,7 @@
 		onpointerup={blind.onPointerUp}
 		onkeydown={blind.onKeyDown}
 		role="slider"
+		aria-orientation="vertical"
 		tabindex={0}
 		aria-label="Window blind — drag to open or close"
 		aria-valuenow={Math.round(Math.abs(blind.dragY))}

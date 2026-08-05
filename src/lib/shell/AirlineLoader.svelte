@@ -62,6 +62,16 @@
         }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+        .plane-group,
+        .path-anim {
+            animation: none;
+        }
+        .path-anim {
+            stroke-dashoffset: 0;
+        }
+    }
+
     @keyframes dash {
         0% {
             stroke-dashoffset: 251;
