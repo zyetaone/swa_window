@@ -19,6 +19,16 @@ import type { SimulationContext } from '$lib/types';
 
 // ── Reactive outputs ────────────────────────────────────────────────────────
 
+// `$state`, deliberately NOT `$state.raw`, even though every field is rewritten
+// each frame. The usual argument for `.raw` in a hot path is proxy overhead —
+// measured here, that is 0.65 us per frame for these 7 fields against a frame
+// budget of ~333 000 us at the Pi's observed 3 fps. Noise.
+//
+// The reactivity, by contrast, is load-bearing: `Pane.svelte` reads
+// `motion.motionOffsetX` and `motion.breathingOffset` through `$derived` to
+// drive the cabin-sway transform. `$state.raw` would replace the object rather
+// than track field writes, so those deriveds would stop updating and the sway
+// would freeze — a silent visual regression traded for an unmeasurable win.
 export const motion = $state({
 	motionOffsetX: 0,
 	motionOffsetY: 0,

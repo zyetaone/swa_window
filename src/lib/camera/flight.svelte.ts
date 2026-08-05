@@ -68,8 +68,18 @@ export class FlightSimEngine {
 	// --- Orbit ---
 	orbitCenterLat = $state(25.2048);
 	orbitCenterLon = $state(55.2708);
-	orbitRadiusMajor = $state<number>(0.15);
-	orbitRadiusMinor = $state<number>(0.06);
+	// Plain fields, NOT $state: both are written and read inside #tickOrbit in
+	// the same frame, and nothing outside this class — no component, no test —
+	// ever reads them. As $state each was a signal invalidated 60×/second for
+	// zero subscribers, which is pure overhead plus a misleading signal to the
+	// next reader that something reactive depends on them.
+	//
+	// The neighbours here stay reactive on purpose: orbitCenterLat/Lon,
+	// orbitBearing and orbitAngle ARE read by tests pinning the 3-Pi
+	// deterministic-orbit contract, so demoting those would remove the handle
+	// that proves the panorama stays position-locked.
+	orbitRadiusMajor = 0.15;
+	orbitRadiusMinor = 0.06;
 	orbitBearing = $state(0);
 	orbitAngle = $state(0);
 	// Rotation sense around the orbit ellipse: +1 or -1. Randomised
