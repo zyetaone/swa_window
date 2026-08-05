@@ -245,7 +245,7 @@
 	:global(body) {
 		margin: 0;
 		font-family: system-ui, -apple-system, sans-serif;
-		background: #0f1117;
+		background: var(--bg-base);
 		color: #e0e0e6;
 	}
 	.page {
@@ -281,41 +281,41 @@
 	.dropzone {
 		display: flex; align-items: center; gap: 12px;
 		padding: 16px;
-		background: #16181d;
+		background: var(--bg-surface);
 		border: 1px dashed #3f3f46;
 		border-radius: 6px;
 	}
 	.upload-btn {
 		padding: 8px 16px;
-		background: #2563eb;
+		background: var(--primary);
 		border: none;
 		border-radius: 6px;
 		color: #fff;
 		font-size: 13px;
 		cursor: pointer;
 	}
-	.upload-btn:hover:not(:disabled) { background: #1d4ed8; }
+	.upload-btn:hover:not(:disabled) { background: var(--primary-hover); }
 	.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 	.hint { color: #888; font-size: 13px; }
 	table {
 		width: 100%;
 		border-collapse: collapse;
 		font-size: 13px;
-		background: #16181d;
-		border: 1px solid #27272a;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		overflow: hidden;
 	}
 	th {
 		text-align: left;
 		padding: 10px 12px;
-		background: #1a1c23;
-		color: #71717a;
+		background: var(--bg-raised);
+		color: var(--muted);
 		font-weight: 500;
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		border-bottom: 1px solid #27272a;
+		border-bottom: 1px solid var(--border);
 	}
 	td {
 		padding: 10px 12px;
@@ -333,7 +333,7 @@
 		background: transparent;
 		border: 1px solid #7f1d1d;
 		border-radius: 4px;
-		color: #fca5a5;
+		color: var(--error-text);
 		font-size: 11px;
 		cursor: pointer;
 	}
@@ -355,8 +355,8 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 		animation: slide-in 0.2s ease-out;
 	}
-	.toast.ok { background: #14532d; color: #86efac; border: 1px solid #3a6a40; }
-	.toast.err { background: #7f1d1d; color: #fca5a5; border: 1px solid #6a3a40; }
+	.toast.ok { background: #14532d; color: var(--ok-text); border: 1px solid #3a6a40; }
+	.toast.err { background: #7f1d1d; color: var(--error-text); border: 1px solid #6a3a40; }
 	@keyframes slide-in {
 		from { transform: translateY(20px); opacity: 0; }
 		to   { transform: translateY(0);    opacity: 1; }

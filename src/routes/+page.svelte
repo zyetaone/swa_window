@@ -425,12 +425,6 @@
 		cursor: none !important;
 	}
 
-	/* Accessibility: focus indicators */
-	:global(:focus-visible) {
-		outline: 2px solid var(--sw-yellow);
-		outline-offset: 2px;
-	}
-
 	/* Accessibility: reduce motion for DECORATIVE hint animations only.
 	   Scene animations (cloud drift, warp, breathing) are the product, not
 	   shell, so they keep running regardless of this preference. The old

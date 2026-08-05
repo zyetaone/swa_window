@@ -50,15 +50,15 @@
 	}
 
 	function tempColor(c: number): string {
-		if (c >= 80) return '#ef4444';
-		if (c >= 70) return '#f59e0b';
-		return '#22c55e';
+		if (c >= 80) return 'var(--error)';
+		if (c >= 70) return 'var(--warn)';
+		return 'var(--ok)';
 	}
 
 	function fpsColor(fps: number): string {
-		if (fps === 0) return '#6b7280';
-		if (fps < 55) return '#f59e0b';
-		return '#22c55e';
+		if (fps === 0) return 'var(--no-data)';
+		if (fps < 55) return 'var(--warn)';
+		return 'var(--ok)';
 	}
 </script>
 
@@ -119,7 +119,7 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #0f1117;
+		background: var(--bg-base);
 	}
 	.page {
 		max-width: 1200px;
@@ -127,7 +127,7 @@
 		padding: 2rem;
 		font: 14px/1.5 system-ui, sans-serif;
 		color: #e5e7eb;
-		background: #0f1117;
+		background: var(--bg-base);
 		min-height: 100vh;
 	}
 	header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
@@ -139,8 +139,8 @@
 		display: flex;
 		gap: 1.5rem;
 		padding: 1rem 1.25rem;
-		background: #16181d;
-		border: 1px solid #27272a;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
 		border-radius: 8px;
 		margin-bottom: 1.5rem;
 	}
@@ -151,12 +151,12 @@
 		gap: 1rem;
 	}
 	.tile {
-		background: #16181d;
+		background: var(--bg-surface);
 		border-radius: 8px;
 		padding: 1rem;
-		border: 1px solid #27272a;
+		border: 1px solid var(--border);
 	}
-	.tile.offline { border-color: #ef4444; opacity: 0.6; }
+	.tile.offline { border-color: var(--error); opacity: 0.6; }
 	.tile header {
 		display: flex;
 		justify-content: flex-start;
@@ -168,10 +168,10 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: #ef4444;
+		background: var(--error);
 		flex-shrink: 0;
 	}
-	.status-dot.online { background: #22c55e; }
+	.status-dot.online { background: var(--ok); }
 	.id { font-weight: 600; }
 	.role { font-size: 0.8rem; color: #9ca3af; }
 	.commit {
@@ -186,7 +186,7 @@
 	.last-error {
 		margin: 0.4rem 0 0;
 		font-size: 0.72rem;
-		color: #fca5a5;
+		color: var(--error-text);
 		background: rgba(248, 113, 113, 0.1);
 		padding: 0.25rem 0.5rem;
 		border-radius: 4px;
@@ -198,6 +198,6 @@
 	dl > div { display: flex; justify-content: space-between; }
 	dt { color: #9ca3af; }
 	dd { margin: 0; font-weight: 600; }
-	.tile footer { font-size: 0.75rem; color: #6b7280; margin-top: 0.75rem; }
+	.tile footer { font-size: 0.75rem; color: var(--no-data); margin-top: 0.75rem; }
 	.empty { color: #9ca3af; grid-column: 1 / -1; text-align: center; padding: 2rem; }
 </style>

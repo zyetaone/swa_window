@@ -1,0 +1,63 @@
+/*
+ * Global design tokens + chrome — the app's only global stylesheet.
+ *
+ * Origin: the Aug-2026 design audit found the implicit design language
+ * (11–14px type, white-alpha elevation, brand blue/amber) expressed through
+ * ~10 near-identical dark surfaces, 5 card radii, and 15 transition
+ * durations. This file formalizes the parts with real cross-route
+ * consumers. The kiosk's glass/brand tokens (--sw-*) stay route-scoped in
+ * src/routes/+page.svelte — they are cabin chrome, not app chrome.
+ *
+ * Rule for new work: reach for these vars before introducing a new hex.
+ */
+
+:root {
+	/* Surfaces — admin/tooling dark shell */
+	--bg-base: #0f1117; /* page body */
+	--bg-surface: #16181d; /* panels, cards, tables */
+	--bg-raised: #1a1c23; /* table headers, raised wells */
+	--border: #27272a; /* hairlines, card borders, quiet chips */
+
+	/* Text */
+	--text: #e4e4e7;
+	--text-dim: #a1a1aa;
+	--muted: #71717a; /* lowest AA-passing gray on --bg-surface */
+
+	/* Actions */
+	--primary: #2563eb;
+	--primary-hover: #1d4ed8;
+	--accent: #3b82f6; /* focus rings, badges, links on admin */
+
+	/* Semantic ramp — ok/degraded/error mean ONE thing on every surface */
+	--ok: #22c55e;
+	--ok-text: #86efac; /* small text on dark */
+	--warn: #f59e0b;
+	--error: #ef4444;
+	--error-text: #fca5a5;
+	--no-data: #6b7280;
+}
+
+/* One focus ring for the whole app. Brand yellow; admin controls override
+   to --accent with more specific selectors. */
+:focus-visible {
+	outline: 2px solid #ffbf27;
+	outline-offset: 2px;
+}
+
+::selection {
+	background: rgba(48, 76, 178, 0.45);
+	color: #e0e0e8;
+}
+
+/* Thin dark scrollbars — admin panels and the Night Lab scroll daily. */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.12);
+	border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
+}

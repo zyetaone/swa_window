@@ -573,8 +573,8 @@
 <style>
 	:global(body) {
 		margin: 0;
-		background: #0f1117;
-		color: #e4e4e7;
+		background: var(--bg-base);
+		color: var(--text);
 		font-family: system-ui, -apple-system, sans-serif;
 	}
 
@@ -582,7 +582,7 @@
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
-		background: #0f1117;
+		background: var(--bg-base);
 	}
 
 	/* Header */
@@ -591,8 +591,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 16px 24px;
-		background: #16181d;
-		border-bottom: 1px solid #27272a;
+		background: var(--bg-surface);
+		border-bottom: 1px solid var(--border);
 	}
 
 	.header-left {
@@ -609,7 +609,7 @@
 
 	.subtitle {
 		font-size: 13px;
-		color: #71717a;
+		color: var(--muted);
 	}
 
 	.header-right {
@@ -623,12 +623,12 @@
 		padding: 4px 10px;
 		border-radius: 12px;
 		background: #7f1d1d;
-		color: #fca5a5;
+		color: var(--error-text);
 	}
 
 	.connection-badge.online {
 		background: #14532d;
-		color: #86efac;
+		color: var(--ok-text);
 	}
 
 	.fps-badge {
@@ -636,13 +636,13 @@
 		font-weight: 600;
 		padding: 4px 10px;
 		border-radius: 12px;
-		background: #27272a;
-		color: #a1a1aa;
+		background: var(--border);
+		color: var(--text-dim);
 		font-family: ui-monospace, monospace;
 	}
 	.fps-badge.good {
 		background: #14532d;
-		color: #86efac;
+		color: var(--ok-text);
 	}
 	.fps-badge.warn {
 		background: #713f12;
@@ -652,7 +652,7 @@
 	.clock-display {
 		font-size: 13px;
 		font-family: ui-monospace, monospace;
-		color: #71717a;
+		color: var(--muted);
 		letter-spacing: 0.5px;
 	}
 
@@ -662,8 +662,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 8px 24px;
-		background: #1a1c23;
-		border-bottom: 1px solid #27272a;
+		background: var(--bg-raised);
+		border-bottom: 1px solid var(--border);
 		gap: 16px;
 		flex-wrap: wrap;
 	}
@@ -676,14 +676,14 @@
 
 	.health-stat {
 		font-size: 12px;
-		color: #a1a1aa;
+		color: var(--text-dim);
 		display: flex;
 		align-items: center;
 		gap: 6px;
 	}
 
 	.health-stat strong {
-		color: #e4e4e7;
+		color: var(--text);
 	}
 
 	.health-dot {
@@ -692,8 +692,8 @@
 		border-radius: 50%;
 	}
 
-	.health-dot.online { background: #22c55e; }
-	.health-dot.offline { background: #ef4444; }
+	.health-dot.online { background: var(--ok); }
+	.health-dot.offline { background: var(--error); }
 
 	.alerts {
 		display: flex;
@@ -705,13 +705,13 @@
 		font-size: 11px;
 		padding: 3px 8px;
 		border-radius: 4px;
-		background: #27272a;
-		color: #a1a1aa;
+		background: var(--border);
+		color: var(--text-dim);
 	}
 
 	.alert-badge.error {
 		background: #7f1d1d;
-		color: #fca5a5;
+		color: var(--error-text);
 	}
 
 	.alert-badge.warning {
@@ -730,8 +730,8 @@
 	.controls {
 		width: 280px;
 		min-width: 280px;
-		background: #16181d;
-		border-right: 1px solid #27272a;
+		background: var(--bg-surface);
+		border-right: 1px solid var(--border);
 		padding: 20px;
 		display: flex;
 		flex-direction: column;
@@ -744,12 +744,12 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: #71717a;
+		color: var(--muted);
 		margin: 0 0 10px;
 	}
 	.controls :global(.control label),
 	.controls :global(.toggle-container) {
-		color: #a1a1aa;
+		color: var(--text-dim);
 		text-shadow: none;
 	}
 	.controls :global(.label-text) {
@@ -760,7 +760,7 @@
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: #71717a;
+		color: var(--muted);
 		margin-bottom: 12px;
 		display: flex;
 		justify-content: space-between;
@@ -769,7 +769,7 @@
 
 	.hint-muted {
 		font-size: 10px;
-		color: #71717a;
+		color: var(--muted);
 		text-transform: none;
 		letter-spacing: normal;
 		font-weight: 400;
@@ -784,13 +784,13 @@
 
 	label span {
 		font-size: 12px;
-		color: #a1a1aa;
+		color: var(--text-dim);
 	}
 
 	select, .input {
-		background: #0f1117;
-		border: 1px solid #27272a;
-		color: #e4e4e7;
+		background: var(--bg-base);
+		border: 1px solid var(--border);
+		color: var(--text);
 		border-radius: 6px;
 		padding: 8px 10px;
 		font-size: 13px;
@@ -799,7 +799,7 @@
 
 	select:focus:not(:focus-visible), .input:focus:not(:focus-visible) {
 		outline: none;
-		border-color: #3b82f6;
+		border-color: var(--accent);
 	}
 
 	.btn:focus-visible,
@@ -807,7 +807,7 @@
 	.btn-x:focus-visible,
 	select:focus-visible,
 	.input:focus-visible {
-		outline: 2px solid #3b82f6;
+		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
 
@@ -831,28 +831,28 @@
 	.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-primary {
-		background: #2563eb;
+		background: var(--primary);
 		color: white;
 		width: 100%;
 	}
 
 	.btn-secondary {
-		background: #27272a;
-		color: #e4e4e7;
+		background: var(--border);
+		color: var(--text);
 		width: 100%;
 	}
 
 	.btn-outline {
 		background: transparent;
 		border: 1px solid #3f3f46;
-		color: #a1a1aa;
+		color: var(--text-dim);
 		width: 100%;
 	}
 
 	.btn-mode {
 		flex: 1;
 		background: #1e1e24;
-		color: #71717a;
+		color: var(--muted);
 		padding: 6px 8px;
 		font-size: 12px;
 	}
@@ -881,7 +881,7 @@
 		width: 100%;
 		height: 4px;
 		border-radius: 2px;
-		background: #27272a;
+		background: var(--border);
 		outline: none;
 		cursor: pointer;
 	}
@@ -892,7 +892,7 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		background: #3b82f6;
+		background: var(--accent);
 		cursor: pointer;
 		border: 2px solid #1e3a5f;
 	}
@@ -901,7 +901,7 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		background: #3b82f6;
+		background: var(--accent);
 		cursor: pointer;
 		border: 2px solid #1e3a5f;
 	}
@@ -919,7 +919,7 @@
 	.toggle-label input[type="checkbox"] {
 		width: 16px;
 		height: 16px;
-		accent-color: #3b82f6;
+		accent-color: var(--accent);
 		cursor: pointer;
 	}
 
@@ -948,8 +948,8 @@
 
 	/* Device card */
 	.device-card {
-		background: #16181d;
-		border: 1px solid #27272a;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
 		border-radius: 10px;
 		padding: 16px;
 		text-align: left;
@@ -965,8 +965,8 @@
 	}
 
 	.device-card.selected {
-		border-color: #3b82f6;
-		box-shadow: 0 0 0 1px #3b82f6;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 1px var(--accent);
 	}
 
 	.device-card.offline .card-body,
@@ -984,12 +984,12 @@
 		width: 8px;
 		height: 8px;
 		border-radius: 50%;
-		background: #ef4444;
+		background: var(--error);
 		flex-shrink: 0;
 	}
 
 	.status-dot.online {
-		background: #22c55e;
+		background: var(--ok);
 	}
 
 	.hostname {
@@ -1024,7 +1024,7 @@
 
 	.stat-label {
 		font-size: 11px;
-		color: #71717a;
+		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
@@ -1034,7 +1034,7 @@
 		color: #d4d4d8;
 	}
 
-	.fps-good { color: #86efac; }
+	.fps-good { color: var(--ok-text); }
 
 	/* Hardening surface — running-commit chip + error strip */
 	.commit-chip {
@@ -1051,14 +1051,14 @@
 		padding: 0.25rem 0.5rem;
 		border-radius: 4px;
 		background: rgba(248, 113, 113, 0.12);
-		color: #fca5a5;
+		color: var(--error-text);
 		font-size: 0.7rem;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.error-last { opacity: 0.75; }
-	.fps-warn { color: #f59e0b; }
+	.fps-warn { color: var(--warn); }
 
 	.card-footer {
 		display: flex;
@@ -1070,7 +1070,7 @@
 
 	.last-seen {
 		font-size: 11px;
-		color: #71717a;
+		color: var(--muted);
 	}
 
 	.selected-badge {
@@ -1095,25 +1095,25 @@
 	.empty-title {
 		font-size: 18px;
 		font-weight: 600;
-		color: #a1a1aa;
+		color: var(--text-dim);
 	}
 
 	.empty-desc {
 		font-size: 14px;
-		color: #71717a;
+		color: var(--muted);
 	}
 
 	/* Device bindings (SWA corridor) */
 	.bindings-my {
-		background: #0f1117;
-		border: 1px solid #27272a;
+		background: var(--bg-base);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		padding: 10px;
 		margin-bottom: 12px;
 	}
 	.bindings-caption {
 		font-size: 10px;
-		color: #71717a;
+		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		margin-bottom: 6px;
@@ -1121,16 +1121,16 @@
 	.section-caption {
 		font-size: 11px;
 		line-height: 1.45;
-		color: #71717a;
+		color: var(--muted);
 		margin: 0 0 8px;
 	}
 	.section-caption code {
 		font-size: 10.5px;
-		color: #a1a1aa;
+		color: var(--text-dim);
 	}
 	.update-result {
 		font-size: 11px;
-		color: #86efac;
+		color: var(--ok-text);
 		margin: 8px 0 0;
 	}
 	.update-result.has-failures {
@@ -1139,7 +1139,7 @@
 	.update-failed {
 		display: block;
 		font-size: 10.5px;
-		color: #71717a;
+		color: var(--muted);
 		margin-top: 3px;
 		word-break: break-word;
 	}
@@ -1161,9 +1161,9 @@
 	.bindings-form .select { flex: 0 0 80px; padding: 6px 8px; font-size: 12px; }
 	.bindings-form .input { flex: 1; padding: 6px 8px; font-size: 12px; }
 	.bindings-form .btn { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
-	.bindings-hint { font-size: 11px; color: #71717a; margin: 0; }
-	.bindings-hint strong { color: #e4e4e7; }
-	.bindings-hint .muted { color: #71717a; }
+	.bindings-hint { font-size: 11px; color: var(--muted); margin: 0; }
+	.bindings-hint strong { color: var(--text); }
+	.bindings-hint .muted { color: var(--muted); }
 	.bindings-list {
 		list-style: none;
 		padding: 0;
@@ -1193,7 +1193,7 @@
 	.btn-x {
 		background: transparent;
 		border: 1px solid #3f3f46;
-		color: #71717a;
+		color: var(--muted);
 		border-radius: 4px;
 		width: 22px;
 		height: 22px;
@@ -1203,7 +1203,7 @@
 		align-items: center;
 		justify-content: center;
 	}
-	.btn-x:hover { border-color: #7f1d1d; color: #fca5a5; }
+	.btn-x:hover { border-color: #7f1d1d; color: var(--error-text); }
 
 	@media (max-width: 1100px) {
 		.controls {

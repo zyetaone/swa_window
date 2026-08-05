@@ -1,4 +1,6 @@
 <script lang="ts">
+	import '../app.css';
+
 	let { children } = $props();
 
 	// Dev-mode cursor restore — app.html unconditionally adds `html.kiosk` on
@@ -13,7 +15,6 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href="/favicon.svg" />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link
 		rel="preconnect"
