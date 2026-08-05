@@ -275,10 +275,12 @@
 			<div class="detail-box good">
 				<h4>✓ Solid</h4>
 				<ul>
-					<li>Single Z-source: layers.ts — imported by all consumers</li>
-					<li>Single compositor mount point: &lt;Compositor /&gt; in Pane.svelte</li>
+					<li>Z-order is local to Pane.svelte — no shared z-table, each layer declares its own stacking</li>
+					<li>Single compositor mount point: effect layers composed directly in shell/Pane.svelte</li>
 					<li>Static registry + dynamic bundle store merged at render time</li>
-					<li>Adding an effect = 3 files: component, registry entry, z-constant</li>
+					<!-- `&#123;#if&#125;` is escaped: written literally, Svelte parses it as a
+					     real block-open and the whole page fails to compile. -->
+					<li>Adding an effect = a component plus an <code>&#123;#if&#125;</code> mount in Pane.svelte</li>
 					<li>CSS filter chain (blur/contrast/saturate) over WebGL — two rendering worlds that composite, not fight</li>
 				</ul>
 			</div>
@@ -334,7 +336,6 @@
 		<h2>Pillar 5 — Input</h2>
 		<div class="input-focus">
 			<div class="input-hero">
-				<span class="gesture-icon">🪟</span>
 				<h3>The Blind</h3>
 				<p class="big-gesture">Drag down → close blind → fly somewhere new</p>
 			</div>
@@ -657,11 +658,11 @@
 				<span class="stat-label">pillars (built / hidden)</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">108</span>
+				<span class="big-num">115</span>
 				<span class="stat-label">source files</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">274</span>
+				<span class="big-num">417</span>
 				<span class="stat-label">tests passing</span>
 			</div>
 			<div class="verdict-stat">
@@ -815,7 +816,7 @@
 
 	<footer class="arch-footer">
 		<p>Aero Dynamic Window · SvelteKit 2 + Cesium + Bun · Raspberry Pi 5 Kiosk · SWA Hyderabad install · 2026</p>
-		<p class="arch-footer-sub">v1.2 (2026-07-28). Subsystem Manager Pattern now formalised across <code>src/lib/world/</code> (8 leaf managers + orchestrator). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order values sourced from <code>src/lib/scene/layers.ts</code>; sky-state thresholds from <code>src/lib/utils.ts</code>; subsystem pattern documented at <code>AGENTS.md</code>.</p>
+		<p class="arch-footer-sub">v1.2 (2026-07-28). Subsystem Manager Pattern now formalised across <code>src/lib/world/</code> (8 leaf managers + orchestrator). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order is managed locally in <code>src/lib/shell/Pane.svelte</code> (no shared z-table); sky-state thresholds from <code>src/lib/utils.ts</code>; subsystem pattern documented at <code>AGENTS.md</code>.</p>
 	</footer>
 </main>
 
@@ -863,7 +864,7 @@
 
 	.deck {
 		font-size: 15px;
-		color: #667090;
+		color: #8890b0;
 		max-width: 560px;
 		margin: 0 auto 24px;
 	}
@@ -964,7 +965,7 @@
 	.arch-sub {
 		font-size: 11px;
 		font-weight: 400;
-		color: #6678a0;
+		color: #8890b0;
 		margin-top: 2px;
 		font-family: "JetBrains Mono", monospace;
 	}
@@ -996,7 +997,7 @@
 
 	.arch-footer-line {
 		font-size: 13px;
-		color: #667090;
+		color: #8890b0;
 		margin-top: 16px;
 	}
 
@@ -1053,7 +1054,7 @@
 	.pillar-num {
 		font-size: 13px;
 		font-weight: 700;
-		color: #5568a0;
+		color: #8494c0;
 		display: block;
 		margin-bottom: 6px;
 	}
@@ -1103,13 +1104,13 @@
 	.flow-sub {
 		font-size: 11px;
 		font-weight: 400;
-		color: #6678a0;
+		color: #8890b0;
 		margin-top: 2px;
 	}
 
 	.flow-arrow {
 		font-size: 13px;
-		color: #5568a0;
+		color: #8494c0;
 		padding: 4px 0;
 	}
 
@@ -1120,7 +1121,7 @@
 	}
 
 	.flow-row .flow-node { flex: 1; }
-	.flow-plus { color: #5568a0; font-weight: 700; font-size: 18px; }
+	.flow-plus { color: #8494c0; font-weight: 700; font-size: 18px; }
 
 	/* ── State Diagram ─────────────────────────────────────────────── */
 
@@ -1217,7 +1218,7 @@
 		font-family: "JetBrains Mono", monospace;
 		font-size: 11px;
 		font-weight: 700;
-		color: #5568a0;
+		color: #8494c0;
 		min-width: 36px;
 		padding-left: calc(var(--z) * 1.5px + 8px);
 	}
@@ -1229,7 +1230,7 @@
 	}
 
 	.z-desc {
-		color: #667090;
+		color: #8890b0;
 		font-size: 12px;
 		flex: 1;
 	}
@@ -1383,7 +1384,6 @@
 		margin-bottom: 20px;
 	}
 
-	.gesture-icon { font-size: 40px; display: block; margin-bottom: 8px; }
 	.big-gesture { font-size: 18px; font-weight: 500; color: #c0d0f0; margin: 0; }
 
 	.input-details {
@@ -1447,7 +1447,7 @@
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.8px;
-		color: #5568a0;
+		color: #8494c0;
 		padding: 3px 10px;
 		border: 1px solid rgba(255,255,255,0.08);
 		border-radius: 10px;
@@ -1524,37 +1524,14 @@
 		color: #b0b8d0;
 	}
 
-	.hidden-intro {
-		font-size: 14px;
-		color: #8890b0;
-		max-width: 720px;
-		margin: 0 0 32px;
-		padding: 16px 20px;
-		border-left: 3px solid #c084fc;
-		background: rgba(192, 132, 252, 0.04);
-		border-radius: 0 6px 6px 0;
-	}
-	.hidden-h3 {
-		font-size: 18px;
-		font-weight: 600;
-		color: #e0e0e8;
-		margin: 40px 0 8px;
-	}
-	.hidden-blurb {
-		font-size: 14px;
-		color: #a8b0c8;
-		margin: 0 0 16px;
-		max-width: 760px;
-	}
-
 	.audio-note {
 		font-size: 13px;
-		color: #667090;
+		color: #8890b0;
 		font-style: italic;
 	}
 
 	/* Inline code */
-	:global(code) {
+	.arch-doc code {
 		font-family: "JetBrains Mono", monospace;
 		font-size: 12px;
 		background: rgba(255,255,255,0.06);
@@ -1563,7 +1540,7 @@
 		color: #a0b0d0;
 	}
 
-	:global(em) {
+	.arch-doc em {
 		color: #c0c8e0;
 		font-style: italic;
 	}
@@ -1645,7 +1622,7 @@
 
 	.stat-label {
 		font-size: 12px;
-		color: #667090;
+		color: #8890b0;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}
@@ -1671,9 +1648,9 @@
 		color: #556080;
 		margin: 0 0 4px;
 	}
-	.arch-footer-sub {
-		font-size: 11px !important;
-		color: #404868 !important;
+	.arch-footer .arch-footer-sub {
+		font-size: 11px;
+		color: #556080;
 	}
 
 	/* ── Trade-off Table ───────────────────────────────────────────── */
@@ -1717,7 +1694,7 @@
 
 	.tr-note {
 		font-size: 10px;
-		color: #667090;
+		color: #8890b0;
 		font-style: italic;
 	}
 
@@ -1787,5 +1764,9 @@
 		.verdict-grid { grid-template-columns: repeat(2, 1fr); }
 		.z-name { min-width: 80px; }
 		.z-desc { display: none; }
+		.tradeoff-row { grid-template-columns: 80px 1fr 1fr; }
+		.tradeoff-row span:last-child { grid-column: 1 / -1; }
+		.audio-source { min-width: 120px; }
+		.flow-row { flex-direction: column; }
 	}
 </style>
