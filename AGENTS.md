@@ -291,7 +291,7 @@ $effect(() => {
 - **Runtime**: Bun (lockfile: `bun.lock`). Do NOT use npm, yarn, or pnpm.
 - **Build**: Vite 7 + SvelteKit 2 + `@sveltejs/adapter-node` (v5). `bundleStrategy: 'single'` for Pi kiosk.
 - **3D stack**: Cesium v1.141, Three.js v0.183, @threlte/core v8, postprocessing v6.
-- **Styling**: Tailwind CSS v4 + component-scoped `<style>` blocks.
+- **Styling**: hand-rolled component-scoped `<style>` blocks — no Tailwind. Shared design tokens + global chrome (focus ring, selection, scrollbars) live in `src/app.css`; the kiosk's brand `--sw-*` set is declared on the `/` route body in `src/routes/+page.svelte`.
 - **Environment variables** (see `.env.example`):
   - `VITE_CESIUM_ION_TOKEN` — required for terrain/imagery at dev time
   - `TILE_DIR` — offline tile cache (default `/opt/zyeta-aero/tiles` on Pi)
@@ -372,7 +372,7 @@ Heuristic dev utilities — verify hits before deleting:
 - **Assertion style**: `expect(value).toBe(expected)` — standard Vitest matchers
 - **Server endpoint tests**: Directly import SvelteKit `+server.ts` handler functions, call with synthetic `Request` objects and mock `getClientAddress`
 - **No global setup file** — each test file is self-contained
-- **Coverage**: 367 tests across 32 files (as of Phase 18). No formal coverage threshold configured.
+- **Coverage**: snapshot counts go stale fast — run `bun x vitest run` for the current number (458 tests / 46 files as of Aug 2026). No formal coverage threshold configured.
 - **Run**: `bun run test` (alias: `bun x vitest run`)
 
 ### Test Patterns
