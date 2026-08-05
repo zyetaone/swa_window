@@ -54,6 +54,15 @@ export async function peerAuthHeader(): Promise<HeadersInit> {
 }
 
 /**
+ * JSON content-type + peer auth in one call. The fleet REST paths all POST
+ * or PATCH JSON bodies with the same header shape — this is the SSOT for
+ * that pair so the spread + content-type can't drift across call sites.
+ */
+export async function peerJsonHeaders(): Promise<HeadersInit> {
+	return { 'Content-Type': 'application/json', ...(await peerAuthHeader()) };
+}
+
+/**
  * Test-only reset hook. Module state is per-process, so unit tests need a
  * way to drop the cache between cases. Not used by production code.
  */

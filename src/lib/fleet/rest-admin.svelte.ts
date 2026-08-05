@@ -20,7 +20,7 @@ import type {
 } from '$lib/fleet/protocol';
 import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/protocol';
-import { peerAuthHeader } from '$lib/http/peer-token';
+import { peerJsonHeaders } from '$lib/http/peer-token';
 
 type ConnectionState = 'connecting' | 'connected' | 'degraded' | 'disconnected';
 
@@ -187,10 +187,9 @@ export class RestAdminStore {
 	// resolve silently — `getPeerToken` falls back to the operator's session
 	// and the failing-peer hint belongs in the per-peer handler, not here.
 	async #postCommand(peer: DiscoveredPeer, body: { type: string; [k: string]: unknown }): Promise<void> {
-		const authHeader = await peerAuthHeader();
 		const res = await fetch(`${urlFor(peer)}/api/command`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json', ...authHeader },
+			headers: await peerJsonHeaders(),
 			body: JSON.stringify(body),
 		});
 		if (!res.ok) {
@@ -232,19 +231,15 @@ export class RestAdminStore {
 	async pushConfigPath(deviceId: string, path: string, value: unknown): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
-		try {
-			const authHeader = await peerAuthHeader();
-			const res = await fetch(`${urlFor(peer)}/api/config`, {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json', ...authHeader },
-				body: JSON.stringify({ path, value, timestamp: Date.now(), sourceId: this.#sourceId }),
-			});
-			if (!res.ok) console.warn(`[admin] config PATCH to ${peer.deviceId} failed: ${res.status}`);
-		} catch (e) {
-			console.warn(`[admin] config PATCH to ${peer.deviceId} network error:`, (e as Error).message);
+		const res = await fetch(`${urlFor(peer)}/api/config`, {
+			method: 'PATCH',
+			headers: await peerJsonHeaders(),
+			body: JSON.stringify({ path, value, timestamp: Date.now(), sourceId: this.#sourceId }),
+		});
+		if (!res.ok) {
+			throw new Error(`HTTP ${res.status} from ${peer.deviceId}`);
 		}
 	}
-
 	/**
 	 * Trigger the OTA updater on one device NOW, instead of waiting up to 15 min
 	 * for its timer. Returns a result rather than console.warn-ing into the void
@@ -261,10 +256,9 @@ export class RestAdminStore {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return { ok: false, detail: 'device not discovered' };
 		try {
-			const authHeader = await peerAuthHeader();
 			const res = await fetch(`${urlFor(peer)}/api/update`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...authHeader },
+				headers: await peerJsonHeaders(),
 			});
 			if (res.ok) return { ok: true };
 			return {

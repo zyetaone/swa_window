@@ -23,7 +23,7 @@ import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType
 import { setParallaxRole, applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS, transitionDelayMs } from '$lib/fleet/protocol';
-import { peerAuthHeader } from '$lib/http/peer-token';
+import { peerJsonHeaders, peerAuthHeader } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { resolveDeviceId } from '$lib/fleet/device-id';
 import { APP_COMMIT } from '$lib/version';
@@ -158,11 +158,11 @@ export class DeviceClient {
 		// token from the localhost peer-token route. Async IIFE keeps publishV2
 		// fire-and-forget/void — the header fetch is cached after warmup.
 		void (async () => {
-			const authHeader = await peerAuthHeader();
+			const headers = await peerJsonHeaders();
 			for (const peer of this.#peers) {
 				void fetch(`${urlFor(peer)}/api/command`, {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json', ...authHeader },
+					headers,
 					body: JSON.stringify(msg),
 				}).catch(() => { /* follower unreachable — skip */ });
 			}

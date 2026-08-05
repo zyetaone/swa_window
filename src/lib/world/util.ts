@@ -43,8 +43,13 @@ export class EpsilonGate<T> {
 		const a = this.last as unknown;
 		const b = value as unknown;
 		if (typeof a === 'number' && typeof b === 'number') {
+			// NaN sentinel (from reset) must always write — Math.abs(NaN - x)
+			// returns NaN, and NaN > epsilon is false, so without this guard
+			// reset() is a no-op for numeric gates.
+			if (Number.isNaN(a)) return true;
 			return Math.abs(a - b) > this.epsilon;
 		}
+		// Symbol sentinel (from reset on non-number gates) → always !== b
 		return a !== b;
 	}
 

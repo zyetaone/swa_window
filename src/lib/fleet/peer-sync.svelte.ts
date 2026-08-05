@@ -56,7 +56,7 @@ export function startPeerSync(store: RestAdminStore): () => void {
 				// Fire-and-forget per changed path. Peer errors don't block UI.
 				for (const peer of store.peers) {
 					if (peer.self) continue;
-					void store.pushConfigPath(peer.deviceId, path, value);
+					void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: peer unreachable, next tick retries */ });
 				}
 			}
 			snapshot = next;
