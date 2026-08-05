@@ -4,6 +4,7 @@
 	import { config } from '$lib/model/config-tree.svelte';
 	import { formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
+	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES } from '$lib/types';
@@ -165,18 +166,11 @@
 		return `${Math.floor(diff / 3600)}h ago`;
 	}
 
-	const onlineCount = $derived(store.devices.filter(d => d.online).length);
-	const totalCount = $derived(store.devices.length);
-
-	// Live digital clock
-	let clockNow = $state(new Date());
-	$effect(() => {
-		const timer = setInterval(() => { clockNow = new Date(); }, 1000);
-		return () => clearInterval(timer);
-	});
-	const clockDisplay = $derived(
-		clockNow.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-	);
+	// Live digital clock — shared module rather than a third private interval
+	// (this one allocated a whole Date into $state every second). Seconds are
+	// on here because an ops dashboard wants them; the kiosk's clock does not.
+	$effect(() => subscribeWallClock());
+	const clockDisplay = $derived(formatClock(wallClockNow(), true));
 
 	// FPS badge — best available: fleet health avg or live from device grid
 	const fpsBadge = $derived(
@@ -269,13 +263,14 @@
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
-			<span class="fps-badge" class:good={store.fleetHealth.avgFps >= 30}>{fpsBadge}</span>
+			<span
+				class="fps-badge"
+				class:good={store.fleetHealth.avgFps >= 30}
+				class:warn={store.fleetHealth.avgFps > 0 && store.fleetHealth.avgFps < 30}
+			>{fpsBadge}</span>
 			<span class="clock-display">{clockDisplay}</span>
 			<span class={['connection-badge', store.connectionState === 'connected' && 'online']}>
 				{store.connectionState === 'connected' ? 'REST' : store.connectionState}
-			</span>
-			<span class="device-count">
-				{onlineCount}/{totalCount} online
 			</span>
 		</div>
 	</header>
@@ -323,7 +318,7 @@
 						{/each}
 					</select>
 				</label>
-				<button class="btn btn-primary" onclick={handlePushScene}>
+				<button class="btn btn-secondary" onclick={handlePushScene}>
 					Fly There {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
 			</section>
@@ -420,15 +415,6 @@
 			</section>
 
 			<section class="control-section">
-				<h3>Bulk</h3>
-				<button class="btn btn-outline" onclick={toggleSelectAll}>
-					{selectedDevices.size === store.devices.length && store.devices.length > 0
-						? 'Deselect All'
-						: 'Select All'}
-				</button>
-			</section>
-
-			<section class="control-section">
 				<h3>Software</h3>
 				<p class="section-caption">
 					Pulls the CI-approved <code>release</code> branch, rebuilds on the device and restarts.
@@ -512,6 +498,13 @@
 					</p>
 				</div>
 			{:else}
+				<div class="grid-toolbar">
+					<button class="btn btn-outline" onclick={toggleSelectAll}>
+						{selectedDevices.size === store.devices.length && store.devices.length > 0
+							? 'Deselect All'
+							: 'Select All'}
+					</button>
+				</div>
 				<div class="device-grid">
 					{#each store.devices as device (device.deviceId)}
 						{@const selected = selectedDevices.has(device.deviceId)}
@@ -580,10 +573,18 @@
 </div>
 
 <style>
+	:global(body) {
+		margin: 0;
+		background: #0f1117;
+		color: #e4e4e7;
+		font-family: system-ui, -apple-system, sans-serif;
+	}
+
 	.dashboard {
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
+		background: #0f1117;
 	}
 
 	/* Header */
@@ -645,17 +646,16 @@
 		background: #14532d;
 		color: #86efac;
 	}
+	.fps-badge.warn {
+		background: #713f12;
+		color: #fde68a;
+	}
 
 	.clock-display {
 		font-size: 13px;
 		font-family: ui-monospace, monospace;
-		color: #d4d4d8;
+		color: #71717a;
 		letter-spacing: 0.5px;
-	}
-
-	.device-count {
-		font-size: 13px;
-		color: #a1a1aa;
 	}
 
 	/* Health bar */
@@ -698,7 +698,7 @@
 	.health-dot.offline { background: #ef4444; }
 
 	.server-uptime {
-		color: #52525b;
+		color: #71717a;
 	}
 
 	.alerts {
@@ -711,6 +711,8 @@
 		font-size: 11px;
 		padding: 3px 8px;
 		border-radius: 4px;
+		background: #27272a;
+		color: #a1a1aa;
 	}
 
 	.alert-badge.error {
@@ -743,6 +745,23 @@
 		overflow-y: auto;
 	}
 
+	.controls :global(h4) {
+		font-size: 11px;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #71717a;
+		margin: 0 0 10px;
+	}
+	.controls :global(.control label),
+	.controls :global(.toggle-container) {
+		color: #a1a1aa;
+		text-shadow: none;
+	}
+	.controls :global(.label-text) {
+		text-shadow: none;
+	}
+
 	.control-section h3 {
 		font-size: 11px;
 		text-transform: uppercase;
@@ -756,7 +775,7 @@
 
 	.hint-muted {
 		font-size: 10px;
-		color: #52525b;
+		color: #71717a;
 		text-transform: none;
 		letter-spacing: normal;
 		font-weight: 400;
@@ -784,9 +803,18 @@
 		width: 100%;
 	}
 
-	select:focus, .input:focus {
+	select:focus:not(:focus-visible), .input:focus:not(:focus-visible) {
 		outline: none;
 		border-color: #3b82f6;
+	}
+
+	.btn:focus-visible,
+	.device-card:focus-visible,
+	.btn-x:focus-visible,
+	select:focus-visible,
+	.input:focus-visible {
+		outline: 2px solid #3b82f6;
+		outline-offset: 2px;
 	}
 
 	.mode-buttons {
@@ -804,7 +832,9 @@
 		transition: background 0.15s, opacity 0.15s;
 	}
 
-	.btn:hover { opacity: 0.85; }
+	.btn:hover:not(:disabled) { opacity: 0.85; }
+
+	.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-primary {
 		background: #2563eb;
@@ -906,6 +936,16 @@
 		overflow-y: auto;
 	}
 
+	.grid-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: 12px;
+	}
+
+	.grid-toolbar .btn {
+		width: auto;
+	}
+
 	.device-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -935,7 +975,8 @@
 		box-shadow: 0 0 0 1px #3b82f6;
 	}
 
-	.device-card.offline {
+	.device-card.offline .card-body,
+	.device-card.offline .card-footer {
 		opacity: 0.55;
 	}
 
@@ -985,9 +1026,6 @@
 
 	.stat-row .stat {
 		flex: 1;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 2px;
 	}
 
 	.stat-label {
@@ -1026,7 +1064,7 @@
 		text-overflow: ellipsis;
 	}
 	.error-last { opacity: 0.75; }
-	.fps-warn { color: #fbbf24; }
+	.fps-warn { color: #f59e0b; }
 
 	.card-footer {
 		display: flex;
@@ -1038,7 +1076,7 @@
 
 	.last-seen {
 		font-size: 11px;
-		color: #52525b;
+		color: #71717a;
 	}
 
 	.selected-badge {
@@ -1068,7 +1106,7 @@
 
 	.empty-desc {
 		font-size: 14px;
-		color: #52525b;
+		color: #71717a;
 	}
 
 	/* Device bindings (SWA corridor) */
@@ -1098,7 +1136,7 @@
 	}
 	.update-result {
 		font-size: 11px;
-		color: #4ade80;
+		color: #86efac;
 		margin: 8px 0 0;
 	}
 	.update-result.has-failures {
@@ -1115,7 +1153,7 @@
 		display: inline-block;
 		font-size: 11px;
 		color: #93c5fd;
-		background: #111827;
+		background: #1e1e24;
 		padding: 2px 6px;
 		border-radius: 3px;
 		margin-bottom: 8px;
@@ -1131,7 +1169,7 @@
 	.bindings-form .btn { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
 	.bindings-hint { font-size: 11px; color: #71717a; margin: 0; }
 	.bindings-hint strong { color: #e4e4e7; }
-	.bindings-hint .muted { color: #52525b; }
+	.bindings-hint .muted { color: #71717a; }
 	.bindings-list {
 		list-style: none;
 		padding: 0;
@@ -1156,8 +1194,8 @@
 		font-family: ui-monospace, Menlo, monospace;
 		flex: 0 0 60px;
 	}
-	.bindings-row .select { flex: 0 0 70px; padding: 4px 6px; font-size: 11px; }
-	.input-sm { padding: 4px 6px; font-size: 11px; flex: 1; min-width: 0; }
+	.bindings-row .select { flex: 0 0 70px; padding: 6px 8px; font-size: 12px; }
+	.input-sm { padding: 6px 8px; font-size: 12px; flex: 1; min-width: 0; }
 	.btn-x {
 		background: transparent;
 		border: 1px solid #3f3f46;
@@ -1172,4 +1210,11 @@
 		justify-content: center;
 	}
 	.btn-x:hover { border-color: #7f1d1d; color: #fca5a5; }
+
+	@media (max-width: 1100px) {
+		.controls {
+			width: 240px;
+			min-width: 240px;
+		}
+	}
 </style>

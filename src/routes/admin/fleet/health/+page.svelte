@@ -22,6 +22,9 @@
 		total: 0, online: 0, offline: 0, avgFps: 0, maxTempC: 0, totalCrashes: 0,
 	});
 	let error = $state<string | null>(null);
+	// False until the first successful poll — summary shows '—' instead of
+	// misleading zeros while connecting, and the empty state stays quiet.
+	let loaded = $state(false);
 
 	async function poll() {
 		try {
@@ -32,6 +35,7 @@
 			samples = devs as HeartbeatSample[];
 			summary = sum as FleetSummary;
 			error = null;
+			loaded = true;
 		} catch (e) {
 			error = (e as Error).message;
 		}
@@ -53,7 +57,7 @@
 
 	function fpsColor(fps: number): string {
 		if (fps === 0) return '#6b7280';
-		if (fps < 30) return '#ef4444';
+		if (fps < 30) return '#f59e0b';
 		if (fps < 55) return '#f59e0b';
 		return '#22c55e';
 	}
@@ -74,17 +78,18 @@
 	{/if}
 
 	<section class="summary">
-		<div class="stat"><strong>{summary.online}</strong> / {summary.total} online</div>
-		<div class="stat"><strong>{summary.offline}</strong> offline</div>
-		<div class="stat"><strong>{summary.avgFps.toFixed(1)}</strong> avg fps</div>
-		<div class="stat"><strong>{summary.maxTempC}°C</strong> max</div>
-		<div class="stat"><strong>{summary.totalCrashes}</strong> crashes</div>
+		<div class="stat"><strong>{loaded ? summary.online : '—'}</strong> / {loaded ? summary.total : '—'} online</div>
+		<div class="stat"><strong>{loaded ? summary.offline : '—'}</strong> offline</div>
+		<div class="stat"><strong>{loaded ? summary.avgFps.toFixed(1) : '—'}</strong> avg fps</div>
+		<div class="stat"><strong>{loaded ? `${summary.maxTempC}°C` : '—'}</strong> max</div>
+		<div class="stat"><strong>{loaded ? summary.totalCrashes : '—'}</strong> crashes</div>
 	</section>
 
 	<section class="tiles">
 		{#each samples as s (s.deviceId)}
 			<article class={['tile', !isOnline(s) && 'offline']}>
 				<header>
+					<span class={['status-dot', isOnline(s) && 'online']}></span>
 					<span class="id">{s.deviceId}</span>
 					<span class="role">{s.role} · {s.groupId}</span>
 					{#if s.commit}<span class="commit" title="running commit">{s.commit}</span>{/if}
@@ -103,30 +108,40 @@
 				</footer>
 			</article>
 		{:else}
-			<p class="empty">No heartbeats received yet. Pi devices need AERO_ADMIN_URL set.</p>
+			{#if loaded}
+				<p class="empty">No heartbeats received yet. Pi devices need AERO_ADMIN_URL set.</p>
+			{:else}
+				<p class="empty">Connecting…</p>
+			{/if}
 		{/each}
 	</section>
 </div>
 
 <style>
+	:global(body) {
+		margin: 0;
+		background: #0f1117;
+	}
 	.page {
 		max-width: 1200px;
 		margin: 0 auto;
 		padding: 2rem;
 		font: 14px/1.5 system-ui, sans-serif;
 		color: #e5e7eb;
-		background: #0b0f19;
+		background: #0f1117;
 		min-height: 100vh;
 	}
 	header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 	header h1 { font-size: 1.5rem; margin: 0; }
 	header a { color: #60a5fa; text-decoration: none; }
-	.err { background: #7f1d1d; padding: 0.75rem; border-radius: 4px; }
+	header a:hover { text-decoration: underline; }
+	.err { background: #7f1d1d; padding: 0.75rem; border-radius: 8px; }
 	.summary {
 		display: flex;
 		gap: 1.5rem;
 		padding: 1rem 1.25rem;
-		background: #1f2937;
+		background: #16181d;
+		border: 1px solid #27272a;
 		border-radius: 8px;
 		margin-bottom: 1.5rem;
 	}
@@ -137,17 +152,27 @@
 		gap: 1rem;
 	}
 	.tile {
-		background: #1f2937;
+		background: #16181d;
 		border-radius: 8px;
 		padding: 1rem;
-		border: 2px solid #22c55e;
+		border: 1px solid #27272a;
 	}
-	.tile.offline { border-color: #6b7280; opacity: 0.6; }
+	.tile.offline { border-color: #ef4444; opacity: 0.6; }
 	.tile header {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-start;
+		align-items: center;
+		gap: 0.5rem;
 		margin-bottom: 0.75rem;
 	}
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: #ef4444;
+		flex-shrink: 0;
+	}
+	.status-dot.online { background: #22c55e; }
 	.id { font-weight: 600; }
 	.role { font-size: 0.8rem; color: #9ca3af; }
 	.commit {

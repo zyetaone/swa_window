@@ -164,7 +164,7 @@
 >
 	<header>
 		<h1>Aero — Content</h1>
-		<p class="subtitle">Drag bundle .json or asset (mp4/png/webp) anywhere on this page.</p>
+		<p class="subtitle">Drag bundle .json or asset (mp4/webm/png/jpg/webp) anywhere on this page.</p>
 	</header>
 
 	<section class="dropzone">
@@ -240,7 +240,7 @@
 	:global(body) {
 		margin: 0;
 		font-family: system-ui, -apple-system, sans-serif;
-		background: #0a0a0e;
+		background: #0f1117;
 		color: #e0e0e6;
 	}
 	.page {
@@ -257,8 +257,8 @@
 	}
 	header h1 {
 		margin: 0 0 4px;
-		font-size: 28px;
-		font-weight: 500;
+		font-size: 20px;
+		font-weight: 700;
 	}
 	.subtitle {
 		margin: 0 0 24px;
@@ -278,65 +278,62 @@
 		align-items: center;
 		gap: 12px;
 		padding: 16px;
-		background: #14141a;
-		border: 1px solid #222;
-		border-radius: 8px;
-	}
-	.upload-btn {
+		background: #16181d;
+		border: 1px dashed #3f3f46;
 		padding: 8px 16px;
-		background: #335577;
-		border: 1px solid #4488cc;
-		border-radius: 5px;
+		background: #2563eb;
+		border: none;
+		border-radius: 6px;
 		color: #fff;
 		font-size: 13px;
 		cursor: pointer;
 	}
-	.upload-btn:hover { background: #446688; }
+	.upload-btn:hover:not(:disabled) { background: #1d4ed8; }
 	.upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.hint { color: #666; font-size: 13px; }
+	.hint { color: #888; font-size: 13px; }
 	table {
 		width: 100%;
 		border-collapse: collapse;
 		font-size: 13px;
-		background: #14141a;
-		border: 1px solid #222;
+		background: #16181d;
+		border: 1px solid #27272a;
 		border-radius: 6px;
 		overflow: hidden;
 	}
 	th {
 		text-align: left;
 		padding: 10px 12px;
-		background: #1a1a22;
-		color: #888;
+		background: #1a1c23;
+		color: #71717a;
 		font-weight: 500;
 		font-size: 11px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		border-bottom: 1px solid #222;
+		border-bottom: 1px solid #27272a;
 	}
 	td {
 		padding: 10px 12px;
-		border-bottom: 1px solid #1a1a22;
-		color: #ccc;
+		border-bottom: 1px solid #1e1e24;
+		color: #d4d4d8;
 	}
 	tr:last-child td { border-bottom: none; }
 	code {
-		font-family: 'JetBrains Mono', monospace;
+		font-family: ui-monospace, monospace;
 		font-size: 12px;
 		color: #aac;
 	}
 	.danger {
 		padding: 4px 10px;
 		background: transparent;
-		border: 1px solid #663030;
+		border: 1px solid #7f1d1d;
 		border-radius: 4px;
-		color: #cc7070;
+		color: #fca5a5;
 		font-size: 11px;
 		cursor: pointer;
 	}
 	.danger:hover { background: rgba(204, 60, 60, 0.1); border-color: #884040; }
 	.empty {
-		color: #666;
+		color: #888;
 		font-size: 13px;
 		font-style: italic;
 		padding: 12px;
@@ -352,8 +349,8 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 		animation: slide-in 0.2s ease-out;
 	}
-	.toast.ok { background: #2a4a2e; color: #afe0ba; border: 1px solid #3a6a40; }
-	.toast.err { background: #4a2a2e; color: #e0afba; border: 1px solid #6a3a40; }
+	.toast.ok { background: #14532d; color: #86efac; border: 1px solid #3a6a40; }
+	.toast.err { background: #7f1d1d; color: #fca5a5; border: 1px solid #6a3a40; }
 	@keyframes slide-in {
 		from { transform: translateY(20px); opacity: 0; }
 		to   { transform: translateY(0);    opacity: 1; }
