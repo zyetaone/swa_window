@@ -20,13 +20,24 @@ content/   → authored artifacts: locations, palettes, weather recipes,
              shows, bundles
 ```
 
-### What lives in `content/` (target state)
+### What lives in `content/` (current state)
 
-- `content/locations/*.ts` — one file per location, replaces the single `src/lib/locations.ts`
-- `content/palettes/*.ts` — sky gradients, haze colors, car-light RGB, currently scattered across `shell/Pane.svelte`, `scene/effects/haze/HazeEffect.svelte`, `world/shaders.ts`, `scene/effects/car-lights/rules.ts`
-- `content/weather/*.ts` — replaces inline `WEATHER_EFFECTS` literal in `src/lib/constants.ts`
-- `content/shows/*.show.ts` — NEW primitive: a complete authored production (scene bank + cue list + defaults)
-- `content/bundles/*/` — already shipped under `data/bundles/`, relocate
+- `content/locations/` — **shipped.** `catalog.ts` + `index.ts`; the old
+  per-location module was replaced by one catalog rather than the
+  file-per-location split originally sketched here.
+- `content/shows/*.show.ts` — **shipped.** A complete authored production
+  (scene bank + cue list + defaults). `default.show.ts` is the boot baseline.
+- `content/weather/` — **not built.** Weather lives in the config tree
+  (`config.atmosphere`) keyed by `WEATHER_TYPES`, which turned out to be enough.
+  There is no central constants module to migrate away from any more — the
+  config tree is the SSOT for every number.
+- `content/palettes/` — **not built.** Palette constants sit next to the code
+  that reads them (`src/lib/world/shaders.ts`, `src/lib/world/sky.ts`). An
+  earlier orphaned palette file was deleted rather than expanded.
+
+> These bullets were a *target* written before the migration. They are restated
+> as current state so the next reader does not re-do work that already landed,
+> or build `content/weather/` on the assumption it was always intended.
 
 ### What stays in `src/`
 
