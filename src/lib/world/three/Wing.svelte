@@ -215,7 +215,7 @@
 					};
 				}
 			})
-			.catch((err) => console.error(`[Wing] l{url} load failed`, err));
+			.catch((err) => console.error(`[Wing] ${url} load failed`, err));
 		return () => {
 			cancelled = true;
 			// Dispose the GLB model's geometries + the toLit materials, and detach
