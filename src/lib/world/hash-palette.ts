@@ -10,10 +10,8 @@
  *   cleanup(); // removes stage, restores aero-color-grade
  */
 
+import type * as CesiumType from 'cesium';
 import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CesiumViewer = any;
 
 export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform sampler2D colorTexture;
@@ -95,7 +93,8 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 `;
 
 export function installHashPalette(
-	viewer: CesiumViewer,
+	Cesium: typeof CesiumType,
+	viewer: CesiumType.Viewer,
 	getNightFactor: () => number,
 	getNightLightScale: () => number,
 	getDarkVoidStrength: () => number,
@@ -112,17 +111,11 @@ export function installHashPalette(
 		const s = stages.get(i) as { name?: string; enabled?: boolean } | null;
 		if (s && s.name === COLOR_GRADE_STAGE) {
 			aeroStage = s as { enabled: boolean };
-			prevAeroEnabled = aeroStage.enabled;
-			aeroStage.enabled = false;
+			prevAeroEnabled = s.enabled ?? true;
 			break;
 		}
 	}
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const Cesium = (viewer as any).cesiumWidget?.constructor as any;
-	if (!Cesium?.PostProcessStage) return () => {
-		if (aeroStage) aeroStage.enabled = prevAeroEnabled;
-	};
+	if (aeroStage) aeroStage.enabled = false;
 
 	const stage = new Cesium.PostProcessStage({
 		name: 'hash-palette-night',

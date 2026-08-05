@@ -139,7 +139,7 @@ export class CesiumManager {
 
 		this.#setupPostProcess(COLOR_GRADING_GLSL);
 		if (this.#model.config.world.useHashPalette) {
-			installHashPalette(v, () => this.#model.nightFactor, () => this.#model.nightLightScale, () => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight, () => this.#model.config.world.additiveStrength);
+			installHashPalette(C, v, () => this.#model.nightFactor, () => this.#model.nightLightScale, () => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight, () => this.#model.config.world.additiveStrength);
 		}
 		await setupTerrain();
 		await setupImagery();
