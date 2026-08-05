@@ -1,16 +1,23 @@
 <script lang="ts">
 	/**
 	 * AtmosphereControls — cloud density / cloud speed / haze sliders.
-	 * Routes operator writes through model.applyConfigPatch — see
+	 * Routes operator writes through applyConfigPatch — see
 	 * docs/ARCHITECTURE.md non-goals: `applyConfigPatch` is the single
 	 * write gate for the CRDT LWW merge and the prototype-pollution
 	 * defense. Direct `config.X = v` skips the gate and silently
 	 * breaks fleet sync.
+	 *
+	 * Mounted in two trees: the kiosk SidePanel (AeroWindow context —
+	 * model.applyConfigPatch adds telemetry + fleet broadcast) and /admin
+	 * (no context — module-level gate; startPeerSync propagates to peers).
 	 */
-	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';
+	import { config, applyConfigPatch } from '$lib/model/config-tree.svelte';
 	import RangeSlider from './RangeSlider.svelte';
 
-	const model = useAeroWindow();
+	const model = tryUseAeroWindow();
+	const cfg = model?.config ?? config;
+	const patch: typeof applyConfigPatch = model ? model.applyConfigPatch.bind(model) : applyConfigPatch;
 </script>
 	<section>
 	<h4>Atmosphere</h4>
@@ -19,28 +26,28 @@
 		min={0}
 		max={1.0}
 		step={0.05}
-		value={model.config.atmosphere.clouds.density}
-		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))}
+		value={cfg.atmosphere.clouds.density}
+		oninput={(e) => patch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 	<RangeSlider
 		id="cloudSpeed"
 		label="Cloud Speed"
-		min={model.config.director.ambient.cloudSpeedMin}
-		max={model.config.director.ambient.cloudSpeedMax}
+		min={cfg.director.ambient.cloudSpeedMin}
+		max={cfg.director.ambient.cloudSpeedMax}
 		step={0.1}
-		value={model.config.atmosphere.clouds.speed}
-		oninput={(e) => model.applyConfigPatch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))}
+		value={cfg.atmosphere.clouds.speed}
+		oninput={(e) => patch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => v.toFixed(1) + 'x'}
 	/>
 	<RangeSlider
 		id="haze"
 		label="Haze"
-		min={model.config.atmosphere.haze.min}
-		max={model.config.atmosphere.haze.max}
+		min={cfg.atmosphere.haze.min}
+		max={cfg.atmosphere.haze.max}
 		step={0.005}
-		value={model.config.atmosphere.haze.amount}
-		oninput={(e) => model.applyConfigPatch('atmosphere.haze.amount', parseFloat(e.currentTarget.value))}
+		value={cfg.atmosphere.haze.amount}
+		oninput={(e) => patch('atmosphere.haze.amount', parseFloat(e.currentTarget.value))}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 </section>

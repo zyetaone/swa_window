@@ -517,3 +517,13 @@ export function useAeroWindow(): AeroWindow {
 	if (!model) throw new Error('useAeroWindow() called outside component tree');
 	return model;
 }
+
+/**
+ * Non-throwing variant for components mountable both inside the kiosk
+ * tree (model present) and standalone in /admin (no AeroWindow context —
+ * admin writes go through the module-level config gate instead, and
+ * startPeerSync propagates them to the fleet).
+ */
+export function tryUseAeroWindow(): AeroWindow | null {
+	return getAeroWindowContext() ?? null;
+}
