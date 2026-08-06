@@ -18,10 +18,12 @@
  *   }
  *
  * This is a pure state module — no DOM, no fetch. It's imported by the
- * +server.ts route, not by a component. The `.svelte.ts` suffix is kept
- * for consistency with other fleet modules that use $state (this one uses
- * plain module-level Map/Array for server-side hot-reload friendliness).
+ * +server.ts route, not by a component — plain module-level Map/Array, no
+ * runes, for server-side hot-reload friendliness.
  */
+
+import type { FleetSummary } from '$lib/fleet/protocol';
+import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
 
 export interface HeartbeatSample {
 	/** Wall-clock ms when the admin received the sample. */
@@ -145,9 +147,6 @@ function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
  * Compute basic rollups across the whole fleet — the dashboard header uses
  * these. Online count, average FPS across online devices, hottest CPU, etc.
  */
-import type { FleetSummary } from '$lib/fleet/protocol';
-import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
-
 export function summarize(now: number = Date.now()): FleetSummary {
 	const all = latestAll();
 	const online = all.filter((s) => isOnline(s, now));

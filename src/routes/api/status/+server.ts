@@ -3,7 +3,7 @@
  * POST /api/status — internal: browser pushes its own status (fps, current
  *                    location, mode, etc.) so the server cache stays fresh.
  *
- * The Pi's browser POSTs at ~0.5 Hz (same cadence as the old WS heartbeat).
+ * The Pi's browser POSTs every 5 s (STATUS_INTERVAL_MS = 5000, i.e. 0.2 Hz).
  * Admin panel polls each device's GET endpoint at a similar rate.
  */
 

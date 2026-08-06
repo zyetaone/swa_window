@@ -26,8 +26,11 @@ function servicePort(): number {
 	return Number.parseInt(process.env.PORT ?? '3000', 10);
 }
 
-/** Device hostname used in mDNS answers. Falls back to `aero-unknown`. */
-function deviceHost(): string {
+/**
+ * Device hostname — used in mDNS answers and as this device's self-identity
+ * in /api/devices. Falls back to `aero-unknown`.
+ */
+export function deviceHost(): string {
 	return process.env.AERO_DEVICE_ID ?? process.env.HOSTNAME ?? 'aero-unknown';
 }
 

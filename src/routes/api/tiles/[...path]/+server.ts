@@ -18,10 +18,11 @@
 
 import { createReadStream, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
+import { safeResolveWithin } from '$lib/server/fs-guard';
 
 // Resolve TILE_DIR from project root (five levels up from this route file).
 // Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
@@ -40,17 +41,6 @@ const MIME: Record<string, string> = {
 };
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');
-
-function safeResolve(subPath: string): { filePath: string; notFound: boolean; forbidden: boolean } {
-	const filePath = resolve(TILE_DIR, subPath);
-	if (!filePath.startsWith(TILE_DIR)) return { filePath, notFound: false, forbidden: true };
-	if (!existsSync(filePath)) return { filePath, notFound: true, forbidden: false };
-	try {
-		const real = realpathSync(filePath);
-		if (!real.startsWith(TILE_DIR)) return { filePath, notFound: false, forbidden: true };
-	} catch { return { filePath, notFound: true, forbidden: false }; }
-	return { filePath, notFound: false, forbidden: false };
-}
 
 function serveTile(filePath: string, cors: Record<string, string>): Response {
 	const ext = filePath.substring(filePath.lastIndexOf('.'));
@@ -83,14 +73,14 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	if (xyzMatch) {
 		const [, layer, z, x, y, ext] = xyzMatch;
 		const remapped = `${layer}/${z}/${y}/${x}.${ext}`;
-		const { filePath, notFound, forbidden } = safeResolve(remapped);
+		const { filePath, notFound, forbidden } = safeResolveWithin(TILE_DIR, remapped);
 		if (forbidden) return new Response('Forbidden', { status: 403 });
 		if (notFound) return new Response('Not found', { status: 404, headers: cors });
 		return serveTile(filePath, cors);
 	}
 
 	// Direct WMTS path: /api/tiles/{layer}/{z}/{y}/{x}.ext
-	const { filePath, notFound, forbidden } = safeResolve(path);
+	const { filePath, notFound, forbidden } = safeResolveWithin(TILE_DIR, path);
 	if (forbidden) return new Response('Forbidden', { status: 403 });
 	if (notFound) return new Response('Not found', { status: 404, headers: cors });
 	return serveTile(filePath, cors);

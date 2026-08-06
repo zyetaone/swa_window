@@ -23,10 +23,10 @@
  */
 
 import { json } from '@sveltejs/kit';
-import { spawn } from 'node:child_process';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { requireAdminToken } from '$lib/http/auth';
+import { schedulePrivileged } from '$lib/server/schedule-privileged';
 
 export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
@@ -46,17 +46,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
 /** Internal — only meaningful on the Pi (uses sudo + systemctl). */
 function scheduleUpdate(): void {
-	if (process.platform !== 'linux') {
-		console.warn('[api/update] non-linux platform — no-op');
-		return;
-	}
-	setTimeout(() => {
-		// Detached: this process is about to be restarted by the very unit it
-		// starts, so the child must not be tied to its lifetime.
-		const run = spawn('sudo', ['-n', 'systemctl', 'start', 'aero-updater.service'], {
-			detached: true,
-			stdio: 'ignore',
-		});
-		run.unref();
-	}, 500);
+	// Detached + delayed: this process is about to be restarted by the very
+	// unit it starts, so the child must not be tied to its lifetime and the
+	// 202 must go out first. See schedulePrivileged.
+	schedulePrivileged(['sudo', '-n', 'systemctl', 'start', 'aero-updater.service'], 500, '[api/update]');
 }

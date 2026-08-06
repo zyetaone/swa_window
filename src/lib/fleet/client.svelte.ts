@@ -19,13 +19,14 @@
 
 import type { FleetClientModel } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
-import { isValidWeather, isValidDisplayMode, isValidDeviceRole, type WeatherType, type QualityMode } from '$lib/types';
-import { setParallaxRole, applyConfigPatch } from '$lib/model/config-tree.svelte';
+import { isValidWeather, isValidDisplayMode, type WeatherType, type QualityMode } from '$lib/types';
+import { applyConfigPatch } from '$lib/model/config-tree.svelte';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS, transitionDelayMs } from '$lib/fleet/protocol';
-import { peerJsonHeaders, peerAuthHeader } from '$lib/http/peer-token';
+import { peerJsonHeaders } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { resolveDeviceId } from '$lib/fleet/device-id';
+import { resolveBinding, shouldApplyDirectorDecision } from '$lib/fleet/parallax.svelte';
 import { APP_COMMIT } from '$lib/version';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
@@ -238,21 +239,20 @@ export class DeviceClient {
 		try { msg = JSON.parse(ev.data); }
 		catch { return; }
 
+		// Corridor gating: group-scoped leader broadcasts (director_decision,
+		// vantage_beat) only apply to panes in the targeted corridor — with two
+		// corridors on one LAN, each leader must drive ONLY its own group.
+		// Absent groupId = legacy unscoped broadcast = apply (back-compat with
+		// pre-gating leaders). Skipped messages are not ours, so they fall out
+		// before the fleet_in telemetry record below (not logged as applied).
+		if (msg.type === 'director_decision' || msg.type === 'vantage_beat') {
+			if (!shouldApplyDirectorDecision(resolveBinding().groupId, msg.groupId as string | undefined)) {
+				return;
+			}
+		}
+
 		this.#model.telemetry?.recordEvent('fleet_in', { type: msg.type });
 		switch (msg.type) {
-			case 'update': {
-				// Fan the OTA trigger to the local /api/update endpoint. The
-				// server-side handler is the only path that actually runs
-				// aero-updater.sh — keeps the browser out of the upgrade loop.
-				void (async () => {
-					const headers = await peerAuthHeader();
-					await fetch('/api/update', { method: 'POST', headers });
-				})().catch((e) => {
-					// Best-effort trigger — the app may already be restarting.
-					console.warn('[fleet] OTA trigger failed:', e);
-				});
-				break;
-			}
 			case 'set_scene': {
 				if (!isValidLocation(msg.location)) break;
 				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
@@ -280,19 +280,6 @@ export class DeviceClient {
 					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
 					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
 					if (typeof d.qualityMode === 'string') this.#model.setQualityMode(d.qualityMode as QualityMode);
-				}
-				break;
-			}
-			case 'role_assign': {
-				if (isValidDeviceRole(msg.role)) {
-					applyConfigPatch('camera.parallax.role', msg.role);
-					setParallaxRole(msg.role);
-				}
-				if (typeof msg.headingOffsetDeg === 'number') {
-					this.#model.applyConfigPatch?.('camera.parallax.headingOffsetDeg', msg.headingOffsetDeg);
-				}
-				if (typeof msg.fovDeg === 'number') {
-					this.#model.applyConfigPatch?.('camera.parallax.fovDeg', msg.fovDeg);
 				}
 				break;
 			}

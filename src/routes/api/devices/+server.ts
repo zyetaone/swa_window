@@ -12,19 +12,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders } from '$lib/http/cors';
-import { listPeers } from '$lib/server/fleet/lan-peers';
+import { listPeers, deviceHost } from '$lib/server/fleet/lan-peers';
 
 export const GET: RequestHandler = ({ request, url }) => {
 	const origin = request.headers.get('origin');
 	const peers = listPeers();
 
 	// Include self (the Pi serving this request) so admin UI can show it too.
-	const selfHost = url.hostname;
-	const selfPort = Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
+	// deviceId shares the mDNS identity chain (deviceHost) so a device never
+	// announces itself under one id and reports another.
 	const self = {
-		deviceId: process.env.AERO_DEVICE_ID ?? process.env.HOSTNAME ?? selfHost,
-		host: selfHost,
-		port: selfPort,
+		deviceId: deviceHost(),
+		host: url.hostname,
+		port: Number(url.port) || (url.protocol === 'https:' ? 443 : 80),
 		self: true,
 	};
 

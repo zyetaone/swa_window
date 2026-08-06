@@ -28,16 +28,16 @@ export const GET: RequestHandler = () => {
 			// Open the stream with a connected event so EventSource.onopen fires.
 			write(`event: connected\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
 
+			const writeEvent = (ev: SseEvent) => {
+				write(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);
+			};
+
 			// Replay buffered events from before the browser connected.
 			// Covers the page-reload gap where REST endpoints published
 			// config_patch / command events with no subscriber attached.
-			replayTo((ev: SseEvent) => {
-				write(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);
-			});
+			replayTo(writeEvent);
 
-			unsubscribe = subscribe((ev: SseEvent) => {
-				write(`event: ${ev.type}\ndata: ${JSON.stringify(ev.data)}\n\n`);
-			});
+			unsubscribe = subscribe(writeEvent);
 
 			// Comment pings keep idle streams alive through proxies / WAF.
 			keepAliveTimer = setInterval(() => write(`: keep-alive\n\n`), 20_000);
