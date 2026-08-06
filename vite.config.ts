@@ -22,7 +22,16 @@ function gitCommit(): string {
 	}
 }
 
+// Under `vitest`, resolve Svelte's BROWSER entry so components can actually be
+// MOUNTED in tests. With the default (SSR) condition, `mount()` throws
+// lifecycle_function_unavailable, so component behaviour could only be reasoned
+// about, never executed — which is how a blank-page context bug reached
+// production with a fully green suite. Scoped to the test run by an env check so
+// the kiosk/adapter-node build is untouched.
+const IS_TEST = process.env.VITEST !== undefined;
+
 export default defineConfig({
+	...(IS_TEST ? { resolve: { conditions: ['browser'] } } : {}),
 	plugins: [
 		viteStaticCopy({
 			targets: [

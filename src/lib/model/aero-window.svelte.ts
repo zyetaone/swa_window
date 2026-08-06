@@ -6,7 +6,7 @@
  *   Child components: const model = useAeroWindow()
  */
 
-import { createContext } from 'svelte';
+import { getContext, setContext, hasContext } from 'svelte';
 import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
@@ -503,21 +503,29 @@ export class AeroWindow {
 
 // ─── Context DI ──────────────────────────────────────────────────────────────
 //
-// createContext (Svelte 5.40+) provides type-safe get/set without a manual
-// Symbol key or cast. The returned tuple's set/get names stay private inside
-// this module; public API is createAeroWindow() / useAeroWindow().
-const [getAeroWindowContext, setAeroWindowContext] = createContext<AeroWindow>();
+// Hand-rolled over `createContext()` for ONE reason: createContext's getter
+// THROWS `missing_context` when unset, with no non-throwing companion and no
+// way to reach its private key. `tryUseAeroWindow()` must be able to answer
+// "is there a model?" with `null`, because AtmosphereControls / LightingControls
+// mount both inside the kiosk tree and standalone in /admin. Owning the key
+// here lets `hasContext` do that check safely.
+const AERO_WINDOW_KEY = Symbol('aero-window');
+
+function getAeroWindowContext(): AeroWindow {
+	return getContext<AeroWindow>(AERO_WINDOW_KEY);
+}
 
 export function createAeroWindow(): AeroWindow {
 	const model = new AeroWindow();
-	setAeroWindowContext(model);
+	setContext(AERO_WINDOW_KEY, model);
 	return model;
 }
 
 export function useAeroWindow(): AeroWindow {
-	const model = getAeroWindowContext();
-	if (!model) throw new Error('useAeroWindow() called outside component tree');
-	return model;
+	if (!hasContext(AERO_WINDOW_KEY)) {
+		throw new Error('useAeroWindow() called outside component tree');
+	}
+	return getAeroWindowContext();
 }
 
 /**
@@ -525,7 +533,19 @@ export function useAeroWindow(): AeroWindow {
  * tree (model present) and standalone in /admin (no AeroWindow context —
  * admin writes go through the module-level config gate instead, and
  * startPeerSync propagates them to the fleet).
+ *
+ * ─── ⚠ WHY THIS USES hasContext RATHER THAN `?? null` ───────────────────────
+ * `createContext()`'s getter does not return undefined when the context is
+ * unset — it THROWS `missing_context`. So the previous `getAeroWindowContext()
+ * ?? null` could never yield null: the ?? was dead code, and mounting any of
+ * these components without a provider killed the whole page during init.
+ * That is what blanked /admin — a white screen with one console error, while
+ * `bun run check` and every unit test stayed green.
+ *
+ * `hasContext` is the only safe pre-check, and it must be called with the SAME
+ * key the getter uses, which is why the key lives here beside the accessors
+ * rather than being hidden inside createContext's closure.
  */
 export function tryUseAeroWindow(): AeroWindow | null {
-	return getAeroWindowContext() ?? null;
+	return hasContext(AERO_WINDOW_KEY) ? getAeroWindowContext() : null;
 }

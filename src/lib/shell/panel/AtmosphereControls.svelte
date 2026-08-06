@@ -11,14 +11,10 @@
 	 * model.applyConfigPatch adds telemetry + fleet broadcast) and /admin
 	 * (no context — module-level gate; startPeerSync propagates to peers).
 	 */
-	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';
-	import { config, applyConfigPatch } from '$lib/model/config-tree.svelte';
-	import { patchNum } from './patch';
+	import { patchNum, usePanelConfig } from './patch';
 	import RangeSlider from './RangeSlider.svelte';
 
-	const model = tryUseAeroWindow();
-	const cfg = model?.config ?? config;
-	const patch: typeof applyConfigPatch = model ? model.applyConfigPatch.bind(model) : applyConfigPatch;
+	const { cfg, patch } = usePanelConfig();
 </script>
 	<section>
 	<h4>Atmosphere</h4>
