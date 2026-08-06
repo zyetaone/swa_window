@@ -13,7 +13,7 @@
 import type { WeatherType } from '$lib/types';
 import type * as CesiumType from 'cesium';
 import { createSeededRng, daySeed } from './prng';
-import { spriteOffset, spriteScale } from './cloud-sprite-placement';
+import { metresToGeoDelta, spriteOffset, spriteScale } from './cloud-sprite-placement';
 
 const CLOUD_ALT_M = 7_000; // ~26k ft
 
@@ -129,11 +129,8 @@ export function updateCesiumClouds(
 			const worldY = oy + CLOUD_ALT_M;
 			const worldZ = cz - (oz - cz);
 
-			const position = C.Cartesian3.fromDegrees(
-				lon + (worldX / 111_320),
-				lat + (worldZ / (111_320 * Math.cos(lat * Math.PI / 180))),
-				worldY,
-			);
+			const d = metresToGeoDelta(worldX, worldZ, lat);
+			const position = C.Cartesian3.fromDegrees(lon + d.lon, lat + d.lat, worldY);
 
 			_collection.add({
 				position,
@@ -178,11 +175,8 @@ export function updateCesiumClouds(
 			const worldY = oy + CLOUD_ALT_M * 0.85;
 			const worldZ = cz - (oz - cz);
 
-			const position = C.Cartesian3.fromDegrees(
-				lon + (worldX / 111_320),
-				lat + (worldZ / (111_320 * Math.cos(lat * Math.PI / 180))),
-				worldY,
-			);
+			const d = metresToGeoDelta(worldX, worldZ, lat);
+			const position = C.Cartesian3.fromDegrees(lon + d.lon, lat + d.lat, worldY);
 
 			_collection.add({
 				position,

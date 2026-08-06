@@ -84,3 +84,41 @@ export function spriteOffset(
 export function spriteScale(i: number, baseScale: number, rng: () => number): number {
 	return baseScale * (i === 0 ? ANCHOR_SCALE : SPRITE_SCALE_MIN + rng() * SPRITE_SCALE_SPAN);
 }
+
+/** Metres per degree of latitude. Constant everywhere on the ellipsoid. */
+const M_PER_DEG_LAT = 111_320;
+
+/** Local east/north offset in metres, as a geographic delta. */
+export interface GeoDelta {
+	lat: number;
+	lon: number;
+}
+
+/**
+ * Convert a local east/north offset (metres) at a given latitude into a
+ * geographic delta (degrees).
+ *
+ * ─── ⚠ THE cos(lat) BELONGS ON LONGITUDE ────────────────────────────────────
+ * One degree of LATITUDE is ~111.32 km at every latitude — meridians converge
+ * at the poles but do not shorten along their own length. One degree of
+ * LONGITUDE shrinks as cos(lat), because the parallels are small circles whose
+ * radius falls off toward the poles.
+ *
+ * The Cesium billboard layer previously inlined this twice (once per distance
+ * band) with the cos applied to the LATITUDE term instead, which squashes the
+ * deck east-west and stretches it north-south by the same factor. The error is
+ * zero at the equator and grows with |lat|: at Chicago (41.8°) a sprite meant
+ * to sit 20 km east/north landed 5.1 km short and 6.8 km long respectively.
+ *
+ * Both cloud renderers must agree on sprite placement (see the header note), and
+ * the Three overlay derives its positions from a true ENU basis — so the Cesium
+ * path had to be corrected to match rather than the other way round.
+ */
+export function metresToGeoDelta(eastM: number, northM: number, latDeg: number): GeoDelta {
+	const cosLat = Math.cos((latDeg * Math.PI) / 180);
+	return {
+		lat: northM / M_PER_DEG_LAT,
+		// Guard the poles: cos(lat) → 0 makes the longitude delta diverge.
+		lon: eastM / (M_PER_DEG_LAT * Math.max(cosLat, 1e-6)),
+	};
+}

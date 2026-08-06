@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRng } from '$lib/world/prng';
 import {
+	metresToGeoDelta,
 	spriteOffset,
 	spriteScale,
 	SPRITE_SPREAD_XZ,
@@ -125,5 +126,54 @@ describe('cloud sprite placement', () => {
 		expect(SPRITE_SPREAD_Y).toBeLessThan(SPRITE_SPREAD_XZ / 5);
 		expect(ANCHOR_SCALE).toBeGreaterThan(SPRITE_SCALE_MIN);
 		expect(SPRITE_SCALE_MIN + SPRITE_SCALE_SPAN).toBeGreaterThan(ANCHOR_SCALE);
+	});
+});
+
+describe('metresToGeoDelta', () => {
+	// One degree of latitude is ~111.32 km at EVERY latitude; one degree of
+	// longitude shrinks as cos(lat). The Cesium billboard layer inlined this
+	// twice with the cos on the wrong axis, squashing the deck east-west and
+	// stretching it north-south. These tests fail against that old maths.
+	const M_PER_DEG_LAT = 111_320;
+
+	it('keeps the latitude scale constant with latitude', () => {
+		const north = 20_000;
+		const atEquator = metresToGeoDelta(0, north, 0).lat;
+		for (const lat of [17.44, 25.2, 36.17, 41.79, 60]) {
+			expect(metresToGeoDelta(0, north, lat).lat).toBeCloseTo(atEquator, 12);
+		}
+	});
+
+	it('shrinks the longitude scale by cos(lat)', () => {
+		const east = 20_000;
+		const atEquator = metresToGeoDelta(east, 0, 0).lon;
+		for (const lat of [17.44, 36.17, 41.79]) {
+			const expected = atEquator / Math.cos((lat * Math.PI) / 180);
+			expect(metresToGeoDelta(east, 0, lat).lon).toBeCloseTo(expected, 12);
+		}
+		// A degree of longitude is SHORTER away from the equator, so covering the
+		// same ground distance takes MORE degrees.
+		expect(metresToGeoDelta(east, 0, 41.79).lon).toBeGreaterThan(atEquator);
+	});
+
+	it('round-trips an east/north offset back to the input metres', () => {
+		// This is the check the old code fails: it lands ~5 km short east and
+		// ~6.8 km long north at Chicago for a 20 km offset.
+		for (const lat of [0, 17.44, 25.2, 36.17, 41.79]) {
+			const cos = Math.cos((lat * Math.PI) / 180);
+			const d = metresToGeoDelta(20_000, 20_000, lat);
+			expect(d.lon * M_PER_DEG_LAT * cos).toBeCloseTo(20_000, 6);
+			expect(d.lat * M_PER_DEG_LAT).toBeCloseTo(20_000, 6);
+		}
+	});
+
+	it('does not diverge at the pole', () => {
+		expect(Number.isFinite(metresToGeoDelta(1000, 1000, 90).lon)).toBe(true);
+	});
+
+	it('is deterministic — same inputs, same delta on every Pi (invariant #4)', () => {
+		const a = metresToGeoDelta(1234, -567, 36.17);
+		const b = metresToGeoDelta(1234, -567, 36.17);
+		expect(a).toEqual(b);
 	});
 });

@@ -16,12 +16,13 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { config } from "$lib/model/config-tree.svelte";
-	import { formatAltitudeFt, formatSpeedX, formatTime } from "$lib/utils";
+	import { flightReadout } from "./hud/flight-readout";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
 	let { children }: { children?: Snippet } = $props();
 
 	const model = useAeroWindow();
+	const stats = $derived(flightReadout(model));
 
 	let panelOpen = $state(false);
 	let closing = $state(false);
@@ -157,20 +158,12 @@
 		<!-- Flight Data -->
 		<div class="flight-data">
 			<div class="data-row">
-				<div class="data-item">
-					<span class="data-label">ALT</span>
-					<span class="data-value">{formatAltitudeFt(model.flight.altitude)}</span>
-				</div>
-				<div class="data-item">
-					<span class="data-label">GS</span>
-					<span class="data-value">{formatSpeedX(model.flight.flightSpeed)}</span>
-				</div>
-				<div class="data-item">
-					<span class="data-label">LOC</span>
-					<span class="data-value"
-						>{formatTime(model.localTimeOfDay)}</span
-					>
-				</div>
+				{#each stats as stat (stat.label)}
+					<div class="data-item">
+						<span class="data-label">{stat.label}</span>
+						<span class="data-value">{stat.value}</span>
+					</div>
+				{/each}
 			</div>
 			<div class="current-location">{model.currentLocation.name}</div>
 		</div>

@@ -12,6 +12,7 @@ import {
 	tryConsumeReloadBudget,
 	reloadBudgetAvailable,
 	registerLivenessCanvas,
+	attachCanvasLiveness,
 } from '$lib/world/lifecycle-liveness';
 
 beforeEach(() => {
@@ -116,5 +117,84 @@ describe('liveness watchdog', () => {
 		vi.advanceTimersByTime(3000);
 		expect(b.reload).not.toHaveBeenCalled();
 		b.stop();
+	});
+});
+
+describe('attachCanvasLiveness', () => {
+	// Fake canvas: records listeners and reports a lost context on demand.
+	function fakeCanvas(lost = false) {
+		const listeners = new Map<string, EventListener[]>();
+		return {
+			lost,
+			listeners,
+			addEventListener(t: string, fn: EventListener) {
+				listeners.set(t, [...(listeners.get(t) ?? []), fn]);
+			},
+			removeEventListener(t: string, fn: EventListener) {
+				listeners.set(t, (listeners.get(t) ?? []).filter((f) => f !== fn));
+			},
+			getContext() {
+				return { isContextLost: () => (this as { lost: boolean }).lost };
+			},
+			fire() {
+				for (const fn of listeners.get('webglcontextlost') ?? []) {
+					fn({ preventDefault() {} } as unknown as Event);
+				}
+			},
+		};
+	}
+
+	function reporter() {
+		const seen: Record<string, unknown>[] = [];
+		return { seen, recordEvent: (_k: 'error', d: Record<string, unknown>) => seen.push(d) };
+	}
+
+	it('reports a context loss with its origin', () => {
+		const canvas = fakeCanvas();
+		const tel = reporter();
+		attachCanvasLiveness(canvas as unknown as HTMLCanvasElement, 'cesium', tel);
+		canvas.fire();
+		expect(tel.seen).toEqual([{ where: 'cesium', event: 'webglcontextlost' }]);
+	});
+
+	it('teardown removes the listener AND the watchdog registration', () => {
+		const canvas = fakeCanvas(true); // context already lost
+		const tel = reporter();
+		const detach = attachCanvasLiveness(canvas as unknown as HTMLCanvasElement, 'cesium', tel);
+
+		// While registered, the watchdog sees the dead context.
+		const before = run({ fps: [60] });
+		vi.advanceTimersByTime(31_000);
+		before.stop();
+		expect(before.reload).toHaveBeenCalled();
+
+		detach();
+		canvas.fire();
+		expect(tel.seen).toHaveLength(0); // listener gone
+
+		// Unregistered, the dead canvas no longer triggers recovery.
+		sessionStorage.clear();
+		const after = run({ fps: [60] });
+		vi.advanceTimersByTime(31_000);
+		after.stop();
+		expect(after.reload).not.toHaveBeenCalled();
+	});
+
+	it('releases the PREVIOUS canvas when a renderer is re-created', () => {
+		// This is the drift the two hand-written copies had: only the Three one
+		// released first, so a retried Cesium viewer could orphan its old canvas
+		// in the watchdog set and poll a dead context forever.
+		const tel = reporter();
+		const first = fakeCanvas(true); // the canvas that died
+		const second = fakeCanvas(false); // healthy replacement from auto-retry
+
+		let detach = attachCanvasLiveness(first as unknown as HTMLCanvasElement, 'cesium', tel);
+		detach = attachCanvasLiveness(second as unknown as HTMLCanvasElement, 'cesium', tel, detach);
+
+		const r = run({ fps: [60] });
+		vi.advanceTimersByTime(31_000);
+		r.stop();
+		expect(r.reload).not.toHaveBeenCalled(); // dead canvas was released
+		detach();
 	});
 });

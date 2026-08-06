@@ -4,9 +4,10 @@
 	 * Shown when the blind is OPEN (scene visible).
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { formatAltitudeFt, formatSpeedX, formatTime } from '$lib/utils';
+	import { flightReadout } from './flight-readout';
 
 	const model = useAeroWindow();
+	const stats = $derived(flightReadout(model));
 	const locationName = $derived(model.currentLocation.name);
 	const destName     = $derived(model.flight.cruiseDestinationName ?? '');
 	const isCruising   = $derived(model.flight.flightMode !== 'orbit');
@@ -22,18 +23,12 @@
 				</span>
 			</div>
 			<div class="telemetry-grid">
-				<div class="stat">
-					<span class="label">ALT</span>
-					<span class="value">{formatAltitudeFt(model.flight.altitude)}</span>
-				</div>
-				<div class="stat">
-					<span class="label">GS</span>
-					<span class="value">{formatSpeedX(model.flight.flightSpeed)}</span>
-				</div>
-				<div class="stat">
-					<span class="label">LOC</span>
-					<span class="value">{formatTime(model.localTimeOfDay)}</span>
-				</div>
+				{#each stats as stat (stat.label)}
+					<div class="stat">
+						<span class="label">{stat.label}</span>
+						<span class="value">{stat.value}</span>
+					</div>
+				{/each}
 			</div>
 		</div>
 	</div>

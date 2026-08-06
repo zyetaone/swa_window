@@ -81,6 +81,46 @@ export function registerLivenessCanvas(canvas: HTMLCanvasElement): () => void {
 	return () => canvases.delete(canvas);
 }
 
+/** Minimal telemetry surface needed to report a context loss. */
+interface LossReporter {
+	recordEvent(kind: 'error', detail: Record<string, unknown>): void;
+}
+
+/**
+ * Register a GL canvas with the watchdog AND log its context-loss events, as
+ * one operation with one teardown.
+ *
+ * Both renderers need exactly this pair: a canvas that dies (GPU/driver reset
+ * overnight on a Pi) makes every subsequent GL call a silent no-op — nothing
+ * throws, so only the watchdog's `isContextLost()` poll notices, and the
+ * listener supplies the precise timestamp. Registering without listening loses
+ * the timestamp; listening without registering loses the recovery.
+ *
+ * They were previously wired by hand in `CesiumViewer.svelte` and
+ * `ThreeOverlay.svelte`, and had already drifted: only the Three copy released
+ * a prior registration before taking a new one, so a re-created Cesium viewer
+ * could orphan the old canvas in the watchdog set and keep polling a dead
+ * context forever. This version always releases first.
+ */
+export function attachCanvasLiveness(
+	canvas: HTMLCanvasElement,
+	where: string,
+	telemetry: LossReporter,
+	previous?: (() => void) | null,
+): () => void {
+	previous?.();
+	const unregister = registerLivenessCanvas(canvas);
+	const onLost = (e: Event) => {
+		e.preventDefault(); // signal intent to restore
+		telemetry.recordEvent('error', { where, event: 'webglcontextlost' });
+	};
+	canvas.addEventListener('webglcontextlost', onLost);
+	return () => {
+		canvas.removeEventListener('webglcontextlost', onLost);
+		unregister();
+	};
+}
+
 function anyContextLost(): boolean {
 	for (const canvas of canvases) {
 		// Either context kind; getContext returns the EXISTING context.

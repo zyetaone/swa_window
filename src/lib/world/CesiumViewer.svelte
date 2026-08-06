@@ -26,7 +26,7 @@
 	import { COLOR_GRADING_GLSL } from '$lib/world/shaders';
 	import { initCesiumGlobal } from '$lib/world/cesium-setup';
 	import { activeCesium } from '$lib/world/active.svelte';
-	import { registerLivenessCanvas, tryConsumeReloadBudget } from '$lib/world/lifecycle-liveness';
+	import { attachCanvasLiveness, tryConsumeReloadBudget } from '$lib/world/lifecycle-liveness';
 
 	const model = useAeroWindow();
 
@@ -39,8 +39,7 @@
 	let viewerContainer: HTMLDivElement;
 	let loadTimeout: ReturnType<typeof setTimeout> | null = null;
 	let autoRetryTimeout: ReturnType<typeof setTimeout> | null = null;
-	let unregisterCanvas: (() => void) | null = null;
-	let removeContextLost: (() => void) | null = null;
+	let detachLiveness: (() => void) | null = null;
 	let destroyed = false;
 
 	// Bounded auto-retry: a kiosk Pi often boots BEFORE the network / Cesium Ion
@@ -73,16 +72,15 @@
 				// (GPU/driver reset overnight) makes GL calls silent no-ops —
 				// nothing throws, so only the watchdog's isContextLost() poll can
 				// notice; the listener adds the precise timestamp + telemetry.
-				{
-					const canvas = cesium.getViewer().canvas as HTMLCanvasElement;
-					unregisterCanvas = registerLivenessCanvas(canvas);
-					const onLost = (e: Event) => {
-						e.preventDefault(); // signal intent to restore
-						model.telemetry.recordEvent('error', { where: 'cesium', event: 'webglcontextlost' });
-					};
-					canvas.addEventListener('webglcontextlost', onLost);
-					removeContextLost = () => canvas.removeEventListener('webglcontextlost', onLost);
-				}
+				// Passing the previous teardown matters on the auto-retry path: a
+				// retried viewer builds a NEW canvas, and without releasing the old
+				// registration the watchdog would poll a dead context forever.
+				detachLiveness = attachCanvasLiveness(
+					cesium.getViewer().canvas as HTMLCanvasElement,
+					'cesium',
+					model.telemetry,
+					detachLiveness,
+				);
 
 				// Dev-only diagnostic hook: reach the live Cesium scene from the
 				// console / headless probe to bisect atmosphere defects.
@@ -129,8 +127,8 @@
 		destroyed = true;
 		if (loadTimeout) clearTimeout(loadTimeout);
 		if (autoRetryTimeout) clearTimeout(autoRetryTimeout);
-		removeContextLost?.();
-		unregisterCanvas?.();
+		detachLiveness?.();
+		detachLiveness = null;
 		activeCesium.manager = null;
 		cesium?.destroy();
 		cesium = null;

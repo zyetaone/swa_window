@@ -9,7 +9,7 @@
 	import { Canvas, T } from '@threlte/core';
 	import { PerspectiveCamera, WebGLRenderer, Color } from 'three';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { registerLivenessCanvas } from '$lib/world/lifecycle-liveness';
+	import { attachCanvasLiveness } from '$lib/world/lifecycle-liveness';
 	import CameraMirror from './CameraMirror.svelte';
 	import Clouds from './Clouds.svelte';
 	import Wing from './Wing.svelte';
@@ -28,14 +28,11 @@
 	// the OLD canvas in the watchdog's Set. That canvas's context is lost by
 	// definition, so `anyContextLost()` stays true forever and the watchdog
 	// burns the hourly reload budget trying to recover a canvas that is gone.
-	let unregisterCanvas: (() => void) | null = null;
-	let removeContextLost: (() => void) | null = null;
+	let detachLiveness: (() => void) | null = null;
 
 	$effect(() => () => {
-		removeContextLost?.();
-		unregisterCanvas?.();
-		removeContextLost = null;
-		unregisterCanvas = null;
+		detachLiveness?.();
+		detachLiveness = null;
 	});
 
 	const _ambientTintScratch = new Color();
@@ -56,17 +53,14 @@
 <div class="three-overlay" aria-hidden="true">
 	<Canvas
 		createRenderer={(canvas) => {
-			// Drop any handles from a previous renderer before replacing them,
-			// so a re-created renderer can't orphan the earlier registration.
-			removeContextLost?.();
-			unregisterCanvas?.();
-			unregisterCanvas = registerLivenessCanvas(canvas as HTMLCanvasElement);
-			const onLost = (e: Event) => {
-				e.preventDefault();
-				model.telemetry.recordEvent('error', { where: 'three-overlay', event: 'webglcontextlost' });
-			};
-			canvas.addEventListener('webglcontextlost', onLost);
-			removeContextLost = () => canvas.removeEventListener('webglcontextlost', onLost);
+			// Passing the previous teardown drops the old registration first, so a
+			// re-created renderer can't orphan the earlier canvas in the watchdog.
+			detachLiveness = attachCanvasLiveness(
+				canvas as HTMLCanvasElement,
+				'three-overlay',
+				model.telemetry,
+				detachLiveness,
+			);
 			return new WebGLRenderer({
 				canvas,
 				antialias: true,
