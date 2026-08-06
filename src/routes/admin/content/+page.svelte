@@ -49,25 +49,53 @@
 		flash('err', `${label}: 401 — token rejected. Re-enter on next attempt.`);
 	}
 
-	async function uploadBundle(text: string) {
+	/**
+	 * Authenticated admin request with uniform failure handling.
+	 *
+	 * Every mutating call needs the same four steps — fetch a cached token,
+	 * attach the bearer header, clear-and-warn on 401, and surface the server's
+	 * JSON error message on any other failure. All three call sites spelled that
+	 * out by hand and had already drifted: deleteBundle skipped the JSON error
+	 * body entirely and reported a bare status code, so an operator hitting a
+	 * "bundle in use" error saw "delete failed: 409" with the reason discarded.
+	 *
+	 * Returns the parsed body on success, or null when the caller should stop
+	 * (the failure has already been reported to the operator).
+	 */
+	async function adminFetch<T>(
+		label: string,
+		url: string,
+		init: RequestInit & { headers?: Record<string, string> } = {},
+	): Promise<T | null> {
 		const token = ensureAdminToken();
-		if (!token) { flash('err', 'bundle: token required'); return; }
+		if (!token) { flash('err', `${label}: token required`); return null; }
+		const res = await fetch(url, {
+			...init,
+			headers: { ...(init.headers ?? {}), ...adminAuthHeader(token) },
+		});
+		if (res.status === 401) { handle401(label); return null; }
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({ message: res.statusText }));
+			flash('err', `${label}: ${err.message ?? res.status}`);
+			return null;
+		}
+		// Tolerate an empty/non-JSON success body (204, bare 200) — the caller only
+		// needs to know the request succeeded. Returning {} keeps the null return
+		// meaning exactly one thing: "failed, already reported".
+		return ((await res.json().catch(() => ({}))) ?? {}) as T;
+	}
+
+	async function uploadBundle(text: string) {
 		busy = true;
 		try {
 			const parsed = JSON.parse(text);
-			const res = await fetch('/api/content', {
+			const out = await adminFetch<{ id: string }>('bundle', '/api/content', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...adminAuthHeader(token) },
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(parsed),
 			});
-			if (res.status === 401) { handle401('bundle'); return; }
-			if (!res.ok) {
-				const err = await res.json().catch(() => ({ message: res.statusText }));
-				flash('err', `bundle: ${err.message ?? res.status}`);
-				return;
-			}
-			const { id } = await res.json();
-			flash('ok', `installed bundle: ${id}`);
+			if (!out) return;
+			flash('ok', `installed bundle: ${out.id}`);
 			await refresh();
 		} catch (e) {
 			flash('err', `parse failed: ${(e as Error).message}`);
@@ -77,26 +105,18 @@
 	}
 
 	async function uploadAsset(file: File) {
-		const token = ensureAdminToken();
-		if (!token) { flash('err', 'asset: token required'); return; }
 		busy = true;
 		try {
 			const fd = new FormData();
 			fd.append('file', file);
-			const res = await fetch('/api/assets', {
+			// No Content-Type: the browser must set the multipart boundary itself.
+			const out = await adminFetch<{ asset: AssetInfo }>('asset', '/api/assets', {
 				method: 'POST',
-				headers: adminAuthHeader(token),
 				body: fd,
 			});
-			if (res.status === 401) { handle401('asset'); return; }
-			if (!res.ok) {
-				const err = await res.json().catch(() => ({ message: res.statusText }));
-				flash('err', `asset: ${err.message ?? res.status}`);
-				return;
-			}
-			const { asset } = await res.json();
-			await navigator.clipboard?.writeText(asset.url).catch(() => {});
-			flash('ok', `asset stored: ${asset.url} (URL copied to clipboard)`);
+			if (!out) return;
+			await navigator.clipboard?.writeText(out.asset.url).catch(() => {});
+			flash('ok', `asset stored: ${out.asset.url} (URL copied to clipboard)`);
 			await refresh();
 		} catch (e) {
 			flash('err', `upload failed: ${(e as Error).message}`);
@@ -107,19 +127,14 @@
 
 	async function deleteBundle(id: string) {
 		if (!confirm(`Remove bundle "${id}"?`)) return;
-		const token = ensureAdminToken();
-		if (!token) { flash('err', 'delete: token required'); return; }
-		const res = await fetch(`/api/content/${encodeURIComponent(id)}`, {
-			method: 'DELETE',
-			headers: adminAuthHeader(token),
-		});
-		if (res.status === 401) { handle401('delete'); return; }
-		if (res.ok) {
-			flash('ok', `removed: ${id}`);
-			await refresh();
-		} else {
-			flash('err', `delete failed: ${res.status}`);
-		}
+		const out = await adminFetch(
+			'delete',
+			`/api/content/${encodeURIComponent(id)}`,
+			{ method: 'DELETE' },
+		);
+		if (!out) return;
+		flash('ok', `removed: ${id}`);
+		await refresh();
 	}
 
 	async function handleFiles(files: FileList | File[]) {
