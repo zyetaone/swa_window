@@ -362,6 +362,24 @@ Heuristic dev utilities — verify hits before deleting:
 | `node tools/doc-path-scan.mjs` | file paths in docs that no longer exist |
 | `node tools/dead-export-scan.mjs` | exported symbols with no non-test, non-barrel consumer |
 
+## Route smoke test
+
+```bash
+bun run build && node build/index.js &          # or: bun run start
+"$CHROME" --headless=new --remote-debugging-port=9335 --enable-webgl about:blank &
+bun run smoke --base http://127.0.0.1:5401 --port 9335
+```
+
+Loads every page route and asserts it actually rendered (non-empty body, no
+init-time exception, canvas present on the kiosk route).
+
+**Run this before shipping UI or state changes.** `/admin` once shipped as a
+completely blank page: `check` was green, all 489 unit tests were green, and the
+kiosk route looked perfect, because a single throw during component init
+produces an empty `<body>` that no type check or non-mounting unit test can see.
+Component tests can now mount (vitest resolves Svelte's browser condition), but
+only a real page load covers the whole route.
+
 
 ## Testing & QA
 
