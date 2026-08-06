@@ -120,10 +120,22 @@ export const NIGHT_PALETTE = {
 
 	/**
 	 * VIIRS Black Marble alpha ceiling at deep night. The NASA tiles paint
-	 * a uniform amber wash at 1.0 — capping at 0.5 keeps them reading as
+	 * a uniform amber wash at 1.0 — capping keeps them reading as
 	 * "lit terrain" on top of the shader-darkened base. Previously lived
 	 * in $lib/night/index.ts; consolidating into the palette so all night
 	 * targets sit in one file.
+	 *
+	 * ─── ⚠ THIS CEILING WAS UNENFORCED UNTIL 2026-08 ────────────────────
+	 * imagery.ts clamped the composed alpha to 1.0 rather than to this value,
+	 * and the operator gain (0..5) multiplied into it, so the product hit 5.6
+	 * and pinned the layer fully opaque — the exact "uniform amber wash" the
+	 * cap exists to prevent. syncImagery now clamps to maxAlpha.
+	 *
+	 * NOTE the prose above previously said "capping at 0.5" while the value
+	 * has been 0.8. Enforcement was written against the VALUE (0.8), because
+	 * lowering it to 0.5 would be a look decision, not a bug fix. If the deep-
+	 * night wash still reads too strong on hardware, 0.5 is the number the
+	 * original author intended and this is the one knob to try first.
 	 */
 	viirs: {
 		maxAlpha:         0.8,
