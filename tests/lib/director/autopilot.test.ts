@@ -27,6 +27,9 @@ function makeCtx(overrides: Partial<SimulationContext> = {}): SimulationContext 
 				weatherPool: ['clear'],
 				directorMinInterval: 1, directorMaxInterval: 1,
 				nightLitCitiesOnly: false,
+				// vantage must exist (required config key) — disabled here so the
+				// beat never fires during randomisation coverage.
+				vantage: { enabled: false },
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			} as any,
 			ambient: {
@@ -35,7 +38,7 @@ function makeCtx(overrides: Partial<SimulationContext> = {}): SimulationContext 
 				hazeShift: 0.05, hazeMin: 0, hazeMax: 1,
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			} as any,
-			daylight: { syncToRealTime: false, manualTimeOfDay: 12, syncIntervalMs: 1000 },
+			daylight: { syncIntervalMs: 1000 },
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} as any,
 		isOrbitMode: true,

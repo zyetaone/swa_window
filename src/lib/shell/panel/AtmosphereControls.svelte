@@ -13,6 +13,7 @@
 	 */
 	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';
 	import { config, applyConfigPatch } from '$lib/model/config-tree.svelte';
+	import { patchNum } from './patch';
 	import RangeSlider from './RangeSlider.svelte';
 
 	const model = tryUseAeroWindow();
@@ -27,7 +28,7 @@
 		max={1.0}
 		step={0.05}
 		value={cfg.atmosphere.clouds.density}
-		oninput={(e) => patch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'atmosphere.clouds.density')}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 	<RangeSlider
@@ -37,7 +38,7 @@
 		max={cfg.director.ambient.cloudSpeedMax}
 		step={0.1}
 		value={cfg.atmosphere.clouds.speed}
-		oninput={(e) => patch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'atmosphere.clouds.speed')}
 		formatValue={(v) => v.toFixed(1) + 'x'}
 	/>
 	<RangeSlider
@@ -47,7 +48,7 @@
 		max={cfg.atmosphere.haze.max}
 		step={0.005}
 		value={cfg.atmosphere.haze.amount}
-		oninput={(e) => patch('atmosphere.haze.amount', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'atmosphere.haze.amount')}
 		formatValue={(v) => Math.round(v * 100) + '%'}
 	/>
 </section>

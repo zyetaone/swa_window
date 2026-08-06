@@ -45,7 +45,7 @@ function makeCtx(overrides: Partial<SimulationContext> = {}): SimulationContext 
 				hazeShift: 0.05, hazeMin: 0, hazeMax: 1,
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			} as any,
-			daylight: { syncToRealTime: false, manualTimeOfDay: 22, syncIntervalMs: 1000 },
+			daylight: { syncIntervalMs: 1000 },
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} as any,
 		isOrbitMode: true,

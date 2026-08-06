@@ -7,6 +7,7 @@
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
 		import type { AeroWindow } from '$lib/model/aero-window.svelte';
+	import { patchNum } from '$lib/shell/panel/patch';
 	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
 	import Toggle from '$lib/shell/panel/Toggle.svelte';
 
@@ -23,6 +24,10 @@
 		mode?: LabMode;
 		model: AeroWindow;
 	} = $props();
+
+	// Closure, not .bind(model): referencing the prop at call time keeps the
+	// compiler's state_referenced_locally warning quiet.
+	const patch = (path: string, value: unknown) => model.applyConfigPatch(path, value);
 </script>
 
 <fieldset>
@@ -76,8 +81,8 @@
 {:else if mode === 'cesium'}
 	<fieldset>
 		<legend>Clouds</legend>
-	<RangeSlider label="Density" value={model.config.atmosphere.clouds.density} oninput={(e) => model.applyConfigPatch('atmosphere.clouds.density', parseFloat(e.currentTarget.value))} min={0} max={1} step={0.01} />
-	<RangeSlider label="Speed" value={model.config.atmosphere.clouds.speed} oninput={(e) => model.applyConfigPatch('atmosphere.clouds.speed', parseFloat(e.currentTarget.value))} min={0.1} max={3} step={0.1} />
+	<RangeSlider label="Density" value={model.config.atmosphere.clouds.density} oninput={patchNum(patch, 'atmosphere.clouds.density')} min={0} max={1} step={0.01} />
+	<RangeSlider label="Speed" value={model.config.atmosphere.clouds.speed} oninput={patchNum(patch, 'atmosphere.clouds.speed')} min={0.1} max={3} step={0.1} />
 	</fieldset>
 {/if}
 

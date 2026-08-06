@@ -27,15 +27,15 @@
 	 * passes don't run in clear/cloudy weather (most of the time).
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { randomBetween } from '$lib/utils';
 
 	const model = useAeroWindow();
 	const active = $derived(model.weather === 'rain' || model.weather === 'storm');
 	const intensity = $derived(model.weather === 'storm' ? 1 : 0.72);
 
-	const rand = (a: number, b: number) => a + Math.random() * (b - a);
 	// Organic, asymmetric blob — no two beads the same shape.
 	const blob = () => {
-		const v = () => Math.round(rand(38, 62));
+		const v = () => Math.round(randomBetween(38, 62));
 		return `${v()}% ${v()}% ${v()}% ${v()}% / ${v()}% ${v()}% ${v()}% ${v()}%`;
 	};
 
@@ -44,17 +44,17 @@
 	const beads = Array.from({ length: 14 }, () => {
 		const runner = Math.random() < 0.25;
 		return {
-			x: rand(6, 94),
-			y: rand(8, 86),
-			size: rand(5, 14), // smaller, finer beads
-			opacity: rand(0.5, 0.85),
-			slide: runner ? rand(40, 130) : rand(2, 9),
+			x: randomBetween(6, 94),
+			y: randomBetween(8, 86),
+			size: randomBetween(5, 14), // smaller, finer beads
+			opacity: randomBetween(0.5, 0.85),
+			slide: runner ? randomBetween(40, 130) : randomBetween(2, 9),
 			// Wet roll-down trail behind a runner (the streak it leaves as it
 			// slides). Stuck beads leave none.
-			trail: runner ? rand(28, 80) : 0,
-			dur: rand(7, 15),
-			delay: -rand(0, 12), // negative → beads start mid-cycle, desynced
-			blur: rand(0.8, 1.7),
+			trail: runner ? randomBetween(28, 80) : 0,
+			dur: randomBetween(7, 15),
+			delay: -randomBetween(0, 12), // negative → beads start mid-cycle, desynced
+			blur: randomBetween(0.8, 1.7),
 			radius: blob(),
 		};
 	});

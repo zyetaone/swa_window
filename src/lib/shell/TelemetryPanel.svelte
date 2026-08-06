@@ -33,7 +33,7 @@
 	// Most recent first, cap visible to 50 entries.
 	const recentEvents = $derived([...telemetry.events].slice(-50).reverse());
 
-	function formatTime(t: number): string {
+	function formatTimestamp(t: number): string {
 		const d = new Date(t);
 		const hh = d.getHours().toString().padStart(2, '0');
 		const mm = d.getMinutes().toString().padStart(2, '0');
@@ -117,7 +117,7 @@
 			<ul>
 				{#each recentEvents as evt (evt)}
 					<li class="evt kind-{evt.kind}">
-						<span class="t">{formatTime(evt.t)}</span>
+						<span class="t">{formatTimestamp(evt.t)}</span>
 						<span class="kind">{evt.kind}</span>
 						<span class="payload">{previewPayload(evt.payload)}</span>
 					</li>

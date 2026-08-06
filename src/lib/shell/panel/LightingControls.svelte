@@ -19,6 +19,7 @@
 	 */
 	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';
 	import { config, applyConfigPatch } from '$lib/model/config-tree.svelte';
+	import { patchNum } from './patch';
 	import Toggle from './Toggle.svelte';
 	import RangeSlider from './RangeSlider.svelte';
 
@@ -34,7 +35,7 @@
 		max={5.0}
 		step={0.1}
 		value={cfg.world.nightLightIntensity}
-		oninput={(e) => patch('world.nightLightIntensity', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.nightLightIntensity')}
 		formatValue={(v) => v.toFixed(1)}
 	/>
 	<RangeSlider
@@ -44,7 +45,7 @@
 		max={15}
 		step={0.25}
 		value={cfg.world.additiveStrength}
-		oninput={(e) => patch('world.additiveStrength', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.additiveStrength')}
 		formatValue={(v) => v.toFixed(1)}
 	/>
 	<RangeSlider
@@ -54,7 +55,7 @@
 		max={0.3}
 		step={0.005}
 		value={cfg.world.moonlightIntensity}
-		oninput={(e) => patch('world.moonlightIntensity', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.moonlightIntensity')}
 		formatValue={(v) => v.toFixed(3)}
 	/>
 	<RangeSlider
@@ -64,7 +65,7 @@
 		max={4.0}
 		step={0.05}
 		value={cfg.world.skyDarken}
-		oninput={(e) => patch('world.skyDarken', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.skyDarken')}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<RangeSlider
@@ -74,7 +75,7 @@
 		max={1.5}
 		step={0.025}
 		value={cfg.world.nightExposure}
-		oninput={(e) => patch('world.nightExposure', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.nightExposure')}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<RangeSlider
@@ -84,7 +85,7 @@
 		max={3.0}
 		step={0.05}
 		value={cfg.world.viirsBrightness}
-		oninput={(e) => patch('world.viirsBrightness', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.viirsBrightness')}
 		formatValue={(v) => v.toFixed(2)}
 	/>
 	<!-- P8 perf-gate A/B: flip the photoreal Three.js overlay live in the space
@@ -100,7 +101,7 @@
 	<!-- Wing position + mirror — adjust how the wing sits in the window -->
 	<RangeSlider id="wingX" label="Wing Position" min={-12} max={2} step={0.1}
 		value={cfg.world.wingXBase}
-		oninput={(e) => patch('world.wingXBase', parseFloat(e.currentTarget.value))}
+		oninput={patchNum(patch, 'world.wingXBase')}
 		formatValue={(v) => v.toFixed(1)} />
 	<!-- Wing mirror: flip the screen-drift sign when the wing mirror looks wrong -->
 	<Toggle label="Wing Mirror Flip" checked={cfg.world.wingDriftSign === -1} onchange={(e) => patch('world.wingDriftSign', e.currentTarget.checked ? -1 : 1)} />

@@ -2,12 +2,12 @@
 	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
 	import { config } from '$lib/model/config-tree.svelte';
-	import { formatTime, formatUptime } from '$lib/utils';
+	import { formatAltitudeFt, formatSpeedX, formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
 	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
-	import { WEATHER_TYPES, DISPLAY_MODES } from '$lib/types';
+	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS } from '$content/locations';
 	import { onDestroy, onMount } from 'svelte';
@@ -51,9 +51,9 @@
 	});
 
 	// Derived display labels for scene sliders
-	const altitudeLabel = $derived(`${(scene.altitude / 1000).toFixed(0)}k ft`);
+	const altitudeLabel = $derived(formatAltitudeFt(scene.altitude, 0));
 	const timeLabel = $derived(formatTime(scene.timeOfDay));
-	const speedLabel = $derived(`${scene.flightSpeed.toFixed(1)}x`);
+	const speedLabel = $derived(formatSpeedX(scene.flightSpeed));
 
 	function getTargets(): string[] {
 		return selectedDevices.size > 0
@@ -220,7 +220,8 @@
 	// the browser running the admin panel — each physical display's binding is
 	// authored by visiting /admin on that device. Also reflects this admin's
 	// own current binding so the operator can sanity-check which pane they're on.
-	const ROLE_OPTIONS: DeviceRole[] = ['solo', 'left', 'center', 'right'];
+	// Derived from the DEVICE_ROLES SSOT with 'solo' pinned first (the default).
+	const ROLE_OPTIONS: DeviceRole[] = ['solo', ...DEVICE_ROLES.filter(r => r !== 'solo')];
 	let bindings = $state<Array<{ fingerprint: string; binding: DeviceBinding }>>([]);
 	let myFingerprint = $state('');
 	let myBinding = $state<DeviceBinding>({ role: 'solo', groupId: 'default' });

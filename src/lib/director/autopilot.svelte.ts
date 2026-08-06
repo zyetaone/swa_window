@@ -142,7 +142,7 @@ function tickDirector(delta: number, ctx: SimulationContext): LocationId | null 
  */
 function tickVantage(delta: number, ctx: SimulationContext): VantageBeat | null {
 	const v = ctx.director.autopilot.vantage;
-	if (!v?.enabled) return null;
+	if (!v.enabled) return null;
 
 	if (_timeToNextVantage === null) {
 		_timeToNextVantage = randomBetween(v.minIntervalSec, v.maxIntervalSec);

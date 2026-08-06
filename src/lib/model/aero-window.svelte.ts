@@ -24,13 +24,13 @@ import {
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
-import { isGroupLeader } from '$lib/fleet/parallax.svelte';
+import { isGroupLeader, resolveBinding } from '$lib/fleet/parallax.svelte';
+// TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
+// one number: the receiver bounds incoming schedules against it (transitionDelayMs).
 import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
 
 
 function effectiveCloudDensityFor(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
-// Re-exported from the fleet protocol so sender + receiver share one number:
-// the receiver bounds incoming schedules against it (transitionDelayMs).
 
 // ─── User override state ──────────────────────────────────────────────────────
 
@@ -262,14 +262,14 @@ export class AeroWindow {
 	#flyoverTimers = new Set<ReturnType<typeof setTimeout>>();
 
 	enterFlyover(pitchDeg: number, altitudeFt: number): void {
-		_applyConfigPatch('camera.flyoverPitchDeg', pitchDeg);   // CRDT-stamped so peer Pis see the flyover
+		this.applyConfigPatch('camera.flyoverPitchDeg', pitchDeg);   // CRDT-stamped so peer Pis see the flyover
 		this.flight.setFlyoverAltitude(Math.max(altitudeFt, this.config.camera.altitude.min));
 	}
 
 	exitFlyover(): void {
 		for (const id of this.#flyoverTimers) clearTimeout(id);
 		this.#flyoverTimers.clear();
-		_applyConfigPatch('camera.flyoverPitchDeg', 0);
+		this.applyConfigPatch('camera.flyoverPitchDeg', 0);
 		this.flight.clearFlyoverAltitude();
 	}
 
@@ -382,9 +382,7 @@ export class AeroWindow {
 		motionStep(delta, ctx);
 
 		ctx.isOrbitMode      = this.flight.flightMode === 'orbit';
-		ctx.pickNextLocation = () => pickNextLocation(this.location, this.timeOfDay, {
-			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly,
-		});
+		ctx.pickNextLocation = () => this.pickNextLocation();
 		// Phase 7 — solo + center are leaders (run autopilot); left/right follow
 		// the leader's director_decision. The rule lives in fleet/parallax as
 		// isGroupLeader: it was ALSO inlined here, so the panorama's leader
@@ -419,6 +417,9 @@ export class AeroWindow {
 					weather: this.weather,
 					decidedAtMs: now,
 					transitionAtMs: now + TRANSITION_DELAY_MS,
+					// Corridor gate: followers apply only when groupId matches their
+					// binding (missing groupId = legacy, apply unconditionally).
+					groupId: resolveBinding().groupId,
 				});
 			}
 			this.flight.flyTo(directorPatch.nextLocation);
@@ -437,6 +438,7 @@ export class AeroWindow {
 					durationMs: directorPatch.vantageBeat.durationMs,
 					pitchDeg: directorPatch.vantageBeat.pitchDeg,
 					altitudeFt: directorPatch.vantageBeat.altitudeFt,
+					groupId: resolveBinding().groupId,
 				});
 			}
 			this.scheduleFlyover(directorPatch.vantageBeat, transitionAtMs);

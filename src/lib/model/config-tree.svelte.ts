@@ -185,8 +185,6 @@ export function setParallaxRole(role: DeviceRole): void {
 
 export const director = $state({
 	daylight: {
-		syncToRealTime: true,
-		manualTimeOfDay: 12,
 		syncIntervalMs: 60_000,        // 1 minute
 	},
 	autopilot: {

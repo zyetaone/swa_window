@@ -16,7 +16,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { config } from "$lib/model/config-tree.svelte";
-	import { formatTime } from "$lib/utils";
+	import { formatAltitudeFt, formatSpeedX, formatTime } from "$lib/utils";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
 	let { children }: { children?: Snippet } = $props();
@@ -159,16 +159,11 @@
 			<div class="data-row">
 				<div class="data-item">
 					<span class="data-label">ALT</span>
-					<span class="data-value"
-						>{(model.flight.altitude / 1000).toFixed(1)}<small>k ft</small
-						></span
-					>
+					<span class="data-value">{formatAltitudeFt(model.flight.altitude)}</span>
 				</div>
 				<div class="data-item">
 					<span class="data-label">GS</span>
-					<span class="data-value"
-						>{model.flight.flightSpeed.toFixed(1)}<small>x</small></span
-					>
+					<span class="data-value">{formatSpeedX(model.flight.flightSpeed)}</span>
 				</div>
 				<div class="data-item">
 					<span class="data-label">LOC</span>
@@ -372,12 +367,6 @@
 		font-size: 0.85rem;
 		font-weight: 400;
 		letter-spacing: 0.05em;
-	}
-
-	.data-value small {
-		font-size: 0.7em;
-		opacity: 0.6;
-		margin-left: 0.15em;
 	}
 
 	.current-location {

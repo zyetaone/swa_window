@@ -77,11 +77,11 @@ describe('applyConfigPatch', () => {
 	});
 
 	it('dispatches to director layer for director.* paths', () => {
-		const original = director.daylight.manualTimeOfDay;
-		const ok = applyConfigPatch('director.daylight.manualTimeOfDay', 17);
+		const original = director.daylight.syncIntervalMs;
+		const ok = applyConfigPatch('director.daylight.syncIntervalMs', 30_000);
 		expect(ok).toBe(true);
-		expect(director.daylight.manualTimeOfDay).toBe(17);
-		director.daylight.manualTimeOfDay = original;
+		expect(director.daylight.syncIntervalMs).toBe(30_000);
+		director.daylight.syncIntervalMs = original;
 	});
 
 	it('dispatches to world layer for world.* paths', () => {
@@ -268,7 +268,7 @@ describe('applyConfigPatch namespace isolation', () => {
 
 	it('director.* writes do NOT touch world', () => {
 		const before = world.buildingsEnabled;
-		applyConfigPatch('director.daylight.syncToRealTime', director.daylight.syncToRealTime);
+		applyConfigPatch('director.daylight.syncIntervalMs', director.daylight.syncIntervalMs);
 		expect(world.buildingsEnabled).toBe(before);
 	});
 

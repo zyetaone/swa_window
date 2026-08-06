@@ -5,6 +5,7 @@
 	 */
 	import { config } from '$lib/model/config-tree.svelte';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { formatAltitudeFt, formatSpeedX } from '$lib/utils';
 	import RangeSlider from './RangeSlider.svelte';
 	import Toggle from './Toggle.svelte';
 
@@ -20,7 +21,7 @@
 		max={model.config.camera.cruise.maxSpeed}
 		step={0.1}
 		value={model.flight.flightSpeed}
-		formatValue={(v) => v.toFixed(1) + 'x'}
+		formatValue={formatSpeedX}
 		oninput={(e) => model.setFlightSpeed(parseFloat(e.currentTarget.value))}
 	/>
 	<RangeSlider
@@ -30,7 +31,7 @@
 		max={model.config.camera.altitude.max}
 		step={1000}
 		value={model.flight.altitude}
-		formatValue={(v) => (v / 1000).toFixed(0) + 'k ft'}
+		formatValue={formatAltitudeFt}
 		oninput={(e) => model.setAltitude(parseFloat(e.currentTarget.value))}
 	/>
 	<!-- Restrict autopilot's location pool to lit cities. ON for kiosk

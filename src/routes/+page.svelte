@@ -21,7 +21,6 @@
 	import Controls from "$lib/shell/HUD.svelte";
 	import SidePanel from "$lib/shell/SidePanel.svelte";
 	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
-	import { setParallaxRole } from "$lib/model/config-tree.svelte";
 	// Composed panel sections — page picks the set + order it wants.
 	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
 	import TimeControl from "$lib/shell/panel/TimeControl.svelte";
@@ -204,8 +203,10 @@
 		const chosenRole: DeviceRole = fromUrl ?? fromStorage ?? "solo";
 
 		if (chosenRole !== "solo") {
+			// applyConfigPatch('camera.parallax.role') also derives the role's
+			// heading/fuselage offsets internally (applyRoleDerived) — no
+			// separate setParallaxRole call needed.
 			model.applyConfigPatch('camera.parallax.role', chosenRole);
-			setParallaxRole(chosenRole);
 			model.applyConfigPatch('shell.windowFrame', false);
 		}
 		if (fromUrl) {

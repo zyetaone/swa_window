@@ -250,3 +250,17 @@ export function formatUptime(seconds: number): string {
 	const m = Math.floor((seconds % 3600) / 60);
 	return `${h}h ${m}m`;
 }
+
+/**
+ * Format feet as thousands-of-feet: `35000` → `"35.0k ft"`.
+ */
+export function formatAltitudeFt(ft: number, decimals = 1): string {
+	return (ft / 1000).toFixed(decimals) + 'k ft';
+}
+
+/**
+ * Format a speed multiplier: `1.25` → `"1.3x"`.
+ */
+export function formatSpeedX(speed: number): string {
+	return speed.toFixed(1) + 'x';
+}

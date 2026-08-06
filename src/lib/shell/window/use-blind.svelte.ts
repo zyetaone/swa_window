@@ -16,7 +16,7 @@
  */
 
 import type { Attachment } from 'svelte/attachments';
-import { clamp } from '$lib/utils';
+import { clamp, smoothstep } from '$lib/utils';
 
 /** Narrow interface — only what the blind needs from AeroWindow. */
 interface BlindControl {
@@ -95,7 +95,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		const step = (now: number) => {
 			const t = clamp((now - t0) / lpRelease, 0, 1);
 			// ease-out smoothstep
-			const e = t * t * (3 - 2 * t);
+			const e = smoothstep(t);
 			speedMultiplier = from + (target - from) * e;
 			if (t < 1) releaseRaf = requestAnimationFrame(step);
 			else {

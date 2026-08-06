@@ -4,7 +4,7 @@
 	 * Shown when the blind is OPEN (scene visible).
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { formatTime } from '$lib/utils';
+	import { formatAltitudeFt, formatSpeedX, formatTime } from '$lib/utils';
 
 	const model = useAeroWindow();
 	const locationName = $derived(model.currentLocation.name);
@@ -24,11 +24,11 @@
 			<div class="telemetry-grid">
 				<div class="stat">
 					<span class="label">ALT</span>
-					<span class="value">{(model.flight.altitude / 1000).toFixed(1)}<small>k ft</small></span>
+					<span class="value">{formatAltitudeFt(model.flight.altitude)}</span>
 				</div>
 				<div class="stat">
 					<span class="label">GS</span>
-					<span class="value">{model.flight.flightSpeed.toFixed(1)}<small>x</small></span>
+					<span class="value">{formatSpeedX(model.flight.flightSpeed)}</span>
 				</div>
 				<div class="stat">
 					<span class="label">LOC</span>
@@ -125,10 +125,5 @@
 		font-weight: 400;
 		letter-spacing: 0.05em;
 		opacity: 0.9;
-	}
-	small {
-		font-size: 0.7em;
-		opacity: 0.6;
-		margin-left: 0.2em;
 	}
 </style>
