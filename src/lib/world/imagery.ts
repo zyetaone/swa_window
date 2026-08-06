@@ -11,10 +11,10 @@
  */
 
 import type * as CesiumType from 'cesium';
-import { altitudeDetailMix } from '$lib/world/altitude';
+import { altitudeDetailMix, NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
 import { getSatelliteImagery, TILE_SERVER_URL } from '$lib/world/cesium-setup';
-import { smoothstep } from '$lib/utils';
+import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
 
@@ -122,6 +122,65 @@ function _addLayer(url: string, maximumLevel: number, minimumLevel: number, webM
 		}),
 	);
 }
+/**
+ * VIIRS night-lights layer alpha.
+ *
+ * Pure so the clamp can be tested — the layer itself is module-private and only
+ * exists after a networked setupImagery(), which is exactly why the saturation
+ * bug below survived: nothing could assert on it without a live viewer.
+ *
+ * ─── ⚠ THE CEILING IS maxAlpha, NOT 1.0 ─────────────────────────────────────
+ * `scale` (the operator's Night Lights knob) and `boost` multiply INTO this, so
+ * clamping at 1.0 let them overrun the palette ceiling: at the shipped defaults
+ * the product reaches 5.6, pinning alpha fully opaque for every nightFactor
+ * past the smoothstep knee, at every altitude. The NASA tiles then read as a
+ * flat amber wash rather than lit terrain over shader-darkened ground, and 82%
+ * of the slider's 0..5 travel did nothing — with the 5.0 default sitting deep
+ * inside that dead zone.
+ */
+export function viirsLayerAlpha(
+	nightFactor: number,
+	scale: number,
+	altitudeFt: number,
+	alphaBoost: number,
+	bootFade = 1,
+): number {
+	const V = NIGHT_PALETTE.viirs;
+	const ease = smoothstep(
+		(nightFactor - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001),
+	);
+	const altGate = 1 - altitudeDetailMix(altitudeFt);
+	const boost = 1.0 + (alphaBoost - 1.0) * nightFactor;
+	// `scale` is nightLightIntensity, a 0..5 knob SHARED with the shader uniforms,
+	// where a gain of 5 is meaningful. An ALPHA cannot use it raw: at 5 it
+	// overruns any ceiling instantly. Normalising against the slider maximum
+	// keeps the whole travel expressive instead of pinning at ~0.7 and leaving
+	// most of the control inert.
+	const gain = clamp(scale / NIGHT_LIGHT_SCALE_MAX, 0, 1);
+	// boost lifts the deep-night end; clamp so it cannot push past the ceiling.
+	return clamp(V.maxAlpha * ease * gain * altGate * boost, 0, V.maxAlpha) * bootFade;
+}
+
+/**
+ * CartoDB road-mask layer alpha.
+ *
+ * Clamped for the same reason as VIIRS: `scale` multiplies in, so at the 5.0
+ * default this evaluated to 1.5-3.7 and was assigned with NO clamp at all
+ * (observed live: 3.664). Cesium treats >= 1 as fully opaque, so every value
+ * above 1 was both meaningless and indistinguishable, and the altitude gate
+ * could never actually fade the mask.
+ */
+export function roadMaskAlpha(
+	nightFactor: number,
+	scale: number,
+	altitudeFt: number,
+	bootFade = 1,
+): number {
+	const gate = 0.3 + 0.7 * altitudeDetailMix(altitudeFt);
+	const nf = nightFactor;
+	return Math.min(nf * scale * gate + (1 - nf) * 0.08 * gate, 1.0) * bootFade;
+}
+
 export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	const nf = model.nightFactor;
 	const scale = model.nightLightScale;
@@ -137,11 +196,7 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	}
 
 	if (_viirsLayer) {
-		const V = NIGHT_PALETTE.viirs;
-		const viirsEase = smoothstep((nf - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001));
-		const altGate = 1 - altitudeDetailMix(model.altitude);
-		const boost = 1.0 + (w.viirsAlphaBoost - 1.0) * nf;
-		const viirsAlpha = Math.min(V.maxAlpha * viirsEase * scale * altGate * boost, 1.0) * bootFade;
+		const viirsAlpha = viirsLayerAlpha(nf, scale, model.altitude, w.viirsAlphaBoost, bootFade);
 		const viirsShow = (show || (prev < 0.01 && nf > 0.01)) && viirsAlpha > 0.001;
 		const viirsBrightness = 5.0 * w.viirsBrightness;
 
@@ -150,8 +205,7 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 		_viirsBrightness.update(viirsBrightness, (v) => { _viirsLayer!.brightness = v; });
 	}
 	if (_roadMaskLayer) {
-		const roadAltGate = 0.3 + 0.7 * altitudeDetailMix(model.altitude);
-		const roadAlpha = (nf * scale * roadAltGate + (1 - nf) * 0.08 * roadAltGate) * bootFade;
+		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
 		const roadBrightness = 1.5 + nf * 1.5;
 		_roadMaskLayer.show = !w.useThreeOverlay;
 		_roadAlpha.update(roadAlpha, (v) => { _roadMaskLayer!.alpha = v; });

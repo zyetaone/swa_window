@@ -35,7 +35,11 @@ const FILES = execSync(
 )
 	.split('\n')
 	.filter(Boolean)
-	.filter((f) => readFileSync(f, 'utf8').includes('v_textureCoordinates'));
+	.filter((f) => {
+		const src = readFileSync(f, 'utf8');
+		// Post-process stages and the model shaders (buildings) both matter.
+		return src.includes('v_textureCoordinates') || src.includes('czm_modelMaterial');
+	});
 
 const SHADERS: Record<string, string> = Object.assign({}, ...FILES.map(extractShaders));
 
@@ -54,6 +58,11 @@ describe('post-process fragment shaders', () => {
 			});
 
 			it('declares every uniform it references', () => {
+				// Cesium CustomShader (the buildings model shader) declares its uniforms
+				// in JS via the `uniforms:` map and injects them, so GLSL declarations
+				// are correctly absent there. Only PostProcessStage shaders must
+				// declare their own.
+				if (src.includes('czm_modelMaterial')) return;
 				const used = new Set([...src.matchAll(/\bu_[A-Za-z0-9_]+/g)].map((m) => m[0]));
 				for (const u of used) {
 					expect(src, `${u} used but not declared`).toMatch(
@@ -69,6 +78,24 @@ describe('post-process fragment shaders', () => {
 
 			it('has balanced braces', () => {
 				expect((src.match(/{/g) ?? []).length).toBe((src.match(/}/g) ?? []).length);
+			});
+
+			it('does not multiply a colour by a raw >1 operator knob', () => {
+				// Emissive/colour output is LDR: anything past 1.0 per channel clips to
+				// pure white and destroys the palette. u_lightIntensity carries a 0..5
+				// operator knob, so each use must either be normalised (divided by the
+				// scale max) or explicitly clamped at the point of use. The buildings
+				// shader did neither and every window clipped, even the dimmest.
+				if (!src.includes('u_lightIntensity')) return;
+				for (const line of src.split('\n')) {
+					if (!/\*\s*u_lightIntensity|u_lightIntensity\s*\*/.test(line)) continue;
+					const normalised = /u_lightIntensity\s*\//.test(line);
+					const clampedHere = /\b(min|clamp|saturate)\s*\(/.test(line);
+					expect(
+						normalised || clampedHere,
+						`unbounded colour scale by u_lightIntensity: ${line.trim()}`,
+					).toBe(true);
+				}
 			});
 		});
 	}

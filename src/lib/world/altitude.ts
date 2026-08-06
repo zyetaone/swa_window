@@ -45,3 +45,15 @@ export function altitudeDetailMix(camAltFt: number): number {
 		),
 	);
 }
+
+/**
+ * Upper bound of the operator's "Night Lights" knob
+ * (`config.world.nightLightIntensity`, surfaced by LightingControls).
+ *
+ * SSOT because the number is needed in three places that must agree: the
+ * slider's `max`, the shader gain, and the VIIRS layer alpha — which has to
+ * NORMALISE against it, since an alpha cannot use a 0..5 gain raw. When the
+ * slider max and the alpha's assumed max drift apart, part of the control
+ * silently stops doing anything.
+ */
+export const NIGHT_LIGHT_SCALE_MAX = 5.0;

@@ -13,7 +13,7 @@ import type * as CesiumType from 'cesium';
 import { getIonToken } from './cesium-setup';
 import { getViirsField } from './viirs-field';
 import { smoothstep } from '$lib/utils';
-import { altitudeDetailMix } from '$lib/world/altitude';
+import { altitudeDetailMix, NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
 import { enableNightIbl } from './night-ibl';
 import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { EpsilonGate } from './util';
@@ -149,7 +149,19 @@ const BUILDING_SHADER_GLSL = `
 		vec3 aviationRed = vec3(1.0, 0.08, 0.03);
 
 		// Build the window emission: lit windows + street-level ambient + aviation lights.
-		vec3 emission = (windowColor * windowBright * flicker * lit) * u_lightIntensity
+		//
+		// ─── ⚠ u_lightIntensity IS NORMALISED, NOT APPLIED RAW ──────────────────
+		// It carries config.world.nightLightIntensity, a 0..5 operator knob. Cesium's
+		// material.emissive is LDR — anything over 1.0 per channel clips to pure
+		// white. Applied raw at the 5.0 default, peak emission hit 7.0 and even the
+		// DIMMEST window reached 2.79, so every window clipped and the carefully
+		// built palette above (warm amber / gold / warm-white-never-pure) was
+		// flattened into identical white boxes. That is what made night-time
+		// buildings read as blank cutouts rather than lit interiors.
+		// Normalising to 0..1 keeps the knob's full travel meaningful AND keeps the
+		// hue: bright windows now approach white, dim ones stay amber.
+		float lightGain = clamp(u_lightIntensity / ${NIGHT_LIGHT_SCALE_MAX.toFixed(1)}, 0.0, 1.0);
+		vec3 emission = (windowColor * windowBright * flicker * lit) * lightGain
 			+ streetLampColor * streetGlow * u_nightFactor
 			+ aviationRed * rooftopLight * u_nightFactor;
 

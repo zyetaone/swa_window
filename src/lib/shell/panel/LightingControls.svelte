@@ -18,6 +18,7 @@
 	 * (no context — module-level gate; startPeerSync propagates to peers).
 	 */
 	import { patchNum, usePanelConfig } from './patch';
+	import { NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
 	import Toggle from './Toggle.svelte';
 	import RangeSlider from './RangeSlider.svelte';
 
@@ -28,7 +29,7 @@
 		<RangeSlider
 		label="Night Lights (VIIRS scale)"
 		min={0}
-		max={5.0}
+		max={NIGHT_LIGHT_SCALE_MAX}
 		step={0.1}
 		value={cfg.world.nightLightIntensity}
 		oninput={patchNum(patch, 'world.nightLightIntensity')}
