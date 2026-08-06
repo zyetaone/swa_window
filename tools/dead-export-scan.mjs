@@ -8,6 +8,20 @@
 // Heuristic (identifier match), and a long tail of hits are legitimate: types
 // used only in annotations, test-only reset hooks, const-array members reached
 // via their union. Verify before deleting.
+//
+// ─── ⚠ KNOWN FALSE-POSITIVE CLASS: SAME-FILE-ONLY HELPERS ───────────────────
+// The `g !== file` filter below means a symbol used ONLY inside its own module
+// is reported dead, because no OTHER file imports it. That is intentional for
+// finding needlessly-exported internals, but it also flags a legitimate
+// pattern: a pure function extracted from a module-private code path purely so
+// tests can reach it. `viirsLayerAlpha` / `roadMaskAlpha` in world/imagery.ts
+// are exactly that — the layers they feed only exist after a networked
+// setupImagery(), so the maths was untestable until it was split out (which is
+// how a night-blowout bug survived unnoticed).
+//
+// Before deleting a hit, rename ONLY its declaration and run `bun run check`:
+// whatever still fails to compile is the real consumer set. That distinguishes
+// "dead", "test-only seam" and "same-file production use" without guessing.
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 
