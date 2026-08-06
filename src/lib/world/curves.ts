@@ -38,8 +38,8 @@ type Vec3 = [number, number, number];
 /**
  * Per-layer × per-phase RGB palette. `blendPhase` crossfades between the four
  * phase colours continuously (no hard switch → no seam). Lives here so the
- * curves are self-contained; world/three/sky.ts re-exports it for the few
- * Three layers + shell components that read raw palette entries.
+ * curves are self-contained; consumers (Three layers, shell components)
+ * import it directly from this module.
  */
 export const SKY_PALETTE = {
 	sunCore: {
@@ -184,7 +184,7 @@ function blendPhase(out: Vec3, layer: keyof typeof SKY_PALETTE, t: number): void
  *
  * @param timeOfDay   decimal hours 0..24 (model.timeOfDay)
  * @param nightFactor 0..1 darkness (model.nightFactor — already the √-curve SSOT)
- * @param sunElevSin  optional sin(local solar elevation) — world/three/sky.ts
+ * @param sunElevSin  optional sin(local solar elevation) — world/sky.ts
  *                    `sunElevationSin(latDeg, timeOfDay)`. Feeds ONLY the
  *                    ambient horizon boost; everything phase-related is
  *                    time/nightFactor driven by design. Previously this took a

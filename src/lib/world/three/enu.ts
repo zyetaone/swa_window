@@ -1,8 +1,7 @@
 /**
- * world/enu — local ENU (East-North-Up) tangent-plane anchor math.
+ * world/three/enu — local ENU (East-North-Up) tangent-plane anchor math.
  *
- * Many city-anchored Three-side assets (CityLightField, OsmRoads,
- * Clouds) construct the same 3-line basis matrix to position
+ * Sole consumer: Clouds.svelte, which builds this basis matrix to position
  * a Group at a known (lat, lon, alt) on the WGS84 ellipsoid:
  *
  *   up    = normalize(geoToCartesian(lat, lon, alt))

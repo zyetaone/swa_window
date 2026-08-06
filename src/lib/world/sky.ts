@@ -1,32 +1,18 @@
 /**
- * world/three/sky — geometry primitives for the Three-side env layers: the
- * sun-direction vector, the air-mass approximation, and the per-phase colour
- * palette.
+ * world/sky — sun-position math for the Three-side env layers: the
+ * sun-direction vector and the local solar elevation that feeds horizon
+ * effects (air mass, low-sun warm shift).
  *
- * The time-of-day RESPONSE curves (visibility, mood phase, ambient) used to
- * live here too; they moved to world/curves.ts — the single owner of
- * every day/dusk/night response, keyed on the canonical T thresholds. This
- * file now holds only the inputs lighting.ts (and a few layers) build on.
+ * The time-of-day RESPONSE curves (visibility, mood phase, ambient) and the
+ * per-phase colour palette (SKY_PALETTE) live in world/curves.ts — the
+ * single owner of every day/dusk/night response, keyed on the canonical T
+ * thresholds. This file holds only the geometric inputs layers build on.
  */
 
 type Vec3 = [number, number, number];
 
 /** Earth's axial tilt (radians) — gives the sun an arc across the year. */
 const SUN_TILT = 0.4;
-
-/**
- * World-space placement radius for sun-anchored layers (EffectStack GodRays,
- * Venus positioning). Sun/Moon/LensFlare are now Cesium billboards.
- *
- * Previously this 6e7 m constant was duplicated across SunGlow, LensFlare,
- * EffectStack, and Moon — silent drift risk if anyone changed one without
- * the others. Single source of truth lives here; consumers import it.
- *
- * 60,000 km is "past every other Three-side scene asset" + "inside
- * camera.far (1e9)" → sun layers stay behind clouds in depth order
- * while remaining safely renderable.
- */
-export const SUN_PLACEMENT_M = 6e7;
 
 /**
  * World-space unit vector toward the sun for the given camera longitude

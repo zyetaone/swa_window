@@ -14,6 +14,8 @@
  * mix patterns within a storm (real cells have one character).
  */
 
+import { pickRandom } from '$lib/utils';
+
 export type LightningPattern = 'sheet' | 'forked' | 'distant';
 
 export interface LightningComposition {
@@ -75,5 +77,5 @@ const COMPOSITIONS: readonly LightningComposition[] = [
 export function pickLightningComposition(
 	rng: () => number = Math.random,
 ): LightningComposition {
-	return COMPOSITIONS[Math.floor(rng() * COMPOSITIONS.length)];
+	return pickRandom(COMPOSITIONS, rng);
 }

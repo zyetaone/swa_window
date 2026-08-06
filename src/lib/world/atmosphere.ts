@@ -59,13 +59,6 @@ const _atmoLight = new EpsilonGate<number>(0.005, -1);
 let _moonPhaseTime = -1;
 let _moonPhaseCache = 1.0;
 
-let _lastTimeOfDay = -1;
-let _lastClockLon = -999;
-
-export function getLastTimeOfDay(): number { return _lastTimeOfDay; }
-export function setLastTimeOfDay(v: number): void { _lastTimeOfDay = v; }
-export function getLastClockLon(): number { return _lastClockLon; }
-export function setLastClockLon(v: number): void { _lastClockLon = v; }
 export function initAtmosphere(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
 	_globeColor.reset();

@@ -8,7 +8,7 @@
  * determinism surfaces as a CI signal.
  */
 import { describe, it, expect } from 'vitest';
-import { createSeededRng, daySeed, spherePoint } from '$lib/world/prng';
+import { createSeededRng, daySeed } from '$lib/world/prng';
 
 describe('createSeededRng', () => {
 	it('produces uniform [0, 1) values', () => {
@@ -66,21 +66,5 @@ describe('daySeed', () => {
 		const a = new Date(Date.UTC(2025, 0, 1));
 		const b = new Date(Date.UTC(2026, 0, 1));
 		expect(daySeed(a)).not.toBe(daySeed(b));
-	});
-});
-
-describe('spherePoint', () => {
-	it('returns a point on the sphere of the given radius', () => {
-		const rng = createSeededRng(7);
-		for (let i = 0; i < 50; i++) {
-			const [x, y, z] = spherePoint(rng, 100);
-			const len = Math.sqrt(x * x + y * y + z * z);
-			expect(len).toBeCloseTo(100, 5);
-		}
-	});
-	it('is deterministic for the same seed sequence', () => {
-		const r1 = createSeededRng(42);
-		const r2 = createSeededRng(42);
-		expect(spherePoint(r1, 50)).toEqual(spherePoint(r2, 50));
 	});
 });

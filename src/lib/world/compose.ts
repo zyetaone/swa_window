@@ -2,9 +2,9 @@
  * CesiumManager — thin orchestrator for the Cesium globe.
  *
  * Delegates to reactive feature modules:
- *   imagery.svelte.ts    — base imagery, VIIRS, CartoDB roads
- *   buildings.svelte.ts  — OSM 3D Tiles + procedural shader
- *   atmosphere.svelte.ts — sky, fog, globe color, moonlight, exposure
+ *   imagery.ts    — base imagery, VIIRS, CartoDB roads
+ *   buildings.ts  — OSM 3D Tiles + procedural shader
+ *   atmosphere.ts — sky, fog, globe color, moonlight, exposure
  * Owns directly: viewer lifecycle, post-processing,
  * cloud billboards, lightning, and the per-frame render loop.
  * (Camera sync lives in ./camera — see syncCamera().)
@@ -20,15 +20,14 @@ import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { syncCamera, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE } from './shaders';
-import { VIEWER_OPTIONS, applySceneDefaults } from './cesium-setup';
+import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery';
 import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
 import { installHashPalette } from './hash-palette';
-import { initAtmosphere, syncAtmosphere, getLastTimeOfDay, getLastClockLon, setLastTimeOfDay, setLastClockLon } from './atmosphere';
+import { initAtmosphere, syncAtmosphere } from './atmosphere';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain';
-import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 
 type WorldConfig = typeof world;
 
@@ -70,6 +69,10 @@ export class CesiumManager {
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
 	#lastColorGradeEnabled: boolean | null = null;
+
+	// Clock-change gates — owned here; #syncClockCheck is their only consumer.
+	#lastTimeOfDay = -1;
+	#lastClockLon = -999;
 
 	#lastPostRenderTime = performance.now();
 	#boundTick: (() => void) | null = null;
@@ -191,9 +194,9 @@ export class CesiumManager {
 	/** Sync clock when timeOfDay or longitude changed. Then sync atmosphere. */
 	#syncClockCheck(): void {
 		const m = this.#model;
-		if (getLastTimeOfDay() !== m.timeOfDay || Math.abs(getLastClockLon() - m.flight.lon) > 0.5) {
-			setLastTimeOfDay(m.timeOfDay);
-			setLastClockLon(m.flight.lon);
+		if (this.#lastTimeOfDay !== m.timeOfDay || Math.abs(this.#lastClockLon - m.flight.lon) > 0.5) {
+			this.#lastTimeOfDay = m.timeOfDay;
+			this.#lastClockLon = m.flight.lon;
 			if (this.#viewer.scene.sun)
 				this.#viewer.scene.sun.show = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 			this.#syncClock();
@@ -223,7 +226,9 @@ export class CesiumManager {
 			this.#getBootFade(),
 		);
 		if (this.#colorGradeStage && this.#lastQualityMode !== 'performance') {
-			const should = m.nightFactor >= 0.001;
+			// Hash palette wins when enabled: the two grading stages must never
+			// stack (double-grade), so color-grade stays off under useHashPalette.
+			const should = m.nightFactor >= 0.001 && !m.config.world.useHashPalette;
 			if (should !== this.#lastColorGradeEnabled) {
 				this.#colorGradeStage.enabled = should;
 				this.#lastColorGradeEnabled = should;
@@ -277,7 +282,7 @@ export class CesiumManager {
 	#setupPostProcess(glsl: string): void {
 		const v = this.#viewer;
 		// HBAO — Pi-5 tuned: fewer directions/steps than desktop defaults.
-		// Enabled per-tick in atmosphere.svelte.ts when altitude < 15 000 ft
+		// Enabled per-tick in atmosphere.ts when altitude < 15 000 ft
 		// AND qualityMode !== "performance".
 		const ao = v.scene.postProcessStages.ambientOcclusion;
 		if (ao) {
@@ -328,7 +333,9 @@ export class CesiumManager {
 		const allow = mode !== 'performance';
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
-		if (this.#colorGradeStage) this.#colorGradeStage.enabled = true; // always on — warm palette is load-bearing
+		// Warm palette is load-bearing, but hash palette wins when enabled —
+		// the two grading stages must never stack (double-grade).
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = !this.#model.config.world.useHashPalette;
 		const v = this.#viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any

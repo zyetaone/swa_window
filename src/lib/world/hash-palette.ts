@@ -38,11 +38,9 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		// warm sources (building windows, car lights) got the full 100%. The
 		// ground looked flat next to the buildings for that reason alone.
 		//
-		// A comment in compose.ts still claims "kept 0.1 saturation so the
-		// shader's red-bias gate has a signal" while the line beneath it sets
-		// 0.0 — the signal was removed and the gate left in. Moot now regardless:
-		// the source is a greyscale RADIANCE product (viirs-endpoint.ts), so
-		// red == blue at the source and no saturation value could revive it.
+		// Moot regardless: the source is a greyscale RADIANCE product
+		// (viirs-field.ts), so red == blue at the source and no saturation
+		// value could give a chroma gate a signal.
 		//
 		// Luminance alone selects lights, which is what the gate was reaching for.
 		// Safe against amber-ing the sky: this is a CESIUM post-process stage, so

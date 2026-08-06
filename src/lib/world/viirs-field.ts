@@ -33,13 +33,6 @@
  * deterministic, not transient) is the entry marked 'failed' permanently and
  * callers get null — they fall back to their static colours. No hard
  * dependency on the network.
- *
- * Waiter semantics: `onReady` callbacks stay registered across retries and are
- * notified exactly once, on TERMINAL resolution (success or permanent failure).
- * Retryable failures do not notify — a notified waiter would call back into
- * getViirsField, read null, and have to re-register anyway; keeping it
- * registered is the simplest correct behaviour. Use `removeViirsWaiter` to
- * cancel a registration on unmount.
  */
 
 
@@ -153,7 +146,6 @@ function latToTileYf(lat: number, z: number): number {
 
 type Entry = ViirsField | 'loading' | 'failed';
 const _cache = new Map<string, Entry>();
-const _waiters = new Map<string, Set<() => void>>();
 // Per-tile network-error counter. < MAX_FAILS → retryable (entry deleted +
 // background retry scheduled); >= MAX_FAILS → 'failed' permanently.
 const _fails = new Map<string, number>();
@@ -167,26 +159,10 @@ function tileKey(lat: number, lon: number): { key: string; tx: number; ty: numbe
 }
 
 /**
- * Deregister an `onReady` callback previously passed to `getViirsField` for
- * the tile covering (lat, lon). Call from component cleanup — without this a
- * still-pending load would hold the closure (and whatever it captures) until
- * the tile resolves. No-op if the callback was never registered or already
- * notified.
- */
-export function removeViirsWaiter(lat: number, lon: number, onReady: () => void): void {
-	const { key } = tileKey(lat, lon);
-	const s = _waiters.get(key);
-	if (!s) return;
-	s.delete(onReady);
-	if (s.size === 0) _waiters.delete(key);
-}
-
-/**
  * Get the VIIRS field for the tile covering (lat, lon). Returns the field if it
- * is already loaded, otherwise null + kicks off the async load. Pass `onReady`
- * to be notified when an in-flight load completes (e.g. to trigger a rebuild).
+ * is already loaded, otherwise null + kicks off the async load.
  */
-export function getViirsField(lat: number, lon: number, onReady?: () => void): ViirsField | null {
+export function getViirsField(lat: number, lon: number): ViirsField | null {
 	if (typeof document === 'undefined') return null; // SSR guard
 	const z = TILE_Z;
 	const { key, tx, ty } = tileKey(lat, lon);
@@ -194,21 +170,8 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 	const e = _cache.get(key);
 	if (e && e !== 'loading' && e !== 'failed') return e;
 	if (e === 'failed') return null;
-	if (onReady) {
-		let s = _waiters.get(key);
-		if (!s) _waiters.set(key, (s = new Set()));
-		s.add(onReady);
-	}
 	if (e === 'loading') return null;
 	_cache.set(key, 'loading');
-
-	const notify = () => {
-		const s = _waiters.get(key);
-		if (s) {
-			s.forEach((fn) => fn());
-			_waiters.delete(key);
-		}
-	};
 
 	const img = new Image();
 	img.crossOrigin = 'anonymous';
@@ -259,20 +222,17 @@ export function getViirsField(lat: number, lon: number, onReady?: () => void): V
 			_cache.set(key, 'failed');
 		}
 		_fails.delete(key);
-		notify();
 	};
 	img.onerror = () => {
 		const fails = (_fails.get(key) ?? 0) + 1;
 		_fails.set(key, fails);
 		if (fails >= MAX_FAILS) {
-			_cache.set(key, 'failed'); // terminal — give up, notify waiters once
-			notify();
+			_cache.set(key, 'failed'); // terminal — give up
 			return;
 		}
 		// Retryable network error (kiosk-boot blip): delete the entry so the next
 		// getViirsField call re-enters the load path, and schedule a background
-		// retry with linear backoff. Waiters stay registered — they are only
-		// notified on terminal success/failure (see module doc).
+		// retry with linear backoff.
 		_cache.delete(key);
 		setTimeout(() => getViirsField(lat, lon), RETRY_BASE_MS * fails);
 	};

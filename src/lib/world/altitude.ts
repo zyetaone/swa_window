@@ -3,19 +3,16 @@
  * altitude gates the night-light detail layers.
  *
  * ─── WHY THIS LIVES HERE ────────────────────────────────────────────────────
- * Same cross-boundary pattern as world/curves.ts: both Cesium
- * (world/compose.ts) and Three (world/three/NeonLineLayer) need altitude-
- * based fading. Framework-free — no `three`, no `cesium`, pure math.
+ * Same cross-boundary pattern as world/curves.ts: the Cesium side
+ * (world/imagery.ts, world/buildings.ts) needs altitude-based fading.
+ * Framework-free — no `three`, no `cesium`, pure math.
  *
- * ─── THE FIVE GATES (all former callers) ────────────────────────────────────
- * Each consumer used to hard-code its own LO/HI pair. Migration is staged —
- * the Three-side layers adopt the SSOT now; the Cesium-side gates flip after
- * the Pi-perf gate (they carry TODOs in compose.ts so the diff stays small):
- *   1. VIIRS Cesium layer  (5k → 15k, FAR)   → pending: (1 − mix)        [TODO]
- *   2. CartoDB road mask   (15k → 35k, NEAR) → pending: 0.4 + 0.6 * mix  [TODO]
- *   3. Building emissive    (25k → 55k, NEAR) → pending: 1 − altBlend     [TODO]
- *   4. CityLightField bokeh (FAR)            → LIVE: 0.15 + 0.85 * (1 − mix)
- *   5. NeonLineLayer neon  (NEAR)            → LIVE: mix
+ * ─── THE GATES ──────────────────────────────────────────────────────────────
+ *   1. VIIRS Cesium layer  → alpha × (1 − mix)          (imagery.ts)
+ *   2. CartoDB road mask   → alpha × (0.3 + 0.7 * mix)  (imagery.ts)
+ *   3. Building windows    → density × (1 − mix)        (buildings.ts u_windowDensity)
+ * The former Three-side consumers (CityLightField bokeh, NeonLineLayer neon)
+ * were retired with the layers themselves.
  *
  * ─── CONTRACT ────────────────────────────────────────────────────────────────
  * Pure + allocation-free. Consumers call altitudeDetailMix(camAltFt) and derive

@@ -55,7 +55,7 @@
  *   - `world.skyDarken` — multiplier on `brShift` toward Cesium's -1 clamp
  *
  * Three.js overlay layers (separate transparent canvas, not in this pipeline):
- *   tuned in src/lib/world-three/sky.ts + Clouds.svelte.
+ *   tuned in src/lib/world/sky.ts + src/lib/world/three/Clouds.svelte.
  *
  * To darken night sky: edit the √-curve exponent in utils.ts FIRST (fixes
  * everything via single point of truth), then lower the operator sliders if

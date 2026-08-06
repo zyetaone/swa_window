@@ -62,26 +62,6 @@ export function daySeed(now: Date = new Date()): number {
 	return year * 1000 + dayOfYear;
 }
 
-/**
- * Convenience: spherical position uniform on a sphere of `radius`.
- * Same u/v → (θ, φ) transform used elsewhere; promoted to a helper so
- * star + meteor + future-celestial-body components can share.
- */
-export function spherePoint(
-	rng: () => number,
-	radius: number,
-): [number, number, number] {
-	const u = rng();
-	const v = rng();
-	const theta = 2 * Math.PI * u;
-	const phi = Math.acos(2 * v - 1);
-	return [
-		radius * Math.sin(phi) * Math.cos(theta),
-		radius * Math.cos(phi),
-		radius * Math.sin(phi) * Math.sin(theta),
-	];
-}
-
 /** djb2 string hash → unsigned 32-bit. Pair with daySeed() to derive
  *  per-entity deterministic seeds: `createSeededRng((daySeed() ^ hashString(id)) >>> 0)`. */
 export function hashString(id: string): number {
