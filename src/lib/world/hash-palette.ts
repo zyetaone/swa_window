@@ -20,6 +20,12 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform float u_darkVoidStrength;
 	uniform float u_envLight;
 	uniform float u_additiveStrength;
+	// MUST be declared. Cesium prepends the version/precision preamble and the
+	// out_FragColor declaration, but NOT the varying — COLOR_GRADING_GLSL in
+	// shaders.ts declares its own, and this shader was written without one, so
+	// it failed to compile and Cesium halted rendering entirely on every night
+	// frame ("An error occurred while rendering. Rendering has stopped.").
+	in vec2 v_textureCoordinates;
 
 	void main() {
 		vec4 color = texture(colorTexture, v_textureCoordinates);
