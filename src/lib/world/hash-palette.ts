@@ -102,9 +102,14 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		// An additive lift scaled by how dark the pixel already is keeps the floor
 		// (nothing crushes to pure black) while PRESERVING relative variation, so
 		// terrain shape and the light field both stay visible.
+		// Multiplying the lift by the pixel's own value (plus a small floor) keeps
+		// terrain VARIATION proportional instead of pasting a constant over it.
+		// A flat add was measurably too strong on low-light scenes: ground standard
+		// deviation fell to 4.0 at the Himalayas and 9.2 at Hyderabad, i.e. the
+		// lift was dominating the terrain signal it exists to reveal.
 		vec3 ambient = vec3(0.065, 0.052, 0.038) * u_envLight * u_nightFactor;
 		float darkness = 1.0 - smoothstep(0.0, 0.35, lum);
-		rgb += ambient * darkness;
+		rgb += ambient * darkness * (0.35 + 1.6 * lum);
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}
