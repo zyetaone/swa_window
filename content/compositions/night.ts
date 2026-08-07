@@ -132,10 +132,18 @@ export const NIGHT_PALETTE = {
 	 * cap exists to prevent. syncImagery now clamps to maxAlpha.
 	 *
 	 * NOTE the prose above previously said "capping at 0.5" while the value
-	 * has been 0.8. Enforcement was written against the VALUE (0.8), because
-	 * lowering it to 0.5 would be a look decision, not a bug fix. If the deep-
-	 * night wash still reads too strong on hardware, 0.5 is the number the
-	 * original author intended and this is the one knob to try first.
+	 * has been 0.8. Enforcement was written against the VALUE (0.8).
+	 *
+	 * Both settings were then MEASURED on the production build rather than
+	 * argued from the comment, and 0.5 is meaningfully darker:
+	 *
+	 *              Chicago lit%    Dubai mean lum
+	 *   0.8 (now)      55.5             92.6
+	 *   0.5            8.8              61.9
+	 *
+	 * So the knob works and is the right one to reach for — but in the darker
+	 * direction. Given the display was reported as too dim, 0.8 stays. Drop to
+	 * 0.5 only if the deep-night VIIRS wash ever reads too STRONG.
 	 */
 	viirs: {
 		maxAlpha:         0.8,
