@@ -89,8 +89,22 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
 
 		// Ambient floor — warm tint so terrain never goes pure black.
+		//
+		// ─── ⚠ ADDITIVE LIFT, NOT max() ─────────────────────────────────────────
+		// This was rgb = max(rgb, ambient) with ambient scaled by u_envLight
+		// (4.0 by default), which put the floor at 8-bit luminance 54.8. Because
+		// max() CLAMPS UP, every terrain pixel darker than that became exactly
+		// that value — measured: the median pixel of a night frame was 54.8 in
+		// three consecutive builds, i.e. most of the screen was one flat colour.
+		// The scene then reads as washed-out AND dark at the same time: no terrain
+		// detail survives, and the floor is bright enough to mute nearby city
+		// lights by comparison.
+		// An additive lift scaled by how dark the pixel already is keeps the floor
+		// (nothing crushes to pure black) while PRESERVING relative variation, so
+		// terrain shape and the light field both stay visible.
 		vec3 ambient = vec3(0.065, 0.052, 0.038) * u_envLight * u_nightFactor;
-		rgb = max(rgb, ambient);
+		float darkness = 1.0 - smoothstep(0.0, 0.35, lum);
+		rgb += ambient * darkness;
 
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}

@@ -76,6 +76,13 @@ describe('post-process fragment shaders', () => {
 				expect(src).not.toMatch(/\btexture2D\s*\(/);
 			});
 
+			it('has no backtick in a comment (would end the template literal)', () => {
+				// Bitten twice: a JS-style `identifier` quote inside a GLSL comment
+				// terminates the enclosing template literal, truncating the shader.
+				// The brace check below catches the wreckage; this names the cause.
+				expect(src).not.toContain('`');
+			});
+
 			it('has balanced braces', () => {
 				expect((src.match(/{/g) ?? []).length).toBe((src.match(/}/g) ?? []).length);
 			});

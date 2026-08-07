@@ -89,8 +89,18 @@ export async function setupImagery(): Promise<void> {
 			_roadMaskLayer.show = false;
 			_roadMaskLayer.dayAlpha = 0;
 			_roadMaskLayer.nightAlpha = 1;
+			// ─── ⚠ THRESHOLD MUST EXCEED THE TILE'S BACKGROUND ──────────────────
+			// Cesium keys a pixel transparent when its distance to `colorToAlpha`
+			// is <= threshold. At 0.0 only EXACTLY #000000 qualifies, and the
+			// CartoDB dark basemap's background is near-black but NOT black — so
+			// nothing was keyed out and the whole tile composited as an opaque
+			// dark sheet OVER the lit terrain. The layer meant to add street glow
+			// was subtracting ground light instead.
+			// 0.12 clears the background (~#0e1013) while leaving road strokes,
+			// which are much brighter, intact. VIIRS uses the same mechanism with
+			// 0.01 because its background is true black.
 			_roadMaskLayer.colorToAlpha = C.Color.BLACK;
-			_roadMaskLayer.colorToAlphaThreshold = 0.0;
+			_roadMaskLayer.colorToAlphaThreshold = 0.12;
 			_roadMaskLayer.saturation = 0.0;
 			_roadMaskLayer.contrast = 1.5;
 			_roadMaskLayer.brightness = 1.0;
@@ -178,7 +188,12 @@ export function roadMaskAlpha(
 ): number {
 	const gate = 0.3 + 0.7 * altitudeDetailMix(altitudeFt);
 	const nf = nightFactor;
-	return Math.min(nf * scale * gate + (1 - nf) * 0.08 * gate, 1.0) * bootFade;
+	// Normalise the 0..5 operator gain, exactly as viirsLayerAlpha does. Clamping
+	// alone left this pinned at 1.0 for every altitude and every knob position
+	// above ~0.3, so the altitude gate above could never actually fade the mask
+	// and most of the slider was inert.
+	const gain = clamp(scale / NIGHT_LIGHT_SCALE_MAX, 0, 1);
+	return clamp(nf * gain * gate + (1 - nf) * 0.08 * gate, 0, 1) * bootFade;
 }
 
 export function syncImagery(model: ImageryTickInput, bootFade: number): void {
