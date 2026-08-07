@@ -13,7 +13,7 @@ import type * as CesiumType from 'cesium';
 import { getIonToken } from './cesium-setup';
 import { getViirsField } from './viirs-field';
 import { smoothstep } from '$lib/utils';
-import { altitudeDetailMix, NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
+import { altitudeDetailMix, NIGHT_EMISSIVE_WHITE_POINT } from '$lib/world/altitude';
 import { enableNightIbl } from './night-ibl';
 import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { EpsilonGate } from './util';
@@ -150,20 +150,29 @@ const BUILDING_SHADER_GLSL = `
 
 		// Build the window emission: lit windows + street-level ambient + aviation lights.
 		//
-		// ─── ⚠ u_lightIntensity IS NORMALISED, NOT APPLIED RAW ──────────────────
-		// It carries config.world.nightLightIntensity, a 0..5 operator knob. Cesium's
-		// material.emissive is LDR — anything over 1.0 per channel clips to pure
-		// white. Applied raw at the 5.0 default, peak emission hit 7.0 and even the
-		// DIMMEST window reached 2.79, so every window clipped and the carefully
-		// built palette above (warm amber / gold / warm-white-never-pure) was
-		// flattened into identical white boxes. That is what made night-time
-		// buildings read as blank cutouts rather than lit interiors.
-		// Normalising to 0..1 keeps the knob's full travel meaningful AND keeps the
-		// hue: bright windows now approach white, dim ones stay amber.
-		float lightGain = clamp(u_lightIntensity / ${NIGHT_LIGHT_SCALE_MAX.toFixed(1)}, 0.0, 1.0);
-		vec3 emission = (windowColor * windowBright * flicker * lit) * lightGain
-			+ streetLampColor * streetGlow * u_nightFactor
-			+ aviationRed * rooftopLight * u_nightFactor;
+		// ─── ⚠ TONE-MAP, DO NOT LINEARLY SCALE ──────────────────────────────────
+		// u_lightIntensity carries config.world.nightLightIntensity, a 0..5 operator
+		// GAIN. Cesium's material.emissive is LDR: over 1.0 per channel clips to
+		// pure white. Applied raw at the 5.0 default the peak channel hit 7.0 and
+		// even the DIMMEST window reached 2.79, so every window clipped and the
+		// palette above (warm amber / gold / warm-white-never-pure) collapsed into
+		// identical white boxes.
+		//
+		// Dividing the gain down fixes the clipping but costs 5x the brightness —
+		// the city then reads as dim. Reinhard tone-mapping is the right tool: it
+		// compresses the HDR range into 0..1 so bright windows stay BRIGHT (a raw
+		// 7.0 lands at ~0.88) while dim ones stay separable (~0.74) and every
+		// value keeps its hue. The gain stays a real exposure control across its
+		// whole travel instead of saturating instantly.
+		vec3 hdrEmission = (windowColor * windowBright * flicker * lit) * u_lightIntensity
+			+ streetLampColor * streetGlow * u_nightFactor * u_lightIntensity
+			+ aviationRed * rooftopLight * u_nightFactor * u_lightIntensity;
+
+		// Reinhard with a white point: x * (1 + x/W^2) / (1 + x). W is the raw
+		// channel value that should map to pure white, so anything at or above it
+		// reads fully lit without flattening everything below it.
+		const float W = ${NIGHT_EMISSIVE_WHITE_POINT.toFixed(1)};
+		vec3 emission = hdrEmission * (1.0 + hdrEmission / (W * W)) / (1.0 + hdrEmission);
 
 		// Darken building surfaces at night so emissive reads cleanly.
 		material.diffuse *= mix(1.0, 0.06, u_nightFactor);

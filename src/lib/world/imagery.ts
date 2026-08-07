@@ -207,7 +207,18 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	if (_roadMaskLayer) {
 		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
 		const roadBrightness = 1.5 + nf * 1.5;
-		_roadMaskLayer.show = !w.useThreeOverlay;
+		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
+		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
+		// field to the Three side. Those overlays (CityLightField bokeh,
+		// NeonLineLayer) were deleted in 3bf9cf4, and the flag defaults TRUE — so
+		// the guard has been switching the road mask OFF in favour of a renderer
+		// that draws nothing but clouds and the wing. Confirmed live: the layer sat
+		// at show=false on every night frame.
+		// Net effect: night cities had no street-grid light at all, just building
+		// windows floating over unlit ground, which reads as "too dark".
+		// world/three/ has no ground-lighting component; if one is ever added, gate
+		// it there rather than reinstating a flag that silently blanks this layer.
+		_roadMaskLayer.show = true;
 		_roadAlpha.update(roadAlpha, (v) => { _roadMaskLayer!.alpha = v; });
 		_roadBrightness.update(roadBrightness, (v) => { _roadMaskLayer!.brightness = v; });
 	}

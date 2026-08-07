@@ -87,6 +87,13 @@ describe('post-process fragment shaders', () => {
 				// scale max) or explicitly clamped at the point of use. The buildings
 				// shader did neither and every window clipped, even the dimmest.
 				if (!src.includes('u_lightIntensity')) return;
+				// Three legitimate ways to keep an LDR output in range:
+				//   normalise the knob, clamp at the point of use, or TONE-MAP the
+				//   accumulated HDR value downstream. Tone-mapping is preferred for
+				//   emissive because dividing the gain down costs real brightness —
+				//   it fixes clipping by making the city dim, which is its own bug.
+				const toneMapped = /\/\s*\(1\.0\s*\+|1\.0\s*\+\s*\w+\s*\/\s*\(W\s*\*\s*W\)/.test(src);
+				if (toneMapped) return;
 				for (const line of src.split('\n')) {
 					if (!/\*\s*u_lightIntensity|u_lightIntensity\s*\*/.test(line)) continue;
 					const normalised = /u_lightIntensity\s*\//.test(line);

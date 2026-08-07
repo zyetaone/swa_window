@@ -57,3 +57,14 @@ export function altitudeDetailMix(camAltFt: number): number {
  * silently stops doing anything.
  */
 export const NIGHT_LIGHT_SCALE_MAX = 5.0;
+
+/**
+ * Raw emissive channel value that tone-maps to pure white in the building
+ * shader's Reinhard curve.
+ *
+ * The window palette peaks around 7.0 raw at the default gain. A white point
+ * slightly above the typical value keeps the brightest windows reading as
+ * genuinely bright (~0.9) without flattening the amber/gold mid-range into
+ * them — which is what a naive clamp, or dividing the gain down, both do.
+ */
+export const NIGHT_EMISSIVE_WHITE_POINT = 2.2;
