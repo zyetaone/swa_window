@@ -37,45 +37,40 @@
 
 	// ── Frame chrome ──────────────────────────────────────────────────────────
 
-	const frameVisible = $derived(model.config.shell.windowFrame);
-	const skyBackground = $derived(SKY_PALETTE[model.skyState].background);
+const frameVisible = $derived(model.config.shell.windowFrame);
+const skyPalette = $derived(SKY_PALETTE[model.skyState]);
+const skyBackground = $derived(skyPalette.background);
 
-	// ── Atmospheric CSS filters ───────────────────────────────────────────────
+// ── Atmospheric CSS filters ───────────────────────────────────────────────
 
-	const filterString = $derived.by(() => {
-		const timeBrightness =
-			model.skyState === "night" ? 1.0
-			: model.skyState === "dawn" || model.skyState === "dusk" ? 0.95
-			: 1.0;
-		const brightness = timeBrightness * model.config.atmosphere.weather.filterBrightness;
-		const w = model.flight.warpFactor;
-		const baseBlur = 0.35;
-		const base = `brightness(${brightness.toFixed(2)}) blur(${baseBlur}px)`;
-		if (w < 0.01) return base;
-		return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
-	});
+const filterString = $derived.by(() => {
+	const brightness = skyPalette.filterBrightness * model.config.atmosphere.weather.filterBrightness;
+	const w = model.flight.warpFactor;
+	const baseBlur = 0.35;
+	const base = `brightness(${brightness.toFixed(2)}) blur(${baseBlur}px)`;
+	if (w < 0.01) return base;
+	return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
+});
 
-	// ── Motion (turbulence, breathing, parallax) ──────────────────────────────
+// ── Motion (turbulence, breathing, parallax) ──────────────────────────────
 
-	const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
-	const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
-	const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
-	const breathingY = $derived(model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude);
-	const parallax = useMouseParallax();
+const turbulenceY = $derived(model.motion.motionOffsetY * 0.08);
+const turbulenceX = $derived(model.motion.motionOffsetX * 0.08);
+const turbulenceRotate = $derived(model.motion.motionOffsetY * 0.02);
+const breathingY = $derived(model.motion.breathingOffset * model.config.camera.motion.breathingAmplitude);
+const parallax = useMouseParallax();
 
-	const motionTransform = $derived.by(() => {
-		const x = turbulenceX + model.motion.engineVibeX + parallax.x;
-		const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
-		const rotate = turbulenceRotate;
-		const scale = 1 + model.motion.warpZoom;
-		return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
-	});
+const motionTransform = $derived.by(() => {
+	const x = turbulenceX + model.motion.engineVibeX + parallax.x;
+	const y = turbulenceY + breathingY + model.motion.engineVibeY + parallax.y;
+	const rotate = turbulenceRotate;
+	const scale = 1 + model.motion.warpZoom;
+	return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rotate.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
+});
 
-	// ── Glass ─────────────────────────────────────────────────────────────────
+// ── Glass ─────────────────────────────────────────────────────────────────
 
-	const glassVignetteOpacity = $derived(
-		model.skyState === "night" ? 0.3 : model.skyState === "day" ? 0.1 : 0.2,
-	);
+const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 
 	// ── Timed click-hint ──────────────────────────────────────────────────────
 
