@@ -382,7 +382,7 @@ export function applyConfigPatch(
 	// have stamped the CRDT. Previously crdt.set() ran before setByPath(),
 	// so a failed write left a stale CRDT timestamp with no config change.
 	if (!setByPath(rootRec, rest, value)) return false;
-	crdt.set(path, value);
+	crdt.record(path, value);
 
 	// `camera.parallax.role` is not a leaf value — it DERIVES headingOffsetDeg
 	// and fuselageOffsetM. A bare patch would set the role while leaving the

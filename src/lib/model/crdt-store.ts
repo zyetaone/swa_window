@@ -59,13 +59,27 @@ export class CRDTStore {
 	 * shortly and subsequent stamps will be healthy.
 	 */
 	set(path: string, value: unknown): boolean {
+		this.#stamp(path, value);
+		setByPath(this.#root, path, value);
+		return true;
+	}
+
+	/**
+	 * Stamp-only variant for callers that already wrote the config tree
+	 * themselves. `applyConfigPatch` writes config FIRST (so a failed
+	 * setByPath can't leave a stale stamp) and then only needs the LWW
+	 * stamp — routing it through set() would write the same value twice.
+	 */
+	record(path: string, value: unknown): void {
+		this.#stamp(path, value);
+	}
+
+	#stamp(path: string, value: unknown): void {
 		const ts = Date.now();
 		if (ts < MIN_SANE_TIMESTAMP) {
 			console.error(`[crdt] System clock appears incorrect (${ts} < ${MIN_SANE_TIMESTAMP}). Local writes will lose CRDT races until NTP syncs.`);
 		}
 		this.#timestamps.set(path, { value, timestamp: ts, sourceId: _deviceId });
-		setByPath(this.#root, path, value);
-		return true;
 	}
 
 	/**

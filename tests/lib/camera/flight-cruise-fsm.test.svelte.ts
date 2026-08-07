@@ -71,7 +71,7 @@ describe('cruise FSM', () => {
 		e.setLocationWithSky(HOME, 'day');
 		expect(e.flightMode).toBe('orbit');
 
-		e.flyTo(AWAY);
+		e.flyTo(AWAY, 'day');
 		expect(e.flightMode).toBe('cruise_departure');
 
 		runUntil(e, ctx, () => e.flightMode === 'cruise_transit');
@@ -93,7 +93,7 @@ describe('cruise FSM', () => {
 		const e = new FlightSimEngine();
 		const ctx = makeCtx(4, 2);
 		e.setLocationWithSky(HOME, 'day');
-		e.flyTo(AWAY);
+		e.flyTo(AWAY, 'day');
 
 		runUntil(e, ctx, () => e.flightMode !== 'cruise_departure');
 
@@ -106,7 +106,7 @@ describe('cruise FSM', () => {
 		const e = new FlightSimEngine();
 		const ctx = makeCtx(1, 3);
 		e.setLocationWithSky(HOME, 'day');
-		e.flyTo(AWAY);
+		e.flyTo(AWAY, 'day');
 
 		const { elapsed } = runUntil(e, ctx, () => e.flightMode === 'cruise_transit');
 		expect(elapsed).toBeLessThan(2);          // gated by departure (1s), not transit
@@ -116,16 +116,16 @@ describe('cruise FSM', () => {
 	it('flyTo to the location already in flight is a no-op', () => {
 		const e = new FlightSimEngine();
 		e.setLocationWithSky(HOME, 'day');
-		e.flyTo(AWAY);
+		e.flyTo(AWAY, 'day');
 		const mode = e.flightMode;
-		e.flyTo(AWAY);                            // same target again
+		e.flyTo(AWAY, 'day');                            // same target again
 		expect(e.flightMode).toBe(mode);
 	});
 
 	it('flyTo to an unknown location does not enter cruise', () => {
 		const e = new FlightSimEngine();
 		e.setLocationWithSky(HOME, 'day');
-		e.flyTo('not-a-real-place' as never);
+		e.flyTo('not-a-real-place' as never, 'day');
 		expect(e.flightMode).toBe('orbit');
 	});
 
@@ -135,7 +135,7 @@ describe('cruise FSM', () => {
 		e.setLocationWithSky(HOME, 'day');
 		expect(e.isTransitioning).toBe(false);
 
-		e.flyTo(AWAY);
+		e.flyTo(AWAY, 'day');
 		expect(e.isTransitioning).toBe(true);
 
 		runUntil(e, ctx, () => e.flightMode === 'arrival_hold');

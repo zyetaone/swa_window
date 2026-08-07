@@ -124,7 +124,7 @@ export class FlightSimEngine {
 	// PUBLIC API
 	// ====================================================================
 
-	flyTo(locationId: LocationId): void {
+	flyTo(locationId: LocationId, skyState: SkyState): void {
 		if (this.cruiseTargetId === locationId) return;
 		const target = LOCATION_MAP.get(locationId);
 		if (!target) return;
@@ -133,7 +133,9 @@ export class FlightSimEngine {
 		this.#cruiseElapsed = 0;
 		this.warpFactor = 0;
 		this.#preWarpSpeed = this.flightSpeed;
-		this.#initScenario(locationId, 'day');
+		// Real sky state, not a hardcoded 'day' — a night departure should
+		// play a night-picked scenario for the ~2s departure window too.
+		this.#initScenario(locationId, skyState);
 	}
 
 	setLocationWithSky(locationId: LocationId, skyState: SkyState): void {

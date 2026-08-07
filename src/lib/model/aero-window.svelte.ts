@@ -317,7 +317,7 @@ export class AeroWindow {
 	}
 
 	flyTo(locationId: LocationId): void {
-		this.flight.flyTo(locationId);
+		this.flight.flyTo(locationId, this.skyState);
 	}
 
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
@@ -327,7 +327,7 @@ export class AeroWindow {
 
 	applyScene(locationId: LocationId, weather?: WeatherType): void {
 		this.exitFlyover();   // a location change ends any active flyover beat
-		this.flight.flyTo(locationId);
+		this.flight.flyTo(locationId, this.skyState);
 		if (weather) { this.weather = weather; this.#syncWeatherConfig(); }
 	}
 
@@ -422,7 +422,7 @@ export class AeroWindow {
 					groupId: resolveBinding().groupId,
 				});
 			}
-			this.flight.flyTo(directorPatch.nextLocation);
+			this.flight.flyTo(directorPatch.nextLocation, this.skyState);
 		} else if (directorPatch.vantageBeat) {
 			// Leader chose a night-city flyover. Broadcast the same transitionAtMs
 			// to followers, then schedule locally off that instant so every Pi

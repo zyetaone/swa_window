@@ -21,6 +21,7 @@
  */
 
 import { config } from '$lib/model/config-tree.svelte';
+import { subscribe } from '$lib/game-loop';
 
 const MAX_OFFSET_X = 12; // pixels at viewport edge
 const MAX_OFFSET_Y = 8;
@@ -55,18 +56,15 @@ export function useMouseParallax(): { readonly x: number; readonly y: number } {
 		};
 	});
 
-	$effect(() => {
-		let raf = 0;
-		const tick = () => {
-			current = {
-				x: current.x + (target.x - current.x) * LERP,
-				y: current.y + (target.y - current.y) * LERP,
-			};
-			raf = requestAnimationFrame(tick);
+	// The shared game loop, not a private RAF: one animation-frame source
+	// (visibility-aware — a hidden tab stops lerping instead of burning
+	// frames), same pattern as GlobeLayer's tick subscription.
+	$effect(() => subscribe(() => {
+		current = {
+			x: current.x + (target.x - current.x) * LERP,
+			y: current.y + (target.y - current.y) * LERP,
 		};
-		raf = requestAnimationFrame(tick);
-		return () => cancelAnimationFrame(raf);
-	});
+	}));
 
 	return {
 		get x() { return current.x; },
