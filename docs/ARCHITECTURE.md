@@ -149,14 +149,20 @@ Three rules:
 |---|---|---|
 | `world/lightning-stage.ts` | `world/lightning-stage.ts` (module functions) | **1** [shipped] |
 | `world/cloud-billboard-layer.ts` | `world/cloud-billboard-layer.ts` (module functions) | **1** [shipped] |
-| (color-grade in `compose.ts`) | `world/effects/color-grade.svelte.ts` | **1** [shipped] |
+| (color-grade in `compose.ts`) | inline PostProcessStage in `compose.ts` | **1** [shipped] |
+| `world/imagery.ts` | `world/imagery.ts` (hybrid) | **2** [shipped] |
+| `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
+| `world/atmosphere-manager.ts` | `world/atmosphere.ts` (hybrid) | **2** [shipped] |
+| `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | **2** [shipped] |
+| `world/camera-manager.ts` | `world/camera.ts` (`getCameraRead()` + `syncCamera()`) | **3** [shipped] |
+| `world/compose.ts` | (kept, slimmed) | **4** [shipped] |
 
 > Phase 1 shipped: lightning, clouds, color-grade are now reactive
-> features in `world/effects/`. The legacy imperative classes
-> (`LightningStage`, `CloudBillboardLayer`, inline color-grade block
-> in `compose.ts`) are still present alongside the new modules and
-> still receive the same sync calls — they will be removed in Phase 2
-> once all four async-setup subsystems migrate together.
+> features. Both `lightning-stage.ts` and `cloud-billboard-layer.ts`
+> export module-level `mount*(C, v)` + `tick/update*()` + `destroy*()`
+> functions — the legacy imperative classes (`LightningStage`,
+> `CloudBillboardLayer`) were deleted. Color-grade lives inline in
+> `compose.ts` as a single PostProcessStage.
 
 > **Phase 2 shipped**: imagery, buildings, atmosphere, terrain all
 > converted to hybrid (module-level state + `init()` + `setup()` +
@@ -166,34 +172,30 @@ Three rules:
 > class shell is gone; the lifecycle is explicit in the function
 > signatures.
 
-> **Phase 3 PARTIAL** (corrected 2026-08-03): the file is `world/camera.ts`
-> (no runes, so no `.svelte.ts`) and it exports ONLY `getCameraRead()`.
-> `CameraMirror.svelte` does read through that typed API, so the Three→Cesium
-> boundary is clean. But `setupCamera()` / `syncCamera(slice)` do NOT exist:
-> `CesiumManager` still owns `#scratchDest` and a private `#syncCamera()`.
-> Finishing Phase 3 means moving that body into `world/camera.ts` and calling
-> it from the tick. Until then this row is the one place the migration map
-> overstates what shipped — do not cite it as precedent.
+> **Phase 3 shipped**: `world/camera.ts` exports both
+> `getCameraRead()` (typed boundary for CameraMirror / Three side)
+> and `syncCamera(slice, resources, scratchDest)` (the per-frame
+> camera sync body). `CesiumManager.#syncCamera()` is now a 7-line
+> wrapper that builds the slice + resources from `this.#model` and
+> delegates. The `#scratchDest` field stays on the orchestrator
+> because it belongs to the per-viewer allocation lifetime. 8 tests
+> in `tests/lib/world/camera.test.ts` pin the math.
 
-> **Phase 4 shipped**: `compose.ts` is now ~340 lines (was 670+). The
+> **Phase 4 shipped**: `compose.ts` is now ~376 lines (was 670+). The
 > `#tick` method is 8 lines of imperative dispatch (was 50+). The
 > `CesiumManager` class is the orchestrator only — every leaf concern
 > (atmosphere, terrain, imagery, buildings, lightning, clouds,
-> color-grade) lives in its own `.ts` file with `init*`/`setup*`/`sync*`
-> exported functions. Camera is the exception — see Phase 3 above. `CesiumManager` owns:
+> color-grade, camera sync) lives in its own `.ts` file with
+> `init*`/`setup*`/`sync*` exported functions. `CesiumManager` owns:
 >   - the `Cesium.Viewer` instance (single viewer invariant)
 >   - the post-process stage enumeration (HBAO, bloom, FXAA)
 >   - the quality-mode transition (one-shot, fires on change)
 >   - the public `applyQualityMode()` + `setBuildingsWireframe()` API
+>   - the `#scratchDest` allocation (camera sync work buffer)
 >   - the destroy / cleanup contract
 > The orchestrator is no longer the source of leaf logic — it
 > delegates.
-| `world/imagery.ts` | `world/imagery.ts` (hybrid) | **2** [shipped] |
-| `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
-| `world/atmosphere-manager.ts` | `world/atmosphere.ts` (hybrid) | **2** [shipped] |
-| `world/terrain-manager.ts` | `world/terrain.ts` (hybrid) | **2** [shipped] |
-| `world/camera-manager.ts` | `world/camera.ts` (`getCameraRead()` only; `#syncCamera` still inline in compose.ts) | **3** [partial] |
-| `world/compose.ts` | (kept, slimmed) | **4** [shipped] |
+
 
 **Hybrid** = class for async setup (Ion token, terrain provider, 3D
 Tiles init), `$effect` for per-frame sync. Async I/O does not fit
