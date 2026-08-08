@@ -114,7 +114,11 @@ export const NIGHT_PALETTE = {
 	 * world.nightExposure / world.atmosphereLight so we read those at runtime.
 	 */
 	scene: {
-		exposureDay:        1.0,
+		// 1.0 → 1.4 (visual review, Aug 2026): ACES tonemapping compresses the
+		// LDR satellite imagery hard, so exposure 1.0 rendered mid-afternoon
+		// like late dusk. Night is unaffected — exposure lerps toward the
+		// operator-tunable world.nightExposure by nightFactor.
+		exposureDay:        1.4,
 		atmosphereLightDay: 10.0,
 	},
 

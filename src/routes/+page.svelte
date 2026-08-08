@@ -176,6 +176,13 @@
 			model.setWeather(weatherParam);
 		}
 
+		// A pinned scene (?location / ?time / ?weather) is a reproducible A/B —
+		// park the director so its location cycler can't fly away from the
+		// pinned scenario mid-measurement (the P8 perf gate depends on this).
+		if (isValidLocation(locationParam) || timeParam || isValidWeather(weatherParam)) {
+			model.applyConfigPatch('director.autopilot.enabled', false);
+		}
+
 		// Perf-gate A/B (P8): force the hybrid Three overlay ON/OFF on the SHIP
 		// route via ?overlay=1 / ?overlay=0, so the Pi-5 benchmark can measure the
 		// exact shipping tree BOTH ways from one URL each (the go/no-go is the
