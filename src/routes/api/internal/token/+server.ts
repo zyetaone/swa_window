@@ -38,6 +38,9 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 			throw error(503, 'CESIUM_ION_TOKEN not set');
 		}
 	} else if (type === 'admin') {
+		token = process.env.AERO_ADMIN_TOKEN;
+		if (!token) throw error(503, 'AERO_ADMIN_TOKEN not set');
+	} else {
 		throw error(400, 'missing or invalid ?type= (cesium|admin)');
 	}
 

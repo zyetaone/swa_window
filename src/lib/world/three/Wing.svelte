@@ -332,13 +332,13 @@
 	// Anti-collision strobe: a DOUBLE flash (two quick pulses STROBE_GAP_S apart)
 	// every period — the real 737 beacon cadence, punchier than a single blink.
 	const STROBE_PERIOD_S = 1.1;
-	const STROBE_PULSE_S = 0.05;
+	const STROBE_PULSE_S = 0.12;
 	const STROBE_GAP_S = 0.16;
 	// Scratch sun-direction holder for the key light (avoids per-frame alloc).
 	const _keyDir = new Vector3();
 
 	useTask((dt) => {
-		// The camera-mirror wrapper IS placement's parent (the <T.Group> below).
+
 		// Read it directly rather than via bind:ref — the bound $state wasn't
 		// populating, so the whole tick was early-returning (no visibility swap,
 		// no bank). placement.parent is set as soon as the group mounts.
@@ -422,25 +422,36 @@
 		navLight.visible = visible;
 		strobeLight.visible = visible;
 		if (!visible) return;
-
-		// Night nav lights — gated by nightFactor.
+		// Night nav lights — gated by nightFactor with a smoothstep curve so
+		// the lights ease in as dusk fades (not a hard switch at nf=0.5). At
+		// dusk the wing is still faintly readable so the lights should be
+		// subtle; at night they're the only bright thing on the wing.
 		const nf = untrack(() => model.nightFactor);
-		navMat.opacity = nf;
-		navHaloMat.opacity = nf * 0.35;
+		// smoothstep(0.15, 0.95) — the lights start fading in just past dusk
+		// (nf=0.15) and reach full intensity well before deep night (nf=0.95).
+		const navRamp = nf * nf * (3 - 2 * nf);
+		// Color shift: warm-green at low night (~dusk, nf=0.3) → cool-saturated
+		// aviation green at full night (nf=1). Real aviation navigation lights
+		// appear markedly more cyan in low light.
+		navMat.color.setRGB(
+			0.0 * (1 - nf) + 0.0 * nf,                // R: keep 0
+			0.85 * (1 - nf) + 0.95 * nf,               // G: stays bright
+			0.30 * (1 - nf) + 0.65 * nf,               // B: cyan-bias at night
+		);
+		navHaloMat.color.copy(navMat.color);
+		navMat.opacity = navRamp;
+		// Halo ≈ core * 0.45 — the bloom pass merges the two into one glow; the
+		// halo's bigger radius gives the glow its soft edge.
+		navHaloMat.opacity = navRamp * 0.45;
 		_strobeT += dt;
 		if (_strobeT > STROBE_PERIOD_S) _strobeT -= STROBE_PERIOD_S;
-		// Double-flash: two sharp pulses (at 0 and STROBE_GAP_S) → the bloom
-		// pass turns each into a hard anti-collision burst.
+		// Double-flash: two pulses STROBE_GAP_S apart. Bloom catches each when
+		// STROBE_PULSE_S is long enough to register — 0.05s was too short and
+		// the blink barely rendered. 0.12s is still snappy but visible.
 		const flash =
 			_strobeT < STROBE_PULSE_S ||
 			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
-		strobeMat.opacity = nf * (flash ? 1 : 0);
-
-		// Dawn / moon key light — direction tracks the sun azimuth with REAL
-		// local solar elevation (sunElevationSin) so dawn/dusk light rakes the
-		// wing low and noon light falls steep. Floored to +0.15 (never a
-		// sub-horizon backlight) and lerped toward the old fixed +0.45 as night
-		// falls — the night key is stand-in moonlight, not the sun, so it keeps
+		strobeMat.opacity = navRamp * (flash ? 1 : 0);
 		// its calibrated raking angle. Colour + intensity lerp warm-day →
 		// cool-dim-moonlight by nightFactor, so the wing dims and cools at night
 		// for free (no per-material colour hack) while the AmbientLight floor
@@ -452,10 +463,9 @@
 		_keyDir.set(sd[0], keyElev, sd[2]).normalize().multiplyScalar(1e6);
 		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
 		// Eased key + hemisphere fill → gentle ~2.5:1 lit:shadow ratio instead of
-		// the old ~6:1 that made the root facets read as harsh black shadows.
-		keyLight.intensity = 0.3 + (1 - nf) * 0.85; // night 0.3 → day 1.15
+		keyLight.intensity = 0.45 + (1 - nf) * 0.75; // night 0.45 → day 1.20
 		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
-		fillLight.intensity = 0.45 - nf * 0.28; // day 0.45 soft fill → night 0.17
+		fillLight.intensity = 0.55 - nf * 0.30; // day 0.55 soft fill → night 0.25
 	});
 
 	$effect(() => () => {

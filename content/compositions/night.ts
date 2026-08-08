@@ -150,7 +150,7 @@ export const NIGHT_PALETTE = {
 	 * 0.5 only if the deep-night VIIRS wash ever reads too STRONG.
 	 */
 	viirs: {
-		maxAlpha:         0.8,
+	maxAlpha:         0.6,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 	},
