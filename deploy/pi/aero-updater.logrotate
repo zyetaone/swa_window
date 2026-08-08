@@ -1,0 +1,12 @@
+# aero-updater.log is appended by tee -a on every 15-min timer poll — without
+# rotation it grows for the life of the SD card. copytruncate because the
+# updater is a short-lived oneshot we can't signal to reopen its log.
+/var/log/aero-updater.log {
+	weekly
+	size 1M
+	rotate 4
+	compress
+	copytruncate
+	missingok
+	notifempty
+}

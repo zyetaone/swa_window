@@ -119,7 +119,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
 	fonts-ubuntu \
 	fonts-jetbrains-mono \
 	plymouth \
-	cron
+	cron \
+	logrotate
 
 # fonts-ubuntu + fonts-jetbrains-mono are NOT optional: the app declares both
 # (shell HUD, TelemetryOverlay, BootLockup). Pi OS ships neither, so without
@@ -328,6 +329,9 @@ install -m 755 "${SCRIPT_DIR}/display-dim-schedule.sh" /usr/local/lib/aero/displ
 # Cron entries — written to /etc/cron.d so they're package-level, not user-level.
 install -m 644 "${SCRIPT_DIR}/nightly-reboot.cron"       /etc/cron.d/aero-nightly-reboot
 install -m 644 "${SCRIPT_DIR}/weekly-cache-clear.cron"   /etc/cron.d/aero-weekly-cache-clear
+
+# Log rotation for the updater's append-only log (SD-card lifespan).
+install -m 644 "${SCRIPT_DIR}/aero-updater.logrotate"    /etc/logrotate.d/aero-updater
 # Health + display-dim entries we generate here (they parameterise on AERO_* vars).
 cat > /etc/cron.d/aero-health-check <<EOF
 # Every 60s — report fps/temp/uptime via POST. Silent failure is OK.
