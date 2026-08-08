@@ -1,0 +1,10 @@
+# Aero privileged hatches — the smallest set of passwordless commands the
+# app's HTTP endpoints need. __AERO_USER__ is rewritten by install.sh.
+#
+#   /api/update      → systemctl start aero-updater.service
+#   /api/wifi/reset  → nmcli connection delete + reboot
+#
+# Both endpoints preflight `sudo -n true` and fail closed with a 503 when
+# this file is missing, rather than reporting success and doing nothing.
+# /bin and /usr/bin are both listed because usrmerge systems resolve either.
+__AERO_USER__ ALL=(root) NOPASSWD: /usr/bin/systemctl start aero-updater.service, /bin/systemctl start aero-updater.service, /sbin/reboot, /usr/sbin/reboot, /usr/bin/nmcli, /bin/nmcli

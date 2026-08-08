@@ -308,6 +308,19 @@ done
 # The updater timer has no placeholders — copy verbatim.
 install -m 644 "${SCRIPT_DIR}/aero-updater.timer" /etc/systemd/system/aero-updater.timer
 
+# Passwordless sudo for exactly the commands the app's privileged endpoints
+# run (/api/update, /api/wifi/reset). Without this, `sudo -n` fails and — now
+# that both endpoints preflight it — the operator gets a truthful 503 instead
+# of a silent no-op. Validated with visudo before installing; a broken
+# fragment can lock out sudo entirely, so a failed validation skips it.
+sed "s|__AERO_USER__|${PI_USER}|g" "${SCRIPT_DIR}/aero.sudoers" > /etc/sudoers.d/aero.tmp
+if visudo -cf /etc/sudoers.d/aero.tmp >/dev/null 2>&1; then
+	install -m 440 /etc/sudoers.d/aero.tmp /etc/sudoers.d/aero
+else
+	echo "  WARN: sudoers fragment failed visudo validation — skipping (privileged endpoints will 503)"
+fi
+rm -f /etc/sudoers.d/aero.tmp
+
 # Retire units from superseded layouts. The loop above only OVERWRITES units it
 # still ships, so a unit that was dropped from the project survives a re-provision
 # and keeps auto-starting forever. aero-fleet ran the standalone WebSocket broker

@@ -33,7 +33,14 @@ export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 export const POST: RequestHandler = async ({ request }) => {
 	requireAdminToken(request);
 	const origin = request.headers.get('origin');
-	scheduleUpdate();
+	// schedulePrivileged preflights `sudo -n` on Linux — if the updater unit
+	// can't be started at all, say so with a 503 instead of a lying 202.
+	if (!scheduleUpdate()) {
+		return json(
+			{ ok: false, message: 'Privileged hatch unavailable (sudo -n preflight failed) — reinstall deploy/pi/install.sh to provision /etc/sudoers.d/aero.' },
+			{ status: 503, headers: lanCorsHeaders(origin) },
+		);
+	}
 	return json(
 		{
 			ok: true,
@@ -44,10 +51,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	);
 };
 
-/** Internal — only meaningful on the Pi (uses sudo + systemctl). */
-function scheduleUpdate(): void {
+/** Internal — only meaningful on the Pi (uses sudo + systemctl). Returns false if not scheduled. */
+function scheduleUpdate(): boolean {
 	// Detached + delayed: this process is about to be restarted by the very
 	// unit it starts, so the child must not be tied to its lifetime and the
 	// 202 must go out first. See schedulePrivileged.
-	schedulePrivileged(['sudo', '-n', 'systemctl', 'start', 'aero-updater.service'], 500, '[api/update]');
+	return schedulePrivileged(['sudo', '-n', 'systemctl', 'start', 'aero-updater.service'], 500, '[api/update]');
 }

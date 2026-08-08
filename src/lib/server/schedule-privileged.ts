@@ -15,17 +15,30 @@
  *     process's lifetime — the command may be what tears this process down.
  *   - `stdio: 'ignore'`: no TTY, so an interactive sudo password prompt would
  *     hang forever; callers pass `sudo -n` to fail fast instead.
+ *
+ * Returns false when the command was NOT scheduled: on Linux, a `sudo -n true`
+ * preflight verifies the box can sudo non-interactively at all (the deploy
+ * ships /etc/sudoers.d/aero for exactly these hatches). Previously a missing
+ * sudoers entry meant the operator got a 200/202 and then nothing happened —
+ * the worst kind of silent failure on a headless fleet. Non-Linux stays a
+ * warn-and-returns-true no-op so dev hosts and tests keep the old contract.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
-export function schedulePrivileged(argv: string[], delayMs: number, label: string): void {
+export function schedulePrivileged(argv: string[], delayMs: number, label: string): boolean {
 	if (process.platform !== 'linux') {
 		console.warn(`${label} non-linux platform — no-op`);
-		return;
+		return true;
+	}
+	const preflight = spawnSync('sudo', ['-n', 'true'], { stdio: 'ignore' });
+	if (preflight.status !== 0) {
+		console.warn(`${label} sudo -n preflight failed — is /etc/sudoers.d/aero installed? Command NOT scheduled.`);
+		return false;
 	}
 	setTimeout(() => {
 		const child = spawn(argv[0], argv.slice(1), { detached: true, stdio: 'ignore' });
 		child.unref();
 	}, delayMs);
+	return true;
 }

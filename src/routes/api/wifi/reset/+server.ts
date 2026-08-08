@@ -24,22 +24,29 @@ export const POST: RequestHandler = async ({ request }) => {
 	requireBearerToken(request, 'AERO_WIFI_RESET_TOKEN', 'wifi reset endpoint');
 	// Async fire-and-forget: schedule the reset for ~2s out so we have time to
 	// return a 200 to the caller before the network drops + reboot kicks in.
-	scheduleReset();
+	// schedulePrivileged preflights `sudo -n` on Linux — if the box can't run
+	// the purge at all, say so with a 503 instead of lying with a 200.
+	if (!scheduleReset()) {
+		return json(
+			{ ok: false, message: 'Privileged hatch unavailable (sudo -n preflight failed) — reinstall deploy/pi/install.sh to provision /etc/sudoers.d/aero.' },
+			{ status: 503 },
+		);
+	}
 	return json({
 		ok: true,
 		message: 'WiFi will be cleared and the device will reboot in ~2 seconds. Reconnect via the setup portal.',
 	});
 };
 
-/** Internal — only invokable on the Pi (uses sudo + nmcli + reboot). */
-function scheduleReset(): void {
+/** Internal — only invokable on the Pi (uses sudo + nmcli + reboot). Returns false if not scheduled. */
+function scheduleReset(): boolean {
 	// Delete every saved 802-11-wireless connection, then reboot.
 	// `sudo -n` (non-interactive), matching /api/update: schedulePrivileged
 	// spawns with stdio 'ignore' and no TTY, so an interactive password prompt
 	// would hang the purge forever with the operator seeing nothing. -n fails
 	// fast and loudly instead. The 2 s delay lets the 200 reach the caller
 	// before the network drops + reboot kicks in.
-	schedulePrivileged(
+	return schedulePrivileged(
 		['sh', '-c', `for c in $(nmcli -t -f NAME,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}'); do sudo -n nmcli c delete "$c" || true; done && sudo -n /sbin/reboot`],
 		2000,
 		'[wifi/reset]',
