@@ -58,9 +58,14 @@
 	let sceneDirty = $state(false);
 	$effect(() => {
 		if (sceneSeeded || sceneDirty) return;
-		const online = store.devices.find((d) => d.online && isValidLocation(d.currentLocation));
-		if (online) {
-			scene.location = online.currentLocation;
+		// Prefer an online device; fall back to any that has EVER reported
+		// (lastSeen > 0 skips placeholder rows the store seeds before the
+		// first status poll, whose 'dubai' location is not real data).
+		const withLoc =
+			store.devices.find((d) => d.online && isValidLocation(d.currentLocation)) ??
+			store.devices.find((d) => d.lastSeen > 0 && isValidLocation(d.currentLocation));
+		if (withLoc) {
+			scene.location = withLoc.currentLocation;
 			sceneSeeded = true;
 		}
 	});

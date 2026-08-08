@@ -37,7 +37,10 @@
 
 <div class="control">
     <label for={id}>{label}: {formatValue(value)}</label>
-    <input {id} type="range" {min} {max} {step} bind:value={value} {oninput} />
+    <!-- aria-label regardless of id: label[for] only associates when id is
+         set, and several consumers (Cloud Cover, VIIRS scale) pass none —
+         without this the slider has no accessible name at all. -->
+    <input {id} type="range" {min} {max} {step} bind:value={value} {oninput} aria-label={label} />
 </div>
 
 <style>
