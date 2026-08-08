@@ -9,7 +9,7 @@
 	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
-	import { LOCATIONS } from '$content/locations';
+	import { LOCATIONS, isValidLocation } from '$content/locations';
 	import { onDestroy, onMount } from 'svelte';
 	import {
 		listBindings,
@@ -30,8 +30,8 @@
 	// local `scene` state because it's a one-shot command ("go there"), not an
 	// ambient config value. The "Push Scene" button dispatches on demand.
 	const store = new RestAdminStore();
-	startPeerSync(store);
-	onDestroy(() => store.destroy());
+	const stopPeerSync = startPeerSync(store);
+	onDestroy(() => { stopPeerSync(); store.destroy(); });
 
 	// Selection state
 	let selectedDevices = $state<Set<string>>(new Set());
@@ -48,6 +48,21 @@
 		timeOfDay: 12,
 		flightSpeed: 1.0,
 		syncToRealTime: true,
+	});
+
+	// Seed the picker from the first online device once — otherwise a
+	// blind "Fly There" pushes the hardcoded default (Dallas) over whatever
+	// the wall is actually showing. Operator edits win: once a picker is
+	// touched, seeding stops.
+	let sceneSeeded = $state(false);
+	let sceneDirty = $state(false);
+	$effect(() => {
+		if (sceneSeeded || sceneDirty) return;
+		const online = store.devices.find((d) => d.online && isValidLocation(d.currentLocation));
+		if (online) {
+			scene.location = online.currentLocation;
+			sceneSeeded = true;
+		}
 	});
 
 	// Derived display labels for scene sliders
@@ -303,7 +318,7 @@
 				<h3>Location + Weather</h3>
 				<label>
 					<span>Location</span>
-					<select bind:value={scene.location}>
+					<select bind:value={scene.location} onchange={() => (sceneDirty = true)}>
 						{#each LOCATIONS as loc (loc.id)}
 							<option value={loc.id}>{loc.name}</option>
 						{/each}
@@ -311,7 +326,7 @@
 				</label>
 				<label>
 					<span>Weather</span>
-					<select bind:value={scene.weather}>
+					<select bind:value={scene.weather} onchange={() => (sceneDirty = true)}>
 						{#each WEATHER_OPTIONS as w (w)}
 							<option value={w}>{w[0].toUpperCase() + w.slice(1)}</option>
 						{/each}
@@ -522,7 +537,7 @@
 							<div class="card-body">
 								<div class="stat">
 									<span class="stat-label">Location</span>
-									<span class="stat-value">{device.currentLocation || '—'}</span>
+									<span class="stat-value">{LOCATIONS.find((l) => l.id === device.currentLocation)?.name || device.currentLocation || '—'}</span>
 								</div>
 								<div class="stat">
 									<span class="stat-label">Temp</span>

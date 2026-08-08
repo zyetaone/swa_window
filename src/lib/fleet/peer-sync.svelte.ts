@@ -41,25 +41,33 @@ const WATCHED_PATHS: ReadonlyArray<{ path: string; read: () => unknown }> = [
 
 /**
  * Start propagating local config edits to every peer in the store.
- * Plain $effect: the only caller invokes this during component init, so
- * Svelte tears it down automatically on unmount — no $effect.root, no
- * manual stop handle.
+ * Returns a stop() function that tears down the effect.
+ *
+ * Uses `$effect.root` (not a plain `$effect`) so peer-sync survives
+ * the component that called it. The admin route unmounts when the
+ * operator navigates to /admin/content or /admin/fleet/health; a
+ * plain `$effect` would stop syncing at that point, silently
+ * breaking fleet propagation.
  */
-export function startPeerSync(store: RestAdminStore): void {
+export function startPeerSync(store: RestAdminStore): () => void {
 	let snapshot = WATCHED_PATHS.map((p) => p.read());
 
-	$effect(() => {
-		const next = WATCHED_PATHS.map((p) => p.read());
-		for (let i = 0; i < WATCHED_PATHS.length; i++) {
-			if (next[i] === snapshot[i]) continue;
-			const { path } = WATCHED_PATHS[i];
-			const value = next[i];
-			// Fire-and-forget per changed path. Peer errors don't block UI.
-			for (const peer of store.peers) {
-				if (peer.self) continue;
-				void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: peer unreachable, next tick retries */ });
+	const cleanup = $effect.root(() => {
+		$effect(() => {
+			const next = WATCHED_PATHS.map((p) => p.read());
+			for (let i = 0; i < WATCHED_PATHS.length; i++) {
+				if (next[i] === snapshot[i]) continue;
+				const { path } = WATCHED_PATHS[i];
+				const value = next[i];
+				// Fire-and-forget per changed path. Peer errors don't block UI.
+				for (const peer of store.peers) {
+					if (peer.self) continue;
+					void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: peer unreachable, next tick retries */ });
+				}
 			}
-		}
-		snapshot = next;
+			snapshot = next;
+		});
 	});
+
+	return cleanup;
 }
