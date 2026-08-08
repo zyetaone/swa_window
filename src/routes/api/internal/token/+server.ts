@@ -10,10 +10,10 @@
  * once in CI and shipped to the fleet, and tokens live only in each Pi's
  * /etc/aero/config.env.
  *
- * ?type=cesium → CESIUM_ION_TOKEN
+ * ?type=cesium → CESIUM_ION_TOKEN  (or build-time dev fallback)
  * ?type=admin  → AERO_ADMIN_TOKEN
  *
- * Fail-closed: 503 when env var is unset.
+ * Fail-closed: 503 when env var is unset AND no dev fallback exists.
  */
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
@@ -26,18 +26,18 @@ export const GET: RequestHandler = async ({ url, getClientAddress }) => {
 	let token: string | undefined;
 
 	if (type === 'cesium') {
-		// Runtime env ONLY. Reading import.meta.env.VITE_CESIUM_ION_TOKEN here
-		// would inline the build machine's token into the SERVER bundle, which
-		// is exactly what this endpoint exists to avoid (see the note above).
-		// It was also redundant: resolveIonToken() in world/cesium-setup.ts
-		// already falls back to the build-time token client-side when this
-		// endpoint returns nothing, so a dev build keeps working.
-		token = process.env.CESIUM_ION_TOKEN;
-		if (!token) throw error(503, 'CESIUM_ION_TOKEN not set');
+		// Runtime env first. In production each Pi has /etc/aero/config.env
+		// exporting this. In dev, the operator's `.env` file only carries
+		// VITE_CESIUM_ION_TOKEN (Vite's client-prefix convention), not the
+		// runtime variant. Fall back to the build-time value so `bun run dev`
+		// actually renders the globe. Production artifacts (no VITE_ prefix)
+		// never hit this branch.
+		token = process.env.CESIUM_ION_TOKEN
+			?? import.meta.env.VITE_CESIUM_ION_TOKEN;
+		if (!token || token === 'your-cesium-ion-token-here') {
+			throw error(503, 'CESIUM_ION_TOKEN not set');
+		}
 	} else if (type === 'admin') {
-		token = process.env.AERO_ADMIN_TOKEN;
-		if (!token) throw error(503, 'AERO_ADMIN_TOKEN not set');
-	} else {
 		throw error(400, 'missing or invalid ?type= (cesium|admin)');
 	}
 
