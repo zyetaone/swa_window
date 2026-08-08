@@ -10,3 +10,16 @@
 	missingok
 	notifempty
 }
+
+# Fleet heartbeat history (collector only) — one JSON line per device per
+# minute; ~200 KB/day for a 3-Pi wall. Same copytruncate rationale.
+/var/log/aero-heartbeats.jsonl {
+	weekly
+	size 2M
+	rotate 4
+	compress
+	copytruncate
+	missingok
+	notifempty
+}
+

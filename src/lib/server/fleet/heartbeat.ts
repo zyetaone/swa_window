@@ -6,6 +6,14 @@
  * × 60s = 30000s ≈ 8.3h). The /admin/fleet/health page reads this and renders
  * a live tile per device with the most recent metrics + a sparkline.
  *
+ * Persistence: every sample is also appended as one JSON line to a JSONL log
+ * (default /var/log/aero-heartbeats.jsonl on Linux; override with
+ * AERO_HEARTBEAT_LOG; disabled elsewhere unless the env var is set). On boot
+ * the ring buffers are re-seeded from the tail of that log, so a collector
+ * restart no longer wipes "what happened overnight". The log is rotated by
+ * deploy/pi/aero-updater.logrotate. Writes are best-effort: a full/read-only
+ * disk must never break heartbeat recording.
+ *
  * Contract — heartbeat POST body (matches deploy/pi/health-check.sh):
  *   {
  *     deviceId:    string    // hostname
@@ -22,6 +30,7 @@
  * runes, for server-side hot-reload friendliness.
  */
 
+import { appendFileSync, readFileSync } from 'node:fs';
 import type { FleetSummary } from '$lib/fleet/protocol';
 import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
 
@@ -59,6 +68,45 @@ export const DEVICE_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
  * chronological order anyway.
  */
 const samples = new Map<string, HeartbeatSample[]>();
+
+// ─── JSONL persistence ──────────────────────────────────────────────────────
+// Env override wins; default on the Pi is /var/log (rotated by
+// deploy/pi/aero-updater.logrotate). Off by default on non-Linux so dev hosts
+// and tests never touch the filesystem unless they opt in.
+const LOG_PATH =
+	process.env.AERO_HEARTBEAT_LOG ??
+	(process.platform === 'linux' ? '/var/log/aero-heartbeats.jsonl' : null);
+
+function appendToLog(sample: HeartbeatSample): void {
+	if (!LOG_PATH) return;
+	try {
+		appendFileSync(LOG_PATH, JSON.stringify(sample) + '\n');
+	} catch (e) {
+		// Best-effort: a full or read-only disk must never break recording.
+		console.warn('[heartbeat] log append failed:', (e as Error).message);
+	}
+}
+
+/** Re-seed ring buffers from the log tail on boot (survives collector restarts). */
+function loadFromLog(): void {
+	if (!LOG_PATH) return;
+	try {
+		const stat = readFileSync(LOG_PATH); // whole file; logrotate caps it at 1M
+		const lines = stat.toString('utf8').trim().split('\n');
+		// Only the tail can matter — at most MAX_SAMPLES_PER_DEVICE per device.
+		for (const line of lines.slice(-MAX_SAMPLES_PER_DEVICE * 8)) {
+			try {
+				const s = JSON.parse(line) as HeartbeatSample;
+				if (!s || typeof s.deviceId !== 'string' || !DEVICE_ID_PATTERN.test(s.deviceId)) continue;
+				const buf = samples.get(s.deviceId) ?? [];
+				buf.push(s);
+				if (buf.length > MAX_SAMPLES_PER_DEVICE) buf.splice(0, buf.length - MAX_SAMPLES_PER_DEVICE);
+				samples.set(s.deviceId, buf);
+			} catch { /* skip corrupt line */ }
+		}
+	} catch { /* no log yet — first boot */ }
+}
+loadFromLog();
 
 /**
  * Record an incoming heartbeat.
@@ -109,6 +157,7 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 		buf.splice(0, buf.length - MAX_SAMPLES_PER_DEVICE);
 	}
 	samples.set(deviceId, buf);
+	appendToLog(sample);
 	return sample;
 }
 
