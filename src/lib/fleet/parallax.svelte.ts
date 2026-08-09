@@ -147,6 +147,47 @@ export function isGroupLeader(role: DeviceRole): boolean {
 }
 
 /**
+ * Edge pane of a 3-Pi corridor. Shares the flight scene with center but must
+ * not paint operator/passenger chrome that would read as three separate UIs.
+ * SSOT for shell gates — do not re-inline `role === 'left' || role === 'right'`.
+ */
+export function isEdgePane(role: DeviceRole): boolean {
+	return role === 'left' || role === 'right';
+}
+
+/**
+ * Operator SidePanel tab + settings chrome.
+ * Solo/center always; edge panes only with the ?ops=1 escape hatch so on-site
+ * techs can open controls without rebuilding the kiosk role URL.
+ */
+export function showsOpsChrome(role: DeviceRole, opsMode = false): boolean {
+	return opsMode || isGroupLeader(role);
+}
+
+/**
+ * Open-blind passenger whisper ("En route / place"). Never on edge panes —
+ * one continuous window. Closed-blind BlindInfoCard is independent furniture
+ * and may show on every pane.
+ */
+export function showsOpenPassengerHud(role: DeviceRole, hudVisible: boolean): boolean {
+	return hudVisible && isGroupLeader(role);
+}
+
+/**
+ * Parse ?ops=1|true from a search string or URLSearchParams.
+ * Used by SidePanel; pure so tests don't need a real location object.
+ */
+export function isOpsModeParam(search: string | URLSearchParams | null | undefined): boolean {
+	if (search == null) return false;
+	const params =
+		typeof search === 'string'
+			? new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+			: search;
+	const v = params.get('ops');
+	return v === '1' || v === 'true';
+}
+
+/**
  * Should this device apply a director_decision message? True when the message's
  * groupId matches our group, or the message targets a wildcard group ('*').
  */

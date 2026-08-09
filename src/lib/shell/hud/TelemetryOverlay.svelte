@@ -1,38 +1,28 @@
 <script lang="ts">
 	/**
-	 * TelemetryOverlay — cinematic top-right ALT / GS / LOC readout.
-	 * Shown when the blind is OPEN (scene visible).
+	 * TelemetryOverlay — soft destination whisper when the blind is OPEN.
+	 *
+	 * Passenger mode: no ALT / GS / LOCAL, no ORBIT/CRUISE badge. Those live
+	 * in SidePanel for operators. On the glass we only name the place while
+	 * en route, then fade out — ambient, not a flight deck.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { flightReadout } from './flight-readout';
 
 	const model = useAeroWindow();
-	const stats = $derived(flightReadout(model));
-	const locationName = $derived(model.currentLocation.name);
-	const destName     = $derived(model.flight.cruiseDestinationName ?? '');
-	const isCruising   = $derived(model.flight.flightMode !== 'orbit');
+	const destName = $derived(model.flight.cruiseDestinationName ?? '');
+	const isCruising = $derived(model.flight.flightMode !== 'orbit');
+	// Whisper only while the FSM is between places. Quiet orbit = pure view.
+	const showWhisper = $derived(isCruising && destName.length > 0);
 </script>
 
-<div class="hud-wrapper">
-	<div class="hud-layer">
-		<div class="status-group">
-			<div class="primary-stat">
-				<span class="hud-location">{isCruising ? destName : locationName}</span>
-				<span class={['mode-badge', isCruising && 'cruising']}>
-					{isCruising ? 'CRUISE' : 'ORBIT'}
-				</span>
-			</div>
-			<div class="telemetry-grid">
-				{#each stats as stat (stat.label)}
-					<div class="stat">
-						<span class="label">{stat.label}</span>
-						<span class="value">{stat.value}</span>
-					</div>
-				{/each}
-			</div>
+{#if showWhisper}
+	<div class="hud-wrapper" aria-hidden="true">
+		<div class="whisper">
+			<span class="label">En route</span>
+			<span class="place">{destName}</span>
 		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 	.hud-wrapper {
@@ -42,83 +32,39 @@
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
+		z-index: 15;
 	}
-	.hud-layer {
+	.whisper {
 		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-		padding: clamp(1rem, 4vmin, 3rem);
-		box-sizing: border-box;
-		display: flex;
-		flex-direction: column;
-		justify-content: space-between;
-		background: radial-gradient(ellipse at top right, rgba(0, 0, 0, 0.18) 0%, transparent 55%);
-	}
-	.status-group {
-		align-self: flex-end;
-		text-align: right;
-		color: rgba(255, 255, 255, 0.85);
-		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.3);
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-	.primary-stat {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 1rem;
-		margin-bottom: 0.5rem;
-	}
-	.hud-location {
-		font-size: 1.2rem;
-		font-weight: 300;
-		letter-spacing: 0.15em;
-		text-transform: uppercase;
-		font-family: 'Ubuntu', system-ui, sans-serif;
-	}
-	.mode-badge {
-		font-size: 0.6rem;
-		font-weight: 500;
-		padding: 0.1rem 0.4rem;
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 2px;
-		letter-spacing: 0.15em;
-		backdrop-filter: blur(2px);
-		color: rgba(255, 255, 255, 0.7);
-	}
-	.mode-badge.cruising {
-		border-color: rgba(158, 178, 255, 0.45);
-		color: rgba(158, 178, 255, 0.95);
-		box-shadow: 0 0 10px rgba(48, 76, 178, 0.25);
-	}
-	.telemetry-grid {
-		display: flex;
-		gap: 2rem;
-		padding-top: 0.5rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.1);
-	}
-	.stat {
+		top: clamp(1rem, 4vmin, 2.5rem);
+		right: clamp(1rem, 4vmin, 2.5rem);
 		display: flex;
 		flex-direction: column;
 		align-items: flex-end;
+		gap: 0.25rem;
+		color: rgba(255, 255, 255, 0.82);
+		text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 0, 0, 0.3);
+		animation: whisper-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 	}
 	.label {
-		font-size: 0.625rem;
-		opacity: 0.5;
-		letter-spacing: 0.2em;
+		font-size: 0.6rem;
 		font-weight: 400;
-		margin-bottom: 0.1rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		opacity: 0.55;
 	}
-	.value {
-		font-family: 'JetBrains Mono', 'Fira Code', monospace;
-		font-size: 0.8rem;
-		font-weight: 400;
-		letter-spacing: 0.05em;
-		opacity: 0.9;
+	.place {
+		font-size: 1.05rem;
+		font-weight: 300;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+		font-family: 'Ubuntu', system-ui, sans-serif;
+	}
+	@keyframes whisper-in {
+		from { opacity: 0; transform: translateY(-6px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.whisper { animation: none; }
 	}
 </style>

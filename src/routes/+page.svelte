@@ -255,42 +255,50 @@
 />
 
 <main class={["app", !model.config.shell.windowFrame && "no-frame"]}>
-	<!-- Cabin wall with texture -->
+	<!-- Cabin wall: texture + rivets only when the oval frame is on.
+	     Panorama (no-frame) is edge-to-edge glass — rivets break the continuous wall. -->
 	<div class="cabin-wall">
-		<!-- Panel lines texture -->
-		<div class="cabin-texture"></div>
+		{#if model.config.shell.windowFrame}
+			<div class="cabin-texture"></div>
+		{/if}
 
 		<Pane />
 
-		<!-- Rivets/details around window -->
-		<div class="cabin-details">
-			<div class="rivet rivet-tl"></div>
-			<div class="rivet rivet-tr"></div>
-			<div class="rivet rivet-bl"></div>
-			<div class="rivet rivet-br"></div>
-		</div>
+		{#if model.config.shell.windowFrame}
+			<div class="cabin-details">
+				<div class="rivet rivet-tl"></div>
+				<div class="rivet rivet-tr"></div>
+				<div class="rivet rivet-bl"></div>
+				<div class="rivet rivet-br"></div>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Controls (HUD + blind info) -->
 	<Controls />
 
-	<!-- Side panel (location picker + settings) -->
+	<!-- Side panel — essentials first; density/lighting/lab behind Advanced.
+	     Keeps the ops surface short so auto-close feels natural, not rushed. -->
 	<SidePanel>
 		<LocationPicker />
+		<div class="divider"></div>
+		<WeatherPicker />
 		<div class="divider"></div>
 		<TimeControl />
 		<div class="divider"></div>
 		<FlightControls />
-		<div class="divider"></div>
-		<AtmosphereControls />
-		<div class="divider"></div>
-		<LightingControls />
-		<div class="divider"></div>
-		<WeatherPicker />
-		{#if import.meta.env.DEV && labMode}
-			<div class="divider"></div>
-			<LabControls bind:mode={labRenderer} {model} />
-		{/if}
+		<details class="advanced">
+			<summary>Advanced</summary>
+			<div class="advanced-body">
+				<AtmosphereControls />
+				<div class="divider"></div>
+				<LightingControls />
+				{#if import.meta.env.DEV && labMode}
+					<div class="divider"></div>
+					<LabControls bind:mode={labRenderer} {model} />
+				{/if}
+			</div>
+		</details>
 	</SidePanel>
 
 	<!-- Night-variant harness — its own floating <aside>, so it sits beside the
@@ -439,7 +447,6 @@
 	   blanket :global(*) rule silently froze the cloud deck on any OS with
 	   reduce-motion enabled. */
 	@media (prefers-reduced-motion: reduce) {
-		:global(.click-hint),
 		:global(.blind-overlay.discoverable::after) {
 			animation: none !important;
 		}

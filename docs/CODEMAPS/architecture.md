@@ -152,7 +152,8 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 │   ├── window/Glass (vignette + recess)
 │   └── window/Blind ── useBlind composable
 │
-├── HUD.svelte ── useAeroWindow()
+├── HUD.svelte ── useAeroWindow() + showsOpenPassengerHud (parallax SSOT)
+├── SidePanel.svelte ── showsOpsChrome + isOpsModeParam (parallax SSOT)
 │   ├── hud/TelemetryOverlay (open-state, ALT/GS/LOC)
 │   └── hud/BlindInfoCard (closed-state branding)
 │
@@ -176,7 +177,7 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 | `scene/bundle/store.svelte.ts` | Reactive bundleStore — installed pushable bundles (sprites, video-bg). |
 | `fleet/rest-admin.svelte.ts` | RestAdminStore class — admin dashboard state (devices, connectionState). |
 | `fleet/client.svelte.ts` | DeviceClient class — SSE event source + status loop. |
-| `fleet/parallax.svelte.ts` | Module-scope persistent role bindings, MAC-fingerprint keyed. |
+| `fleet/parallax.svelte.ts` | Role bindings + chrome gates (`isEdgePane`, `showsOpsChrome`, `showsOpenPassengerHud`). |
 | `fleet/heartbeat.svelte.ts` (`.server`) | Per-device ring buffer of heartbeat samples (server-side). |
 | `fleet/device-registry.server.ts` | Per-device live status (online + lastSeen). |
 

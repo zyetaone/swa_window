@@ -14,8 +14,10 @@
 	 */
 	import type { Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
+	import { onDestroy } from 'svelte';
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { config } from "$lib/model/config-tree.svelte";
+	import { isOpsModeParam, showsOpsChrome } from '$lib/fleet/parallax.svelte';
 	import { flightReadout } from "./hud/flight-readout";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
@@ -24,12 +26,17 @@
 	const model = useAeroWindow();
 	const stats = $derived(flightReadout(model));
 
+	// Chrome role gates live in fleet/parallax — single SSOT with HUD.
+	const role = $derived(model.config.camera.parallax.role);
+	const opsMode = $derived.by(() =>
+		typeof window === 'undefined' ? false : isOpsModeParam(window.location.search),
+	);
+	const showOpsChrome = $derived(showsOpsChrome(role, opsMode));
+
 	let panelOpen = $state(false);
 	let closing = $state(false);
 	let dismissTimer: ReturnType<typeof setTimeout> | null = null;
 	let closeTimer: ReturnType<typeof setTimeout> | null = null;
-
-	import { onDestroy } from 'svelte';
 
 
 	function resetDismissTimer() {
@@ -110,7 +117,8 @@
 	};
 </script>
 
-<!-- Tab button (always visible on right edge) -->
+{#if showOpsChrome}
+<!-- Tab button (solo / center / ?ops=1 only — edge panes stay clean) -->
 <button
 	bind:this={tabButtonEl}
 	class={['panel-tab', panelOpen && !closing && 'open']}
@@ -132,9 +140,10 @@
 		{/if}
 	</svg>
 </button>
+{/if}
 
 <!-- Slide-out panel -->
-{#if panelOpen}
+{#if showOpsChrome && panelOpen}
 	<button
 		class={['backdrop', closing && 'closing']}
 		onclick={closePanel}
@@ -153,6 +162,7 @@
 	>
 		<header>
 			<h2>Aero Window</h2>
+			<p class="panel-sub">Operator</p>
 		</header>
 
 		<!-- Flight Data -->
@@ -326,6 +336,15 @@
 		letter-spacing: 0.02em;
 	}
 
+	.panel-sub {
+		margin: 0.2rem 0 0;
+		font-size: 0.65rem;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		opacity: 0.4;
+		font-weight: 400;
+	}
+
 	/* --- Flight Data --- */
 
 	.flight-data {
@@ -478,6 +497,51 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
+	}
+
+	/* Advanced fold — atmosphere / lighting / lab. Closed by default so the
+	   first screenful is place + weather + time + flight only. */
+	.panel :global(details.advanced) {
+		margin-top: 0.25rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		padding-top: 0.55rem;
+	}
+	.panel :global(details.advanced > summary) {
+		list-style: none;
+		cursor: pointer;
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		opacity: 0.55;
+		font-weight: 500;
+		padding: 0.35rem 0;
+		user-select: none;
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+	.panel :global(details.advanced > summary::-webkit-details-marker) {
+		display: none;
+	}
+	.panel :global(details.advanced > summary::before) {
+		content: '▸';
+		font-size: 0.65rem;
+		opacity: 0.7;
+		transition: transform 0.15s ease;
+	}
+	.panel :global(details.advanced[open] > summary::before) {
+		transform: rotate(90deg);
+	}
+	.panel :global(details.advanced > summary:hover),
+	.panel :global(details.advanced > summary:focus-visible) {
+		opacity: 0.9;
+		color: white;
+	}
+	.panel :global(details.advanced .advanced-body) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		padding-top: 0.55rem;
 	}
 
 	:global(.panel .control input[type="range"]) {

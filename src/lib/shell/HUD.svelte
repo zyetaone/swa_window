@@ -1,23 +1,34 @@
 <script lang="ts">
 	/**
-	 * HUD — dispatcher between two display modes:
-	 *   Blind OPEN  → TelemetryOverlay (cinematic ALT / GS / LOC readout)
-	 *   Blind CLOSED → BlindInfoCard (centered Aero Window + time + hint)
+	 * HUD — passenger chrome over the cabin wall.
+	 *
+	 *   Blind CLOSED → BlindInfoCard (quiet time + place on the blind)
+	 *   Blind OPEN   → TelemetryOverlay (soft destination whisper only;
+	 *                  ALT/GS live in SidePanel for operators)
+	 *
+	 * Role / visibility gates live in `$lib/fleet/parallax.svelte`
+	 * (`showsOpenPassengerHud`) — do not re-inline left/right checks here.
 	 *
 	 * Also owns the aria-live region for flight-transition screen-reader
-	 * announcements — that lives here (not in either card) because it
-	 * should narrate regardless of which mode is showing.
+	 * announcements — that lives here so it narrates regardless of which
+	 * visual mode is showing.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { showsOpenPassengerHud } from '$lib/fleet/parallax.svelte';
 	import TelemetryOverlay from './hud/TelemetryOverlay.svelte';
 	import BlindInfoCard from './hud/BlindInfoCard.svelte';
 
 	const model = useAeroWindow();
 
-	// Screen-reader announcement reflecting current flight phase. Was an
-	// $effect with prev-state memoisation — Svelte 5 anti-pattern (effect
-	// writing $state we already had the inputs for). Derived from the same
-	// reactive sources directly; aria-live="polite" handles boundary
+	const role = $derived(model.config.camera.parallax.role);
+	const showOpenHud = $derived(
+		model.config.shell.blindOpen &&
+			showsOpenPassengerHud(role, model.config.shell.hudVisible),
+	);
+	const showClosedBlindInfo = $derived(!model.config.shell.blindOpen);
+
+	// Screen-reader announcement reflecting current flight phase. Derived from
+	// the same reactive sources directly; aria-live="polite" handles boundary
 	// announcements via text-change detection, no edge tracking needed.
 	const liveAnnouncement = $derived.by(() => {
 		if (model.flight.isTransitioning && model.flight.cruiseDestinationName) {
@@ -26,10 +37,8 @@
 		return `Arrived at ${model.currentLocation.name}`;
 	});
 
-	// Arrival pause (v2 council Q3): when the FSM is in arrival_hold, dim the
-	// HUD so the eye lands on the terrain that just resolved. Experience
-	// Designer called this "non-negotiable" — without it 8 s of held position
-	// reads as a freeze. CSS transition makes the dim itself a soft fade.
+	// Arrival pause: dim the HUD so the eye lands on the terrain that just
+	// resolved. CSS transition makes the dim itself a soft fade.
 	const isArrivalHold = $derived(model.flight.flightMode === 'arrival_hold');
 </script>
 
@@ -38,13 +47,15 @@
 	{liveAnnouncement}
 </div>
 
-<div class={['hud-frame', isArrivalHold && 'dim']}>
-	{#if model.config.shell.blindOpen}
-		<TelemetryOverlay />
-	{:else}
-		<BlindInfoCard />
-	{/if}
-</div>
+{#if showOpenHud || showClosedBlindInfo}
+	<div class={['hud-frame', isArrivalHold && 'dim']}>
+		{#if showOpenHud}
+			<TelemetryOverlay />
+		{:else if showClosedBlindInfo}
+			<BlindInfoCard />
+		{/if}
+	</div>
+{/if}
 
 <style>
 	.sr-only {

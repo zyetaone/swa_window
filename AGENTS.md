@@ -313,15 +313,31 @@ Role assignment, in priority order:
 2. `localStorage['aero.device.role']` persisted from a prior URL param
 3. Default `'solo'` (zero offset — identical to single-Pi mode)
 
-| Role | Yaw offset | Frame | Autopilot | Receives `director_decision` |
-|---|---|---|---|---|
-| `solo` | 0° | on | yes | — |
-| `center` | 0° | off | yes (leader) | — |
-| `left` | −(arc/2 − arc/6)° | off | no (follower) | yes, applied at `transitionAtMs` |
-| `right` | +(arc/2 − arc/6)° | off | no (follower) | yes, applied at `transitionAtMs` |
+| Role | Yaw offset | Frame | Autopilot | Receives `director_decision` | Open HUD whisper | SidePanel tab |
+|---|---|---|---|---|---|---|
+| `solo` | 0° | on\* | yes | — | yes if `hudVisible` | yes |
+| `center` | 0° | off | yes (leader) | — | yes if `hudVisible` | yes |
+| `left` | −(arc/2 − arc/6)° | off | no (follower) | yes, at `transitionAtMs` | no | only `?ops=1` |
+| `right` | +(arc/2 − arc/6)° | off | no (follower) | yes, at `transitionAtMs` | no | only `?ops=1` |
+
+\*Default `shell.windowFrame` is `false`; solo can toggle frame on for cabin chrome.
 
 The leader emits `{v:2, type:'director_decision', locationId, transitionAtMs: now+2500}`;
 followers schedule it for that wall-clock instant. The 2.5 s window absorbs ~±200 ms NTP drift.
+
+### Chrome role SSOT
+
+Shell must not re-inline left/right checks. Use helpers in
+`src/lib/fleet/parallax.svelte.ts`:
+
+- `isGroupLeader` / `isEdgePane` — flight leadership vs edge pane
+- `showsOpsChrome(role, opsMode)` — SidePanel tab visibility
+- `showsOpenPassengerHud(role, hudVisible)` — open-blind destination whisper
+- `isOpsModeParam(search)` — `?ops=1|true` escape hatch for edge ops
+
+**Rule:** scene state syncs fleet-wide; operator chrome is local; passenger
+chrome on edge panes stays empty so the wall reads as one window. See
+`docs/ARCHITECTURE.md` § *Shell: passenger vs operator vs multi-window*.
 
 ## Tile caching (ADR-002)
 

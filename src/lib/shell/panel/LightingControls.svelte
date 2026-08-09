@@ -93,6 +93,8 @@
 	<Toggle label="3D Buildings" checked={cfg.world.buildingsEnabled} onchange={(e) => patch('world.buildingsEnabled', e.currentTarget.checked)} />
 	<Toggle label="Cesium Clouds (auto-off when Three.js overlay active)" checked={cfg.world.useCesiumClouds} onchange={(e) => patch('world.useCesiumClouds', e.currentTarget.checked)} />
 	<Toggle label="Window Frame" checked={cfg.shell.windowFrame} onchange={(e) => patch('shell.windowFrame', e.currentTarget.checked)} />
+	<!-- Open-blind "En route / place" whisper. Closed-blind time card is independent. -->
+	<Toggle label="Destination Whisper" checked={cfg.shell.hudVisible} onchange={(e) => patch('shell.hudVisible', e.currentTarget.checked)} />
 	<Toggle label="Touch (Demo Mode)" checked={cfg.shell.touchEnabled} onchange={(e) => patch('shell.touchEnabled', e.currentTarget.checked)} />
 	<Toggle label="Cursor Parallax" checked={cfg.shell.mouseParallax} onchange={(e) => patch('shell.mouseParallax', e.currentTarget.checked)} />
 	<!-- Wing position + mirror — adjust how the wing sits in the window -->

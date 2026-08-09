@@ -7,19 +7,15 @@
 	 * solar time) — office workers expect their real time on the kiosk.
 	 *
 	 * Deliberately near-invisible: a quiet, low-contrast watermark on the
-	 * cabin-plastic blind, not a prominent UI panel. The blind itself is
-	 * the surface; this is just a faint glance of time + place.
+	 * cabin-plastic blind, not a prominent UI panel. Open-gesture coaching
+	 * lives only on the Blind chevrons (first session) — no second text hint.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
 
 	const model = useAeroWindow();
 
-	// Shared wall clock. This used to run its own 30 s interval plus a `_tick`
-	// counter read inside the derived purely to force invalidation — a pattern
-	// that also let this card and the CabinClock disagree by up to 30 s. The
-	// module's $state makes the dependency direct, and one interval serves
-	// every consumer.
+	// Shared wall clock so this and CabinClock never disagree about the minute.
 	$effect(() => subscribeWallClock());
 	const wallClockTime = $derived(formatClock(wallClockNow()));
 </script>
@@ -27,7 +23,6 @@
 <div class="blind-info">
 	<span class="time">{wallClockTime}</span>
 	<span class="menu-location">{model.currentLocation.name}</span>
-	<span class="hint">Drag up to open</span>
 </div>
 
 <style>
@@ -44,8 +39,7 @@
 		pointer-events: none;
 		z-index: 200;
 	}
-	/* Near-invisible watermark — low-contrast ink on the plastic blind.
-	   Reads only as a faint glance, never competes with the blind texture. */
+	/* Near-invisible watermark — low-contrast ink on the plastic blind. */
 	.time {
 		font-weight: 300;
 		font-size: 2.6rem;
@@ -58,12 +52,5 @@
 		font-weight: 400;
 		letter-spacing: 0.04em;
 		color: rgba(40, 40, 50, 0.18);
-	}
-	.hint {
-		font-size: 0.65rem;
-		letter-spacing: 0.22em;
-		text-transform: uppercase;
-		color: rgba(40, 40, 50, 0.3);
-		margin-top: 0.75rem;
 	}
 </style>

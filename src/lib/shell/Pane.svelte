@@ -71,19 +71,8 @@ const motionTransform = $derived.by(() => {
 // ── Glass ─────────────────────────────────────────────────────────────────
 
 const glassVignetteOpacity = $derived(skyPalette.glassVignette);
-
-	// ── Timed click-hint ──────────────────────────────────────────────────────
-
-	let showHint = $state(false);
-	$effect(() => {
-		if (!model.config.shell.blindOpen || model.flight.isTransitioning) {
-			showHint = false;
-			return;
-		}
-		const showTimer = setTimeout(() => { showHint = true; }, 3000);
-		const hideTimer = setTimeout(() => { showHint = false; }, 8000);
-		return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
-	});
+// Open/close coaching is the Blind chevron cluster only (first session).
+// No timed toast here — it competed with the view and desynced across panes.
 </script>
 
 <div
@@ -112,12 +101,6 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 
 		{#if model.config.shell.clockVisible}
 			<CabinClock />
-		{/if}
-
-		{#if showHint}
-			<div class="click-hint visible">
-				<span>Pull the blind down to fly somewhere new</span>
-			</div>
 		{/if}
 	</div>
 
@@ -191,32 +174,6 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 		inset: 0 !important;
 		width: 100% !important;
 		height: 100% !important;
-	}
-
-	.click-hint {
-		position: absolute;
-		bottom: 10%;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 20;
-		pointer-events: none;
-		opacity: 0;
-		transition: opacity 0.8s ease;
-	}
-
-	.click-hint.visible { opacity: 1; }
-
-	.click-hint span {
-		background: rgba(10, 10, 30, 0.72);
-		backdrop-filter: blur(8px);
-		color: rgba(255, 255, 255, 0.88);
-		padding: 10px 20px;
-		border-radius: 20px;
-		font-size: 12px;
-		letter-spacing: 0.04em;
-		white-space: nowrap;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-		border: 1px solid rgba(255, 255, 255, 0.16);
 	}
 
 	.window-container.no-frame :global(.glass-surface),

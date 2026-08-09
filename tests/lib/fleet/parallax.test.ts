@@ -5,6 +5,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
 	isGroupLeader,
+	isEdgePane,
+	showsOpsChrome,
+	showsOpenPassengerHud,
+	isOpsModeParam,
 	shouldApplyDirectorDecision,
 	resolveBinding,
 	saveBinding,
@@ -26,6 +30,54 @@ describe('isGroupLeader', () => {
 	});
 	it('returns false for right', () => {
 		expect(isGroupLeader('right')).toBe(false);
+	});
+});
+
+// ─── chrome role gates (shell SSOT) ───────────────────────────────────────
+
+describe('isEdgePane', () => {
+	it('is true for left and right only', () => {
+		expect(isEdgePane('left')).toBe(true);
+		expect(isEdgePane('right')).toBe(true);
+		expect(isEdgePane('center')).toBe(false);
+		expect(isEdgePane('solo')).toBe(false);
+	});
+});
+
+describe('showsOpsChrome', () => {
+	it('shows on solo and center without ops mode', () => {
+		expect(showsOpsChrome('solo')).toBe(true);
+		expect(showsOpsChrome('center')).toBe(true);
+		expect(showsOpsChrome('left')).toBe(false);
+		expect(showsOpsChrome('right')).toBe(false);
+	});
+	it('shows on edge panes only when ops mode is on', () => {
+		expect(showsOpsChrome('left', true)).toBe(true);
+		expect(showsOpsChrome('right', true)).toBe(true);
+		expect(showsOpsChrome('center', true)).toBe(true);
+	});
+});
+
+describe('showsOpenPassengerHud', () => {
+	it('requires hudVisible and a non-edge role', () => {
+		expect(showsOpenPassengerHud('solo', true)).toBe(true);
+		expect(showsOpenPassengerHud('center', true)).toBe(true);
+		expect(showsOpenPassengerHud('left', true)).toBe(false);
+		expect(showsOpenPassengerHud('right', true)).toBe(false);
+		expect(showsOpenPassengerHud('solo', false)).toBe(false);
+	});
+});
+
+describe('isOpsModeParam', () => {
+	it('accepts ops=1 and ops=true', () => {
+		expect(isOpsModeParam('?ops=1')).toBe(true);
+		expect(isOpsModeParam('ops=true')).toBe(true);
+		expect(isOpsModeParam(new URLSearchParams('ops=1'))).toBe(true);
+	});
+	it('rejects missing or other values', () => {
+		expect(isOpsModeParam('')).toBe(false);
+		expect(isOpsModeParam('?ops=0')).toBe(false);
+		expect(isOpsModeParam(null)).toBe(false);
 	});
 });
 

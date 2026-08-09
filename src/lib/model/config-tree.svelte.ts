@@ -283,8 +283,10 @@ export const world = $state({
 export const shell = $state({
 		windowFrame: false, // cabin oval border
 	blindOpen: true,
+	// Open-blind destination whisper on solo/center. Edge panes ignore this
+	// (HUD is role-gated). Closed-blind BlindInfoCard is independent.
 	hudVisible: true,
-		clockVisible: false, // lab-scope wall-clock overlay
+		clockVisible: false, // double-tap cabin clock on the open glass
 		mouseParallax: true, // cursor parallax (no-op in kiosk)
 		sidePanelAutoCloseMs: 15000, // auto-close idle side panel
 	// Touch-contract gate (Q3 council 2026-05-20). false = passenger mode: basic

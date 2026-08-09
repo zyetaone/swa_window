@@ -69,7 +69,63 @@ Only one object owns the Viewer. Everything else consumes it.
 | **Camera** | movement (camera pose) | anything visual |
 | **Flight** | behaviour (location, weather, time) | renders |
 | **Scene** | decorative effects | touches Cesium globe primitives |
-| **Shell** | presentation (DOM chrome) | reads simulation |
+| **Shell** | presentation (DOM chrome: pane, glass, blind, HUD, ops panel) | owns Cesium / decides flight / invents second scene state |
+
+Shell **reads** the model for display (location name, flight mode, readout
+stats). It does not *drive* simulation — writes go through
+`applyConfigPatch` / typed setters so CRDT + fleet stay coherent.
+
+## Shell: passenger vs operator vs multi-window
+
+North star: **one continuous flight across all panes**. Ambient installs
+break when the machine's internal state becomes visible uninvited.
+
+### Surfaces
+
+```text
+Passenger glass     globe + glass + blind (+ optional cabin clock)
+Cruise only         soft "En route / {place}" whisper (center|solo)
+Blind closed        faint wall-clock time + place on the shade
+Operator            SidePanel — ALT / GS / LOCAL + controls
+Edge panes          pure view (no tab, no open-blind HUD)
+```
+
+| Surface | When | Role gate |
+|---|---|---|
+| BlindInfoCard | blind closed | every pane (furniture on the shade) |
+| TelemetryOverlay whisper | blind open + en route | `showsOpenPassengerHud(role, hudVisible)` |
+| SidePanel tab | operator invite | `showsOpsChrome(role, opsMode)` |
+| ALT / GS / LOCAL | SidePanel header only | same as SidePanel |
+| CabinClock | double-tap, `shell.clockVisible` | fleet-synced config |
+
+### Role / chrome SSOT
+
+All shell chrome role gates live in **`src/lib/fleet/parallax.svelte.ts`**
+next to `isGroupLeader`. Do not re-inline `role === 'left' || …` in
+components.
+
+| Helper | Meaning |
+|---|---|
+| `isGroupLeader(role)` | center \| solo — autopilot + director broadcast |
+| `isEdgePane(role)` | left \| right — share scene, hide edge UI |
+| `showsOpsChrome(role, opsMode)` | SidePanel tab; edge needs `?ops=1` |
+| `showsOpenPassengerHud(role, hudVisible)` | open-blind whisper |
+| `isOpsModeParam(search)` | parse `?ops=1\|true` |
+
+### Sync rule (fleet)
+
+| Kind | Sync? | Why |
+|---|---|---|
+| Scene state (location, altitude, weather, time, flight mode, director) | **yes** — CRDT / `director_decision` | one flight |
+| Shell config that is cabin furniture (`clockVisible`, `windowFrame`, …) | **yes** when written via `applyConfigPatch` | wall agrees |
+| Operator chrome open/closed, SidePanel scroll, Advanced fold | **no** — local | tech tool, not the product |
+| Passenger discoverable hints | **local / center-only** | three coaches desync the wall |
+
+### Panel composition
+
+`+page.svelte` owns section order. Essentials first (Location → Weather →
+Time → Flight); Atmosphere / Lighting / Lab behind a closed `<details
+class="advanced">`. Lab is DEV + `?lab=1` only.
 
 ## Data flow
 
