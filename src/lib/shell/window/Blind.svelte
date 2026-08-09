@@ -11,15 +11,24 @@
 	 * `--frame-width` CSS custom properties — Pane.svelte defines them.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { isEdgePane } from '$lib/fleet/parallax.svelte';
 	import { useBlind } from './use-blind.svelte';
 
 	const model = useAeroWindow();
 	const blind = useBlind(model);
+
+	// First-session chevrons only on solo/center. Edge panes share the blind
+	// gesture but three staggered coaches would desync the corridor wall.
+	const showDiscoverable = $derived(
+		!model.config.shell.blindOpen &&
+			!blind.hasAnimated &&
+			!isEdgePane(model.config.camera.parallax.role),
+	);
 </script>
 
 <div class="blind-clip" {@attach blind.attach}>
 	<div
-		class={['blind-overlay', !model.config.shell.blindOpen && !blind.hasAnimated && 'discoverable']}
+		class={['blind-overlay', showDiscoverable && 'discoverable']}
 		onanimationend={() => { blind.hasAnimated = true; }}
 		onpointerdown={blind.onPointerDown}
 		onpointermove={blind.onPointerMove}
@@ -37,7 +46,7 @@
 		style:pointer-events={model.config.shell.blindOpen ? 'none' : 'auto'}
 	>
 		<div class="blind-slats"></div>
-		{#if !model.config.shell.blindOpen && !blind.hasAnimated}
+		{#if showDiscoverable}
 			<div class="pull-hint" aria-hidden="true">
 				<span class="chev chev-1">▼</span>
 				<span class="chev chev-2">▼</span>

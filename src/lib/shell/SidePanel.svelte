@@ -54,7 +54,9 @@
 
 	// Tab button: kept as bind:this because closePanel() needs to refocus it
 	// AFTER the panel unmounts (no live element to dispatch from at that point).
-	let tabButtonEl: HTMLButtonElement | undefined;
+	// $state so bind:this satisfies Svelte 5 non_reactive_update (we only
+	// use it for imperative focus, not template reads).
+	let tabButtonEl = $state<HTMLButtonElement | undefined>();
 
 	function openPanel() {
 		panelOpen = true;

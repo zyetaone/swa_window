@@ -50,6 +50,8 @@ Legend: ✅ done & tested  ⚠ done but untested on real hardware  ❓ open ques
 - ✅ Blind drag composable + accessibility
 - ✅ Telemetry panel (Shift+T)
 - ✅ `shell.touchEnabled` gate (Day 1 commit `210eff9`) — passenger mode default; long-press accel + extras gated behind operator toggle
+- ✅ Passenger quiet chrome (2026-08): open-blind is en-route whisper only; ALT/GS/LOCAL in SidePanel; edge panes hide ops tab + HUD + discoverable chevrons (`showsOpsChrome` / `showsOpenPassengerHud` in `fleet/parallax`)
+- ✅ Operator panel essentials first; Atmosphere/Lighting/Lab under Advanced; edge ops via `?ops=1`
 - ⚠ Touch gestures untested on real capacitive touchscreen
 - ⏳ Corner-PIN gesture unlock + 10-min auto-revert (v1.1 deferred from Q3 council)
 - ⏳ inputMode FSM (locked/armed/cooldown) cleanup — Day 6 task #62 (drag-during-cruise_transit silent swallow + multi-touch race)
