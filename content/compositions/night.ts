@@ -149,8 +149,32 @@ export const NIGHT_PALETTE = {
 	 * direction. Given the display was reported as too dim, 0.8 stays. Drop to
 	 * 0.5 only if the deep-night VIIRS wash ever reads too STRONG.
 	 */
+	/**
+	 * ─── ⚠ maxAlpha IS THE ONLY LIVE VIIRS CONTROL IN THE SHOW BAND ──────────
+	 * viirsLayerAlpha multiplies maxAlpha by ease × gain × altGate × boost and
+	 * then clamps back to maxAlpha. At deep night with shipped defaults
+	 * (scale 5 → gain 1, boost 1.4) the product exceeds the ceiling at EVERY
+	 * night-show altitude, so it pins to maxAlpha and the altitude gate does
+	 * nothing:
+	 *
+	 *   28,000 ft  altGate 0.767 → raw 0.644 → clamped 0.60
+	 *   30,000 ft  altGate 0.833 → raw 0.700 → clamped 0.60
+	 *   34,000 ft  altGate 0.967 → raw 0.812 → clamped 0.60
+	 *
+	 * Same inert-knob shape the two comments above viirsLayerAlpha/roadMaskAlpha
+	 * already document. Until that clamp is restructured, tune HERE.
+	 *
+	 * 0.6 → 0.30 because VIIRS cannot carry structure at these altitudes. The
+	 * layer caps at zoom 8 = 583 m/px; at 30,000 ft the frame spans 13.5 km, so
+	 * ONE VIIRS pixel covers ~88 screen pixels, bilinearly smoothed. It is
+	 * physically incapable of resolving a building or a road — it renders as a
+	 * smooth blob of light. VIIRS is the right source for "where is the city"
+	 * (a spatial field feeding u_cityBrightness) and the wrong source for "what
+	 * does the city look like". Structure comes from the 3D building windows and
+	 * the z18 (0.57 m/px) road mask; VIIRS is now fill BEHIND them.
+	 */
 	viirs: {
-	maxAlpha:         0.6,
+	maxAlpha:         0.30,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 	},

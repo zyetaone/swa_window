@@ -25,6 +25,7 @@ import {
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
 import { isGroupLeader, resolveBinding } from '$lib/fleet/parallax.svelte';
+import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 // TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
 import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
@@ -79,6 +80,14 @@ export class AeroWindow {
 	setFleetBroadcast(fn: ((msg: { v: 2; type: string; [k: string]: unknown }) => void) | null): void {
 		this.#fleetBroadcast = fn;
 	}
+
+	// True during the constructor. Boot-time config applications (persisted
+	// restore, weather sync, boot setLocation jitter) must NOT stamp the CRDT
+	// with the current wall-clock: an admin push issued while the Pi was
+	// offline carries an OLDER timestamp and would lose LWW to a fresh
+	// local-default stamp on every reboot. applyConfigPatch consults this
+	// flag; genuine user/fleet interactions after boot stamp normally.
+	#booting = true;
 
 	// ── Core state ────────────────────────────────────────────────────────────
 	location     = $state<LocationId>('hyderabad');
@@ -195,21 +204,29 @@ export class AeroWindow {
 		if (typeof window !== 'undefined') {
 			this.updateTimeFromSystem();
 		}
+
+		// Boot complete — from here on, applyConfigPatch stamps the CRDT
+		// with the wall-clock again (see #booting).
+		this.#booting = false;
 	}
 
 	/** Sync AtmosphereConfig.weather fields from WEATHER_EFFECTS on weather change. */
 	#syncWeatherConfig(): void {
 		const fx = WEATHER_EFFECTS[this.weather];
-		syncAtmosphereWeather(fx);
+		// Unstamped during boot (see #booting) — the weather recipe is a local
+		// default, not a fleet decision.
+		syncAtmosphereWeather(fx, this.#booting ? { stamp: false } : undefined);
 	}
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
 		if (saved.location) this.setLocation(saved.location);
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
 		if (saved.weather) { this.weather = saved.weather; this.#syncWeatherConfig(); }
-		// Config-tree restores go through applyConfigPatch so the CRDT timestamp
-		// index reflects the restored value — keeps the LWW comparison honest
-		// when an admin push lands milliseconds later.
+		// Config-tree restores go through applyConfigPatch so the same
+		// validation/type gates apply, but WITHOUT a CRDT stamp (#booting) —
+		// an admin push issued while the Pi was offline carries an older
+		// wall-clock timestamp and must still win LWW over these restored
+		// local defaults.
 		if (saved.cloudDensity !== undefined) this.applyConfigPatch('atmosphere.clouds.density', saved.cloudDensity);
 		if (saved.buildingsEnabled !== undefined) this.applyConfigPatch('world.buildingsEnabled', saved.buildingsEnabled);
 		if (saved.showClouds !== undefined) this.applyConfigPatch('world.showClouds', saved.showClouds);
@@ -222,8 +239,14 @@ export class AeroWindow {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
 		const scene = this.currentLocation.scene;
+		// Deterministic jitter — same daySeed() ^ location-hash seed as the
+		// orbit (flight.setLocationWithSky). All 3 Pis in a panorama compute
+		// IDENTICAL cloud/haze settings on arrival, so the seam stays aligned
+		// and the peer-synced writes converge instead of fighting via LWW.
+		// Was Math.random(): each Pi jittered independently per pane.
+		const rng = createSeededRng((daySeed() ^ hashString(id)) >>> 0);
 		const jitter = (base: number, amp: number, lo: number, hi: number) =>
-			clamp(base + (Math.random() - 0.5) * amp, lo, hi);
+			clamp(base + (rng() - 0.5) * amp, lo, hi);
 		// Route through applyConfigPatch so the CRDT stamps the writer + the
 		// new value lands in the timestamp index. Earlier this wrote
 		// config.atmosphere.* directly, which propagated to peers via the
@@ -381,7 +404,8 @@ export class AeroWindow {
 	 */
 	applyConfigPatch(path: string, value: unknown): boolean {
 		this.telemetry.recordEvent('config_patch', { path, value });
-		return _applyConfigPatch(path, value);
+		// Boot-time applications skip the CRDT stamp (see #booting).
+		return _applyConfigPatch(path, value, undefined, this.#booting ? { stamp: false } : undefined);
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {

@@ -202,7 +202,14 @@ export function roadMaskAlpha(
 	altitudeFt: number,
 	bootFade = 1,
 ): number {
-	const gate = 0.3 + 0.7 * altitudeDetailMix(altitudeFt);
+	// Floor raised 0.3 → 0.6 (span 0.7 → 0.4, so the low-altitude end still
+	// reaches 1.0). The road mask is the ONLY globally-available source of
+	// street-grid STRUCTURE — a z18 raster at 0.57 m/px, versus VIIRS at 583
+	// m/px. The old floor faded it to 0.32-0.46 across the 28-34k night-show
+	// band while VIIRS sat pinned at its ceiling, so the structured layer was
+	// quietest exactly where the blobby one was loudest (road:VIIRS was 0.69
+	// at 30,000 ft — now ~2.2). Roads carry the city; VIIRS fills behind.
+	const gate = 0.6 + 0.4 * altitudeDetailMix(altitudeFt);
 	const nf = nightFactor;
 	// Normalise the 0..5 operator gain, exactly as viirsLayerAlpha does. Clamping
 	// alone left this pinned at 1.0 for every altitude and every knob position

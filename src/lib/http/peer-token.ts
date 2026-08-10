@@ -20,6 +20,8 @@
  * profiles. Module memory is enough.
  */
 
+import { isLoopback } from './loopback';
+
 let cached: string | null = null;
 let pending: Promise<string | null> | null = null;
 let resolved = false;
@@ -47,7 +49,28 @@ export async function getPeerToken(): Promise<string | null> {
 	return pending;
 }
 
-export async function peerAuthHeader(): Promise<HeadersInit> {
+/**
+ * True when `host` is an address we trust with the admin bearer token:
+ * loopback spellings, `localhost`, or an mDNS `.local` hostname — the only
+ * shapes lan-peers discovery legitimately produces (SRV targets are
+ * announced as `${deviceHost()}.local`). Anything else (public IP, bare DNS
+ * name, a lookalike like `aero-display-01.local.evil.com`) means a rogue
+ * mDNS responder pointed us off-LAN, and the token must not be sent.
+ * Numeric RFC1918 (192.168.x.x) is deliberately NOT trusted, matching the
+ * CORS allowlist policy in ./cors.ts.
+ */
+export function isLanHost(host: string): boolean {
+	// Hostnames are case-insensitive; mDNS targets may carry a trailing
+	// root dot (`aero-display-01.local.`).
+	const h = host.toLowerCase().replace(/\.$/, '');
+	return isLoopback(h) || h === 'localhost' || h.endsWith('.local');
+}
+
+export async function peerAuthHeader(host?: string): Promise<HeadersInit> {
+	// A peer host we can't place on the LAN gets no bearer token — the
+	// request still goes out (unauthenticated), and the receiving end
+	// rejects it, same as the token-unavailable path.
+	if (host !== undefined && !isLanHost(host)) return {};
 	const token = await getPeerToken();
 	if (!token) return {};
 	return { Authorization: `Bearer ${token}` };
@@ -57,9 +80,15 @@ export async function peerAuthHeader(): Promise<HeadersInit> {
  * JSON content-type + peer auth in one call. The fleet REST paths all POST
  * or PATCH JSON bodies with the same header shape — this is the SSOT for
  * that pair so the spread + content-type can't drift across call sites.
+ *
+ * Pass the target peer's `host` whenever the request leaves this device:
+ * the Authorization header is attached only for LAN hosts (see isLanHost),
+ * so a spoofed mDNS SRV target can't harvest the admin token. Omitting
+ * `host` preserves the legacy always-attach behaviour for same-origin
+ * callers.
  */
-export async function peerJsonHeaders(): Promise<HeadersInit> {
-	return { 'Content-Type': 'application/json', ...(await peerAuthHeader()) };
+export async function peerJsonHeaders(host?: string): Promise<HeadersInit> {
+	return { 'Content-Type': 'application/json', ...(await peerAuthHeader(host)) };
 }
 
 /**

@@ -46,8 +46,15 @@ function scheduleReset(): boolean {
 	// would hang the purge forever with the operator seeing nothing. -n fails
 	// fast and loudly instead. The 2 s delay lets the 200 reach the caller
 	// before the network drops + reboot kicks in.
+	// Iterate connection UUIDs, not names: NAME values can contain spaces
+	// ("My Home WiFi") and the old `for c in $(...)` loop word-split them, so
+	// the delete silently failed and the Pi rebooted back onto the surviving
+	// profile — portal never came up. UUIDs are space-free, so `while read`
+	// is safe. No `|| true`: if any delete fails, `exit 1` (while-loop runs in
+	// the pipeline's subshell) fails the pipeline and `&&` skips the reboot —
+	// better to stay up on a stale profile than to reboot into one.
 	return schedulePrivileged(
-		['sh', '-c', `for c in $(nmcli -t -f NAME,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}'); do sudo -n nmcli c delete "$c" || true; done && sudo -n /sbin/reboot`],
+		['sh', '-c', `nmcli -t -f UUID,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}' | while read -r u; do sudo -n nmcli c delete "$u" || exit 1; done && sudo -n /sbin/reboot`],
 		2000,
 		'[wifi/reset]',
 	);

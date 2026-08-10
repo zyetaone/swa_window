@@ -2,14 +2,21 @@
 	/**
 	 * FlightControls — cruising speed + altitude sliders.
 	 * Slider ranges pull from config SSOT (camera.cruise + camera.altitude).
+	 *
+	 * Routes operator writes through applyConfigPatch — see
+	 * docs/ARCHITECTURE.md non-goals: `applyConfigPatch` is the single
+	 * write gate for the CRDT LWW merge and the prototype-pollution
+	 * defense. Direct `config.X = v` skips the gate and silently
+	 * breaks fleet sync.
 	 */
-	import { config } from '$lib/model/config-tree.svelte';
+	import { usePanelConfig } from './patch';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { formatAltitudeFt, formatSpeedX } from '$lib/utils';
 	import RangeSlider from './RangeSlider.svelte';
 	import Toggle from './Toggle.svelte';
 
 	const model = useAeroWindow();
+	const { cfg, patch } = usePanelConfig();
 </script>
 
 <section>
@@ -37,5 +44,5 @@
 	<!-- Restrict autopilot's location pool to lit cities. ON for kiosk
 	     installs so the camera never wanders to ocean / desert / mountain
 	     and dimmed the scene. OFF lets the director use the full pool. -->
-	<Toggle label="Night-Lit Cities Only" bind:checked={config.director.autopilot.nightLitCitiesOnly} />
+	<Toggle label="Night-Lit Cities Only" checked={cfg.director.autopilot.nightLitCitiesOnly} onchange={(e) => patch('director.autopilot.nightLitCitiesOnly', e.currentTarget.checked)} />
 </section>

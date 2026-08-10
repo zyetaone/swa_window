@@ -45,6 +45,21 @@ export function clearOverlayDisabled(): void {
 	}
 }
 
+/**
+ * True when the URL carries an explicit `?overlay=` override (the perf-gate
+ * A/B param parsed in +page.svelte). An explicit operator choice must win
+ * over the persisted auto-disable, so the boot-time check in GlobeLayer
+ * skips applying the persisted flag when this is set.
+ */
+export function hasExplicitOverlayParam(): boolean {
+	if (typeof window === 'undefined') return false;
+	try {
+		return new URLSearchParams(window.location.search).has('overlay');
+	} catch {
+		return false;
+	}
+}
+
 export interface OverlayRecoveryOptions {
 	/** Called to read the current measured fps. */
 	getFps: () => number;

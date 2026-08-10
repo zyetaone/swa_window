@@ -12,12 +12,15 @@
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
 	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
 import { startLivenessWatchdog } from '$lib/world/lifecycle-liveness';
-import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabled } from '$lib/world/lifecycle-overlay-recovery';
+import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlayParam } from '$lib/world/lifecycle-overlay-recovery';
 
 	const model = useAeroWindow();
 
 	// ── Overlay auto-recovery: boot-time check ──────────────────────────────
-	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled()) {
+	// An explicit ?overlay= param (parsed in +page.svelte, which runs before
+	// this child inits) is an operator override — it must win over the
+	// persisted auto-disable, otherwise ?overlay=1 is silently clobbered.
+	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled() && !hasExplicitOverlayParam()) {
 		model.applyConfigPatch('world.useThreeOverlay', false);
 	}
 
@@ -64,11 +67,11 @@ import { startOverlayRecovery, isOverlayPersistentlyDisabled, clearOverlayDisabl
 		});
 	});
 
-	$effect(() => {
-		if (model.config.world.useThreeOverlay) {
-			clearOverlayDisabled();
-		}
-	});
+	// The persisted overlay-disabled flag is cleared ONLY by explicit
+	// re-enable paths (SidePanel toggle in LightingControls, ?overlay=1 in
+	// +page.svelte) — NOT reactively here. A reactive clear would fire on any
+	// useThreeOverlay=true write (fleet push, CRDT replay) and wipe a weak
+	// Pi's self-preservation state.
 	const fps = $derived(Math.round(model.measuredFps));
 </script>
 

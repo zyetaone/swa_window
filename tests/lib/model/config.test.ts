@@ -228,6 +228,18 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		expect(after).toEqual(before);
 	});
 
+	it('rejects a remote (CRDT) patch to an unknown namespace without mutating state', () => {
+		// Mirrors the local-branch rejection above: an unknown namespace must
+		// be refused before crdt.merge, never falling through to it.
+		const before = configSnapshot();
+		const ok = applyConfigPatch('wrongroot.something', 1, {
+			timestamp: Date.now() + 1000,
+			sourceId: 'admin-test',
+		});
+		expect(ok).toBe(false);
+		expect(configSnapshot()).toEqual(before);
+	});
+
 	it('rejects an unknown field under a known layer', () => {
 		const ok = applyConfigPatch('shell.doesNotExist', true);
 		expect(ok).toBe(false);

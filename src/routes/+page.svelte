@@ -15,6 +15,7 @@
 	import { isValidWeather } from "$lib/types";
 	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/persistence";
+	import { clearOverlayDisabled } from "$lib/world/lifecycle-overlay-recovery";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/Pane.svelte";
@@ -193,6 +194,9 @@
 		const overlayParam = params.get("overlay");
 		if (overlayParam === "1" || overlayParam === "true") {
 			model.applyConfigPatch('world.useThreeOverlay', true);
+			// Explicit re-enable: lift any persisted low-fps auto-disable so the
+			// next boot (and GlobeLayer's boot-time check) honours the override.
+			clearOverlayDisabled();
 		} else if (overlayParam === "0" || overlayParam === "false") {
 			model.applyConfigPatch('world.useThreeOverlay', false);
 		}

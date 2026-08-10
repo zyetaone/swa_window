@@ -17,21 +17,27 @@
  */
 
 import { createReadStream, statSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { safeResolveWithin } from '$lib/server/fs-guard';
 
-// Resolve TILE_DIR from project root (five levels up from this route file).
+// Anchor relative paths on process.cwd() — the repo root in dev, the deploy
+// dir on the Pi. import.meta.url depth-counting breaks after bundling: the
+// emitted chunk lives deeper than the source route file, so 'five levels up'
+// no longer lands on the project root.
 // Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
-const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
-function resolveTileDir(): string {
-	if (process.env.TILE_DIR) return resolve(PROJECT_ROOT, process.env.TILE_DIR);
+export function resolveTileDir(
+	env: NodeJS.ProcessEnv = process.env,
+	cwd: string = process.cwd(),
+	piDirExists: (path: string) => boolean = existsSync,
+): string {
+	// resolve() returns an absolute TILE_DIR unchanged — absolute fast path.
+	if (env.TILE_DIR) return resolve(cwd, env.TILE_DIR);
 	const piPath = '/opt/zyeta-aero/tiles';
-	if (existsSync(piPath)) return piPath;
-	return resolve(PROJECT_ROOT, 'data/tiles');
+	if (piDirExists(piPath)) return piPath;
+	return resolve(cwd, 'data/tiles');
 }
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 

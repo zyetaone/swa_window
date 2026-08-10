@@ -2,10 +2,11 @@
 	/**
 	 * Clouds — PNG-sprite CLUSTER composition at the WGS84 cloud deck.
 	 *
-	 * TWO BANDS:
-	 *   - DISTANT: 45-95 large clusters at 42-307 km radius. 8-24 km
+	 * TWO BANDS (counts are density-scaled — SSOT is clusterCountsForDensity
+	 * in ./cloud-cluster-budget.ts; ranges below are dens=0..1):
+	 *   - DISTANT: 8-95 large clusters at 42-307 km radius. 8-24 km
 	 *              baseScale. 9-16 sprites/cluster. Horizon weather systems.
-	 *   - CLOSE:   16-32 small clusters at 1.5-32 km radius. 1.5-4.5 km
+	 *   - CLOSE:   3-32 small clusters at 1.5-32 km radius. 1.5-4.5 km
 	 *              baseScale. 4-10 sprites/cluster. Near clouds passing the
 	 *              passenger window — sells the "flying THROUGH the deck" feel.
 	 *
@@ -310,12 +311,17 @@
 	// causing visible frame stutters. 200 ms debounce coalesces rapid
 	// changes — the user sees the new clouds ~200 ms after they stop
 	// adjusting the slider, which feels responsive without the stutter.
+	//
+	// Deliberately NOT keyed on anchorMatrix: the seeded field is
+	// location-independent (same daySeed(), ENU-local coords), so a flyTo
+	// arrival only needs the matrix-copy effect above to re-anchor the
+	// existing clusters — rebuilding here would cost a 30-50 ms hitch on
+	// every location change for an identical field.
 	const REBUILD_DEBOUNCE_MS = 200;
 	let _rebuildTimeout: ReturnType<typeof setTimeout> | null = null;
 	$effect(() => {
 		const w = weather;
 		const d = density;
-		void anchorMatrix;
 		let cancelled = false;
 		if (_rebuildTimeout !== null) clearTimeout(_rebuildTimeout);
 		_rebuildTimeout = setTimeout(() => {

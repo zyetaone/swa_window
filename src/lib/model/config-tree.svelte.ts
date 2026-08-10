@@ -324,9 +324,11 @@ const crdt = new CRDTStore(_configRoot);
  * Each field is stamped through the CRDT so concurrent admin PATCHes
  * to the same fields participate in LWW merge — previously Object.assign
  * bypassed CRDT and would silently clobber fleet-config writes.
+ * Boot-time callers pass `{ stamp: false }` (see applyConfigPatch).
  */
 export function syncAtmosphereWeather(
 	fx: { turbulence: 'light' | 'moderate' | 'severe'; hasLightning: boolean; rainOpacity: number; windAngle: number; cloudDensityRange: [number, number]; nightCloudFloor: number; filterBrightness: number },
+	opts?: { stamp?: boolean },
 ): void {
 	for (const [key, value] of Object.entries(fx)) {
 		const path = `atmosphere.weather.${key}`;
@@ -334,7 +336,7 @@ export function syncAtmosphereWeather(
 		// path: setByPath validation → idempotency skip → CRDT stamp. Previously
 		// this wrote directly and stamped CRDT separately — two mutation paths.
 		const newValue = key === 'cloudDensityRange' ? [...value as [number, number]] : value;
-		applyConfigPatch(path, newValue);
+		applyConfigPatch(path, newValue, undefined, opts);
 	}
 }
 
@@ -371,10 +373,14 @@ function isLeafTypeCompatible(existing: unknown, value: unknown): boolean {
  * Apply a path-keyed patch to the config tree.
  *
  * Local writes (no `remote` arg) stamp with `Date.now()` + current
- * device id and write through. Remote writes (with `remote` arg) route
- * through CRDT merge — the incoming patch only applies if its
- * timestamp beats the local last-writer for this path, with sourceId
- * lexicographic tiebreak on equal timestamps.
+ * device id and write through — unless `opts.stamp === false`, which
+ * boot/restore paths use: a restored local default must NOT carry a
+ * fresh wall-clock stamp, or it would win LWW over an admin push issued
+ * while the device was offline (an older but real timestamp).
+ * Remote writes (with `remote` arg) route through CRDT merge — the
+ * incoming patch only applies if its timestamp beats the local
+ * last-writer for this path, with sourceId lexicographic tiebreak on
+ * equal timestamps.
  *
  * Returns true if the write was applied. For remote writes, false means
  * "lost the CRDT race" (stale) or type/path rejected; for local writes,
@@ -384,6 +390,7 @@ export function applyConfigPatch(
 	path: string,
 	value: unknown,
 	remote?: { timestamp: number; sourceId: string },
+	opts?: { stamp?: boolean },
 ): boolean {
 	const resolved = resolveConfigPath(path);
 	if (!resolved) return false;
@@ -403,7 +410,11 @@ export function applyConfigPatch(
 
 	// Write config FIRST — failed setByPath must not leave a CRDT stamp.
 	if (!setByPath(rootRec, rest, value)) return false;
-	crdt.record(path, value);
+	// stamp:false (boot/restore) — apply the value WITHOUT a wall-clock
+	// stamp. A fresh Date.now() stamp on a restored local default would win
+	// LWW over an admin push issued while the device was offline (older but
+	// real timestamp), silently reverting the push on every reboot.
+	if (opts?.stamp !== false) crdt.record(path, value);
 	maybeApplyRoleDerived(path, value);
 	return true;
 }

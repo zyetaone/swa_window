@@ -19,6 +19,7 @@
 	 */
 	import { patchNum, usePanelConfig } from './patch';
 	import { NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
+	import { clearOverlayDisabled } from '$lib/world/lifecycle-overlay-recovery';
 	import Toggle from './Toggle.svelte';
 	import RangeSlider from './RangeSlider.svelte';
 
@@ -85,8 +86,14 @@
 		oninput={patchNum(patch, 'world.viirsBrightness')}
 		formatValue={(v) => v.toFixed(2)}
 	/>
-	<!-- P8 perf A/B: Three overlay (wing + clouds). Local; fleet-wide via admin. -->
-	<Toggle label="Three.js Overlay" checked={cfg.world.useThreeOverlay} onchange={(e) => patch('world.useThreeOverlay', e.currentTarget.checked)} />
+	<!-- P8 perf A/B: Three overlay (wing + clouds). Local; fleet-wide via admin.
+	     Toggling ON is an explicit re-enable: clear the persisted low-fps
+	     auto-disable so it doesn't clobber the choice on next boot. -->
+	<Toggle label="Three.js Overlay" checked={cfg.world.useThreeOverlay} onchange={(e) => {
+		const on = e.currentTarget.checked;
+		patch('world.useThreeOverlay', on);
+		if (on) clearOverlayDisabled();
+	}} />
 	<Toggle label="Hash Palette (Night)" checked={cfg.world.useHashPalette} onchange={(e) => patch('world.useHashPalette', e.currentTarget.checked)} />
 	<Toggle label="3D Buildings" checked={cfg.world.buildingsEnabled} onchange={(e) => patch('world.buildingsEnabled', e.currentTarget.checked)} />
 	<Toggle label="Cesium Clouds (auto-off when Three.js overlay active)" checked={cfg.world.useCesiumClouds} onchange={(e) => patch('world.useCesiumClouds', e.currentTarget.checked)} />

@@ -33,6 +33,7 @@
 		onpointerdown={blind.onPointerDown}
 		onpointermove={blind.onPointerMove}
 		onpointerup={blind.onPointerUp}
+		onpointercancel={blind.onPointerCancel}
 		onkeydown={blind.onKeyDown}
 		role="slider"
 		aria-orientation="vertical"
@@ -67,6 +68,7 @@
 			onpointerdown={blind.onPointerDown}
 			onpointermove={blind.onPointerMove}
 			onpointerup={blind.onPointerUp}
+			onpointercancel={blind.onPointerCancel}
 			role="button"
 			tabindex={-1}
 			aria-label="Drag down to close window blind"

@@ -157,13 +157,14 @@ export class DeviceClient {
 		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
 		// /api/command is bearer-gated; the leader (a kiosk Pi) pulls its own
 		// token from the localhost peer-token route. Async IIFE keeps publishV2
-		// fire-and-forget/void — the header fetch is cached after warmup.
+		// fire-and-forget/void — the token fetch is cached after warmup.
+		// Headers are per-peer: a rogue mDNS SRV target pointing off-LAN gets
+		// no Authorization header (see isLanHost in $lib/http/peer-token).
 		void (async () => {
-			const headers = await peerJsonHeaders();
 			for (const peer of this.#peers) {
 				void fetch(`${urlFor(peer)}/api/command`, {
 					method: 'POST',
-					headers,
+					headers: await peerJsonHeaders(peer.host),
 					body: JSON.stringify(msg),
 				}).catch(() => { /* follower unreachable — skip */ });
 			}

@@ -194,6 +194,25 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		}
 	}
 
+	/**
+	 * `pointercancel` (touch takeover, palm rejection) aborts the gesture
+	 * WITHOUT committing — the same treatment use-double-tap gives its pending
+	 * tap. Clearing isDragging re-arms the resync $effect above, which snaps
+	 * dragY back to the config-driven position with the CSS transition.
+	 */
+	function onPointerCancel() {
+		if (!isDragging) return;
+		isDragging = false;
+		if (lpEnabled) {
+			clearPressTimer();
+			cancelRelease();
+			if (accelerated) {
+				accelerated = false;
+				speedMultiplier = 1;
+			}
+		}
+	}
+
 	function onKeyDown(e: KeyboardEvent) {
 		if (e.key === 'Enter' || e.key === ' ') commitBlind(!model.config.shell.blindOpen);
 	}
@@ -210,6 +229,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 		onPointerDown,
 		onPointerMove,
 		onPointerUp,
+		onPointerCancel,
 		onKeyDown,
 	};
 }

@@ -188,7 +188,7 @@ export class RestAdminStore {
 	async #postCommand(peer: DiscoveredPeer, body: { type: string; [k: string]: unknown }): Promise<void> {
 		const res = await fetch(`${urlFor(peer)}/api/command`, {
 			method: 'POST',
-			headers: await peerJsonHeaders(),
+			headers: await peerJsonHeaders(peer.host),
 			body: JSON.stringify(body),
 		});
 		if (!res.ok) {
@@ -232,7 +232,7 @@ export class RestAdminStore {
 		if (!peer) return;
 		const res = await fetch(`${urlFor(peer)}/api/config`, {
 			method: 'PATCH',
-			headers: await peerJsonHeaders(),
+			headers: await peerJsonHeaders(peer.host),
 			body: JSON.stringify({ path, value, timestamp: Date.now(), sourceId: this.#sourceId }),
 		});
 		if (!res.ok) {
@@ -257,7 +257,7 @@ export class RestAdminStore {
 		try {
 			const res = await fetch(`${urlFor(peer)}/api/update`, {
 				method: 'POST',
-				headers: await peerJsonHeaders(),
+				headers: await peerJsonHeaders(peer.host),
 			});
 			if (res.ok) return { ok: true };
 			return {
