@@ -47,7 +47,16 @@ let _sunPos: any = null, _moonPos: any = null, _earthToMoon: any = null, _moonTo
 
 const _globeColor = new EpsilonGate<string>(0, '');
 const _fogDensity = new EpsilonGate<number>(0.00001, -1);
-const _fogVisualScalar = new EpsilonGate<number>(0.005, -1);
+// Cesium stock Fog.visualDensityScalar is 0.15 (not 1). Scaling from 1 made
+// per-pass extinction ~8–14× stock and stacked murk on density already >stock.
+const FOG_SCALAR_BASE = 0.15;
+
+/** Pure fog visual-density formula — used by sync + unit tests. */
+export function fogVisualDensityScalar(nightFactor: number, hazeAmount: number): number {
+	return FOG_SCALAR_BASE * (1 + 0.9 * nightFactor + hazeAmount * 4);
+}
+
+const _fogVisualScalar = new EpsilonGate<number>(0.001, -1);
 const _fogBrightness = new EpsilonGate<number>(0.01, -1);
 const _lightIntensity = new EpsilonGate<number>(0.01, -1);
 const _skySatShift = new EpsilonGate<number>(0.01, 999);
@@ -127,8 +136,8 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 	_fogDensity.update(tDensity, (val) => {
 		if (v.scene.fog) { v.scene.fog.enabled = val > 0.00001; v.scene.fog.density = val; }
 	});
-	// Per-pass visual density — sharper at night, plus an additive haze boost.
-	_fogVisualScalar.update(1 + 0.9 * nf + haze * 4, (val) => {
+	// Night sharper + haze slider additive; magnitude is FOG_SCALAR_BASE-relative.
+	_fogVisualScalar.update(fogVisualDensityScalar(nf, haze), (val) => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		if (v.scene.fog) (v.scene.fog as any).visualDensityScalar = val;
 	});

@@ -84,6 +84,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
 	import { spriteOffset, spriteScale } from '$lib/world/cloud-sprite-placement';
+	import { clusterCountsForDensity } from './cloud-cluster-budget';
 	import { lightingState } from '$lib/world/curves';
 
 	let {
@@ -175,16 +176,11 @@
 		// canonical pattern. See world/three/prng.ts for the full why.
 		const rng = createSeededRng(daySeed());
 
-		// Counts pulled back from the over-aggressive previous bump:
-		// distant 50-110 → 45-95, close 18-36 → 16-32. Sprite counts per
-		// cluster also tamed: distant 11-22 → 9-16, close 5-13 → 4-10.
-		// Worst case is now ~1,840 sprites (was 2,888) which keeps draw
-		// calls under ~2,000 — Pi 5 fits within budget. Softening still
-		// works via the within-cluster spread + smoothstep gradient +
-		// lower per-sprite alpha + bigger bloom kernel — accumulation
-		// across slightly fewer sprites, not many more.
-		const distantCount = Math.round(45 + Math.min(1, dens) * 50);
-		const closeCount   = Math.round(16 + Math.min(1, dens) * 16);
+		// Density scales counts (not a high floor + small dens offset). dens=0
+		// is sparse; dens=1 keeps the prior storm budget (95 / 32). Seeded rng
+		// is sequential — lower dens is a strict PREFIX of the same field
+		// (3-Pi identical). See clusterCountsForDensity().
+		const { distant: distantCount, close: closeCount } = clusterCountsForDensity(dens);
 
 		for (let c = 0; c < distantCount; c++) {
 			emitCluster(textures, pool, 42_000, 265_000, 8000, 16000, 9, 8, 0.03, rng);

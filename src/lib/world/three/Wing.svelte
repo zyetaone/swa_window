@@ -59,6 +59,7 @@
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, sunElevationSin, DEG2RAD } from '$lib/world/sky';
+	import { lerp } from '$lib/utils';
 	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
 
 	const model = useAeroWindow();
@@ -304,11 +305,13 @@
 	// the floor that keeps the shadowed side from going pure black.
 	const keyLight = new DirectionalLight(0xffffff, 1.0);
 	// Soft hemisphere fill so the directional key SHAPES the wing without
-	// carving harsh near-black shadow facets at the root / leading edge (which
-	// read as "strange" hard shadows). Cool sky tint from above, dim warm bounce
-	// from below — a gentle gradient that lifts the shadowed side. Only the wing
-	// (sole lit object in the overlay) sees it. Intensity set in the tick.
+	// carving harsh near-black shadow facets at the root / leading edge.
+	// Intensity set in the tick (KEY_* / FILL_* constants below).
 	const fillLight = new HemisphereLight(0xbcd2ff, 0x2a2620, 0.0);
+	const KEY_NIGHT = 0.1;
+	const KEY_DAY = 1.2;
+	const FILL_NIGHT = 0.1;
+	const FILL_DAY = 0.55;
 	$effect(() => {
 		const scene = ctx.scene;
 		scene.add(keyLight, keyLight.target, fillLight);
@@ -462,10 +465,12 @@
 		const keyElev = elevSin * (1 - nf) + 0.45 * nf;
 		_keyDir.set(sd[0], keyElev, sd[2]).normalize().multiplyScalar(1e6);
 		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
-		// Eased key + hemisphere fill → gentle ~2.5:1 lit:shadow ratio instead of
-		keyLight.intensity = 0.45 + (1 - nf) * 0.75; // night 0.45 → day 1.20
+		// Overlay has no Cesium night grade — keep key/fill low at night so the
+		// wing is not a bright slab; nav/strobe remain the only hot points.
+		// Day totals unchanged (key 1.20, fill 0.55).
+		keyLight.intensity = lerp(KEY_DAY, KEY_NIGHT, nf);
 		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
-		fillLight.intensity = 0.55 - nf * 0.30; // day 0.55 soft fill → night 0.25
+		fillLight.intensity = lerp(FILL_DAY, FILL_NIGHT, nf);
 	});
 
 	$effect(() => () => {
