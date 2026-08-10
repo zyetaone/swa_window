@@ -85,9 +85,7 @@
 		oninput={patchNum(patch, 'world.viirsBrightness')}
 		formatValue={(v) => v.toFixed(2)}
 	/>
-	<!-- P8 perf-gate A/B: flip the photoreal Three.js overlay live in the space
-	     (wing / clouds / moon / neon city / postprocess) without a URL param.
-	     Local to this device — for a fleet-wide flip use admin /api/config. -->
+	<!-- P8 perf A/B: Three overlay (wing + clouds). Local; fleet-wide via admin. -->
 	<Toggle label="Three.js Overlay" checked={cfg.world.useThreeOverlay} onchange={(e) => patch('world.useThreeOverlay', e.currentTarget.checked)} />
 	<Toggle label="Hash Palette (Night)" checked={cfg.world.useHashPalette} onchange={(e) => patch('world.useHashPalette', e.currentTarget.checked)} />
 	<Toggle label="3D Buildings" checked={cfg.world.buildingsEnabled} onchange={(e) => patch('world.buildingsEnabled', e.currentTarget.checked)} />

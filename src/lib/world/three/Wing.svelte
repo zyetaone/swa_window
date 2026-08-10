@@ -51,6 +51,7 @@
 		MeshLambertMaterial,
 		DirectionalLight,
 		HemisphereLight,
+		PointLight,
 		SphereGeometry,
 		Color,
 		DoubleSide,
@@ -198,10 +199,11 @@
 					);
 				holder.add(m);
 				loaded = m;
-				m.add(navLight, strobeLight, navHalo);
+				m.add(navLight, strobeLight, navHalo, tipPoint);
 				navLight.position.copy(navPos);
 				strobeLight.position.copy(navPos);
 				navHalo.position.copy(navPos);
+				tipPoint.position.copy(navPos);
 				// Dev-only live tuning hook.
 				if (import.meta.env.DEV) {
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -225,7 +227,7 @@
 			// the nav lights (they're module-scoped + disposed in the cleanup effect
 			// below, so just unparent them here). Prevents a GPU leak on HMR/unmount.
 			if (loaded) {
-				loaded.remove(navLight, strobeLight, navHalo);
+				loaded.remove(navLight, strobeLight, navHalo, tipPoint);
 				loaded.traverse((o) => {
 					const me = o as Mesh;
 					if (me.isMesh && me.geometry && me !== navLight && me !== strobeLight && me !== navHalo) {
@@ -243,30 +245,27 @@
 	$effect(() => loadWing('/models/wing.glb', [WING_ROT_X, WING_ROT_Y, WING_ROT_Z]));
 
 	// ─── Night nav lights ───────────────────────────────────────────────
-	// Enlarged vs the body so the bloom pass blows them into a glowing point —
-	// the wing goes dark at night (above) so these are the only bright thing on
-	// it, the iconic 737 starboard signal. Strobe sphere is bigger again for a
-	// punchier anti-collision flash.
-	const navGeom = new SphereGeometry(0.12, 12, 12);
-	const strobeGeom = new SphereGeometry(0.18, 12, 12);
+	// Three overlay has NO bloom (Cesium bloom only grades the globe canvas).
+	// Glow is faked with AdditiveBlending + a large soft halo + short PointLight
+	// so lights still read on performance quality where Cesium bloom is off.
+	// Green nav = starboard continuous; white strobe = anti-collision double flash.
+	const navGeom = new SphereGeometry(0.16, 12, 12);
+	const strobeGeom = new SphereGeometry(0.22, 12, 12);
 	const navMat = new MeshBasicMaterial({
-		color: 0x00ee44, // truer aviation green (was 0x00ff77, slightly yellow)
+		color: 0x00ee44,
 		transparent: true,
 		opacity: 0,
 		depthWrite: false,
-		// depthTest off → the wingtip light always draws over the dark wing
-		// (never occluded by the winglet body) and the bloom pass blows it
-		// into a glowing emerald point — the star of the night wing.
-		depthTest: false,
+		depthTest: false, // always draw over winglet body
+		blending: AdditiveBlending,
 		fog: false,
+		toneMapped: false,
 	});
 	const navLight = new Mesh(navGeom, navMat);
 	navLight.frustumCulled = false;
 	navLight.renderOrder = 3;
 
-	// Soft additive green halo behind the core — light scattering in humid air;
-	// the bloom pass merges it with the core into one coherent glow. Cheap (one
-	// 10×10 sphere, additive, depthTest off).
+	// Soft additive green halo — humid-air scatter without a post-process bloom.
 	const navHaloMat = new MeshBasicMaterial({
 		color: 0x00ee44,
 		transparent: true,
@@ -275,8 +274,9 @@
 		depthTest: false,
 		blending: AdditiveBlending,
 		fog: false,
+		toneMapped: false,
 	});
-	const navHalo = new Mesh(new SphereGeometry(0.34, 10, 10), navHaloMat);
+	const navHalo = new Mesh(new SphereGeometry(0.48, 10, 10), navHaloMat);
 	navHalo.frustumCulled = false;
 	navHalo.renderOrder = 2;
 
@@ -286,11 +286,18 @@
 		opacity: 0,
 		depthWrite: false,
 		depthTest: false,
+		blending: AdditiveBlending,
 		fog: false,
+		toneMapped: false,
 	});
 	const strobeLight = new Mesh(strobeGeom, strobeMat);
 	strobeLight.frustumCulled = false;
 	strobeLight.renderOrder = 3;
+
+	// Local tip glow — lights the winglet skin slightly so the signal is not a
+	// floating sprite. Short range; only the tip sees it.
+	const tipPoint = new PointLight(0x00ee44, 0, 3.5, 2);
+	tipPoint.frustumCulled = false;
 
 	// Nav lights are parented to the model `m` at load (see loadWing) so they
 	// ride the winglet through every model transform — no per-frame reposition.
@@ -439,54 +446,46 @@
 		const warpFactor = untrack(() => model.flight.warpFactor);
 		const visible = warpFactor < 0.05;
 		placement.visible = visible;
-		navLight.visible = visible;
-		strobeLight.visible = visible;
-		if (!visible) return;
-		// Night nav lights — gated by nightFactor with a smoothstep curve so
-		// the lights ease in as dusk fades (not a hard switch at nf=0.5). At
-		// dusk the wing is still faintly readable so the lights should be
-		// subtle; at night they're the only bright thing on the wing.
+		if (!visible) {
+			navLight.visible = false;
+			strobeLight.visible = false;
+			navHalo.visible = false;
+			tipPoint.intensity = 0;
+			return;
+		}
+		// Night nav lights — same SSOT as ground city lights (cityLightAmount):
+		// off by day, ease in through civil twilight, full at deep night.
 		const nf = untrack(() => model.nightFactor);
-		// smoothstep(0.15, 0.95) — the lights start fading in just past dusk
-		// (nf=0.15) and reach full intensity well before deep night (nf=0.95).
-		const navRamp = nf * nf * (3 - 2 * nf);
-		// Color shift: warm-green at low night (~dusk, nf=0.3) → cool-saturated
-		// aviation green at full night (nf=1). Real aviation navigation lights
-		// appear markedly more cyan in low light.
-		navMat.color.setRGB(
-			0.0 * (1 - nf) + 0.0 * nf,                // R: keep 0
-			0.85 * (1 - nf) + 0.95 * nf,               // G: stays bright
-			0.30 * (1 - nf) + 0.65 * nf,               // B: cyan-bias at night
-		);
+		const timeOfDay = untrack(() => model.timeOfDay);
+		const L = lightingState(timeOfDay, nf);
+		const navRamp = L.cityLightAmount;
+		const lightsOn = navRamp > 0.02;
+		navLight.visible = lightsOn;
+		strobeLight.visible = lightsOn;
+		navHalo.visible = lightsOn;
+		// Color shift: warm-green at dusk → cooler aviation green at night.
+		navMat.color.setRGB(0.0, 0.85 + 0.10 * nf, 0.30 + 0.35 * nf);
 		navHaloMat.color.copy(navMat.color);
-		navMat.opacity = navRamp;
-		// Halo ≈ core * 0.45 — the bloom pass merges the two into one glow; the
-		// halo's bigger radius gives the glow its soft edge.
-		navHaloMat.opacity = navRamp * 0.45;
+		tipPoint.color.copy(navMat.color);
+		// Additive cores read brighter than opacity suggests; keep headroom.
+		navMat.opacity = navRamp * 0.95;
+		navHaloMat.opacity = navRamp * 0.55;
+		tipPoint.intensity = navRamp * 1.1;
 		_strobeT += dt;
 		if (_strobeT > STROBE_PERIOD_S) _strobeT -= STROBE_PERIOD_S;
-		// Double-flash: two pulses STROBE_GAP_S apart. Bloom catches each when
-		// STROBE_PULSE_S is long enough to register — 0.05s was too short and
-		// the blink barely rendered. 0.12s is still snappy but visible.
+		// Double-flash: two pulses STROBE_GAP_S apart (737 anti-collision cadence).
 		const flash =
 			_strobeT < STROBE_PULSE_S ||
 			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
 		strobeMat.opacity = navRamp * (flash ? 1 : 0);
-		// its calibrated raking angle. Colour + intensity lerp warm-day →
-		// cool-dim-moonlight by nightFactor, so the wing dims and cools at night
-		// for free (no per-material colour hack) while the AmbientLight floor
-		// keeps the shadowed side from crushing to black.
-		const timeOfDay = untrack(() => model.timeOfDay);
+		if (flash && lightsOn) tipPoint.intensity = navRamp * 2.2;
 		const sd = computeSunDirection(untrack(() => model.flight.camLon), timeOfDay);
 		const elevSin = Math.max(sunElevationSin(untrack(() => model.flight.camLat), timeOfDay), 0.15);
 		const keyElev = elevSin * (1 - nf) + 0.45 * nf;
 		_keyDir.set(sd[0], keyElev, sd[2]).normalize().multiplyScalar(1e6);
-		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
-		// Overlay has no Cesium night grade — keep key/fill low at night so the
-		// wing is not a bright slab; nav/strobe remain the only hot points.
-		// Lerp on the SSOT's sunContribution (== 1 - nf today) rather than raw
-		// nightFactor, so this tracks the shared phase curve if it's retuned.
-		const sun = lightingState(timeOfDay, nf).sunContribution;
+		keyLight.position.copy(_keyDir); // target at origin → rays rake the top surface
+		// sunContribution tracks the shared day/night curve (curves.ts SSOT).
+		const sun = L.sunContribution;
 		keyLight.intensity = lerp(KEY_NIGHT, KEY_DAY, sun);
 		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
 		fillLight.intensity = lerp(FILL_NIGHT, FILL_DAY, sun);

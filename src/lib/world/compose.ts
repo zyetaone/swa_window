@@ -28,6 +28,7 @@ import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, up
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere } from './atmosphere';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain';
+import { lightingState } from './curves';
 import { SKY_PALETTE } from '$content/palettes';
 
 type WorldConfig = typeof world;
@@ -161,6 +162,11 @@ export class CesiumManager {
 
 		this.#syncClock();
 		this.#tick();
+		// Apply the configured quality preset up front. The reactive effect in
+		// CesiumViewer only fires when qualityMode CHANGES, so without this the
+		// globe boots at Cesium's default maximumScreenSpaceError (=2) even
+		// though qualityMode defaults to 'performance'.
+		this.applyQualityMode(this.#model.config.world.qualityMode);
 		v.resize();
 		v.scene.requestRender();
 	}
@@ -248,10 +254,13 @@ export class CesiumManager {
 
 	#syncBuildings(dt: number): void {
 		const m = this.#model;
+		// Same civil-twilight gate as wing nav lights (curves.ts cityLightAmount).
+		const cityLightAmount = lightingState(m.timeOfDay, m.nightFactor).cityLightAmount;
 		syncBuildings(
 			dt, m.nightFactor, m.nightLightScale, m.flight.altitude,
 			m.config.world.buildingsEnabled, m.config.world.windowLightIntensity,
 			this.#getBootFade(),
+			cityLightAmount,
 		);
 	}
 

@@ -232,6 +232,8 @@ export async function setupBuildings(
 export function syncBuildings(
 	dt: number, nf: number, scale: number, altFt: number,
 	buildingsEnabled: boolean, windowLightIntensity: number, bootFade: number,
+	/** When set, window density tracks cityLightAmount (same twilight gate as wing nav + VIIRS intent). */
+	cityLightAmount?: number,
 ): void {
 	if (!tileset) return;
 	_show.update(buildingsEnabled, (v) => { tileset!.show = v; });
@@ -240,7 +242,9 @@ export function syncBuildings(
 		_time = (_time + dt) % (Math.PI * 4000);
 		_shader.setUniform('u_nightFactor', nf * bootFade);
 		_shader.setUniform('u_lightIntensity', scale);
-		_shader.setUniform('u_windowDensity', (1 - altitudeDetailMix(altFt)) * smoothstep((nf - 0.15) / 0.7) * windowLightIntensity);
+		// Prefer SSOT cityLightAmount; fall back to legacy smoothstep if caller omits it.
+		const lightGate = cityLightAmount ?? smoothstep((nf - 0.15) / 0.7);
+		_shader.setUniform('u_windowDensity', (1 - altitudeDetailMix(altFt)) * lightGate * windowLightIntensity);
 		_shader.setUniform('u_time', _time);
 		_shader.setUniform('u_cityBrightness', sampleCityBrightness());
 		return;
