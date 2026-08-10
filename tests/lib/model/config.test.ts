@@ -187,8 +187,7 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		// equal timestamp falls to the lexicographic sourceId tiebreak. A real
 		// remote assignment arrives later than the local state it replaces.
 		const ok = applyConfigPatch('camera.parallax.role', 'right', {
-			timestamp: Date.now() + 1000,
-			sourceId: 'admin-test',
+			remote: { timestamp: Date.now() + 1000, sourceId: 'admin-test' },
 		});
 		expect(ok).toBe(true);
 		expect(camera.parallax.role).toBe('right');
@@ -200,8 +199,7 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 	it('rejects a remote (CRDT) patch whose typeof mismatches the leaf', () => {
 		const orig = atmosphere.clouds.density;
 		const ok = applyConfigPatch('atmosphere.clouds.density', 'potato', {
-			timestamp: Date.now() + 1000,
-			sourceId: 'admin-test',
+			remote: { timestamp: Date.now() + 1000, sourceId: 'admin-test' },
 		});
 		expect(ok).toBe(false);
 		expect(atmosphere.clouds.density).toBe(orig);
@@ -211,8 +209,7 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		const orig = atmosphere.clouds.density;
 		const next = orig > 0.5 ? 0.1 : 0.9;
 		const ok = applyConfigPatch('atmosphere.clouds.density', next, {
-			timestamp: Date.now() + 1000,
-			sourceId: 'admin-test',
+			remote: { timestamp: Date.now() + 1000, sourceId: 'admin-test' },
 		});
 		expect(ok).toBe(true);
 		expect(atmosphere.clouds.density).toBe(next);
@@ -233,8 +230,7 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		// be refused before crdt.merge, never falling through to it.
 		const before = configSnapshot();
 		const ok = applyConfigPatch('wrongroot.something', 1, {
-			timestamp: Date.now() + 1000,
-			sourceId: 'admin-test',
+			remote: { timestamp: Date.now() + 1000, sourceId: 'admin-test' },
 		});
 		expect(ok).toBe(false);
 		expect(configSnapshot()).toEqual(before);

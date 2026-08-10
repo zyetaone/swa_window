@@ -256,7 +256,14 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	}
 	if (_roadMaskLayer) {
 		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
-		const roadBrightness = 1.5 + nf * 1.5;
+		// Night 3.0 → 4.5. Measured from a real CartoDB dark_nolabels z14 tile over
+		// Hyderabad: colorToAlpha keys out 81.3% as background and keeps 18.7% as
+		// road strokes, but those average only 28.6/255. Through brightness 3.0 +
+		// contrast 1.5 at alpha 0.667 they composited to 58/255 over a 44/255
+		// ground — 1.32x contrast, on lines ~2 screen px wide at 30k ft, which
+		// reads as vague texture rather than a street grid. 4.5 lands ~101/255,
+		// about 2.3x, which is the point of having a 0.57 m/px layer at all.
+		const roadBrightness = 1.5 + nf * 3.0;
 		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
 		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
 		// field to the Three side. Those overlays (CityLightField bokeh,

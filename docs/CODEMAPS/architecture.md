@@ -130,7 +130,7 @@ config.atmosphere.haze.amount = 0.12
 Peer device's POST /api/config handler
     │
     v
-applyConfigPatch(path, value, {timestamp, sourceId})
+applyConfigPatch(path, value, { remote: { timestamp, sourceId } })
     │
     └── crdt.merge(...)
           ├── if local timestamp newer → reject (return false)

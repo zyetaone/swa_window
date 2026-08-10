@@ -34,8 +34,7 @@ describe('AeroWindow boot CRDT stamping', () => {
 
 		// Push issued 60 s BEFORE the boot, while the Pi was offline.
 		const ok = applyConfigPatch('atmosphere.clouds.density', 0.5, {
-			timestamp: bootedAt - 60_000,
-			sourceId: 'admin-offline',
+			remote: { timestamp: bootedAt - 60_000, sourceId: 'admin-offline' },
 		});
 		expect(ok).toBe(true);
 		expect(model.config.atmosphere.clouds.density).toBe(0.5);
@@ -51,8 +50,7 @@ describe('AeroWindow boot CRDT stamping', () => {
 		expect(model.weather).toBe('storm');
 
 		const ok = applyConfigPatch('atmosphere.weather.rainOpacity', 0.42, {
-			timestamp: bootedAt - 60_000,
-			sourceId: 'admin-offline',
+			remote: { timestamp: bootedAt - 60_000, sourceId: 'admin-offline' },
 		});
 		expect(ok).toBe(true);
 		expect(model.config.atmosphere.weather.rainOpacity).toBe(0.42);

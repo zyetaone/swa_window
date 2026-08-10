@@ -229,7 +229,9 @@ export class DeviceClient {
 		if (typeof body.path !== 'string') return;
 
 		if (typeof body.timestamp === 'number' && typeof body.sourceId === 'string') {
-			applyConfigPatch(body.path, body.value, { timestamp: body.timestamp, sourceId: body.sourceId });
+			applyConfigPatch(body.path, body.value, {
+				remote: { timestamp: body.timestamp, sourceId: body.sourceId },
+			});
 		} else {
 			this.#model.applyConfigPatch?.(body.path, body.value);
 		}

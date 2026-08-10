@@ -405,7 +405,7 @@ export class AeroWindow {
 	applyConfigPatch(path: string, value: unknown): boolean {
 		this.telemetry.recordEvent('config_patch', { path, value });
 		// Boot-time applications skip the CRDT stamp (see #booting).
-		return _applyConfigPatch(path, value, undefined, this.#booting ? { stamp: false } : undefined);
+		return _applyConfigPatch(path, value, this.#booting ? { stamp: false } : undefined);
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
