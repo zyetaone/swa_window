@@ -36,46 +36,37 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): 
 }
 
 export class FlightSimEngine {
-	// --- Position (raw simulation state) ---
-	lat = $state(25.2048);
-	lon = $state(55.2708);
+	// --- Position (plain — pull model for engines; no 60Hz reactive fan-out) ---
+	// UI/HUD only needs flightMode, altitude, flightSpeed, warpFactor, cruise*.
+	// Cesium/Three read pose imperatively each frame (syncCamera, useTask).
+	lat = 25.2048;
+	lon = 55.2708;
+	heading = 45;
+	pitch = 60;
+	// Operator-facing: sliders + readout (keep reactive).
 	altitude = $state<number>(5_000);
-	heading = $state(45);
-	pitch = $state(60);
 
-	// --- Smoothed Camera (SSOT for rendering) ---
-	// These values lerp toward the raw state above to provide "heavy camera"
-	// feel and absorb teleports/jitters. SSOT for Cesium + DOM.
-	camLat = $state(25.2048);
-	camLon = $state(55.2708);
-	camAlt = $state(5_000);
-	camHeading = $state(45);
-	camPitch = $state(60);
+	// --- Smoothed camera pose (plain SSOT for Cesium + Three pull) ---
+	camLat = 25.2048;
+	camLon = 55.2708;
+	camAlt = 5_000;
+	camHeading = 45;
+	camPitch = 60;
 	#camInitialized = false;
 
-	// --- Flight mode (reactive) ---
+	// --- Flight mode (reactive — shell HUD / blind / fleet) ---
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
 	warpFactor = $state(0);
 	flightSpeed = $state(4.0);
 
-	// --- Orbit ---
-	orbitCenterLat = $state(25.2048);
-	orbitCenterLon = $state(55.2708);
-	// Plain fields, NOT $state: both are written and read inside #tickOrbit in
-	// the same frame, and nothing outside this class — no component, no test —
-	// ever reads them. As $state each was a signal invalidated 60×/second for
-	// zero subscribers, which is pure overhead plus a misleading signal to the
-	// next reader that something reactive depends on them.
-	//
-	// The neighbours here stay reactive on purpose: orbitCenterLat/Lon,
-	// orbitBearing and orbitAngle ARE read by tests pinning the 3-Pi
-	// deterministic-orbit contract, so demoting those would remove the handle
-	// that proves the panorama stays position-locked.
+	// --- Orbit (plain; tests read bearing/angle for 3-Pi determinism) ---
+	orbitCenterLat = 25.2048;
+	orbitCenterLon = 55.2708;
 	orbitRadiusMajor = 0.15;
 	orbitRadiusMinor = 0.06;
-	orbitBearing = $state(0);
-	orbitAngle = $state(0);
+	orbitBearing = 0;
+	orbitAngle = 0;
 	// Rotation sense around the orbit ellipse: +1 or -1. Randomised
 	// (deterministically) per location so the camera doesn't always sweep
 	// the same way — some passes go left-to-right, others right-to-left.

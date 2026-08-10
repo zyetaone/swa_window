@@ -17,7 +17,7 @@
  * the life of the per-frame tick (a per-call allocation would defeat the
  * "this is the hot path" reasoning the original inline code carried).
  */
-import { SEAT_LOOK_DEG } from '$lib/camera/screen-conventions';
+import { SEAT_LOOK_DEG } from '$lib/flight/screen-conventions';
 import type { Cartesian3, Viewer } from 'cesium';
 import type * as CesiumType from 'cesium';
 import { activeCesium } from './active.svelte';

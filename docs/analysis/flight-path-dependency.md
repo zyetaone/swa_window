@@ -155,11 +155,11 @@ All three are **fixed** (they never change at runtime). Collapsing them into one
 
 ## 4. Minimal, low-risk refactor
 
-Five small atomic commits. Tests stay green (the orbit-determinism tests at `tests/lib/camera/flight-orbit.test.ts` only assert `orbitDirection ∈ {±1}` and cross-instance equality — none of these changes touch that). Cesium stays confined to `world/`. 3-Pi determinism is untouched (see §5).
+Five small atomic commits. Tests stay green (the orbit-determinism tests at `tests/lib/flight/flight-orbit.test.ts` only assert `orbitDirection ∈ {±1}` and cross-instance equality — none of these changes touch that). Cesium stays confined to `world/`. 3-Pi determinism is untouched (see §5).
 
 ### Commit 1 — name the SSOT, no behavior change
 - In `flight.svelte.ts`, add a `get travelSign()` returning `this.orbitDirection`, and a doc block declaring it the single travel-direction SSOT. (Pure alias; zero risk.)
-- Add `export const SCREEN_DRIFT_SIGN = ?` to a new tiny `src/lib/camera/screen-conventions.ts` (the natural home — framework-free, importable by both Wing and a test). Value chosen in Commit 4 after measuring.
+- Add `export const SCREEN_DRIFT_SIGN = ?` to a new tiny `src/lib/flight/screen-conventions.ts` (the natural home — framework-free, importable by both Wing and a test). Value chosen in Commit 4 after measuring.
 
 ### Commit 2 — derive the wing mirror from the canonical expression
 - `Wing.svelte:271` → replace `const showRight = orbitDir === WING_NATURAL_DIR;`
@@ -176,7 +176,7 @@ Five small atomic commits. Tests stay green (the orbit-determinism tests at `tes
 - Pin the chosen value with a comment citing the parity product in §3.3.
 
 ### Commit 5 — pin it with a test + delete the dead magic
-- Add `tests/lib/camera/screen-conventions.test.ts`: assert `SCREEN_DRIFT_SIGN ∈ {±1}` and a documentation-style assertion that `withMovement` and `turnBank` derive from the same `orbitDir * SCREEN_DRIFT_SIGN` term (guards against a future edit re-splitting them).
+- Add `tests/lib/flight/screen-conventions.test.ts`: assert `SCREEN_DRIFT_SIGN ∈ {±1}` and a documentation-style assertion that `withMovement` and `turnBank` derive from the same `orbitDir * SCREEN_DRIFT_SIGN` term (guards against a future edit re-splitting them).
 - Remove the now-obsolete "Sign verified empirically" comment at `Wing.svelte:296` for the *mirror/lean* (the heading-offset strip stays — that's §5, unrelated).
 
 **Lines that change:** `flight.svelte.ts` (+getter, ~5 lines), new `screen-conventions.ts` (~10 lines), `Wing.svelte:271,279,325` (3 logic lines + import), new test file. No Cesium files (`compose.ts`) change — the `+90` and `-bankAngle` stay as the *definitions* that `SCREEN_DRIFT_SIGN` calibrates against. **`compose.ts` untouched = Cesium isolation untouched, lowest possible risk.**

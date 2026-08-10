@@ -15,12 +15,12 @@ const config = {
 		alias: {
 			$content: 'content',
 		},
-		// Pi 5 kiosk: single JS bundle reduces concurrent connections
-		// and speeds up cold start in Chromium kiosk mode.
-		// Ref: https://svelte.dev/docs/kit/project-types#Embedded-device
-		output: {
-			bundleStrategy: 'single',
-		},
+		// Route-split client chunks (default). Kiosk `/` no longer downloads
+		// /admin* UI; Cesium dynamic import can be a real async chunk.
+		// Was `single` for Pi cold-start connection count — on localhost that
+		// cost is negligible vs parsing admin+lab into every kiosk boot.
+		// Ref: https://svelte.dev/docs/kit/configuration#output
+		// To revert: bundleStrategy: 'single' (and drop manualChunks if any).
 		csp: {
 			directives: {
 				'default-src': ['self'],

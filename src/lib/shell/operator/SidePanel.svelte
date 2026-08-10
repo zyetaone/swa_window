@@ -7,7 +7,7 @@
 	 * cruise-transition status).
 	 *
 	 * Inner content is composed at the page level via the `children` snippet.
-	 * The usual composition lives in shell/panel/ — LocationPicker,
+	 * The usual composition lives in shell/operator/panel/ — LocationPicker,
 	 * TimeControl, FlightControls, AtmosphereControls, LightingControls,
 	 * WeatherPicker. Pages can re-order, subset, or add their own sections
 	 * without touching this shell.
@@ -18,7 +18,7 @@
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { config } from "$lib/model/config-tree.svelte";
 	import { isOpsModeParam, showsOpsChrome } from '$lib/fleet/parallax.svelte';
-	import { flightReadout } from "./hud/flight-readout";
+	import { flightReadout } from "$lib/shell/passenger/hud/flight-readout";
 	import AirlineLoader from "./AirlineLoader.svelte";
 
 	let { children }: { children?: Snippet } = $props();
@@ -196,7 +196,7 @@
 		<div class="divider"></div>
 
 		<!-- Composed sections — page supplies via <SidePanel>…</SidePanel>.
-		     See shell/panel/ for the stock components. -->
+		     See shell/operator/panel/ for the stock components. -->
 		<div class="settings">
 			{@render children?.()}
 		</div>

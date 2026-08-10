@@ -14,7 +14,7 @@ import {
 	wallClockSubscriberCount,
 	formatClock,
 	formatClockDate,
-} from '$lib/shell/wall-clock.svelte';
+} from '$lib/shell/passenger/wall-clock.svelte';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {

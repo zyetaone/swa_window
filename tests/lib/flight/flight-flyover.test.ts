@@ -5,7 +5,7 @@
  * identically. Two engines at the same override must stay lock-step.
  */
 import { describe, it, expect } from 'vitest';
-import { FlightSimEngine } from '$lib/camera/flight.svelte';
+import { FlightSimEngine } from '$lib/flight/flight.svelte';
 import type { SimulationContext } from '$lib/types';
 
 const ALT = { default: 35000, min: 10000, max: 65000 };

@@ -35,9 +35,13 @@
 		detachLiveness = null;
 	});
 
+	// Lighting driven by scene identity (location + time), NOT cam pose.
+	// camLat/camLon move every frame; sun elev is constant for minutes — keying
+	// $derived on cam thrash was pure invalidation with no visual gain.
+	// Clouds/Wing re-read elevSin inside useTask if they need live cam.
 	const _ambientTintScratch = new Color();
 	const ambientTint = $derived.by(() => {
-		const elevSin = sunElevationSin(model.flight.camLat, model.timeOfDay);
+		const elevSin = sunElevationSin(model.currentLocation.lat, model.timeOfDay);
 		const s = lightingState(model.timeOfDay, model.nightFactor, elevSin);
 		return _ambientTintScratch.setRGB(s.ambientColor[0], s.ambientColor[1], s.ambientColor[2]);
 	});
@@ -45,7 +49,7 @@
 		lightingState(model.timeOfDay, model.nightFactor).ambientIntensity,
 	);
 	const sunDirection = $derived.by(() => {
-		const d = computeSunDirection(model.flight.camLon, model.timeOfDay) as Vec3;
+		const d = computeSunDirection(model.currentLocation.lon, model.timeOfDay) as Vec3;
 		return [d[0], d[1], d[2]] as Vec3;
 	});
 </script>

@@ -14,9 +14,9 @@ import { loadPersistedState, type PersistedState } from '$lib/model/persistence'
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
-import { applyShowOpening } from '$lib/show/load';
-import { FlightSimEngine } from '$lib/camera/flight.svelte';
-import { motion as motionState, motionStep } from '$lib/camera/motion.svelte';
+import { applyShowOpening } from '$lib/director/show-opening';
+import { FlightSimEngine } from '$lib/flight/flight.svelte';
+import { motion as motionState, motionStep } from '$lib/flight/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
 import {
 	config as _config,
@@ -24,14 +24,13 @@ import {
 	applyConfigPatch as _applyConfigPatch,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
+import { effectiveCloudDensityFor } from '$lib/model/atmosphere-rules';
 import { isGroupLeader, resolveBinding } from '$lib/fleet/parallax.svelte';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 // TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
 import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
 
-
-function effectiveCloudDensityFor(weather: WeatherType, raw: number, skyState: SkyState): number { const fx = WEATHER_EFFECTS[weather]; const [min, max] = fx.cloudDensityRange; let d = max > 0 ? clamp(raw, min, max) : raw * 0.3; if (skyState === 'night') d = Math.max(d * 0.5, fx.nightCloudFloor); else if (skyState === 'dusk') d *= 0.7; return d; }
 
 // ─── User override state ──────────────────────────────────────────────────────
 

@@ -9,7 +9,7 @@
  * so these tests drive the FSM with DELIBERATELY UNEQUAL durations.
  */
 import { describe, it, expect } from 'vitest';
-import { FlightSimEngine } from '$lib/camera/flight.svelte';
+import { FlightSimEngine } from '$lib/flight/flight.svelte';
 import { camera as cameraConfig, director as directorConfig } from '$lib/model/config-tree.svelte';
 import { LOCATION_IDS } from '$content/locations';
 import type { SimulationContext } from '$lib/types';

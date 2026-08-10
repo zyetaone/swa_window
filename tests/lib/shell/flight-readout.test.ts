@@ -5,7 +5,7 @@
  * pin the data contract so operator chrome cannot drift on labels/formatters.
  */
 import { describe, it, expect } from 'vitest';
-import { flightReadout } from '$lib/shell/hud/flight-readout';
+import { flightReadout } from '$lib/shell/passenger/hud/flight-readout';
 import { formatAltitudeFt, formatSpeedX, formatTime } from '$lib/utils';
 
 const model = { flight: { altitude: 35_000, flightSpeed: 1.25 }, localTimeOfDay: 14.5 };

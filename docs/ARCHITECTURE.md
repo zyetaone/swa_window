@@ -1,10 +1,35 @@
 # AeroWindow Architecture (canonical)
 
-> **Status (2026-07-28):** Phase 0 — target shape. Sections marked
-> `[shipped]` / `[phase N]` reflect actual code state.
+> **Status (2026-08-10):** Live tree is authoritative. CODEMAPS may lag —
+> prefer this file + `AGENTS.md` + `src/lib/*` folders.
 >
-> See also: `AGENTS.md` for the subsystem pattern + reactive-feature
-> idiom as it applies day-to-day.
+> See also: `AGENTS.md` for day-to-day patterns (Cesium isolation, untrack rule).
+
+## Surfaces (kiosk vs admin vs API)
+
+| Surface | Route | State | Renders globe? |
+|---------|-------|-------|----------------|
+| **Kiosk** | `/` | `createAeroWindow()` context | Yes (Cesium; Three dynamic) |
+| **Admin** | `/admin/*` | module `config` + `RestAdminStore` | **No** |
+| **API** | `/api/*` | process modules under `server/` | — |
+| **Wiki** | `/wiki` | none (`csr=false`) | — |
+
+Admin **never** constructs AeroWindow — it authors `config_patch` / `command` only.
+
+## Three clocks (do not collapse)
+
+1. **game-loop RAF** → `model.tick` (flight / motion / director)
+2. **Cesium postRender** → `compose` sync* (imperative, EpsilonGate)
+3. **Threlte useTask** → CameraMirror / Clouds / Wing
+
+Pose is **pull-model**: engines read plain numbers each frame. Do not
+`$effect(() => cesium.setCamera(model.flight.camLat))`.
+
+## Client bundle
+
+Route-**split** client chunks (`svelte.config.js`). Kiosk boot does not
+download `/admin` UI. Three overlay is `import()`-lazy from GlobeLayer.
+Cesium remains `await import('cesium')` in `CesiumViewer.svelte` only.
 
 ---
 

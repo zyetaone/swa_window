@@ -31,7 +31,7 @@
 	import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
 	import { activeCesium } from '$lib/world/active.svelte';
 	import type { AeroWindow } from '$lib/model/aero-window.svelte';
-	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
+	import RangeSlider from '$lib/shell/operator/panel/RangeSlider.svelte';
 
 	let { model }: { model: AeroWindow } = $props();
 

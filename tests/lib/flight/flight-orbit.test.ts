@@ -10,7 +10,7 @@
  * seeded replacement so a regression back to Math.random() fails loudly.
  */
 import { describe, it, expect } from 'vitest';
-import { FlightSimEngine } from '$lib/camera/flight.svelte';
+import { FlightSimEngine } from '$lib/flight/flight.svelte';
 import { LOCATION_IDS } from '$content/locations';
 
 const FIRST_LOCATION = [...LOCATION_IDS][0];

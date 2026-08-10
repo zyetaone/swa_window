@@ -11,8 +11,8 @@
  */
 
 import { json, error } from '@sveltejs/kit';
-import { listBundles, saveBundle } from '$lib/server/scene/bundle/disk';
-import { isContentBundle, BUNDLE_ID_PATTERN } from '$lib/scene/bundle/types';
+import { listBundles, saveBundle } from '$lib/server/bundle/disk';
+import { isContentBundle, BUNDLE_ID_PATTERN } from '$lib/bundle/types';
 import { readLimitedJson } from '$lib/http/body';
 import { requireAdminToken } from '$lib/http/auth';
 import type { RequestHandler } from './$types';

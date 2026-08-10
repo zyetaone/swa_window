@@ -10,8 +10,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { VideoBgBundle } from '$lib/scene/bundle/types';
-import * as disk from '$lib/server/scene/bundle/disk';
+import type { VideoBgBundle } from '$lib/bundle/types';
+import * as disk from '$lib/server/bundle/disk';
 
 let tmp: string;
 

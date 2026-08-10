@@ -54,10 +54,22 @@ export default defineConfig({
 		__APP_COMMIT__: JSON.stringify(process.env.APP_COMMIT ?? gitCommit()),
 	},
 	build: {
-		// manualChunks removed — incompatible with bundleStrategy:'single'
-		// in svelte.config.js (which enables inlineDynamicImports).
-		// Single-bundle mode already handles Cesium bundling.
+		// With route-split client output, optional vendor splits keep Threlte
+		// off the critical path once ThreeOverlay is dynamically imported.
 		chunkSizeWarningLimit: 5000,
+		rollupOptions: {
+			output: {
+				manualChunks(id: string): string | undefined {
+					if (id.includes('node_modules/three') || id.includes('node_modules/@threlte')) {
+						return 'three';
+					}
+					if (id.includes('node_modules/cesium')) {
+						return 'cesium';
+					}
+					return undefined;
+				},
+			},
+		},
 	},
 	test: {
 		environment: 'happy-dom',

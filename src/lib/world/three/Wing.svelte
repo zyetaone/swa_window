@@ -62,7 +62,7 @@
 	import { computeSunDirection, sunElevationSin, DEG2RAD } from '$lib/world/sky';
 	import { lerp } from '$lib/utils';
 	import { lightingState } from '$lib/world/curves';
-	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
+	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/flight/screen-conventions';
 
 	const model = useAeroWindow();
 	const ctx = useThrelte();

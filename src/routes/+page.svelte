@@ -18,19 +18,19 @@
 	import { clearOverlayDisabled } from "$lib/world/lifecycle-overlay-recovery";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
-	import Pane from "$lib/shell/Pane.svelte";
-	import Controls from "$lib/shell/HUD.svelte";
-	import SidePanel from "$lib/shell/SidePanel.svelte";
-	import TelemetryPanel from "$lib/shell/TelemetryPanel.svelte";
+	import Pane from "$lib/shell/pane/Pane.svelte";
+	import Controls from "$lib/shell/passenger/HUD.svelte";
+	import SidePanel from "$lib/shell/operator/SidePanel.svelte";
+	import TelemetryPanel from "$lib/shell/operator/TelemetryPanel.svelte";
 	// Composed panel sections — page picks the set + order it wants.
-	import LocationPicker from "$lib/shell/panel/LocationPicker.svelte";
-	import TimeControl from "$lib/shell/panel/TimeControl.svelte";
-	import FlightControls from "$lib/shell/panel/FlightControls.svelte";
-	import AtmosphereControls from "$lib/shell/panel/AtmosphereControls.svelte";
-	import LightingControls from "$lib/shell/panel/LightingControls.svelte";
-	import WeatherPicker from "$lib/shell/panel/WeatherPicker.svelte";
-	import LabControls from "$lib/shell/panel/LabControls.svelte";
-	import NightVariantPanel from "$lib/shell/panel/NightVariantPanel.svelte";
+	import LocationPicker from "$lib/shell/operator/panel/LocationPicker.svelte";
+	import TimeControl from "$lib/shell/operator/panel/TimeControl.svelte";
+	import FlightControls from "$lib/shell/operator/panel/FlightControls.svelte";
+	import AtmosphereControls from "$lib/shell/operator/panel/AtmosphereControls.svelte";
+	import LightingControls from "$lib/shell/operator/panel/LightingControls.svelte";
+	import WeatherPicker from "$lib/shell/operator/panel/WeatherPicker.svelte";
+	// Lab panels: DEV-only dynamic import so production client graph never
+	// links NightVariantPanel / LabControls (large harness + duplicated GLSL).
 
 	// Create unified app state (provides context to all child components)
 	// All state is reactive via $state/$derived in AeroWindow
@@ -39,10 +39,6 @@
 	// Lab mode (?lab=1, DEV only) — see the param parsing in onMount.
 	let labMode = $state(false);
 	let labRenderer = $state<'cesium' | 'hybrid' | 'night-lab'>('cesium');
-	// The renderer selector is the ONLY lab writer of useThreeOverlay, and it
-	// writes nothing unless lab mode is on — otherwise it would clobber the
-	// config-tree default (and any ?overlay= / fleet config_patch) on the ship
-	// route. Night Lab needs the overlay: variants E/F render through Three.
 	$effect(() => {
 		if (!labMode) return;
 		model.applyConfigPatch('world.useThreeOverlay', labRenderer !== 'cesium');
@@ -299,16 +295,18 @@
 				<LightingControls />
 				{#if import.meta.env.DEV && labMode}
 					<div class="divider"></div>
-					<LabControls bind:mode={labRenderer} {model} />
+					{#await import('$lib/shell/operator/panel/LabControls.svelte') then { default: LabControls }}
+						<LabControls bind:mode={labRenderer} {model} />
+					{/await}
 				{/if}
 			</div>
 		</details>
 	</SidePanel>
 
-	<!-- Night-variant harness — its own floating <aside>, so it sits beside the
-	     SidePanel rather than inside it. -->
 	{#if import.meta.env.DEV && labMode && labRenderer === 'night-lab'}
-		<NightVariantPanel {model} />
+		{#await import('$lib/shell/operator/panel/NightVariantPanel.svelte') then { default: NightVariantPanel }}
+			<NightVariantPanel {model} />
+		{/await}
 	{/if}
 
 	<!-- Observability viewer (Shift+T to toggle) -->

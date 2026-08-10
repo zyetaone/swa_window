@@ -70,27 +70,30 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 
 | Directory | Purpose |
 |---|---|
-| `src/lib/world/` | Cesium globe — terrain, imagery, shaders, VIIRS endpoint. **Cesium runtime import confined here.** |
-| `src/lib/world/three/` | Three.js overlay — CameraMirror, Clouds, Wing. Flag-gated on `config.world.useThreeOverlay`. |
-| `src/lib/camera/` | Flight simulation engine (orbit + cruise FSM) + motion module (bank, breathing, turbulence) |
-| `src/lib/director/` | Autopilot — weather randomiser + location cycler + night-city flyover beat |
-| `src/lib/model/` | Reactive state graph — AeroWindow, config-tree, CRDT store, telemetry, persistence |
-| `src/lib/scene/bundle/` | Pushed content-bundle wire types + server-side disk store (no runtime mount point) |
-| `src/lib/shell/` | UI surround — Pane, HUD, SidePanel, Blind, Glass, Weather effects |
-| `src/lib/fleet/` | Remote Pi fleet management — REST client, SSE, peer sync, heartbeat, mDNS discovery |
-| `src/lib/http/` | Shared HTTP helpers — auth, CORS, body parsing, peer token |
-| `src/routes/` | SvelteKit routes — `/` (kiosk), `/playground/*` (lab surfaces), `/admin/*` (fleet panel), `/api/*` |
-| `content/` | Authored artifacts — locations, weather recipes, palettes, shows. Rule 0: content/control split. |
-| `tests/` | Vitest test files mirroring `src/` and `content/` structure |
-| `tools/` | Build/deploy tooling — tile packager, OTA push worker, perf harness |
-| `docs/` | ADRs, standards, ship readiness, architecture framing |
+| `src/lib/model/` | Reactive state — AeroWindow, config-tree, CRDT, telemetry, atmosphere-rules |
+| `src/lib/flight/` | Flight sim FSM + motion (was `camera/` — avoids clash with `world/camera.ts`) |
+| `src/lib/director/` | Autopilot + show-opening apply |
+| `src/lib/world/` | Cesium isolation + `three/` overlay (dynamic import on kiosk) |
+| `src/lib/shell/pane/` | Pane + GlobeLayer (compositor + RAF host) |
+| `src/lib/shell/passenger/` | HUD, clocks, flight-readout |
+| `src/lib/shell/operator/` | SidePanel, panel controls, TelemetryPanel |
+| `src/lib/shell/window/` | Blind, Glass, RainGlass |
+| `src/lib/fleet/` | Browser multi-Pi client / admin store / parallax chrome gates |
+| `src/lib/server/fleet/` | SSE bus, mDNS, heartbeat |
+| `src/lib/bundle/` | Content-bundle **wire types only** (no runtime mount) |
+| `src/lib/server/bundle/` | Bundle disk + asset/geojson serve |
+| `src/lib/http/` | Auth, CORS, peer token (LAN host guard) |
+| `src/routes/` | `/` kiosk · `/admin/*` fleet UI · `/api/*` · `/wiki` static |
+| `content/` | Authored artifacts — Rule 0 content/control split |
+| `tests/` | Mirrors `src/` + `content/` |
+| `docs/` | Architecture, ADRs, CODEMAPS |
 
 ## Development Commands
 
 | Command | What it does |
 |---|---|
 | `bun run dev` | Vite dev server (binds `0.0.0.0` for LAN; skips mDNS) |
-| `bun run build` | Production build — single-bundle for Pi via `adapter-node` |
+| `bun run build` | Production build — route-split client + adapter-node |
 | `bun run preview` | Preview production build |
 | `bun run check` | Type-check with `svelte-check` |
 | `bun run check:watch` | Type-check in watch mode |
@@ -265,24 +268,17 @@ $effect(() => {
 |---|---|
 | `src/lib/model/aero-window.svelte.ts` | Root simulation state — `createAeroWindow()` / `useAeroWindow()` |
 | `src/lib/model/config-tree.svelte.ts` | All tunable config — the SSOT for every number |
-| `src/lib/shell/Pane.svelte` | Layer compositor + RAF tick subscription |
+| `src/lib/shell/pane/Pane.svelte` | Layer compositor + window chrome |
+| `src/lib/shell/pane/GlobeLayer.svelte` | RAF host + Cesium + dynamic Three |
 | `src/lib/game-loop.ts` | Single RAF loop — subscriber pattern, visibility-aware |
-| `src/lib/types.ts` | Core domain types — const-array-derived unions, SimulationContext |
-| `src/lib/utils.ts` | Shared utilities, `T` time-of-day constants (DAWN_START, DAY_START, etc.) |
+| `src/lib/flight/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM (pose is plain fields) |
 | `src/lib/world/compose.ts` | CesiumManager — imports cesium as type |
-| `src/lib/world/sky.ts` | `computeSunDirection` (memoised, alias contract), sky palette |
-| `src/lib/world/prng.ts` | Seeded RNG for 3-Pi determinism |
 | `src/lib/world/curves.ts` | Time-of-day response curves — cross-renderer SSOT |
-| `src/lib/camera/flight.svelte.ts` | FlightSimEngine — orbit + cruise FSM |
 | `src/lib/director/autopilot.svelte.ts` | Weather randomiser + location cycler |
 | `src/lib/fleet/client.svelte.ts` | DeviceClient — SSE + REST fleet communication |
-| `src/routes/+layout.ts` | SSR disabled app-wide |
 | `src/routes/+page.svelte` | Main kiosk display |
-| `content/locations/catalog.ts` | Location catalog |
-| `content/shows/default.show.ts` | Boot baseline show |
-| `server.ts` | Bun server entry — mDNS + adapter-node import |
-| `vite.config.ts` | Vite 7 config — SvelteKit, Cesium static copy, vitest inline |
-| `svelte.config.js` | SvelteKit config — adapter-node, CSP, `$content` alias, single bundle |
+| `svelte.config.js` | adapter-node, CSP, `$content`, **route-split** client output |
+| `vite.config.ts` | Cesium static copy; optional three/cesium manualChunks |
 | `package.json` | Dependencies + scripts |
 | `tsconfig.json` | Strict TypeScript — extends `.svelte-kit/tsconfig.json` |
 

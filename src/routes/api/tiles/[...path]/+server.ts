@@ -17,28 +17,11 @@
  */
 
 import { createReadStream, statSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { safeResolveWithin } from '$lib/server/fs-guard';
+import { resolveTileDir } from '$lib/server/tiles-dir';
 
-// Anchor relative paths on process.cwd() — the repo root in dev, the deploy
-// dir on the Pi. import.meta.url depth-counting breaks after bundling: the
-// emitted chunk lives deeper than the source route file, so 'five levels up'
-// no longer lands on the project root.
-// Fallback chain: TILE_DIR env → /opt/zyeta-aero/tiles (Pi deploy) → ./data/tiles (dev)
-export function resolveTileDir(
-	env: NodeJS.ProcessEnv = process.env,
-	cwd: string = process.cwd(),
-	piDirExists: (path: string) => boolean = existsSync,
-): string {
-	// resolve() returns an absolute TILE_DIR unchanged — absolute fast path.
-	if (env.TILE_DIR) return resolve(cwd, env.TILE_DIR);
-	const piPath = '/opt/zyeta-aero/tiles';
-	if (piDirExists(piPath)) return piPath;
-	return resolve(cwd, 'data/tiles');
-}
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 
 const MIME: Record<string, string> = {

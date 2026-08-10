@@ -31,7 +31,7 @@
 		wallClockNow,
 		formatClock,
 		formatClockDate,
-	} from '$lib/shell/wall-clock.svelte';
+	} from '$lib/shell/passenger/wall-clock.svelte';
 
 	const model = useAeroWindow();
 

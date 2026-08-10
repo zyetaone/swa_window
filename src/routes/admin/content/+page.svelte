@@ -11,8 +11,8 @@
 	 */
 	import { onDestroy } from 'svelte';
 	import { ensureAdminToken, clearAdminToken, adminAuthHeader } from '$lib/http/admin-token';
-	import type { ContentBundle } from '$lib/scene/bundle/types';
-	import type { AssetInfo } from '$lib/server/scene/bundle/assets';
+	import type { ContentBundle } from '$lib/bundle/types';
+	import type { AssetInfo } from '$lib/server/bundle/assets';
 
 	// $state.raw — both arrays are only ever reassigned wholesale from fetch
 	// responses; never mutated in place. Avoids the proxy traversal cost.

@@ -2,29 +2,22 @@
 	/**
 	 * GlobeLayer — mounts Cesium + Three overlay + watchdogs inside the scene.
 	 *
-	 * Every concern that needs the Cesium Manager, the Three overlay, or the
-	 * RAF game loop lives here. The parent (Pane.svelte) handles layout chrome
-	 * (oval frame, glass, blind) and delegates the globe to this component.
+	 * Three overlay is dynamically imported so the kiosk cold path does not
+	 * parse Threlte/Three when useThreeOverlay is false (or until first enable).
 	 */
 	import { untrack } from "svelte";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
-	import ThreeOverlay from "$lib/world/three/ThreeOverlay.svelte";
-import { startLivenessWatchdog } from '$lib/world/lifecycle-liveness';
-import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlayParam } from '$lib/world/lifecycle-overlay-recovery';
+	import { startLivenessWatchdog } from '$lib/world/lifecycle-liveness';
+	import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlayParam } from '$lib/world/lifecycle-overlay-recovery';
 
 	const model = useAeroWindow();
 
-	// ── Overlay auto-recovery: boot-time check ──────────────────────────────
-	// An explicit ?overlay= param (parsed in +page.svelte, which runs before
-	// this child inits) is an operator override — it must win over the
-	// persisted auto-disable, otherwise ?overlay=1 is silently clobbered.
 	if (typeof window !== 'undefined' && isOverlayPersistentlyDisabled() && !hasExplicitOverlayParam()) {
 		model.applyConfigPatch('world.useThreeOverlay', false);
 	}
 
-	// ── Overlay error boundary state ────────────────────────────────────────
 	let overlayResets = 0;
 	const MAX_OVERLAY_RESETS = 3;
 	function onOverlayError(error: unknown, reset: () => void): void {
@@ -38,14 +31,12 @@ import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlay
 		}
 	}
 
-	// ── GAME LOOP ───────────────────────────────────────────────────────────
 	$effect(() => {
 		return subscribe((dt: number) => {
 			untrack(() => model.tick(dt));
 		});
 	});
 
-	// ── Liveness watchdog ───────────────────────────────────────────────────
 	$effect(() => {
 		return startLivenessWatchdog({
 			getFps: () => untrack(() => model.measuredFps),
@@ -67,20 +58,20 @@ import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlay
 		});
 	});
 
-	// The persisted overlay-disabled flag is cleared ONLY by explicit
-	// re-enable paths (SidePanel toggle in LightingControls, ?overlay=1 in
-	// +page.svelte) — NOT reactively here. A reactive clear would fire on any
-	// useThreeOverlay=true write (fleet push, CRDT replay) and wipe a weak
-	// Pi's self-preservation state.
 	const fps = $derived(Math.round(model.measuredFps));
+	const wantOverlay = $derived(model.config.world.useThreeOverlay);
 </script>
 
-<svelte:boundary onerror={onOverlayError}>
-	{#if model.config.world.useThreeOverlay}
-		<ThreeOverlay />
-	{/if}
-	{#snippet failed()}{/snippet}
-</svelte:boundary>
+{#if wantOverlay}
+	<svelte:boundary onerror={onOverlayError}>
+		{#await import('$lib/world/three/ThreeOverlay.svelte') then { default: ThreeOverlay }}
+			<ThreeOverlay />
+		{:catch}
+			<!-- Dynamic import failed — stay Cesium-only; recovery can retry later. -->
+		{/await}
+		{#snippet failed()}{/snippet}
+	</svelte:boundary>
+{/if}
 
 <div class="render-layer">
 	<CesiumViewer />

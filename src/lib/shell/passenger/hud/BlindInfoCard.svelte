@@ -11,7 +11,7 @@
 	 * lives only on the Blind chevrons (first session) — no second text hint.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
-	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
+	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
 
 	const model = useAeroWindow();
 

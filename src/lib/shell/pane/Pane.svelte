@@ -8,12 +8,12 @@
 		 */
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
-		import GlobeLayer from "./GlobeLayer.svelte";
-	import Glass from "./window/Glass.svelte";
-	import RainGlass from "./window/RainGlass.svelte";
-	import Blind from "./window/Blind.svelte";
+	import GlobeLayer from "./GlobeLayer.svelte";
+	import Glass from "$lib/shell/window/Glass.svelte";
+	import RainGlass from "$lib/shell/window/RainGlass.svelte";
+	import Blind from "$lib/shell/window/Blind.svelte";
 	import { useMouseParallax } from '$lib/shell/use-mouse-parallax.svelte';
-	import CabinClock from "./hud/CabinClock.svelte";
+	import CabinClock from "$lib/shell/passenger/hud/CabinClock.svelte";
 	import { doubleTap } from '$lib/shell/use-double-tap';
 
 	const model = useAeroWindow();

@@ -4,9 +4,9 @@
 	import { config } from '$lib/model/config-tree.svelte';
 	import { formatAltitudeFt, formatSpeedX, formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
-	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/wall-clock.svelte';
-	import AtmosphereControls from '$lib/shell/panel/AtmosphereControls.svelte';
-	import LightingControls from '$lib/shell/panel/LightingControls.svelte';
+	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
+	import AtmosphereControls from '$lib/shell/operator/panel/AtmosphereControls.svelte';
+	import LightingControls from '$lib/shell/operator/panel/LightingControls.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS, isValidLocation } from '$content/locations';

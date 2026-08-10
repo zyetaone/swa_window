@@ -3,7 +3,7 @@
 **Status:** Proposed (analysis + ADR; no code changes)
 **Author:** architect
 **Date:** 2026-06-11
-**Scope:** `src/lib/camera/`, `src/lib/world/compose.ts` (syncCamera only), `src/lib/world/three/Wing.svelte`, `src/lib/world/three/CameraMirror.svelte`, `src/lib/camera/screen-conventions.ts`
+**Scope:** `src/lib/flight/`, `src/lib/world/compose.ts` (syncCamera only), `src/lib/world/three/Wing.svelte`, `src/lib/world/three/CameraMirror.svelte`, `src/lib/flight/screen-conventions.ts`
 **Relates to:** May-2026 render-graph ultrathink (ECS rejected); `screen-conventions.ts` band-aid (landed)
 
 ---

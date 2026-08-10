@@ -7,9 +7,9 @@
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
 		import type { AeroWindow } from '$lib/model/aero-window.svelte';
-	import { patchNum } from '$lib/shell/panel/patch';
-	import RangeSlider from '$lib/shell/panel/RangeSlider.svelte';
-	import Toggle from '$lib/shell/panel/Toggle.svelte';
+	import { patchNum } from '$lib/shell/operator/panel/patch';
+	import RangeSlider from '$lib/shell/operator/panel/RangeSlider.svelte';
+	import Toggle from '$lib/shell/operator/panel/Toggle.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';
 	// Record<DeviceRole, …> rather than a bare object literal: adding a role to
