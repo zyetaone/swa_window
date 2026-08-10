@@ -5,9 +5,8 @@
  *   background       — full-viewport gradient behind the Cesium canvas
  *                       (rendered by shell/Window.svelte, shown through the glass)
  *   haze             — horizon haze color + alpha (rendered by atmosphere/haze)
- *   filterBrightness — CSS filter multiplier on the scene-content layer
- *                       (multiplied by the weather recipe's filterBrightness
- *                       at consume site in Pane.svelte)
+ *   filterBrightness — multiplies Cesium exposure (× weather recipe
+ *                       filterBrightness in compose.ts → atmosphere.ts)
  *   glassVignette    — radial-gradient black overlay opacity at the rim
  *                       (passed to <Glass glassVignetteOpacity={...} />)
  *
@@ -28,8 +27,7 @@ export interface SkyPaletteEntry {
 	background: string;
 	/** CSS color (rgba recommended) for horizon haze overlay. */
 	haze: string;
-	/** CSS filter multiplier on the scene-content layer. Multiplied by the
-	 *  weather recipe's filterBrightness at consume site (Pane.svelte). */
+	/** Multiplier on Cesium post-process exposure (× weather filterBrightness). */
 	filterBrightness: number;
 	/** Radial-gradient black overlay opacity at the rim of the glass. Pane.svelte
 	 *  passes this to <Glass glassVignetteOpacity={...} /> as a CSS variable. */

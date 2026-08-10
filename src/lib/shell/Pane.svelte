@@ -41,18 +41,9 @@ const frameVisible = $derived(model.config.shell.windowFrame);
 const skyPalette = $derived(SKY_PALETTE[model.skyState]);
 const skyBackground = $derived(skyPalette.background);
 
-// ── Atmospheric CSS filters ───────────────────────────────────────────────
-// No base blur: `filter: blur()` on a layer that holds Cesium+Three forces a
-// full-window intermediate bitmap every frame on Pi. Brightness alone is cheap.
-// Warp still softens the glass briefly, but only while warpFactor is real.
-
-const filterString = $derived.by(() => {
-	const brightness = skyPalette.filterBrightness * model.config.atmosphere.weather.filterBrightness;
-	const w = model.flight.warpFactor;
-	if (w < 0.02) return `brightness(${brightness.toFixed(2)})`;
-	// Single blur term (not stacked) + mild brighten during departure.
-	return `brightness(${(brightness * (1 + w * 0.25)).toFixed(2)}) blur(${(w * 3.5).toFixed(1)}px)`;
-});
+// Scene brightness lives in Cesium exposure (atmosphere.ts), not CSS filter —
+// filter on a WebGL layer costs a full intermediate bitmap every frame on Pi.
+// Warp feel is warpZoom scale on .scene-content + a short exposure lift.
 
 // ── Motion (turbulence, breathing, parallax) ──────────────────────────────
 
@@ -91,7 +82,6 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 		<div
 			class="scene-content"
 			style:transform={motionTransform}
-			style:filter={filterString}
 		>
 			<div class="render-layer" style:z-index="0">
 				<GlobeLayer />

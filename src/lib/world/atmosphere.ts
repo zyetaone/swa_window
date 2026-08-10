@@ -33,6 +33,27 @@ export interface AtmosphereModel {
 	 */
 	hazeAmount: number;
 	sceneFog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
+	/**
+	 * Sky palette × weather `filterBrightness` (was CSS filter on Pane).
+	 * Applied as a multiplier on Cesium post-process exposure.
+	 */
+	filterBrightness: number;
+	/** Cruise warp 0..1 — brief exposure lift replaces CSS warp brightness. */
+	warpFactor: number;
+}
+
+/**
+ * Final Cesium exposure from night/day base, palette/weather brightness, and warp.
+ * Pure for unit tests — syncAtmosphere is the only runtime consumer.
+ */
+export function sceneExposure(
+	baseExposure: number,
+	filterBrightness: number,
+	warpFactor = 0,
+): number {
+	const fb = Number.isFinite(filterBrightness) ? filterBrightness : 1;
+	const w = warpFactor > 0.02 ? 1 + warpFactor * 0.25 : 1;
+	return baseExposure * fb * w;
 }
 
 type C = typeof CesiumType;
@@ -170,7 +191,9 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 		_lightIntensity.update(li, (val) => { if (v.scene.light) v.scene.light.intensity = val; });
 	}
 
-	const exp = NIGHT_PALETTE.scene.exposureDay + (w.nightExposure - NIGHT_PALETTE.scene.exposureDay) * nf;
+	const baseExp =
+		NIGHT_PALETTE.scene.exposureDay + (w.nightExposure - NIGHT_PALETTE.scene.exposureDay) * nf;
+	const exp = sceneExposure(baseExp, model.filterBrightness, model.warpFactor);
 	_exposure.update(exp, (val) => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(v.scene.postProcessStages as any).exposure = val;

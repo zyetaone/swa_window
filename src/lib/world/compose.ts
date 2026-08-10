@@ -28,6 +28,7 @@ import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, up
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere } from './atmosphere';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain';
+import { SKY_PALETTE } from '$content/palettes';
 
 type WorldConfig = typeof world;
 
@@ -40,6 +41,7 @@ type WorldConfig = typeof world;
 interface CesiumModelView extends CameraSyncSlice {
 	flight: CameraSyncSlice['flight'] & {
 		lat: number; lon: number; altitude: number; heading: number; pitch: number;
+		warpFactor: number;
 	};
 	config: CameraSyncSlice['config'] & {
 		world: WorldConfig;
@@ -49,12 +51,15 @@ interface CesiumModelView extends CameraSyncSlice {
 			weather: {
 				hasLightning: boolean; lightningDecayRate: number;
 				lightningMinInterval: number; lightningMaxInterval: number;
+				filterBrightness: number;
 			};
 		};
 	};
 	timeOfDay: number; nightFactor: number; dawnDuskFactor: number;
 	nightLightScale: number; qualityMode: QualityMode;
 	location: LocationId; weather: WeatherType;
+	/** Needed for SKY_PALETTE.filterBrightness → Cesium exposure. */
+	skyState: import('$lib/types').SkyState;
 	sceneFog: { dayDensity: number; nightDensity: number; dayBrightness: number; nightBrightness: number };
 	terrainExaggeration: number;
 }
@@ -201,6 +206,8 @@ export class CesiumManager {
 				this.#viewer.scene.sun.show = m.timeOfDay > T.DAWN_START && m.timeOfDay < T.DUSK_END;
 			this.#syncClock();
 		}
+		const skyFb = SKY_PALETTE[m.skyState]?.filterBrightness ?? 1;
+		const weatherFb = m.config.atmosphere.weather.filterBrightness ?? 1;
 		syncAtmosphere(
 			{
 				timeOfDay: m.timeOfDay, nightFactor: m.nightFactor, dawnDuskFactor: m.dawnDuskFactor,
@@ -208,6 +215,9 @@ export class CesiumManager {
 				config: { world: m.config.world },
 				hazeAmount: m.config.atmosphere.haze.amount,
 				sceneFog: m.sceneFog,
+				// Was CSS filter on Pane — now multiplies Cesium exposure only.
+				filterBrightness: skyFb * weatherFb,
+				warpFactor: m.flight.warpFactor,
 			},
 			this.#viewer.clock.currentTime,
 		);
