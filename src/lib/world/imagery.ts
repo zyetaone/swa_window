@@ -69,9 +69,25 @@ export async function setupImagery(): Promise<void> {
 
 	_baseLayer = _addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);
 	if (_baseLayer) {
-		_baseDaySaturation = cfg.label.startsWith('eox') ? 1.6 : 1.25;
+		// ─── ⚠ THESE CLIP DARK PIXELS — TUNE AGAINST WATER, NOT LAND ────────
+		// Cesium applies contrast as mix(0.5, color, c), then saturation as
+		// mix(luma, color, s) with luma weights (0.2125, 0.7154, 0.0721).
+		// Both EXTRAPOLATE past 1.0, and blue carries only 7% of the luma — so
+		// on a dark blue pixel they drive R and G negative, where they clamp to
+		// zero and leave pure blue. That read as a purple ocean.
+		//
+		// Measured on a real EOX tile (open Pacific, z7): raw RGB 13/25/44,
+		// hue 217°. At the old contrast 1.3 / saturation 1.6 it came out
+		// 0/3/47, hue 236°, with a channel clipped on 100% of ocean pixels
+		// (land: 1.5%). At 1.05/1.30 it lands 8/27/55, hue 216.5°, 0.1% clipped.
+		//
+		// Cost: land saturation drops ~0.94 → ~0.58. The old values were pushing
+		// terrain well past its native 0.46, so this is closer to the source.
+		// EOX is flatter than Mapbox/Esri, hence still a boost, just not one
+		// that clips. Re-measure before raising either number.
+		_baseDaySaturation = cfg.label.startsWith('eox') ? 1.3 : 1.25;
 		_baseLayer.saturation = _baseDaySaturation;
-		_baseLayer.contrast = cfg.label.startsWith('eox') ? 1.3 : 1.1;
+		_baseLayer.contrast = cfg.label.startsWith('eox') ? 1.05 : 1.1;
 		_baseLayer.gamma = cfg.label.startsWith('eox') ? 1.1 : 1.0;
 		_baseLayer.brightness = 1.0;
 	}
