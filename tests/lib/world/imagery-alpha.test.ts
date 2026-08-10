@@ -21,6 +21,8 @@ import { NIGHT_PALETTE } from '$content/compositions/night';
 
 const CEIL = NIGHT_PALETTE.viirs.maxAlpha;
 const CRUISE = 35_000;
+/** Mirrors config-tree world.viirsAlphaBoost. Assert at the SHIPPED value. */
+const DEFAULT_BOOST = 1.0;
 
 describe('viirsLayerAlpha', () => {
 	it('never exceeds the palette ceiling, even at max operator gain', () => {
@@ -57,6 +59,49 @@ describe('viirsLayerAlpha', () => {
 		expect(viirsLayerAlpha(1.0, 1.0, 8_000, 1.4)).toBeLessThan(
 			viirsLayerAlpha(1.0, 1.0, CRUISE, 1.4),
 		);
+	});
+
+	// ─── ⚠ THE REGRESSION THIS PINS ─────────────────────────────────────────
+	// The test above passes scale 1.0 (gain 0.2), which keeps the gate product
+	// under 1 and so never exercised the clamp. At the SHIPPED default of 5.0
+	// (gain 1.0) with boost 1.4 the product ran 1.07..1.35 across the entire
+	// 28-34k night-show band, pinned flat at maxAlpha, and altitude did nothing
+	// on any real night show. Always assert at shipped defaults, not at a
+	// convenient scale.
+	it('keeps altitude expressive at SHIPPED defaults across the show band', () => {
+		const at = (alt: number) => viirsLayerAlpha(1.0, 5.0, alt, DEFAULT_BOOST);
+		const band = [28_000, 30_000, 32_000, 34_000];
+		const alphas = band.map(at);
+		for (let i = 1; i < alphas.length; i++) {
+			expect(alphas[i]).toBeGreaterThan(alphas[i - 1]);
+		}
+		// Not merely ordered — meaningfully separated. A near-flat ramp would
+		// satisfy monotonicity while still reading as one constant on screen.
+		expect(alphas[alphas.length - 1] - alphas[0]).toBeGreaterThan(0.05);
+	});
+
+	it('holds the deep-night level at the reference altitude', () => {
+		// 30,000 ft is the night altitude the city shows sit at. Guards against a
+		// maxAlpha edit silently changing the look while the ratios still pass.
+		expect(viirsLayerAlpha(1.0, 5.0, 30_000, DEFAULT_BOOST)).toBeCloseTo(0.25, 2);
+	});
+
+	it('goes inert if alphaBoost is raised — the regression, pinned', () => {
+		// Documents WHY the default is 1.0. At 1.4 the gate product exceeds 1 at
+		// every show altitude and clamps flat, so altitude stops mattering.
+		const flat = [28_000, 34_000].map((a) => viirsLayerAlpha(1.0, 5.0, a, 1.4));
+		expect(flat[0]).toBeCloseTo(flat[1], 6); // identical == gate disabled
+	});
+
+	it('stays under the road mask so structure reads over fill', () => {
+		// VIIRS caps at zoom 8 (583 m/px — ~88 screen px per sample at 30k ft) so
+		// it cannot resolve a building or a road; the z18 road mask (0.57 m/px)
+		// carries the structure. If this ever inverts, the city is a blob again.
+		for (const alt of [28_000, 30_000, 34_000]) {
+			expect(roadMaskAlpha(1.0, 5.0, alt)).toBeGreaterThan(
+				viirsLayerAlpha(1.0, 5.0, alt, DEFAULT_BOOST) * 2,
+			);
+		}
 	});
 
 	it('honours bootFade', () => {

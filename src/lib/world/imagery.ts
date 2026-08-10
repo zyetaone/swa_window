@@ -183,7 +183,19 @@ export function viirsLayerAlpha(
 	// keeps the whole travel expressive instead of pinning at ~0.7 and leaving
 	// most of the control inert.
 	const gain = clamp(scale / NIGHT_LIGHT_SCALE_MAX, 0, 1);
-	// boost lifts the deep-night end; clamp so it cannot push past the ceiling.
+	// ─── ⚠ boost > 1 COSTS YOU THE ALTITUDE GATE ────────────────────────────
+	// clamp(maxAlpha * X, 0, maxAlpha) === maxAlpha * clamp(X, 0, 1), so any
+	// X > 1 pins the result flat. Every term except `boost` is already <= 1, so
+	// boost alone decides whether altGate survives. At the old default of 1.4
+	// with gain 1, X ran 1.07..1.35 across the ENTIRE 28-34k night-show band:
+	//
+	//   28,000 ft  altGate 0.767 → raw 0.644 → clamped 0.60
+	//   34,000 ft  altGate 0.967 → raw 0.812 → clamped 0.60
+	//
+	// i.e. altitude had zero effect on any real night show. The ceiling itself
+	// is correct and deliberate (see the palette-overrun note above) — the fix
+	// is the default, now 1.0 (config-tree world.viirsAlphaBoost). Raising it
+	// past ~1.03 re-flattens the gate; maxAlpha is the knob to reach for.
 	return clamp(V.maxAlpha * ease * gain * altGate * boost, 0, V.maxAlpha) * bootFade;
 }
 

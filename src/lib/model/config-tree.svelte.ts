@@ -255,7 +255,12 @@ export const world = $state({
 		atmosphereLight: 1.6, // globe limb-scatter intensity
 		skyDarken: 1.8, // sky-atmosphere brightness shift
 	viirsBrightness: 3.0, // VIIRS layer brightness
-	viirsAlphaBoost: 1.4,
+	// 1.4 → 1.0: this multiplies INTO viirsLayerAlpha's gate product, which is
+	// then clamped back to maxAlpha. At 1.4 the product overshot 1.0 at every
+	// night-show altitude, pinning alpha flat and disabling the altitude gate
+	// entirely. Reach for NIGHT_PALETTE.viirs.maxAlpha to change the level; see
+	// the note in viirsLayerAlpha before raising this above ~1.03.
+	viirsAlphaBoost: 1.0,
 	windowLightIntensity: 1.5, // procedural building-window brightness
 	showClouds: true,
 		useCesiumClouds: true, // Cesium cloud billboards (1 draw call, GPU-instanced)
