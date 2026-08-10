@@ -60,6 +60,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { computeSunDirection, sunElevationSin, DEG2RAD } from '$lib/world/sky';
 	import { lerp } from '$lib/utils';
+	import { lightingState } from '$lib/world/curves';
 	import { screenTravelSign, getScreenDriftSign, setScreenDriftSign } from '$lib/camera/screen-conventions';
 
 	const model = useAeroWindow();
@@ -107,11 +108,6 @@
 	placement.position.set(0, WING_Y_BASE, WING_Z_BASE);
 	holder.position.x = WING_X_BASE;
 
-	// Mutable X base — the dev tuner drives this via __wing.setXBase; the tick
-	// re-derives holder.position.x from it every frame. $state so Svelte
-	// tracks the dev write as a reactive dep — the tick re-evaluates.
-	let xBase = $state(WING_X_BASE);
-
 	// albedo colour/map. Lambert (cheap + Pi-friendly — diffuse only, no specular)
 	// responds to the scene AmbientLight + the dawn/moon key light below, so the
 	// wing reads as a dimensional 3D surface (lit edge + shadowed edge) whose
@@ -121,11 +117,15 @@
 	// The earlier flat approach existed because PBR went black at altitude with
 	// near-zero ambient; the dedicated key light + ambient floor fix that, and the
 	// night dimming now falls out of the (low) night light levels for free.
+	// Small emissive floor so the wing never crushes to pure black when key/fill
+	// are night-dim (overlay has no Cesium grade). Still far below day lit levels.
+	const WING_EMISSIVE = new Color(0.035, 0.038, 0.045);
 	const toLit = (src: { color?: Color; map?: unknown }) =>
 		new MeshLambertMaterial({
 			color: src.color ? src.color.clone() : new Color(0.8, 0.8, 0.82),
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			map: (src.map as any) ?? null,
+			emissive: WING_EMISSIVE,
 			side: DoubleSide,
 			fog: false,
 		});
@@ -207,8 +207,10 @@
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					(window as any).__wing = {
 						placement, aero: model, model: m,
-						setXBase: (v: number) => { xBase = v; },
-						get xBase() { return xBase; },
+						setXBase: (v: number) => {
+							model.applyConfigPatch?.('world.wingXBase', v);
+						},
+						get xBase() { return model.config.world.wingXBase; },
 						// Calibration: flip until the wing sweeps WITH the world, then
 						// bake the result into DEFAULT_SCREEN_DRIFT_SIGN.
 						flipDriftSign: () => { setScreenDriftSign(-getScreenDriftSign()); return getScreenDriftSign(); },
@@ -308,9 +310,21 @@
 	// carving harsh near-black shadow facets at the root / leading edge.
 	// Intensity set in the tick (KEY_* / FILL_* constants below).
 	const fillLight = new HemisphereLight(0xbcd2ff, 0x2a2620, 0.0);
-	const KEY_NIGHT = 0.1;
+	// Endpoints stay LOCAL: the wing is the only lit-material object in the
+	// overlay, so these are single-consumer and don't belong in the
+	// cross-renderer SSOT. The day/night RESPONSE does come from the SSOT —
+	// the tick lerps on `sunContribution`, not raw nightFactor, so a retune of
+	// the phase curve carries here instead of drifting (the exact failure
+	// curves.ts's header documents).
+	//
+	// Night total is these two plus lightingState().ambientIntensity — do not
+	// re-state that floor as a number here; it lives in curves.ts and a copy
+	// would be an invariant nothing enforces.
+	// Night 0.10/0.10 overshot — wing silhouette vanished on dark Cesium.
+	// Mid values keep nav/strobe dominant without crushing the body to black.
+	const KEY_NIGHT = 0.32;
 	const KEY_DAY = 1.2;
-	const FILL_NIGHT = 0.1;
+	const FILL_NIGHT = 0.22;
 	const FILL_DAY = 0.55;
 	$effect(() => {
 		const scene = ctx.scene;
@@ -367,7 +381,10 @@
 		// the left/right panorama roles.
 		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
 		const mirrorX = screenSign >= 0 ? 1 : -1;
-		holder.position.x = (xBase + seatOffset) * mirrorX;
+		// untrack: useTask is outside reactive scope, but keep the read explicit
+		// so a future effect-wrapper cannot accidentally subscribe here.
+		const xb = untrack(() => model.config.world.wingXBase ?? WING_X_BASE);
+		holder.position.x = (xb + seatOffset) * mirrorX;
 		const cam = ctx.camera.current;
 		group.position.copy(cam.position);
 		group.quaternion.copy(cam.quaternion);
@@ -467,10 +484,12 @@
 		keyLight.position.copy(_keyDir); // target stays at origin → rays rake downward
 		// Overlay has no Cesium night grade — keep key/fill low at night so the
 		// wing is not a bright slab; nav/strobe remain the only hot points.
-		// Day totals unchanged (key 1.20, fill 0.55).
-		keyLight.intensity = lerp(KEY_DAY, KEY_NIGHT, nf);
+		// Lerp on the SSOT's sunContribution (== 1 - nf today) rather than raw
+		// nightFactor, so this tracks the shared phase curve if it's retuned.
+		const sun = lightingState(timeOfDay, nf).sunContribution;
+		keyLight.intensity = lerp(KEY_NIGHT, KEY_DAY, sun);
 		keyLight.color.setRGB(1.0 - nf * 0.45, 0.88 - nf * 0.25, 0.72 + nf * 0.28);
-		fillLight.intensity = lerp(FILL_DAY, FILL_NIGHT, nf);
+		fillLight.intensity = lerp(FILL_NIGHT, FILL_DAY, sun);
 	});
 
 	$effect(() => () => {
