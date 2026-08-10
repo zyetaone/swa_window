@@ -78,6 +78,25 @@ describe('CRDTStore', () => {
 			expect(applied).toBe(false);
 			expect(root.a).toBe(5);
 		});
+
+		it('returns false and records no timestamp for an unknown-but-well-formed path', () => {
+			const applied = store.merge({ path: 'nested.missing', value: 1, timestamp: T(200), sourceId: 'device-B' });
+			expect(applied).toBe(false);
+			expect(store.get('nested.missing')).toBeUndefined();
+		});
+
+		it('does not let a failed write block a later legit patch with an older timestamp', () => {
+			// Phantom merge: path does not exist yet, so nothing is written or stamped.
+			store.merge({ path: 'nested.missing', value: 1, timestamp: T(200), sourceId: 'device-B' });
+			// The path becomes real later (e.g. a newer config tree).
+			(root.nested as Record<string, unknown>).missing = 0;
+			// A legit patch with an older timestamp than the phantom would
+			// have had must NOT be rejected by a stamp that wrote nothing.
+			const applied = store.merge({ path: 'nested.missing', value: 2, timestamp: T(150), sourceId: 'device-B' });
+			expect(applied).toBe(true);
+			expect((root.nested as Record<string, unknown>).missing).toBe(2);
+			expect(store.get('nested.missing')!.timestamp).toBe(T(150));
+		});
 	});
 
 	describe('set (local write)', () => {
@@ -95,6 +114,11 @@ describe('CRDTStore', () => {
 		it('writes to root via setByPath', () => {
 			store.set('nested.b', 99);
 			expect((root.nested as Record<string, unknown>).b).toBe(99);
+		});
+
+		it('returns false and records no stamp when the write fails', () => {
+			expect(store.set('nested.missing', 1)).toBe(false);
+			expect(store.get('nested.missing')).toBeUndefined();
 		});
 	});
 

@@ -339,6 +339,35 @@ export function syncAtmosphereWeather(
 }
 
 /**
+ * Resolve `namespace.rest…` against the five config roots.
+ * Single parse path for local + remote patches (SSOT).
+ */
+function resolveConfigPath(path: string): {
+	ns: ConfigNamespace;
+	rest: string;
+	rootRec: Record<string, unknown>;
+	existing: unknown;
+} | null {
+	const idx = path.indexOf('.');
+	if (idx < 0) return null;
+	const ns = path.slice(0, idx) as ConfigNamespace;
+	const root = NAMESPACES[ns];
+	if (!root) return null;
+	const rest = path.slice(idx + 1);
+	const rootRec = root as unknown as Record<string, unknown>;
+	return { ns, rest, rootRec, existing: readByPath(rootRec, rest) };
+}
+
+/**
+ * Reject fleet/local writes that change a leaf's runtime type
+ * (`'potato'` → number). Missing leaves: let setByPath / merge decide.
+ */
+function isLeafTypeCompatible(existing: unknown, value: unknown): boolean {
+	if (existing === undefined) return true;
+	return typeof value === typeof existing;
+}
+
+/**
  * Apply a path-keyed patch to the config tree.
  *
  * Local writes (no `remote` arg) stamp with `Date.now()` + current
@@ -348,55 +377,44 @@ export function syncAtmosphereWeather(
  * lexicographic tiebreak on equal timestamps.
  *
  * Returns true if the write was applied. For remote writes, false means
- * "lost the CRDT race" (stale); for local writes, false means "unknown
- * namespace or invalid path segment."
+ * "lost the CRDT race" (stale) or type/path rejected; for local writes,
+ * false means unknown namespace, type mismatch, or invalid path.
  */
 export function applyConfigPatch(
 	path: string,
 	value: unknown,
 	remote?: { timestamp: number; sourceId: string },
 ): boolean {
+	const resolved = resolveConfigPath(path);
+	if (!resolved) return false;
+	const { rest, rootRec, existing } = resolved;
+
+	// SSOT type gate — same rule for local UI and fleet CRDT.
+	if (!isLeafTypeCompatible(existing, value)) return false;
+
 	if (remote) {
 		const merged = crdt.merge({ path, value, ...remote });
-		// A remote role assignment must derive its offsets too — see the note
-		// on the local path below. Only when the merge actually won (an older
-		// timestamp is rejected, and must not move the offsets).
-		if (merged && path === 'camera.parallax.role') applyRoleDerived(value as DeviceRole);
+		if (merged) maybeApplyRoleDerived(path, value);
 		return merged;
 	}
 
-	const idx = path.indexOf('.');
-	if (idx < 0) return false;
-	const ns = path.slice(0, idx) as keyof typeof NAMESPACES;
-	const rest = path.slice(idx + 1);
-	const root = NAMESPACES[ns];
-	if (!root) return false;
-	const rootRec = root as unknown as Record<string, unknown>;
-	const existing = readByPath(rootRec, rest);
-
-	// Idempotency: when the value is already what we're being asked to set,
-	// skip the CRDT stamp + setByPath. Saves a per-keystroke peer-sync PATCH
-
+	// Idempotency: skip stamp when already set (peer-sync keystroke noise).
 	if (Object.is(existing, value)) return true;
 
-	// config leaf. Prevents 'potato' → number field from corrupting runtime.
-	if (typeof value !== typeof existing) return false;
-
-	// Write config FIRST — if setByPath fails (bogus path), we must not
-	// have stamped the CRDT. Previously crdt.set() ran before setByPath(),
-	// so a failed write left a stale CRDT timestamp with no config change.
+	// Write config FIRST — failed setByPath must not leave a CRDT stamp.
 	if (!setByPath(rootRec, rest, value)) return false;
 	crdt.record(path, value);
-
-	// `camera.parallax.role` is not a leaf value — it DERIVES headingOffsetDeg
-	// and fuselageOffsetM. A bare patch would set the role while leaving the
-	// old role's yaw/seat offsets in place, which silently breaks the 3-Pi
-	// panorama alignment (the seam moves, nothing errors). Callers used to be
-	// responsible for pairing applyConfigPatch with setParallaxRole; doing it
-	// here means the remote/CRDT path gets it too, and there is one way to be
-	// right instead of a convention to remember.
-	if (ns === 'camera' && rest === 'parallax.role') applyRoleDerived(value as DeviceRole);
+	maybeApplyRoleDerived(path, value);
 	return true;
+}
+
+/**
+ * `camera.parallax.role` is not a bare leaf — it DERIVES headingOffsetDeg
+ * and fuselageOffsetM. One place for local + remote so panorama seams stay
+ * aligned (callers used to forget setParallaxRole on the fleet path).
+ */
+function maybeApplyRoleDerived(path: string, value: unknown): void {
+	if (path === 'camera.parallax.role') applyRoleDerived(value as DeviceRole);
 }
 
 /** Recompute the values that DERIVE from the panorama role. */

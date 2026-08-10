@@ -197,6 +197,29 @@ describe('applyConfigPatch — wire-level scenarios', () => {
 		applyConfigPatch('camera.parallax.role', orig);
 	});
 
+	it('rejects a remote (CRDT) patch whose typeof mismatches the leaf', () => {
+		const orig = atmosphere.clouds.density;
+		const ok = applyConfigPatch('atmosphere.clouds.density', 'potato', {
+			timestamp: Date.now() + 1000,
+			sourceId: 'admin-test',
+		});
+		expect(ok).toBe(false);
+		expect(atmosphere.clouds.density).toBe(orig);
+	});
+
+	it('applies a remote (CRDT) patch whose typeof matches the leaf', () => {
+		const orig = atmosphere.clouds.density;
+		const next = orig > 0.5 ? 0.1 : 0.9;
+		const ok = applyConfigPatch('atmosphere.clouds.density', next, {
+			timestamp: Date.now() + 1000,
+			sourceId: 'admin-test',
+		});
+		expect(ok).toBe(true);
+		expect(atmosphere.clouds.density).toBe(next);
+
+		applyConfigPatch('atmosphere.clouds.density', orig);
+	});
+
 	it('rejects a path outside the five known layers without mutating state', () => {
 		const before = configSnapshot();
 		const ok = applyConfigPatch('wrongroot.something', 1);

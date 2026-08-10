@@ -60,9 +60,21 @@ export function publish(event: SseEvent): void {
 /**
  * Replay buffered events to a callback. Called once per new subscriber
  * before live events start flowing. Preserves insertion order.
+ *
+ * Only the MOST RECENT buffered `command` is replayed: commands carry
+ * wall-clock instants (e.g. director_decision transitionAtMs), so replaying
+ * the whole history on reconnect would fire up to BUFFER_SIZE stale,
+ * long-past-due scene flips in a burst. config_patch events replay in full —
+ * CRDT LWW rejects stale patches, so those are harmless.
  */
 export function replayTo(fn: (event: SseEvent) => void): void {
-	for (const event of buffer) {
+	let lastCommandIdx = -1;
+	for (let i = buffer.length - 1; i >= 0; i--) {
+		if (buffer[i].type === 'command') { lastCommandIdx = i; break; }
+	}
+	for (let i = 0; i < buffer.length; i++) {
+		const event = buffer[i];
+		if (event.type === 'command' && i !== lastCommandIdx) continue;
 		try { fn(event); } catch { /* subscriber exploded — skip */ }
 	}
 }

@@ -59,8 +59,10 @@ export class CRDTStore {
 	 * shortly and subsequent stamps will be healthy.
 	 */
 	set(path: string, value: unknown): boolean {
+		// Write FIRST — a failed setByPath must not leave a stamp behind,
+		// or the phantom stamp would block later legit writes.
+		if (!setByPath(this.#root, path, value)) return false;
 		this.#stamp(path, value);
-		setByPath(this.#root, path, value);
 		return true;
 	}
 
@@ -101,8 +103,11 @@ export class CRDTStore {
 
 	merge(patch: CRDTPatch): boolean {
 		if (!this.canMerge(patch)) return false;
+		// Write FIRST, stamp only on success — a phantom stamp for a
+		// plausible-but-nonexistent path would write nothing yet block a
+		// later legit patch carrying an older (but valid) timestamp.
+		if (!setByPath(this.#root, patch.path, patch.value)) return false;
 		this.#timestamps.set(patch.path, { value: patch.value, timestamp: patch.timestamp, sourceId: patch.sourceId });
-		setByPath(this.#root, patch.path, patch.value);
 		return true;
 	}
 }

@@ -129,10 +129,17 @@ export class FlightSimEngine {
 		const target = LOCATION_MAP.get(locationId);
 		if (!target) return;
 		this.cruiseTargetId = locationId;
+		// Snapshot the pre-warp speed only when NOT already cruising. A mid-cruise
+		// flyTo (LocationPicker re-target) would otherwise capture the WARPED speed
+		// (preWarp + 100), and #tickTransit would restore that as the permanent
+		// orbit speed — the orbit then runs ~25x fast forever. Must read
+		// isTransitioning BEFORE flipping flightMode below (it derives from it).
+		if (!this.isTransitioning) {
+			this.#preWarpSpeed = this.flightSpeed;
+		}
 		this.flightMode = 'cruise_departure';
 		this.#cruiseElapsed = 0;
 		this.warpFactor = 0;
-		this.#preWarpSpeed = this.flightSpeed;
 		// Real sky state, not a hardcoded 'day' — a night departure should
 		// play a night-picked scenario for the ~2s departure window too.
 		this.#initScenario(locationId, skyState);

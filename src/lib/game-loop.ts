@@ -3,9 +3,13 @@
  * Subscriber pattern: components register callbacks, loop auto-starts/stops.
  * Includes visibility check (saves CPU when tab hidden) and per-subscriber
  * error tracking with emergency reload after 10 consecutive failures.
+ * The reload goes through the shared hourly reload budget
+ * (lifecycle-liveness); once exhausted the failing subscriber is
+ * unsubscribed instead of reload-looping the kiosk forever.
  */
 
 import { STORAGE_KEY } from '$lib/model/persistence';
+import { tryConsumeReloadBudget } from '$lib/world/lifecycle-liveness';
 
 type Callback = (dt: number) => void;
 
@@ -28,14 +32,21 @@ function loop(now: number): void {
 	for (const fn of subscribers) {
 		try {
 			fn(dt);
-			errorCounts.set(fn, 0);
+			if (errorCounts.get(fn)) errorCounts.set(fn, 0);
 		} catch {
 			const count = (errorCounts.get(fn) ?? 0) + 1;
 			errorCounts.set(fn, count);
 			if (count >= 10) {
 				try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
-				window.location.reload();
-				return;
+				if (tryConsumeReloadBudget()) {
+					window.location.reload();
+					return;
+				}
+				// Budget exhausted — a permanently-throwing subscriber must not
+				// strobe the kiosk with reload loops. Drop it and carry on.
+				console.warn('[game-loop] reload budget exhausted; unsubscribing failing callback');
+				subscribers.delete(fn);
+				errorCounts.delete(fn);
 			}
 		}
 	}

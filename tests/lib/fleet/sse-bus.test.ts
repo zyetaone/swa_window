@@ -96,6 +96,22 @@ describe('sse-bus', () => {
 			expect(received[2]).toEqual({ type: 'config_patch', data: { path: 'b', value: 2 } });
 		});
 
+		it('replayTo replays all config patches but only the latest command', () => {
+			publish({ type: 'command', data: { type: 'set_scene', location: 'dubai' } });
+			publish({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			publish({ type: 'command', data: { type: 'set_scene', location: 'london' } });
+			publish({ type: 'config_patch', data: { path: 'b', value: 2 } });
+			publish({ type: 'command', data: { type: 'set_mode', mode: 'night' } });
+
+			const received: SseEvent[] = [];
+			replayTo((ev) => received.push(ev));
+
+			expect(received).toHaveLength(3);
+			expect(received[0]).toEqual({ type: 'config_patch', data: { path: 'a', value: 1 } });
+			expect(received[1]).toEqual({ type: 'config_patch', data: { path: 'b', value: 2 } });
+			expect(received[2]).toEqual({ type: 'command', data: { type: 'set_mode', mode: 'night' } });
+		});
+
 		it('ring buffer evicts oldest when capacity exceeded', () => {
 			// Fill past BUFFER_SIZE (32).
 			for (let i = 0; i < 40; i++) {

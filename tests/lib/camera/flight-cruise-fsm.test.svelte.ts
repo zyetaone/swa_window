@@ -129,6 +129,33 @@ describe('cruise FSM', () => {
 		expect(e.flightMode).toBe('orbit');
 	});
 
+	it('mid-cruise flyTo must not pollute the restored orbit speed', () => {
+		const e = new FlightSimEngine();
+		const ctx = makeCtx(2, 2);
+		e.setLocationWithSky(HOME, 'day');
+		const orbitSpeed = e.flightSpeed;
+
+		// First leg: fly out, get well into cruise (warped speed).
+		e.flyTo(AWAY, 'day');
+		runUntil(e, ctx, () => e.flightMode === 'cruise_transit');
+		expect(e.flightSpeed).toBeGreaterThan(orbitSpeed + 50); // warp engaged
+
+		// Mid-cruise re-target (LocationPicker during transit). The warped
+		// flightSpeed must NOT become the new pre-warp snapshot. NB:
+		// LOCATION_IDS is a Set — spread it, it is not indexable.
+		const THIRD = [...LOCATION_IDS][2];
+		e.flyTo(THIRD, 'day');
+		expect(e.cruiseTargetId).toBe(THIRD);
+
+		// Ride the second cruise to completion; arrival restores pre-warp speed.
+		runUntil(e, ctx, () => e.flightMode === 'arrival_hold');
+		expect(e.flightSpeed).toBe(orbitSpeed);
+
+		// And the orbit afterwards runs at that speed, not ~25x.
+		runUntil(e, ctx, () => e.flightMode === 'orbit');
+		expect(e.flightSpeed).toBe(orbitSpeed);
+	});
+
 	it('isTransitioning is true exactly during the cruise phases', () => {
 		const e = new FlightSimEngine();
 		const ctx = makeCtx(2, 2);

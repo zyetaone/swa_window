@@ -137,8 +137,14 @@
 	// ─── Reactive effects ─────────────────────────────────────────────────────
 
 	$effect(() => {
+		// Read the mode BEFORE the null guard: `cesium` is a plain `let` (not
+		// $state), so guarding on it first would leave zero reactive
+		// dependencies and the effect would never re-run. Boot-time
+		// application is handled by CesiumManager.start(); this effect only
+		// needs to track later mode changes.
+		const mode = model.qualityMode;
 		if (!cesium) return;
-		cesium.applyQualityMode(model.qualityMode);
+		cesium.applyQualityMode(mode);
 	});
 </script>
 
