@@ -12,6 +12,8 @@
 
 import type * as CesiumType from 'cesium';
 import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
+import { NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
+import { clamp } from '$lib/utils';
 
 export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform sampler2D colorTexture;
@@ -145,7 +147,17 @@ export function installHashPalette(
 		fragmentShader: HASH_PALETTE_SHADER,
 		uniforms: {
 			u_nightFactor: getNightFactor,
-			u_lightIntensity: getNightLightScale,
+			// ─── ⚠ NORMALISE THE 0..5 KNOB — DO NOT PASS IT RAW ──────────────
+			// getNightLightScale is world.nightLightIntensity, a 0..5 operator
+			// gain. It feeds the pollution corona, whose coefficients
+			// (0.18, 0.09, 0.02) are authored for a ~1 multiplier. At the
+			// shipped default of 5.0 it added +(0.90, 0.45, 0.10) to EVERY
+			// pixel with luminance >= 0.5 — a near-saturated orange wash over
+			// half the ground, which is what made night cities read as one
+			// amber blob rather than discrete lights.
+			// Same normalisation viirsLayerAlpha and roadMaskAlpha already use;
+			// see the notes there on why a 0..5 gain can never multiply in raw.
+			u_lightIntensity: () => clamp(getNightLightScale() / NIGHT_LIGHT_SCALE_MAX, 0, 1),
 			u_darkVoidStrength: getDarkVoidStrength,
 			u_envLight: getEnvLight,
 			u_additiveStrength: getAdditiveStrength,
