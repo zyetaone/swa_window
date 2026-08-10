@@ -150,31 +150,19 @@ export const NIGHT_PALETTE = {
 	 * 0.5 only if the deep-night VIIRS wash ever reads too STRONG.
 	 */
 	/**
-	 * ─── ⚠ maxAlpha IS THE ONLY LIVE VIIRS CONTROL IN THE SHOW BAND ──────────
-	 * viirsLayerAlpha multiplies maxAlpha by ease × gain × altGate × boost and
-	 * then clamps back to maxAlpha. At deep night with shipped defaults
-	 * (scale 5 → gain 1, boost 1.4) the product exceeds the ceiling at EVERY
-	 * night-show altitude, so it pins to maxAlpha and the altitude gate does
-	 * nothing:
+	 * VIIRS night-lights fill (not structure).
 	 *
-	 *   28,000 ft  altGate 0.767 → raw 0.644 → clamped 0.60
-	 *   30,000 ft  altGate 0.833 → raw 0.700 → clamped 0.60
-	 *   34,000 ft  altGate 0.967 → raw 0.812 → clamped 0.60
+	 * viirsLayerAlpha = maxAlpha × ease × gain × altGate × boost, then clamp
+	 * to maxAlpha. Keep world.viirsAlphaBoost ≈ 1.0 so altGate stays live
+	 * (boost > ~1.03 re-pins the product — see imagery.ts). Scale 5 → gain 1
+	 * is the shipped night-show band; structure comes from building windows
+	 * and the z18 road mask. VIIRS is "where is the city" fill only.
 	 *
-	 * Same inert-knob shape the two comments above viirsLayerAlpha/roadMaskAlpha
-	 * already document. Until that clamp is restructured, tune HERE.
-	 *
-	 * 0.6 → 0.30 because VIIRS cannot carry structure at these altitudes. The
-	 * layer caps at zoom 8 = 583 m/px; at 30,000 ft the frame spans 13.5 km, so
-	 * ONE VIIRS pixel covers ~88 screen pixels, bilinearly smoothed. It is
-	 * physically incapable of resolving a building or a road — it renders as a
-	 * smooth blob of light. VIIRS is the right source for "where is the city"
-	 * (a spatial field feeding u_cityBrightness) and the wrong source for "what
-	 * does the city look like". Structure comes from the 3D building windows and
-	 * the z18 (0.57 m/px) road mask; VIIRS is now fill BEHIND them.
+	 * 0.6 → 0.30: zoom-8 VIIRS is ~583 m/px; at 30k ft one sample spans ~88
+	 * screen px. It cannot resolve roads/buildings — only a soft city blob.
 	 */
 	viirs: {
-	maxAlpha:         0.30,
+		maxAlpha:         0.30,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 	},
