@@ -339,6 +339,11 @@ Shell must not re-inline left/right checks. Use helpers in
 chrome on edge panes stays empty so the wall reads as one window. See
 `docs/ARCHITECTURE.md` § *Shell: passenger vs operator vs multi-window*.
 
+**Human flyTo (blind pull / LocationPicker):** only leaders call
+`AeroWindow.flyTo()` productively — it broadcasts `director_decision`
+(`scenarioId: 'manual'`) then cruises. Edge followers no-op; they move only via
+`applyScene()` when the fleet client applies a scheduled decision.
+
 ## Tile caching (ADR-002)
 
 Every external tile source is cached locally at build time, with the remote

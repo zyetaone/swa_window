@@ -7,17 +7,16 @@
  * Cesium camera state.
  *
  * Smoothing: target offset updates on mousemove, actual offset lerps toward
- * target each RAF tick. Lerp coefficient 0.08 ≈ 200ms time-constant — slow
- * enough to feel deliberate, fast enough to track quick cursor moves.
+ * target each RAF tick. Lerp coefficient 0.14 ≈ 110ms time-constant.
  *
- * Gating: config.shell.mouseParallax toggle. Cursor leaving viewport resets
- * target to (0, 0) so it smoothly returns to neutral.
+ * Gating: config.shell.mouseParallax (default OFF — kiosk has no cursor).
+ * When disabled or settled at rest, we stop writing $state so Pane's
+ * motionTransform is not invalidated 60×/s for a no-op.
  *
  * Why DOM transform vs. Cesium camera nudge: the camera nudge would trigger
  * tile re-evaluation and break the existing flight engine's smooth camera
  * lerp. DOM transform on .scene-content is a pure visual offset of the
- * already-rendered frame — zero Cesium impact, super cheap, classic
- * Three.js demo feel.
+ * already-rendered frame — zero Cesium impact.
  */
 
 import { config } from '$lib/model/config-tree.svelte';
@@ -25,7 +24,9 @@ import { subscribe } from '$lib/game-loop';
 
 const MAX_OFFSET_X = 12; // pixels at viewport edge
 const MAX_OFFSET_Y = 8;
-const LERP = 0.14; // 0.14 ≈ 110ms time constant @ 60fps — snappier per user
+const LERP = 0.14; // 0.14 ≈ 110ms time constant @ 60fps
+/** Skip $state writes when motion is visually zero (stops style thrash). */
+const SETTLE_EPS = 0.02;
 
 export function useMouseParallax(): { readonly x: number; readonly y: number } {
 	let current = $state({ x: 0, y: 0 });
@@ -34,6 +35,10 @@ export function useMouseParallax(): { readonly x: number; readonly y: number } {
 	$effect(() => {
 		if (!config.shell.mouseParallax) {
 			target = { x: 0, y: 0 };
+			// Snap settled so the next frame can drop the RAF writer.
+			if (Math.abs(current.x) > SETTLE_EPS || Math.abs(current.y) > SETTLE_EPS) {
+				current = { x: 0, y: 0 };
+			}
 			return;
 		}
 
@@ -56,15 +61,27 @@ export function useMouseParallax(): { readonly x: number; readonly y: number } {
 		};
 	});
 
-	// The shared game loop, not a private RAF: one animation-frame source
-	// (visibility-aware — a hidden tab stops lerping instead of burning
-	// frames), same pattern as GlobeLayer's tick subscription.
-	$effect(() => subscribe(() => {
-		current = {
-			x: current.x + (target.x - current.x) * LERP,
-			y: current.y + (target.y - current.y) * LERP,
-		};
-	}));
+	// Shared game loop — only subscribed while parallax is enabled so a
+	// kiosk (default off) pays nothing per frame.
+	$effect(() => {
+		if (!config.shell.mouseParallax) return;
+		return subscribe(() => {
+			const nx = current.x + (target.x - current.x) * LERP;
+			const ny = current.y + (target.y - current.y) * LERP;
+			const atRest =
+				Math.abs(nx) < SETTLE_EPS &&
+				Math.abs(ny) < SETTLE_EPS &&
+				Math.abs(target.x) < SETTLE_EPS &&
+				Math.abs(target.y) < SETTLE_EPS;
+			if (atRest) {
+				if (current.x !== 0 || current.y !== 0) current = { x: 0, y: 0 };
+				return;
+			}
+			// Only invalidate when the delta is visible.
+			if (Math.abs(nx - current.x) < SETTLE_EPS && Math.abs(ny - current.y) < SETTLE_EPS) return;
+			current = { x: nx, y: ny };
+		});
+	});
 
 	return {
 		get x() { return current.x; },

@@ -42,14 +42,16 @@ const skyPalette = $derived(SKY_PALETTE[model.skyState]);
 const skyBackground = $derived(skyPalette.background);
 
 // ── Atmospheric CSS filters ───────────────────────────────────────────────
+// No base blur: `filter: blur()` on a layer that holds Cesium+Three forces a
+// full-window intermediate bitmap every frame on Pi. Brightness alone is cheap.
+// Warp still softens the glass briefly, but only while warpFactor is real.
 
 const filterString = $derived.by(() => {
 	const brightness = skyPalette.filterBrightness * model.config.atmosphere.weather.filterBrightness;
 	const w = model.flight.warpFactor;
-	const baseBlur = 0.35;
-	const base = `brightness(${brightness.toFixed(2)}) blur(${baseBlur}px)`;
-	if (w < 0.01) return base;
-	return `${base} blur(${(w * 5).toFixed(1)}px) brightness(${(1 + w * 0.3).toFixed(2)})`;
+	if (w < 0.02) return `brightness(${brightness.toFixed(2)})`;
+	// Single blur term (not stacked) + mild brighten during departure.
+	return `brightness(${(brightness * (1 + w * 0.25)).toFixed(2)}) blur(${(w * 3.5).toFixed(1)}px)`;
 });
 
 // ── Motion (turbulence, breathing, parallax) ──────────────────────────────

@@ -8,23 +8,12 @@
 	 * Cesium+Three scene behind itself, so it could only FAKE a bead with flat
 	 * sprites. `backdrop-filter` blurs + brightens the LIVE scene behind each
 	 * bead, so a STATIC drop looks alive — the world moves behind it and the
-	 * bead magnifies different content frame to frame. The 3-D bead itself is
-	 * the kevinbism "liquid-glass" recipe: an organic blob `border-radius`, an
-	 * inset box-shadow (light top-left / dark bottom-right = refraction), and a
-	 * `::before` specular highlight.
+	 * bead magnifies different content frame to frame.
 	 *
-	 * Lives in the DOM glass layer, so it ships on BOTH render paths (Cesium-
-	 * only fallback AND the hybrid) — unlike the overlay shader, which only
-	 * existed when `useThreeOverlay` was on.
-	 *
-	 * Screen-local (water sits on THIS window's glass), so it does NOT need the
-	 * 3-Pi seeded-determinism contract — three physical windows each having
-	 * their own random beads is correct, not a seam to match.
-	 *
-	 * Pi-5 budget: `backdrop-filter` is GPU-costly, so this is a HANDFUL of
-	 * large beads (~14), not a field — which is also how real window rain reads.
-	 * Mounted only while it's actually raining (`{#if active}`), so the blur
-	 * passes don't run in clear/cloudy weather (most of the time).
+	 * Pi-5 budget: `backdrop-filter` is GPU-costly. Defaults:
+	 *   - balanced/ultra: ~14 beads with live backdrop blur
+	 *   - performance: ~7 beads, flat fill (no backdrop-filter) — default
+	 *     qualityMode on ship. Mounted only while raining.
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { randomBetween } from '$lib/utils';
@@ -32,6 +21,10 @@
 	const model = useAeroWindow();
 	const active = $derived(model.weather === 'rain' || model.weather === 'storm');
 	const intensity = $derived(model.weather === 'storm' ? 1 : 0.72);
+	const isPerf = $derived(model.config.world.qualityMode === 'performance');
+	// Fewer beads on the Pi preset; slice a prebuilt pool so weather flips
+	// don't reshuffle positions every frame.
+	const beadCount = $derived(isPerf ? 7 : 14);
 
 	// Organic, asymmetric blob — no two beads the same shape.
 	const blob = () => {
@@ -39,29 +32,32 @@
 		return `${v()}% ${v()}% ${v()}% ${v()}% / ${v()}% ${v()}% ${v()}% ${v()}%`;
 	};
 
-	// Generate the beads ONCE (plain const — not reactive, never regenerates).
+	// Generate the full pool ONCE (plain const — not reactive).
 	// ~1 in 4 is a "runner" that streaks down; the rest cling (stuck beads).
-	const beads = Array.from({ length: 14 }, () => {
+	const allBeads = Array.from({ length: 14 }, () => {
 		const runner = Math.random() < 0.25;
 		return {
 			x: randomBetween(6, 94),
 			y: randomBetween(8, 86),
-			size: randomBetween(5, 14), // smaller, finer beads
+			size: randomBetween(5, 14),
 			opacity: randomBetween(0.5, 0.85),
 			slide: runner ? randomBetween(40, 130) : randomBetween(2, 9),
-			// Wet roll-down trail behind a runner (the streak it leaves as it
-			// slides). Stuck beads leave none.
 			trail: runner ? randomBetween(28, 80) : 0,
 			dur: randomBetween(7, 15),
-			delay: -randomBetween(0, 12), // negative → beads start mid-cycle, desynced
+			delay: -randomBetween(0, 12),
 			blur: randomBetween(0.8, 1.7),
 			radius: blob(),
 		};
 	});
+
+	const beads = $derived(allBeads.slice(0, beadCount));
 </script>
 
 {#if active}
-	<div class="rain-glass" style:--rg-intensity={intensity}>
+	<div
+		class={['rain-glass', isPerf && 'flat']}
+		style:--rg-intensity={intensity}
+	>
 		{#each beads as b, i (i)}
 			<span
 				class="bead"
@@ -103,8 +99,6 @@
 		/* The lens: blur + brighten the LIVE scene behind = real refraction. */
 		backdrop-filter: blur(var(--blur)) brightness(1.14) saturate(1.08);
 		-webkit-backdrop-filter: blur(var(--blur)) brightness(1.14) saturate(1.08);
-		/* 3-D bead — light refracts top-left, shades bottom-right; faint cast
-		   shadow on the glass. A whisper of fill so the rim shadows read. */
 		background: linear-gradient(
 			135deg,
 			rgba(255, 255, 255, 0.07),
@@ -114,12 +108,27 @@
 			inset 1.5px 2px 3px rgba(255, 255, 255, 0.4),
 			inset -2px -3px 5px rgba(0, 0, 0, 0.3),
 			0 2px 4px rgba(0, 0, 0, 0.15);
-		will-change: transform, opacity;
+		/* No permanent will-change — 14 promoted layers thrash memory on Pi. */
 		animation: rg-bead var(--dur) ease-in-out var(--delay) infinite;
 	}
 
-	/* Roll-down trail — a faint, blurred wet streak rising from the bead (the
-	   path it leaves as it slides). Length = --trail (0 for stuck beads). */
+	/* performance quality: same silhouette, no per-bead backdrop blur pass. */
+	.rain-glass.flat .bead {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		background: linear-gradient(
+			135deg,
+			rgba(220, 235, 255, 0.22),
+			rgba(180, 200, 230, 0.08) 55%,
+			rgba(255, 255, 255, 0.04)
+		);
+	}
+	.rain-glass.flat .bead::after {
+		filter: none;
+		opacity: 0.55;
+	}
+
+	/* Roll-down trail */
 	.bead::after {
 		content: '';
 		position: absolute;
@@ -138,7 +147,6 @@
 		filter: blur(1.5px);
 	}
 
-	/* Specular highlight — the crisp glint near the bead's light side. */
 	.bead::before {
 		content: '';
 		position: absolute;
@@ -150,8 +158,6 @@
 		background: radial-gradient(circle, rgba(255, 255, 255, 0.92), transparent 70%);
 	}
 
-	/* Grow in → cling (refracting) → slide a little → release + fade. Most beads
-	   have a tiny --slide (they stick); runners have a large one (they streak). */
 	@keyframes rg-bead {
 		0%   { opacity: 0; transform: translateY(-2px) scale(0.6); }
 		12%  { opacity: var(--o); transform: translateY(0) scale(1); }

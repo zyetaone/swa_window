@@ -316,8 +316,47 @@ export class AeroWindow {
 		});
 	}
 
+	/**
+	 * Human / ops scene change (blind pull, LocationPicker).
+	 *
+	 * Leaders only: broadcast `director_decision` then fly locally (same
+	 * contract as the autopilot path). Edge followers ignore — they only
+	 * move when a `director_decision` arrives via the fleet client and
+	 * `applyScene()` runs. Without this gate a center blind-pull desynced
+	 * the corridor (one pane cruised; left/right stayed in orbit).
+	 */
 	flyTo(locationId: LocationId): void {
+		if (!isGroupLeader(this.config.camera.parallax.role)) {
+			this.telemetry.recordEvent('info', {
+				event: 'flyTo_ignored',
+				reason: 'follower',
+				locationId,
+				role: this.config.camera.parallax.role,
+			});
+			return;
+		}
+		this.#broadcastLocationDecision(locationId, 'manual');
 		this.flight.flyTo(locationId, this.skyState);
+	}
+
+	/**
+	 * Fan-out a location change to corridor peers. Shared by autopilot and
+	 * human flyTo so the wire shape cannot drift between the two paths.
+	 */
+	#broadcastLocationDecision(locationId: LocationId, scenarioId: string): void {
+		if (!this.#fleetBroadcast) return;
+		if (!isGroupLeader(this.config.camera.parallax.role)) return;
+		const now = Date.now();
+		this.#fleetBroadcast({
+			v: 2,
+			type: 'director_decision',
+			scenarioId,
+			locationId,
+			weather: this.weather,
+			decidedAtMs: now,
+			transitionAtMs: now + TRANSITION_DELAY_MS,
+			groupId: resolveBinding().groupId,
+		});
 	}
 
 	setDisplayMode(mode: DisplayMode, payload?: string): void {
@@ -402,26 +441,11 @@ export class AeroWindow {
 			// A new location cancels any active/pending flyover beat — the
 			// world is moving, so pop the camera back to the normal look.
 			this.exitFlyover();
-			// Phase 7 — if we're a panorama leader with connected followers,
-			// broadcast the decision BEFORE flying locally. transitionAtMs is
-			// 2.5s in the future so all three Pis can lock to the same wall-
-			// clock instant and start cruise_departure simultaneously,
-			// absorbing NTP drift (up to ±200ms is safe).
-			if (ctx.isLeader && this.#fleetBroadcast) {
-				const now = Date.now();
-				this.#fleetBroadcast({
-					v: 2,
-					type: 'director_decision',
-					scenarioId: 'autopilot',
-					locationId: directorPatch.nextLocation,
-					weather: this.weather,
-					decidedAtMs: now,
-					transitionAtMs: now + TRANSITION_DELAY_MS,
-					// Corridor gate: followers apply only when groupId matches their
-					// binding (missing groupId = legacy, apply unconditionally).
-					groupId: resolveBinding().groupId,
-				});
-			}
+			// Phase 7 — broadcast BEFORE flying locally (shared with flyTo()).
+			// transitionAtMs is 2.5s ahead so followers can lock to wall-clock
+			// and absorb ~±200 ms NTP drift. Leader still starts immediately
+			// (same as pre-existing autopilot contract).
+			this.#broadcastLocationDecision(directorPatch.nextLocation, 'autopilot');
 			this.flight.flyTo(directorPatch.nextLocation, this.skyState);
 		} else if (directorPatch.vantageBeat) {
 			// Leader chose a night-city flyover. Broadcast the same transitionAtMs

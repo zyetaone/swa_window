@@ -287,7 +287,9 @@ export const shell = $state({
 	// (HUD is role-gated). Closed-blind BlindInfoCard is independent.
 	hudVisible: true,
 		clockVisible: false, // double-tap cabin clock on the open glass
-		mouseParallax: true, // cursor parallax (no-op in kiosk)
+		// OFF by default: kiosk has no cursor (html.kiosk { cursor:none }).
+		// When ON, still skips $state writes once settled (see use-mouse-parallax).
+		mouseParallax: false,
 		sidePanelAutoCloseMs: 15000, // auto-close idle side panel
 	// Touch-contract gate (Q3 council 2026-05-20). false = passenger mode: basic
 	// blind drag is the ONLY touch interaction — the curtain metaphor. true =
