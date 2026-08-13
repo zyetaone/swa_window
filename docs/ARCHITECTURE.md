@@ -16,6 +16,26 @@
 
 Admin **never** constructs AeroWindow — it authors `config_patch` / `command` only.
 
+## Display modes (`set_mode`)
+
+Admin **Mode** pushes a fleet `command` (`type: 'set_mode'`). Wire + validation
+live in `fleet/display-payload.ts` (not shell).
+
+| Mode | Payload | Kiosk behaviour |
+|------|---------|-----------------|
+| `flight` | none | Globe (default). Clears media + persist. |
+| `video` | URL string (http(s) or `/api/assets/…`) | Full-bleed looped video. |
+| `screensaver` | JSON `{ urls: string[], intervalSec? }` | Image slideshow. |
+
+Kiosk apply path: SSE → `AeroWindow.setDisplayMode` (reject bad payload, no-op)
+→ `Pane` stacks `MediaStage` over a **parked** `GlobeLayer` (`useDefaultRenderLoop
+= false`, tick/liveness off). Return-to-flight is warm (no Cesium remount).
+
+Persist: `fleet/display-mode-persist.ts` (`localStorage`) so reload keeps media.
+Exit media: SidePanel **Return to Flight**, or **Escape** (all roles including
+edge panes). Admin rewrites relative assets to absolute against its origin so
+peers fetch a reachable host.
+
 ## Three clocks (do not collapse)
 
 1. **game-loop RAF** → `model.tick` (flight / motion / director)
