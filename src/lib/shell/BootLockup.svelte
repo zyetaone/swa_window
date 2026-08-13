@@ -8,20 +8,20 @@
 	 * re-export deploy/pi/branding/aero-splash.png from the same markup or the
 	 * handoff will visibly step.
 	 *
-	 * Held until the scene actually renders — `measuredFps > 0` is the first
-	 * honest proof a frame reached the panel, so there is no black gap and no
-	 * half-drawn globe on show.
+	 * Held until the scene is ready to show:
+	 *   - flight: `measuredFps > 0` (first honest Cesium frame)
+	 *   - video/slideshow: displayMode itself (globe is parked; no FPS)
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	const model = useAeroWindow();
 
-	// Live once the renderer reports real frames. Deliberately NOT latched:
-	// if rendering stalls, covering the view is the correct behaviour — it is
-	// the same contract as the blind in liveness.ts, where the audience sees
-	// the splash rather than a frozen or half-drawn globe while the watchdog
-	// reloads underneath.
-	const isLive = $derived(model.measuredFps > 0);
+	// Live once the active path is producing a view. Deliberately NOT latched
+	// for flight: if Cesium stalls, re-cover. Media modes stay live without
+	// FPS because the globe render loop is intentionally paused.
+	const isLive = $derived(
+		model.displayMode !== 'flight' || model.measuredFps > 0,
+	);
 
 	// Safety: if Cesium never renders a frame (WebGL failure, stalled init),
 	// dissolve after 15s. A half-rendered globe is better than a permanent

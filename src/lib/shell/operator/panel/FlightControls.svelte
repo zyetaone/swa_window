@@ -8,7 +8,8 @@
 	 * kiosk SidePanel and /admin if composed there.
 	 *
 	 * When the wall is on video/slideshow, exposes "Return to Flight" so
-	 * an on-device operator can exit media without admin.
+	 * an on-device operator can exit media without admin. Edge panes without
+	 * the SidePanel use Escape (handled on +page).
 	 */
 	import { usePanelConfig } from './patch';
 	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';

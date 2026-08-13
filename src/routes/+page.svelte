@@ -95,15 +95,20 @@
 	// Clean up model timers on page teardown
 	onDestroy(() => model.destroy());
 
-	// "F" keyboard toggle for window frame (designer spec — Phase 5b).
-	// Only captures when no other text-entry element has focus so we don't
-	// fight the time slider / weather dropdown / SidePanel inputs.
-	// Handler used by <svelte:window onkeydown> below — idiomatic over
-	// addEventListener inside $effect per Svelte 5 best practices.
+	// Keyboard ops (svelte:window onkeydown below). Skip when typing in inputs.
+	// Escape — exit video/slideshow to flight on ANY pane (edge panes hide
+	// SidePanel; this is their local recovery without ?ops=1 / admin).
+	// F — window frame toggle (designer spec Phase 5b); flight-only chrome.
 	function handleKey(e: KeyboardEvent) {
-		if (e.key !== "f" && e.key !== "F") return;
 		const t = e.target as HTMLElement;
 		if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+		if (e.key === "Escape" && model.displayMode !== "flight") {
+			e.preventDefault();
+			model.setDisplayMode("flight");
+			return;
+		}
+		if (e.key !== "f" && e.key !== "F") return;
+		if (model.displayMode !== "flight") return; // frame forced off during media
 		model.applyConfigPatch('shell.windowFrame', !model.config.shell.windowFrame);
 	}
 

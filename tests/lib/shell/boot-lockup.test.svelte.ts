@@ -69,6 +69,20 @@ describe('BootLockup', () => {
 		expect(errorEvents()).toHaveLength(1);
 	});
 
+	it('media mode dissolves without waiting for Cesium fps', () => {
+		boot();
+		expect(dissolved()).toBe(false);
+		// No frame periods — still covers in flight mode.
+		expect(model.measuredFps).toBe(0);
+		model.setDisplayMode('video', 'https://cdn.example.com/a.mp4');
+		flushSync();
+		expect(dissolved()).toBe(true);
+		// Back to flight with zero fps re-covers.
+		model.setDisplayMode('flight');
+		flushSync();
+		expect(dissolved()).toBe(false);
+	});
+
 	it('a live frame clears the latch — a later stall re-covers the view', () => {
 		boot();
 		vi.advanceTimersByTime(15_000); // forced dissolve, latch set

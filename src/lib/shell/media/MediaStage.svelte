@@ -2,8 +2,8 @@
 	/**
 	 * MediaStage — full-viewport video or image slideshow.
 	 *
-	 * Mounted instead of GlobeLayer when displayMode is video/screensaver so
-	 * the Pi is not burning GPU on Cesium under a covered view.
+	 * Stacked above a parked GlobeLayer (Cesium warm, render loop off).
+	 * Escape or SidePanel "Return to Flight" exits media mode.
 	 */
 	import { onDestroy } from 'svelte';
 	import type { SlideshowSpec } from '$lib/fleet/display-payload';
@@ -114,7 +114,7 @@
 	{#if mediaError}
 		<div class="empty">
 			Media failed to load
-			<span class="hint">Check URL / fleet asset host · ops panel → Return to Flight</span>
+			<span class="hint">Check URL / fleet asset host · Escape or ops → Return to Flight</span>
 		</div>
 	{:else if mode === 'video' && videoUrl}
 		<video

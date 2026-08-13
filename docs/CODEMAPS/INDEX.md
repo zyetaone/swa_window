@@ -70,5 +70,16 @@ panel/*  →  usePanelConfig()
 Shared ambient panels: `FlightControls`, `AtmosphereControls`, `LightingControls`
 (Lighting + Display sections). Scene one-shots stay admin-local drafts.
 
+### Display modes (admin `set_mode`)
+
+| Mode | Wire | Kiosk |
+|------|------|--------|
+| `flight` | no payload | Globe (default) |
+| `video` | URL string | Full-bleed loop; globe parked warm |
+| `screensaver` | JSON `{urls, intervalSec}` | Image slideshow |
+
+Payload SSOT: `fleet/display-payload.ts`. Persist: `fleet/display-mode-persist.ts`.
+Exit media: SidePanel **Return to Flight**, or **Escape** (all panes including edges).
+
 State flows through `AeroWindow` on the kiosk. Admin never mounts AeroWindow.
 Cesium stays in `world/`; Three overlay under `world/three/`.
