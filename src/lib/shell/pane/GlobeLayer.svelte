@@ -4,13 +4,20 @@
 	 *
 	 * Three overlay is dynamically imported so the kiosk cold path does not
 	 * parse Threlte/Three when useThreeOverlay is false (or until first enable).
+	 *
+	 * `active` (default true): when false (video/slideshow covering the wall),
+	 * keep Cesium warm (no destroy/remount) but pause the render loop, model
+	 * tick, and liveness — return-to-flight is instant and GPU stays free.
 	 */
 	import { untrack } from "svelte";
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { subscribe } from "$lib/game-loop";
 	import CesiumViewer from "$lib/world/CesiumViewer.svelte";
+	import { activeCesium } from '$lib/world/active.svelte';
 	import { startLivenessWatchdog } from '$lib/world/lifecycle-liveness';
 	import { startOverlayRecovery, isOverlayPersistentlyDisabled, hasExplicitOverlayParam } from '$lib/world/lifecycle-overlay-recovery';
+
+	let { active = true }: { active?: boolean } = $props();
 
 	const model = useAeroWindow();
 
@@ -31,13 +38,17 @@
 		}
 	}
 
+	// Sim tick only while the globe is the visible path.
 	$effect(() => {
+		if (!active) return;
 		return subscribe((dt: number) => {
 			untrack(() => model.tick(dt));
 		});
 	});
 
+	// FPS stall while media covers the wall is expected — don't reload.
 	$effect(() => {
+		if (!active) return;
 		return startLivenessWatchdog({
 			getFps: () => untrack(() => model.measuredFps),
 			recordEvent: (kind, payload) => model.telemetry.recordEvent(kind, payload),
@@ -45,6 +56,7 @@
 	});
 
 	$effect(() => {
+		if (!active) return;
 		return startOverlayRecovery({
 			getFps: () => untrack(() => model.measuredFps),
 			disableOverlay: () => {
@@ -58,8 +70,26 @@
 		});
 	});
 
+	// Pause Cesium's continuous render loop while media is up. Viewer stays
+	// alive so return-to-flight does not pay cold WebGL init.
+	$effect(() => {
+		const mgr = activeCesium.manager;
+		if (!mgr) return;
+		const viewer = mgr.getViewer();
+		// useDefaultRenderLoop is the Cesium continuous RAF; false freezes draws.
+		viewer.useDefaultRenderLoop = active;
+		return () => {
+			// On unmount / teardown, leave loop on if the viewer still exists.
+			try {
+				viewer.useDefaultRenderLoop = true;
+			} catch {
+				/* destroyed */
+			}
+		};
+	});
+
 	const fps = $derived(Math.round(model.measuredFps));
-	const wantOverlay = $derived(model.config.world.useThreeOverlay);
+	const wantOverlay = $derived(model.config.world.useThreeOverlay && active);
 </script>
 
 {#if wantOverlay}
@@ -77,7 +107,7 @@
 	<CesiumViewer />
 </div>
 
-{#if import.meta.env.DEV}
+{#if import.meta.env.DEV && active}
 	<div class="fps-badge">FPS {fps}</div>
 {/if}
 <style>

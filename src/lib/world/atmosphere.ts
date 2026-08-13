@@ -106,6 +106,10 @@ export function initAtmosphere(Cesium: C, viewer: CesiumType.Viewer): void {
 	// from ever attaching to the fresh scene and the night globe renders
 	// day-lit until nf < 0.65 self-heals.
 	_isUsingMoonlight = false;
+	// Moon-phase cache is memoised per clock time; a stale cache from a dead
+	// viewer's timeline would serve the wrong phase until the time key moved.
+	_moonPhaseTime = -1;
+	_moonPhaseCache = 1.0;
 	_originalSunLight = viewer.scene.light;
 	_moonlight = new Cesium.DirectionalLight({
 		direction: new Cesium.Cartesian3(0, 0, -1),

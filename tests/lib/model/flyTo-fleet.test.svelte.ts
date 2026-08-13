@@ -1,8 +1,11 @@
 /**
  * flyTo fleet contract — human/ops scene changes must not desync a corridor.
  *
- * Leaders broadcast director_decision then cruise; edge followers no-op and
- * only move via applyScene (fleet client path).
+ * A panorama leader (center) broadcasts director_decision and schedules its
+ * own flyTo at the broadcast transitionAtMs, so leader and edge panes move
+ * in wall-clock lock-step. Solo has no followers: no broadcast, immediate
+ * flight. Edge followers no-op and only move via applyScene (fleet client
+ * path).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
@@ -28,19 +31,16 @@ describe('AeroWindow.flyTo fleet gate', () => {
 	afterEach(() => {
 		model.setFleetBroadcast(null);
 		applyConfigPatch('camera.parallax.role', 'solo');
-		model.destroy();
+		model.destroy();   // cancels any pending lock-step cruise timer
+		vi.useRealTimers();
 	});
 
-	it('leader (solo) flies and broadcasts director_decision', () => {
+	it('leader (solo) flies immediately — no followers to broadcast to', () => {
 		expect(model.config.camera.parallax.role).toBe('solo');
 		model.flyTo(AWAY);
 		expect(model.flight.flightMode).not.toBe('orbit');
 		expect(model.flight.cruiseDestinationName).toBeTruthy();
-		expect(broadcasts).toHaveLength(1);
-		expect(broadcasts[0].type).toBe('director_decision');
-		expect(broadcasts[0].locationId).toBe(AWAY);
-		expect(broadcasts[0].scenarioId).toBe('manual');
-		expect(typeof broadcasts[0].transitionAtMs).toBe('number');
+		expect(broadcasts).toHaveLength(0);
 	});
 
 	it('leader (center) broadcasts the same wire shape as autopilot', () => {
@@ -51,6 +51,34 @@ describe('AeroWindow.flyTo fleet gate', () => {
 		expect(broadcasts[0].type).toBe('director_decision');
 		expect(broadcasts[0].locationId).toBe(AWAY);
 		expect(broadcasts[0].weather).toBe(model.weather);
+	});
+
+	it('leader (center) schedules its own flyTo at the broadcast transitionAtMs', () => {
+		vi.useFakeTimers();
+		applyConfigPatch('camera.parallax.role', 'center');
+		const flySpy = vi.spyOn(model.flight, 'flyTo');
+
+		model.flyTo(AWAY);
+		expect(broadcasts).toHaveLength(1);
+		expect(broadcasts[0].scenarioId).toBe('manual');
+		const transitionAtMs = broadcasts[0].transitionAtMs as number;
+
+		// Lock-step: the leader must NOT cruise before the shared instant.
+		expect(flySpy).not.toHaveBeenCalled();
+		expect(model.flight.flightMode).toBe('orbit');
+
+		vi.advanceTimersByTime(transitionAtMs - Date.now() + 1);
+		expect(flySpy).toHaveBeenCalledTimes(1);
+		expect(model.flight.flightMode).not.toBe('orbit');
+	});
+
+	it('leader (center) without a fleet client flies immediately — no broadcast possible', () => {
+		applyConfigPatch('camera.parallax.role', 'center');
+		model.setFleetBroadcast(null);
+		model.flyTo(AWAY);
+		expect(model.flight.flightMode).not.toBe('orbit');
+		expect(model.flight.cruiseDestinationName).toBeTruthy();
+		expect(broadcasts).toHaveLength(0);
 	});
 
 	it('follower (left) does not fly and does not broadcast', () => {

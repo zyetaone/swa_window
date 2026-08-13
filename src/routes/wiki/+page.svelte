@@ -149,16 +149,16 @@
 		<div class="flow-diagram">
 			<div class="flow-node root">requestAnimationFrame<div class="flow-sub">60 Hz heartbeat</div></div>
 			<div class="flow-arrow">↓ dt</div>
-			<div class="flow-node">model.tick(dt)<div class="flow-sub">flight · motion · director · auto-quality</div></div>
+			<div class="flow-node">model.tick(dt)<div class="flow-sub">flight · motion · director</div></div>
 			<div class="flow-arrow">↓</div>
 			<div class="flow-node">Svelte $derived<div class="flow-sub">re-computes only what changed</div></div>
 			<div class="flow-arrow">↓</div>
 			<div class="flow-row">
 				<div class="flow-node">Cesium render<div class="flow-sub">WebGL globe</div></div>
 				<span class="flow-plus">+</span>
-				<div class="flow-node">Compositor<div class="flow-sub">Z-layered DOM</div></div>
+				<div class="flow-node">Pane<div class="flow-sub">shell layers + chrome</div></div>
 				<span class="flow-plus">+</span>
-				<div class="flow-node">CSS motion<div class="flow-sub">transforms</div></div>
+				<div class="flow-node">Three overlay<div class="flow-sub">flag-gated</div></div>
 			</div>
 		</div>
 		<div class="pillar-detail">
@@ -203,8 +203,8 @@
 				<div class="state-box small">Pane</div>
 				<div class="state-box small">Blind</div>
 				<div class="state-box small">HUD</div>
-				<div class="state-box small">Compositor</div>
 				<div class="state-box small">SidePanel</div>
+				<div class="state-box small">Three</div>
 			</div>
 		</div>
 		<div class="pillar-detail">
@@ -276,12 +276,12 @@
 				<h4>✓ Solid</h4>
 				<ul>
 					<li>Z-order is local to Pane.svelte — no shared z-table, each layer declares its own stacking</li>
-					<li>Single compositor mount point: effect layers composed directly in shell/Pane.svelte</li>
-					<li>Static registry + dynamic bundle store merged at render time</li>
+					<li>Single mount point: effect layers composed directly in shell/pane/Pane.svelte</li>
 					<!-- `&#123;#if&#125;` is escaped: written literally, Svelte parses it as a
 					     real block-open and the whole page fails to compile. -->
 					<li>Adding an effect = a component plus an <code>&#123;#if&#125;</code> mount in Pane.svelte</li>
-					<li>CSS filter chain (blur/contrast/saturate) over WebGL — two rendering worlds that composite, not fight</li>
+					<li>Cesium exposure / Three post — no CSS filter over WebGL (was a GPU thrash)</li>
+					<li>Operator chrome (SidePanel) vs passenger chrome (HUD/clock) gated by fleet role SSOT</li>
 				</ul>
 			</div>
 		</div>
@@ -370,11 +370,11 @@
 			<div class="content-side control">
 				<h3>src/ — Control Plane</h3>
 				<div class="file-tree">
-					<div class="ft-item">lib/world/ — Cesium engine</div>
-					<div class="ft-item">lib/camera/ — Flight + motion sim</div>
+					<div class="ft-item">lib/world/ — Cesium + Three overlay</div>
+					<div class="ft-item">lib/flight/ — Flight + motion sim</div>
 					<div class="ft-item">lib/director/ — Autopilot + scenarios</div>
-					<div class="ft-item">lib/scene/ — Compositor + effects</div>
-					<div class="ft-item">lib/shell/ — Pane, Blind, Glass, HUD</div>
+					<div class="ft-item">lib/bundle/ — Content-bundle wire types</div>
+					<div class="ft-item">lib/shell/ — pane · passenger · operator · window</div>
 					<div class="ft-item">lib/fleet/ — Multi-Pi networking</div>
 					<div class="ft-item">lib/model/ — State, CRDT, telemetry</div>
 				</div>

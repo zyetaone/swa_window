@@ -160,6 +160,7 @@
 		aria-label="Settings panel"
 		tabindex="-1"
 		onpointermove={resetDismissTimer}
+		onkeydown={resetDismissTimer}
 		{@attach focusTrap}
 	>
 		<header>

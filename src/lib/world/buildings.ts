@@ -27,7 +27,7 @@ interface BuildingsShader {
 let _cs: C;
 let _viewer: CesiumType.Viewer;
 
-export let tileset: CesiumType.Cesium3DTileset | null = null;
+let tileset: CesiumType.Cesium3DTileset | null = null;
 let _shader: BuildingsShader | null = null;
 let _time = 0;
 let _cityBrightness = 1;

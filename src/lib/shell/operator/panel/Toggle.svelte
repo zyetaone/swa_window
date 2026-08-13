@@ -1,13 +1,12 @@
 <script lang="ts">
     /**
-     * Toggle — bindable checkbox pill.
+     * Toggle — checkbox pill.
      *
-     * Supports both idioms so consumers can pick:
-     *   <Toggle label="..." bind:checked={config.field} />
-     *   <Toggle label="..." checked={flag} onchange={e => ...} />
+     * Prefer the patch gate for config leaves:
+     *   <Toggle label="..." checked={cfg.x} onchange={e => patch('path', e.currentTarget.checked)} />
      *
-     * `checked` is $bindable so direct bind against a $state field Just Works,
-     * which is how the Phase-1 config classes expose their booleans.
+     * `checked` is $bindable for local UI state only — never bind straight
+     * to `config.*` (skips applyConfigPatch / CRDT / peer-sync).
      */
     interface Props {
         label: string;

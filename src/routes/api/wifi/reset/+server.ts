@@ -53,8 +53,12 @@ function scheduleReset(): boolean {
 	// is safe. No `|| true`: if any delete fails, `exit 1` (while-loop runs in
 	// the pipeline's subshell) fails the pipeline and `&&` skips the reboot —
 	// better to stay up on a stale profile than to reboot into one.
+	// The leading `nmcli ... >/dev/null || exit 1` preflights the enumerate
+	// step itself: `sh` has no pipefail, so without it a failed `nmcli`
+	// (NetworkManager down) feeds the loop nothing, the pipeline exits 0,
+	// and the Pi reboots without purging.
 	return schedulePrivileged(
-		['sh', '-c', `nmcli -t -f UUID,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}' | while read -r u; do sudo -n nmcli c delete "$u" || exit 1; done && sudo -n /sbin/reboot`],
+		['sh', '-c', `nmcli -t -f UUID,TYPE c >/dev/null || exit 1; nmcli -t -f UUID,TYPE c | awk -F: '$2=="802-11-wireless"{print $1}' | while read -r u; do sudo -n nmcli c delete "$u" || exit 1; done && sudo -n /sbin/reboot`],
 		2000,
 		'[wifi/reset]',
 	);

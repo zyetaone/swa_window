@@ -6,14 +6,22 @@
  * in-process sse-bus publishes an event that this stream forwards as an
  * SSE frame. Replaces the server → browser leg of the old WS broker.
  *
- * Same-origin only — no CORS headers. Admin doesn't subscribe here;
+ * Loopback-only (same gate as /api/status POST): the stream replays
+ * buffered config_patch / command events — fleet control traffic — and
+ * every subscriber pins an open connection, so only the Pi's own browser
+ * may attach. No CORS headers either. Admin doesn't subscribe here;
  * admin polls /api/status on each device instead.
  */
 
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { subscribe, replayTo, type SseEvent } from '$lib/server/fleet/sse-bus';
+import { isLoopback } from '$lib/http/loopback';
 
-export const GET: RequestHandler = () => {
+export const GET: RequestHandler = ({ getClientAddress }) => {
+	if (!isLoopback(getClientAddress())) {
+		throw error(403, 'forbidden: localhost only');
+	}
 	let unsubscribe: (() => void) | null = null;
 	let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 

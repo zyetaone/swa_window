@@ -373,13 +373,24 @@ export class FlightSimEngine {
 		if (this.#scenarioProgress >= 1) {
 			this.#scenarioProgress = 0;
 			this.#scenarioWaypointIndex = nextIdx;
-			if (nextIdx === 0 && this.#currentScenario.loop) {
+			if (nextIdx === 0) {
 				this.#scenarioLoopCount++;
-				if (this.#scenarioLoopCount >= FlightSimEngine.SCENARIO_MAX_LOOPS) {
+				// loop:false runs exactly once then hands back to the orbit —
+				// without this the modulo indexing above would wrap the
+				// waypoints and a run-once scenario would fly forever.
+				// loop:true expires after SCENARIO_MAX_LOOPS.
+				if (!this.#currentScenario.loop || this.#scenarioLoopCount >= FlightSimEngine.SCENARIO_MAX_LOOPS) {
 					this.#currentScenario = null;
 					this.#scenarioLoopCount = 0;
 				} else {
-					const rng = createSeededRng((daySeed() ^ hashString(ctx.locationId)) >>> 0);
+					// Mix the loop counter into the seed. Re-seeding with the
+					// plain daySeed ^ location hash redraws the SAME stream on
+					// every loop, so the flip and the re-pick below returned
+					// identical results each time. The counter is deterministic
+					// per day, so all 3 Pis still compute the same sequence.
+					const rng = createSeededRng(
+						(daySeed() ^ hashString(ctx.locationId) ^ Math.imul(this.#scenarioLoopCount, 0x9E3779B9)) >>> 0
+					);
 					// Randomly flip direction on each loop — the flight doesn't
 					// always trace the same waypoints in the same order.
 					this.#scenarioForward = rng() < 0.5;

@@ -1,8 +1,13 @@
 /**
  * AeroWindow persistence — localStorage save/load for the user's last
  * session state. Pure data only — no runes, no class context, no DOM
- * reactivity. Wire-up in +page.svelte (save on unload) and AeroWindow
- * ctor (load on boot).
+ * reactivity. Wire-up: AeroWindow ctor loads on boot; +page.svelte saves
+ * via a 2s-debounced $effect auto-save on snapshot change (there is no
+ * unload handler) — so a change made <2s before a power-cut is lost.
+ *
+ * Display mode (video/slideshow) lives in a separate key —
+ * `$lib/fleet/display-mode-persist` — so media survives reload without
+ * participating in the daily location/weather rotation gate.
  */
 import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
 import { isValidLocation } from '$content/locations';

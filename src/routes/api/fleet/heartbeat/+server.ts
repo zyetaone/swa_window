@@ -10,6 +10,9 @@
  *   ?deviceId=<id>  → full history for that device (up to 500 samples)
  *   (no params)     → latest sample from every known device
  *   ?summary        → fleet rollup (total, online, offline, avgFps, maxTempC)
+ *   GET is token-free so the admin dashboard can poll it cross-origin
+ *   without a bearer; in exchange, internal-only debug fields (lastError
+ *   journal lines) are stripped from every GET response.
  *
  * All responses carry permissive CORS headers so the admin dashboard can
  * live on a different origin (e.g. a laptop on the LAN).
@@ -23,6 +26,7 @@ import {
 	latestAll,
 	summarize,
 	DEVICE_ID_PATTERN,
+	type HeartbeatSample,
 } from '$lib/server/fleet/heartbeat';
 import { readLimitedJson } from '$lib/http/body';
 import { lanCorsHeadersFull, corsPreflight } from '$lib/http/cors';
@@ -58,7 +62,21 @@ export const GET: RequestHandler = async ({ url, request }) => {
 		if (!DEVICE_ID_PATTERN.test(deviceId)) {
 			throw error(400, 'invalid deviceId');
 		}
-		return json(historyForDevice(deviceId), { headers: cors });
+		return json(stripInternal(historyForDevice(deviceId)), { headers: cors });
 	}
-	return json(latestAll(), { headers: cors });
+	return json(stripInternal(latestAll()), { headers: cors });
 };
+
+/**
+ * Drop internal-only debug fields from samples served to unauthenticated
+ * GET clients. `lastError` carries a raw aero-app journal line — useful on
+ * the device itself, but GET is token-free (the admin dashboard polls it
+ * cross-origin without a bearer), so it must not leak to any LAN client.
+ */
+function stripInternal(list: HeartbeatSample[]): HeartbeatSample[] {
+	return list.map((s) => {
+		const pub = { ...s };
+		delete pub.lastError;
+		return pub;
+	});
+}

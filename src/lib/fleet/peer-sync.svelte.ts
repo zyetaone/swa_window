@@ -1,18 +1,17 @@
 /**
  * Peer-sync — propagate local config edits to every discovered peer.
  *
- * The admin browser binds sliders directly to the global config rune
- * (`$lib/model/config-tree.svelte`). This module hooks a `$effect` to the
- * same rune. When any watched field changes, the previous value is compared
- * against the current, and the delta is POSTed as a path-keyed PATCH to
- * every peer's `/api/config` endpoint.
+ * Admin + dual-tree panel controls write through `applyConfigPatch` into the
+ * global config rune (`$lib/model/config-tree.svelte`). This module hooks a
+ * `$effect` to the same paths. When any watched field changes, the delta is
+ * POSTed as a path-keyed PATCH to every peer's `/api/config` endpoint.
  *
  * Intentional design choices:
  *   - No debounce. Each slider tick is one request. LAN latency is ~2 ms
  *     per peer; six peers × 2 ms = 12 ms total. If this ever becomes a
  *     bottleneck, add request batching here — not in callers.
- *   - No self-fetch. The local config was already mutated by the slider
- *     bind; we only push to peers other than `self`.
+ *   - No self-fetch. The local config was already mutated by the patch;
+ *     we only push to peers other than `self`.
  *   - Timestamp + sourceId are included so CRDT merge gates the write on
  *     the receiving device (concurrent-admin-write safety).
  *   - Caller controls lifecycle via the returned stop function. The
@@ -21,23 +20,49 @@
  */
 
 import { config } from '$lib/model/config-tree.svelte';
+import { readByPath } from '$lib/utils';
 import type { RestAdminStore } from './rest-admin.svelte';
 
 /**
- * Paths the peer-sync watches. Adding a slider to admin means adding the
- * path here — no other changes. Keep in alphabetical order by namespace so
- * diff noise is low when the list grows.
+ * Paths dual-tree operator panels write (FlightControls + AtmosphereControls
+ * + LightingControls). SSOT for admin→fleet ambient sync — add a path here
+ * when a shared panel gains a new patch target. Keep alphabetical by
+ * namespace so diffs stay readable.
+ *
+ * Device-local chrome (role FOV, etc.) stays out of this list.
  */
-const WATCHED_PATHS: ReadonlyArray<{ path: string; read: () => unknown }> = [
-	{ path: 'atmosphere.clouds.density', read: () => config.atmosphere.clouds.density },
-	{ path: 'atmosphere.clouds.speed',   read: () => config.atmosphere.clouds.speed },
-	{ path: 'atmosphere.haze.amount',    read: () => config.atmosphere.haze.amount },
-	{ path: 'world.nightLightIntensity', read: () => config.world.nightLightIntensity },
-	{ path: 'world.qualityMode',         read: () => config.world.qualityMode },
-	{ path: 'world.showClouds',          read: () => config.world.showClouds },
-	{ path: 'world.buildingsEnabled',    read: () => config.world.buildingsEnabled },
-	{ path: 'shell.windowFrame',         read: () => config.shell.windowFrame },
-];
+export const PEER_SYNC_PATHS = [
+	'atmosphere.clouds.density',
+	'atmosphere.clouds.speed',
+	'atmosphere.haze.amount',
+	'director.autopilot.nightLitCitiesOnly',
+	'shell.clockVisible',
+	'shell.hudVisible',
+	'shell.mouseParallax',
+	'shell.touchEnabled',
+	'shell.windowFrame',
+	'world.additiveStrength',
+	'world.buildingsEnabled',
+	'world.moonlightIntensity',
+	'world.nightExposure',
+	'world.nightLightIntensity',
+	'world.qualityMode',
+	'world.showClouds',
+	'world.skyDarken',
+	'world.useCesiumClouds',
+	'world.useHashPalette',
+	'world.useThreeOverlay',
+	'world.viirsBrightness',
+	'world.wingDriftSign',
+	'world.wingXBase',
+] as const;
+
+const _configRoot = config as unknown as Record<string, unknown>;
+
+/** Read a dotted path off the live config root (reactive when called in $effect). */
+export function readPeerSyncPath(path: string): unknown {
+	return readByPath(_configRoot, path);
+}
 
 /**
  * Start propagating local config edits to every peer in the store.
@@ -50,19 +75,19 @@ const WATCHED_PATHS: ReadonlyArray<{ path: string; read: () => unknown }> = [
  * breaking fleet propagation.
  */
 export function startPeerSync(store: RestAdminStore): () => void {
-	let snapshot = WATCHED_PATHS.map((p) => p.read());
+	let snapshot = PEER_SYNC_PATHS.map((p) => readPeerSyncPath(p));
 
 	const cleanup = $effect.root(() => {
 		$effect(() => {
-			const next = WATCHED_PATHS.map((p) => p.read());
-			for (let i = 0; i < WATCHED_PATHS.length; i++) {
+			const next = PEER_SYNC_PATHS.map((p) => readPeerSyncPath(p));
+			for (let i = 0; i < PEER_SYNC_PATHS.length; i++) {
 				if (next[i] === snapshot[i]) continue;
-				const { path } = WATCHED_PATHS[i];
+				const path = PEER_SYNC_PATHS[i];
 				const value = next[i];
 				// Fire-and-forget per changed path. Peer errors don't block UI.
 				for (const peer of store.peers) {
 					if (peer.self) continue;
-					void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: peer unreachable, next tick retries */ });
+					void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: no retry — a failed push is lost until the next change to this path */ });
 				}
 			}
 			snapshot = next;

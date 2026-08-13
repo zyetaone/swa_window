@@ -19,8 +19,7 @@
 
 import type { FleetClientModel } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
-import { isValidWeather, isValidDisplayMode, type WeatherType, type QualityMode } from '$lib/types';
-import { applyConfigPatch } from '$lib/model/config-tree.svelte';
+import { isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
 import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS, transitionDelayMs } from '$lib/fleet/protocol';
 import { peerJsonHeaders } from '$lib/http/peer-token';
@@ -229,7 +228,10 @@ export class DeviceClient {
 		if (typeof body.path !== 'string') return;
 
 		if (typeof body.timestamp === 'number' && typeof body.sourceId === 'string') {
-			applyConfigPatch(body.path, body.value, {
+			// Route through the model wrapper (not the config-tree global) so the
+			// apply lands in telemetry like every other config_patch. The remote
+			// stamp rides along for the CRDT LWW merge.
+			this.#model.applyConfigPatch?.(body.path, body.value, {
 				remote: { timestamp: body.timestamp, sourceId: body.sourceId },
 			});
 		} else {
@@ -271,18 +273,20 @@ export class DeviceClient {
 				// Legacy flat DisplayConfig → decomposed into typed setter calls
 				// (altitude/time/weather/flightSpeed have side effects) and
 				// path-targeted patches (cloud density, haze, lights, etc.).
+				// /api/command deliberately does NOT validate payloads, so the
+				// isValid* gates on enum fields here are the trust boundary.
 				const p = msg.patch;
 				if (p && typeof p === 'object' && !Array.isArray(p)) {
 					const d = p as Record<string, unknown>;
 					if (typeof d.altitude === 'number') this.#model.setAltitude(d.altitude);
 					if (typeof d.timeOfDay === 'number') this.#model.setTime(d.timeOfDay);
-					if (typeof d.weather === 'string') this.#model.applyScene(this.#model.location, d.weather as WeatherType);
+					if (isValidWeather(d.weather)) this.#model.applyScene(this.#model.location, d.weather);
 					if (typeof d.flightSpeed === 'number') this.#model.setFlightSpeed(d.flightSpeed);
 					if (typeof d.syncToRealTime === 'boolean') this.#model.syncToRealTime = d.syncToRealTime;
 					if (typeof d.cloudDensity === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
 					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
 					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
-					if (typeof d.qualityMode === 'string') this.#model.setQualityMode(d.qualityMode as QualityMode);
+					if (isValidQualityMode(d.qualityMode)) this.#model.setQualityMode(d.qualityMode);
 				}
 				break;
 			}

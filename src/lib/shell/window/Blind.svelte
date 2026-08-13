@@ -29,7 +29,6 @@
 <div class="blind-clip" {@attach blind.attach}>
 	<div
 		class={['blind-overlay', showDiscoverable && 'discoverable']}
-		onanimationend={() => { blind.hasAnimated = true; }}
 		onpointerdown={blind.onPointerDown}
 		onpointermove={blind.onPointerMove}
 		onpointerup={blind.onPointerUp}

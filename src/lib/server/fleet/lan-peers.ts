@@ -12,6 +12,7 @@
 
 import mdns from 'multicast-dns';
 import { PEER_REFRESH_INTERVAL_MS } from '$lib/fleet/protocol';
+import { DEVICE_ID_PATTERN } from './heartbeat';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -20,6 +21,12 @@ const SERVICE_TYPE = '_aero-bundle._tcp.local';
 const ANNOUNCE_INTERVAL_MS = PEER_REFRESH_INTERVAL_MS;
 /** Peer announcement is considered stale after this many ms without a refresh. */
 const PEER_TTL_MS = 90_000;
+/**
+ * Hard bound on the peer map. mDNS answers are untrusted LAN input — without
+ * a cap a flood of bogus SRV records grows the map (and /api/devices) without
+ * limit. 64 is ~10× the largest real install.
+ */
+const MAX_PEERS = 64;
 
 /** Local service port — the admin-exposed `/api/bundle/:hash` endpoint. */
 function servicePort(): number {
@@ -105,9 +112,9 @@ function announce(): void {
 
 /**
  * Handle an mDNS response from another Pi. We only care about answers
- * carrying our SERVICE_TYPE PTR + SRV pair.
+ * carrying our SERVICE_TYPE PTR + SRV pair. Exported for tests.
  */
-function handleResponse(resp: { answers?: Array<{ name: string; type: string; data: unknown }> }): void {
+export function handleResponse(resp: { answers?: Array<{ name: string; type: string; data: unknown }> }): void {
 	if (!resp.answers) return;
 	let deviceId: string | null = null;
 	let port: number | null = null;
@@ -122,6 +129,12 @@ function handleResponse(resp: { answers?: Array<{ name: string; type: string; da
 		}
 	}
 	if (deviceId && port && host && deviceId !== deviceHost()) {
+		// mDNS answers are untrusted: deviceId becomes the peer-map key and is
+		// rendered in the admin UI, so it must be hostname-shaped (the same
+		// allowlist the heartbeat store enforces). New entries beyond
+		// MAX_PEERS are dropped — refreshes of known peers always land.
+		if (!DEVICE_ID_PATTERN.test(deviceId)) return;
+		if (!peers.has(deviceId) && peers.size >= MAX_PEERS) return;
 		peers.set(deviceId, { deviceId, host, port, lastSeen: Date.now() });
 	}
 }
@@ -149,7 +162,8 @@ export function startLanProxy(): () => void {
 	return stopLanProxy;
 }
 
-function stopLanProxy(): void {
+/** Stop announcing, tear down the socket, and clear the peer map. Exported for test teardown. */
+export function stopLanProxy(): void {
 	if (announceTimer) {
 		clearInterval(announceTimer);
 		announceTimer = null;

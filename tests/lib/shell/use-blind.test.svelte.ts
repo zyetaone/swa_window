@@ -146,3 +146,31 @@ describe('useBlind pointercancel', () => {
 		h.stop();
 	});
 });
+
+describe('useBlind discoverable coaching', () => {
+	// The chevron hint must show "once per session until the user first
+	// interacts" — NOT vanish when the 3-iteration handle-breathe animation
+	// ends on its own. hasAnimated is therefore set by pointerdown, not
+	// animationend.
+	it('starts un-animated so the coaching shows', () => {
+		const h = harness();
+		expect(h.blind.hasAnimated).toBe(false);
+		h.stop();
+	});
+
+	it('first pointerdown retires the coaching', () => {
+		const h = harness();
+		h.blind.onPointerDown(h.pointer(100, 100));
+		expect(h.blind.hasAnimated).toBe(true);
+		h.blind.onPointerCancel();
+		h.stop();
+	});
+
+	it('a pointerdown during a flight transition still counts as interaction', () => {
+		const h = harness();
+		h.model.flight.isTransitioning = true;
+		h.blind.onPointerDown(h.pointer(100, 100));
+		expect(h.blind.hasAnimated).toBe(true);
+		h.stop();
+	});
+});

@@ -29,11 +29,26 @@
  */
 
 
-export const EARTH_RADIUS_M = 6378137;
-// Soft Earth-limb fade band for celestial occlusion (moon/Venus fade vs pop).
+const EARTH_RADIUS_M = 6378137;
 export const CLOUD_DECK_M = 8000;           // clouds at ~8 km altitude
 
 type Vec3 = [number, number, number];
+
+/**
+ * Cesium ECEF → this project's Three.js world frame.
+ *
+ *   Cesium ECEF:  X = Greenwich+equator, Y = 90°E+equator, Z = North pole
+ *   Three (here): X = Greenwich+equator, Y = North pole,   Z = −90°E+equator
+ *
+ * so Three(x, y, z) = (cx, cz, −cy). The map is LINEAR, so it applies
+ * verbatim to positions, direction/up vectors, and lookAt targets
+ * (point + direction×k transforms componentwise). CameraMirror.svelte
+ * uses this for every per-frame copy; geoToCartesian below is the same
+ * map applied to WGS84 geography.
+ */
+export function cesiumToThreeVec(cx: number, cy: number, cz: number): Vec3 {
+	return [cx, cz, -cy];
+}
 
 /**
  * Convert geographic (lat°, lon°, altitude metres) → world Cartesian.

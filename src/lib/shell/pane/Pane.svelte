@@ -5,10 +5,14 @@
 	 * Owns the cabin chrome (oval frame, glass, blind, HUD) and composes
 	 * the scene. GlobeLayer handles Cesium + Three overlay + watchdogs.
 	 *
-		 */
+	 * Media modes (video / slideshow) force full-bleed (no oval frame) and
+	 * stack MediaStage over a *parked* GlobeLayer so return-to-flight does
+	 * not cold-remount Cesium.
+	 */
 	import { useAeroWindow } from "$lib/model/aero-window.svelte";
 	import { SKY_PALETTE } from "$content/palettes";
 	import GlobeLayer from "./GlobeLayer.svelte";
+	import MediaStage from "$lib/shell/media/MediaStage.svelte";
 	import Glass from "$lib/shell/window/Glass.svelte";
 	import RainGlass from "$lib/shell/window/RainGlass.svelte";
 	import Blind from "$lib/shell/window/Blind.svelte";
@@ -17,6 +21,7 @@
 	import { doubleTap } from '$lib/shell/use-double-tap';
 
 	const model = useAeroWindow();
+	const isFlight = $derived(model.displayMode === 'flight');
 
 	// Double-tap anywhere on the pane toggles the cabin clock. Attached on the
 	// window CONTAINER, not the viewport: `<Blind />` is a SIBLING of
@@ -36,10 +41,10 @@
 	}
 
 	// ── Frame chrome ──────────────────────────────────────────────────────────
-
-const frameVisible = $derived(model.config.shell.windowFrame);
-const skyPalette = $derived(SKY_PALETTE[model.skyState]);
-const skyBackground = $derived(skyPalette.background);
+	// Media always full-bleeds the wall; oval frame is flight-only chrome.
+	const frameVisible = $derived(isFlight && model.config.shell.windowFrame);
+	const skyPalette = $derived(SKY_PALETTE[model.skyState]);
+	const skyBackground = $derived(isFlight ? skyPalette.background : '#000');
 
 // Scene brightness lives in Cesium exposure (atmosphere.ts), not CSS filter —
 // filter on a WebGL layer costs a full intermediate bitmap every frame on Pi.
@@ -69,7 +74,7 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 </script>
 
 <div
-	class={['window-container', !frameVisible && 'no-frame']}
+	class={['window-container', !frameVisible && 'no-frame', !isFlight && 'media-mode']}
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
@@ -81,22 +86,36 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 	>
 		<div
 			class="scene-content"
-			style:transform={motionTransform}
+			style:transform={isFlight ? motionTransform : 'none'}
 		>
-			<div class="render-layer" style:z-index="0">
-				<GlobeLayer />
+			<!-- Globe stays mounted (parked) under media so return-to-flight is warm. -->
+			<div class={['render-layer', 'globe-layer', !isFlight && 'parked']} style:z-index="0">
+				<GlobeLayer active={isFlight} />
 			</div>
+			{#if !isFlight}
+				<div class="render-layer media-layer" style:z-index="1">
+					{#if model.displayMode === 'video'}
+						<MediaStage mode="video" videoUrl={model.videoUrl} />
+					{:else}
+						<MediaStage mode="screensaver" slideshow={model.slideshow} />
+					{/if}
+				</div>
+			{/if}
 		</div>
 
-		<RainGlass />
-		<Glass {glassVignetteOpacity} />
+		{#if isFlight}
+			<RainGlass />
+			<Glass {glassVignetteOpacity} />
+		{/if}
 
 		{#if model.config.shell.clockVisible}
 			<CabinClock />
 		{/if}
 	</div>
 
-	<Blind />
+	{#if isFlight}
+		<Blind />
+	{/if}
 </div>
 
 <style>
@@ -168,6 +187,12 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 		height: 100% !important;
 	}
 
+	/* Keep WebGL canvas in the tree (display:none can lose GL size on some GPUs). */
+	.render-layer.parked {
+		visibility: hidden;
+		pointer-events: none;
+	}
+
 	.window-container.no-frame :global(.glass-surface),
 	.window-container.no-frame :global(.vignette),
 	.window-container.no-frame :global(.glass-recess) {
@@ -191,6 +216,14 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 	.window-container.no-frame .window-viewport {
 		border-radius: 0 !important;
 		box-shadow: none !important;
+		/* Media full-bleed: no frame inset. */
+		inset: 0;
+	}
+
+	.window-container.media-mode .window-viewport {
+		/* Zero frame width while media so CSS var-based insets don't leave a rim. */
+		--frame-width: 0px;
+		--inner-radius: 0px;
 	}
 
 	.window-container.no-frame :global(.blind-clip),

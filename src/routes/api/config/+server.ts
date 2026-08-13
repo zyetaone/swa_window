@@ -4,8 +4,9 @@
  * Body: { path, value, timestamp?, sourceId? }
  *
  * When the message carries {timestamp, sourceId}, receiver routes through
- * CRDT merge (applyRemoteConfigPatch) — incoming only applies if it wins
- * per-path LWW. Omitted → fall through to local-semantics applyConfigPatch
+ * CRDT merge (the remote branch of applyConfigPatch in config-tree.svelte.ts)
+ * — incoming only applies if it wins per-path LWW. Omitted → fall through to
+ * local-semantics applyConfigPatch
  * (stamps fresh, just for convenience in curl / admin with no cradled id).
  *
  * Actually applies on the BROWSER side via SSE publish — config state

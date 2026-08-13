@@ -3,13 +3,15 @@
 	 * LabControls — DEV-only SidePanel section for the lab mode on /.
 	 * Exposes the same controls as /playground (mode selector + per-mode knobs)
 	 * when ?lab=1 is active. Not bundled in production (import.meta.env.DEV gate).
+	 *
+	 * Config leaves go through usePanelConfig (same gate as dual-tree panels).
+	 * Sim actions (location/time/altitude) still need the AeroWindow prop.
 	 */
 	import { setParallaxRole } from '$lib/model/config-tree.svelte';
 	import { DEVICE_ROLES, type DeviceRole } from '$lib/types';
-		import type { AeroWindow } from '$lib/model/aero-window.svelte';
-	import { patchNum } from '$lib/shell/operator/panel/patch';
-	import RangeSlider from '$lib/shell/operator/panel/RangeSlider.svelte';
-	import Toggle from '$lib/shell/operator/panel/Toggle.svelte';
+	import type { AeroWindow } from '$lib/model/aero-window.svelte';
+	import { patchNum, usePanelConfig } from './patch';
+	import RangeSlider from './RangeSlider.svelte';
 
 	type LabMode = 'cesium' | 'hybrid' | 'night-lab';
 	// Record<DeviceRole, …> rather than a bare object literal: adding a role to
@@ -25,9 +27,7 @@
 		model: AeroWindow;
 	} = $props();
 
-	// Closure, not .bind(model): referencing the prop at call time keeps the
-	// compiler's state_referenced_locally warning quiet.
-	const patch = (path: string, value: unknown) => model.applyConfigPatch(path, value);
+	const { cfg, patch } = usePanelConfig();
 </script>
 
 <fieldset>
@@ -38,7 +38,7 @@
 		// The renderer selector is the ONLY lab writer of useThreeOverlay — the
 		// write lives here (user interaction) rather than a page-level $effect.
 		// Night Lab needs the overlay: variants E/F render through Three.
-		model.applyConfigPatch('world.useThreeOverlay', next !== 'cesium');
+		patch('world.useThreeOverlay', next !== 'cesium');
 	}}>
 		<option value="cesium">Cesium (DOM effects)</option>
 		<option value="hybrid">Hybrid (Cesium + Three)</option>
@@ -48,28 +48,30 @@
 
 {#if mode === 'hybrid'}
 	<fieldset>
-		<legend>HUD</legend>
-	<Toggle label="Show clock" checked={model.config.shell.clockVisible} onchange={(e) => model.applyConfigPatch('shell.clockVisible', e.currentTarget.checked)} />
-	</fieldset>
-
-	<fieldset>
 		<legend>Night city flyover</legend>
 		<button type="button" class="lab-btn"
 			onclick={() => {
-				const turningOn = model.config.camera.flyoverPitchDeg === 0;
-				model.applyConfigPatch('camera.flyoverPitchDeg', turningOn ? -60 : 0);
-				if (turningOn) { model.setLocation(model.location); model.setTime(2); model.setAltitude(8000); model.onUserInteraction('altitude'); }
+				const turningOn = cfg.camera.flyoverPitchDeg === 0;
+				patch('camera.flyoverPitchDeg', turningOn ? -60 : 0);
+				if (turningOn) {
+					model.setLocation(model.location);
+					model.setTime(2);
+					model.setAltitude(8000);
+					model.onUserInteraction('altitude');
+				}
 			}}>
-			{model.config.camera.flyoverPitchDeg !== 0 ? '✓ Flyover active' : 'Night City Flyover'}
+			{cfg.camera.flyoverPitchDeg !== 0 ? '✓ Flyover active' : 'Night City Flyover'}
 		</button>
 	</fieldset>
 
 	<fieldset>
 		<legend>3-Pi Role</legend>
-		<select class="lab-select" value={model.config.camera.parallax.role}
+		<select class="lab-select" value={cfg.camera.parallax.role}
 			onchange={(e) => {
 				const role = (e.currentTarget as HTMLSelectElement).value as DeviceRole;
-				setParallaxRole(role); model.applyConfigPatch('camera.parallax.fovDeg', ROLE_FOV[role]);
+				// Role is device-local — setParallaxRole skips CRDT/fleet stamp.
+				setParallaxRole(role);
+				patch('camera.parallax.fovDeg', ROLE_FOV[role]);
 			}}>
 			<!-- Iterated from the DEVICE_ROLES SSOT so the lab picker can never
 			     offer a different set than the roles the app actually accepts. -->
@@ -81,8 +83,8 @@
 {:else if mode === 'cesium'}
 	<fieldset>
 		<legend>Clouds</legend>
-	<RangeSlider label="Density" value={model.config.atmosphere.clouds.density} oninput={patchNum(patch, 'atmosphere.clouds.density')} min={0} max={1} step={0.01} />
-	<RangeSlider label="Speed" value={model.config.atmosphere.clouds.speed} oninput={patchNum(patch, 'atmosphere.clouds.speed')} min={0.1} max={3} step={0.1} />
+		<RangeSlider label="Density" value={cfg.atmosphere.clouds.density} oninput={patchNum(patch, 'atmosphere.clouds.density')} min={0} max={1} step={0.01} />
+		<RangeSlider label="Speed" value={cfg.atmosphere.clouds.speed} oninput={patchNum(patch, 'atmosphere.clouds.speed')} min={0.1} max={3} step={0.1} />
 	</fieldset>
 {/if}
 

@@ -8,7 +8,7 @@
  * deployed Pi stays in Cesium-only mode across reboots until an operator
  * manually re-enables it.
  *
- * Framework-free — no runes, testable. Wire-up in Pane.svelte.
+ * Framework-free — no runes, testable. Wire-up in GlobeLayer.svelte.
  */
 
 /** Three consecutive 30s checks below this fps threshold triggers disable. */
@@ -60,7 +60,7 @@ export function hasExplicitOverlayParam(): boolean {
 	}
 }
 
-export interface OverlayRecoveryOptions {
+interface OverlayRecoveryOptions {
 	/** Called to read the current measured fps. */
 	getFps: () => number;
 	/** Called to disable the overlay (applyConfigPatch + persist). */
@@ -77,14 +77,19 @@ export interface OverlayRecoveryOptions {
  * Start the overlay recovery monitor. Returns a stop function.
  *
  * Design: separate from the liveness watchdog — the watchdog handles "dead"
- * (fps=0) and this handles "alive but too slow." Both run from Pane.svelte
- * $effects and use the same measuredFps source. They don't interact.
+ * (fps=0) and this handles "alive but too slow." Both run from
+ * GlobeLayer.svelte $effects and use the same measuredFps source. They don't
+ * interact.
  */
 export function startOverlayRecovery(opts: OverlayRecoveryOptions): () => void {
 	const intervalMs = opts.intervalMs ?? CHECK_INTERVAL_MS;
 	const threshold = opts.fpsMinThreshold ?? FPS_MIN_THRESHOLD;
 	const required = opts.slowChecksRequired ?? CONSECUTIVE_CHECKS;
 	let consecutiveSlow = 0;
+	// Latch: once fired, don't re-fire disableOverlay (a config patch + fleet
+	// broadcast) on every interval while the slowness persists. A healthy
+	// check resets the latch so a LATER sustained regression re-fires.
+	let reported = false;
 
 	const id = setInterval(() => {
 		if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -97,10 +102,12 @@ export function startOverlayRecovery(opts: OverlayRecoveryOptions): () => void {
 		}
 		if (fps >= threshold) {
 			consecutiveSlow = 0;
+			reported = false;
 			return;
 		}
 		consecutiveSlow++;
-		if (consecutiveSlow >= required) {
+		if (consecutiveSlow >= required && !reported) {
+			reported = true;
 			persistDisabled();
 			opts.disableOverlay();
 		}

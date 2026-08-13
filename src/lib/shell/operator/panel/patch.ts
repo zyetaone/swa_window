@@ -22,6 +22,10 @@ export function patchNum(patch: (path: string, value: unknown) => void, path: st
  * pick up telemetry + fleet broadcast), and /admin, which has no context (so
  * writes go through the module-level gate and reach peers via startPeerSync).
  *
+ * When a dual-tree control adds a new patch path, also add it to
+ * `PEER_SYNC_PATHS` in `$lib/fleet/peer-sync.svelte` so admin ambient edits
+ * fan out to the wall.
+ *
  * Getting this wrong is silent. Reading `config` directly in the kiosk shows
  * the wrong tree; writing `config.X = v` instead of patching skips the CRDT
  * stamp and the prototype-pollution guard, and fleet sync just stops working

@@ -10,8 +10,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
 	startLivenessWatchdog,
 	tryConsumeReloadBudget,
-	reloadBudgetAvailable,
-	registerLivenessCanvas,
 	attachCanvasLiveness,
 } from '$lib/world/lifecycle-liveness';
 
@@ -66,7 +64,6 @@ describe('liveness watchdog', () => {
 		expect(tryConsumeReloadBudget()).toBe(true);
 		expect(tryConsumeReloadBudget()).toBe(true);
 		expect(tryConsumeReloadBudget()).toBe(false);   // 4th within the hour — denied
-		expect(reloadBudgetAvailable()).toBe(false);
 	});
 
 	it('budget entries expire after an hour', () => {
@@ -74,8 +71,8 @@ describe('liveness watchdog', () => {
 		expect(tryConsumeReloadBudget(t0)).toBe(true);
 		expect(tryConsumeReloadBudget(t0)).toBe(true);
 		expect(tryConsumeReloadBudget(t0)).toBe(true);
-		expect(reloadBudgetAvailable(t0)).toBe(false);
-		expect(reloadBudgetAvailable(t0 + 3_600_001)).toBe(true);   // rolled off
+		expect(tryConsumeReloadBudget(t0)).toBe(false);              // capped
+		expect(tryConsumeReloadBudget(t0 + 3_600_001)).toBe(true);   // rolled off
 	});
 
 	it('watchdog stops reloading once the budget is exhausted', () => {
@@ -89,6 +86,35 @@ describe('liveness watchdog', () => {
 		expect(events.some((e) => (e as { reloadBudgetExhausted?: boolean }).reloadBudgetExhausted)).toBe(true);
 		stop();
 	});
+
+	it('budget-exhausted latch: the terminal event logs ONCE, then silence', () => {
+		tryConsumeReloadBudget();
+		tryConsumeReloadBudget();
+		tryConsumeReloadBudget();
+		const { reload, events, stop } = run({ fps: [0, 0, 0, 0, 0, 0, 0, 0] });
+		vi.advanceTimersByTime(8000);
+		expect(reload).not.toHaveBeenCalled();
+		// Before the latch this was 3 error events per 2 intervals, forever.
+		// Now: 2 dead-check events + 1 terminal event, then quiet.
+		expect(events).toHaveLength(3);
+		expect(
+			events.filter((e) => (e as { reloadBudgetExhausted?: boolean }).reloadBudgetExhausted),
+		).toHaveLength(1);
+		stop();
+	});
+
+	it('a healthy check resets the latch — a later stall reports again', () => {
+		tryConsumeReloadBudget();
+		tryConsumeReloadBudget();
+		tryConsumeReloadBudget();
+		// stall → terminal latch → recover → stall again → reports again.
+		const { events, stop } = run({ fps: [0, 0, 0, 60, 0, 0, 0] });
+		vi.advanceTimersByTime(7000);
+		expect(
+			events.filter((e) => (e as { reloadBudgetExhausted?: boolean }).reloadBudgetExhausted),
+		).toHaveLength(2);
+		stop();
+	});
 	// Regression: a canvas left registered after its owner unmounts keeps
 	// reporting a LOST context forever, so the watchdog sees "dead" on every
 	// check and burns the hourly reload budget trying to recover a canvas that
@@ -98,9 +124,11 @@ describe('liveness watchdog', () => {
 		// left behind by a remount.
 		const orphan = {
 			getContext: () => ({ isContextLost: () => true }),
+			addEventListener() {},
+			removeEventListener() {},
 		} as unknown as HTMLCanvasElement;
 
-		const unregister = registerLivenessCanvas(orphan);
+		const unregister = attachCanvasLiveness(orphan, 'test', { recordEvent() {} });
 
 		// While registered, healthy fps is not enough: the lost context alone
 		// marks the app dead, so the watchdog reloads.

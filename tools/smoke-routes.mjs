@@ -80,8 +80,11 @@ for (const route of ROUTES) {
 		console.log(`ok    ${route.path}  (${text.trim().length} chars, ${canvases} canvas)`);
 	}
 
-	Runtime.exceptionThrown.removeListener?.(onEx);
-	Runtime.consoleAPICalled.removeListener?.(onLog);
+	// Unsubscribe via the client EventEmitter — Runtime.<event>(cb) is just
+	// client.on('Runtime.<event>', cb); a .removeListener on the method
+	// itself would be a silent no-op and listeners would accumulate.
+	client.off('Runtime.exceptionThrown', onEx);
+	client.off('Runtime.consoleAPICalled', onLog);
 }
 
 await client.close();

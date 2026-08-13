@@ -9,8 +9,11 @@
  *
  *   1. first call after construction  → write (last seeded with sentinel)
  *   2. |Δ| > epsilon                  → write
- *   3. otherwise                      → no-op (still tracks last, so the
- *                                       next divergence triggers the write)
+ *   3. otherwise                      → no-op (last stays at the last WRITTEN
+ *                                       value, so repeated sub-epsilon drifts
+ *                                       accumulate against it and eventually
+ *                                       trip the gate, instead of ratcheting
+ *                                       the baseline and never writing)
  *
  * Epsilons are chosen per-property by the site that needs them; numbers
  * below perception (< 0.005 alpha, < 0.01 brightness) so admin sliders

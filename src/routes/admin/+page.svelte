@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
-	import { config } from '$lib/model/config-tree.svelte';
 	import { formatAltitudeFt, formatSpeedX, formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
 	import AtmosphereControls from '$lib/shell/operator/panel/AtmosphereControls.svelte';
+	import FlightControls from '$lib/shell/operator/panel/FlightControls.svelte';
 	import LightingControls from '$lib/shell/operator/panel/LightingControls.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
@@ -20,15 +20,22 @@
 		type DeviceRole,
 		type DeviceBinding,
 	} from '$lib/fleet/parallax.svelte';
+	import type { AssetInfo } from '$lib/server/bundle/assets';
+	import {
+		isAllowedMediaUrl,
+		isRelativeAssetUrl,
+		encodeSlideshowPayload,
+		toAbsoluteMediaUrl,
+		absolutizeMediaUrls,
+		DEFAULT_SLIDESHOW_INTERVAL_SEC,
+	} from '$lib/fleet/display-payload';
 
-	// Admin is a view into the global config rune. Slider sliders bind directly
-	// to `config.*` (module-scope $state — single instance per process). A $effect
-	// inside startPeerSync watches those fields and POSTs PATCH /api/config to
-	// every peer in `store.peers`, so edits propagate without an explicit push.
+	// Admin reuses the same dual-tree panel controls as the kiosk SidePanel.
+	// They write through usePanelConfig → applyConfigPatch (no AeroWindow).
+	// startPeerSync watches PEER_SYNC_PATHS and PATCHes peers on change.
 	//
 	// Scene-level state (location/weather/altitude/time/flightSpeed) stays in
-	// local `scene` state because it's a one-shot command ("go there"), not an
-	// ambient config value. The "Push Scene" button dispatches on demand.
+	// local `scene` state — one-shot "go there", not ambient config.
 	const store = new RestAdminStore();
 	const stopPeerSync = startPeerSync(store);
 	onDestroy(() => { stopPeerSync(); store.destroy(); });
@@ -37,6 +44,64 @@
 	let selectedDevices = $state<Set<string>>(new Set());
 	let pushMode = $state<DisplayMode>('flight');
 	let videoUrl = $state('');
+	/** Ordered slideshow image URLs (assets and/or external). */
+	let slideUrls = $state<string[]>([]);
+	let slideIntervalSec = $state(DEFAULT_SLIDESHOW_INTERVAL_SEC);
+	let slideUrlDraft = $state('');
+	let assets = $state.raw<AssetInfo[]>([]);
+
+	const VIDEO_EXT = /\.(mp4|webm)$/i;
+	const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
+	const videoAssets = $derived(assets.filter((a) => VIDEO_EXT.test(a.filename)));
+	const imageAssets = $derived(assets.filter((a) => IMAGE_EXT.test(a.filename)));
+	const adminOrigin = $derived(typeof window !== 'undefined' ? window.location.origin : '');
+	const usesRelativeAssets = $derived.by(() => {
+		if (pushMode === 'video') return isRelativeAssetUrl(videoUrl);
+		if (pushMode === 'screensaver') return slideUrls.some(isRelativeAssetUrl);
+		return false;
+	});
+
+	async function refreshAssets() {
+		try {
+			const res = await fetch('/api/assets');
+			if (!res.ok) return;
+			const data = await res.json();
+			assets = (data.assets ?? []) as AssetInfo[];
+		} catch { /* assets optional offline */ }
+	}
+
+	function pickVideoAsset(url: string) {
+		videoUrl = url;
+	}
+
+	function toggleSlideAsset(url: string) {
+		if (slideUrls.includes(url)) {
+			slideUrls = slideUrls.filter((u) => u !== url);
+		} else {
+			slideUrls = [...slideUrls, url];
+		}
+	}
+
+	function addSlideUrlDraft() {
+		const u = slideUrlDraft.trim();
+		if (!isAllowedMediaUrl(u) || slideUrls.includes(u)) return;
+		slideUrls = [...slideUrls, u];
+		slideUrlDraft = '';
+	}
+
+	function removeSlideUrl(url: string) {
+		slideUrls = slideUrls.filter((u) => u !== url);
+	}
+
+	function moveSlide(url: string, dir: -1 | 1) {
+		const i = slideUrls.indexOf(url);
+		if (i < 0) return;
+		const j = i + dir;
+		if (j < 0 || j >= slideUrls.length) return;
+		const next = [...slideUrls];
+		[next[i], next[j]] = [next[j], next[i]];
+		slideUrls = next;
+	}
 
 	// One-shot scene builder — what to command devices to be (not ambient config).
 	// Shadow state is justified here because admin authors a DRAFT before pushing;
@@ -136,14 +201,36 @@
 	async function handlePushMode() {
 		const targets = getTargets();
 		if (targets.length === 0) return;
+		// Absolute-ify /api/assets paths against this admin origin so every Pi
+		// fetches media from the host that holds the files (not its own empty store).
+		const origin = typeof window !== 'undefined' ? window.location.origin : '';
 		let payload: string | undefined;
-		if (pushMode === 'video' && videoUrl) {
-			try { const u = new URL(videoUrl); if (!['http:', 'https:'].includes(u.protocol)) return; } catch { return; }
-			payload = videoUrl;
+		if (pushMode === 'video') {
+			const abs = toAbsoluteMediaUrl(videoUrl, origin);
+			if (!isAllowedMediaUrl(abs)) {
+				pushResult = { ok: 0, failed: ['video URL required (http(s) or /api/assets/…)'] };
+				return;
+			}
+			payload = abs;
+		} else if (pushMode === 'screensaver') {
+			if (slideUrls.length === 0) {
+				pushResult = { ok: 0, failed: ['add at least one slideshow image'] };
+				return;
+			}
+			payload = encodeSlideshowPayload(absolutizeMediaUrls(slideUrls, origin), slideIntervalSec);
+			if (JSON.parse(payload).urls.length === 0) {
+				pushResult = { ok: 0, failed: ['no allowed slideshow URLs'] };
+				return;
+			}
 		}
+		// flight: no payload
 		pushResult = null;
 		try {
 			pushResult = await fanOut(targets, (id) => store.pushMode(id, pushMode, payload));
+			// Heartbeats are slow — re-poll status so Mode chips reflect the push.
+			// Short delay lets devices apply set_mode before we read /api/status.
+			await new Promise((r) => setTimeout(r, 400));
+			await store.refreshStatus();
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
@@ -227,9 +314,18 @@
 	const WEATHER_OPTIONS: readonly WeatherType[] = WEATHER_TYPES;
 	const MODE_LABELS: Record<DisplayMode, string> = {
 		flight: 'Flight Sim',
-		screensaver: 'Screensaver',
+		screensaver: 'Slideshow',
 		video: 'Video',
 	};
+
+	/** Pretty-print device.currentMode on cards (wire uses screensaver). */
+	function formatDeviceMode(mode: string | undefined): string {
+		if (!mode) return '—';
+		if (mode === 'screensaver') return 'Slideshow';
+		if (mode === 'video') return 'Video';
+		if (mode === 'flight') return 'Flight';
+		return mode;
+	}
 	// Record<DisplayMode, string> is exhaustive-checked, so adding a mode to
 	// DISPLAY_MODES is a compile error here until it gets a label.
 	const MODE_OPTIONS: { value: DisplayMode; label: string }[] =
@@ -258,7 +354,10 @@
 		formRole = myBinding.role;
 		formGroup = myBinding.groupId;
 	}
-	onMount(refreshBindings);
+	onMount(() => {
+		refreshBindings();
+		void refreshAssets();
+	});
 
 	function handleSaveMyBinding() {
 		// handleSetBinding already calls refreshBindings().
@@ -344,6 +443,17 @@
 
 			<section class="control-section">
 				<h3>Mode</h3>
+				<p class="section-caption">
+					Flight = globe. Video = looped fullscreen. Slideshow = image playlist
+					(screensaver). Upload media on <a href="/admin/content">Content</a>, then pick here.
+					Asset paths are rewritten to absolute URLs against this admin host so every Pi can fetch them.
+				</p>
+				{#if usesRelativeAssets}
+					<p class="media-warn">
+						Devices must reach <code>{adminOrigin}</code> for these assets
+						(or use absolute CDN/http URLs).
+					</p>
+				{/if}
 				<div class="mode-buttons">
 					{#each MODE_OPTIONS as opt (opt.value)}
 						<button
@@ -354,14 +464,93 @@
 						</button>
 					{/each}
 				</div>
+
 				{#if pushMode === 'video'}
-					<input
-						type="url"
-						placeholder="Video URL..."
-						bind:value={videoUrl}
-						class="input"
-					/>
+					<label>
+						<span>Video URL</span>
+						<input
+							type="url"
+							placeholder="https://… or /api/assets/…"
+							bind:value={videoUrl}
+							class="input"
+						/>
+					</label>
+					{#if videoAssets.length > 0}
+						<p class="asset-hint">Installed videos — click to select</p>
+						<div class="asset-grid">
+							{#each videoAssets as a (a.filename)}
+								<button
+									type="button"
+									class={['asset-chip', videoUrl === a.url && 'active']}
+									onclick={() => pickVideoAsset(a.url)}
+									title={a.filename}
+								>
+									{a.filename}
+								</button>
+							{/each}
+						</div>
+					{:else}
+						<p class="asset-hint muted">No video assets yet — drop .mp4/.webm on Content.</p>
+					{/if}
+				{:else if pushMode === 'screensaver'}
+					<label>
+						<div class="slider-header">
+							<span>Slide interval</span>
+							<span class="slider-value">{slideIntervalSec}s</span>
+						</div>
+						<input
+							type="range"
+							min="3"
+							max="60"
+							step="1"
+							bind:value={slideIntervalSec}
+							class="range"
+						/>
+					</label>
+					{#if imageAssets.length > 0}
+						<p class="asset-hint">Installed images — click to toggle in playlist</p>
+						<div class="asset-grid">
+							{#each imageAssets as a (a.filename)}
+								<button
+									type="button"
+									class={['asset-chip', slideUrls.includes(a.url) && 'active']}
+									onclick={() => toggleSlideAsset(a.url)}
+									title={a.filename}
+								>
+									{a.filename}
+								</button>
+							{/each}
+						</div>
+					{:else}
+						<p class="asset-hint muted">No image assets yet — drop .png/.jpg/.webp on Content.</p>
+					{/if}
+					<div class="slide-url-row">
+						<input
+							type="url"
+							placeholder="Add external image URL…"
+							bind:value={slideUrlDraft}
+							class="input"
+							onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSlideUrlDraft(); } }}
+						/>
+						<button type="button" class="btn btn-secondary" onclick={addSlideUrlDraft}>Add</button>
+					</div>
+					{#if slideUrls.length > 0}
+						<ol class="slide-list">
+							{#each slideUrls as url, i (url)}
+								<li>
+									<span class="slide-idx">{i + 1}</span>
+									<code class="slide-url" title={url}>{url}</code>
+									<div class="slide-actions">
+										<button type="button" class="icon-btn" onclick={() => moveSlide(url, -1)} disabled={i === 0} title="Up">↑</button>
+										<button type="button" class="icon-btn" onclick={() => moveSlide(url, 1)} disabled={i === slideUrls.length - 1} title="Down">↓</button>
+										<button type="button" class="icon-btn" onclick={() => removeSlideUrl(url)} title="Remove">×</button>
+									</div>
+								</li>
+							{/each}
+						</ol>
+					{/if}
 				{/if}
+
 				<button class="btn btn-secondary" onclick={handlePushMode}>
 					Push Mode {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
 				</button>
@@ -371,26 +560,12 @@
 				<h3>
 					Ambient <span class="hint-muted">— auto-syncs to fleet</span>
 				</h3>
-				<!-- Shared components with device SidePanel. They bind directly to the
-				     module-scope config rune — editing here is identical to editing
-				     on-device. peer-sync (above) propagates to peers. -->
+				<!-- Same dual-tree panels as kiosk SidePanel. FlightControls
+				     shows night-lit only (no AeroWindow → no speed/alt sliders).
+				     usePanelConfig → applyConfigPatch; peer-sync fans out. -->
+				<FlightControls />
 				<AtmosphereControls />
 				<LightingControls />
-				<label>
-					<div class="slider-header">
-						<span>Quality</span>
-						<span class="slider-value">{config.world.qualityMode}</span>
-					</div>
-					<select bind:value={config.world.qualityMode} class="select">
-						<option value="performance">Performance (Pi/Raspberry)</option>
-						<option value="balanced">Balanced (default)</option>
-						<option value="ultra">Ultra (high-end)</option>
-					</select>
-				</label>
-				<label class="toggle-label">
-					<input type="checkbox" bind:checked={config.world.showClouds} />
-					<span>Show Clouds</span>
-				</label>
 			</section>
 
 			<section class="control-section">
@@ -550,7 +725,15 @@
 								</div>
 								<div class="stat">
 									<span class="stat-label">Mode</span>
-									<span class="stat-value">{device.currentMode || '—'}</span>
+									<span
+										class={[
+											'stat-value',
+											'mode-chip',
+											device.currentMode && device.currentMode !== 'flight' && 'mode-media',
+										]}
+									>
+										{formatDeviceMode(device.currentMode)}
+									</span>
 								</div>
 								<div class="stat-row">
 									<div class="stat">
@@ -838,6 +1021,103 @@
 		margin-bottom: 10px;
 	}
 
+	.media-warn {
+		margin: 0 0 10px;
+		padding: 8px 10px;
+		font-size: 11px;
+		line-height: 1.4;
+		border-radius: 6px;
+		background: #713f12;
+		color: #fde68a;
+	}
+	.media-warn code {
+		font-size: 10px;
+		word-break: break-all;
+	}
+
+	.asset-hint {
+		margin: 8px 0 6px;
+		font-size: 11px;
+		color: var(--text-dim);
+	}
+	.asset-hint.muted { opacity: 0.7; }
+	.asset-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-bottom: 10px;
+	}
+	.asset-chip {
+		font-size: 11px;
+		padding: 4px 8px;
+		border-radius: 999px;
+		border: 1px solid var(--border);
+		background: var(--bg-surface);
+		color: var(--text-dim);
+		cursor: pointer;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.asset-chip.active {
+		border-color: var(--accent);
+		color: var(--text);
+		background: color-mix(in srgb, var(--accent) 18%, transparent);
+	}
+	.slide-url-row {
+		display: flex;
+		gap: 6px;
+		margin: 8px 0;
+	}
+	.slide-url-row .input { flex: 1; }
+	.slide-url-row .btn { width: auto; }
+	.slide-list {
+		list-style: none;
+		margin: 0 0 10px;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.slide-list li {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 11px;
+		padding: 4px 6px;
+		border-radius: 4px;
+		background: var(--bg-surface);
+		border: 1px solid var(--border);
+	}
+	.slide-idx {
+		opacity: 0.5;
+		font-variant-numeric: tabular-nums;
+		min-width: 1.2em;
+	}
+	.slide-url {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 10px;
+		color: var(--text-dim);
+	}
+	.slide-actions { display: flex; gap: 2px; }
+	.icon-btn {
+		width: 22px;
+		height: 22px;
+		border: none;
+		border-radius: 4px;
+		background: var(--border);
+		color: var(--text);
+		cursor: pointer;
+		font-size: 12px;
+		line-height: 1;
+	}
+	.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 	.btn {
 		padding: 8px 14px;
 		border-radius: 6px;
@@ -1048,6 +1328,12 @@
 		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+	}
+
+	.mode-chip.mode-media {
+		color: #93c5fd;
+		font-weight: 600;
+		text-transform: capitalize;
 	}
 
 	.stat-value {

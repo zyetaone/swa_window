@@ -1,16 +1,12 @@
 <script lang="ts">
     /**
-     * RangeSlider — bindable numeric slider.
+     * RangeSlider — numeric slider for operator panels.
      *
-     * Supports both idioms so consumers can pick — matches the Toggle pattern:
-     *   <RangeSlider label="…" min={0} max={1} step={0.1} bind:value={config.field} />
-     *   <RangeSlider label="…" min={0} max={1} step={0.1} value={x} oninput={e => …} />
+     * Prefer the patch gate for config leaves:
+     *   <RangeSlider … value={cfg.x} oninput={patchNum(patch, 'path')} />
      *
-     * `value` is $bindable so direct bind against a `$state` field Just Works,
-     * removing the `oninput={(e) => (config.foo = parseFloat(e.currentTarget.value))}`
-     * boilerplate that every LightingControls / AtmosphereControls etc. used to
-     * carry. Native `<input type="range">` returns string values; the bind:value
-     * Svelte glue coerces back to number via the existing range-input handler.
+     * `value` is $bindable for local UI state only — never bind straight to
+     * `config.*` (skips applyConfigPatch / CRDT / peer-sync).
      */
     interface Props {
         label: string;

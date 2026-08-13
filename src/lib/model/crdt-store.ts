@@ -3,12 +3,13 @@
  *
  * Tracks timestamps for every config mutation. Fleet patches carry
  * { path, value, timestamp }. Incoming patches apply only when
- * timestamp > local recorded timestamp. Local UI calls .set() which
- * writes through to the config tree and records the timestamp.
+ * timestamp > local recorded timestamp. Local writes go through
+ * applyConfigPatch (config-tree.svelte.ts), which writes the config tree
+ * first and then calls .record() for the LWW stamp.
  *
  * Usage:
- *   const crdt = createCRDTStore(config);
- *   crdt.set('atmosphere.clouds.density', 0.5);   // local UI
+ *   const crdt = new CRDTStore(config);
+ *   crdt.record(path, value);                         // after a local write
  *   crdt.merge({ path, value, timestamp, sourceId }); // fleet
  */
 

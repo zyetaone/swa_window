@@ -51,7 +51,7 @@ import type * as CesiumType from 'cesium';
 type C = typeof CesiumType;
 
 /** Tuning for the night look. Deliberately narrow — see the header. */
-export interface NightIblOptions {
+interface NightIblOptions {
 	/**
 	 * Environment contribution relative to direct sun. Cesium's own example
 	 * uses 3.0 to "increase the intensity of the environment map lighting
@@ -67,7 +67,7 @@ export interface NightIblOptions {
 	maximumSecondsDifference: number;
 }
 
-export const NIGHT_IBL_DEFAULTS: NightIblOptions = {
+const NIGHT_IBL_DEFAULTS: NightIblOptions = {
 	atmosphereScatteringIntensity: 3.0,
 	// Warm sodium bounce, matching the emissive-window palette family.
 	groundColorCss: '#2a1d10',
@@ -107,7 +107,11 @@ export function enableNightIbl(
 	return true;
 }
 
-/** Turn it back off — for A/B comparison without a reload. */
+/**
+ * Turn it back off — for A/B comparison without a reload.
+ * Deliberate public API: half of the flag-flip evaluation this prototype
+ * module exists for (see header); today only tests call it.
+ */
 export function disableNightIbl(tileset: CesiumType.Cesium3DTileset | null): boolean {
 	if (!tileset) return false;
 	const mgr = (tileset as unknown as { environmentMapManager?: Record<string, unknown> })
@@ -117,7 +121,11 @@ export function disableNightIbl(tileset: CesiumType.Cesium3DTileset | null): boo
 	return true;
 }
 
-/** Is the API available on this Cesium build? Exported for the lab UI + tests. */
+/**
+ * Is the API available on this Cesium build? Deliberate public API: probe for
+ * the flag-flip evaluation (see header) — enableNightIbl already no-ops
+ * defensively, so the flag path never needs it; today only tests call it.
+ */
 export function nightIblSupported(tileset: CesiumType.Cesium3DTileset | null): boolean {
 	if (!tileset) return false;
 	const mgr = (tileset as unknown as { environmentMapManager?: unknown }).environmentMapManager;

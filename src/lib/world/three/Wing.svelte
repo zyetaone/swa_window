@@ -32,14 +32,14 @@
 	 * ─── LIGHTING ──────────────────────────────────────────────────────
 	 * The GLB keeps its own materials (white wing skin + Heart-gradient
 	 * winglet). They're lit by the scene AmbientLight (tinted by the lighting
-	 * SSOT → dawn warm / day cool / dusk amber / night blue)
-	 * + the Sky IBL, so the wing transitions with time of day automatically.
+	 * SSOT → dawn warm / day cool / dusk amber / night blue) plus the
+	 * dawn/moon key light below, so the wing transitions with time of day
+	 * automatically.
 	 * Fog is disabled on the wing materials (the holder is camera-anchored
 	 * but baked far from world origin, so distance fog would wrongly darken
 	 * it).
 	 */
 	import { T, useTask, useThrelte } from '@threlte/core';
-	import { untrack } from 'svelte';
 	import {
 		Group,
 		Box3,
@@ -378,19 +378,19 @@
 		// (below) both derive from this ONE term (screen-conventions.ts), so the
 		// wing always sweeps WITH the world drift and banks INTO the turn — by
 		// construction, not by four separate signs happening to agree.
-		const travelSign = untrack(() => model.flight.travelSign);
-		const wingSign = untrack(() => model.config.world.wingDriftSign) ?? 1;
+		const travelSign = model.flight.travelSign;
+		const wingSign = model.config.world.wingDriftSign ?? 1;
 		const screenSign = screenTravelSign(travelSign) * wingSign;
 		// Seat / window position slides the wing fore-aft along the fuselage axis
 		// (holder X). A forward seat (negative offset) shows more trailing edge;
 		// an aft seat (positive) more leading edge. Reads the per-role offset the
 		// model already computes (parallax.fuselageOffsetM) — 0 for solo, ±6 m for
 		// the left/right panorama roles.
-		const seatOffset = untrack(() => model.config.camera.parallax.fuselageOffsetM);
+		const seatOffset = model.config.camera.parallax.fuselageOffsetM;
 		const mirrorX = screenSign >= 0 ? 1 : -1;
-		// untrack: useTask is outside reactive scope, but keep the read explicit
-		// so a future effect-wrapper cannot accidentally subscribe here.
-		const xb = untrack(() => model.config.world.wingXBase ?? WING_X_BASE);
+		// Reads are direct: useTask callbacks run from renderer.setAnimationLoop,
+		// outside any tracking scope, so no untrack() wrapper is needed.
+		const xb = model.config.world.wingXBase ?? WING_X_BASE;
 		holder.position.x = (xb + seatOffset) * mirrorX;
 		const cam = ctx.camera.current;
 		group.position.copy(cam.position);
@@ -407,9 +407,7 @@
 		// camera sees a different angular slice of the SAME wing — it flows
 		// continuously across the three screens, matching the world behind it.
 		// (Sign verified empirically against the lab role switcher.)
-		const headingOffsetDeg = untrack(
-			() => model.config.camera.parallax.headingOffsetDeg,
-		);
+		const headingOffsetDeg = model.config.camera.parallax.headingOffsetDeg;
 		if (headingOffsetDeg !== 0) {
 			_yawQuat.setFromAxisAngle(_yawAxis, headingOffsetDeg * DEG2RAD);
 			group.quaternion.multiply(_yawQuat);
@@ -433,17 +431,17 @@
 		// bank even though the orbit IS a continuous turn. Gated to orbit mode so
 		// it doesn't fight the scripted cruise-transition bank. Sign = orbitDir so
 		// it leans into the turn direction.
-		const flightMode = untrack(() => model.flight.flightMode);
+		const flightMode = model.flight.flightMode;
 		const ORBIT_BANK_DEG = 5; // gentle, steady lean into the orbit turn (13° read as "weird")
 		const turnBank = flightMode === 'orbit' ? screenSign * ORBIT_BANK_DEG : 0;
-		const bankAngleDeg = untrack(() => model.motion.bankAngle) + turnBank + sway;
+		const bankAngleDeg = model.motion.bankAngle + turnBank + sway;
 		_bankQuat.setFromAxisAngle(_bankAxis, bankAngleDeg * 0.55 * DEG2RAD);
 		_bankQuatX.setFromAxisAngle(_bankAxisX, bankAngleDeg * 0.18 * DEG2RAD);
 		_bankQuatY.setFromAxisAngle(_yawAxis, bankAngleDeg * 0.12 * DEG2RAD);
 		group.quaternion.multiply(_bankQuat).multiply(_bankQuatX).multiply(_bankQuatY);
 
 		// Hide during cruise warp (teleport).
-		const warpFactor = untrack(() => model.flight.warpFactor);
+		const warpFactor = model.flight.warpFactor;
 		const visible = warpFactor < 0.05;
 		placement.visible = visible;
 		if (!visible) {
@@ -455,8 +453,8 @@
 		}
 		// Night nav lights — same SSOT as ground city lights (cityLightAmount):
 		// off by day, ease in through civil twilight, full at deep night.
-		const nf = untrack(() => model.nightFactor);
-		const timeOfDay = untrack(() => model.timeOfDay);
+		const nf = model.nightFactor;
+		const timeOfDay = model.timeOfDay;
 		const L = lightingState(timeOfDay, nf);
 		const navRamp = L.cityLightAmount;
 		const lightsOn = navRamp > 0.02;
@@ -479,8 +477,8 @@
 			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
 		strobeMat.opacity = navRamp * (flash ? 1 : 0);
 		if (flash && lightsOn) tipPoint.intensity = navRamp * 2.2;
-		const sd = computeSunDirection(untrack(() => model.flight.camLon), timeOfDay);
-		const elevSin = Math.max(sunElevationSin(untrack(() => model.flight.camLat), timeOfDay), 0.15);
+		const sd = computeSunDirection(model.flight.camLon, timeOfDay);
+		const elevSin = Math.max(sunElevationSin(model.flight.camLat, timeOfDay), 0.15);
 		const keyElev = elevSin * (1 - nf) + 0.45 * nf;
 		_keyDir.set(sd[0], keyElev, sd[2]).normalize().multiplyScalar(1e6);
 		keyLight.position.copy(_keyDir); // target at origin → rays rake the top surface

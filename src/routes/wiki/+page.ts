@@ -8,4 +8,6 @@
  * %sveltekit.nonce% CSP placeholder, which prerender rejects.
  */
 export const ssr = true;
+// Load-bearing SvelteKit page option, not a dead export — the framework
+// consumes it (keeps wiki markup out of the kiosk bundle; see header).
 export const csr = false;

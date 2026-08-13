@@ -14,6 +14,7 @@
 
 import type { LocationId, WeatherType, DisplayMode, QualityMode, VantageBeat } from '$lib/types';
 import type { Telemetry } from '$lib/model/telemetry.svelte';
+import type { ConfigPatchOpts } from '$lib/model/config-tree.svelte';
 
 export interface FleetClientModel {
 	measuredFps: number;
@@ -27,7 +28,7 @@ export interface FleetClientModel {
 	/** Schedule a night-city flyover beat locked to a shared transitionAtMs.
 	 *  Optional so test stubs and older models stay valid; the client feature-tests. */
 	scheduleFlyover?(beat: VantageBeat, transitionAtMs: number): void;
-	setDisplayMode(mode: DisplayMode, payload?: string): void;
+	setDisplayMode(mode: DisplayMode, payload?: string): boolean | void;
 	setQualityMode(mode: QualityMode): void;
 	setAltitude(alt: number): void;
 	setTime(t: number): void;
@@ -36,8 +37,10 @@ export interface FleetClientModel {
 	 * Path-targeted patch — applied through RootConfig.applyConfigPatch.
 	 * Returns true if the path was recognised. Optional so test stubs and
 	 * older models remain valid; the SSE client feature-tests.
+	 * `opts.remote` carries the fleet CRDT stamp (timestamp + sourceId) for
+	 * LWW merge; omit it for local writes, which stamp with the wall-clock.
 	 */
-	applyConfigPatch?(path: string, value: unknown): boolean;
+	applyConfigPatch?(path: string, value: unknown, opts?: ConfigPatchOpts): boolean;
 	/** Observability sink — optional. */
 	telemetry?: Telemetry;
 }

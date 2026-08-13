@@ -89,18 +89,5 @@ export function sunElevationSin(latDeg: number, timeOfDay: number): number {
 	);
 }
 
-/**
- * Simple air-mass approximation for low-sun atmospheric effects.
- * Used by multiple artistic layers for realistic horizon bloom / dimming.
- * Tightened epsilon gives stronger response near the horizon.
- *
- * Now driven by the REAL local solar elevation (sunElevationSin) instead of
- * computeSunDirection's constant world-Y — previously this returned ~1.965
- * for every input, freezing every consumer's horizon response at a mid-state
- * constant. Range: ~0.96 (sun overhead) → 1/0.12 ≈ 8.33 (sun at/below the
- * horizon, hard-capped by the elevation clamp).
- */
-
-
 // Moon phase: Cesium Simon1994PlanetaryPositions handles this via
-// atmosphere-manager.ts. Three-side moon billboard also uses Cesium.
+// atmosphere.ts. Three-side moon billboard also uses Cesium.

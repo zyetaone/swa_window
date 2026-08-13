@@ -90,6 +90,30 @@ describe('game-loop emergency reload', () => {
 		expect(console.warn).toHaveBeenCalledOnce();
 	});
 
+	it('leaves the loop restartable when the reload no-ops', () => {
+		const bad = vi.fn(() => {
+			throw new Error('boom');
+		});
+		const good = vi.fn();
+		const unsubBad = gameLoop.subscribe(bad);
+		gameLoop.subscribe(good);
+
+		frames(10);
+		expect(reload).toHaveBeenCalledOnce();
+
+		// The mocked reload is a no-op: loop() returned without scheduling the
+		// next frame. The failing subscriber tears down; a later subscribe must
+		// restart the loop for the survivors. Before the fix rafId stayed
+		// non-null, so start() early-returned and the RAF loop was dead for
+		// the rest of the session.
+		unsubBad();
+		const late = vi.fn();
+		gameLoop.subscribe(late);
+		frames(1, 160);
+		expect(good.mock.calls.length).toBeGreaterThan(9);
+		expect(late).toHaveBeenCalledOnce();
+	});
+
 	it('a successful frame resets the failure streak', () => {
 		let shouldThrow = true;
 		const fn = vi.fn(() => {

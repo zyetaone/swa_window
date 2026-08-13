@@ -54,12 +54,26 @@ let _mounted = false;
  * One-time mount: create the BillboardCollection and add it to the
  * scene. Idempotent. Accepts the live Cesium + Viewer from CesiumManager
  * so the module mounts BEFORE `activeCesium.manager` is published.
+ *
+ * Liveness-guarded: `_mounted` is only valid while its viewer lives. If
+ * `onDestroy` fired while `CesiumManager.start()` was suspended in an await,
+ * `destroy()` ran first and `start()` then resumes calling this on a
+ * destroyed viewer — latching there would bar every later (live) mount for
+ * the rest of the session.
  */
 export function mountCesiumClouds(
 	C: typeof CesiumType,
 	viewer: CesiumType.Viewer,
 ): void {
-	if (_mounted) return;
+	if (_mounted) {
+		if (_viewer && !_viewer.isDestroyed?.()) return;
+		// Stale latch from a destroyed viewer — drop it and remount below.
+		_collection = null;
+		_mounted = false;
+	}
+	// Never mount onto a viewer that is already destroyed (start() resuming
+	// after destroy()).
+	if (viewer.isDestroyed()) return;
 	_C = C;
 	_viewer = viewer;
 	_collection = viewer.scene.primitives.add(new C.BillboardCollection());
@@ -127,7 +141,11 @@ export function updateCesiumClouds(
 
 			const worldX = ox;
 			const worldY = oy + CLOUD_ALT_M;
-			const worldZ = cz - (oz - cz);
+			// Raw oz — the Three overlay places at the same oz verbatim
+			// (Clouds.svelte `sprite.position.set(ox, oy, oz)`); mirroring Z
+			// around the cluster centre here broke the identical-placement
+			// contract in cloud-sprite-placement.ts.
+			const worldZ = oz;
 
 			const d = metresToGeoDelta(worldX, worldZ, lat);
 			const position = C.Cartesian3.fromDegrees(lon + d.lon, lat + d.lat, worldY);
@@ -173,7 +191,11 @@ export function updateCesiumClouds(
 
 			const worldX = ox;
 			const worldY = oy + CLOUD_ALT_M * 0.85;
-			const worldZ = cz - (oz - cz);
+			// Raw oz — the Three overlay places at the same oz verbatim
+			// (Clouds.svelte `sprite.position.set(ox, oy, oz)`); mirroring Z
+			// around the cluster centre here broke the identical-placement
+			// contract in cloud-sprite-placement.ts.
+			const worldZ = oz;
 
 			const d = metresToGeoDelta(worldX, worldZ, lat);
 			const position = C.Cartesian3.fromDegrees(lon + d.lon, lat + d.lat, worldY);

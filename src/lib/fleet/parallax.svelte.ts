@@ -61,9 +61,10 @@ function writeBindingsMap(map: Record<string, DeviceBinding>): void {
 
 
 /**
- * Resolve this device's binding. Pure function — safe to call from $effect or
- * component setup. Persists the resolved binding under STORAGE_KEY_SELF so a
+ * Resolve this device's binding. NOT pure: the URL-param branch persists the
+ * resolved binding under STORAGE_KEY_SELF (and into the fingerprint map) so a
  * subsequent load without URL params still reflects the operator's choice.
+ * Still safe to call from $effect or component setup — writes are idempotent.
  */
 export function resolveBinding(): DeviceBinding {
 	if (typeof window === 'undefined') return { role: 'solo', groupId: 'default' };

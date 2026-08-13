@@ -1,0 +1,101 @@
+/**
+ * /api/fleet/heartbeat — POST bearer gate + GET sanitisation.
+ *
+ * POST requires AERO_FLEET_TOKEN (fail-closed 503 when unset, 401 on a
+ * wrong token). GET is deliberately token-free so the admin dashboard can
+ * poll it cross-origin without a bearer — but internal-only debug fields
+ * (the lastError journal line) must be stripped from every GET response.
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { GET, POST } from '../../../../src/routes/api/fleet/heartbeat/+server';
+import { recordHeartbeat } from '$lib/server/fleet/heartbeat';
+
+const TOKEN = 'fleet-bearer-token';
+
+function post(body: unknown, token?: string) {
+	const request = new Request('http://localhost/api/fleet/heartbeat', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+		},
+		body: JSON.stringify(body),
+	});
+	return POST({ request } as unknown as Parameters<typeof POST>[0]);
+}
+
+function get(query = '') {
+	const request = new Request(`http://localhost/api/fleet/heartbeat${query}`);
+	return GET({
+		request,
+		url: new URL(request.url),
+	} as unknown as Parameters<typeof GET>[0]);
+}
+
+const SAMPLE = {
+	deviceId: 'pi-gw-1',
+	role: 'solo',
+	groupId: 'default',
+	fps: 60,
+	temp: 51,
+	uptime: 3600,
+	crashCount: 0,
+	lastError: 'aero-app[512]: TypeError: cannot read properties of undefined',
+};
+
+beforeEach(() => {
+	vi.stubEnv('AERO_FLEET_TOKEN', TOKEN);
+});
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
+
+describe('POST /api/fleet/heartbeat', () => {
+	it('accepts a valid heartbeat with the fleet token', async () => {
+		const res = await post(SAMPLE, TOKEN);
+		expect(res.status).toBe(200);
+	});
+
+	it('rejects a wrong token with 401', async () => {
+		await expect(post(SAMPLE, 'nope')).rejects.toMatchObject({ status: 401 });
+	});
+
+	it('rejects a missing token with 401', async () => {
+		await expect(post(SAMPLE)).rejects.toMatchObject({ status: 401 });
+	});
+});
+
+describe('GET /api/fleet/heartbeat', () => {
+	it('strips lastError from the latest-samples response', async () => {
+		recordHeartbeat(SAMPLE);
+		const res = await get();
+		const body = await res.json() as Array<Record<string, unknown>>;
+		const mine = body.filter((s) => s.deviceId === 'pi-gw-1');
+		expect(mine).toHaveLength(1);
+		expect(mine[0]).toMatchObject({ deviceId: 'pi-gw-1', fps: 60, temp: 51 });
+		expect('lastError' in mine[0]).toBe(false);
+	});
+
+	it('strips lastError from the per-device history response', async () => {
+		recordHeartbeat(SAMPLE);
+		const res = await get('?deviceId=pi-gw-1');
+		const body = await res.json() as Array<Record<string, unknown>>;
+		expect(body.length).toBeGreaterThan(0);
+		for (const s of body) {
+			expect('lastError' in s).toBe(false);
+		}
+	});
+
+	it('rejects a malformed deviceId with 400', async () => {
+		await expect(get('?deviceId=bad host')).rejects.toMatchObject({ status: 400 });
+	});
+
+	it('summary rollup stays available without a token', async () => {
+		recordHeartbeat(SAMPLE);
+		const res = await get('?summary');
+		const body = await res.json() as { total: number };
+		expect(body.total).toBeGreaterThan(0);
+	});
+});

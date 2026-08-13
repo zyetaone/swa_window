@@ -49,7 +49,7 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 	'viirs-night-lights': {
 		source: 'viirs-night-lights',
 		storagePath: 'viirs-night-lights/{z}/{y}/{x}.jpg',
-		// Layer + pinned date MUST match src/lib/world/viirs-endpoint.ts — the
+		// Layer + pinned date MUST match src/lib/world/viirs-field.ts — the
 		// packaged tiles and the remote fallback have to be the same raster, or
 		// a cache miss silently changes what the city looks like. See that file
 		// for why Black Marble was dropped (colorized, lifted navy background

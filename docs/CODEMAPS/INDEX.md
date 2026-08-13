@@ -1,29 +1,19 @@
 # Aero Window Codemap
 
-**Last Updated:** 2026-08-02
+**Last Updated:** 2026-08-12
 
 ## Quick Navigation
 
 | Document | Scope |
 |----------|-------|
-| [File Inventory](files.md) | Source layout — folder by folder, top files by size |
+| [File Inventory](files.md) | Source layout — folder by folder |
 | [Architecture](architecture.md) | Layer diagram, data flow, key interfaces |
 | [Scene composition](scene.md) | Live layer composition in Pane.svelte + bundle wire contract |
 | [Content API](content-api.md) | Bundle CRUD + LAN cache + remote push |
 | [Security boundaries](security.md) | Trust zones, validation, CSP, sensitive data |
 
-> The authoritative architecture lives in `AGENTS.md` at the repo root.
-> CODEMAPS summarise per-concern slices.
-
-## Codebase stats (2026-08-02)
-
-| Tree | Files | Lines |
-|------|------:|------:|
-| `src/lib/` | 86 | 13,222 |
-| `src/routes/` | 25 | 4,826 |
-| `content/` | 22 | 940 |
-
-Regenerate with `git ls-files <dir> | xargs wc -l | tail -1`.
+> Authoritative agent instructions: `AGENTS.md`. Full architecture: `docs/ARCHITECTURE.md`.
+> CODEMAPS summarise per-concern slices and can lag — prefer AGENTS when they disagree.
 
 ## Architecture at a glance
 
@@ -33,43 +23,52 @@ Regenerate with `git ls-files <dir> | xargs wc -l | tail -1`.
  ┌─────────────────────────────────────────────────────┐
  │  ROUTES                                             │
  │  +layout.ts (ssr=false) → +page.svelte → admin/    │
- │  /playground (lean composition lab)                │
+ │  /playground (lab) · /wiki                         │
  └──────────────┬─────────────────┬───────────────────┘
                 │                 │
                 v                 v
  ┌─────────────────────┐  ┌──────────────────────────┐
  │  MODEL              │  │  SHELL                   │
- │  AeroWindow + ctx   │  │  Window (compositor)     │
- │  config tree (SSOT) │  │  HUD, SidePanel,         │
- │  CRDT LWW store     │  │  panel/* hud/* window/*  │
+ │  AeroWindow + ctx   │  │  pane/  passenger/       │
+ │  config tree (SSOT) │  │  operator/  window/      │
+ │  CRDT LWW store     │  │  dual-tree panel/*       │
  └───┬───────┬─────────┘  └──────────┬───────────────┘
      │       │                       │
      v       v                       v
  ┌────────┐ ┌──────────┐  ┌─────────────────────────┐
- │CAMERA  │ │DIRECTOR  │  │ SCENE                    │
- │flight  │ │autopilot │  │ compositor + registry +  │
- │motion  │ │scenarios │  │ layers + effects/* +     │
- │        │ │          │  │ bundle/*                 │
- └────────┘ └──────────┘  └────────────┬─────────────┘
+ │FLIGHT  │ │DIRECTOR  │  │ BUNDLE                  │
+ │orbit + │ │autopilot │  │ wire types + disk store │
+ │cruise  │ │scenarios │  │ (no runtime mount)      │
+ │motion  │ │show open │  │ DOM effects → shell/    │
+ └────────┘ └──────────┘  └────────────┬────────────┘
                                        │
                                        v
                           ┌─────────────────────┐
                           │ WORLD               │
-                          │ Cesium isolation    │
-                          │ (compose, shaders)  │
+                          │ Cesium (compose) +  │
+                          │ Three overlay (flag)│
                           └─────────────────────┘
 
- Authored artifacts        Boot baseline         Fleet
- ┌──────────────┐          ┌────────────┐        ┌──────────────┐
- │ content/     │          │ show/      │        │ fleet/       │
- │ locations    │          │ Show type +│        │ REST + SSE,  │
- │ weather      │          │ applyShow  │        │ CRDT sync,   │
- │ palettes     │          │ Opening()  │        │ peer-sync    │
- │ shows        │          └────────────┘        │ effect       │
- └──────────────┘                                └──────────────┘
+ Authored artifacts        Fleet
+ ┌──────────────┐          ┌──────────────┐
+ │ content/     │          │ fleet/       │
+ │ locations    │          │ REST + SSE   │
+ │ weather      │          │ peer-sync    │
+ │ palettes     │          │ parallax SSOT│
+ │ shows        │          │ CRDT stamps  │
+ └──────────────┘          └──────────────┘
 ```
 
-State flows through `AeroWindow`. Engines and effects are reactive but
-side-effect-free outside their `untrack()` tick bodies. UI reads via
-context (`useAeroWindow()`). Fleet config writes route through the CRDT
-for last-writer-wins conflict resolution. Cesium is confined to `world/`.
+### Operator dual-tree (kiosk + admin)
+
+```
+panel/*  →  usePanelConfig()
+              ├── kiosk: model.applyConfigPatch (telemetry + SSE)
+              └── admin: applyConfigPatch + startPeerSync(PEER_SYNC_PATHS)
+```
+
+Shared ambient panels: `FlightControls`, `AtmosphereControls`, `LightingControls`
+(Lighting + Display sections). Scene one-shots stay admin-local drafts.
+
+State flows through `AeroWindow` on the kiosk. Admin never mounts AeroWindow.
+Cesium stays in `world/`; Three overlay under `world/three/`.

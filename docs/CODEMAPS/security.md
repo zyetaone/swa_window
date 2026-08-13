@@ -14,7 +14,7 @@
 | `?device=` URL param | Browser/attacker | fleet-client.svelte.ts:10-13 | **No** — stored in localStorage |
 | `?display=` URL param | Browser/attacker | fleet-client.svelte.ts:96 | **No** — unbounded string |
 | WS `set_scene` | Fleet hub | fleet-client.svelte.ts:#handleMessage | Yes — location via LOCATION_IDS, weather via allowlist |
-| WS `set_mode` | Fleet hub | fleet-client.svelte.ts:#handleMessage | Partial — mode validated, `payload` (videoUrl) unvalidated |
+| WS/`set_mode` command | Fleet SSE | client → `setDisplayMode` | Mode enum + `display-payload` URL allowlist (http(s) / `/api/assets`); reject is no-op + telemetry |
 | WS `set_config` | Fleet hub | fleet-client.svelte.ts:#handleMessage | Yes — delegates to applyPatch with clamps |
 | WS `set_quality` | Fleet hub | fleet-client.svelte.ts:#handleMessage | Yes — mode via allowlist |
 | localStorage | Browser storage | persistence.ts:loadPersistedState | Yes — type checks, enum allowlists, numeric bounds |
@@ -39,7 +39,7 @@ This is documented as acceptable for a physically-isolated Pi kiosk deployment. 
 | Location | What | Quality |
 |---|---|---|
 | `persistence.ts` | All localStorage fields | Thorough — type, enum, bounds |
-| `fleet-client.svelte.ts` | Incoming WS messages | Adequate — enum checks, but videoUrl unvalidated |
+| `fleet-client.svelte.ts` | Incoming SSE/commands | Adequate — enum checks; media payload via `display-payload.ts` |
 | `app-state.svelte.ts:applyPatch()` | All patchable fields | Adequate — clamp numerics, typeof booleans, weather enum |
 | `+page.svelte` | URL params | Correct for location/altitude |
 | `fleet-hub.ts` (admin path) | Admin → display relay | **Gap** — no validation on forwarded message |

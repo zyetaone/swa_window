@@ -13,12 +13,18 @@
 	 */
 	import { patchNum, usePanelConfig } from './patch';
 	import RangeSlider from './RangeSlider.svelte';
+	import Toggle from './Toggle.svelte';
 
 	const { cfg, patch } = usePanelConfig();
 </script>
-	<section>
+<section>
 	<h4>Atmosphere</h4>
-		<RangeSlider
+	<Toggle
+		label="Show Clouds"
+		checked={cfg.world.showClouds}
+		onchange={(e) => patch('world.showClouds', e.currentTarget.checked)}
+	/>
+	<RangeSlider
 		label="Cloud Cover"
 		min={0}
 		max={1.0}

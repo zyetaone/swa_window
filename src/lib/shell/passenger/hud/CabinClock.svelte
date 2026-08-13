@@ -3,11 +3,9 @@
 	 * CabinClock — glassmorphic wall clock, toggled by double-tap.
 	 *
 	 * ─── WHY IT EXISTS ──────────────────────────────────────────────────────
-	 * `shell.clockVisible` has existed in the config tree (and had a "Show
-	 * clock" toggle in LabControls) but NOTHING rendered it — flipping that
-	 * switch did nothing at all. This is the missing renderer, promoted from a
-	 * lab-only idea to real cabin furniture: an office passer-by should be able
-	 * to get the time from the window without pulling out a phone.
+	 * Toggled by double-tap on the open glass, or via LightingControls
+	 * "Cabin Clock" (kiosk SidePanel Advanced + admin ambient). An office
+	 * passer-by can get the time from the window without pulling out a phone.
 	 *
 	 * ─── GLASS, ON A PI 5 BUDGET ────────────────────────────────────────────
 	 * `backdrop-filter` is the honest way to do glassmorphism — it refracts the

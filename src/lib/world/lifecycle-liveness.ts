@@ -16,11 +16,11 @@
  * nightly reboot rather than strobing the display.
  *
  * Framework-free (no runes) so it can be unit-tested and reused by any
- * route. Wire-up lives in Pane.svelte ($effect start/stop) and the canvas
- * owners call registerCanvas().
+ * route. Wire-up lives in GlobeLayer.svelte ($effect start/stop) and the
+ * canvas owners attach via attachCanvasLiveness().
  */
 
-export interface LivenessOptions {
+interface LivenessOptions {
 	/** Called to read the current measured fps (0 = stalled). */
 	getFps: () => number;
 	/** Telemetry sink — receives ('error', payload) style events. */
@@ -37,7 +37,7 @@ const RELOAD_LOG_KEY = 'aero-liveness-reloads';
 const MAX_RELOADS_PER_HOUR = 3;
 
 /** True when the watchdog is still allowed to reload (under the hourly cap). */
-export function reloadBudgetAvailable(now: number = Date.now()): boolean {
+function reloadBudgetAvailable(now: number = Date.now()): boolean {
 	return readReloadLog(now).length < MAX_RELOADS_PER_HOUR;
 }
 
@@ -75,8 +75,9 @@ function recordReload(now: number): void {
 // Registered GL canvases (Cesium + Three overlay register on mount).
 const canvases = new Set<HTMLCanvasElement>();
 
-/** Canvas owners register here; returns an unregister function. */
-export function registerLivenessCanvas(canvas: HTMLCanvasElement): () => void {
+/** Internal primitive — production callers use attachCanvasLiveness() so
+ *  registration and the context-loss listener cannot drift apart. */
+function registerLivenessCanvas(canvas: HTMLCanvasElement): () => void {
 	canvases.add(canvas);
 	return () => canvases.delete(canvas);
 }
@@ -143,6 +144,11 @@ export function startLivenessWatchdog(opts: LivenessOptions): () => void {
 	const deadThreshold = opts.deadChecksBeforeReload ?? 2;
 	const reload = opts.reload ?? (() => window.location.reload());
 	let consecutiveDead = 0;
+	// Terminal latch: once the reload budget is exhausted (hard fault), the
+	// terminal event has been logged — stay quiet instead of re-logging 3
+	// error events per 2 intervals forever. A healthy check (recovery)
+	// resets the latch so a LATER stall reports again.
+	let reported = false;
 
 	const id = setInterval(() => {
 		// Hidden tab: RAF legitimately pauses (fps 0) — not death.
@@ -154,9 +160,11 @@ export function startLivenessWatchdog(opts: LivenessOptions): () => void {
 		const fpsStalled = opts.getFps() <= 0;
 		if (!contextLost && !fpsStalled) {
 			consecutiveDead = 0;
+			reported = false;
 			return;
 		}
 		consecutiveDead++;
+		if (reported) return;
 		opts.recordEvent('error', {
 			where: 'liveness',
 			contextLost,
@@ -169,6 +177,7 @@ export function startLivenessWatchdog(opts: LivenessOptions): () => void {
 			// Budget exhausted — a hard fault. Leave it to the nightly reboot
 			// instead of strobing the display with reload loops.
 			opts.recordEvent('error', { where: 'liveness', reloadBudgetExhausted: true });
+			reported = true;
 			consecutiveDead = 0;
 			return;
 		}

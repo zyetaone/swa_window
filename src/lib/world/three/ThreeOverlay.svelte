@@ -40,13 +40,17 @@
 	// $derived on cam thrash was pure invalidation with no visual gain.
 	// Clouds/Wing re-read elevSin inside useTask if they need live cam.
 	const _ambientTintScratch = new Color();
+	const elevSin = $derived(sunElevationSin(model.currentLocation.lat, model.timeOfDay));
 	const ambientTint = $derived.by(() => {
-		const elevSin = sunElevationSin(model.currentLocation.lat, model.timeOfDay);
 		const s = lightingState(model.timeOfDay, model.nightFactor, elevSin);
 		return _ambientTintScratch.setRGB(s.ambientColor[0], s.ambientColor[1], s.ambientColor[2]);
 	});
+	// Pass elevSin here too even though ambientIntensity doesn't read it:
+	// lightingState memos on (timeOfDay, nightFactor, sunElevSin), so omitting
+	// it (legacy sin(0.4) default) alternated the memo key against ambientTint
+	// and recomputed the full palette blend twice per frame.
 	const ambientIntensity = $derived(
-		lightingState(model.timeOfDay, model.nightFactor).ambientIntensity,
+		lightingState(model.timeOfDay, model.nightFactor, elevSin).ambientIntensity,
 	);
 	const sunDirection = $derived.by(() => {
 		const d = computeSunDirection(model.currentLocation.lon, model.timeOfDay) as Vec3;

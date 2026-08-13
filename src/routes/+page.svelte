@@ -37,12 +37,11 @@
 	const model = createAeroWindow();
 
 	// Lab mode (?lab=1, DEV only) — see the param parsing in onMount.
+	// The renderer selector in LabControls owns the useThreeOverlay write on
+	// mode change (user interaction); labRenderer only mirrors the selection
+	// here for the NightVariantPanel mount gate below.
 	let labMode = $state(false);
 	let labRenderer = $state<'cesium' | 'hybrid' | 'night-lab'>('cesium');
-	$effect(() => {
-		if (!labMode) return;
-		model.applyConfigPatch('world.useThreeOverlay', labRenderer !== 'cesium');
-	});
 
 	$effect(() => {
 		if (model.syncToRealTime && typeof window !== "undefined") {
@@ -83,8 +82,8 @@
 		const client = createDeviceClient(model);
 		// Phase 7 — register the leader-broadcast hook so the director can
 		// emit director_decision messages when this device is a panorama
-		// leader. Solo devices set the hook too; it's harmless (nobody
-		// receives the emits unless a group is configured server-side).
+		// leader. Solo devices set the hook too, but the model only emits
+		// when role is 'center' — solo never broadcasts and flies immediately.
 		model.setFleetBroadcast((msg) => client.publishV2(msg));
 		return () => {
 			model.setFleetBroadcast(null);

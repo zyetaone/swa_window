@@ -122,6 +122,15 @@ export class RestAdminStore {
 		}
 	}
 
+	/**
+	 * Re-fetch status from known peers without wiping the device list.
+	 * Used after set_mode / set_scene so Mode chips catch up quickly.
+	 */
+	async refreshStatus(): Promise<void> {
+		if (this.#destroyed || this.#peers.length === 0) return;
+		await this.#pollStatus();
+	}
+
 	async #pollStatus(): Promise<void> {
 		if (this.#destroyed) return;
 		const results = await Promise.all(

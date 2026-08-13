@@ -5,7 +5,10 @@
  * error tracking with emergency reload after 10 consecutive failures.
  * The reload goes through the shared hourly reload budget
  * (lifecycle-liveness); once exhausted the failing subscriber is
- * unsubscribed instead of reload-looping the kiosk forever.
+ * unsubscribed instead of reload-looping the kiosk forever. rafId is
+ * cleared BEFORE the reload attempt so that if the reload is blocked or
+ * no-ops (e.g. a beforeunload handler), the loop is left stopped-but-
+ * restartable via subscribe() → start(), not permanently dead.
  */
 
 import { STORAGE_KEY } from '$lib/model/persistence';
@@ -39,6 +42,11 @@ function loop(now: number): void {
 			if (count >= 10) {
 				try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
 				if (tryConsumeReloadBudget()) {
+					// Clear rafId BEFORE reload: the current frame already fired,
+					// and if the reload is blocked or no-ops we return without
+					// scheduling the next frame — leaving rafId non-null would
+					// brick the loop (start() early-returns on rafId !== null).
+					rafId = null;
 					window.location.reload();
 					return;
 				}
@@ -71,7 +79,11 @@ function stop(): void {
 export function subscribe(fn: Callback): () => void {
 	subscribers.add(fn);
 	errorCounts.set(fn, 0);
-	if (subscribers.size === 1) start();
+	// Unconditional start(), not `size === 1`: start() guards on rafId
+	// internally, and after a blocked/no-op reload the loop is dead with
+	// rafId null while subscribers remain — a size-gated start would never
+	// fire for them (size never returns to 1), leaving the kiosk frameless.
+	start();
 
 	return () => {
 		subscribers.delete(fn);

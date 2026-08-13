@@ -18,7 +18,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 // below. `import type` erases entirely at build.
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
-import { syncCamera, type CameraSyncSlice } from './camera';
+import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
@@ -45,6 +45,9 @@ interface CesiumModelView extends CameraSyncSlice {
 		warpFactor: number;
 	};
 	config: CameraSyncSlice['config'] & {
+		camera: CameraSyncSlice['config']['camera'] & {
+			parallax: { fovDeg: number };
+		};
 		world: WorldConfig;
 		atmosphere: {
 			haze: { amount: number };
@@ -75,6 +78,10 @@ export class CesiumManager {
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
 	#lastColorGradeEnabled: boolean | null = null;
+	// Hash-palette stage lifecycle — installed/uninstalled reactively in
+	// #syncQuality when config.world.useHashPalette changes, not once at boot.
+	#hashPaletteCleanup: (() => void) | null = null;
+	#lastUseHashPalette: boolean | null = null;
 
 	// Clock-change gates — owned here; #syncClockCheck is their only consumer.
 	#lastTimeOfDay = -1;
@@ -92,6 +99,15 @@ export class CesiumManager {
 		return t >= 1 ? 1 : t < 0 ? 0 : t;
 	}
 	#scratchDest: CesiumType.Cartesian3 | null = null;
+	// Scratch for getCameraRead() — mutated in place at 60Hz, never reallocated.
+	#cameraReadScratch: CameraRead = {
+		position: { x: 0, y: 0, z: 0 },
+		direction: { x: 0, y: 0, z: 0 },
+		up: { x: 0, y: 0, z: 0 },
+		fovDeg: NaN,
+	};
+	// Epsilon gate for the parallax fov write in #syncCamera.
+	#lastFovDeg = -1;
 	constructor(model: CesiumModelView, CesiumModule: typeof CesiumType, container: HTMLElement) {
 
 		this.#C = CesiumModule;
@@ -111,20 +127,24 @@ export class CesiumManager {
 	 * other system that needs to mirror Cesium's camera each frame) reads
 	 * through this instead of reaching into `viewer.camera.positionWC`
 	 * directly. Plain `{x,y,z}` objects + a scalar fov, no Cesium types.
+	 *
+	 * Returns the shared scratch object (#cameraReadScratch), mutated in place
+	 * every call — this runs at 60Hz, so a fresh allocation per frame would
+	 * defeat the module's scratch-buffer discipline. Read-and-derive
+	 * synchronously; never store the reference.
 	 */
-	getCameraRead(): { position: { x: number; y: number; z: number }; direction: { x: number; y: number; z: number }; up: { x: number; y: number; z: number }; fovDeg: number } {
+	getCameraRead(): CameraRead {
 		const cam = this.#viewer.camera;
 		const p = cam.positionWC;
 		const d = cam.directionWC;
 		const u = cam.upWC;
 		const fovy = (cam.frustum as { fovy: number }).fovy;
-		const fovDeg = Number.isFinite(fovy) ? (fovy * 180) / Math.PI : NaN;
-		return {
-			position: { x: p.x, y: p.y, z: p.z },
-			direction: { x: d.x, y: d.y, z: d.z },
-			up: { x: u.x, y: u.y, z: u.z },
-			fovDeg,
-		};
+		const r = this.#cameraReadScratch;
+		r.position.x = p.x; r.position.y = p.y; r.position.z = p.z;
+		r.direction.x = d.x; r.direction.y = d.y; r.direction.z = d.z;
+		r.up.x = u.x; r.up.y = u.y; r.up.z = u.z;
+		r.fovDeg = Number.isFinite(fovy) ? (fovy * 180) / Math.PI : NaN;
+		return r;
 	}
 
 	// ── Start ────────────────────────────────────────────────────────────────
@@ -136,7 +156,10 @@ export class CesiumManager {
 		const v = this.#viewer;
 
 		applySceneDefaults(v, C);
-		initAtmosphere(C, v);
+		// initAtmosphere runs in the constructor with the other subsystem inits.
+		// Nothing between construction and here (applySceneDefaults included)
+		// touches atmosphere-owned state (scene.light), so re-initing would only
+		// re-snapshot the same light and re-create the same moonlight.
 		this.#scratchDest = new C.Cartesian3();
 
 		// Snap camera to flight position immediately so the first frame
@@ -147,9 +170,9 @@ export class CesiumManager {
 		v.scene.postRender.addEventListener(this.#boundTick);
 
 		this.#setupPostProcess(COLOR_GRADING_GLSL);
-		if (this.#model.config.world.useHashPalette) {
-			installHashPalette(C, v, () => this.#model.nightFactor, () => this.#model.nightLightScale, () => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight, () => this.#model.config.world.additiveStrength);
-		}
+		// Hash palette is NOT installed here — #syncQuality (run at the end of
+		// #setupPostProcess and every tick) installs/uninstalls it reactively
+		// from config.world.useHashPalette, so runtime toggles take effect.
 		await setupTerrain();
 		await setupImagery();
 		await setupBuildings(
@@ -294,6 +317,16 @@ export class CesiumManager {
 			{ Cesium: this.#C, viewer: this.#viewer },
 			this.#scratchDest,
 		);
+		// Parallax FOV knob: LabControls writes camera.parallax.fovDeg per role.
+		// Applied to the Cesium frustum here (epsilon-gated like the other sync
+		// writes); CameraMirror then mirrors it into the Three camera for free
+		// via getCameraRead().fovDeg. setView() never touches the frustum, so
+		// this does not fight flight camera control.
+		const fovDeg = this.#model.config.camera.parallax.fovDeg;
+		if (Number.isFinite(fovDeg) && fovDeg > 0 && Math.abs(fovDeg - this.#lastFovDeg) > 0.01) {
+			this.#lastFovDeg = fovDeg;
+			(this.#viewer.camera.frustum as { fov: number }).fov = this.#C.Math.toRadians(fovDeg);
+		}
 	}
 
 	// ── Post-Process ─────────────────────────────────────────────────────────
@@ -347,14 +380,41 @@ export class CesiumManager {
 
 	#syncQuality(): void {
 		const mode = this.#model.config.world.qualityMode;
-		if (mode === this.#lastQualityMode) return;
+		const useHash = this.#model.config.world.useHashPalette;
+		if (mode === this.#lastQualityMode && useHash === this.#lastUseHashPalette) return;
 		this.#lastQualityMode = mode;
+		this.#lastUseHashPalette = useHash;
+		// Hash palette follows the flag at runtime: install on true, uninstall
+		// (remove stage + restore aero-color-grade) on false. Boot-only install
+		// left the stage permanently enabled after a runtime toggle-off while
+		// #syncImagery re-enabled color-grade — the double-grade.
+		if (useHash && !this.#hashPaletteCleanup) {
+			this.#hashPaletteCleanup = installHashPalette(
+				this.#C, this.#viewer,
+				() => this.#model.nightFactor, () => this.#model.nightLightScale,
+				() => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight,
+				() => this.#model.config.world.additiveStrength,
+			);
+			// installHashPalette flips aero-color-grade.enabled directly, behind
+			// #syncImagery's gate — invalidate so the next tick re-writes it.
+			this.#lastColorGradeEnabled = null;
+		} else if (!useHash && this.#hashPaletteCleanup) {
+			this.#hashPaletteCleanup();
+			this.#hashPaletteCleanup = null;
+			// Cleanup restores a stale prev-enabled on aero-color-grade;
+			// invalidate the gate so #syncImagery re-derives it next tick.
+			this.#lastColorGradeEnabled = null;
+		}
 		const allow = mode !== 'performance';
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
 		// Warm palette is load-bearing, but hash palette wins when enabled —
-		// the two grading stages must never stack (double-grade).
-		if (this.#colorGradeStage) this.#colorGradeStage.enabled = !this.#model.config.world.useHashPalette;
+		// the two grading stages must never stack (double-grade). Gated by the
+		// same `allow` as bloom/shadows/fxaa: in performance mode this
+		// full-screen grade stays off instead of running 24/7. In quality mode
+		// (#lastQualityMode !== 'performance') #syncImagery re-takes
+		// enabled-management per tick, so behaviour there is unchanged.
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow && !useHash;
 		const v = this.#viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -385,6 +445,8 @@ export class CesiumManager {
 	setBuildingsWireframe(enabled: boolean): void { setBuildingsWireframe(enabled); }
 
 	destroy(): void {
+		this.#hashPaletteCleanup?.();
+		this.#hashPaletteCleanup = null;
 		destroyLightning();
 		destroyCesiumClouds();
 		if (!this.#viewer.isDestroyed()) {

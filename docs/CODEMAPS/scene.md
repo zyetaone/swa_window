@@ -11,17 +11,20 @@
 
 ```
 +page.svelte
-└── Pane.svelte                      → layer order is local CSS, no Z table
+└── shell/pane/Pane.svelte           → layer order is local CSS, no Z table
     ├── GlobeLayer.svelte
-    │   └── CesiumViewer.svelte      → publishes activeCesium.manager
-    ├── RainGlass.svelte             → CSS water beads, mounted only while raining
+    │   ├── CesiumViewer.svelte      → publishes activeCesium.manager
+    │   └── ThreeOverlay (dynamic)   → flag-gated, world/three/*
+    ├── RainGlass.svelte             → CSS water beads, raining only
     ├── Glass.svelte                 → vignette + recess rim
     └── Blind.svelte                 → useBlind composable
 ```
 
+Passenger chrome (HUD, cabin clock) and operator chrome (SidePanel) mount
+as siblings of Pane on `+page.svelte`, not inside the compositor stack.
+
 Effects are plain Svelte components composed directly in `Pane.svelte`.
-There is no registry, no `when` predicate contract, and no shared `Z`
-constant. Each component:
+There is no registry, no shared `Z` constant. Each component:
 
 - owns its internal `$state` (timers, transient visuals),
 - subscribes to the game loop itself via `$effect(() => subscribe(...))`,
@@ -29,16 +32,15 @@ constant. Each component:
 - mounts/unmounts through an `{#if}` in `Pane.svelte`.
 
 Adding a DOM effect = add the component and one `{#if}` line. Adding a
-geo effect = add a manager class under `world/` (see AGENTS.md).
+geo effect = add a module under `world/` (see AGENTS.md).
 
 ## Content bundles
 
-`scene/bundle/` is now a **wire contract only** — the DOM compositor that
-mounted bundles is gone, so pushed bundles have no runtime mount point.
-What remains and is live:
+`lib/bundle/` is a **wire contract only** — pushed bundles have no runtime
+DOM mount point. What remains and is live:
 
-- `scene/bundle/types.ts` — `ContentBundle` shape + `isContentBundle` guard
-- `server/scene/bundle/disk.ts` — server-side persistence
+- `lib/bundle/types.ts` — `ContentBundle` shape + `isContentBundle` guard
+- `lib/server/bundle/disk.ts` — server-side persistence
 - `/api/content`, `/api/content/[id]`, `/api/assets` — CRUD over the above
 
 The in-memory `bundleStore` and the Cloudflare push-poll client were deleted

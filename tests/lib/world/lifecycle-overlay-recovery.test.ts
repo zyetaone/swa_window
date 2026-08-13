@@ -80,6 +80,22 @@ describe('overlay recovery', () => {
 		expect(isOverlayPersistentlyDisabled()).toBe(false);
 		stop();
 	});
+
+	it('fires disableOverlay ONCE while slowness persists, not every interval', () => {
+		// disableOverlay is a config patch + fleet broadcast — re-firing every
+		// 30s while fps stays low would spam the whole fleet forever.
+		const { disableOverlay, stop } = run({ fps: [3, 3, 3, 3, 3, 3, 3, 3] });
+		vi.advanceTimersByTime(8000);
+		expect(disableOverlay).toHaveBeenCalledOnce();
+		stop();
+	});
+
+	it('a healthy check resets the latch — a later sustained regression re-fires', () => {
+		const { disableOverlay, stop } = run({ fps: [3, 3, 3, 60, 3, 3, 3, 3] });
+		vi.advanceTimersByTime(8000);
+		expect(disableOverlay).toHaveBeenCalledTimes(2);
+		stop();
+	});
 });
 
 describe('hasExplicitOverlayParam', () => {

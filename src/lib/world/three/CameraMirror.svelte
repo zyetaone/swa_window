@@ -15,12 +15,14 @@
 	 *   This project:  X = Greenwich+equator, Y = North pole,   Z = -90°E+equator
 	 * So Three(x, y, z) = Cesium(cx, cz, -cy). Same transform applies to
 	 * position, direction, and up — all three are vectors in the same frame.
+	 * SSOT: cesiumToThreeVec in ./state.ts (unit-tested; do not re-inline).
 	 *
 	 * Without this swap, Three's clouds would render at the wrong points
 	 * relative to where Cesium is showing terrain.
 	 */
 	import { useTask } from '@threlte/core';
 	import { getCameraRead } from '$lib/world/camera';
+	import { cesiumToThreeVec } from './state';
 	import type { PerspectiveCamera } from 'three';
 
 	let { camera }: { camera: PerspectiveCamera | undefined } = $props();
@@ -39,13 +41,16 @@
 		const u = c.up;
 
 		// Position + up vectors: swap (cy ↔ cz, negate the original cy).
-		camera.position.set(p.x, p.z, -p.y);
-		camera.up.set(u.x, u.z, -u.y);
+		camera.position.set(...cesiumToThreeVec(p.x, p.y, p.z));
+		camera.up.set(...cesiumToThreeVec(u.x, u.y, u.z));
 
 		// lookAt target = position + direction × LOOK_AHEAD_M, transformed.
-		const tx = p.x + d.x * LOOK_AHEAD_M;
-		const ty = p.z + d.z * LOOK_AHEAD_M;
-		const tz = -(p.y + d.y * LOOK_AHEAD_M);
+		// The swap is linear, so transforming the sum == summing the transforms.
+		const [tx, ty, tz] = cesiumToThreeVec(
+			p.x + d.x * LOOK_AHEAD_M,
+			p.y + d.y * LOOK_AHEAD_M,
+			p.z + d.z * LOOK_AHEAD_M,
+		);
 		camera.lookAt(tx, ty, tz);
 
 		if (Number.isFinite(c.fovDeg) && Math.abs(camera.fov - c.fovDeg) > 0.01) {

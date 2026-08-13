@@ -41,7 +41,11 @@ export const motion = $state({
 
 // ── Internal timer state (not reactive) ─────────────────────────────────────
 
-let _prevHeading = 0;
+// Null until the first tick seeds it from ctx.heading (same lazy-init
+// pattern as _nextBump below). Initialising to 0 against the 45° boot
+// heading read as a 45°/delta first-frame turn and slammed the bank to
+// bankAngleMax for ~1s.
+let _prevHeading: number | null = null;
 let _rawBankAngle = 0;
 let _bumpTimer = 0;
 // Lazy-init on first tick from ctx.camera.motion.bumpMin/MaxInterval (live
@@ -54,6 +58,26 @@ let _bumpTimer = 0;
 let _nextBump: number | null = null;
 let _bumpElapsed = -1;
 let _bumpSign = 1;
+
+// ── Remount reset ───────────────────────────────────────────────────────────
+
+/**
+ * Reset all module state to first-tick values (null sentinels included).
+ * Called by the AeroWindow constructor: this module is a process singleton,
+ * the AeroWindow is not, so on remount (HMR, page nav, liveness reload) the
+ * retained `_prevHeading` made the first tick derive a heading delta from the
+ * PREVIOUS model's last heading — the boot-slam the null sentinel exists to
+ * prevent. The reactive `motion` outputs are not touched: every field is
+ * rewritten on the next tick anyway.
+ */
+export function motionReset(): void {
+	_prevHeading = null;
+	_rawBankAngle = 0;
+	_bumpTimer = 0;
+	_nextBump = null;
+	_bumpElapsed = -1;
+	_bumpSign = 1;
+}
 
 // ── Tick ────────────────────────────────────────────────────────────────────
 
@@ -111,14 +135,20 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 	} else if (_bumpTimer > _nextBump) {
 		_bumpTimer = 0;
 		_bumpElapsed = 0;
+		// Deliberate Math.random(): bump sign is per-pane visual noise, not
+		// scene state — the panorama invariant covers geometry, not turbulence.
 		_bumpSign = Math.random() > 0.5 ? 1 : -1;
 		_nextBump = randomBetween(m.bumpMinInterval, m.bumpMaxInterval) / turbMult;
 	}
 
 	motion.motionOffsetY = (noiseY * m.turbulenceOffsetY + chatterY + bumpValue) * altFactor;
+	// X deliberately derives from the Y scalar: one turbulence budget, scaled
+	// down laterally (0.3) — not a missing turbulenceOffsetX config key.
 	motion.motionOffsetX = (noiseX * m.turbulenceOffsetY * 0.3 + chatterX) * altFactor;
 
-	const hDelta = shortestAngleDelta(_prevHeading, heading);
+	// First tick: no previous heading, so report zero turn rather than a
+	// phantom swing from the sentinel to the boot heading.
+	const hDelta = _prevHeading === null ? 0 : shortestAngleDelta(_prevHeading, heading);
 	const turnRate = delta > 0 ? hDelta / delta : 0;
 	const targetBank = clamp(turnRate * 0.45, -m.bankAngleMax, m.bankAngleMax);
 	_rawBankAngle += (targetBank - _rawBankAngle) * Math.min(m.bankSmoothing * delta, 1);

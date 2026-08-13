@@ -36,7 +36,7 @@
  */
 
 
-export const VIIRS_GIBS_LAYER =
+const VIIRS_GIBS_LAYER =
 	'VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance';
 
 /**
@@ -51,7 +51,7 @@ export const VIIRS_GIBS_LAYER =
  * before shipping — a single day can be gap-filled unevenly by region. Keep
  * it in step with tools/tile-packager/src/sources.ts.
  */
-export const VIIRS_GIBS_DATE = '2026-07-15';
+const VIIRS_GIBS_DATE = '2026-07-15';
 
 export const VIIRS_GIBS_BASE = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_GIBS_LAYER}/default/${VIIRS_GIBS_DATE}/GoogleMapsCompatible_Level8`;
 
@@ -59,7 +59,7 @@ const TILE_Z = 7;
 const VIIRS_TILE = (z: number, y: number, x: number) =>
 	`${VIIRS_GIBS_BASE}/${z}/${y}/${x}.png`;
 
-export interface ViirsField {
+interface ViirsField {
 	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core).
 	 *  Nearest-pixel — cheapest, but snaps to the coarse ~1.2 km/px tile grid
 	 *  (blocky for dense point placement). */
@@ -93,6 +93,10 @@ export interface ViirsField {
  * Pure function of the tile bytes → identical on all 3 Pis (invariant #4).
  * O(w·h), ~0.6M adds for 256² — once per tile load, off the frame loop.
  * Returns the number of suppressed pixels (observability + tests).
+ *
+ * Exported as a test seam (same pattern as imagery.ts viirsLayerAlpha): the
+ * production caller is the decode path below, which only runs after a
+ * networked tile load — untestable without splitting the maths out.
  */
 export function despeckle(data: Uint8ClampedArray, w: number, h: number): number {
 	// Snapshot luminance first so suppression decisions never cascade.

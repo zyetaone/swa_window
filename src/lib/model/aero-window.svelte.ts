@@ -10,18 +10,26 @@ import { getContext, setContext, hasContext } from 'svelte';
 import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
+import {
+	parseVideoPayload,
+	parseSlideshowPayload,
+	encodeSlideshowPayload,
+	type SlideshowSpec,
+} from '$lib/fleet/display-payload';
+import { loadDisplayMode, saveDisplayMode } from '$lib/fleet/display-mode-persist';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
 import { applyShowOpening } from '$lib/director/show-opening';
 import { FlightSimEngine } from '$lib/flight/flight.svelte';
-import { motion as motionState, motionStep } from '$lib/flight/motion.svelte';
+import { motion as motionState, motionStep, motionReset } from '$lib/flight/motion.svelte';
 import { directorTick, directorReset } from '$lib/director/autopilot.svelte';
 import {
 	config as _config,
 	syncAtmosphereWeather,
 	applyConfigPatch as _applyConfigPatch,
+	type ConfigPatchOpts,
 } from '$lib/model/config-tree.svelte';
 import { Telemetry } from '$lib/model/telemetry.svelte';
 import { effectiveCloudDensityFor } from '$lib/model/atmosphere-rules';
@@ -96,12 +104,13 @@ export class AeroWindow {
 	// Environment
 	weather = $state<WeatherType>('cloudy');
 
-	// Display — fleet-controlled mode. Stored and relayed via fleet status/push.
-	// Window.svelte does not consume this yet; add a display-path consumer here
-	// when screensaver/video modes are implemented. Plain fields (not $state):
-	// only read by setInterval-driven fleet status push — never in a template.
-	displayMode: DisplayMode = 'flight';
-	videoUrl    = '';
+	// Display — fleet-controlled mode (admin set_mode). Consumed by Pane →
+	// MediaStage. $state so templates re-render when the fleet flips mode.
+	displayMode = $state<DisplayMode>('flight');
+	/** Active video URL when displayMode === 'video'. */
+	videoUrl = $state('');
+	/** Active slideshow when displayMode === 'screensaver'. */
+	slideshow = $state<SlideshowSpec | null>(null);
 
 	// Performance. Derived from the telemetry median frame period rather than
 	// counted per wall-second: at the 2–4 fps the Pi panel actually runs, a
@@ -160,6 +169,13 @@ export class AeroWindow {
 
 	// ── Constructor ───────────────────────────────────────────────────────────
 	constructor() {
+		// motion is a process singleton with module-scope state, the
+		// AeroWindow is not — on remount (HMR, page nav, liveness reload) the
+		// retained _prevHeading made the first tick derive a turn from the
+		// PREVIOUS model's last heading, re-introducing the boot bank-slam
+		// (same remount-staleness class as the director's module timers,
+		// reset via directorReset on flightPatch.resetDirector).
+		motionReset();
 		// Precedence at boot:
 		//   1. Show opening (baseline — from $content/shows/default.show.ts)
 		//   2. Persisted localStorage (user's last session, wins over show)
@@ -207,6 +223,13 @@ export class AeroWindow {
 		// Boot complete — from here on, applyConfigPatch stamps the CRDT
 		// with the wall-clock again (see #booting).
 		this.#booting = false;
+
+		// Restore last media mode after boot so Chromium reload keeps video/
+		// slideshow (not daily-rotated; separate storage key).
+		const storedMode = loadDisplayMode();
+		if (storedMode && storedMode.mode !== 'flight') {
+			this.setDisplayMode(storedMode.mode, storedMode.payload);
+		}
 	}
 
 	/** Sync AtmosphereConfig.weather fields from WEATHER_EFFECTS on weather change. */
@@ -267,11 +290,15 @@ export class AeroWindow {
 		this.onUserInteraction('time');
 	}
 
-	setWeather(w: WeatherType): void {
+	setWeather(w: WeatherType, opts?: { trackUserOverride?: boolean }): void {
 		if (!isValidWeather(w)) return;
 		this.weather = w;
 		this.#syncWeatherConfig();
-		this.onUserInteraction('atmosphere');
+		// Autopilot weather rolls pass trackUserOverride:false — a machine
+		// decision must not arm the 8 s user-override that gates the
+		// director's own tickRandomize (it would pause the very randomiser
+		// that issued the roll).
+		if (opts?.trackUserOverride !== false) this.onUserInteraction('atmosphere');
 	}
 
 	// ── Night-city flyover beat ─────────────────────────────────────────────
@@ -316,6 +343,39 @@ export class AeroWindow {
 		this.#flyoverTimers.add(enterId);
 	}
 
+	// ── Scheduled cruise (fleet lock-step) ────────────────────────────────────
+	// When a director_decision is broadcast, the leader must start its own
+	// flyTo at the SAME wall-clock instant the followers apply theirs (the
+	// fleet client schedules applyScene off the broadcast transitionAtMs).
+	// Starting immediately left the leader's blinds reopening
+	// ~TRANSITION_DELAY_MS ahead of the edge panes — the tear the schedule
+	// exists to prevent. No broadcast (solo — no followers) means no
+	// lock-step, so the leader flies immediately instead. Single slot: any
+	// newer scene change supersedes a pending one. Cancelled on destroy.
+	#pendingFlyToTimer: ReturnType<typeof setTimeout> | null = null;
+
+	/** Schedule a local flyTo at the shared transitionAtMs — the leader side
+	 *  of the director_decision contract, mirroring how the fleet client
+	 *  schedules applyScene on followers. Cancels any cruise already pending. */
+	#scheduleFlyTo(locationId: LocationId, transitionAtMs: number): void {
+		this.#cancelScheduledFlyTo();
+		// Clamped via transitionDelayMs for the same reason as the flyover
+		// beat: a bad clock must neither freeze the scene nor overflow
+		// setTimeout into firing instantly.
+		const id = setTimeout(() => {
+			this.#pendingFlyToTimer = null;
+			this.flight.flyTo(locationId, this.skyState);
+		}, transitionDelayMs(transitionAtMs));
+		this.#pendingFlyToTimer = id;
+	}
+
+	#cancelScheduledFlyTo(): void {
+		if (this.#pendingFlyToTimer !== null) {
+			clearTimeout(this.#pendingFlyToTimer);
+			this.#pendingFlyToTimer = null;
+		}
+	}
+
 	setFlightSpeed(n: number): void {
 		// Honor the cruise bounds defined in the config tree (admin-tunable
 		// SSOT). Earlier this hard-coded (0.1, 5) which contradicted the
@@ -341,11 +401,16 @@ export class AeroWindow {
 	/**
 	 * Human / ops scene change (blind pull, LocationPicker).
 	 *
-	 * Leaders only: broadcast `director_decision` then fly locally (same
-	 * contract as the autopilot path). Edge followers ignore — they only
-	 * move when a `director_decision` arrives via the fleet client and
-	 * `applyScene()` runs. Without this gate a center blind-pull desynced
-	 * the corridor (one pane cruised; left/right stayed in orbit).
+	 * Leaders only. Broadcasts `director_decision` to corridor peers; when the
+	 * broadcast actually went out (panorama leader with followers), the local
+	 * flyTo is scheduled at the same transitionAtMs so the leader and edge
+	 * panes move in wall-clock lock-step — same rule as the autopilot path.
+	 * When solo (no broadcast, nobody to lock-step with), it flies
+	 * immediately — operator feedback beats wall-clock alignment for a blind
+	 * pull. Edge followers ignore — they only move when a `director_decision`
+	 * arrives via the fleet client and `applyScene()` runs. Without this gate
+	 * a center blind-pull desynced the corridor (one pane cruised; left/right
+	 * stayed in orbit).
 	 */
 	flyTo(locationId: LocationId): void {
 		if (!isGroupLeader(this.config.camera.parallax.role)) {
@@ -357,18 +422,25 @@ export class AeroWindow {
 			});
 			return;
 		}
-		this.#broadcastLocationDecision(locationId, 'manual');
-		this.flight.flyTo(locationId, this.skyState);
+		this.#cancelScheduledFlyTo();   // a human scene change supersedes a pending autopilot cruise
+		const transitionAtMs = this.#broadcastLocationDecision(locationId, 'manual');
+		if (transitionAtMs !== null) this.#scheduleFlyTo(locationId, transitionAtMs);
+		else this.flight.flyTo(locationId, this.skyState);
 	}
 
 	/**
 	 * Fan-out a location change to corridor peers. Shared by autopilot and
 	 * human flyTo so the wire shape cannot drift between the two paths.
+	 * Returns the transitionAtMs placed on the wire so the caller can lock
+	 * its own local transition to the same instant — or null when nothing
+	 * was broadcast (no fleet hook, or solo: a panorama leader is `center`;
+	 * solo is a leader for LOCAL autopilot only and has no followers to
+	 * lock-step with). Callers fly immediately on null.
 	 */
-	#broadcastLocationDecision(locationId: LocationId, scenarioId: string): void {
-		if (!this.#fleetBroadcast) return;
-		if (!isGroupLeader(this.config.camera.parallax.role)) return;
+	#broadcastLocationDecision(locationId: LocationId, scenarioId: string): number | null {
+		if (!this.#fleetBroadcast || this.config.camera.parallax.role !== 'center') return null;
 		const now = Date.now();
+		const transitionAtMs = now + TRANSITION_DELAY_MS;
 		this.#fleetBroadcast({
 			v: 2,
 			type: 'director_decision',
@@ -376,18 +448,64 @@ export class AeroWindow {
 			locationId,
 			weather: this.weather,
 			decidedAtMs: now,
-			transitionAtMs: now + TRANSITION_DELAY_MS,
+			transitionAtMs,
 			groupId: resolveBinding().groupId,
 		});
+		return transitionAtMs;
 	}
 
-	setDisplayMode(mode: DisplayMode, payload?: string): void {
-		this.displayMode = mode;
-		if (payload && mode === 'video') this.videoUrl = payload;
+	/**
+	 * Switch kiosk display path. Invalid payloads refuse the mode change for
+	 * media modes (stay on current) so a bad admin push cannot blank the wall.
+	 * flight always applies and clears media state.
+	 *
+	 * @returns true if the mode was applied; false if rejected (also logged).
+	 */
+	setDisplayMode(mode: DisplayMode, payload?: string): boolean {
+		if (mode === 'flight') {
+			this.displayMode = 'flight';
+			this.videoUrl = '';
+			this.slideshow = null;
+			saveDisplayMode('flight');
+			return true;
+		}
+		if (mode === 'video') {
+			const url = parseVideoPayload(payload);
+			if (!url) {
+				this.telemetry.recordEvent('info', {
+					event: 'set_mode_rejected',
+					mode,
+					reason: 'invalid_video_url',
+				});
+				return false;
+			}
+			this.displayMode = 'video';
+			this.videoUrl = url;
+			this.slideshow = null;
+			saveDisplayMode('video', url);
+			return true;
+		}
+		// screensaver = image slideshow
+		const spec = parseSlideshowPayload(payload);
+		if (!spec) {
+			this.telemetry.recordEvent('info', {
+				event: 'set_mode_rejected',
+				mode,
+				reason: 'invalid_slideshow_payload',
+			});
+			return false;
+		}
+		this.displayMode = 'screensaver';
+		this.slideshow = spec;
+		this.videoUrl = '';
+		// Persist the normalized wire form so reload re-parses cleanly.
+		saveDisplayMode('screensaver', encodeSlideshowPayload(spec.urls, spec.intervalSec));
+		return true;
 	}
 
 	applyScene(locationId: LocationId, weather?: WeatherType): void {
 		this.exitFlyover();   // a location change ends any active flyover beat
+		this.#cancelScheduledFlyTo();   // …and supersedes a pending autopilot cruise
 		this.flight.flyTo(locationId, this.skyState);
 		if (weather) { this.weather = weather; this.#syncWeatherConfig(); }
 	}
@@ -399,12 +517,15 @@ export class AeroWindow {
 	/**
 	 * Path-targeted config patch. Routes into the flat config tree via
 	 * the generic dispatcher. Returns true if the path was recognised.
-	 * Called by the fleet v2 `config_patch` message handler.
+	 * Called by the fleet v2 `config_patch` message handler — remote fleet
+	 * writes pass `opts.remote` (the CRDT stamp) so the LWW merge carries
+	 * the originator's timestamp instead of a fresh wall-clock one.
 	 */
-	applyConfigPatch(path: string, value: unknown): boolean {
+	applyConfigPatch(path: string, value: unknown, opts?: ConfigPatchOpts): boolean {
 		this.telemetry.recordEvent('config_patch', { path, value });
-		// Boot-time applications skip the CRDT stamp (see #booting).
-		return _applyConfigPatch(path, value, this.#booting ? { stamp: false } : undefined);
+		// Boot-time applications skip the CRDT stamp (see #booting); an
+		// explicit opts (e.g. a remote fleet stamp) always wins.
+		return _applyConfigPatch(path, value, opts ?? (this.#booting ? { stamp: false } : undefined));
 	}
 
 	onUserInteraction(type: 'altitude' | 'time' | 'atmosphere'): void {
@@ -456,7 +577,9 @@ export class AeroWindow {
 
 		if (directorPatch.configs) {
 			for (const { path, value } of directorPatch.configs) {
-				if (path === 'weather') this.setWeather(value as WeatherType);
+				// Autopilot weather rolls must not arm the user-override
+				// cooldown that gates tickRandomize — they ARE the randomiser.
+				if (path === 'weather') this.setWeather(value as WeatherType, { trackUserOverride: false });
 				else this.applyConfigPatch(path, value);
 			}
 		}
@@ -466,18 +589,25 @@ export class AeroWindow {
 			this.exitFlyover();
 			// Phase 7 — broadcast BEFORE flying locally (shared with flyTo()).
 			// transitionAtMs is 2.5s ahead so followers can lock to wall-clock
-			// and absorb ~±200 ms NTP drift. Leader still starts immediately
-			// (same as pre-existing autopilot contract).
-			this.#broadcastLocationDecision(directorPatch.nextLocation, 'autopilot');
-			this.flight.flyTo(directorPatch.nextLocation, this.skyState);
+			// and absorb ~±200 ms NTP drift. When the broadcast went out, the
+			// leader schedules its OWN flyTo at the same instant (same
+			// mechanism as the vantage path below) — starting immediately
+			// reopened the leader's blinds ~2.5 s ahead of the edge panes,
+			// tearing the panorama. When nothing was broadcast (solo — no
+			// followers to lock-step with), the leader flies immediately;
+			// scheduling would only add a dead 2.5 s delay.
+			const transitionAtMs = this.#broadcastLocationDecision(directorPatch.nextLocation, 'autopilot');
+			if (transitionAtMs !== null) this.#scheduleFlyTo(directorPatch.nextLocation, transitionAtMs);
+			else this.flight.flyTo(directorPatch.nextLocation, this.skyState);
 		} else if (directorPatch.vantageBeat) {
-			// Leader chose a night-city flyover. Broadcast the same transitionAtMs
-			// to followers, then schedule locally off that instant so every Pi
-			// enters and exits in lock-step (single broadcast, both edges).
+			// Leader chose a night-city flyover. Same rule as the location
+			// decision above: broadcast + lock-step only when there are
+			// followers (role 'center'); solo enters immediately.
 			const now = Date.now();
-			const transitionAtMs = now + TRANSITION_DELAY_MS;
-			if (ctx.isLeader && this.#fleetBroadcast) {
-				this.#fleetBroadcast({
+			const isGroup = this.#fleetBroadcast && this.config.camera.parallax.role === 'center';
+			const transitionAtMs = isGroup ? now + TRANSITION_DELAY_MS : now;
+			if (isGroup) {
+				this.#fleetBroadcast!({
 					v: 2,
 					type: 'vantage_beat',
 					decidedAtMs: now,
@@ -545,6 +675,7 @@ export class AeroWindow {
 	destroy(): void {
 		// override timestamps are module-level — nothing to teardown there.
 		this.exitFlyover();   // cancel any pending flyover enter/exit timers
+		this.#cancelScheduledFlyTo();   // …and any pending lock-step cruise
 	}
 }
 

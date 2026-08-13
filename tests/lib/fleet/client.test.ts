@@ -40,6 +40,8 @@ class FakeEventSource {
 function makeModel(): FleetClientModel & {
 	applyScene: ReturnType<typeof vi.fn>;
 	scheduleFlyover: ReturnType<typeof vi.fn>;
+	setQualityMode: ReturnType<typeof vi.fn>;
+	applyConfigPatch: ReturnType<typeof vi.fn>;
 } {
 	return {
 		measuredFps: 60,
@@ -55,9 +57,12 @@ function makeModel(): FleetClientModel & {
 		setAltitude: vi.fn(),
 		setTime: vi.fn(),
 		setFlightSpeed: vi.fn(),
+		applyConfigPatch: vi.fn(),
 	} as unknown as FleetClientModel & {
 		applyScene: ReturnType<typeof vi.fn>;
 		scheduleFlyover: ReturnType<typeof vi.fn>;
+		setQualityMode: ReturnType<typeof vi.fn>;
+		applyConfigPatch: ReturnType<typeof vi.fn>;
 	};
 }
 
@@ -147,5 +152,55 @@ describe('vantage_beat corridor gating', () => {
 	it('schedules when the message carries no groupId (legacy leader)', () => {
 		command(beat());
 		expect(model.scheduleFlyover).toHaveBeenCalledOnce();
+	});
+});
+
+// ─── set_config enum validation ─────────────────────────────────────────────
+// /api/command deliberately does NOT validate payloads, so the isValid* gates
+// in the client's set_config handler are the trust boundary for enum fields.
+
+describe('set_config enum validation', () => {
+	it('applies a valid weather', () => {
+		command({ type: 'set_config', patch: { weather: 'rain' } });
+		expect(model.applyScene).toHaveBeenCalledWith('dubai', 'rain');
+	});
+
+	it('ignores an invalid weather string instead of casting it', () => {
+		command({ type: 'set_config', patch: { weather: 'hurricane' } });
+		expect(model.applyScene).not.toHaveBeenCalled();
+	});
+
+	it('applies a valid qualityMode', () => {
+		command({ type: 'set_config', patch: { qualityMode: 'ultra' } });
+		expect(model.setQualityMode).toHaveBeenCalledWith('ultra');
+	});
+
+	it('ignores an invalid qualityMode instead of casting it', () => {
+		command({ type: 'set_config', patch: { qualityMode: 'potato' } });
+		expect(model.setQualityMode).not.toHaveBeenCalled();
+	});
+});
+
+// ─── config_patch remote-stamp routing ──────────────────────────────────────
+// Stamped fleet patches must go through model.applyConfigPatch (which records
+// telemetry) carrying the CRDT stamp — not the config-tree global, which
+// would bypass the telemetry recordEvent.
+
+describe('config_patch remote-stamp routing', () => {
+	function patch(msg: Record<string, unknown>): void {
+		const es = FakeEventSource.instances[FakeEventSource.instances.length - 1];
+		es.emit('config_patch', msg);
+	}
+
+	it('routes stamped patches through the model wrapper with the remote stamp', () => {
+		patch({ path: 'atmosphere.clouds.density', value: 0.5, timestamp: 123, sourceId: 'pi-1' });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith(
+			'atmosphere.clouds.density', 0.5, { remote: { timestamp: 123, sourceId: 'pi-1' } },
+		);
+	});
+
+	it('routes unstamped patches through the model wrapper without a stamp', () => {
+		patch({ path: 'world.showClouds', value: true });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('world.showClouds', true);
 	});
 });

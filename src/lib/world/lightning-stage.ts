@@ -42,7 +42,7 @@ const LIGHTNING_GLSL = /* glsl */ `
 	}
 `;
 
-export interface WeatherSlice {
+interface WeatherSlice {
 	hasLightning: boolean;
 	lightningDecayRate: number;
 	lightningMinInterval: number;
@@ -74,8 +74,8 @@ let _rng: () => number = Math.random;
 
 const STORM_SALT = 0x5c07;
 
-/** Reset the strike sequence for a new storm. Exported for tests. */
-export function beginStorm(index: number = _stormIndex): void {
+/** Reset the strike sequence for a new storm. */
+function beginStorm(index: number = _stormIndex): void {
 	_rng = createSeededRng((daySeed() ^ (index * STORM_SALT)) >>> 0);
 	_composition = pickLightningComposition(_rng);
 	_timer = 0;
@@ -91,9 +91,23 @@ export function beginStorm(index: number = _stormIndex): void {
  * One-time mount: create the PostProcessStage and add it to the scene.
  * Idempotent. Accepts the live Cesium + Viewer from CesiumManager so the
  * module mounts BEFORE `activeCesium.manager` is published by the viewer.
+ *
+ * Liveness-guarded: a latched `_stage` is only valid while its viewer lives.
+ * If `onDestroy` fired while `CesiumManager.start()` was suspended in an
+ * await, `destroy()` ran first and `start()` then resumes calling this on a
+ * destroyed viewer — mounting there would latch a stage against a dead scene
+ * and the bare `_stage` check would keep every later (live) mount out for the
+ * rest of the session.
  */
 export function mountLightning(C: typeof CesiumType, viewer: CesiumType.Viewer): void {
-	if (_stage) return;
+	if (_stage) {
+		if (_viewer && !_viewer.isDestroyed?.()) return;
+		// Stale latch from a destroyed viewer — drop it and remount below.
+		_stage = null;
+	}
+	// Never mount onto a viewer that is already destroyed (start() resuming
+	// after destroy()): the stage would be unreachable by the next live mount.
+	if (viewer.isDestroyed()) return;
 	// Keep the viewer so destroyLightning can detach the stage without
 	// depending on activeCesium (which may already be cleared at teardown).
 	_viewer = viewer;
@@ -178,4 +192,8 @@ export function destroyLightning(): void {
 	_flash = 0;
 	_composition = null;
 	_prevHasLightning = false;
+	// Storm counter is session state, not viewer state — but a destroy means
+	// the pipeline restarts from boot, so the next storm must reseed from 0
+	// or its character silently shifts for the rest of the new session.
+	_stormIndex = 0;
 }

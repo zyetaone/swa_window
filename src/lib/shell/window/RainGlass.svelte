@@ -17,6 +17,7 @@
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { randomBetween } from '$lib/utils';
+	import { createSeededRng, daySeed } from '$lib/world/prng';
 
 	const model = useAeroWindow();
 	const active = $derived(model.weather === 'rain' || model.weather === 'storm');
@@ -27,26 +28,29 @@
 	const beadCount = $derived(isPerf ? 7 : 14);
 
 	// Organic, asymmetric blob — no two beads the same shape.
-	const blob = () => {
-		const v = () => Math.round(randomBetween(38, 62));
+	const blob = (rng: () => number) => {
+		const v = () => Math.round(randomBetween(38, 62, rng));
 		return `${v()}% ${v()}% ${v()}% ${v()}% / ${v()}% ${v()}% ${v()}% ${v()}%`;
 	};
 
 	// Generate the full pool ONCE (plain const — not reactive).
 	// ~1 in 4 is a "runner" that streaks down; the rest cling (stuck beads).
+	// Seeded by the day so all 3 corridor panes lay out IDENTICAL beads —
+	// Math.random would give each Pi a different pattern across the seam.
+	const rng = createSeededRng(daySeed());
 	const allBeads = Array.from({ length: 14 }, () => {
-		const runner = Math.random() < 0.25;
+		const runner = rng() < 0.25;
 		return {
-			x: randomBetween(6, 94),
-			y: randomBetween(8, 86),
-			size: randomBetween(5, 14),
-			opacity: randomBetween(0.5, 0.85),
-			slide: runner ? randomBetween(40, 130) : randomBetween(2, 9),
-			trail: runner ? randomBetween(28, 80) : 0,
-			dur: randomBetween(7, 15),
-			delay: -randomBetween(0, 12),
-			blur: randomBetween(0.8, 1.7),
-			radius: blob(),
+			x: randomBetween(6, 94, rng),
+			y: randomBetween(8, 86, rng),
+			size: randomBetween(5, 14, rng),
+			opacity: randomBetween(0.5, 0.85, rng),
+			slide: runner ? randomBetween(40, 130, rng) : randomBetween(2, 9, rng),
+			trail: runner ? randomBetween(28, 80, rng) : 0,
+			dur: randomBetween(7, 15, rng),
+			delay: -randomBetween(0, 12, rng),
+			blur: randomBetween(0.8, 1.7, rng),
+			radius: blob(rng),
 		};
 	});
 

@@ -43,14 +43,6 @@
 	 *      variants (`cloud-soft.webp`). The runtime can swap TEXTURE_URLS
 	 *      to load softer baked variants without paying any shader cost.
 	 *
-	 *   5. NOT yet cached but should be eventually:
-	 *      - Sky IBL cubemap: re-renders whenever sun position changes.
-	 *        Could pre-bake 24 hourly cubemaps + interpolate at runtime.
-	 *      - Procedural moon crater noise: computed each frame in shader.
-	 *        Could pre-bake a small noise texture and sample.
-	 *      - Star buffer attributes: generated once at boot. Could persist
-	 *        via deterministic seed so successive boots are identical.
-	 *
 	 * ─── DEFERRED ARCHITECTURAL MOVES ──────────────────────────────────────
 	 *   - InstancedMesh + billboarded plane shader: replace 1,840 individual
 	 *     SpriteMaterial draws with a single instanced draw. Headroom to
@@ -85,7 +77,7 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
 	import { spriteOffset, spriteScale } from '$lib/world/cloud-sprite-placement';
-	import { clusterCountsForDensity } from './cloud-cluster-budget';
+	import { clusterCountsForDensity, drawCluster } from './cloud-cluster-budget';
 	import { lightingState } from '$lib/world/curves';
 
 	let {
@@ -200,25 +192,17 @@
 		lonelyChance: number,
 		rng: () => number,
 	): void {
-		const theta = rng() * Math.PI * 2;
-		const r = radiusMin + Math.sqrt(rng()) * radiusSpan;
-		const cx = Math.cos(theta) * r;
-		const cz = -Math.sin(theta) * r;
-		const ch = (rng() - 0.18) * 4600;
-
-		const baseScale = baseScaleMin + rng() * baseScaleSpan;
-		const isLonely = rng() < lonelyChance;
-		const spriteCount = isLonely ? 1 : spriteMin + Math.floor(rng() * spriteSpan);
-
-		// Single shear factor for this cluster — applied to every sprite
-		// in the cluster. Range [-0.15, +0.15]; positive = drifts with
-		// gust, negative = against. Adjacent clusters have independent
-		// shears so the deck moves with shear, not as a rigid disc.
-		// Amplitude pulled back from ±0.4 (which had clusters effectively
-		// swapping positions over 30 min — 2.33× rate ratio between
-		// fastest and slowest cluster). ±0.15 keeps the shear visible
-		// (rate ratio 1.35× fastest/slowest) without long-session drift.
-		const clusterShear = (rng() - 0.5) * 0.30;
+		// ⚠ LOAD-BEARING INVARIANT (3-Pi seam): emitCluster must consume the
+		// same rng draws for every cluster regardless of density or cluster
+		// index — density only changes how MANY times buildClusters calls
+		// this, so a lower density is a strict PREFIX of the same seeded
+		// field. The header draws come from the shared pure helper so the
+		// sequence is pinned count-independent (see drawCluster in
+		// ./cloud-cluster-budget.ts and its prefix test). Do NOT let density
+		// or the cluster index leak into ANY draw here — including the
+		// per-sprite loop below — or adjacent screens diverge.
+		const { cx, cz, ch, baseScale, spriteCount, shear: clusterShear } =
+			drawCluster(radiusMin, radiusSpan, baseScaleMin, baseScaleSpan, spriteMin, spriteSpan, lonelyChance, rng);
 
 		for (let i = 0; i < spriteCount; i++) {
 			// Within-cluster X/Z spread: 1.85× (pulled back from the over-

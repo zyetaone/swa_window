@@ -126,6 +126,10 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	);
 
 	function onPointerDown(e: PointerEvent) {
+		// First real interaction retires the discoverable coaching (chevrons +
+		// handle breathe) for the rest of the session — set before the
+		// transition gate, since even an ignored pull is still a discovery.
+		hasAnimated = true;
 		if (model.flight.isTransitioning) return;
 		containerHeight = clipEl?.offsetHeight ?? 1;
 		isDragging = true;

@@ -26,9 +26,16 @@
 	// Safety: if Cesium never renders a frame (WebGL failure, stalled init),
 	// dissolve after 15s. A half-rendered globe is better than a permanent
 	// black screen. Logged to telemetry so operators can diagnose remotely.
+	// forcedDissolve follows the same not-latched contract as isLive: a live
+	// frame clears it, so a LATER genuine stall re-covers the view. While
+	// latched, fps flapping must not re-arm the timer or re-log the error.
 	let forcedDissolve = $state(false);
 	$effect(() => {
-		if (isLive) return;
+		if (isLive) {
+			forcedDissolve = false;
+			return;
+		}
+		if (forcedDissolve) return; // already dissolved + reported
 		const t = setTimeout(() => {
 			forcedDissolve = true;
 			model.telemetry.recordEvent('error', {

@@ -12,8 +12,15 @@ import {
 	enableNightIbl,
 	disableNightIbl,
 	nightIblSupported,
-	NIGHT_IBL_DEFAULTS,
 } from '$lib/world/night-ibl';
+
+// The tuning defaults are module-internal; these literals pin them.
+const TUNING = {
+	atmosphereScatteringIntensity: 3.0,
+	groundColorCss: '#2a1d10',
+	groundAlbedo: 0.28,
+	maximumSecondsDifference: 600,
+};
 
 /** Minimal stand-in for Cesium's Color.fromCssColorString. */
 const FakeCesium = {
@@ -50,10 +57,10 @@ describe('night-ibl', () => {
 		const m = (ts as unknown as { environmentMapManager: Record<string, unknown> })
 			.environmentMapManager;
 		expect(m.enabled).toBe(true);
-		expect(m.atmosphereScatteringIntensity).toBe(NIGHT_IBL_DEFAULTS.atmosphereScatteringIntensity);
-		expect(m.groundAlbedo).toBe(NIGHT_IBL_DEFAULTS.groundAlbedo);
-		expect(m.maximumSecondsDifference).toBe(NIGHT_IBL_DEFAULTS.maximumSecondsDifference);
-		expect(m.groundColor).toEqual({ css: NIGHT_IBL_DEFAULTS.groundColorCss });
+		expect(m.atmosphereScatteringIntensity).toBe(TUNING.atmosphereScatteringIntensity);
+		expect(m.groundAlbedo).toBe(TUNING.groundAlbedo);
+		expect(m.maximumSecondsDifference).toBe(TUNING.maximumSecondsDifference);
+		expect(m.groundColor).toEqual({ css: TUNING.groundColorCss });
 	});
 
 	// The compatibility contract: an older Cesium must degrade, not crash.
@@ -92,20 +99,29 @@ describe('night-ibl', () => {
 	// is `enabled = true` with atmosphereScatteringIntensity 2.0. Verified on
 	// the live scene, where the tileset reported enabled=true / intensity=2
 	// before this module touched it. So the tuning must actually DIFFER from
-	// stock, or the flag is a no-op dressed up as a feature.
+	// stock, or the flag is a no-op dressed up as a feature. The defaults are
+	// module-internal, so these read the values the module actually applies.
 	const CESIUM_STOCK_INTENSITY = 2.0;
 
+	function appliedTuning() {
+		const ts = modernTileset();
+		enableNightIbl(FakeCesium, ts);
+		return (ts as unknown as { environmentMapManager: Record<string, unknown> })
+			.environmentMapManager;
+	}
+
 	it('tunes the environment ABOVE Cesium stock, or it is pointless', () => {
-		expect(NIGHT_IBL_DEFAULTS.atmosphereScatteringIntensity)
+		expect(appliedTuning().atmosphereScatteringIntensity as number)
 			.toBeGreaterThan(CESIUM_STOCK_INTENSITY);
 	});
 
 	it('regenerates far more often than Cesium stock (3600 s) so dusk is not stale', () => {
-		expect(NIGHT_IBL_DEFAULTS.maximumSecondsDifference).toBeLessThan(3600);
+		expect(appliedTuning().maximumSecondsDifference as number).toBeLessThan(3600);
 	});
 
 	it('bounces a non-zero, physically sane amount of ground light', () => {
-		expect(NIGHT_IBL_DEFAULTS.groundAlbedo).toBeGreaterThan(0);
-		expect(NIGHT_IBL_DEFAULTS.groundAlbedo).toBeLessThanOrEqual(1);
+		const albedo = appliedTuning().groundAlbedo as number;
+		expect(albedo).toBeGreaterThan(0);
+		expect(albedo).toBeLessThanOrEqual(1);
 	});
 });

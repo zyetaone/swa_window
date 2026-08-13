@@ -254,9 +254,9 @@ $effect(() => {
    as `flight.svelte.ts`, `motion.svelte.ts`, and `autopilot.svelte.ts` do.
    It does **not** apply to Threlte `useTask` callbacks: those are invoked from
    `renderer.setAnimationLoop`, outside any tracking scope, so reads there create
-   no dependency (`Clouds.svelte` relies on this). `Wing.svelte` still wraps its
-   reads — harmless, but not required. Do not "fix" `useTask` bodies by adding
-   `untrack`; verify the call site's scope first.
+   no dependency (`Wing.svelte` relies on this and reads directly). `Clouds.svelte`
+   still wraps its reads in one `untrack` — harmless, but not required. Do not
+   "fix" `useTask` bodies by adding `untrack`; verify the call site's scope first.
 4. **Deterministic 3-Pi panorama** — use `createSeededRng(daySeed())` from `world/prng.ts`, not `Math.random()`
 5. **Sun-direction memo aliasing** — `computeSunDirection()` returns a shared mutated array; read-and-derive synchronously, never store the reference
 6. **Shared blast radius** — `compose.ts`, `flight.svelte.ts`, `config-tree.svelte.ts` affect every surface; change them deliberately
@@ -407,7 +407,7 @@ only a real page load covers the whole route.
 - **Assertion style**: `expect(value).toBe(expected)` — standard Vitest matchers
 - **Server endpoint tests**: Directly import SvelteKit `+server.ts` handler functions, call with synthetic `Request` objects and mock `getClientAddress`
 - **No global setup file** — each test file is self-contained
-- **Coverage**: snapshot counts go stale fast — run `bun x vitest run` for the current number (458 tests / 46 files as of Aug 2026). No formal coverage threshold configured.
+- **Coverage**: snapshot counts go stale fast — run `bun x vitest run` for the current number. No formal coverage threshold configured.
 - **Run**: `bun run test` (alias: `bun x vitest run`)
 
 ### Test Patterns
