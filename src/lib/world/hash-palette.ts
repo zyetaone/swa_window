@@ -12,8 +12,7 @@
 
 import type * as CesiumType from 'cesium';
 import { COLOR_GRADE_STAGE } from '$lib/world/shaders';
-import { NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
-import { clamp } from '$lib/utils';
+import { nightLightGain } from '$lib/world/altitude';
 
 export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform sampler2D colorTexture;
@@ -157,7 +156,7 @@ export function installHashPalette(
 			// amber blob rather than discrete lights.
 			// Same normalisation viirsLayerAlpha and roadMaskAlpha already use;
 			// see the notes there on why a 0..5 gain can never multiply in raw.
-			u_lightIntensity: () => clamp(getNightLightScale() / NIGHT_LIGHT_SCALE_MAX, 0, 1),
+			u_lightIntensity: () => nightLightGain(getNightLightScale()),
 			u_darkVoidStrength: getDarkVoidStrength,
 			u_envLight: getEnvLight,
 			u_additiveStrength: getAdditiveStrength,

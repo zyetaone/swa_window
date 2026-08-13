@@ -11,7 +11,7 @@
  */
 
 import type * as CesiumType from 'cesium';
-import { altitudeDetailMix, NIGHT_LIGHT_SCALE_MAX } from '$lib/world/altitude';
+import { altitudeDetailMix, nightLightGain } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
 import { getSatelliteImagery, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { clamp, smoothstep } from '$lib/utils';
@@ -182,7 +182,7 @@ export function viirsLayerAlpha(
 	// overruns any ceiling instantly. Normalising against the slider maximum
 	// keeps the whole travel expressive instead of pinning at ~0.7 and leaving
 	// most of the control inert.
-	const gain = clamp(scale / NIGHT_LIGHT_SCALE_MAX, 0, 1);
+	const gain = nightLightGain(scale);
 	// ─── ⚠ boost > 1 COSTS YOU THE ALTITUDE GATE ────────────────────────────
 	// clamp(maxAlpha * X, 0, maxAlpha) === maxAlpha * clamp(X, 0, 1), so any
 	// X > 1 pins the result flat. Every term except `boost` is already <= 1, so
@@ -227,7 +227,7 @@ export function roadMaskAlpha(
 	// alone left this pinned at 1.0 for every altitude and every knob position
 	// above ~0.3, so the altitude gate above could never actually fade the mask
 	// and most of the slider was inert.
-	const gain = clamp(scale / NIGHT_LIGHT_SCALE_MAX, 0, 1);
+	const gain = nightLightGain(scale);
 	return clamp(nf * gain * gate + (1 - nf) * 0.08 * gate, 0, 1) * bootFade;
 }
 

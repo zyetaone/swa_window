@@ -59,12 +59,60 @@ export function altitudeDetailMix(camAltFt: number): number {
 export const NIGHT_LIGHT_SCALE_MAX = 5.0;
 
 /**
- * Raw emissive channel value that tone-maps to pure white in the building
- * shader's Reinhard curve.
+ * The 0..5 Night Lights knob, normalised to a 0..1 multiplier.
  *
- * The window palette peaks around 7.0 raw at the default gain. A white point
- * slightly above the typical value keeps the brightest windows reading as
- * genuinely bright (~0.9) without flattening the amber/gold mid-range into
- * them — which is what a naive clamp, or dividing the gain down, both do.
+ * ─── ⚠ EVERY UNIT-RANGE CONSUMER MUST GO THROUGH THIS ───────────────────────
+ * The knob is a GAIN, not a multiplier. Applied raw to anything authored for
+ * ~1 it saturates instantly, which both blows out the look AND silently kills
+ * whatever else was multiplying in — the term pins at its ceiling and stops
+ * responding. That has now shipped FOUR separate times:
+ *
+ *   viirsLayerAlpha   pinned opaque; altitude gate dead across the show band
+ *   roadMaskAlpha     evaluated to 3.664, assigned with no clamp at all
+ *   u_lightIntensity  +(0.90,0.45,0.10) orange wash over half the ground
+ *   viirsAlphaBoost   product > 1 froze the altitude gate flat
+ *
+ * Three of those carried comments warning about the trap, and a fourth still
+ * shipped — so the fix is one shared function, not more prose.
+ *
+ * NOT the only valid treatment: buildings.ts deliberately passes the gain RAW
+ * and Reinhard tone-maps it in-shader (see NIGHT_EMISSIVE_WHITE_POINT), which
+ * keeps the knob expressive across its whole travel instead of costing 5x
+ * brightness. Normalise for unit-range terms; tone-map for HDR ones. What is
+ * never correct is feeding it raw into something that clips.
  */
-export const NIGHT_EMISSIVE_WHITE_POINT = 2.2;
+export function nightLightGain(scale: number): number {
+	const g = scale / NIGHT_LIGHT_SCALE_MAX;
+	return g < 0 ? 0 : g > 1 ? 1 : g;
+}
+
+/**
+ * Raw emissive channel value that tone-maps to pure white in the building
+ * shader's Reinhard curve:  x * (1 + x/W²) / (1 + x).
+ *
+ * ─── ⚠ W MUST BE >= THE PEAK RAW VALUE, OR THE CURVE STOPS TONE-MAPPING ─────
+ * By construction x = W maps to exactly 1.0, so ANY raw value above W leaves
+ * the 0..1 range and clips. Cesium's material.emissive is LDR, so clipping is
+ * pure white.
+ *
+ * This was 2.2 while the window palette peaks at 7.0 raw (gain 5.0) and the
+ * DIMMEST window sits at 2.79 — so every window in the city, dim ones
+ * included, exceeded W and clamped to white:
+ *
+ *              raw    extended W=2.2    simple x/(1+x)
+ *   dimmest   2.79        1.160             0.736
+ *   peak      7.00        2.140             0.875
+ *
+ * i.e. precisely the "identical white boxes" failure the tone-map exists to
+ * prevent. Note the right-hand column: the 0.88 / 0.74 figures quoted in
+ * buildings.ts are simple Reinhard with NO white point. Those were computed
+ * correctly, then a white point was introduced that inverted the result — the
+ * comment described one curve while the code shipped another.
+ *
+ * 7.0 is the peak raw value, so peak maps to exactly 1.0 (genuinely white)
+ * while the dimmest lands at 0.778 — a 0.22 spread that keeps the amber/gold
+ * palette separable. Raising the gain above 5.0 pushes peak past W again;
+ * that is the operator's business, and it degrades gracefully into clipping
+ * rather than the palette collapsing at the DEFAULT setting.
+ */
+export const NIGHT_EMISSIVE_WHITE_POINT = 7.0;
