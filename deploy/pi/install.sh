@@ -100,7 +100,7 @@ if [[ "${UNITS_ONLY}" == false ]]; then
 
 # ─── Step 1: System packages (idempotent — apt-get only upgrades what changed) ──
 
-echo "[1/7] Installing system packages..."
+echo "[1/8] Installing system packages..."
 apt-get update -qq
 # No `-y upgrade` — leave OS patching to the operator's maintenance window.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
@@ -129,7 +129,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
 
 # ─── Step 2: Bun runtime (installs only if missing) ───────────────────────────
 
-echo "[2/7] Installing Bun runtime..."
+echo "[2/8] Installing Bun runtime..."
 if [[ ! -x "${BUN_BIN}" ]]; then
 	sudo -u "${PI_USER}" bash -c 'curl -fsSL https://bun.sh/install | bash'
 else
@@ -138,7 +138,7 @@ fi
 
 # ─── Step 3: Clone repo (idempotent — fetch+checkout if already present) ──────
 
-echo "[3/7] Fetching app source..."
+echo "[3/8] Fetching app source..."
 mkdir -p "${INSTALL_DIR}"
 chown "${PI_USER}:${PI_USER}" "${INSTALL_DIR}"
 
@@ -155,7 +155,7 @@ fi
 
 # ─── Step 4: Build-time env + bun install + build ─────────────────────────────
 
-echo "[4/7] Installing dependencies + building..."
+echo "[4/8] Installing dependencies + building..."
 
 # VITE_* vars are INLINED AT BUILD TIME (src/lib/world/cesium-setup.ts reads
 # import.meta.env.VITE_CESIUM_ION_TOKEN). This does not fail loudly once — the
@@ -183,7 +183,7 @@ sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' run build"
 
 # ─── Step 5: Write environment config ─────────────────────────────────────────
 
-echo "[5/7] Writing environment config..."
+echo "[5/8] Writing environment config..."
 install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" /etc/aero
 # Preserve hand-configured secrets across re-runs — regenerating this file
 # used to wipe them. AERO_ADMIN_URL silently killed the WAN heartbeat;
@@ -291,9 +291,60 @@ if [[ -f /etc/aero/config.env ]] && ! command grep -q '^AERO_FLEET_TOKEN=.' /etc
 	echo "  added missing AERO_FLEET_TOKEN to /etc/aero/config.env (generated)"
 fi
 
-# ─── Step 6: Systemd units + cron jobs ────────────────────────────────────────
+# ─── Step 6: Tailscale (optional — remote access without a LAN) ───────────────
+#
+# WHY: without this there is NO way to reach a fielded Pi that is not on your
+# LAN. Diagnosis requires physically standing at the device. That was the state
+# during the Aug-10 deploy: CI had been red for five consecutive commits, the
+# release gate correctly refused to promote, the fleet silently ran stale code,
+# and nothing could be inspected remotely. Pi 5's USB-C is no substitute — it is
+# a power sink unless gadget mode was configured beforehand, which itself needs
+# the physical access you are trying to avoid.
+#
+# Enrolls ONLY when TS_AUTHKEY is exported for this run. No key, no change —
+# existing provisioning is unaffected, and the key is never written to the repo
+# or to config.env (tailscaled owns its own state in /var/lib/tailscale).
+#
+#   sudo TS_AUTHKEY=tskey-auth-xxxx ./install.sh
+#
+# Use a REUSABLE, TAGGED key (e.g. tag:aero-kiosk) so re-provisioning does not
+# pile up stale nodes and ACLs can scope what these devices may reach. Prefer
+# NOT ephemeral: an ephemeral node vanishes from the tailnet when the Pi is
+# powered off, which is exactly when you want to see that it went away.
+#
+# --ssh enables Tailscale SSH: shell access with no key distribution, gated by
+# your tailnet ACLs rather than authorized_keys. That is the whole point of
+# installing this, but it IS a remote-access surface — scope it in the ACL to
+# your own user and the aero tag.
+echo "[6/8] Configuring Tailscale..."
+if [[ -n "${TS_AUTHKEY:-}" ]]; then
+	if ! command -v tailscale >/dev/null 2>&1; then
+		echo "  installing tailscale..."
+		curl -fsSL https://tailscale.com/install.sh | sh
+	fi
+	systemctl enable --now tailscaled
+	# `tailscale up` is idempotent, but re-running it with an auth key on an
+	# already-authenticated node is harmless and repairs a node that was logged
+	# out. Hostname is pinned to the kiosk's own hostname so the tailnet list
+	# matches the aero-display-XX naming the wifi portal already uses.
+	tailscale up \
+		--authkey="${TS_AUTHKEY}" \
+		--hostname="$(hostname)" \
+		--ssh \
+		--accept-dns=false || echo "  WARNING: tailscale up failed — device NOT remotely reachable"
+	# --accept-dns=false: the kiosk resolves tile/CDN hosts via the venue's own
+	# DNS. Letting MagicDNS take over risks breaking imagery on a network whose
+	# resolver we do not control, which would be a visible outage.
+	TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+	echo "  tailscale: ${TS_IP:-not connected} (hostname $(hostname))"
+else
+	echo "  skipped — TS_AUTHKEY not set. This Pi will be reachable ONLY on the LAN."
+	echo "  re-run with: sudo TS_AUTHKEY=tskey-auth-xxxx $0 ${*}"
+fi
 
-echo "[6/7] Installing systemd units + cron..."
+# ─── Step 7: Systemd units + cron jobs ────────────────────────────────────────
+
+echo "[7/8] Installing systemd units + cron..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Copy units, rewriting placeholder paths for this install.
@@ -399,7 +450,7 @@ fi
 
 # ─── Step 7: Enable + start (idempotent — enable is a no-op on second run) ────
 
-echo "[7/7] Enabling services..."
+echo "[8/8] Enabling services..."
 systemctl daemon-reload
 systemctl enable aero-xserver.service aero-app.service aero-kiosk.service
 systemctl enable --now aero-updater.timer
