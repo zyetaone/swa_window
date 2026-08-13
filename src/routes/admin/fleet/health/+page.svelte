@@ -98,6 +98,12 @@
 					<div><dt>Temp</dt><dd style:color={tempColor(s.temp)}>{s.temp}°C</dd></div>
 					<div><dt>Uptime</dt><dd>{s.uptime > 0 ? formatUptime(s.uptime) : '—'}</dd></div>
 					<div><dt>Crashes</dt><dd>{s.crashCount}</dd></div>
+					<div>
+						<dt>Mode</dt>
+						<dd class={s.mode && s.mode !== 'flight' ? 'mode-media' : undefined}>
+							{s.mode === 'screensaver' ? 'Slideshow' : s.mode === 'video' ? 'Video' : s.mode === 'flight' ? 'Flight' : (s.mode ?? '—')}
+						</dd>
+					</div>
 				</dl>
 				<footer>
 					last heartbeat {Math.round((Date.now() - s.receivedAt) / 1000)}s ago
@@ -184,6 +190,7 @@
 	dl > div { display: flex; justify-content: space-between; }
 	dt { color: #9ca3af; }
 	dd { margin: 0; font-weight: 600; }
+	dd.mode-media { color: #93c5fd; }
 	.tile footer { font-size: 0.75rem; color: var(--no-data); margin-top: 0.75rem; }
 	.empty { color: #9ca3af; grid-column: 1 / -1; text-align: center; padding: 2rem; }
 </style>

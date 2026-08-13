@@ -69,12 +69,12 @@ describe('POST /api/fleet/heartbeat', () => {
 
 describe('GET /api/fleet/heartbeat', () => {
 	it('strips lastError from the latest-samples response', async () => {
-		recordHeartbeat(SAMPLE);
+		recordHeartbeat({ ...SAMPLE, mode: 'video' });
 		const res = await get();
 		const body = await res.json() as Array<Record<string, unknown>>;
 		const mine = body.filter((s) => s.deviceId === 'pi-gw-1');
 		expect(mine).toHaveLength(1);
-		expect(mine[0]).toMatchObject({ deviceId: 'pi-gw-1', fps: 60, temp: 51 });
+		expect(mine[0]).toMatchObject({ deviceId: 'pi-gw-1', fps: 60, temp: 51, mode: 'video' });
 		expect('lastError' in mine[0]).toBe(false);
 	});
 

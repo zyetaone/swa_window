@@ -60,6 +60,20 @@ REST + SSE (no central broker). Three Pis form one continuous panoramic window. 
 | `GET /api/devices` | Fleet device registry |
 | `GET /api/events` | SSE event stream |
 
+### Display modes (`set_mode`)
+
+Admin **Mode** push (or local Escape / Return to Flight) switches the kiosk path:
+
+| Mode | Wire name | Payload | Kiosk |
+|---|---|---|---|
+| Flight | `flight` | none | Cesium/Three globe |
+| Video | `video` | absolute media URL | full-viewport looped `<video>` |
+| Slideshow | `screensaver` | JSON `{ urls, intervalSec? }` | image playlist |
+
+Payload parse/validate: `$lib/fleet/display-payload`. Persist across reload:
+`$lib/fleet/display-mode-persist`. Admin rewrites `/api/assets/…` to absolute
+URLs against the admin origin so multi-Pi walls share one asset host.
+
 ### Flight Mode State Machine
 
 ```
@@ -78,6 +92,7 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 | `src/lib/shell/passenger/` | HUD, clocks, flight-readout |
 | `src/lib/shell/operator/` | SidePanel, panel controls, TelemetryPanel |
 | `src/lib/shell/window/` | Blind, Glass, RainGlass |
+| `src/lib/shell/media/` | MediaStage — video/slideshow when not in flight |
 | `src/lib/fleet/` | Browser multi-Pi client / admin store / parallax chrome gates |
 | `src/lib/server/fleet/` | SSE bus, mDNS, heartbeat |
 | `src/lib/bundle/` | Content-bundle **wire types only** (no runtime mount) |

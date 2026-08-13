@@ -56,18 +56,19 @@ if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
 	TEMP_C=$(( TEMP_MILLI / 1000 ))
 fi
 
-# FPS + running commit — scrape the device's own /api/status (the browser
-# heartbeats fps + build commit there every 5s). The old target,
-# /api/fleet?health, never existed — WAN heartbeats reported fps 0 forever.
-# If the app is down, default to 0 so the admin sees it as failing.
+# FPS + running commit + display mode — scrape the device's own /api/status
+# (the browser heartbeats there every 5s). If the app is down, default to 0
+# so the admin sees it as failing.
 FPS=0
 COMMIT=""
+MODE=""
 if command -v curl >/dev/null 2>&1; then
 	STATUS_JSON="$(curl -fsS --max-time 2 "http://localhost:${AERO_PORT}/api/status" 2>/dev/null || echo '{}')"
 	# Cheap JSON scrapes without a jq dependency.
 	FPS="$(echo "${STATUS_JSON}" | tr ',' '\n' | command grep -o '"fps":[0-9.]*' | head -1 | cut -d':' -f2 || echo 0)"
 	FPS="${FPS:-0}"
 	COMMIT="$(echo "${STATUS_JSON}" | tr ',' '\n' | command grep -o '"commit":"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
+	MODE="$(echo "${STATUS_JSON}" | tr ',' '\n' | command grep -o '"mode":"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
 fi
 
 # Last error line from the app service journal — one line of WHY, not just
@@ -88,7 +89,7 @@ fi
 # ─── POST to admin ───────────────────────────────────────────────────────────
 
 PAYLOAD=$(cat <<EOF
-{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}"}
+{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}","mode":"${MODE}"}
 EOF
 )
 
