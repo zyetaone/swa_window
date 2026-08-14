@@ -24,7 +24,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { POST, wifiRecoveryAvailable } from '../../../../src/routes/api/wifi/reset/+server';
+import { POST } from '../../../../src/routes/api/wifi/reset/+server';
+// Not exported from +server.ts: SvelteKit restricts route exports to a fixed
+// list and rejects anything else at BUILD time — which neither svelte-check nor
+// vitest exercises, so it shipped green and broke CI one step later.
+import { wifiRecoveryAvailable } from '$lib/server/wifi-recovery';
 
 const TOKEN = 'sekret-token-for-tests';
 
