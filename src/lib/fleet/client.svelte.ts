@@ -35,6 +35,8 @@ interface ConfigPatchEvent {
 	value: unknown;
 	timestamp?: number;
 	sourceId?: string;
+	/** Apply-ack correlation id (admin pushes only — ambient peer-sync omits it). */
+	commandId?: string;
 }
 
 interface CommandEvent {
@@ -210,6 +212,9 @@ export class DeviceClient {
 				uptime: Math.floor((Date.now() - this.#bootTime) / 1000),
 				lastSeen: Date.now(),
 				commit: APP_COMMIT,
+				// Apply-ack echo — lets the admin dashboard distinguish
+				// "published to SSE" from "applied by the kiosk".
+				lastAppliedCommandId: this.#model.lastAppliedCommandId ?? undefined,
 				fpsLow: tel?.fpsLow,
 				frameMsP50: tel ? Math.round(tel.frameMsP50 * 10) / 10 : undefined,
 				frameMsP95: tel ? Math.round(tel.frameMsP95 * 10) / 10 : undefined,
@@ -218,6 +223,18 @@ export class DeviceClient {
 				lastErrors,
 			}),
 		}).catch(() => { /* heartbeat best-effort — don't pollute console */ });
+	}
+
+	/**
+	 * Apply-ack: record the pushed commandId AFTER applying. This acks RECEIPT
+	 * — "this device applied the message" — NOT merge outcome: a config patch
+	 * that LOSES the CRDT LWW merge still acks (the message was handled even
+	 * if its value didn't win), and an SSE ring-buffer replay after reload
+	 * re-acks the same id, which is harmless — it is the same command.
+	 */
+	#recordAck(commandId: unknown): void {
+		if (typeof commandId !== 'string' || commandId.length === 0) return;
+		this.#model.lastAppliedCommandId = commandId.slice(0, 64);
 	}
 
 	#handleConfigPatch(ev: MessageEvent): void {
@@ -239,6 +256,7 @@ export class DeviceClient {
 		} else {
 			this.#model.applyConfigPatch?.(body.path, body.value);
 		}
+		this.#recordAck(body.commandId);
 	}
 
 	#handleCommand(ev: MessageEvent): void {
@@ -266,6 +284,7 @@ export class DeviceClient {
 				if (!isValidLocation(msg.location)) break;
 				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
 				this.#model.applyScene(msg.location, weather);
+				this.#recordAck(msg.commandId);
 				break;
 			}
 			case 'set_mode': {
@@ -279,6 +298,7 @@ export class DeviceClient {
 						? (msg.decidedAtMs as number)
 						: Date.now();
 				this.#model.setDisplayMode(mode, msg.payload as string | undefined, { decidedAtMs });
+				this.#recordAck(msg.commandId);
 				break;
 			}
 			case 'set_config': {
@@ -309,6 +329,7 @@ export class DeviceClient {
 					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
 					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
 					if (isValidQualityMode(d.qualityMode)) this.#model.setQualityMode(d.qualityMode);
+					this.#recordAck(msg.commandId);
 				}
 				break;
 			}
@@ -326,13 +347,17 @@ export class DeviceClient {
 				if (rawLead < -50) {
 					console.warn(`[fleet] director_decision arrived ${-rawLead}ms late; applying immediately`);
 					this.#model.applyScene(loc, weather);
+					this.#recordAck(msg.commandId);
 				} else {
 					// Track the handle so disconnect() can cancel pending
 					// transitions and the closure stops pinning #model.
+					// The ack is recorded when the scene ACTUALLY applies (at
+					// transitionAtMs), not when the message arrives.
 					const id = setTimeout(() => {
 						this.#pendingTransitions.delete(id);
 						if (this.#destroyed) return;
 						this.#model.applyScene(loc, weather);
+						this.#recordAck(msg.commandId);
 					}, delay);
 					this.#pendingTransitions.add(id);
 				}

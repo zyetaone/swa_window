@@ -1,7 +1,7 @@
 /**
  * PATCH /api/config — accept a config patch from a peer (admin or leader).
  *
- * Body: { path, value, timestamp?, sourceId? }
+ * Body: { path, value, timestamp?, sourceId?, commandId? }
  *
  * When the message carries {timestamp, sourceId}, receiver routes through
  * CRDT merge (the remote branch of applyConfigPatch in config-tree.svelte.ts)
@@ -25,6 +25,8 @@ interface ConfigPatchBody {
 	value: unknown;
 	timestamp?: number;
 	sourceId?: string;
+	/** Apply-ack correlation id (admin fan-outs; absent on ambient peer-sync). */
+	commandId?: string;
 }
 
 // Allowlist of namespaces that a remote PATCH may write to — derived from
@@ -63,6 +65,9 @@ export const PATCH: RequestHandler = publishRoute<ConfigPatchBody>((body) => {
 			value: body.value,
 			timestamp: body.timestamp,
 			sourceId: body.sourceId,
+			// Apply-ack correlation id — forwarded so the kiosk can echo it in
+			// its heartbeat. Capped here at the wire boundary.
+			commandId: typeof body.commandId === 'string' ? body.commandId.slice(0, 64) : undefined,
 		},
 	};
 });

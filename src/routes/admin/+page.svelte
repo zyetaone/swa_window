@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
-	import { startPeerSync } from '$lib/fleet/peer-sync.svelte';
+	import { RestAdminStore, newCommandId } from '$lib/fleet/rest-admin.svelte';
+	import { startPeerSync, getAmbientSyncFailures, clearAmbientSyncFailures } from '$lib/fleet/peer-sync.svelte';
 	import { formatAltitudeFt, formatSpeedX, formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
@@ -41,6 +41,19 @@
 	const store = new RestAdminStore();
 	const stopPeerSync = startPeerSync(store);
 	onDestroy(() => { stopPeerSync(); store.destroy(); });
+
+	// Ambient fan-out failures (rejected PATCHes — offline/rebooting peers).
+	// Visibility only; peer-sync deliberately does not retry.
+	const ambientFailures = $derived(getAmbientSyncFailures());
+
+	/** Compact relative age for the ambient-failure list ("45s ago"). */
+	function relativeAgo(at: number): string {
+		const s = Math.max(0, Math.round((wallClockNow() - at) / 1000));
+		if (s < 60) return `${s}s ago`;
+		const m = Math.floor(s / 60);
+		if (m < 60) return `${m}m ago`;
+		return `${Math.floor(m / 60)}h ago`;
+	}
 
 	// Selection state
 	let selectedDevices = $state<Set<string>>(new Set());
@@ -190,13 +203,17 @@
 		const targets = getTargets();
 		if (targets.length === 0) return;
 		pushResult = null;
+		// Apply-ack: one commandId for the whole fan-out; kiosks echo it in
+		// their heartbeat so the result line can count real applies, not 200s.
+		const commandId = newCommandId();
+		store.trackCommand(commandId, targets);
 		try {
 			// One code path for 1..N targets: broadcastScene() was the same
 			// per-peer POSTs under Promise.all, but one rejecting peer failed
 			// the whole report (ok: 0 with 2 of 3 applied). fanOut attributes
 			// success/failure per target.
 			pushResult = await fanOut(targets, (id) =>
-				store.pushScene(id, scene.location, scene.weather));
+				store.pushScene(id, scene.location, scene.weather, commandId));
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
@@ -226,8 +243,10 @@
 		}
 		// flight: no payload
 		pushResult = null;
+		const commandId = newCommandId();
+		store.trackCommand(commandId, targets);
 		try {
-			pushResult = await fanOut(targets, (id) => store.pushMode(id, pushMode, payload));
+			pushResult = await fanOut(targets, (id) => store.pushMode(id, pushMode, payload, commandId));
 			// Heartbeats are slow — re-poll status so Mode chips reflect the push.
 			// Short delay lets devices apply set_mode before we read /api/status.
 			await new Promise((r) => setTimeout(r, 400));
@@ -246,8 +265,10 @@
 			weather: scene.weather,
 		};
 		pushResult = null;
+		const commandId = newCommandId();
+		store.trackCommand(commandId, targets);
 		try {
-			pushResult = await fanOut(targets, (id) => store.pushSceneFull(id, patch));
+			pushResult = await fanOut(targets, (id) => store.pushSceneFull(id, patch, commandId));
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
@@ -573,6 +594,22 @@
 				<FlightControls />
 				<AtmosphereControls />
 				<LightingControls />
+				{#if ambientFailures.length > 0}
+					<p class="update-result has-failures">
+						{ambientFailures.length} ambient sync {ambientFailures.length === 1 ? 'failure' : 'failures'}
+						<button
+							class="btn-x ambient-dismiss"
+							aria-label="Dismiss ambient sync failures"
+							title="Dismiss"
+							onclick={clearAmbientSyncFailures}
+						>×</button>
+						<span class="update-failed">
+							{#each ambientFailures as f}
+								{f.deviceId} · {f.path} · {relativeAgo(f.at)}<br />
+							{/each}
+						</span>
+					</p>
+				{/if}
 			</section>
 
 			<section class="control-section">
@@ -608,6 +645,9 @@
 				{#if pushResult}
 					<p class="update-result" class:has-failures={pushResult.failed.length > 0}>
 						{pushResult.ok} pushed{pushResult.failed.length ? `, ${pushResult.failed.length} failed` : ''}
+						{#if store.ackProgress}
+							· applied by {store.ackProgress.applied}/{store.ackProgress.total}{store.ackProgress.applied < store.ackProgress.total ? '…' : ''}
+						{/if}
 						{#if pushResult.failed.length}
 							<span class="update-failed">{pushResult.failed.join(' · ')}</span>
 						{/if}
@@ -1459,6 +1499,11 @@
 		color: var(--muted);
 		margin-top: 3px;
 		word-break: break-word;
+	}
+	.ambient-dismiss {
+		display: inline-flex;
+		vertical-align: -6px;
+		margin-left: 6px;
 	}
 	.bindings-fp {
 		display: inline-block;

@@ -51,6 +51,13 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!body || typeof body.deviceId !== 'string') {
 		throw error(400, 'invalid status body');
 	}
+	// Apply-ack correlation id — optional; length-capped like the commit /
+	// lastError hardening fields (network-facing debug string).
+	if (typeof body.lastAppliedCommandId === 'string' && body.lastAppliedCommandId.length > 0) {
+		body.lastAppliedCommandId = body.lastAppliedCommandId.slice(0, 64);
+	} else {
+		delete body.lastAppliedCommandId;
+	}
 	setDeviceStatus(body);
 	return json({ ok: true });
 };

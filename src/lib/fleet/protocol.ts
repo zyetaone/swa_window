@@ -49,6 +49,14 @@ export interface FleetClientModel {
 	 * LWW merge; omit it for local writes, which stamp with the wall-clock.
 	 */
 	applyConfigPatch?(path: string, value: unknown, opts?: ConfigPatchOpts): boolean;
+	/**
+	 * Apply-ack: id of the most recent admin-pushed command / config patch
+	 * this device APPLIED (written by the fleet client after applying). The
+	 * DeviceClient echoes it in the /api/status heartbeat so the admin
+	 * dashboard can tell "published to the SSE bus" apart from "applied by
+	 * the kiosk". Optional so test stubs stay valid.
+	 */
+	lastAppliedCommandId?: string | null;
 	/** Observability sink — optional. */
 	telemetry?: Telemetry;
 }
@@ -87,6 +95,8 @@ export interface DeviceInfo {
 	commit?: string;
 	errorCount?: number;
 	lastErrors?: string[];
+	/** Apply-ack relayed from DeviceStatus (see below). */
+	lastAppliedCommandId?: string;
 }
 
 export interface DeviceStatus {
@@ -115,6 +125,10 @@ export interface DeviceStatus {
 	/** Up to the 3 most recent error messages (truncated) — enough to know
 	 *  WHAT is failing on a fielded Pi without SSH. */
 	lastErrors?: string[];
+	/** Apply-ack: id of the most recent admin push the kiosk applied. A 200
+	 *  from /api/command or /api/config only means "published to the SSE bus";
+	 *  this field is what proves the browser actually applied it. */
+	lastAppliedCommandId?: string;
 }
 
 /** Returned by GET /api/fleet/heartbeat?summary — rollup across the fleet. */
@@ -156,6 +170,8 @@ export interface DeviceStats {
 	crashCount: number;
 	commit?: string;
 	mode?: string;
+	/** Apply-ack id relayed from the kiosk /api/status (optional). */
+	lastAppliedCommandId?: string;
 }
 
 // ─── Shared fleet cadences ─────────────────────────────────────────────────

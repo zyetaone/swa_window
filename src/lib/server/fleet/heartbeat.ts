@@ -51,6 +51,8 @@ export interface HeartbeatSample {
 	lastError?: string;
 	/** Kiosk display path from browser /api/status (optional — older health-check.sh). */
 	mode?: string;
+	/** Apply-ack: last admin push the kiosk browser applied (optional — older builds). */
+	lastAppliedCommandId?: string;
 }
 
 /** How many samples we keep per device. 500 × 60s ≈ 8.3h. */
@@ -155,6 +157,10 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 		mode: typeof o.mode === 'string' && /^[a-z]{1,24}$/.test(o.mode)
 			? o.mode
 			: undefined,
+		// Apply-ack id — length-capped like commit/lastError (network-facing).
+		lastAppliedCommandId: typeof o.lastAppliedCommandId === 'string' && o.lastAppliedCommandId.length > 0
+			? o.lastAppliedCommandId.slice(0, 64)
+			: undefined,
 	};
 
 	const buf = samples.get(deviceId) ?? [];
@@ -244,6 +250,7 @@ export function statsAll(): DeviceStats[] {
 			crashCount: buf.reduce((max, s) => Math.max(max, s.crashCount), 0),
 			commit: last.commit,
 			mode: last.mode,
+			lastAppliedCommandId: last.lastAppliedCommandId,
 		});
 	}
 	return out;

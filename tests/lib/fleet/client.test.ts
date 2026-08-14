@@ -235,6 +235,57 @@ describe('set_config ambient jitter (leader → followers)', () => {
 	});
 });
 
+// ─── apply-ack recording ────────────────────────────────────────────────────
+// The client records a pushed commandId on the model AFTER applying, so the
+// next /api/status heartbeat proves the kiosk applied the message (a 200 from
+// /api/command only proves it reached the SSE bus). Replays re-ack the same
+// id — harmless; it's the same command.
+
+describe('apply-ack recording', () => {
+	function patch(msg: Record<string, unknown>): void {
+		const es = FakeEventSource.instances[FakeEventSource.instances.length - 1];
+		es.emit('config_patch', msg);
+	}
+
+	it('records the commandId after applying a set_scene command', () => {
+		command({ type: 'set_scene', location: 'mumbai', commandId: 'cmd-scene-1' });
+		expect(model.applyScene).toHaveBeenCalledWith('mumbai', undefined);
+		expect(model.lastAppliedCommandId).toBe('cmd-scene-1');
+	});
+
+	it('records the commandId after applying a set_mode command', () => {
+		command({ type: 'set_mode', mode: 'video', payload: 'https://x.test/v.mp4', commandId: 'cmd-mode-1' });
+		expect(model.setDisplayMode).toHaveBeenCalled();
+		expect(model.lastAppliedCommandId).toBe('cmd-mode-1');
+	});
+
+	it('records the commandId after applying a set_config command', () => {
+		command({ type: 'set_config', patch: { cloudDensity: 0.5 }, commandId: 'cmd-cfg-1' });
+		expect(model.lastAppliedCommandId).toBe('cmd-cfg-1');
+	});
+
+	it('records the commandId after applying a config_patch event', () => {
+		patch({ path: 'world.showClouds', value: true, commandId: 'cmd-patch-1' });
+		expect(model.lastAppliedCommandId).toBe('cmd-patch-1');
+	});
+
+	it('does not ack a command gated to a different corridor (never applied)', () => {
+		command({ type: 'set_config', groupId: 'corridor2', patch: { cloudDensity: 0.9 }, commandId: 'cmd-x' });
+		expect(model.lastAppliedCommandId).toBeUndefined();
+	});
+
+	it('does not ack an invalid set_scene (nothing was applied)', () => {
+		command({ type: 'set_scene', location: 'atlantis', commandId: 'cmd-bad' });
+		expect(model.applyScene).not.toHaveBeenCalled();
+		expect(model.lastAppliedCommandId).toBeUndefined();
+	});
+
+	it('ignores non-string commandIds rather than recording junk', () => {
+		command({ type: 'set_scene', location: 'mumbai', commandId: 42 });
+		expect(model.lastAppliedCommandId).toBeUndefined();
+	});
+});
+
 // ─── config_patch remote-stamp routing ──────────────────────────────────────
 // Stamped fleet patches must go through model.applyConfigPatch (which records
 // telemetry) carrying the CRDT stamp — not the config-tree global, which

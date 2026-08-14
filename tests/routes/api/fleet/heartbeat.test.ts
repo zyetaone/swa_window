@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GET, POST } from '../../../../src/routes/api/fleet/heartbeat/+server';
-import { recordHeartbeat } from '$lib/server/fleet/heartbeat';
+import { recordHeartbeat, latestAll, statsAll } from '$lib/server/fleet/heartbeat';
 
 const TOKEN = 'fleet-bearer-token';
 
@@ -97,5 +97,35 @@ describe('GET /api/fleet/heartbeat', () => {
 		const res = await get('?summary');
 		const body = await res.json() as { total: number };
 		expect(body.total).toBeGreaterThan(0);
+	});
+});
+
+describe('apply-ack field (lastAppliedCommandId)', () => {
+	// Unique deviceIds per case — the ring buffer is module-level and shared
+	// across this file's tests.
+	it('accepts and retains the apply-ack id', () => {
+		const s = recordHeartbeat({ ...SAMPLE, deviceId: 'pi-ack-1', lastAppliedCommandId: 'mabc123-x7k2' });
+		expect(s?.lastAppliedCommandId).toBe('mabc123-x7k2');
+		const latest = latestAll().find((d) => d.deviceId === 'pi-ack-1');
+		expect(latest?.lastAppliedCommandId).toBe('mabc123-x7k2');
+		const stats = statsAll().find((d) => d.deviceId === 'pi-ack-1');
+		expect(stats?.lastAppliedCommandId).toBe('mabc123-x7k2');
+	});
+
+	it('caps an over-long apply-ack id like the other hardening strings', () => {
+		const s = recordHeartbeat({ ...SAMPLE, deviceId: 'pi-ack-2', lastAppliedCommandId: 'x'.repeat(500) });
+		expect(s?.lastAppliedCommandId).toHaveLength(64);
+	});
+
+	it('drops non-string and empty apply-ack ids', () => {
+		const numeric = recordHeartbeat({ ...SAMPLE, deviceId: 'pi-ack-3', lastAppliedCommandId: 42 });
+		expect(numeric?.lastAppliedCommandId).toBeUndefined();
+		const empty = recordHeartbeat({ ...SAMPLE, deviceId: 'pi-ack-3', lastAppliedCommandId: '' });
+		expect(empty?.lastAppliedCommandId).toBeUndefined();
+	});
+
+	it('stays absent on heartbeats from older fielded builds', () => {
+		const s = recordHeartbeat({ ...SAMPLE, deviceId: 'pi-ack-4' });
+		expect(s?.lastAppliedCommandId).toBeUndefined();
 	});
 });

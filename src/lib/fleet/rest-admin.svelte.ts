@@ -56,6 +56,17 @@ function adminSourceId(): string {
 	return id;
 }
 
+/**
+ * Correlation id for one admin fan-out (apply-ack). The same id goes into
+ * every per-device payload of the push; each kiosk records it on apply and
+ * echoes it back in its /api/status heartbeat as `lastAppliedCommandId`.
+ * Math.random is fine here — this is an admin action, not a shared-scene
+ * path, so determinism across Pis is not required (contrast invariant #4).
+ */
+export function newCommandId(): string {
+	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export class RestAdminStore {
 	// $state.raw on the array references: every update is a full
 	// reassignment (this.devices = this.devices.map(...)) — fine-grained
@@ -70,6 +81,35 @@ export class RestAdminStore {
 	#destroyed = false;
 	#sourceId: string;
 	#connection = $state<ConnectionState>('connecting');
+
+	// ── Apply-ack tracking ────────────────────────────────────────────────────
+	// A 200 from /api/command or /api/config means "published to the SSE bus",
+	// NOT "applied by the kiosk" — a crashed kiosk browser still publishes
+	// green. trackCommand() arms one commandId per fan-out; each kiosk records
+	// it on apply and echoes it in its 5 s heartbeat, and ackProgress counts
+	// how many targets have echoed. Converges within ~5–10 s of the push.
+	#ackCommandId = $state<string | null>(null);
+	#ackTargetIds = $state.raw<readonly string[]>([]);
+
+	/**
+	 * Arm ack-tracking for a fan-out. Call BEFORE pushing so the admin UI can
+	 * show a "waiting for ack" state while heartbeats catch up.
+	 */
+	trackCommand(commandId: string, targets: readonly string[]): void {
+		this.#ackCommandId = commandId;
+		this.#ackTargetIds = targets;
+	}
+
+	/** Live ack progress for the most recent trackCommand(); null before any push. */
+	ackProgress = $derived.by((): { applied: number; total: number } | null => {
+		const id = this.#ackCommandId;
+		if (!id) return null;
+		const wanted = new Set(this.#ackTargetIds);
+		const applied = this.devices.filter(
+			(d) => wanted.has(d.deviceId) && d.lastAppliedCommandId === id,
+		).length;
+		return { applied, total: this.#ackTargetIds.length };
+	});
 
 	get connectionState(): ConnectionState { return this.#connection; }
 	get isDestroyed(): boolean { return this.#destroyed; }
@@ -155,6 +195,8 @@ export class RestAdminStore {
 						commit: status.commit,
 						errorCount: status.errorCount,
 						lastErrors: status.lastErrors,
+						// Apply-ack echo — drives ackProgress (absent on older builds).
+						lastAppliedCommandId: status.lastAppliedCommandId,
 					};
 				} catch {
 					return { deviceId: peer.deviceId, online: false };
@@ -204,17 +246,17 @@ export class RestAdminStore {
 			throw new Error(`HTTP ${res.status} from ${peer.deviceId}`);
 		}
 	}
-	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType): Promise<void> {
+	async pushScene(deviceId: string, location: LocationId, weather?: WeatherType, commandId?: string): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
-		await this.#postCommand(peer, { type: 'set_scene', location, weather });
+		await this.#postCommand(peer, { type: 'set_scene', location, weather, ...(commandId ? { commandId } : {}) });
 	}
 
-	async pushMode(deviceId: string, mode: DisplayMode, payload?: string): Promise<void> {
+	async pushMode(deviceId: string, mode: DisplayMode, payload?: string, commandId?: string): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
 		// Wall-clock stamp for kiosk LWW vs local Escape / older SSE replay.
-		await this.#postCommand(peer, { type: 'set_mode', mode, payload, decidedAtMs: Date.now() });
+		await this.#postCommand(peer, { type: 'set_mode', mode, payload, decidedAtMs: Date.now(), ...(commandId ? { commandId } : {}) });
 	}
 
 	/**
@@ -227,23 +269,34 @@ export class RestAdminStore {
 	 * (clouds, haze, lights, quality) auto-propagates via peer-sync, so it
 	 * does NOT belong in a scene push.
 	 */
-	async pushSceneFull(deviceId: string, scene: Partial<DisplayConfig>): Promise<void> {
+	async pushSceneFull(deviceId: string, scene: Partial<DisplayConfig>, commandId?: string): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
-		await this.#postCommand(peer, { type: 'set_config', patch: scene });
+		await this.#postCommand(peer, { type: 'set_config', patch: scene, ...(commandId ? { commandId } : {}) });
 	}
 
 	/**
 	 * CRDT-aware per-path patch. Stamps {timestamp, sourceId} so concurrent
 	 * admin writes on different fields both survive on each device.
+	 *
+	 * `commandId` is attached ONLY when the caller passes one. The ambient
+	 * peer-sync loop drives this method on every slider tick; tagging those
+	 * would churn each kiosk's lastAppliedCommandId constantly and drown the
+	 * admin-push ack correlation in noise.
 	 */
-	async pushConfigPath(deviceId: string, path: string, value: unknown): Promise<void> {
+	async pushConfigPath(deviceId: string, path: string, value: unknown, commandId?: string): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
 		const res = await fetch(`${urlFor(peer)}/api/config`, {
 			method: 'PATCH',
 			headers: await peerJsonHeaders(peer.host),
-			body: JSON.stringify({ path, value, timestamp: Date.now(), sourceId: this.#sourceId }),
+			body: JSON.stringify({
+				path,
+				value,
+				timestamp: Date.now(),
+				sourceId: this.#sourceId,
+				...(commandId ? { commandId } : {}),
+			}),
 		});
 		if (!res.ok) {
 			throw new Error(`HTTP ${res.status} from ${peer.deviceId}`);
