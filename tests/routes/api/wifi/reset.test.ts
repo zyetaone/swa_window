@@ -1,23 +1,48 @@
 /**
- * /api/wifi/reset auth gate.
+ * /api/wifi/reset — auth gate + the recovery-path guard.
  *
- * The handler shells out to nmcli + reboot on Linux. On the macOS test
- * host the body's `scheduleReset()` is a no-op (`platform !== 'linux'`
- * early return) so we can safely assert the 200 path without touching
- * networking.
+ * Both of this handler's side-effecting dependencies branch on
+ * `process.platform`, which made this suite host-dependent and turned CI red
+ * the moment the recovery guard landed:
+ *
+ *   - `wifiRecoveryAvailable()` short-circuits to ok:true off Linux, but
+ *     existsSync-checks the portal unit + binary ON Linux. The 200-path
+ *     assertions therefore passed on a macOS dev host and returned 503 on CI's
+ *     Ubuntu runner, where neither file exists.
+ *   - `schedulePrivileged()` is a warn-and-no-op off Linux, but on Linux it
+ *     preflights `sudo -n true` — which SUCCEEDS on a GitHub runner. The suite
+ *     was really scheduling `nmcli … && sudo -n /sbin/reboot` 2s out on every
+ *     CI run, saved only by `nmcli` being absent so the `|| exit 1` fired.
+ *
+ * Fix: pin `process.platform` per test rather than inheriting the host's.
+ * Each test then exercises one specific branch identically everywhere, and
+ * no test can reach the real spawn — the Linux tests all stop at the guard,
+ * the non-Linux tests all stop at schedulePrivileged's no-op. No mocking of
+ * node:fs or node:child_process is needed, and none is attempted: `$lib` and
+ * `node:fs` both resolve to different module ids under vitest than the route
+ * imports, so mocks registered on them silently never bind.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { POST } from '../../../../src/routes/api/wifi/reset/+server';
+import { POST, wifiRecoveryAvailable } from '../../../../src/routes/api/wifi/reset/+server';
 
 const TOKEN = 'sekret-token-for-tests';
 
+const realPlatform = process.platform;
+function setPlatform(p: NodeJS.Platform) {
+	Object.defineProperty(process, 'platform', { value: p, configurable: true });
+}
+
 beforeEach(() => {
 	delete process.env.AERO_WIFI_RESET_TOKEN;
+	// Default to the non-Linux branch: guard short-circuits, schedulePrivileged
+	// no-ops, so the auth logic below is what's actually under test.
+	setPlatform('darwin');
 });
 
 afterEach(() => {
 	delete process.env.AERO_WIFI_RESET_TOKEN;
+	setPlatform(realPlatform);
 });
 
 function call(headers: Record<string, string> = {}) {
@@ -29,7 +54,7 @@ function call(headers: Record<string, string> = {}) {
 	return POST({ request } as unknown as Parameters<typeof POST>[0]);
 }
 
-describe('POST /api/wifi/reset', () => {
+describe('POST /api/wifi/reset — auth', () => {
 	it('fails closed (503) when AERO_WIFI_RESET_TOKEN is unset', async () => {
 		await expect(call({ authorization: `Bearer ${TOKEN}` })).rejects.toMatchObject({ status: 503 });
 	});
@@ -59,8 +84,7 @@ describe('POST /api/wifi/reset', () => {
 		process.env.AERO_WIFI_RESET_TOKEN = TOKEN;
 		const res = await call({ authorization: `Bearer ${TOKEN}` });
 		expect(res.status).toBe(200);
-		const body = await res.json();
-		expect(body).toMatchObject({ ok: true });
+		expect(await res.json()).toMatchObject({ ok: true });
 	});
 
 	it('Bearer prefix is case-insensitive', async () => {
@@ -76,20 +100,34 @@ describe('POST /api/wifi/reset', () => {
  * xserver/app/kiosk/updater, and the unit lives in deploy/ not deploy/pi/), nor
  * the wifi-connect binary it execs — so on a real Pi this endpoint used to mean
  * purge → reboot → permanently offline, recoverable only by hand at the device.
+ *
+ * These pin platform to linux and use the REAL filesystem: neither a macOS dev
+ * host nor a CI runner has /etc/systemd/system/aero-wifi-portal.service, so the
+ * missing-portal branch is deterministic on both without any mock. That is also
+ * the state of a fielded Pi today, which is the whole reason the guard exists.
  */
-describe('wifiRecoveryAvailable', () => {
-	it('reports available on non-Linux (no purge can happen there anyway)', async () => {
-		const { wifiRecoveryAvailable } = await import('../../../../src/routes/api/wifi/reset/+server');
-		// schedulePrivileged is a warn-and-no-op off Linux, so there is nothing
-		// to protect and the dev/test path must stay unblocked.
-		expect(process.platform === 'linux' || wifiRecoveryAvailable().ok).toBe(true);
+describe('POST /api/wifi/reset — recovery guard', () => {
+	it('refuses (503) when the portal unit is absent, rather than purging', async () => {
+		setPlatform('linux');
+		process.env.AERO_WIFI_RESET_TOKEN = TOKEN;
+		const res = await call({ authorization: `Bearer ${TOKEN}` });
+		expect(res.status).toBe(503);
+		const body = await res.json();
+		expect(body.ok).toBe(false);
+		// The operator must learn WHICH piece is missing, not just "no".
+		expect(body.message).toMatch(/aero-wifi-portal\.service|wifi-connect/);
 	});
 
-	it('names the missing component so the 503 is actionable', async () => {
-		const { wifiRecoveryAvailable } = await import('../../../../src/routes/api/wifi/reset/+server');
+	it('names the missing component so the 503 is actionable', () => {
+		setPlatform('linux');
 		const r = wifiRecoveryAvailable();
-		// On a dev host this is ok:true; on a Linux box without the portal the
-		// reason must identify WHICH piece is absent, not just fail.
-		if (!r.ok) expect(r.reason).toMatch(/aero-wifi-portal\.service|wifi-connect/);
+		expect(r.ok).toBe(false);
+		expect(r.reason).toMatch(/aero-wifi-portal\.service|wifi-connect/);
+	});
+
+	it('short-circuits to available off Linux — no purge is possible there', () => {
+		// schedulePrivileged is already a warn-and-no-op off Linux, so there is
+		// nothing to protect and the dev/test path must stay unblocked.
+		expect(wifiRecoveryAvailable().ok).toBe(true);
 	});
 });
