@@ -69,3 +69,27 @@ describe('POST /api/wifi/reset', () => {
 		expect(res.status).toBe(200);
 	});
 });
+
+/**
+ * The purge is only survivable if something restores connectivity afterwards.
+ * install.sh has never installed aero-wifi-portal.service (its unit loop covers
+ * xserver/app/kiosk/updater, and the unit lives in deploy/ not deploy/pi/), nor
+ * the wifi-connect binary it execs — so on a real Pi this endpoint used to mean
+ * purge → reboot → permanently offline, recoverable only by hand at the device.
+ */
+describe('wifiRecoveryAvailable', () => {
+	it('reports available on non-Linux (no purge can happen there anyway)', async () => {
+		const { wifiRecoveryAvailable } = await import('../../../../src/routes/api/wifi/reset/+server');
+		// schedulePrivileged is a warn-and-no-op off Linux, so there is nothing
+		// to protect and the dev/test path must stay unblocked.
+		expect(process.platform === 'linux' || wifiRecoveryAvailable().ok).toBe(true);
+	});
+
+	it('names the missing component so the 503 is actionable', async () => {
+		const { wifiRecoveryAvailable } = await import('../../../../src/routes/api/wifi/reset/+server');
+		const r = wifiRecoveryAvailable();
+		// On a dev host this is ok:true; on a Linux box without the portal the
+		// reason must identify WHICH piece is absent, not just fail.
+		if (!r.ok) expect(r.reason).toMatch(/aero-wifi-portal\.service|wifi-connect/);
+	});
+});

@@ -12,16 +12,77 @@
  * else" posture.
  */
 
+import { existsSync } from 'node:fs';
 import { json } from '@sveltejs/kit';
 import { corsPreflight } from '$lib/http/cors';
 import { requireBearerToken } from '$lib/http/auth';
 import { schedulePrivileged } from '$lib/server/schedule-privileged';
 import type { RequestHandler } from './$types';
 
+/** systemd unit that raises the captive setup AP when no WiFi is configured. */
+const PORTAL_UNIT = '/etc/systemd/system/aero-wifi-portal.service';
+/** Binary the unit execs. deploy/aero-wifi-portal.sh hardcodes this path. */
+const PORTAL_BIN = '/usr/local/bin/wifi-connect';
+
+/**
+ * Is there anything to come back to after we purge WiFi and reboot?
+ *
+ * ─── ⚠ WITHOUT THIS THE ENDPOINT IS A REMOTE BRICK BUTTON ───────────────────
+ * The purge is only survivable because the header above promises the portal
+ * comes up on next boot. It does not: install.sh's unit loop installs
+ * aero-xserver / aero-app / aero-kiosk / aero-updater ONLY, and
+ * aero-wifi-portal.service lives in deploy/ rather than deploy/pi/ where
+ * SCRIPT_DIR points — so it has never been copied to a provisioned Pi. The
+ * wifi-connect binary it execs is never downloaded either (not in the apt
+ * list, no fetch anywhere).
+ *
+ * On a fielded device the sequence was therefore: purge WiFi → reboot → no
+ * portal → permanently offline. No LAN, no OTA, no heartbeat, no recovery
+ * short of physical access with a keyboard or the SD card. On a client-site
+ * kiosk that means someone travels.
+ *
+ * So: verify the recovery path EXISTS before destroying the working one.
+ * Refusing to run is always better than a reboot into nothing.
+ *
+ * Non-Linux short-circuits to available — schedulePrivileged is already a
+ * warn-and-no-op off Linux, so no purge can happen on a dev host and there is
+ * nothing to guard.
+ *
+ * Deliberately checks presence, not `systemctl is-enabled`: that needs a
+ * spawn, and an installed-but-disabled unit is a far narrower failure than
+ * the "never installed at all" case this exists to catch.
+ */
+export function wifiRecoveryAvailable(): { ok: boolean; reason?: string } {
+	if (process.platform !== 'linux') return { ok: true };
+	if (!existsSync(PORTAL_UNIT)) {
+		return { ok: false, reason: `${PORTAL_UNIT} is not installed` };
+	}
+	if (!existsSync(PORTAL_BIN)) {
+		return { ok: false, reason: `${PORTAL_BIN} is missing` };
+	}
+	return { ok: true };
+}
+
 export const OPTIONS: RequestHandler = corsPreflight('POST, OPTIONS');
 
 export const POST: RequestHandler = async ({ request }) => {
 	requireBearerToken(request, 'AERO_WIFI_RESET_TOKEN', 'wifi reset endpoint');
+
+	// Refuse to purge a working connection when nothing can restore one.
+	const recovery = wifiRecoveryAvailable();
+	if (!recovery.ok) {
+		return json(
+			{
+				ok: false,
+				message:
+					`Refusing to clear WiFi: the setup portal is not installed (${recovery.reason}), ` +
+					'so this device would reboot with no network and no way to reconfigure it — ' +
+					'recoverable only by physically attaching a keyboard or reflashing the SD card. ' +
+					'Install the portal (deploy/aero-wifi-portal.service + /usr/local/bin/wifi-connect) first.',
+			},
+			{ status: 503 },
+		);
+	}
 	// Async fire-and-forget: schedule the reset for ~2s out so we have time to
 	// return a 200 to the caller before the network drops + reboot kicks in.
 	// schedulePrivileged preflights `sudo -n` on Linux — if the box can't run
