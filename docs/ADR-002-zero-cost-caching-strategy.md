@@ -33,6 +33,7 @@ a populated cache.
 |---|---|---|---|---|
 | Base imagery | `/api/tiles/eox-sentinel2/{z}/{y}/{x}.jpg` | `tiles.maps.eox.at/.../s2cloudless-2024_3857/…` | ✅ yes | EOX origin (free, rate-limited) |
 | Night overlay | `/api/tiles/cartodb-dark/{z}/{x}/{y}@2x.png` | `basemaps.cartocdn.com/dark_nolabels/…` | ✅ yes | CartoDB origin (free, rate-limited) |
+| **Night roads (baked)** | `/api/tiles/viirs-roads/{z}/{x}/{y}@2x.png` | composite of cartodb-dark × viirs-night-lights | ✅ **NEW** — baked at package time by `tools/tile-packager/src/viirs-roads.ts` | cartodb-dark layer (unmodulated) |
 | **Terrain (primary)** | `/api/tiles/cesium-terrain/{z}/{x}/{y}.terrain` | Cesium Ion (asset 1, World Terrain) | ✅ **NEW** — quantized-mesh, build-time Ion token | Terrarium (below) |
 | **Terrain (fallback)** | `/api/tiles/terrarium/{z}/{x}/{y}.png` | `s3.us-west-2.amazonaws.com/elevation-tiles-prod/terrarium/…` | ✅ **NEW** — PNG heightmap | AWS S3 origin |
 | **3D Buildings** | `/api/buildings/{city}.geojson` | Overpass API (`[building=*]` query) | ✅ **NEW** — extrusion GeoJSON per city | Overpass origin (free, rate-limited) |
@@ -42,6 +43,7 @@ a populated cache.
 
 - Imagery (EOX z3–12, 18 cities): ~350 MB
 - Night overlay (CartoDB z3–14): ~200 MB
+- Night roads, VIIRS-modulated (z4–12): ~80 MB (baked, see below)
 - Terrain primary (Ion mesh): ~200 MB
 - Terrain fallback (Terrarium PNG): ~300 MB
 - Buildings (GeoJSON, 18 cities): ~20 MB
@@ -69,6 +71,23 @@ a populated cache.
 - **Option 1 (Ion only)** — highest quality, but if the Ion free-tier agreement changes or the asset is rotated, every shipped device loses terrain until remanufactured.
 - **Option 2 (Terrarium only)** — pure FOSS, but AWS could drop the public S3 bucket; degraded visual vs Ion mesh.
 - **Option 3 (both cached)** — survives either provider disappearing. 500 MB disk overhead is acceptable for vendor-risk elimination in a product we don't maintenance-contract.
+
+### Baked VIIRS × roads composite (`viirs-roads`)
+
+The raw cartodb-dark road mask glows uniformly — streets light up even where
+VIIRS says there is no city. Since per-pixel modulation isn't possible in
+Cesium imagery layers at runtime, the packager bakes it offline:
+`tools/tile-packager/src/viirs-roads.ts` multiplies each road tile's RGB by
+the luminance of the VIIRS z8 cover over the same geo footprint, remapped
+through `factor = floor + (1 − floor) · luminance` (default floor 0.15, so
+sparse-but-real towns keep some road structure instead of going fully dark).
+Output is a new layer `viirs-roads/{z}/{x}/{y}@2x.png` (z4–12, 512×512
+palette PNG) next to the raw caches, which stay untouched; the existing
+`/api/tiles` passthrough serves it with no server changes. Run after the
+normal packager: `cd tools/tile-packager && bun run viirs-roads`. Note the
+z4–7 road tiles fan out beyond the 0.5° VIIRS enumeration bbox, so their
+outer edges bake at floor glow until the VIIRS cache is widened; z8–12
+(cruise-altitude zooms, where the layer matters) are fully covered.
 
 ### Why cache-primary (not cache-fallback)
 

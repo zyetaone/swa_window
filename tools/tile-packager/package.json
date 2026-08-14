@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"start": "bun src/index.ts",
-		"estimate": "bun src/index.ts --estimate"
+		"estimate": "bun src/index.ts --estimate",
+		"viirs-roads": "bun src/viirs-roads.ts"
 	}
 }

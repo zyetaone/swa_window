@@ -139,12 +139,28 @@ const BUILDING_SHADER_GLSL = `
 		float flicker = 0.93 + 0.07 * sin(u_time * 0.3 + rand * 6.28);
 
 		// Street-level ambient glow (sodium lamps illuminate building bases)
-		float streetGlow = smoothstep(6.0, 0.0, wp.z) * 0.4;
+		// Aug-2026: widened 6 m → 14 m and raised 0.4 → 0.55 — the bases now
+		// carry the wash up the first few floors instead of a ground-level
+		// smear, which is what makes street lighting read as GLOW.
+		float streetGlow = smoothstep(14.0, 0.0, wp.z) * 0.55;
 		vec3 streetLampColor = vec3(1.0, 0.72, 0.28); // classic HPS lamp — deeper amber
 
-		// Rooftop aviation warning lights (tall buildings only, slow blink)
-		float isTall = smoothstep(30.0, 50.0, buildingHeight);
-		float blink = step(0.4, fract(u_time * 0.5));
+		// Subtle facade glow — district light spill onto wall surfaces, scaled
+		// by the VIIRS city-brightness gate so bright cores bloom faintly and
+		// sparse districts stay dark. Walls only (roofs keep the beacons).
+		// Kept far under the tone-map knee: a wash, not a light source.
+		vec3 districtGlow = vec3(1.0, 0.78, 0.45) * cityMix * 0.025 * isWall;
+
+		// Rooftop aviation warning lights — genuinely tall towers ONLY, each on
+		// its own phase. Two failures made the whole skyline pulse red in
+		// lockstep: the 30–50 m threshold caught every mid-rise block, and a
+		// bare fract(u_time) shared one phase across all buildings. Real
+		// obstruction beacons are sparse (120 m+ structures) and never
+		// synchronised.
+		float isTall = smoothstep(120.0, 160.0, buildingHeight);
+		// Per-~25 m-block phase hash — deterministic, so all 3 Pis agree.
+		float beaconPhase = fract(sin(dot(floor(wp.xy / 25.0), vec2(12.9898, 78.233))) * 43758.5453);
+		float blink = step(0.55, fract(u_time * 0.5 + beaconPhase));
 		float rooftopLight = isRoof * isTall * blink;
 		vec3 aviationRed = vec3(1.0, 0.08, 0.03);
 
@@ -166,6 +182,7 @@ const BUILDING_SHADER_GLSL = `
 		// whole travel instead of saturating instantly.
 		vec3 hdrEmission = (windowColor * windowBright * flicker * lit) * u_lightIntensity
 			+ streetLampColor * streetGlow * u_nightFactor * u_lightIntensity
+			+ districtGlow * u_nightFactor * u_lightIntensity
 			+ aviationRed * rooftopLight * u_nightFactor * u_lightIntensity;
 
 		// Reinhard with a white point: x * (1 + x/W^2) / (1 + x). W is the raw

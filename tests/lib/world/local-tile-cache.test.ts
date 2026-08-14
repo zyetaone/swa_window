@@ -65,6 +65,23 @@ describe('checkLocalTileServer', () => {
 		expect(await checkLocalTileServer()).toBe(true);
 	});
 
+	it('exposes the probed layer list for layer-specific decisions', async () => {
+		// setupImagery picks the baked viirs-roads composite over raw cartodb
+		// only when the cache actually has it — an older cache must fall back.
+		stubHealth({ status: 'ok', hasTiles: true, layers: ['eox-sentinel2', 'viirs-roads'] });
+		const { checkLocalTileServer, localTileLayerAvailable } = await load();
+		await checkLocalTileServer();
+		expect(localTileLayerAvailable('viirs-roads')).toBe(true);
+		expect(localTileLayerAvailable('cartodb-dark')).toBe(false);
+	});
+
+	it('answers false for every layer when the server omits the list (older deploys)', async () => {
+		stubHealth({ status: 'ok' });
+		const { checkLocalTileServer, localTileLayerAvailable } = await load();
+		await checkLocalTileServer();
+		expect(localTileLayerAvailable('viirs-roads')).toBe(false);
+	});
+
 	it('reports UNavailable when the route answers 200 with an empty cache', async () => {
 		// The whole reason /health grew a hasTiles field: a bare {status:'ok'}
 		// could not tell "server up, cache populated" from "server up, cache

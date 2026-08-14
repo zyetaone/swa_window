@@ -13,7 +13,7 @@
 import type * as CesiumType from 'cesium';
 import { altitudeDetailMix, nightLightGain } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
-import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, TILE_SERVER_URL } from '$lib/world/cesium-setup';
+import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, localTileLayerAvailable, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
@@ -148,10 +148,27 @@ export async function setupImagery(): Promise<void> {
 	} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
 
 	try {
+		// ─── ⚠ THE @2x SUFFIX IS LOAD-BEARING ─────────────────────────────────
+		// The packager's storagePath is `cartodb-dark/{z}/{x}/{y}@2x.png`; a bare
+		// `{y}.png` URL 404s against the packaged cache, and /health lists layer
+		// DIRECTORIES — so this mismatch shipped silently: every local road tile
+		// 404'd while health reported the layer present.
+		//
+		// Prefer the baked viirs-roads composite when the cache has it
+		// (tools/tile-packager `viirs-roads`): road glow pre-multiplied by VIIRS
+		// luminance, so streets bloom only inside real lit areas and this layer
+		// must NOT run alongside the raw cartodb layer (double glow). Raw
+		// cartodb remains the fallback for older caches and the remote CDN path.
+		const useComposite = tileBase && localTileLayerAvailable('viirs-roads');
 		_roadMaskLayer = _addLayer(
-			tileBase ? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
-				: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-			18, 0, !!tileBase,
+			useComposite
+				? `${tileBase}/viirs-roads/{z}/{x}/{y}@2x.png`
+				: tileBase
+					? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
+					: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
+			// The composite is baked z4–12 (raw cartodb goes to z18; beyond 12
+			// Cesium upsamples, which the glow modulation tolerates fine).
+			useComposite ? 12 : 18, useComposite ? 4 : 0, !!tileBase,
 		);
 		if (_roadMaskLayer) {
 			_roadMaskLayer.alpha = 0;
@@ -212,7 +229,11 @@ export function viirsLayerAlpha(
 	const ease = smoothstep(
 		(nightFactor - V.smoothstepFloor) / Math.max(V.smoothstepCeil - V.smoothstepFloor, 0.001),
 	);
-	const altGate = 1 - altitudeDetailMix(altitudeFt);
+	// Floored at V.lowAltFloor: the gate fades VIIRS to zero by 5k ft, which
+	// left flyover-altitude night terrain a black void. The floor keeps a dim
+	// halo under the road mask — roads carry structure, VIIRS carries the
+	// pooled city glow (see the palette note).
+	const altGate = Math.max(V.lowAltFloor, 1 - altitudeDetailMix(altitudeFt));
 	const boost = 1.0 + (alphaBoost - 1.0) * nightFactor;
 	// `scale` is nightLightIntensity, a 0..5 knob SHARED with the shader uniforms,
 	// where a gain of 5 is meaningful. An ALPHA cannot use it raw: at 5 it
@@ -308,14 +329,16 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	}
 	if (_roadMaskLayer) {
 		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
-		// Night 3.0 → 4.5. Measured from a real CartoDB dark_nolabels z14 tile over
+		// Night 3.0 → 6.0. Measured from a real CartoDB dark_nolabels z14 tile over
 		// Hyderabad: colorToAlpha keys out 81.3% as background and keeps 18.7% as
 		// road strokes, but those average only 28.6/255. Through brightness 3.0 +
 		// contrast 1.5 at alpha 0.667 they composited to 58/255 over a 44/255
 		// ground — 1.32x contrast, on lines ~2 screen px wide at 30k ft, which
 		// reads as vague texture rather than a street grid. 4.5 lands ~101/255,
-		// about 2.3x, which is the point of having a 0.57 m/px layer at all.
-		const roadBrightness = 1.5 + nf * 3.0;
+		// about 2.3x. Aug-2026 visual review asked for the network to actually
+		// GLOW against the dark terrain: 6.0 lands ~135/255 (~3x) — the streets
+		// read as lit arteries over the VIIRS halo, not faint texture.
+		const roadBrightness = 2.0 + nf * 4.0;
 		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
 		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
 		// field to the Three side. Those overlays (CityLightField bokeh,

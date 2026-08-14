@@ -172,5 +172,14 @@ export const NIGHT_PALETTE = {
 		maxAlpha:         0.30,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
+		// Fraction of the altitude gate that survives at ground level. The
+		// gate (1 − altitudeDetailMix) fades VIIRS to ZERO by 5k ft — right
+		// where flyover beats live — leaving low-altitude night terrain a
+		// black void punctured only by roads and windows. A 0.25 floor keeps
+		// a dim city-glow halo under the (now correctly ordered) road mask:
+		// roads carry structure, VIIRS carries the pooled-light halo — the
+		// "VIIRS mask over the streets" read. Subtle enough that the
+		// 583 m/px blur doesn't come back as a wash.
+		lowAltFloor:      0.25,
 	},
 } as const;

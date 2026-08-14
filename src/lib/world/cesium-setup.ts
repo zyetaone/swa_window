@@ -195,15 +195,6 @@ export function getSatelliteImagery(localAvailable = true): ImageryConfig {
 	};
 }
 
-// Last probe verdict, so tile-budget decisions can ask "are we on local disk?"
-// without re-probing. Set by setupImagery, which already awaits the check;
-// read by applyQualityMode, which runs after it. Defaults false, which is the
-// conservative answer — a wrong `true` would mean hammering EOX/GIBS over a
-// client's WiFi, so the fallback must never be the aggressive branch.
-let _localTiles = false;
-export function setLocalTilesAvailable(v: boolean): void { _localTiles = v; }
-export function localTilesAvailable(): boolean { return _localTiles; }
-
 /**
  * Is the local tile cache usable — server reachable AND actually holding tiles?
  *
@@ -213,6 +204,23 @@ export function localTilesAvailable(): boolean { return _localTiles; }
  * doesn't send the field is treated as usable, since before this existed the
  * flag was only ever set on devices that had been packaged.
  */
+// Last probe verdict, so tile-budget decisions can ask "are we on local disk?"
+// without re-probing. Set by setupImagery, which already awaits the check;
+// read by applyQualityMode, which runs after it. Defaults false, which is the
+// conservative answer — a wrong `true` would mean hammering EOX/GIBS over a
+// client's WiFi, so the fallback must never be the aggressive branch.
+let _localTiles = false;
+export function setLocalTilesAvailable(v: boolean): void { _localTiles = v; }
+export function localTilesAvailable(): boolean { return _localTiles; }
+
+// Layer names the last health probe reported (non-empty directories under
+// TILE_DIR). Older servers omit `layers` — treated as "unknown", so
+// layer-specific checks (viirs-roads) conservatively answer false.
+let _localLayers: string[] = [];
+export function localTileLayerAvailable(name: string): boolean {
+	return _localLayers.includes(name);
+}
+
 export async function checkLocalTileServer(): Promise<boolean> {
 	if (!TILE_SERVER_URL) return false;
 	try {
@@ -220,7 +228,10 @@ export async function checkLocalTileServer(): Promise<boolean> {
 			signal: AbortSignal.timeout(500)
 		});
 		if (!resp.ok) return false;
-		const body = await resp.json().catch(() => null) as { hasTiles?: boolean } | null;
+		const body = await resp.json().catch(() => null) as { hasTiles?: boolean; layers?: unknown } | null;
+		_localLayers = Array.isArray(body?.layers)
+			? body.layers.filter((l): l is string => typeof l === 'string')
+			: [];
 		return body?.hasTiles !== false;
 	} catch {
 		return false;

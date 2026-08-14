@@ -61,6 +61,16 @@ describe('viirsLayerAlpha', () => {
 		);
 	});
 
+	it('keeps a dim halo floor at ground level instead of fading to zero', () => {
+		// The altitude gate used to fade VIIRS to 0 by 5k ft — exactly where
+		// flyover beats live — leaving low-altitude night terrain a black void.
+		// The floor keeps maxAlpha × lowAltFloor as pooled city glow under the
+		// road mask (roads carry structure; VIIRS carries the halo).
+		const floor = NIGHT_PALETTE.viirs.lowAltFloor;
+		expect(viirsLayerAlpha(1.0, 5.0, 5_000, DEFAULT_BOOST)).toBeCloseTo(CEIL * floor, 3);
+		expect(viirsLayerAlpha(1.0, 5.0, 0, DEFAULT_BOOST)).toBeCloseTo(CEIL * floor, 3);
+	});
+
 	// ─── ⚠ THE REGRESSION THIS PINS ─────────────────────────────────────────
 	// The test above passes scale 1.0 (gain 0.2), which keeps the gate product
 	// under 1 and so never exercised the clamp. At the SHIPPED default of 5.0
