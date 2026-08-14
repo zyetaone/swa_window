@@ -63,7 +63,10 @@ export function parseSlideshowPayload(payload: string | undefined): SlideshowSpe
 	const urls = rec.urls
 		.filter((u): u is string => typeof u === 'string')
 		.map((u) => u.trim())
-		.filter(isAllowedMediaUrl);
+		.filter(isAllowedMediaUrl)
+		// Cap on parse too — encode already slices, but a hand-crafted or
+		// legacy SSE payload must not expand into an unbounded slideshow.
+		.slice(0, MAX_SLIDESHOW_URLS);
 	if (urls.length === 0) return null;
 	let intervalSec = DEFAULT_SLIDESHOW_INTERVAL_SEC;
 	if (typeof rec.intervalSec === 'number' && Number.isFinite(rec.intervalSec)) {

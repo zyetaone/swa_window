@@ -13,10 +13,10 @@
 	import { createAeroWindow } from "$lib/model/aero-window.svelte";
 	import { isValidLocation } from "$content/locations";
 	import { isValidWeather } from "$lib/types";
-	import { isValidDeviceRole, type DeviceRole } from "$lib/types";
 	import { savePersistedState } from "$lib/model/persistence";
 	import { clearOverlayDisabled } from "$lib/world/lifecycle-overlay-recovery";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
+	import { resolveBinding } from "$lib/fleet/parallax.svelte";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/pane/Pane.svelte";
 	import Controls from "$lib/shell/passenger/HUD.svelte";
@@ -201,27 +201,17 @@
 			model.applyConfigPatch('world.useThreeOverlay', false);
 		}
 
-		// Phase 7 — multi-Pi parallax role. URL wins over localStorage wins
-		// over 'solo' default. When URL param is set, persist it so the role
-		// survives reload without the query string. Non-solo roles also auto-
-		// hide the window frame since three oval frames tile poorly.
-		const ROLE_KEY = "aero.device.role";
-		const roleParam = params.get("role")?.toLowerCase();
-
-		const fromUrl = isValidDeviceRole(roleParam) ? roleParam : null;
-		const stored = localStorage.getItem(ROLE_KEY);
-		const fromStorage = isValidDeviceRole(stored) ? stored : null;
-		const chosenRole: DeviceRole = fromUrl ?? fromStorage ?? "solo";
-
-		if (chosenRole !== "solo") {
-			// applyConfigPatch('camera.parallax.role') also derives the role's
-			// heading/fuselage offsets internally (applyRoleDerived) — no
-			// separate setParallaxRole call needed.
-			model.applyConfigPatch('camera.parallax.role', chosenRole);
+		// Phase 7 — multi-Pi parallax. resolveBinding() is the SSOT (URL →
+		// fingerprint map → self-binding → legacy role key → solo). Mirror
+		// into camera.parallax.role so FOV/yaw offsets and isGroupLeader()
+		// agree with fleet groupId filtering. Do NOT re-read a second
+		// localStorage key here — that dual path used to let role and
+		// groupId diverge across reloads.
+		const binding = resolveBinding();
+		model.applyConfigPatch('camera.parallax.role', binding.role);
+		// Non-solo roles auto-hide the window frame: three oval frames tile poorly.
+		if (binding.role !== 'solo') {
 			model.applyConfigPatch('shell.windowFrame', false);
-		}
-		if (fromUrl) {
-			localStorage.setItem(ROLE_KEY, fromUrl);
 		}
 
 

@@ -10,7 +10,12 @@ import { hashString } from '$lib/world/prng';
  * Resolution priority (highest → lowest):
  *   1. URL params      ?role=left|center|right|solo  &group=lefthall
  *   2. localStorage    aero.device.binding (keyed by fingerprint)
- *   3. Default         { role: 'solo', groupId: 'default' }
+ *   3. localStorage    aero.device.binding (self JSON) / legacy aero.device.role
+ *   4. Default         { role: 'solo', groupId: 'default' }
+ *
+ * This module is the SSOT for role+group. Kiosk boot (`+page.svelte`) must
+ * call `resolveBinding()` and mirror `role` into `camera.parallax.role` —
+ * do not re-read URL/localStorage with a second key for the same decision.
  *
  * Fingerprint is derived on-device only — never sent upstream. It's used as the
  * localStorage key so a device keeps its binding across browser restarts even
@@ -27,6 +32,8 @@ export interface DeviceBinding {
 const STORAGE_KEY_BINDINGS = 'aero.device.bindings'; // map: fingerprint → binding
 const STORAGE_KEY_SELF = 'aero.device.binding';      // resolved binding for THIS device
 const STORAGE_KEY_FP = 'aero.device.fingerprint';
+/** Pre-binding-era key written by older +page boot. Migrated once into SELF. */
+const STORAGE_KEY_LEGACY_ROLE = 'aero.device.role';
 
 
 /**
@@ -98,6 +105,16 @@ export function resolveBinding(): DeviceBinding {
 			}
 		}
 	} catch { /* fall through */ }
+
+	// 4. Legacy role-only key from pre-binding +page boot. Promote into the
+	// self-binding slot so subsequent boots hit step 3 and ROLE_KEY can die.
+	const legacyRole = window.localStorage.getItem(STORAGE_KEY_LEGACY_ROLE);
+	if (isValidDeviceRole(legacyRole)) {
+		const binding: DeviceBinding = { role: legacyRole, groupId: 'default' };
+		window.localStorage.setItem(STORAGE_KEY_SELF, JSON.stringify(binding));
+		window.localStorage.removeItem(STORAGE_KEY_LEGACY_ROLE);
+		return binding;
+	}
 
 	return { role: 'solo', groupId: 'default' };
 }

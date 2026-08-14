@@ -284,6 +284,10 @@ export class AeroWindow {
 	setLocation(id: LocationId): void {
 		this.location = id;
 		this.flight.setLocationWithSky(id, this.skyState);
+		// Real Time follows the depicted city — without this, a hop from
+		// Hyderabad to Dallas kept IST hours as timeOfDay and the sky/HUD
+		// local clock stayed wrong until the next minute tick.
+		if (this.syncToRealTime) this.updateTimeFromSystem();
 		const scene = this.currentLocation.scene;
 		// Deterministic jitter — same daySeed() ^ location-hash seed as the
 		// orbit (flight.setLocationWithSky). All 3 Pis in a panorama compute

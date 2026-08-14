@@ -89,6 +89,11 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 	const { time: t, heading, altitude, turbulenceLevel, camera, warpFactor } = ctx;
 	const m = camera.motion;
 	const turbMult = m.turbulenceMultipliers[turbulenceLevel];
+	// Wall-clock step when available (same class as orbit/director): flight
+	// advances heading on wallDeltaSec, so bank turnRate must use the same
+	// clock or a slow Pi (dt clamped 0.1 s, wall ~0.3 s) over-banks.
+	const w = ctx.wallDeltaSec;
+	const dt = typeof w === 'number' && Number.isFinite(w) && w > 0 ? w : delta;
 
 	const altFactor = altitude > 40000
 		? clamp(1 - (altitude - 40000) / 10000, 0.05, 1)
@@ -122,10 +127,10 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 	}
 
 	let bumpValue = 0;
-	_bumpTimer += delta;
+	_bumpTimer += dt;
 
 	if (_bumpElapsed >= 0) {
-		_bumpElapsed += delta;
+		_bumpElapsed += dt;
 		const onset = 1 - Math.exp(-8 * _bumpElapsed);
 		bumpValue = _bumpSign * m.bumpAmplitude * turbMult
 			* Math.exp(-m.bumpDecay * _bumpElapsed)
@@ -149,9 +154,9 @@ function tickInternal(delta: number, ctx: SimulationContext): void {
 	// First tick: no previous heading, so report zero turn rather than a
 	// phantom swing from the sentinel to the boot heading.
 	const hDelta = _prevHeading === null ? 0 : shortestAngleDelta(_prevHeading, heading);
-	const turnRate = delta > 0 ? hDelta / delta : 0;
+	const turnRate = dt > 0 ? hDelta / dt : 0;
 	const targetBank = clamp(turnRate * 0.45, -m.bankAngleMax, m.bankAngleMax);
-	_rawBankAngle += (targetBank - _rawBankAngle) * Math.min(m.bankSmoothing * delta, 1);
+	_rawBankAngle += (targetBank - _rawBankAngle) * Math.min(m.bankSmoothing * dt, 1);
 	motion.bankAngle = _rawBankAngle;
 	_prevHeading = heading;
 

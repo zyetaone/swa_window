@@ -58,6 +58,14 @@ describe('slideshow payload', () => {
 		const wire = encodeSlideshowPayload(['/api/assets/a.png'], 1);
 		expect(parseSlideshowPayload(wire)?.intervalSec).toBe(3);
 	});
+
+	it('caps urls on parse to MAX_SLIDESHOW_URLS (encode already does)', () => {
+		const many = Array.from({ length: MAX_SLIDESHOW_URLS + 5 }, (_, i) =>
+			`https://cdn.example.com/${i}.png`,
+		);
+		const spec = parseSlideshowPayload(JSON.stringify({ urls: many }));
+		expect(spec?.urls).toHaveLength(MAX_SLIDESHOW_URLS);
+	});
 });
 
 describe('toAbsoluteMediaUrl', () => {

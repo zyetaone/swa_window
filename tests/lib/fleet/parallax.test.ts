@@ -178,6 +178,17 @@ describe('resolveBinding (localStorage)', () => {
 		// fingerprint entry should not have been written
 		expect(map.find((e) => e.fingerprint === fp)).toBeUndefined();
 	});
+
+	it('migrates legacy aero.device.role into the self-binding SSOT', () => {
+		localStorage.setItem('aero.device.role', 'left');
+		const binding = resolveBinding();
+		expect(binding.role).toBe('left');
+		expect(binding.groupId).toBe('default');
+		// Promoted — legacy key cleared so dual-path cannot re-diverge.
+		expect(localStorage.getItem('aero.device.role')).toBeNull();
+		const again = resolveBinding();
+		expect(again.role).toBe('left');
+	});
 });
 
 // ─── getDeviceFingerprint ──────────────────────────────────────────────────

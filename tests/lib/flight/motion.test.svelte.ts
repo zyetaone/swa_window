@@ -16,7 +16,7 @@ import type { SimulationContext } from '$lib/types';
 
 const BOOT_HEADING = 45; // FlightSimEngine's boot heading
 
-function makeCtx(heading: number): SimulationContext {
+function makeCtx(heading: number, wallDeltaSec?: number): SimulationContext {
 	return {
 		time: 0, lat: 0, lon: 0, altitude: 35000, heading, pitch: 60, bankAngle: 0,
 		weather: 'clear', skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
@@ -27,6 +27,7 @@ function makeCtx(heading: number): SimulationContext {
 		camera: cameraConfig,
 		director: directorConfig,
 		isLeader: true,
+		...(wallDeltaSec !== undefined ? { wallDeltaSec } : {}),
 	} as unknown as SimulationContext;
 }
 
@@ -71,5 +72,24 @@ describe('motion first tick', () => {
 		motionReset(); // what the AeroWindow constructor does on remount
 		motionStep(1 / 60, makeCtx(BOOT_HEADING + 90));
 		expect(motion.bankAngle).toBe(0);
+	});
+
+	it('uses wallDeltaSec for turn rate so a slow Pi does not over-bank', async () => {
+		// Same sim delta + heading step: smaller wall Δt → higher turn rate →
+		// more bank. Flight advances heading on wall clock; bank must share it.
+		// (0.1 vs 0.4 with bankSmoothing 2.5 coincidentally equal after one step.)
+		const { motion, motionStep, motionReset } = await import('$lib/flight/motion.svelte');
+		const headingStep = 4;
+
+		motionStep(0.1, makeCtx(BOOT_HEADING, 0.05));
+		motionStep(0.1, makeCtx(BOOT_HEADING + headingStep, 0.05));
+		const bankFast = Math.abs(motion.bankAngle);
+
+		motionReset();
+		motionStep(0.1, makeCtx(BOOT_HEADING, 1.0));
+		motionStep(0.1, makeCtx(BOOT_HEADING + headingStep, 1.0));
+		const bankSlow = Math.abs(motion.bankAngle);
+
+		expect(bankSlow).toBeLessThan(bankFast);
 	});
 });
