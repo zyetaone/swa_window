@@ -146,7 +146,7 @@ Edge panes          pure view (no tab, no open-blind HUD)
 | TelemetryOverlay whisper | blind open + en route | `showsOpenPassengerHud(role, hudVisible)` |
 | SidePanel tab | operator invite | `showsOpsChrome(role, opsMode)` |
 | ALT / GS / LOCAL | SidePanel header only | same as SidePanel |
-| CabinClock | double-tap, `shell.clockVisible` | fleet-synced config |
+| CabinClock | single tap, `shell.clockVisible` | fleet-synced config |
 
 ### Role / chrome SSOT
 

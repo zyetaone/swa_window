@@ -548,7 +548,14 @@
 		padding-top: 0.55rem;
 	}
 
-	:global(.panel .control input[type="range"]) {
-		background: rgba(255, 255, 255, 0.1);
+	@media (prefers-reduced-motion: reduce) {
+		.panel-tab,
+		.backdrop,
+		.backdrop.closing,
+		.panel,
+		.panel.closing {
+			animation: none;
+			transition: none;
+		}
 	}
 </style>

@@ -24,7 +24,7 @@ Organised by domain folder. Shared roots: `types.ts`, `utils.ts`,
 | `flight/motion.svelte.ts` | Bank, breathing, turbulence |
 | `director/autopilot.svelte.ts` | Weather + location cycler |
 | `fleet/client.svelte.ts` | DeviceClient — SSE in, REST out |
-| `fleet/peer-sync.svelte.ts` | Admin ambient → fleet PATCH (`PEER_SYNC_PATHS`) |
+| `fleet/peer-sync.svelte.ts` | Admin ambient → fleet PATCH (re-exports `PEER_SYNC_PATHS` from `model/peer-sync-paths.ts`); ambient push-failure log |
 | `fleet/parallax.svelte.ts` | Role SSOT — ops/HUD gates, bindings |
 | `shell/pane/Pane.svelte` | Layer compositor + RAF tick |
 | `shell/operator/SidePanel.svelte` | Operator shell; page composes panel children |

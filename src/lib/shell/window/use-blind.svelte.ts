@@ -222,7 +222,7 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 
 	/**
 	 * `pointercancel` (touch takeover, palm rejection) aborts the gesture
-	 * WITHOUT committing — the same treatment use-double-tap gives its pending
+	 * WITHOUT committing — the same treatment use-tap gives its pending
 	 * tap. Clearing isDragging re-arms the resync $effect above, which snaps
 	 * dragY back to the config-driven position with the CSS transition.
 	 */

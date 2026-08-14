@@ -40,6 +40,9 @@
 /* One focus ring for the whole app. Brand yellow; admin controls override
    to --accent with more specific selectors. */
 :focus-visible {
+	/* #ffbf27 duplicates --sw-yellow, which is route-scoped to the kiosk in
+	   src/routes/+page.svelte and cannot be referenced here — keep the two
+	   values in sync if the brand color ever changes. */
 	outline: 2px solid #ffbf27;
 	outline-offset: 2px;
 }

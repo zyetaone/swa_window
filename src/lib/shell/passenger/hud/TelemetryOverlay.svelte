@@ -42,6 +42,12 @@
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 0.25rem;
+		padding: 0.45rem 0.85rem;
+		border-radius: 999px;
+		/* Subtle scrim — bare white-on-sky washes out against bright day
+		   cloud tops. Deliberately lighter than CabinClock's glass chip:
+		   a translucent dark fill only, no backdrop-filter blur pass. */
+		background: rgba(8, 12, 22, 0.38);
 		color: rgba(255, 255, 255, 0.82);
 		text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 0, 0, 0.3);
 		animation: whisper-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;

@@ -1,9 +1,9 @@
 <script lang="ts">
 	/**
-	 * CabinClock — glassmorphic wall clock, toggled by double-tap.
+	 * CabinClock — glassmorphic wall clock, toggled by a single tap.
 	 *
 	 * ─── WHY IT EXISTS ──────────────────────────────────────────────────────
-	 * Toggled by double-tap on the open glass, or via LightingControls
+	 * Toggled by a tap on the open glass, or via LightingControls
 	 * "Cabin Clock" (kiosk SidePanel Advanced + admin ambient). An office
 	 * passer-by can get the time from the window without pulling out a phone.
 	 *

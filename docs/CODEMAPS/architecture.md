@@ -167,7 +167,7 @@ LWW with sourceId tiebreak guarantees deterministic convergence across peers wit
 | `bundle/*` | Wire types + server disk store only — no runtime DOM mount. |
 | `fleet/rest-admin.svelte.ts` | RestAdminStore — admin dashboard (devices, peers). |
 | `fleet/client.svelte.ts` | DeviceClient — SSE + status loop on kiosk. |
-| `fleet/peer-sync.svelte.ts` | Admin ambient → fleet; `PEER_SYNC_PATHS` SSOT. |
+| `fleet/peer-sync.svelte.ts` | Admin ambient → fleet; ambient push-failure log. `PEER_SYNC_PATHS` SSOT lives in `model/peer-sync-paths.ts` (shared with persistence). |
 | `fleet/parallax.svelte.ts` | Role bindings + chrome gates (`showsOpsChrome`, etc.). |
 | `shell/operator/panel/patch.ts` | `usePanelConfig` — dual-tree config write gate. |
 

@@ -144,13 +144,18 @@
 		max-height: 70vh;
 		display: flex;
 		flex-direction: column;
-		background: rgba(16, 18, 25, 0.92);
-		backdrop-filter: blur(8px);
-		color: #e4e4e7;
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 10px;
+		/* Same ops surface as SidePanel .panel — the two can be open at once
+		   and must read as one material. No backdrop-filter: SidePanel has
+		   none, and the Pi 5 budget allows no extra blur passes. */
+		background: rgba(10, 10, 30, 0.88);
+		color: var(--text);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		/* Floating card, so it needs the radius SidePanel (full-height) omits;
+		   8px matches the shell's card idiom (flight-data wells). */
+		border-radius: 8px;
 		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-		font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+		/* Ubuntu (inherited from the kiosk body) for chrome/labels; JetBrains
+		   Mono is scoped to numbers and log payloads below — flight-data idiom. */
 		font-size: 12px;
 		overflow: hidden;
 	}
@@ -176,7 +181,7 @@
 		font-size: 12px;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: #a1a1aa;
+		color: var(--text-dim);
 		font-family: 'Ubuntu', sans-serif;
 	}
 
@@ -185,7 +190,7 @@
 	button {
 		background: rgba(255, 255, 255, 0.06);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		color: #d4d4d8;
+		color: var(--text);
 		padding: 3px 8px;
 		border-radius: 4px;
 		font-size: 11px;
@@ -211,22 +216,26 @@
 	.stat .label,
 	.count span {
 		font-size: 10px;
-		color: #71717a;
+		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
 
 	.stat .value {
+		font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 		font-size: 14px;
-		color: #93c5fd;
+		/* Info-blue for live metrics: nearest existing token (app.css --accent),
+		   replacing the Tailwind blue-300 literal from the admin-table pass. */
+		color: var(--accent);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.count { display: flex; flex-direction: column; gap: 2px; }
 
 	.count strong {
+		font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 		font-size: 14px;
-		color: #86efac;
+		color: var(--ok-text);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -241,7 +250,7 @@
 	.events h4 {
 		margin: 4px 0 6px;
 		font-size: 10px;
-		color: #71717a;
+		color: var(--muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		font-family: 'Ubuntu', sans-serif;
@@ -256,27 +265,33 @@
 		padding: 3px 0;
 		border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
 		align-items: baseline;
+		/* Log rows are data (timestamps, enum kinds, JSON payloads) — mono
+		   stays here even though panel chrome/labels are Ubuntu. */
+		font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 	}
 
-	.evt .t { color: #52525b; font-variant-numeric: tabular-nums; }
-	.evt .kind { color: #a1a1aa; }
-	.evt.kind-error .kind { color: #fca5a5; }
-	.evt.kind-fleet_in .kind { color: #93c5fd; }
-	.evt.kind-fleet_out .kind { color: #fde68a; }
-	.evt.kind-config_patch .kind { color: #86efac; }
+	.evt .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+	.evt .kind { color: var(--text-dim); }
+	.evt.kind-error .kind { color: var(--error-text); }
+	/* --accent: same info-blue mapping as .stat .value above. */
+	.evt.kind-fleet_in .kind { color: var(--accent); }
+	/* Amber for outbound fleet traffic: app.css --warn is the semantic ramp's
+	   caution slot, replacing the Tailwind amber-200 literal. */
+	.evt.kind-fleet_out .kind { color: var(--warn); }
+	.evt.kind-config_patch .kind { color: var(--ok-text); }
 	.evt .payload {
-		color: #d4d4d8;
+		color: var(--text);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.empty { color: #52525b; padding: 8px 0; }
+	.empty { color: var(--muted); padding: 8px 0; }
 
 	footer {
 		padding: 6px 14px;
 		border-top: 1px solid rgba(255, 255, 255, 0.04);
-		color: #52525b;
+		color: var(--muted);
 		font-size: 10px;
 	}
 </style>
