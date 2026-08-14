@@ -16,7 +16,7 @@ import {
 	encodeSlideshowPayload,
 	type SlideshowSpec,
 } from '$lib/fleet/display-payload';
-import { loadDisplayMode, saveDisplayMode } from '$lib/fleet/display-mode-persist';
+import { loadDisplayMode, saveDisplayMode, peekDisplayModeSavedAt } from '$lib/fleet/display-mode-persist';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
@@ -225,10 +225,14 @@ export class AeroWindow {
 		this.#booting = false;
 
 		// Restore last media mode after boot so Chromium reload keeps video/
-		// slideshow (not daily-rotated; separate storage key).
+		// slideshow (not daily-rotated; separate storage key). force+savedAt
+		// keeps a later stale SSE command from winning without a fresher stamp.
 		const storedMode = loadDisplayMode();
 		if (storedMode && storedMode.mode !== 'flight') {
-			this.setDisplayMode(storedMode.mode, storedMode.payload);
+			this.setDisplayMode(storedMode.mode, storedMode.payload, {
+				decidedAtMs: storedMode.savedAt || Date.now(),
+				force: true,
+			});
 		}
 	}
 
@@ -459,14 +463,41 @@ export class AeroWindow {
 	 * media modes (stay on current) so a bad admin push cannot blank the wall.
 	 * flight always applies and clears media state.
 	 *
+	 * `opts.decidedAtMs` — wall-clock of the decision (admin stamp or local now).
+	 * Stale fleet SSE (decidedAtMs < last savedAt) is ignored so a local Escape
+	 * is not undone by replaying an older set_mode. `opts.force` skips that gate
+	 * (boot restore from localStorage).
+	 *
 	 * @returns true if the mode was applied; false if rejected (also logged).
 	 */
-	setDisplayMode(mode: DisplayMode, payload?: string): boolean {
+	setDisplayMode(
+		mode: DisplayMode,
+		payload?: string,
+		opts?: { decidedAtMs?: number; force?: boolean },
+	): boolean {
+		const at =
+			typeof opts?.decidedAtMs === 'number' && Number.isFinite(opts.decidedAtMs)
+				? opts.decidedAtMs
+				: Date.now();
+		if (!opts?.force) {
+			const prevAt = peekDisplayModeSavedAt();
+			if (prevAt > 0 && at < prevAt) {
+				this.telemetry.recordEvent('info', {
+					event: 'set_mode_rejected',
+					mode,
+					reason: 'stale_decision',
+					decidedAtMs: at,
+					savedAt: prevAt,
+				});
+				return false;
+			}
+		}
+
 		if (mode === 'flight') {
 			this.displayMode = 'flight';
 			this.videoUrl = '';
 			this.slideshow = null;
-			saveDisplayMode('flight');
+			saveDisplayMode('flight', undefined, at);
 			return true;
 		}
 		if (mode === 'video') {
@@ -482,7 +513,7 @@ export class AeroWindow {
 			this.displayMode = 'video';
 			this.videoUrl = url;
 			this.slideshow = null;
-			saveDisplayMode('video', url);
+			saveDisplayMode('video', url, at);
 			return true;
 		}
 		// screensaver = image slideshow
@@ -499,7 +530,7 @@ export class AeroWindow {
 		this.slideshow = spec;
 		this.videoUrl = '';
 		// Persist the normalized wire form so reload re-parses cleanly.
-		saveDisplayMode('screensaver', encodeSlideshowPayload(spec.urls, spec.intervalSec));
+		saveDisplayMode('screensaver', encodeSlideshowPayload(spec.urls, spec.intervalSec), at);
 		return true;
 	}
 

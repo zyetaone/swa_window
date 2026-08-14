@@ -246,6 +246,10 @@
 		}
 		labMode = isLab;
 	}
+
+	// Media modes force full-bleed: no cabin frame/rivets/passenger HUD over video.
+	const isFlightChrome = $derived(model.displayMode === 'flight');
+	const showCabinChrome = $derived(isFlightChrome && model.config.shell.windowFrame);
 </script>
 
 <svelte:head>
@@ -258,17 +262,17 @@
 	onunhandledrejection={handleUnhandledRejection}
 />
 
-<main class={["app", !model.config.shell.windowFrame && "no-frame"]}>
-	<!-- Cabin wall: texture + rivets only when the oval frame is on.
-	     Panorama (no-frame) is edge-to-edge glass — rivets break the continuous wall. -->
+<main class={["app", !showCabinChrome && "no-frame"]}>
+	<!-- Cabin wall: texture + rivets only when the oval frame is on AND flight.
+	     Media is full-bleed — rivets must not paint over the stage. -->
 	<div class="cabin-wall">
-		{#if model.config.shell.windowFrame}
+		{#if showCabinChrome}
 			<div class="cabin-texture"></div>
 		{/if}
 
 		<Pane />
 
-		{#if model.config.shell.windowFrame}
+		{#if showCabinChrome}
 			<div class="cabin-details">
 				<div class="rivet rivet-tl"></div>
 				<div class="rivet rivet-tr"></div>
@@ -278,8 +282,10 @@
 		{/if}
 	</div>
 
-	<!-- Controls (HUD + blind info) -->
-	<Controls />
+	<!-- Passenger HUD only in flight — never over video/slideshow. -->
+	{#if isFlightChrome}
+		<Controls />
+	{/if}
 
 	<!-- Side panel — essentials first; density/lighting/lab behind Advanced.
 	     Keeps the ops surface short so auto-close feels natural, not rushed. -->

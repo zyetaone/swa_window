@@ -7,6 +7,8 @@ import {
 	toAbsoluteMediaUrl,
 	absolutizeMediaUrls,
 	isRelativeAssetUrl,
+	setModePayloadError,
+	MAX_SLIDESHOW_URLS,
 	DEFAULT_SLIDESHOW_INTERVAL_SEC,
 } from '$lib/fleet/display-payload';
 
@@ -87,3 +89,25 @@ describe('toAbsoluteMediaUrl', () => {
 		expect(isRelativeAssetUrl('https://cdn.example.com/x.png')).toBe(false);
 	});
 });
+
+describe('setModePayloadError', () => {
+	it('rejects empty slideshow and too many urls', () => {
+		expect(setModePayloadError('screensaver', [])).toMatch(/at least one/i);
+		const many = Array.from({ length: MAX_SLIDESHOW_URLS + 1 }, (_, i) =>
+			`https://cdn.example.com/${i}.png`,
+		);
+		expect(setModePayloadError('screensaver', many)).toMatch(/too many/i);
+	});
+
+	it('accepts a modest valid slideshow', () => {
+		expect(
+			setModePayloadError('screensaver', ['https://cdn.example.com/a.png', 'https://cdn.example.com/b.png'], 12),
+		).toBeNull();
+	});
+
+	it('rejects missing video url', () => {
+		expect(setModePayloadError('video', '')).toMatch(/video URL/i);
+		expect(setModePayloadError('video', 'https://cdn.example.com/v.mp4')).toBeNull();
+	});
+});
+

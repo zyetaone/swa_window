@@ -213,7 +213,8 @@ export class RestAdminStore {
 	async pushMode(deviceId: string, mode: DisplayMode, payload?: string): Promise<void> {
 		const peer = this.#peerFor(deviceId);
 		if (!peer) return;
-		await this.#postCommand(peer, { type: 'set_mode', mode, payload });
+		// Wall-clock stamp for kiosk LWW vs local Escape / older SSE replay.
+		await this.#postCommand(peer, { type: 'set_mode', mode, payload, decidedAtMs: Date.now() });
 	}
 
 	/**

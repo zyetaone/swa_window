@@ -27,6 +27,8 @@
 		encodeSlideshowPayload,
 		toAbsoluteMediaUrl,
 		absolutizeMediaUrls,
+		setModePayloadError,
+		MAX_SLIDESHOW_URLS,
 		DEFAULT_SLIDESHOW_INTERVAL_SEC,
 	} from '$lib/fleet/display-payload';
 
@@ -207,21 +209,20 @@
 		let payload: string | undefined;
 		if (pushMode === 'video') {
 			const abs = toAbsoluteMediaUrl(videoUrl, origin);
-			if (!isAllowedMediaUrl(abs)) {
-				pushResult = { ok: 0, failed: ['video URL required (http(s) or /api/assets/…)'] };
+			const err = setModePayloadError('video', abs);
+			if (err) {
+				pushResult = { ok: 0, failed: [err] };
 				return;
 			}
 			payload = abs;
 		} else if (pushMode === 'screensaver') {
-			if (slideUrls.length === 0) {
-				pushResult = { ok: 0, failed: ['add at least one slideshow image'] };
+			const absolute = absolutizeMediaUrls(slideUrls, origin);
+			const err = setModePayloadError('screensaver', absolute, slideIntervalSec);
+			if (err) {
+				pushResult = { ok: 0, failed: [err] };
 				return;
 			}
-			payload = encodeSlideshowPayload(absolutizeMediaUrls(slideUrls, origin), slideIntervalSec);
-			if (JSON.parse(payload).urls.length === 0) {
-				pushResult = { ok: 0, failed: ['no allowed slideshow URLs'] };
-				return;
-			}
+			payload = encodeSlideshowPayload(absolute, slideIntervalSec);
 		}
 		// flight: no payload
 		pushResult = null;
@@ -535,6 +536,12 @@
 						<button type="button" class="btn btn-secondary" onclick={addSlideUrlDraft}>Add</button>
 					</div>
 					{#if slideUrls.length > 0}
+						<p class="asset-hint">
+							{slideUrls.length} / {MAX_SLIDESHOW_URLS} images in playlist
+							{#if slideUrls.length > MAX_SLIDESHOW_URLS}
+								<span class="media-warn-inline"> — over limit</span>
+							{/if}
+						</p>
 						<ol class="slide-list">
 							{#each slideUrls as url, i (url)}
 								<li>
@@ -1033,6 +1040,9 @@
 	.media-warn code {
 		font-size: 10px;
 		word-break: break-all;
+	}
+	.media-warn-inline {
+		color: #fde68a;
 	}
 
 	.asset-hint {

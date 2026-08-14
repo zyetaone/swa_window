@@ -14,6 +14,14 @@ export const DEFAULT_SLIDESHOW_INTERVAL_SEC = 12;
 export const MIN_SLIDESHOW_INTERVAL_SEC = 3;
 export const MAX_SLIDESHOW_INTERVAL_SEC = 300;
 
+/**
+ * Hard caps so set_mode stays under publish-route's 4 KB body budget
+ * (envelope + mode field leave ~3.5 KB for the JSON payload).
+ */
+export const MAX_SLIDESHOW_URLS = 24;
+/** Max characters of the encoded screensaver JSON (or video URL string). */
+export const MAX_SET_MODE_PAYLOAD_CHARS = 3500;
+
 const ASSET_PATH = /^\/api\/assets\/[A-Za-z0-9._%-]+$/;
 
 /** True when a string is a safe media URL for kiosk playback. */
@@ -69,12 +77,43 @@ export function parseSlideshowPayload(payload: string | undefined): SlideshowSpe
 
 /** Build screensaver wire payload from admin UI state. */
 export function encodeSlideshowPayload(urls: string[], intervalSec = DEFAULT_SLIDESHOW_INTERVAL_SEC): string {
-	const clean = urls.map((u) => u.trim()).filter(isAllowedMediaUrl);
+	const clean = urls.map((u) => u.trim()).filter(isAllowedMediaUrl).slice(0, MAX_SLIDESHOW_URLS);
 	const sec = Math.min(
 		MAX_SLIDESHOW_INTERVAL_SEC,
 		Math.max(MIN_SLIDESHOW_INTERVAL_SEC, Math.round(intervalSec)),
 	);
 	return JSON.stringify({ urls: clean, intervalSec: sec });
+}
+
+/**
+ * Pre-flight admin check before POST /api/command.
+ * Returns an operator-facing error string, or null if the payload will fit.
+ */
+export function setModePayloadError(
+	mode: 'video' | 'screensaver',
+	urlsOrVideo: string | readonly string[],
+	intervalSec = DEFAULT_SLIDESHOW_INTERVAL_SEC,
+): string | null {
+	if (mode === 'video') {
+		const url = typeof urlsOrVideo === 'string' ? urlsOrVideo.trim() : '';
+		if (!isAllowedMediaUrl(url)) return 'video URL required (http(s) or /api/assets/…)';
+		if (url.length > MAX_SET_MODE_PAYLOAD_CHARS) {
+			return `video URL too long (max ${MAX_SET_MODE_PAYLOAD_CHARS} chars)`;
+		}
+		return null;
+	}
+	const urls = (Array.isArray(urlsOrVideo) ? urlsOrVideo : [])
+		.map((u) => u.trim())
+		.filter(isAllowedMediaUrl);
+	if (urls.length === 0) return 'add at least one slideshow image';
+	if (urls.length > MAX_SLIDESHOW_URLS) {
+		return `too many images (max ${MAX_SLIDESHOW_URLS}; remove ${urls.length - MAX_SLIDESHOW_URLS})`;
+	}
+	const wire = encodeSlideshowPayload(urls, intervalSec);
+	if (wire.length > MAX_SET_MODE_PAYLOAD_CHARS) {
+		return `slideshow payload too large (${wire.length} chars; max ${MAX_SET_MODE_PAYLOAD_CHARS}). Use fewer/shorter URLs.`;
+	}
+	return null;
 }
 
 /** Parse video payload — single allowed URL, or null. */

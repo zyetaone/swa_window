@@ -28,7 +28,11 @@ export interface FleetClientModel {
 	/** Schedule a night-city flyover beat locked to a shared transitionAtMs.
 	 *  Optional so test stubs and older models stay valid; the client feature-tests. */
 	scheduleFlyover?(beat: VantageBeat, transitionAtMs: number): void;
-	setDisplayMode(mode: DisplayMode, payload?: string): boolean | void;
+	setDisplayMode(
+		mode: DisplayMode,
+		payload?: string,
+		opts?: { decidedAtMs?: number; force?: boolean },
+	): boolean | void;
 	setQualityMode(mode: QualityMode): void;
 	setAltitude(alt: number): void;
 	setTime(t: number): void;

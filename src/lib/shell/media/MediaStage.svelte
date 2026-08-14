@@ -3,10 +3,12 @@
 	 * MediaStage — full-viewport video or image slideshow.
 	 *
 	 * Stacked above a parked GlobeLayer (Cesium warm, render loop off).
-	 * Escape or SidePanel "Return to Flight" exits media mode.
+	 * Exit: Escape, SidePanel "Return to Flight", or long-press (~1.2s) on the
+	 * stage (edge panes without ops chrome / no keyboard).
 	 */
 	import { onDestroy } from 'svelte';
 	import type { SlideshowSpec } from '$lib/fleet/display-payload';
+	import { tryUseAeroWindow } from '$lib/model/aero-window.svelte';
 
 	let {
 		mode,
@@ -18,12 +20,24 @@
 		slideshow?: SlideshowSpec | null;
 	} = $props();
 
+	const model = tryUseAeroWindow();
+
 	let slideIndex = $state(0);
 	/** URLs that failed this session — skipped in the rotation. */
 	let failedUrls = $state<string[]>([]);
 	let mediaError = $state(false);
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let videoEl = $state<HTMLVideoElement | undefined>();
+	let autoFlightTimer: ReturnType<typeof setTimeout> | null = null;
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let longPressMoved = false;
+	let longPressX = 0;
+	let longPressY = 0;
+
+	const LONG_PRESS_MS = 1200;
+	const LONG_PRESS_MOVE_PX = 16;
+	/** After total media failure, return to flight so the wall is not stuck black. */
+	const AUTO_FLIGHT_AFTER_MS = 4000;
 
 	const urls = $derived(slideshow?.urls ?? []);
 	const intervalMs = $derived(Math.max(3, slideshow?.intervalSec ?? 12) * 1000);
@@ -35,25 +49,77 @@
 		playable.length > 1 ? playable[(slideIndex + 1) % playable.length] : '',
 	);
 
+	function reportMediaError(url: string, reason: string) {
+		model?.telemetry?.recordEvent('info', {
+			event: 'media_error',
+			mode,
+			url: url.slice(0, 200),
+			reason,
+		});
+	}
+
+	function scheduleAutoFlight() {
+		if (autoFlightTimer) clearTimeout(autoFlightTimer);
+		autoFlightTimer = setTimeout(() => {
+			autoFlightTimer = null;
+			model?.setDisplayMode('flight');
+		}, AUTO_FLIGHT_AFTER_MS);
+	}
+
 	function markFailed(url: string) {
 		if (!url || failedUrls.includes(url)) return;
-		failedUrls = [...failedUrls, url];
+		const nextFailed = [...failedUrls, url];
+		failedUrls = nextFailed;
+		reportMediaError(url, 'load_failed');
 		if (mode === 'video') {
 			mediaError = true;
+			scheduleAutoFlight();
 			return;
 		}
-		const left = urls.filter((u) => u !== url && !failedUrls.includes(u));
-		if (left.length === 0) {
+		const remaining = urls.filter((u) => !nextFailed.includes(u));
+		if (remaining.length === 0) {
 			mediaError = true;
+			scheduleAutoFlight();
 			return;
 		}
-		// Stay on a valid index in the remaining set.
-		slideIndex = 0;
+		// Keep index in range of the remaining playlist (no hard reset to 0).
+		slideIndex = slideIndex % remaining.length;
 	}
 
 	function advanceSlide() {
 		if (playable.length <= 1) return;
 		slideIndex = (slideIndex + 1) % playable.length;
+	}
+
+	function clearLongPress() {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+	}
+
+	function onStagePointerDown(e: PointerEvent) {
+		longPressMoved = false;
+		longPressX = e.clientX;
+		longPressY = e.clientY;
+		clearLongPress();
+		longPressTimer = setTimeout(() => {
+			longPressTimer = null;
+			if (longPressMoved) return;
+			model?.setDisplayMode('flight');
+		}, LONG_PRESS_MS);
+	}
+
+	function onStagePointerMove(e: PointerEvent) {
+		if (longPressMoved) return;
+		if (Math.hypot(e.clientX - longPressX, e.clientY - longPressY) > LONG_PRESS_MOVE_PX) {
+			longPressMoved = true;
+			clearLongPress();
+		}
+	}
+
+	function onStagePointerUp() {
+		clearLongPress();
 	}
 
 	$effect(() => {
@@ -64,6 +130,10 @@
 		failedUrls = [];
 		mediaError = false;
 		slideIndex = 0;
+		if (autoFlightTimer) {
+			clearTimeout(autoFlightTimer);
+			autoFlightTimer = null;
+		}
 	});
 
 	$effect(() => {
@@ -73,7 +143,9 @@
 		const p = el.play();
 		if (p && typeof p.catch === 'function') {
 			p.catch(() => {
+				reportMediaError(videoUrl, 'autoplay_rejected');
 				mediaError = true;
+				scheduleAutoFlight();
 			});
 		}
 	});
@@ -84,6 +156,9 @@
 		if (mode !== 'screensaver' || !next) return;
 		const img = new Image();
 		img.src = next;
+		return () => {
+			img.src = '';
+		};
 	});
 
 	$effect(() => {
@@ -107,14 +182,26 @@
 
 	onDestroy(() => {
 		if (timer) clearInterval(timer);
+		if (autoFlightTimer) clearTimeout(autoFlightTimer);
+		clearLongPress();
 	});
 </script>
 
-<div class="media-stage" role="img" aria-label={mode === 'video' ? 'Video display' : 'Image slideshow'}>
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+	class="media-stage"
+	role="img"
+	aria-label={mode === 'video' ? 'Video display' : 'Image slideshow'}
+	onpointerdown={onStagePointerDown}
+	onpointermove={onStagePointerMove}
+	onpointerup={onStagePointerUp}
+	onpointercancel={onStagePointerUp}
+	onpointerleave={onStagePointerUp}
+>
 	{#if mediaError}
 		<div class="empty">
 			Media failed to load
-			<span class="hint">Check URL / fleet asset host · Escape or ops → Return to Flight</span>
+			<span class="hint">Returning to flight… Escape / long-press / ops to exit sooner</span>
 		</div>
 	{:else if mode === 'video' && videoUrl}
 		<video
@@ -156,12 +243,15 @@
 		display: grid;
 		place-items: center;
 		overflow: hidden;
+		touch-action: manipulation;
+		user-select: none;
 	}
 	.media {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
+		pointer-events: none;
 	}
 	img.media {
 		animation: fade-in 0.6s ease;
@@ -180,6 +270,7 @@
 		padding: 0.35rem 0.55rem;
 		border-radius: 999px;
 		background: rgba(0, 0, 0, 0.35);
+		pointer-events: none;
 	}
 	.dot {
 		width: 6px;
@@ -199,6 +290,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		pointer-events: none;
 	}
 	.hint {
 		font-size: 0.7rem;

@@ -201,7 +201,9 @@ export class DeviceClient {
 			body: JSON.stringify({
 				deviceId: this.#deviceId,
 				hostname: this.#deviceId,
-				fps: this.#model.measuredFps,
+				// Media parks the globe — report 0 fps so health doesn't show a
+				// stale flight median as "healthy rendering" under video/slideshow.
+				fps: this.#model.displayMode === 'flight' ? this.#model.measuredFps : 0,
 				mode: this.#model.displayMode,
 				location: this.#model.location,
 				weather: this.#model.weather,
@@ -266,7 +268,15 @@ export class DeviceClient {
 			}
 			case 'set_mode': {
 				const mode = msg.mode;
-				if (isValidDisplayMode(mode)) this.#model.setDisplayMode(mode, msg.payload as string | undefined);
+				if (!isValidDisplayMode(mode)) break;
+				// decidedAtMs from admin (wall-clock of the push). Missing on
+				// legacy commands → Date.now() so they still apply, but cannot
+				// undo a *newer* local Escape stored with a later savedAt.
+				const decidedAtMs =
+					typeof msg.decidedAtMs === 'number' && Number.isFinite(msg.decidedAtMs)
+						? (msg.decidedAtMs as number)
+						: Date.now();
+				this.#model.setDisplayMode(mode, msg.payload as string | undefined, { decidedAtMs });
 				break;
 			}
 			case 'set_config': {

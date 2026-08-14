@@ -31,10 +31,15 @@ Kiosk apply path: SSE → `AeroWindow.setDisplayMode` (reject bad payload, no-op
 → `Pane` stacks `MediaStage` over a **parked** `GlobeLayer` (`useDefaultRenderLoop
 = false`, tick/liveness off). Return-to-flight is warm (no Cesium remount).
 
-Persist: `fleet/display-mode-persist.ts` (`localStorage`) so reload keeps media.
-Exit media: SidePanel **Return to Flight**, or **Escape** (all roles including
-edge panes). Admin rewrites relative assets to absolute against its origin so
-peers fetch a reachable host.
+Persist: `fleet/display-mode-persist.ts` (`localStorage` + `savedAt` wall-clock)
+so reload keeps media. Fleet `set_mode` carries `decidedAtMs`; decisions older
+than `savedAt` are ignored (local Escape not undone by SSE replay).
+
+Exit media: SidePanel **Return to Flight**, **Escape**, or **long-press** (~1.2s)
+on the stage (touch / edge panes). Total media failure auto-returns to flight
+after ~4s. Admin rewrites relative assets to absolute against its origin;
+slideshow size is capped (`MAX_SLIDESHOW_URLS` / ~3.5 KB) under the 4 KB command
+body budget. Status reports `fps: 0` while media (globe parked).
 
 ## Three clocks (do not collapse)
 
