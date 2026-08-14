@@ -20,7 +20,7 @@ import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE } from './shaders';
-import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS } from './cesium-setup';
+import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesAvailable } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery';
@@ -440,9 +440,22 @@ export class CesiumManager {
 	applyQualityMode(mode: QualityMode): void {
 		const p = CESIUM_QUALITY_PRESETS[mode];
 		const globe = this.#viewer.scene.globe;
+
+		// The presets are sized for STREAMING, where every extra tile is a
+		// request over a client's WiFi. Served from local disk that cost is a
+		// page-cache read, so retention and prefetch get cheaper by orders of
+		// magnitude and the budget should not stay tuned for the network.
+		//
+		// Deliberately retention + prefetch ONLY. maximumScreenSpaceError is
+		// untouched because it is GPU load, not I/O — lowering it here would
+		// quietly raise triangle count on a Pi 5 that is already running the
+		// Three overlay un-gated, which is the P8 question and not this one.
+		// What this buys is fewer pop-ins after a location change, not fps.
+		const local = localTilesAvailable();
+
 		globe.maximumScreenSpaceError = p.maximumScreenSpaceError;
-		globe.tileCacheSize = p.tileCacheSize;
-		globe.preloadSiblings = p.preloadSiblings;
+		globe.tileCacheSize = local ? p.tileCacheSize * 2 : p.tileCacheSize;
+		globe.preloadSiblings = local ? true : p.preloadSiblings;
 		globe.preloadAncestors = p.preloadAncestors;
 		globe.loadingDescendantLimit = p.loadingDescendantLimit;
 		updateBuildingsQuality(p.maximumScreenSpaceError);

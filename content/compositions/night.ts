@@ -118,7 +118,14 @@ export const NIGHT_PALETTE = {
 		// LDR satellite imagery hard, so exposure 1.0 rendered mid-afternoon
 		// like late dusk. Night is unaffected — exposure lerps toward the
 		// operator-tunable world.nightExposure by nightFactor.
-		exposureDay:        1.4,
+		//
+		// 1.4 → 1.7 (Aug 2026): still read dim on the fielded panels. The room
+		// is the reason the first correction was not enough — these are matte
+		// portrait screens in a daylit office, competing with ambient light no
+		// darkened review monitor has. ACES rolls the top off, so this is ~+21%
+		// of scene luminance in but well under that on screen, and highlights
+		// compress rather than clip. Night still unaffected (nightFactor lerp).
+		exposureDay:        1.7,
 		atmosphereLightDay: 10.0,
 	},
 

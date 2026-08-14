@@ -171,6 +171,22 @@ boot has to garbage-collect.
 | Daily 04:00 | Reboot |
 | Daily 06:00 | Restore display to 100% |
 | Sunday 03:00 | Clear Chromium shader/GPU cache (preserves tile cache) |
+| Every boot | Re-assert brightness for the current hour (`display-dim-schedule.sh auto`) |
+
+**On a dim-looking panel, check brightness before suspecting the render.**
+`ddcutil` stores VCP 0x10 in the *monitor's* NVRAM, so a 5% state survives a
+power cycle, and the nightly reboot lands at 04:00 — inside the dim window. A
+single missed 06:00 run used to leave a wall at 5% for the whole day with
+nothing reporting it. The `@reboot ... auto` entry now re-asserts the right
+state on every boot, but on an already-fielded Pi confirm the live value:
+
+```sh
+ssh kiosk@<pi> 'ddcutil getvcp 0x10 || cat /sys/class/backlight/*/brightness'
+ssh kiosk@<pi> 'sudo /usr/local/lib/aero/display-dim-schedule.sh bright'   # force
+```
+
+Fielded Pis need an `install.sh` re-run (or a hand-added cron line) to pick up
+the `@reboot` entry — it is written at install time.
 
 ## Automatic updates (deploy/aero-updater.sh)
 

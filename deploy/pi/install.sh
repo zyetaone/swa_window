@@ -387,6 +387,11 @@ cat > /etc/cron.d/aero-display-dim <<EOF
 # 2 AM dim to 5%, 6 AM restore to 100%.
 0 2 * * * root /usr/local/lib/aero/display-dim-schedule.sh dim
 0 6 * * * root /usr/local/lib/aero/display-dim-schedule.sh bright
+# Re-assert on boot. ddcutil brightness lives in the MONITOR's NVRAM, so 5%
+# survives a power cycle — and the nightly reboot is at 04:00, inside the dim
+# window. Without this a missed 06:00 run leaves the wall at 5% all day with
+# nothing to recover it. Sleep lets X and the DDC bus come up before we poke.
+@reboot root sleep 90 && /usr/local/lib/aero/display-dim-schedule.sh auto
 EOF
 chmod 644 /etc/cron.d/aero-display-dim
 

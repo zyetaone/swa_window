@@ -74,23 +74,28 @@
 		gap: 2px;
 		padding: 14px 26px 12px;
 
-		border-radius: 18px;
-		/* The glass itself: a translucent fill over a blurred, slightly
-		   brightened sample of the scene behind, with a light top edge and a
-		   dark bottom edge so it reads as a physical pane catching light. */
+		border-radius: 16px;
+		/* The glass itself: a blurred sample of the live scene, and now almost
+		   nothing else. The previous treatment drew a lit pane — 0.16 fill, a
+		   1px edge and three shadows including two insets — which read as a
+		   card sitting ON the window rather than a reflection IN it, and the
+		   card is the thing competing with the view.
+		   What survives is the refraction (the part that actually tracks the
+		   sky as the flight moves) at roughly a third of the old fill. The
+		   edge is a hairline instead of a border, the insets are gone, and the
+		   one remaining drop shadow only separates the panel from a bright
+		   noon sky. Legibility is carried by the type's own text-shadow, which
+		   is why the fill can go this far without the digits going soft. */
 		background: linear-gradient(
 			160deg,
-			rgba(255, 255, 255, 0.16) 0%,
-			rgba(255, 255, 255, 0.06) 46%,
-			rgba(120, 140, 190, 0.10) 100%
+			rgba(255, 255, 255, 0.07) 0%,
+			rgba(255, 255, 255, 0.025) 46%,
+			rgba(120, 140, 190, 0.045) 100%
 		);
-		backdrop-filter: blur(14px) saturate(1.25) brightness(1.06);
-		-webkit-backdrop-filter: blur(14px) saturate(1.25) brightness(1.06);
-		border: 1px solid rgba(255, 255, 255, 0.22);
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.34),
-			inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-			0 8px 26px rgba(0, 0, 0, 0.28);
+		backdrop-filter: blur(16px) saturate(1.2);
+		-webkit-backdrop-filter: blur(16px) saturate(1.2);
+		border: 1px solid rgba(255, 255, 255, 0.10);
+		box-shadow: 0 6px 22px rgba(0, 0, 0, 0.20);
 
 		opacity: var(--night-dim);
 		animation: clock-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -98,32 +103,51 @@
 		user-select: none;
 	}
 
-	/* performance preset: same silhouette, no blur pass. */
+	/* performance preset: same silhouette, no blur pass.
+	   THIS IS THE BRANCH THE KIOSK ACTUALLY RENDERS — qualityMode defaults to
+	   'performance', so the glass above is the dev/ultra look and this flat
+	   fill is what goes on the wall. Any change to the clock's weight has to
+	   be made here to be real. 0.58 was a near-solid navy slab; at 0.34 it
+	   reads as tinted glass while still giving the digits a ground against a
+	   bright noon sky, which is the one thing a pure-transparent version
+	   loses on this preset (no blur to separate type from scene). */
 	.cabin-clock.flat {
 		backdrop-filter: none;
 		-webkit-backdrop-filter: none;
-		background: rgba(18, 22, 38, 0.58);
+		background: rgba(18, 22, 38, 0.34);
+		border-color: rgba(255, 255, 255, 0.08);
 	}
 
 	.time {
-		font-family: 'JetBrains Mono', ui-monospace, monospace;
+		/* Was 'JetBrains Mono' — which is not installed on the Pi and is not
+		   bundled anywhere in this repo, so the fielded kiosks have been
+		   rendering DejaVu Sans Mono this whole time. The clock was never
+		   actually seen as designed. Rather than ship the missing file, this
+		   moves to the cabin signage stack: airline displays are set in a
+		   humanist sans, not a mono, and tabular figures below give back the
+		   only thing the mono was really providing. */
+		font-family: var(--sw-font-cabin, system-ui, sans-serif);
 		font-size: clamp(28px, 4.4vh, 46px);
-		font-weight: 500;
-		letter-spacing: 0.04em;
+		font-weight: 300;
+		letter-spacing: 0.06em;
 		line-height: 1;
-		color: rgba(255, 255, 255, 0.96);
-		/* Keeps the digits legible against a bright noon sky as well as night. */
-		text-shadow: 0 2px 10px rgba(0, 0, 0, 0.42);
-		/* Tabular figures stop the layout jittering as digits change width. */
+		color: rgba(255, 255, 255, 0.93);
+		/* Carries legibility against a bright noon sky now that the panel
+		   behind it is nearly clear — do not soften without re-checking midday. */
+		text-shadow: 0 2px 12px rgba(0, 0, 0, 0.50);
+		/* Tabular figures stop the layout jittering as digits change width.
+		   Load-bearing here: a proportional sans would reflow every minute. */
 		font-variant-numeric: tabular-nums;
 	}
 
 	.date {
+		font-family: var(--sw-font-cabin, system-ui, sans-serif);
 		font-size: clamp(9px, 1.3vh, 12px);
-		letter-spacing: 0.18em;
+		font-weight: 400;
+		letter-spacing: 0.22em;
 		text-transform: uppercase;
-		color: rgba(255, 255, 255, 0.68);
-		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.38);
+		color: rgba(255, 255, 255, 0.58);
+		text-shadow: 0 1px 6px rgba(0, 0, 0, 0.42);
 	}
 
 	@keyframes clock-in {

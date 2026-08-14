@@ -195,6 +195,15 @@ export function getSatelliteImagery(localAvailable = true): ImageryConfig {
 	};
 }
 
+// Last probe verdict, so tile-budget decisions can ask "are we on local disk?"
+// without re-probing. Set by setupImagery, which already awaits the check;
+// read by applyQualityMode, which runs after it. Defaults false, which is the
+// conservative answer — a wrong `true` would mean hammering EOX/GIBS over a
+// client's WiFi, so the fallback must never be the aggressive branch.
+let _localTiles = false;
+export function setLocalTilesAvailable(v: boolean): void { _localTiles = v; }
+export function localTilesAvailable(): boolean { return _localTiles; }
+
 /**
  * Is the local tile cache usable — server reachable AND actually holding tiles?
  *

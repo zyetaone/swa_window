@@ -13,7 +13,7 @@
 import type * as CesiumType from 'cesium';
 import { altitudeDetailMix, nightLightGain } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
-import { getSatelliteImagery, checkLocalTileServer, TILE_SERVER_URL } from '$lib/world/cesium-setup';
+import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
@@ -35,6 +35,8 @@ let _viewer: CesiumType.Viewer;
 
 let _baseLayer: CesiumType.ImageryLayer | null = null;
 let _baseDaySaturation = 1.0;
+let _baseDayGamma = 1.0;
+let _baseNightGamma = 1.0;
 let _viirsLayer: CesiumType.ImageryLayer | null = null;
 let _roadMaskLayer: CesiumType.ImageryLayer | null = null;
 
@@ -68,7 +70,9 @@ export async function setupImagery(): Promise<void> {
 	// per-tile fallback, so picking local against an empty TILE_DIR yields a
 	// bare globe. Same probe setupTerrain uses; ~500 ms worst case at boot, and
 	// it short-circuits instantly when no tile server is configured at all.
-	const cfg = getSatelliteImagery(await checkLocalTileServer());
+	const localTiles = await checkLocalTileServer();
+	setLocalTilesAvailable(localTiles);
+	const cfg = getSatelliteImagery(localTiles);
 
 
 	_baseLayer = _addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);
@@ -89,11 +93,35 @@ export async function setupImagery(): Promise<void> {
 		// terrain well past its native 0.46, so this is closer to the source.
 		// EOX is flatter than Mapbox/Esri, hence still a boost, just not one
 		// that clips. Re-measure before raising either number.
-		_baseDaySaturation = cfg.label.startsWith('eox') ? 1.3 : 1.25;
+		// ⚠ includes, NOT startsWith: the local cache labels itself
+		// 'local-eox-sentinel2' (cesium-setup getSatelliteImagery), so a
+		// startsWith test is FALSE for the packaged path — the same Sentinel-2
+		// pixels would take the non-eox branch purely because they came off
+		// disk instead of the network, quietly undoing both the measured
+		// purple-ocean values and the day gamma lift the moment the ~2.7 GB of
+		// tiles land on a Pi.
+		const isEox = cfg.label.includes('eox');
+
+		_baseDaySaturation = isEox ? 1.3 : 1.25;
 		_baseLayer.saturation = _baseDaySaturation;
-		_baseLayer.contrast = cfg.label.startsWith('eox') ? 1.05 : 1.1;
-		_baseLayer.gamma = cfg.label.startsWith('eox') ? 1.1 : 1.0;
+		_baseLayer.contrast = isEox ? 1.05 : 1.1;
 		_baseLayer.brightness = 1.0;
+
+		// Gamma is the ONLY non-clipping brightness lever here. Cesium's uniform
+		// is OneOverGamma — the shader computes pow(color, 1/gamma) — so gamma>1
+		// maps 1.0→1.0 exactly while lifting midtones and shadows. Unlike the
+		// contrast/saturation pair above it cannot drive a channel negative, so
+		// the purple-ocean failure mode does not apply.
+		//
+		// Day is lifted; NIGHT KEEPS THE OLD VALUE. The night look (VIIRS balance,
+		// road-mask contrast, corona) was measured against a dark ground, and a
+		// gamma lift is proportionally largest exactly there — pow(0.05, 1/1.25)
+		// is nearly 2× — which would wash out the night-light layers it sits
+		// under. Lerped on the same baseEase as saturation, so at full night the
+		// value is bit-identical to before this change.
+		_baseDayGamma = isEox ? 1.25 : 1.15;
+		_baseNightGamma = isEox ? 1.1 : 1.0;
+		_baseLayer.gamma = _baseDayGamma;
 	}
 
 	const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
@@ -240,6 +268,20 @@ export function roadMaskAlpha(
 	return clamp(nf * gain * gate + (1 - nf) * 0.08 * gate, 0, 1) * bootFade;
 }
 
+/**
+ * Day→night ease for the base layer's filters. Both saturation and gamma ride
+ * it, so they can never disagree about when night has arrived.
+ *
+ * Pure, and exported for test: the layer it drives is module-private and only
+ * exists after a networked setupImagery(), so this is the only way to assert
+ * that the day-side gamma lift leaves the measured night look alone. Reaches
+ * exactly 0 at nf <= 0.45 and exactly 1 at nf >= 0.9 (smoothstep clamps), which
+ * is what makes "night is bit-identical" a fact rather than an approximation.
+ */
+export function baseNightEase(nf: number): number {
+	return smoothstep((nf - 0.45) / (0.9 - 0.45));
+}
+
 export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	const nf = model.nightFactor;
 	const scale = model.nightLightScale;
@@ -250,8 +292,9 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	const w = model.config.world;
 
 	if (_baseLayer) {
-		const baseEase = smoothstep((nf - 0.45) / (0.9 - 0.45));
+		const baseEase = baseNightEase(nf);
 		_baseLayer.saturation = _baseDaySaturation + (w.baseNightSaturation - _baseDaySaturation) * baseEase;
+		_baseLayer.gamma = _baseDayGamma + (_baseNightGamma - _baseDayGamma) * baseEase;
 	}
 
 	if (_viirsLayer) {

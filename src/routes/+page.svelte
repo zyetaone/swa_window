@@ -342,6 +342,20 @@
 		--sw-silver: #cccccc;
 		--sw-dark-blue: #0a0a1e;
 
+		/* Cabin display face — the airline-signage voice for passenger-facing
+		   furniture (clock, blind card). NOT a webfont: this kiosk is built to
+		   survive losing the client's WiFi, and a gstatic face would fall back
+		   to something unchosen at exactly the moment that matters. So it is a
+		   stack of faces that genuinely exist on the target.
+		   The lineage is airport signage — Frutiger was drawn for CDG, Helvetica
+		   for the carriers that followed — and both degrade to a metric or
+		   optical relative on Pi OS Bookworm: Piboto is the Pi's own UI face,
+		   Liberation Sans is Helvetica-metric. The Pi lands on Piboto.
+		   Pair with font-variant-numeric: tabular-nums anywhere digits tick. */
+		--sw-font-cabin:
+			"Frutiger", "Univers", "Helvetica Neue", Piboto, Roboto,
+			"Liberation Sans", "Noto Sans", system-ui, sans-serif;
+
 		font-family:
 			"Ubuntu",
 			system-ui,
