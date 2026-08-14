@@ -173,6 +173,13 @@ boot has to garbage-collect.
 | Sunday 03:00 | Clear Chromium shader/GPU cache (preserves tile cache) |
 | Every boot | Re-assert brightness for the current hour (`display-dim-schedule.sh auto`) |
 
+`auto` waits up to 120 s for `NTPSynchronized` before trusting the hour, and
+**fails bright** if the clock never syncs. @reboot is exactly when the clock is
+least reliable — a Pi 5 only holds time across power-off with the optional RTC
+battery fitted — and the two outcomes are not symmetric: a bright wall at 3am
+is a small oddity, a wall stuck at 5% through business hours is the failure
+this path exists to prevent. The next timed cron corrects either way.
+
 **On a dim-looking panel, check brightness before suspecting the render.**
 `ddcutil` stores VCP 0x10 in the *monitor's* NVRAM, so a 5% state survives a
 power cycle, and the nightly reboot lands at 04:00 — inside the dim window. A

@@ -31,10 +31,39 @@ MODE="${1:-bright}"
 # Resolve `auto` against the wall clock. Window is [02:00, 06:00) — the same
 # bounds as the two cron entries, kept in sync by hand; if you move either
 # cron time, move this. 10# forces base-10 so `08`/`09` are not read as octal.
+#
+# ─── THE CLOCK HAS TO BE TRUSTED FIRST ───────────────────────────────────────
+# `auto` runs from @reboot, which is the one moment the clock is least
+# reliable: a Pi 5 keeps time across power-off only if the optional RTC
+# battery is fitted, and NTP may not have landed yet on a site whose WiFi
+# takes a while. Reading the hour then is a guess.
+#
+# So: wait a bounded spell for time sync, and if it never comes, FAIL BRIGHT.
+# The two outcomes are not symmetric — a bright wall at 3am is a small
+# oddity nobody is there to see, while a wall stuck at 5% through business
+# hours is the exact failure this whole `auto` path was added to prevent.
+# Either way the next 02:00/06:00 cron corrects it.
 if [[ "${MODE}" == "auto" ]]; then
+	CLOCK_OK=1
+	if command -v timedatectl >/dev/null 2>&1; then
+		CLOCK_OK=0
+		for _ in $(seq 1 24); do   # ~120 s at 5 s intervals
+			if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" == "yes" ]]; then
+				CLOCK_OK=1; break
+			fi
+			sleep 5
+		done
+	fi
+
 	HOUR="$(date +%H)"
-	if (( 10#${HOUR} >= 2 && 10#${HOUR} < 6 )); then MODE="dim"; else MODE="bright"; fi
-	echo "[display-dim] auto → ${MODE} (hour=${HOUR})"
+	if (( CLOCK_OK == 0 )); then
+		MODE="bright"
+		echo "[display-dim] auto → bright (clock UNSYNCED after 120s; hour=${HOUR} not trusted)"
+	elif (( 10#${HOUR} >= 2 && 10#${HOUR} < 6 )); then
+		MODE="dim";    echo "[display-dim] auto → dim (hour=${HOUR})"
+	else
+		MODE="bright"; echo "[display-dim] auto → bright (hour=${HOUR})"
+	fi
 fi
 
 case "${MODE}" in
