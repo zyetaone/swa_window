@@ -46,6 +46,17 @@ export type SkyState = 'day' | 'night' | 'dawn' | 'dusk';
 /** Universal context passed to all simulation engines each frame. */
 export interface SimulationContext {
 	time: number;
+	/** Wall-clock seconds (Date.now()/1000) — identical across panorama panes
+	 *  within NTP drift. `time` is boot-relative and advanced by the dt-clamped
+	 *  delta, so on slow Pis it runs slower than wall clock and cross-pane
+	 *  oscillators (orbit breathe/wander) decorrelate within minutes. Anything
+	 *  that must stay position-locked across the fleet reads this instead. */
+	wallTimeSec?: number;
+	/** Wall-clock frame delta in seconds (capped at 5 s). `delta` is clamped to
+	 *  100 ms, so at low frame rates ∫delta < wall-elapsed and per-pane
+	 *  integrators (orbit angle, scenario progress) diverge. Integrators that
+	 *  must track wall elapsed time advance by this. */
+	wallDeltaSec?: number;
 	lat: number;
 	lon: number;
 	altitude: number;

@@ -132,6 +132,8 @@ export class AeroWindow {
 	// High-frequency animation time (not reactive — updated each tick).
 	// Read internally via #createContext to feed engines; no external consumer.
 	#time = 0;
+	// Wall-clock of the previous tick (Date.now() ms). 0 = no frame seen yet.
+	#lastWallMs = 0;
 
 	// Private perf counters. 0 = no frame seen yet, so the first frame only
 	// establishes the baseline and contributes no period sample.
@@ -142,13 +144,15 @@ export class AeroWindow {
 
 	// ── Derived ───────────────────────────────────────────────────────────────
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
-	localTimeOfDay = $derived.by(() => {
-		const offset = this.currentLocation.utcOffset;
-		let lt = this.timeOfDay + offset;
-		if (lt >= 24) lt -= 24;
-		if (lt < 0) lt += 24;
-		return lt;
-	});
+	// timeOfDay IS the local civil time at the depicted location — the whole
+	// sky pipeline assumes it (computeSunDirection maps t=12 to sun-overhead,
+	// skyState/nightFactor key on local dawn/dusk, and compose's #syncClock
+	// converts to UTC via longitude). localTimeOfDay stays as a display alias
+	// for the HUD/readouts. It previously ADDED utcOffset on top, which
+	// double-counted the offset: a kiosk standing in the depicted city read
+	// +5.5 h out, and the time slider (reads this, writes timeOfDay) snapped
+	// by the offset on every drag.
+	localTimeOfDay = $derived(this.timeOfDay);
 
 	skyState = $derived<SkyState>(getSkyState(this.timeOfDay));
 
@@ -396,8 +400,14 @@ export class AeroWindow {
 	}
 
 	updateTimeFromSystem(): void {
+		// timeOfDay is LOCAL time at the depicted location, not device-local
+		// time — device getHours() was only correct when the kiosk's timezone
+		// happened to match the location. Derive from UTC + the location's
+		// utcOffset so "Real Time" follows the city on screen (a Hyderabad
+		// kiosk showing Dallas shows Dallas time).
 		const now = new Date();
-		this.timeOfDay = now.getHours() + now.getMinutes() / 60;
+		const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
+		this.timeOfDay = (utcHours + this.currentLocation.utcOffset + 24) % 24;
 	}
 
 	pickNextLocation(): LocationId {
@@ -716,6 +726,14 @@ export class AeroWindow {
 	#createContext(): SimulationContext {
 		const c = this.#ctx;
 		c.time                  = this.#time;
+		// Wall-clock companions to `time`/`delta` — see SimulationContext.
+		// Capped at 5 s so a suspended tab can't teleport the orbit on wake.
+		const wallMs = Date.now();
+		c.wallTimeSec  = wallMs / 1000;
+		c.wallDeltaSec = this.#lastWallMs === 0
+			? 0
+			: Math.min((wallMs - this.#lastWallMs) / 1000, 5);
+		this.#lastWallMs = wallMs;
 		c.lat                   = this.flight.lat;
 		c.lon                   = this.flight.lon;
 		c.altitude              = this.flight.altitude;

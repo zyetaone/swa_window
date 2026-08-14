@@ -94,6 +94,27 @@ export async function setupImagery(): Promise<void> {
 
 	const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
 
+	// Add order = composite order: base → VIIRS → road mask. Roads sit ON TOP
+	// ("Roads carry the city; VIIRS fills behind" — roadMaskAlpha): VIIRS is a
+	// coarse 583 m/px glow that would otherwise mute the crisp z18 road strokes
+	// by up to maxAlpha exactly where both peak (city cores), and its near-black
+	// pixels (colorToAlphaThreshold keys only TRUE black) darkened them further.
+	try {
+		_viirsLayer = _addLayer(
+			tileBase ? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
+				: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`,
+			8, 3, !!tileBase,
+		);
+		if (_viirsLayer) {
+			_viirsLayer.alpha = 0; _viirsLayer.show = false;
+			_viirsLayer.dayAlpha = 0; _viirsLayer.nightAlpha = 1;
+			_viirsLayer.colorToAlpha = C.Color.BLACK;
+			_viirsLayer.hue = 0.0; _viirsLayer.saturation = 0.0;
+			_viirsLayer.brightness = 2.5; _viirsLayer.contrast = 0.8;
+			_viirsLayer.colorToAlphaThreshold = 0.01;
+		}
+	} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
+
 	try {
 		_roadMaskLayer = _addLayer(
 			tileBase ? `${tileBase}/cartodb-dark/{z}/{x}/{y}.png`
@@ -122,22 +143,6 @@ export async function setupImagery(): Promise<void> {
 			_roadMaskLayer.brightness = 1.0;
 		}
 	} catch (e) { console.warn('[Imagery] CartoDB roads failed:', e); }
-
-	try {
-		_viirsLayer = _addLayer(
-			tileBase ? `${tileBase}/viirs-night-lights/{z}/{y}/{x}.jpg`
-				: `${VIIRS_GIBS_BASE}/{z}/{y}/{x}.png`,
-			8, 3, !!tileBase,
-		);
-		if (_viirsLayer) {
-			_viirsLayer.alpha = 0; _viirsLayer.show = false;
-			_viirsLayer.dayAlpha = 0; _viirsLayer.nightAlpha = 1;
-			_viirsLayer.colorToAlpha = C.Color.BLACK;
-			_viirsLayer.hue = 0.0; _viirsLayer.saturation = 0.0;
-			_viirsLayer.brightness = 2.5; _viirsLayer.contrast = 0.8;
-			_viirsLayer.colorToAlphaThreshold = 0.01;
-		}
-	} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
 }
 
 function _addLayer(url: string, maximumLevel: number, minimumLevel: number, webMercator: boolean): CesiumType.ImageryLayer | null {
