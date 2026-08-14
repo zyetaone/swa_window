@@ -58,49 +58,6 @@ Role assignment follows the Phase 7 parallax protocol described in
 `CLAUDE.md` — `left|center|right|solo`, with `center` as the autopilot leader
 and `left`/`right` as followers.
 
-## Remote access (Tailscale)
-
-Without this, a fielded Pi is reachable **only from its own LAN**. There is no
-other path: Pi 5's USB-C port is a power sink unless gadget mode was configured
-in advance, which needs the physical access you were trying to avoid. This
-stopped being theoretical on 2026-08-10 — CI had been red for five consecutive
-commits, the release gate correctly refused to promote, the fleet quietly ran
-stale code, and none of it could be inspected without flying to the venue.
-
-Provision with a key exported for that run only:
-
-```bash
-sudo TS_AUTHKEY=tskey-auth-xxxx bash deploy/pi/install.sh --role center --group corridor-a
-```
-
-The key is never written to the repo or to `config.env` — `tailscaled` keeps
-its own state in `/var/lib/tailscale`. Omit `TS_AUTHKEY` and the step is
-skipped entirely, so existing provisioning is unaffected.
-
-Key hygiene:
-
-| Setting | Why |
-| --- | --- |
-| **Reusable** | one key provisions all six Pis |
-| **Tagged** (`tag:aero-kiosk`) | ACLs can scope what kiosks may reach, and re-provisioning replaces the node instead of piling up duplicates |
-| **NOT ephemeral** | an ephemeral node disappears from the tailnet when the Pi powers off — precisely when you need to see that it went away |
-
-`--ssh` is enabled, so you get a shell with no key distribution, gated by your
-tailnet ACL rather than `authorized_keys`. Scope that ACL to your own user and
-the aero tag; it is a real remote-access surface.
-
-`--accept-dns=false` is deliberate. The kiosk resolves tile and CDN hosts via
-the venue's own DNS; letting MagicDNS take over risks breaking imagery on a
-network whose resolver we do not control, which is a visible outage on a
-screen the audience is looking at.
-
-Once enrolled:
-
-```bash
-tailscale status                 # from your machine — find the device
-ssh pi@aero-display-01           # MagicDNS name, any network
-```
-
 ## Admin URL for heartbeat
 
 `health-check.sh` reads `AERO_ADMIN_URL` from `/etc/aero/config.env`. Edit
