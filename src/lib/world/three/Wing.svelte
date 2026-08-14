@@ -476,7 +476,14 @@
 			_strobeT < STROBE_PULSE_S ||
 			(_strobeT >= STROBE_GAP_S && _strobeT < STROBE_GAP_S + STROBE_PULSE_S);
 		strobeMat.opacity = navRamp * (flash ? 1 : 0);
-		if (flash && lightsOn) tipPoint.intensity = navRamp * 2.2;
+		// White anti-collision strobe: tint the tip light white during the
+		// flash — pumping intensity on the green nav color read as a green
+		// blink instead of a white strobe. (Line above resets to navMat's
+		// green every frame, so this only needs the flash branch.)
+		if (flash && lightsOn) {
+			tipPoint.color.setRGB(1, 1, 1);
+			tipPoint.intensity = navRamp * 2.2;
+		}
 		const sd = computeSunDirection(model.flight.camLon, timeOfDay);
 		const elevSin = Math.max(sunElevationSin(model.flight.camLat, timeOfDay), 0.15);
 		const keyElev = elevSin * (1 - nf) + 0.45 * nf;

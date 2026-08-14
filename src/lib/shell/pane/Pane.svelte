@@ -193,9 +193,10 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 		pointer-events: none;
 	}
 
-	.window-container.no-frame :global(.glass-surface),
-	.window-container.no-frame :global(.vignette),
-	.window-container.no-frame :global(.glass-recess) {
+	/* Glass.svelte collapsed .glass-surface/.vignette/.glass-recess into one
+	   .glass element (Phase 15.5b) — hide that, or the rim vignette + recess
+	   shadow paint edge-to-edge in no-frame/full-bleed mode. */
+	.window-container.no-frame :global(.glass) {
 		visibility: hidden;
 	}
 

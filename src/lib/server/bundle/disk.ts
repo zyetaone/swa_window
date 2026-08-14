@@ -63,9 +63,24 @@ async function hydrate(): Promise<Map<string, ContentBundle>> {
 	return map;
 }
 
+// Promise-memo, not value-memo: two concurrent first-touch callers must
+// share ONE hydrate. With `if (!cache) cache = await hydrate()`, both
+// callers saw cache === null, both hydrated, and the second resolution
+// overwrote the first — a saveBundle() on the losing map was then invisible
+// to listBundles() until process restart.
+let cachePromise: Promise<Map<string, ContentBundle>> | null = null;
+
 async function ensureCache(): Promise<Map<string, ContentBundle>> {
-	if (!cache) cache = await hydrate();
-	return cache;
+	if (cache) return cache;
+	if (!cachePromise) {
+		cachePromise = hydrate().then((map) => {
+			cache = map;
+			return map;
+		}).finally(() => {
+			cachePromise = null;
+		});
+	}
+	return cachePromise;
 }
 
 /** All installed bundles, in insertion order. */

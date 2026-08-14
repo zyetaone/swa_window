@@ -14,6 +14,10 @@
  *     which causes downstream /api/config PATCHes to be rejected by the
  *     receiving peer with 401 / 503 — that's the correct behaviour on a
  *     Pi with no AERO_ADMIN_TOKEN set: peer-sync is simply disabled.
+ *   - A TRANSIENT failure (network error, e.g. the fetch races an OTA app
+ *     restart) is NOT cached: the next caller retries. Caching it as null
+ *     would silently disable peer auth until a full page reload — every
+ *     push 401ing forever.
  *
  * Why no localStorage: the kiosk Pi browser is the only caller. sessionStorage
  * survives reloads we don't need; localStorage would leak the token across
@@ -27,14 +31,12 @@ let pending: Promise<string | null> | null = null;
 let resolved = false;
 
 async function fetchPeerToken(): Promise<string | null> {
-	try {
-		const res = await fetch('/api/internal/token?type=admin', { cache: 'no-store' });
-		if (!res.ok) return null;
-		const body = (await res.json()) as { token?: unknown };
-		return typeof body.token === 'string' && body.token.length > 0 ? body.token : null;
-	} catch {
-		return null;
-	}
+	// Deliberate null (non-OK: token disabled / not localhost) is cacheable.
+	// Network/parse errors THROW so getPeerToken can avoid caching them.
+	const res = await fetch('/api/internal/token?type=admin', { cache: 'no-store' });
+	if (!res.ok) return null;
+	const body = (await res.json()) as { token?: unknown };
+	return typeof body.token === 'string' && body.token.length > 0 ? body.token : null;
 }
 
 export async function getPeerToken(): Promise<string | null> {
@@ -45,6 +47,10 @@ export async function getPeerToken(): Promise<string | null> {
 		resolved = true;
 		pending = null;
 		return token;
+	}).catch(() => {
+		// Transient failure — do NOT cache; the next call retries the fetch.
+		pending = null;
+		return null;
 	});
 	return pending;
 }

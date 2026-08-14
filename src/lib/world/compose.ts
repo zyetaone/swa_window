@@ -384,11 +384,18 @@ export class CesiumManager {
 		if (mode === this.#lastQualityMode && useHash === this.#lastUseHashPalette) return;
 		this.#lastQualityMode = mode;
 		this.#lastUseHashPalette = useHash;
+		const allow = mode !== 'performance';
 		// Hash palette follows the flag at runtime: install on true, uninstall
 		// (remove stage + restore aero-color-grade) on false. Boot-only install
 		// left the stage permanently enabled after a runtime toggle-off while
 		// #syncImagery re-enabled color-grade — the double-grade.
-		if (useHash && !this.#hashPaletteCleanup) {
+		// It is also a full-screen grade, so it obeys the same quality gate as
+		// aero-color-grade below: in performance mode neither grade runs. The
+		// shipped default (performance + useHashPalette: true) otherwise ran
+		// this pass 24/7 on every Pi — pure cost by day, where every term
+		// multiplies out to identity.
+		const wantHash = useHash && allow;
+		if (wantHash && !this.#hashPaletteCleanup) {
 			this.#hashPaletteCleanup = installHashPalette(
 				this.#C, this.#viewer,
 				() => this.#model.nightFactor, () => this.#model.nightLightScale,
@@ -398,14 +405,13 @@ export class CesiumManager {
 			// installHashPalette flips aero-color-grade.enabled directly, behind
 			// #syncImagery's gate — invalidate so the next tick re-writes it.
 			this.#lastColorGradeEnabled = null;
-		} else if (!useHash && this.#hashPaletteCleanup) {
+		} else if (!wantHash && this.#hashPaletteCleanup) {
 			this.#hashPaletteCleanup();
 			this.#hashPaletteCleanup = null;
 			// Cleanup restores a stale prev-enabled on aero-color-grade;
 			// invalidate the gate so #syncImagery re-derives it next tick.
 			this.#lastColorGradeEnabled = null;
 		}
-		const allow = mode !== 'performance';
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
 		if (bloom) bloom.enabled = allow;
 		// Warm palette is load-bearing, but hash palette wins when enabled —
@@ -414,7 +420,7 @@ export class CesiumManager {
 		// full-screen grade stays off instead of running 24/7. In quality mode
 		// (#lastQualityMode !== 'performance') #syncImagery re-takes
 		// enabled-management per tick, so behaviour there is unchanged.
-		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow && !useHash;
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow && !wantHash;
 		const v = this.#viewer;
 		if (v.shadowMap) v.shadowMap.enabled = allow;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any

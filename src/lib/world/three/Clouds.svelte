@@ -333,6 +333,11 @@
 	// render frame, avoiding the ~2.5µs Svelte dep-tracking overhead.
 	useTask(() => {
 	untrack(() => {
+			// Skip all per-sprite work while the cloud group is unmounted
+			// (showClouds off / no anchor): useTask fires regardless of the
+			// {#if} below, so without this ~1840 sprites were re-lit and
+			// re-drifted every frame for an invisible group.
+			if (!model.config.world.showClouds || !driftGroup.parent) return;
 			const nf = nightFactor;
 			// Unified lighting SSOT — the cloud darkening / city-glow / moon-lift now
 			// read the same gates as every other Three layer (cityGlowAmount lights up
@@ -505,6 +510,7 @@
 	let _windT = 0;
 	useTask((dt) => {
 		void anchorMatrix;
+		if (!model.config.world.showClouds || !driftGroup.parent) return;
 		_windT += dt;
 		const gust = 1 + 0.55 * Math.sin(_windT * 0.137) * Math.cos(_windT * 0.273);
 		// Slow wind-speed modulation. Range [0.6, 1.6] — ALWAYS positive

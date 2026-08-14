@@ -1,9 +1,14 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
 import { LOCATION_MAP } from '$content/locations';
+import { STORAGE_KEY } from '$lib/model/persistence';
 
 beforeEach(() => {
 	localStorage.clear();
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 describe('AeroWindow boot', () => {
@@ -16,6 +21,19 @@ describe('AeroWindow boot', () => {
 		// (Dubai 25.2/55.27) whenever nothing was persisted.
 		expect(model.flight.orbitCenterLat).toBeCloseTo(loc!.lat, 5);
 		expect(model.flight.orbitCenterLon).toBeCloseTo(loc!.lon, 5);
+	});
+
+	it('does not clobber timeOfDay with wall-clock when syncToRealTime is false', () => {
+		// Regression: boot called updateTimeFromSystem() unconditionally while
+		// the recurring sync in +page.svelte is gated on syncToRealTime — a
+		// persisted syncToRealTime:false kiosk booted to wall-clock and then
+		// froze there. 23:30 wall-clock vs the show's dawn opening keeps the
+		// assertion well clear of coincidence.
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-14T23:30:00'));
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({ syncToRealTime: false }));
+		const model = new AeroWindow();
+		expect(Math.abs(model.timeOfDay - 23.5)).toBeGreaterThan(2);
 	});
 });
 

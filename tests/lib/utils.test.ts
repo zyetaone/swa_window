@@ -240,4 +240,13 @@ describe('setByPath', () => {
 		const obj: Record<string, unknown> = { a: 1 };
 		expect(setByPath(obj, 'toString.length', 42)).toBe(false);
 	});
+
+	it('rejects writes into a frozen container instead of throwing', () => {
+		// director.autopilot.weatherPool is Object.freeze'd; a config patch to
+		// '...weatherPool.0' reaches the write through a $state proxy, which
+		// throws TypeError in strict mode — that 500'd PATCH /api/config.
+		const obj = { pool: Object.freeze(['clear', 'rain']) };
+		expect(setByPath(obj as unknown as Record<string, unknown>, 'pool.0', 'storm')).toBe(false);
+		expect(obj.pool[0]).toBe('clear');
+	});
 });

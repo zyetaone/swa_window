@@ -216,7 +216,11 @@ export class AeroWindow {
 		// a persisted setLocation() recomputes the identical orbit.
 		this.flight.setLocationWithSky(this.location, this.skyState);
 
-		if (typeof window !== 'undefined') {
+		// Gate on syncToRealTime: the recurring sync (+page.svelte) is gated, so
+		// an ungated boot call clobbered timeOfDay and then froze — killing both
+		// the DEV deep-night default above and any persisted syncToRealTime:false
+		// kiosk's show-opening time.
+		if (typeof window !== 'undefined' && this.syncToRealTime) {
 			this.updateTimeFromSystem();
 		}
 
@@ -427,6 +431,7 @@ export class AeroWindow {
 			return;
 		}
 		this.#cancelScheduledFlyTo();   // a human scene change supersedes a pending autopilot cruise
+		this.exitFlyover();   // a blind pull mid-beat must not carry flyover altitude/pitch into the cruise (autopilot + applyScene already do this)
 		const transitionAtMs = this.#broadcastLocationDecision(locationId, 'manual');
 		if (transitionAtMs !== null) this.#scheduleFlyTo(locationId, transitionAtMs);
 		else this.flight.flyTo(locationId, this.skyState);

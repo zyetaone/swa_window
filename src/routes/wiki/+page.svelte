@@ -227,18 +227,8 @@
 		<div class="z-stack">
 			<div class="z-layer" style="--z:11; --alpha:0.12">
 				<span class="z-num">z:11</span>
-				<span class="z-name">glass-recess</span>
-				<span class="z-desc">rim depth shadow — creates the window frame illusion</span>
-			</div>
-			<div class="z-layer" style="--z:10; --alpha:0.14">
-				<span class="z-num">z:10</span>
-				<span class="z-name">vignette</span>
-				<span class="z-desc">soft dark corners — draws eye to center</span>
-			</div>
-			<div class="z-layer" style="--z:9; --alpha:0.16">
-				<span class="z-num">z:9</span>
-				<span class="z-name">glass-vignette</span>
-				<span class="z-desc">darkens rim perimeter — reinforces depth</span>
+				<span class="z-name">glass</span>
+				<span class="z-desc">rim depth shadow + corner vignette + rim darkening — one element, stacked gradients (was glass-recess / vignette / glass-vignette)</span>
 			</div>
 			<div class="z-layer wing" style="--z:7; --alpha:0.22">
 				<span class="z-num">z:7</span>

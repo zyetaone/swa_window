@@ -219,6 +219,11 @@ export function setByPath(obj: Record<string, unknown>, path: string, value: unk
 	}
 	const key = segments[segments.length - 1];
 	if (!Object.hasOwn(current, key)) return false;
+	// Frozen containers (e.g. director.autopilot.weatherPool, Object.freeze'd
+	// at the config-tree default) reject the write with a TypeError in strict
+	// mode when reached through a $state proxy — turn it into a clean `false`
+	// so the config dispatcher rejects the patch instead of 500ing.
+	if (Object.isFrozen(current)) return false;
 	current[key] = value;
 	return true;
 }

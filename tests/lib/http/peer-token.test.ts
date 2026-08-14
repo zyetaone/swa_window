@@ -3,9 +3,11 @@
  * downstream fleet code relies on:
  *   1. concurrent callers share one in-flight fetch
  *   2. once resolved, subsequent calls do not re-fetch
- *   3. on failure (403/503/network) callers see no Authorization header
+ *   3. on deliberate failure (403/503) callers see no Authorization header
  *      so the fetch still goes out — the receiving peer just rejects with
- *      401, which is the correct "peer-sync disabled" behaviour.
+ *      401, which is the correct "peer-sync disabled" behaviour; a
+ *      TRANSIENT failure (fetch throws) is not cached and the next call
+ *      retries.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -87,13 +89,18 @@ describe('getPeerToken', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('caches null when fetch throws (network failure)', async () => {
-		const fetchMock = vi.fn().mockRejectedValue(new Error('boom'));
+	it('does NOT cache null when fetch throws (network failure retries)', async () => {
+		// A transient failure (e.g. fetch races an OTA app restart) must not
+		// disable peer auth for the life of the tab — the next call retries.
+		const fetchMock = vi.fn()
+			.mockRejectedValueOnce(new Error('boom'))
+			.mockResolvedValue(okResponse({ token: TOKEN }));
 		globalThis.fetch = fetchMock as unknown as typeof fetch;
 
 		expect(await getPeerToken()).toBeNull();
-		expect(await getPeerToken()).toBeNull();
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(await getPeerToken()).toBe(TOKEN);
+		expect(await getPeerToken()).toBe(TOKEN);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 });
 
