@@ -26,12 +26,13 @@
 	const model = useAeroWindow();
 	const stats = $derived(flightReadout(model));
 
-	// Chrome role gates live in fleet/parallax — single SSOT with HUD.
-	const role = $derived(model.config.camera.parallax.role);
+	// Chrome gates live in fleet/parallax — single SSOT with HUD.
 	const opsMode = $derived.by(() =>
 		typeof window === 'undefined' ? false : isOpsModeParam(window.location.search),
 	);
-	const showOpsChrome = $derived(showsOpsChrome(role, opsMode));
+	// Role is deliberately NOT a factor — see showsOpsChrome. A kiosk shows no
+	// operator chrome unless the URL asks for it; dev always shows it.
+	const showOpsChrome = $derived(showsOpsChrome(opsMode, import.meta.env.DEV));
 
 	let panelOpen = $state(false);
 	let closing = $state(false);

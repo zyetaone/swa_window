@@ -50,11 +50,23 @@ const SNAP_THRESHOLD = 0.3;
 const OPEN_Y = -105;
 const CLOSED_Y = 0;
 
+/**
+ * Minimum gap between two blind-triggered destination changes.
+ *
+ * Long enough that repeated swipes can't march the display through cities;
+ * short enough that someone deliberately exploring at a human pace still gets
+ * a new view on their second pull.
+ */
+export const FLIGHT_COOLDOWN_MS = 45_000;
+
 export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	// Clip element is set by the `attach` attachment when the .blind-clip div
 	// mounts. Plain ref (not $state) — we only read offsetHeight from it at
 	// pointer-down, never reactively.
 	let clipEl: HTMLDivElement | null = null;
+	// Per-instance rather than module-level: the limit is about one blind on
+	// one screen, and keeping it here means it cannot leak between tests.
+	let lastFlightAtMs = 0;
 	let isDragging = $state(false);
 	let hasAnimated = $state(false);
 	let dragY = $state(model.config.shell.blindOpen ? OPEN_Y : CLOSED_Y);
@@ -173,13 +185,23 @@ export function useBlind(model: BlindControl, options: UseBlindOptions = {}) {
 	 * that's the canonical "fly somewhere new" gesture — fire it here so the
 	 * blind-pull becomes a scene-change trigger. Mid-cruise pulls are ignored
 	 * (isTransitioning gate) to avoid re-firing during cruise_departure.
+	 *
+	 * The blind itself ALWAYS responds — only the destination change is rate
+	 * limited. The gesture staying responsive is what keeps it feeling like a
+	 * physical blind; it is the world-change behind it that must not be
+	 * spammable. Without the cooldown, the isTransitioning gate only covered
+	 * the ~2 s cruise, so anyone could hop the display between cities as fast
+	 * as they could swipe — which reads as a glitchy toy rather than calm
+	 * ambient furniture, and undoes the whole premise on repeat exposure.
 	 */
 	function commitBlind(nextOpen: boolean): void {
 		const wasOpen = model.config.shell.blindOpen;
 		model.applyConfigPatch('shell.blindOpen', nextOpen);
-		if (wasOpen && !nextOpen && !model.flight.isTransitioning) {
-			model.flyTo(model.pickNextLocation());
-		}
+		if (!wasOpen || nextOpen || model.flight.isTransitioning) return;
+		const now = Date.now();
+		if (now - lastFlightAtMs < FLIGHT_COOLDOWN_MS) return;
+		lastFlightAtMs = now;
+		model.flyTo(model.pickNextLocation());
 	}
 
 	function onPointerUp() {

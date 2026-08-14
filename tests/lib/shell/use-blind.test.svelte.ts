@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { flushSync } from 'svelte';
-import { useBlind } from '$lib/shell/window/use-blind.svelte';
+import { useBlind, FLIGHT_COOLDOWN_MS } from '$lib/shell/window/use-blind.svelte';
 
 const OPEN_Y = -105;
 const CLOSED_Y = 0;
@@ -172,5 +172,67 @@ describe('useBlind discoverable coaching', () => {
 		h.blind.onPointerDown(h.pointer(100, 100));
 		expect(h.blind.hasAnimated).toBe(true);
 		h.stop();
+	});
+});
+
+/**
+ * Blind-close → new destination, rate limited.
+ *
+ * Closing the blind from open is the "fly somewhere new" gesture. Combined
+ * with a drag zone that used to cover the whole pane, anyone in the corridor
+ * could hop the display between cities as fast as they could swipe — a
+ * glitchy-toy failure mode on furniture meant to read as calm. The blind
+ * itself must still always respond; only the world change is limited.
+ */
+describe('useBlind destination cooldown', () => {
+	/** Open → drag past the snap threshold → release. Commits a close. */
+	function closeFromOpen(h: ReturnType<typeof harness>) {
+		h.shell.blindOpen = true;
+		flushSync();
+		h.dragFromOpen(160); // 40% > 30% snap threshold
+		h.blind.onPointerUp();
+	}
+
+	it('flies on the first blind-close', () => {
+		const h = harness({ blindOpen: true });
+		closeFromOpen(h);
+		expect(h.model.flyTo).toHaveBeenCalledOnce();
+		h.stop();
+	});
+
+	it('ignores a second close inside the cooldown — but still closes the blind', () => {
+		vi.useFakeTimers();
+		const h = harness({ blindOpen: true });
+		closeFromOpen(h);
+		expect(h.model.flyTo).toHaveBeenCalledOnce();
+
+		vi.advanceTimersByTime(FLIGHT_COOLDOWN_MS - 1000);
+		closeFromOpen(h);
+		// No second flight...
+		expect(h.model.flyTo).toHaveBeenCalledOnce();
+		// ...but the gesture itself was honoured, so the blind still feels physical.
+		expect(h.model.applyConfigPatch).toHaveBeenCalledWith('shell.blindOpen', false);
+		h.stop();
+	});
+
+	it('flies again once the cooldown has elapsed', () => {
+		vi.useFakeTimers();
+		const h = harness({ blindOpen: true });
+		closeFromOpen(h);
+		vi.advanceTimersByTime(FLIGHT_COOLDOWN_MS + 1000);
+		closeFromOpen(h);
+		expect(h.model.flyTo).toHaveBeenCalledTimes(2);
+		h.stop();
+	});
+
+	it('keeps the cooldown per instance, so it cannot leak between panes', () => {
+		const a = harness({ blindOpen: true });
+		closeFromOpen(a);
+		const b = harness({ blindOpen: true });
+		closeFromOpen(b);
+		expect(a.model.flyTo).toHaveBeenCalledOnce();
+		expect(b.model.flyTo).toHaveBeenCalledOnce();
+		a.stop();
+		b.stop();
 	});
 });

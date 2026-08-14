@@ -158,11 +158,24 @@ export function isEdgePane(role: DeviceRole): boolean {
 
 /**
  * Operator SidePanel tab + settings chrome.
- * Solo/center always; edge panes only with the ?ops=1 escape hatch so on-site
- * techs can open controls without rebuilding the kiosk role URL.
+ *
+ * ?ops=1 in production; always on in dev.
+ *
+ * This used to be `opsMode || isGroupLeader(role)`, which meant a solo install
+ * — and the centre pane of every corridor — carried a visible chevron on the
+ * glass 24/7. On a display whose whole premise is that you cannot tell it is a
+ * computer, that is a permanent tell, and eventually someone walking past taps
+ * it and finds sliders labelled "VIIRS Brightness". It also made the centre
+ * pane differ from its two neighbours, breaking the one-continuous-window
+ * illusion at the seam.
+ *
+ * Role is no longer a factor: an on-site tech reaches the panel the same way
+ * on every pane, which is one rule to document instead of three. `isDev` keeps
+ * the panel one keystroke away while developing, where there is no audience to
+ * break the fiction for.
  */
-export function showsOpsChrome(role: DeviceRole, opsMode = false): boolean {
-	return opsMode || isGroupLeader(role);
+export function showsOpsChrome(opsMode = false, isDev = false): boolean {
+	return opsMode || isDev;
 }
 
 /**

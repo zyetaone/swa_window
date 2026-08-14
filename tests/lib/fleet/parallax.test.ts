@@ -45,16 +45,21 @@ describe('isEdgePane', () => {
 });
 
 describe('showsOpsChrome', () => {
-	it('shows on solo and center without ops mode', () => {
-		expect(showsOpsChrome('solo')).toBe(true);
-		expect(showsOpsChrome('center')).toBe(true);
-		expect(showsOpsChrome('left')).toBe(false);
-		expect(showsOpsChrome('right')).toBe(false);
+	// The regression this pins: the gate used to be `opsMode || isGroupLeader`,
+	// so a solo kiosk and every corridor's centre pane wore a visible operator
+	// chevron 24/7 — a permanent tell on a display that must not read as a
+	// computer, and an asymmetry the 3-pane seam showed off.
+	it('shows nothing on a production kiosk, whatever the role', () => {
+		expect(showsOpsChrome(false, false)).toBe(false);
 	});
-	it('shows on edge panes only when ops mode is on', () => {
-		expect(showsOpsChrome('left', true)).toBe(true);
-		expect(showsOpsChrome('right', true)).toBe(true);
-		expect(showsOpsChrome('center', true)).toBe(true);
+	it('shows when the URL asks for it (?ops=1)', () => {
+		expect(showsOpsChrome(true, false)).toBe(true);
+	});
+	it('shows in dev without any URL param — no audience to break the fiction for', () => {
+		expect(showsOpsChrome(false, true)).toBe(true);
+	});
+	it('defaults to hidden when called with no arguments', () => {
+		expect(showsOpsChrome()).toBe(false);
 	});
 });
 

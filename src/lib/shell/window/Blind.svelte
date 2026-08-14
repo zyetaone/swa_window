@@ -202,9 +202,24 @@
 	   tells the browser this surface intentionally consumes vertical
 	   pointer drags (no native scroll/zoom interference). cursor: grab
 	   gives the affordance — the only mouse cursor in the kiosk. */
+	/*
+	 * Drag-to-close hot zone — the TOP BAND only, not the whole pane.
+	 *
+	 * This was `inset: 0`, so any downward drag starting anywhere on the glass
+	 * closed the blind AND flew to a new location (see commitBlind). On a
+	 * corridor touchscreen that is triggered by a bag brushing past, someone
+	 * steadying themselves, or a passing hand — the single most disruptive
+	 * thing an ambient display can do, on furniture meant to sit quietly.
+	 *
+	 * The band matches the gesture's mental model: the blind lives above and
+	 * comes DOWN, and the pull-tab (.blind-overlay::after, bottom:10%) sits
+	 * just off the top edge while open. Reaching up to pull down still works;
+	 * brushing the middle of the glass no longer does anything.
+	 */
 	.blind-grab {
 		position: absolute;
-		inset: 0;
+		inset: 0 0 auto 0;
+		height: 35%;
 		pointer-events: auto;
 		touch-action: pan-y;
 		cursor: grab;
