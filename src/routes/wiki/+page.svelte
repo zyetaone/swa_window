@@ -503,7 +503,7 @@
 			</div>
 			<div class="constraint-card">
 				<h4>Deployment</h4>
-				<p>Single-bundle output (SvelteKit <code>bundleStrategy: 'single'</code>). No service worker. No CDN. Kiosk boots directly into Chromium pointed at localhost:5173.</p>
+				<p>Route-split client output (SvelteKit default), so the kiosk route never parses the admin or lab UI. No service worker. No CDN. Kiosk boots directly into Chromium pointed at localhost:3000.</p>
 			</div>
 			<div class="constraint-card">
 				<h4>Interaction</h4>

@@ -24,8 +24,6 @@
   },
   "devDependencies": {
     "sharp": "^0.34.5",
-    "@gltf-transform/core": "^4.4.2",
-    "@gltf-transform/functions": "^4.4.2",
     "@google/genai": "^1.52.0",
     "@sveltejs/adapter-node": "^5.5.7",
     "@sveltejs/kit": "^2.70.1",
