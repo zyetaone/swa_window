@@ -408,7 +408,19 @@ if [[ -d "${SCRIPT_DIR}/branding" && "${UNITS_ONLY}" == false ]]; then
 	install -m 644 "${SCRIPT_DIR}/branding/aero.plymouth"   /usr/share/plymouth/themes/aero/aero.plymouth
 	install -m 644 "${SCRIPT_DIR}/branding/aero.script"     /usr/share/plymouth/themes/aero/aero.script
 	install -m 644 "${SCRIPT_DIR}/branding/aero-splash.png" /usr/share/plymouth/themes/aero/aero-splash.png
-	plymouth-set-default-theme aero >/dev/null 2>&1 || true
+	# -R is load-bearing: it rebuilds the initramfs. config.txt sets
+	# auto_initramfs=1, so early-boot Plymouth runs FROM the initramfs and
+	# reads the theme out of it — setting the default without rebuilding
+	# leaves the old image in place and the stock theme on screen, which is
+	# precisely the "rainbow -> logos -> stock Plymouth" sequence this block
+	# exists to remove. Verified broken on a fielded card (aero-display-00):
+	# initramfs_2712 stamped 20:36, the branding installed at ~21:35 — an
+	# hour later, so the theme was never in the image the Pi actually boots.
+	# Fall back to a bare set + explicit rebuild if -R is unsupported.
+	if ! plymouth-set-default-theme -R aero >/dev/null 2>&1; then
+		plymouth-set-default-theme aero >/dev/null 2>&1 || true
+		update-initramfs -u >/dev/null 2>&1 || true
+	fi
 
 	# Firmware rainbow splash off. Idempotent: only appended once.
 	backup_boot_file /boot/firmware/config.txt
