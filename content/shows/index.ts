@@ -1,22 +1,15 @@
 /**
- * Shows registry — daily-seeded rotation across boot-baseline opens.
+ * Shows registry — time-bucketed rotation across boot openings.
  *
- * Each Pi kiosk boot calls `pickDailyShow()` which uses `daySeed()` to
- * pick deterministically across the rotation set. All 3 Pis in a panorama
- * group pick the SAME show on a given day (daySeed is shared), and the
- * picked show CHANGES every day at midnight UTC.
+ * Each Pi boot calls `pickDailyShow()` which uses `showRotationSeed()` so:
+ *   - All 3 Pis in a panorama pick the SAME show in the same UTC slot
+ *   - The pick changes every ROTATION_SLOT_HOURS (not only at midnight)
+ *   - Location is NOT restored from localStorage — boot always starts from
+ *     the current slot's show; mid-session hops are the autopilot's job
  *
- * Why per-day (not per-boot):
- *   - 3-Pi panorama: all Pis must see the same opening or the seam breaks.
- *   - Office-worker expectation: same day = same scene (don't surprise the
- *     6 PM passer-by with a different opening from the 9 AM passer-by),
- *     next day = something new (avoids "every visit looks the same").
- *
- * Roll-over at midnight UTC ≈ 5:30 AM Hyderabad — kiosk is unattended.
- *
- * `default.show.ts` is included in the rotation AND remains the named
- * fallback for any code path that wants a guaranteed-stable opening.
- *
+ * Slot length is a multi-Pi trade-off: pure per-boot Math.random() would
+ * tear the panorama on staggered reloads; day-only felt stuck. 2 h UTC
+ * buckets rotate 12×/day while reloads within a slot stay locked.
  */
 
 import type { Show } from './types';
@@ -30,8 +23,14 @@ import { monsoonMumbaiShow } from './monsoon-mumbai.show';
 import { dawnHimalayasShow } from './dawn-himalayas.show';
 import { pacificEveningShow } from './pacific-evening.show';
 import { middayPhoenixShow } from './midday-phoenix.show';
+import { duskDallasShow } from './dusk-dallas.show';
+import { nightChicagoShow } from './night-chicago.show';
+import { dawnDenverShow } from './dawn-denver.show';
 
-/** The daily rotation set — distinct location / weather / time mix. */
+/** How often the boot opening re-rolls (UTC). Shared by all Pis. */
+export const ROTATION_SLOT_HOURS = 2;
+
+/** The rotation set — distinct location / weather / time mix. */
 export const DAILY_ROTATION: readonly Show[] = [
 	defaultShow,           // Hyderabad dawn clear — SWA install brand baseline
 	duskDubaiShow,         // Dubai golden hour clear
@@ -39,37 +38,33 @@ export const DAILY_ROTATION: readonly Show[] = [
 	monsoonMumbaiShow,     // Mumbai monsoon rain
 	dawnHimalayasShow,     // Himalayas alpine dawn
 	pacificEveningShow,    // Pacific Ocean sunset
-	middayPhoenixShow,     // Phoenix clear noon — the daytime hero
-	// nightCloudsShow is OUT of rotation (Jul-13 plan): at 23:00 over a
-	// hasBuildings:false cloud deck there is no VIIRS, no city layer and no
-	// cloud floor — a 1-in-N boot rendered as a black void, contradicting
-	// the director's own nightLitCitiesOnly doctrine. It returns once a
-	// moonlit-cloud-floor layer ships (post-P8 ticket; the layer lives on
-	// the Three overlay, which is default-off until the perf gate).
+	middayPhoenixShow,     // Phoenix clear noon
+	duskDallasShow,        // Dallas golden hour
+	nightChicagoShow,      // Chicago night lights
+	dawnDenverShow,        // Denver dawn
+	// nightCloudsShow stays OUT: hasBuildings:false + deep night = black void
+	// without VIIRS/city floor (see night-clouds.show.ts).
 ];
 
 export { defaultShow };
 
 /**
- * Pick the show for today. Deterministic across all Pis on the same day,
- * different each day. Caller should pass this to `applyShowOpening` at
- * boot before persisted state is restored.
+ * Seed for boot-show rendezvous hashing.
  *
- * CONTENT-ADDRESSED (rendezvous hashing), not positional: each show gets a
- * per-day score from seed^hash(show.id); the max score wins. The old
- * `floor(rng() * length)` index meant ANY rotation edit remapped EVERY
- * day's pick — and worse, a mixed-version fleet (rolling OTA mid-panorama)
- * computed different indices from the same seed, splitting left/center/
- * right across different shows. With rendezvous hashing, adding or
- * removing a show only reassigns the days that show itself wins; all
- * other days keep their pick, and Pis agree as long as their rotation
- * SETS match. Rotation edits still deploy fleet-atomically (a version
- * skew of the set itself can still diverge), but the blast radius of an
- * edit is now that one show's days, not the whole calendar.
- *
- * `seed` is injectable for tests; defaults to today's daySeed().
+ * `daySeed * 100 + slot` — successive 2 h UTC windows get distinct seeds;
+ * all devices using wall clock agree on the slot.
  */
-export function pickDailyShow(seed: number = daySeed()): Show {
+export function showRotationSeed(now: Date = new Date()): number {
+	const slot = Math.floor(now.getUTCHours() / ROTATION_SLOT_HOURS);
+	return daySeed(now) * 100 + slot;
+}
+
+/**
+ * Pick the show for the current rotation slot (or an injectable seed).
+ * Deterministic across Pis for the same seed; content-addressed so adding
+ * a show only reassigns the slots that show wins.
+ */
+export function pickDailyShow(seed: number = showRotationSeed()): Show {
 	let best = DAILY_ROTATION[0];
 	let bestScore = -1;
 	for (const show of DAILY_ROTATION) {

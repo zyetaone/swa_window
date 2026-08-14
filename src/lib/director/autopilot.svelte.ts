@@ -9,6 +9,10 @@
  * directorReset() after cruise_transit. Timer state lives in module-local
  * `let` so it persists across ticks without consumer plumbing. There is
  * only one director in the process — no multi-instance use case exists.
+ *
+ * Timers advance with wallDeltaSec (falling back to sim delta) so a slow
+ * Pi (~3 fps, dt clamped at 0.1 s) still hops cities on real wall time —
+ * same class of fix as orbit/scenario wall-clock integration.
  */
 
 import { untrack } from 'svelte';
@@ -32,6 +36,12 @@ let _timeToNextLocation: number | null = null;
 
 let _vantageTimer = 0;
 let _timeToNextVantage: number | null = null;
+
+/** Wall-clock step when available; otherwise sim delta (tests / legacy). */
+function wallDt(delta: number, ctx: SimulationContext): number {
+	const w = ctx.wallDeltaSec;
+	return typeof w === 'number' && Number.isFinite(w) && w > 0 ? w : delta;
+}
 
 // ─── Tick ───────────────────────────────────────────────────────────────────
 
@@ -77,12 +87,13 @@ export function directorReset(ctx: SimulationContext): void {
 function tickRandomize(delta: number, ctx: SimulationContext): Array<{ path: string; value: unknown }> | null {
 	const ap = ctx.director.autopilot;
 	const am = ctx.director.ambient;
+	const dt = wallDt(delta, ctx);
 
 	if (_nextRandomizeTime === null) {
 		_nextRandomizeTime = randomBetween(ap.initialMinDelay, ap.initialMaxDelay);
 		return null;
 	}
-	_randomizeTimer += delta;
+	_randomizeTimer += dt;
 	if (_randomizeTimer < _nextRandomizeTime) return null;
 	if (ctx.userAdjustingAtmosphere) return null;
 
@@ -114,6 +125,7 @@ function tickRandomize(delta: number, ctx: SimulationContext): Array<{ path: str
 
 function tickDirector(delta: number, ctx: SimulationContext): LocationId | null {
 	const ap = ctx.director.autopilot;
+	const dt = wallDt(delta, ctx);
 
 	if (_timeToNextLocation === null) {
 		_timeToNextLocation = randomBetween(ap.initialMinDelay, ap.initialMaxDelay);
@@ -121,7 +133,7 @@ function tickDirector(delta: number, ctx: SimulationContext): LocationId | null 
 	}
 	if (ctx.userAdjustingAltitude || ctx.userAdjustingTime) { _directorTimer = 0; return null; }
 
-	_directorTimer += delta;
+	_directorTimer += dt;
 	if (_directorTimer > _timeToNextLocation) {
 		_directorTimer = 0;
 		_timeToNextLocation = randomBetween(ap.directorMinInterval, ap.directorMaxInterval);
@@ -143,6 +155,7 @@ function tickDirector(delta: number, ctx: SimulationContext): LocationId | null 
 function tickVantage(delta: number, ctx: SimulationContext): VantageBeat | null {
 	const v = ctx.director.autopilot.vantage;
 	if (!v.enabled) return null;
+	const dt = wallDt(delta, ctx);
 
 	if (_timeToNextVantage === null) {
 		_timeToNextVantage = randomBetween(v.minIntervalSec, v.maxIntervalSec);
@@ -157,7 +170,7 @@ function tickVantage(delta: number, ctx: SimulationContext): VantageBeat | null 
 		return null;
 	}
 
-	_vantageTimer += delta;
+	_vantageTimer += dt;
 	if (_vantageTimer < _timeToNextVantage) return null;
 
 	_vantageTimer = 0;

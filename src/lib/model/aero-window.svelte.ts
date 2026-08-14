@@ -7,7 +7,7 @@
  */
 
 import { getContext, setContext, hasContext } from 'svelte';
-import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt } from '$lib/utils';
+import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt, readByPath } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
 import {
@@ -18,6 +18,7 @@ import {
 } from '$lib/fleet/display-payload';
 import { loadDisplayMode, saveDisplayMode, peekDisplayModeSavedAt } from '$lib/fleet/display-mode-persist';
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
+import { AMBIENT_PERSIST_PATHS, type AmbientValue, type PeerSyncPath } from '$lib/model/peer-sync-paths';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
@@ -112,6 +113,13 @@ export class AeroWindow {
 	/** Active slideshow when displayMode === 'screensaver'. */
 	slideshow = $state<SlideshowSpec | null>(null);
 
+	// Apply-ack — id of the most recent admin-pushed command/config patch the
+	// fleet client applied, echoed back in the /api/status heartbeat so the
+	// admin dashboard can tell "published to SSE" apart from "applied by the
+	// kiosk". Plain (non-reactive): nothing renders it; only the heartbeat
+	// reads it, and the DeviceClient is the only writer.
+	lastAppliedCommandId: string | null = null;
+
 	// Performance. Derived from the telemetry median frame period rather than
 	// counted per wall-second: at the 2–4 fps the Pi panel actually runs, a
 	// per-second counter divides ~3 frames by a ~1 s window, so it lands on
@@ -181,15 +189,13 @@ export class AeroWindow {
 		// reset via directorReset on flightPatch.resetDirector).
 		motionReset();
 		// Precedence at boot:
-		//   1. Show opening (baseline — from $content/shows/default.show.ts)
-		//   2. Persisted localStorage (user's last session, wins over show)
-		//   3. Dev-mode night override (only if no persisted state AND import.meta.env.DEV)
-		//   4. Real-time wall-clock (if syncToRealTime, overrides timeOfDay
-		//      to current wall-clock below)
-		// URL params and admin pushes come later in the page lifecycle.
-		// Daily-rotation: pickDailyShow() uses daySeed() so all 3 Pis in a
-		// panorama group pick the same show on a given day, and the show
-		// changes each day at midnight UTC. See content/shows/index.ts.
+		//   1. Show opening — pickDailyShow(showRotationSeed()) every 2 h UTC
+		//      slot; all Pis agree; reloads within a slot match (multi-Pi safe)
+		//   2. Persisted operator prefs (altitude, ambient, toggles) — NOT
+		//      location/weather (those always come from the rotation seed)
+		//   3. Dev-mode night override (only if no persisted state AND DEV)
+		//   4. Real-time wall-clock when syncToRealTime
+		// URL params and admin/autopilot come later in the page lifecycle.
 		applyShowOpening(this, pickDailyShow());
 		const persisted = loadPersistedState();
 		this.#applyPersisted(persisted);
@@ -253,9 +259,8 @@ export class AeroWindow {
 	}
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
-		if (saved.location) this.setLocation(saved.location);
+		// location/weather intentionally ignored — boot show owns the scene.
 		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
-		if (saved.weather) { this.weather = saved.weather; this.#syncWeatherConfig(); }
 		// Config-tree restores go through applyConfigPatch so the same
 		// validation/type gates apply, but WITHOUT a CRDT stamp (#booting) —
 		// an admin push issued while the Pi was offline carries an older
@@ -264,6 +269,13 @@ export class AeroWindow {
 		if (saved.cloudDensity !== undefined) this.applyConfigPatch('atmosphere.clouds.density', saved.cloudDensity);
 		if (saved.buildingsEnabled !== undefined) this.applyConfigPatch('world.buildingsEnabled', saved.buildingsEnabled);
 		if (saved.showClouds !== undefined) this.applyConfigPatch('world.showClouds', saved.showClouds);
+		// Ambient peer-sync values (haze, nightLightIntensity, qualityMode, …)
+		// — same applyConfigPatch route, same unstamped boot semantics.
+		if (saved.ambient) {
+			for (const [path, value] of Object.entries(saved.ambient)) {
+				this.applyConfigPatch(path, value);
+			}
+		}
 		this.syncToRealTime = saved.syncToRealTime ?? true;
 	}
 
@@ -619,11 +631,24 @@ export class AeroWindow {
 	}
 
 	getPersistedSnapshot(): PersistedState {
+		// Ambient peer-sync values (AMBIENT_PERSIST_PATHS — the PEER_SYNC_PATHS
+		// entries not already covered by the named fields below) so an
+		// admin-pushed ambient state survives a kiosk reboot.
+		const ambient: Partial<Record<PeerSyncPath, AmbientValue>> = {};
+		const root = this.config as unknown as Record<string, unknown>;
+		for (const path of AMBIENT_PERSIST_PATHS) {
+			const value = readByPath(root, path);
+			if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
+				ambient[path] = value;
+			}
+		}
 		return {
-			location: this.location, altitude: this.flight.altitude, weather: this.weather,
+			// location/weather omitted — load never restores them; boot rotates.
+			altitude: this.flight.altitude,
 			cloudDensity: this.config.atmosphere.clouds.density,
 			buildingsEnabled: this.config.world.buildingsEnabled,
 			showClouds: this.config.world.showClouds, syncToRealTime: this.syncToRealTime,
+			ambient,
 		};
 	}
 

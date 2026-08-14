@@ -9,9 +9,13 @@
  * `$lib/fleet/display-mode-persist` — so media survives reload without
  * participating in the daily location/weather rotation gate.
  */
-import { isValidWeather, type LocationId, type WeatherType } from '$lib/types';
-import { isValidLocation } from '$content/locations';
-import { daySeed } from '$lib/world/prng';
+import type { LocationId, WeatherType } from '$lib/types';
+import {
+	AMBIENT_PERSIST_PATHS,
+	validateAmbientValue,
+	type AmbientValue,
+	type PeerSyncPath,
+} from '$lib/model/peer-sync-paths';
 
 // Altitude bounds for persisted state validation — mirrors CameraConfig.altitude.
 // Hardcoded here (one-time startup concern) to keep persistence.ts free of
@@ -23,13 +27,27 @@ const ALT_MAX = 65_000;
 export const STORAGE_KEY = 'aero-window-v2';
 
 export interface PersistedState {
-	location: LocationId;
+	/**
+	 * Scene location/weather are intentionally NOT restored on boot — boot
+	 * always opens from `pickDailyShow(showRotationSeed())` so the wall
+	 * rotates. Fields may still appear in legacy blobs; load strips them.
+	 */
+	location?: LocationId;
 	altitude: number;
-	weather: WeatherType;
+	weather?: WeatherType;
 	cloudDensity: number;
 	buildingsEnabled: boolean;
 	showClouds: boolean;
 	syncToRealTime: boolean;
+	/**
+	 * Ambient peer-sync config values keyed by config path — every
+	 * PEER_SYNC_PATHS entry (`$lib/model/peer-sync-paths`) except the three
+	 * covered by the named fields above. Operator-preference class: carries
+	 * forward across reboots. Without this a rebooted Pi silently reverted
+	 * admin-pushed ambient values (haze, nightLightIntensity, qualityMode, …)
+	 * to code defaults.
+	 */
+	ambient: Partial<Record<PeerSyncPath, AmbientValue>>;
 }
 
 function safeNum(value: unknown, fallback: number, min?: number, max?: number): number {
@@ -60,29 +78,12 @@ export function loadPersistedState(): Partial<PersistedState> {
 		if (parsed.cloudDensity !== undefined) {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.85, 0, 1);
 		}
-		if (parsed.location !== undefined && !isValidLocation(parsed.location)) {
-			delete parsed.location;
-		}
-		if (parsed.weather !== undefined) {
-			if (!isValidWeather(parsed.weather)) {
-				delete parsed.weather;
-			}
-		}
 
-		// Daily-rotation gate — if the persisted dayKey doesn't match today's
-		// daySeed, strip `location` and `weather` so the boot path falls back
-		// to today's `pickDailyShow()` opening. Without this, persistence
-		// pinned the kiosk to the user's last manual override forever; the
-		// daily rotation was invisible on a deployed kiosk after first boot.
-		// Other fields (altitude, cloudDensity, building/cloud toggles,
-		// syncToRealTime) carry forward unchanged across days — they reflect
-		// operator preferences, not scene state.
-		const today = daySeed();
-		if (typeof parsed.dayKey !== 'number' || parsed.dayKey !== today) {
-			delete parsed.location;
-			delete parsed.weather;
-		}
-		delete parsed.dayKey; // never expose internal field to PersistedState consumers
+		// Scene state is never restored: boot always uses pickDailyShow /
+		// showRotationSeed. Legacy blobs may still carry location/weather/dayKey.
+		delete parsed.location;
+		delete parsed.weather;
+		delete parsed.dayKey;
 
 		// Validate boolean flags
 		if (parsed.buildingsEnabled !== undefined && typeof parsed.buildingsEnabled !== 'boolean') {
@@ -95,6 +96,25 @@ export function loadPersistedState(): Partial<PersistedState> {
 			delete parsed.syncToRealTime;
 		}
 
+		// Ambient peer-sync values — validated per path against
+		// AMBIENT_PATH_SPECS (booleans/enums dropped when wrong-typed, numbers
+		// clamped to panel range). NOT gated by dayKey: these are operator
+		// preferences like altitude, not scene state.
+		if (parsed.ambient !== undefined) {
+			if (!parsed.ambient || typeof parsed.ambient !== 'object' || Array.isArray(parsed.ambient)) {
+				delete parsed.ambient;
+			} else {
+				const clean: Partial<Record<PeerSyncPath, AmbientValue>> = {};
+				for (const [path, raw] of Object.entries(parsed.ambient)) {
+					if (!(AMBIENT_PERSIST_PATHS as readonly string[]).includes(path)) continue;
+					const value = validateAmbientValue(path as PeerSyncPath, raw);
+					if (value !== undefined) clean[path as PeerSyncPath] = value;
+				}
+				if (Object.keys(clean).length > 0) parsed.ambient = clean;
+				else delete parsed.ambient;
+			}
+		}
+
 		return parsed;
 	} catch {
 		return {};
@@ -104,10 +124,9 @@ export function loadPersistedState(): Partial<PersistedState> {
 export function savePersistedState(state: PersistedState): void {
 	if (typeof window === 'undefined') return;
 	try {
-		// Stamp the current dayKey so loadPersistedState() can detect a
-		// day rollover and let the daily show rotation pick win on the
-		// next boot. See loadPersistedState() for the gate logic.
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, dayKey: daySeed() }));
+		// Never write location/weather — boot must open from the rotation seed.
+		const { location: _l, weather: _w, ...rest } = state;
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 	} catch {
 		// Storage full or blocked — silently ignore
 	}

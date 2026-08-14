@@ -189,14 +189,17 @@ export const director = $state({
 	},
 	autopilot: {
 		enabled: true,
-				initialMinDelay: 120,
-		initialMaxDelay: 300,
-		subsequentMinDelay: 180,
-		subsequentMaxDelay: 480,
+		// First ambient jitter / first city hop after boot (seconds, wall-clock).
+		// Was 120–300 / 240–360 — felt stuck on one city for long stretches on Pi.
+		initialMinDelay: 45,
+		initialMaxDelay: 90,
+		subsequentMinDelay: 60,
+		subsequentMaxDelay: 120,
 		weatherChangeChance: 0.2,
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
-				directorMinInterval: 240,      // 4:00
-		directorMaxInterval: 360,      // 6:00
+		// Between location hops while in orbit (seconds, wall-clock).
+		directorMinInterval: 90,       // 1:30
+		directorMaxInterval: 180,      // 3:00
 				nightLitCitiesOnly: true, // auto-flight only to lit cities at night
 				vantage: {
 			enabled: true,
@@ -249,10 +252,10 @@ export const world = $state({
 	buildingEmissiveMax: 0.6, // max window-glow intensity at night
 		additiveStrength: 3.0, // emissive boost on lit pixels
 		moonlightIntensity: 0.08,
-	nightExposure: 0.95,
+	nightExposure: 1.15, // 0.95 → 1.15 (Aug-2026 review): global night lift — the wall read too dark at deep night
 	darkVoidStrength: 0.01, // dark-crush floor (nearly off)
 	envLight: 4.0, // terrain ambient floor (night visibility)
-		atmosphereLight: 1.6, // globe limb-scatter intensity
+		atmosphereLight: 2.0, // 1.6 → 2.0 (Aug-2026): ground ambient bleed at night, pairs with the exposure lift
 		skyDarken: 1.8, // sky-atmosphere brightness shift
 	viirsBrightness: 3.0, // VIIRS layer brightness
 	// 1.4 → 1.0: this multiplies INTO viirsLayerAlpha's gate product, which is
@@ -291,7 +294,7 @@ export const shell = $state({
 	// Open-blind destination whisper on solo/center. Edge panes ignore this
 	// (HUD is role-gated). Closed-blind BlindInfoCard is independent.
 	hudVisible: true,
-		clockVisible: false, // double-tap cabin clock on the open glass
+		clockVisible: false, // tap-to-toggle cabin clock on the open glass
 		// OFF by default: kiosk has no cursor (html.kiosk { cursor:none }).
 		// When ON, still skips $state writes once settled (see use-mouse-parallax).
 		mouseParallax: false,

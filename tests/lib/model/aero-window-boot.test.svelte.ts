@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
 import { LOCATION_MAP } from '$content/locations';
 import { STORAGE_KEY } from '$lib/model/persistence';
+import { daySeed } from '$lib/world/prng';
 
 beforeEach(() => {
 	localStorage.clear();
@@ -34,6 +35,45 @@ describe('AeroWindow boot', () => {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({ syncToRealTime: false }));
 		const model = new AeroWindow();
 		expect(Math.abs(model.timeOfDay - 23.5)).toBeGreaterThan(2);
+	});
+
+	it('restores persisted ambient peer-sync values over show-opening defaults', () => {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			dayKey: daySeed(),
+			ambient: {
+				'world.nightLightIntensity': 3.5,
+				'shell.clockVisible': true,
+				'world.qualityMode': 'ultra',
+				'world.useHashPalette': false,
+			},
+		}));
+		const model = new AeroWindow();
+		expect(model.config.world.nightLightIntensity).toBe(3.5);
+		expect(model.config.shell.clockVisible).toBe(true);
+		expect(model.config.world.qualityMode).toBe('ultra');
+		expect(model.config.world.useHashPalette).toBe(false);
+		// Restore defaults so later tests in this file see stock config.
+		model.applyConfigPatch('world.nightLightIntensity', 5.0);
+		model.applyConfigPatch('shell.clockVisible', false);
+		model.applyConfigPatch('world.qualityMode', 'performance');
+		model.applyConfigPatch('world.useHashPalette', true);
+	});
+
+	it('getPersistedSnapshot captures ambient peer-sync values (and skips legacy-named paths)', () => {
+		const model = new AeroWindow();
+		model.applyConfigPatch('world.viirsBrightness', 1.7);
+		try {
+			const snap = model.getPersistedSnapshot();
+			expect(snap.ambient['world.viirsBrightness']).toBe(1.7);
+			expect(snap.ambient['world.qualityMode']).toBe(model.config.world.qualityMode);
+			// These three are covered by the named snapshot fields — ambient
+			// must not duplicate them (two sources for one leaf).
+			expect(snap.ambient['world.showClouds']).toBeUndefined();
+			expect(snap.ambient['world.buildingsEnabled']).toBeUndefined();
+			expect(snap.ambient['atmosphere.clouds.density']).toBeUndefined();
+		} finally {
+			model.applyConfigPatch('world.viirsBrightness', 3.0);
+		}
 	});
 });
 

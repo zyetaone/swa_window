@@ -66,7 +66,7 @@
 		const data = model.getPersistedSnapshot();
 		// Round altitude to 100 ft — sub-100 ft cruise jitter shouldn't
 		// trigger a re-save. Other fields are categorical/booleans.
-		const hash = `${data.location}|${Math.round(data.altitude / 100)}|${data.weather}|${data.cloudDensity}|${data.buildingsEnabled}|${data.showClouds}|${data.syncToRealTime}`;
+		const hash = `${Math.round(data.altitude / 100)}|${data.cloudDensity}|${data.buildingsEnabled}|${data.showClouds}|${data.syncToRealTime}`;
 		if (hash === _lastSnapHash) return;
 		_lastSnapHash = hash;
 		const timeout = setTimeout(() => savePersistedState(data), 2000);
@@ -337,10 +337,9 @@
 
 		/* SouthWest Airlines Branding */
 		--sw-blue: #304cb2;
-		--sw-red: #d5152e;
+		--sw-blue-rgb: 48, 76, 178; /* --sw-blue channels, for rgba(var(--sw-blue-rgb), a) */
 		--sw-yellow: #ffbf27;
 		--sw-silver: #cccccc;
-		--sw-dark-blue: #0a0a1e;
 
 		/* Cabin display face — the airline-signage voice for passenger-facing
 		   furniture (clock, blind card). NOT a webfont: this kiosk is built to
@@ -380,7 +379,7 @@
 		max-height: 2160px;
 		/* Premium cabin wall — cool pearl white with subtle blue warmth */
 		background:
-			radial-gradient(ellipse at 50% 0%, rgba(48, 76, 178, 0.04) 0%, transparent 60%),
+			radial-gradient(ellipse at 50% 0%, rgba(var(--sw-blue-rgb), 0.04) 0%, transparent 60%),
 			linear-gradient(
 				180deg,
 				#eceef2 0%,
@@ -393,8 +392,8 @@
 		align-items: center;
 		justify-content: center;
 		box-shadow:
-			inset 0 0 120px rgba(48, 76, 178, 0.04),
-			inset 0 -2px 0 rgba(48, 76, 178, 0.08),
+			inset 0 0 120px rgba(var(--sw-blue-rgb), 0.04),
+			inset 0 -2px 0 rgba(var(--sw-blue-rgb), 0.08),
 			0 0 60px rgba(0, 0, 0, 0.25);
 	}
 
@@ -408,8 +407,8 @@
 				0deg,
 				transparent 0px,
 				transparent 180px,
-				rgba(48, 76, 178, 0.025) 180px,
-				rgba(48, 76, 178, 0.025) 181px,
+				rgba(var(--sw-blue-rgb), 0.025) 180px,
+				rgba(var(--sw-blue-rgb), 0.025) 181px,
 				transparent 181px
 			),
 			/* Vertical panel seams */
@@ -433,12 +432,12 @@
 		position: absolute;
 		width: 7px;
 		height: 7px;
-		background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(48, 76, 178, 0.3) 60%, rgba(30, 55, 140, 0.6));
+		background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(var(--sw-blue-rgb), 0.3) 60%, rgba(30, 55, 140, 0.6));
 		border-radius: 50%;
 		box-shadow:
 			inset 0 1px 2px rgba(255, 255, 255, 0.8),
 			0 1px 3px rgba(0, 0, 0, 0.25),
-			0 0 0 1px rgba(48, 76, 178, 0.15);
+			0 0 0 1px rgba(var(--sw-blue-rgb), 0.15);
 	}
 
 	.rivet-tl {
@@ -488,9 +487,5 @@
 	.app.no-frame .cabin-wall {
 		background: #000;
 		box-shadow: none;
-	}
-	.app.no-frame :global(.cabin-texture),
-	.app.no-frame :global(.cabin-details) {
-		visibility: hidden;
 	}
 </style>

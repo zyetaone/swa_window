@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { loadPersistedState, savePersistedState, STORAGE_KEY } from '$lib/model/persistence';
-import { daySeed } from '$lib/world/prng';
 
 describe('loadPersistedState', () => {
 	beforeEach(() => {
@@ -11,70 +10,31 @@ describe('loadPersistedState', () => {
 		expect(loadPersistedState()).toEqual({});
 	});
 
-	it('returns valid saved state when dayKey matches today', () => {
+	it('never restores location or weather (boot rotation owns the scene)', () => {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({
 			location: 'dubai',
 			altitude: 30000,
 			weather: 'clear',
 			cloudDensity: 0.5,
-			showBuildings: true,
 			showClouds: true,
 			syncToRealTime: false,
-			dayKey: daySeed(),
-		}));
-		const result = loadPersistedState();
-		expect(result.location).toBe('dubai');
-		expect(result.altitude).toBe(30000);
-		expect(result.weather).toBe('clear');
-	});
-
-	it('strips location + weather when dayKey is missing (legacy state from before rotation gate)', () => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			location: 'dubai',
-			altitude: 30000,
-			weather: 'clear',
-			cloudDensity: 0.5,
+			dayKey: 999999,
 		}));
 		const result = loadPersistedState();
 		expect(result.location).toBeUndefined();
 		expect(result.weather).toBeUndefined();
-		// Non-scene fields (operator preferences) persist across days.
 		expect(result.altitude).toBe(30000);
 		expect(result.cloudDensity).toBe(0.5);
+		expect(result.syncToRealTime).toBe(false);
 	});
 
-	it('strips location + weather when stored dayKey doesnt match today', () => {
+	it('strips dayKey from consumers', () => {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			location: 'dubai',
 			altitude: 30000,
-			weather: 'clear',
-			dayKey: daySeed() - 1, // yesterday
-		}));
-		const result = loadPersistedState();
-		expect(result.location).toBeUndefined();
-		expect(result.weather).toBeUndefined();
-		expect(result.altitude).toBe(30000);
-	});
-
-	it('never leaks the dayKey field to consumers', () => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			location: 'dubai',
-			weather: 'clear',
-			dayKey: daySeed(),
+			dayKey: 12345,
 		}));
 		const result = loadPersistedState() as Record<string, unknown>;
 		expect(result.dayKey).toBeUndefined();
-		expect(result.location).toBe('dubai');
-	});
-
-	it('rejects invalid location', () => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ location: 'atlantis' }));
-		expect(loadPersistedState().location).toBeUndefined();
-	});
-
-	it('rejects invalid weather', () => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ weather: 'snow' }));
-		expect(loadPersistedState().weather).toBeUndefined();
 	});
 
 	it('clamps out-of-range altitude', () => {
@@ -97,27 +57,36 @@ describe('loadPersistedState', () => {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({ showClouds: 'yes' }));
 		expect(loadPersistedState().showClouds).toBeUndefined();
 	});
+
+	it('loads ambient operator prefs', () => {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			altitude: 30000,
+			ambient: { 'world.qualityMode': 'balanced' },
+		}));
+		const r = loadPersistedState();
+		expect(r.ambient?.['world.qualityMode']).toBe('balanced');
+	});
 });
 
 describe('savePersistedState', () => {
-	beforeEach(() => localStorage.clear());
+	beforeEach(() => {
+		localStorage.clear();
+	});
 
-	it('writes to localStorage and stamps todays dayKey', () => {
+	it('does not write location or weather', () => {
 		savePersistedState({
 			location: 'dubai',
-			altitude: 30000,
-			weather: 'clear',
+			weather: 'rain',
+			altitude: 32000,
 			cloudDensity: 0.5,
 			buildingsEnabled: true,
 			showClouds: true,
 			syncToRealTime: true,
+			ambient: {},
 		});
-		const raw = localStorage.getItem(STORAGE_KEY);
-		expect(raw).toBeTruthy();
-		const parsed = JSON.parse(raw!);
-		expect(parsed.location).toBe('dubai');
-		// dayKey is stamped automatically so a subsequent load on the same
-		// day preserves location/weather — daily rotation gate inverse.
-		expect(parsed.dayKey).toBe(daySeed());
+		const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+		expect(parsed.location).toBeUndefined();
+		expect(parsed.weather).toBeUndefined();
+		expect(parsed.altitude).toBe(32000);
 	});
 });

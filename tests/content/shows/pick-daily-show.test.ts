@@ -1,16 +1,19 @@
 /**
- * pickDailyShow — content-addressed (rendezvous-hashed) daily rotation.
+ * pickDailyShow — content-addressed (rendezvous-hashed) rotation.
  *
  * Pins the two properties the 3-Pi fleet depends on:
  *   1. Determinism: same seed → same show, every call, every Pi.
- *   2. Edit stability: removing one show from the rotation only reassigns
- *      the days THAT show won — every other day keeps its pick. (The old
- *      positional `floor(rng() * length)` remapped the whole calendar on
- *      any rotation edit and could split a mixed-version panorama.)
+ *   2. Edit stability: removing one show only reassigns that show's slots.
+ *   3. Slot seed: showRotationSeed advances every ROTATION_SLOT_HOURS UTC.
  */
 import { describe, it, expect } from 'vitest';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
-import { DAILY_ROTATION, pickDailyShow } from '$content/shows';
+import {
+	DAILY_ROTATION,
+	pickDailyShow,
+	showRotationSeed,
+	ROTATION_SLOT_HOURS,
+} from '$content/shows';
 
 describe('pickDailyShow', () => {
 	it('is deterministic for a fixed seed', () => {
@@ -20,7 +23,7 @@ describe('pickDailyShow', () => {
 		expect(a.id).toBe(b.id);
 	});
 
-	it('covers the whole rotation across a year (no show is unreachable)', () => {
+	it('covers the whole rotation across a year of day seeds (no show unreachable)', () => {
 		const seen = new Set<string>();
 		for (let day = 0; day < 366; day++) {
 			const seed = daySeed(new Date(Date.UTC(2026, 0, 1 + day)));
@@ -30,8 +33,6 @@ describe('pickDailyShow', () => {
 	});
 
 	it('rotation edits only reassign the removed show\'s own days', () => {
-		// Re-derive the rendezvous winner over a REDUCED set and compare:
-		// for days the removed show did NOT win, the pick must be unchanged.
 		const removed = DAILY_ROTATION[DAILY_ROTATION.length - 1];
 		const reduced = DAILY_ROTATION.filter((s) => s.id !== removed.id);
 		const winner = (seed: number, set: readonly { id: string }[]) => {
@@ -46,8 +47,24 @@ describe('pickDailyShow', () => {
 		for (let day = 0; day < 180; day++) {
 			const seed = daySeed(new Date(Date.UTC(2026, 0, 1 + day)));
 			const full = winner(seed, DAILY_ROTATION);
-			if (full.id === removed.id) continue; // its own days may reassign
+			if (full.id === removed.id) continue;
 			expect(winner(seed, reduced).id).toBe(full.id);
 		}
+	});
+});
+
+describe('showRotationSeed', () => {
+	it('is stable within a UTC slot and changes across slots', () => {
+		const a = showRotationSeed(new Date(Date.UTC(2026, 7, 14, 10, 15)));
+		const b = showRotationSeed(new Date(Date.UTC(2026, 7, 14, 10, 55)));
+		expect(a).toBe(b);
+		const c = showRotationSeed(new Date(Date.UTC(2026, 7, 14, 10 + ROTATION_SLOT_HOURS, 0)));
+		expect(c).not.toBe(a);
+	});
+
+	it('is shared by all devices at the same wall clock (multi-Pi)', () => {
+		const t = new Date(Date.UTC(2026, 7, 14, 16, 30));
+		expect(showRotationSeed(t)).toBe(showRotationSeed(new Date(t.getTime())));
+		expect(pickDailyShow(showRotationSeed(t)).id).toBe(pickDailyShow(showRotationSeed(t)).id);
 	});
 });

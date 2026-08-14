@@ -10,8 +10,12 @@
  *   - No debounce. Each slider tick is one request. LAN latency is ~2 ms
  *     per peer; six peers × 2 ms = 12 ms total. If this ever becomes a
  *     bottleneck, add request batching here — not in callers.
- *   - No self-fetch. The local config was already mutated by the patch;
- *     we only push to peers other than `self`.
+ *   - Self is INCLUDED. It once wasn't ("local config was already mutated")
+ *     — but that conflated the ADMIN tab's config tree with the KIOSK tab's:
+ *     separate pages, separate module instances. Skipping self left the
+ *     admin-host Pi's own kiosk on stale ambient values while the rest of
+ *     the wall updated. The loopback PATCH lands on the host's own SSE bus
+ *     and reaches its kiosk like any peer's.
  *   - Timestamp + sourceId are included so CRDT merge gates the write on
  *     the receiving device (concurrent-admin-write safety).
  *   - Caller controls lifecycle via the returned stop function. The
@@ -20,42 +24,49 @@
  */
 
 import { config } from '$lib/model/config-tree.svelte';
+// The list itself lives in `$lib/model/peer-sync-paths` — persistence.ts
+// validates restored values against it and must stay free of rune/fleet
+// imports. Re-exported here so existing fleet/panel consumers keep working.
+import { PEER_SYNC_PATHS } from '$lib/model/peer-sync-paths';
 import { readByPath } from '$lib/utils';
 import type { RestAdminStore } from './rest-admin.svelte';
 
-/**
- * Paths dual-tree operator panels write (FlightControls + AtmosphereControls
- * + LightingControls). SSOT for admin→fleet ambient sync — add a path here
- * when a shared panel gains a new patch target. Keep alphabetical by
- * namespace so diffs stay readable.
- *
- * Device-local chrome (role FOV, etc.) stays out of this list.
- */
-export const PEER_SYNC_PATHS = [
-	'atmosphere.clouds.density',
-	'atmosphere.clouds.speed',
-	'atmosphere.haze.amount',
-	'director.autopilot.nightLitCitiesOnly',
-	'shell.clockVisible',
-	'shell.hudVisible',
-	'shell.mouseParallax',
-	'shell.touchEnabled',
-	'shell.windowFrame',
-	'world.additiveStrength',
-	'world.buildingsEnabled',
-	'world.moonlightIntensity',
-	'world.nightExposure',
-	'world.nightLightIntensity',
-	'world.qualityMode',
-	'world.showClouds',
-	'world.skyDarken',
-	'world.useCesiumClouds',
-	'world.useHashPalette',
-	'world.useThreeOverlay',
-	'world.viirsBrightness',
-	'world.wingDriftSign',
-	'world.wingXBase',
-] as const;
+export { PEER_SYNC_PATHS };
+
+// ── Ambient push failure log ────────────────────────────────────────────────
+// The fan-out below is fire-and-forget: a rejected push (offline/rebooting
+// Pi) used to be swallowed by `.catch(() => {})`, leaving the admin sliders
+// purely optimistic. Now the last few failures are recorded for the admin
+// UI (`/admin` Ambient section). Retries are deliberately NOT implemented —
+// visibility only; retrying is a future step (the next slider move re-pushes
+// the current value anyway, and a rebooted Pi restores ambient values from
+// its own persisted state).
+
+export interface AmbientSyncFailure {
+	deviceId: string;
+	path: string;
+	/** Wall-clock ms (Date.now()) when the push rejected. */
+	at: number;
+}
+
+const MAX_AMBIENT_FAILURES = 20;
+const _ambientFailures = $state<AmbientSyncFailure[]>([]);
+
+/** Readonly view of recent ambient push failures, oldest first (reactive). */
+export function getAmbientSyncFailures(): readonly AmbientSyncFailure[] {
+	return _ambientFailures;
+}
+
+export function clearAmbientSyncFailures(): void {
+	_ambientFailures.length = 0;
+}
+
+function recordAmbientSyncFailure(deviceId: string, path: string): void {
+	_ambientFailures.push({ deviceId, path, at: Date.now() });
+	if (_ambientFailures.length > MAX_AMBIENT_FAILURES) {
+		_ambientFailures.splice(0, _ambientFailures.length - MAX_AMBIENT_FAILURES);
+	}
+}
 
 const _configRoot = config as unknown as Record<string, unknown>;
 
@@ -85,9 +96,14 @@ export function startPeerSync(store: RestAdminStore): () => void {
 				const path = PEER_SYNC_PATHS[i];
 				const value = next[i];
 				// Fire-and-forget per changed path. Peer errors don't block UI.
+				// Self included — the admin tab's config tree is NOT the kiosk
+				// tab's; the loopback PATCH is how the host Pi's own kiosk
+				// hears about ambient slider moves (see header).
 				for (const peer of store.peers) {
-					if (peer.self) continue;
-					void store.pushConfigPath(peer.deviceId, path, value).catch(() => { /* fire-and-forget: no retry — a failed push is lost until the next change to this path */ });
+					void store.pushConfigPath(peer.deviceId, path, value).catch(() => {
+						// No retry (see header note above) — record for the admin UI.
+						recordAmbientSyncFailure(peer.deviceId, path);
+					});
 				}
 			}
 			snapshot = next;

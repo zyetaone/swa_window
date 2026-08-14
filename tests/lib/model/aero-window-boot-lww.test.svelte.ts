@@ -41,18 +41,37 @@ describe('AeroWindow boot CRDT stamping', () => {
 	});
 
 	it('boot weather-recipe sync applies unstamped — an older offline push to atmosphere.weather.* wins', () => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({
-			weather: 'storm',
-			dayKey: daySeed(),
-		}));
+		// Location/weather are never restored (boot owns the scene via
+		// pickDailyShow). Construction still runs #syncWeatherConfig for the
+		// show's weather; that path must stay unstamped so an offline admin
+		// push to atmosphere.weather.* still wins LWW.
 		const bootedAt = Date.now();
 		const model = new AeroWindow();
-		expect(model.weather).toBe('storm');
+		expect(model.weather).toBeTruthy();
 
 		const ok = applyConfigPatch('atmosphere.weather.rainOpacity', 0.42, {
 			remote: { timestamp: bootedAt - 60_000, sourceId: 'admin-offline' },
 		});
 		expect(ok).toBe(true);
 		expect(model.config.atmosphere.weather.rainOpacity).toBe(0.42);
+	});
+
+	it('persisted ambient restore applies unstamped — an older offline ambient push still wins LWW', () => {
+		// Same guarantee as the cloudDensity test above, but for the ambient
+		// peer-sync paths (world.*/shell.*/atmosphere.haze.*) that persistence
+		// now carries across reboots.
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			ambient: { 'world.nightLightIntensity': 3.5 },
+			dayKey: daySeed(),
+		}));
+		const bootedAt = Date.now();
+		const model = new AeroWindow();
+		expect(model.config.world.nightLightIntensity).toBe(3.5);
+
+		const ok = applyConfigPatch('world.nightLightIntensity', 4.5, {
+			remote: { timestamp: bootedAt - 60_000, sourceId: 'admin-offline' },
+		});
+		expect(ok).toBe(true);
+		expect(model.config.world.nightLightIntensity).toBe(4.5);
 	});
 });
