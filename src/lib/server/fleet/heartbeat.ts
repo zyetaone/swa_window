@@ -32,7 +32,7 @@
  */
 
 import { appendFileSync, readFileSync } from 'node:fs';
-import type { FleetSummary } from '$lib/fleet/protocol';
+import type { DeviceStats, FleetSummary } from '$lib/fleet/protocol';
 import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
 
 export interface HeartbeatSample {
@@ -197,6 +197,56 @@ export function latestAll(): HeartbeatSample[] {
 
 function isOnline(sample: HeartbeatSample, now: number = Date.now()): boolean {
 	return now - sample.receivedAt < ONLINE_THRESHOLD_MS;
+}
+
+/**
+ * Nearest-rank percentile over an ASCENDING-sorted array.
+ *
+ * Nearest-rank (not linear interpolation) on purpose: it always returns a
+ * value the device actually reported, so "fpsP05 = 27" means some real sample
+ * read 27 — not an average of two neighbours that never occurred. For a perf
+ * gate that decides whether hardware holds framerate, a real observation is
+ * the more defensible number.
+ */
+function percentile(sortedAsc: number[], p: number): number {
+	if (sortedAsc.length === 0) return 0;
+	const rank = Math.ceil((p / 100) * sortedAsc.length);
+	return sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, rank - 1))];
+}
+
+/**
+ * Per-device rollup over the retained window — the P8 backfill.
+ *
+ * This is what turns "the fleet has run overlay-ON for weeks" into a number
+ * you can hold against the P8 thresholds. See DeviceStats in fleet/protocol
+ * for why the reported tail is p05 rather than p95.
+ *
+ * Samples with fps === 0 are KEPT, not filtered: a zero means the local
+ * /api/status scrape failed or the renderer stalled, and dropping those would
+ * turn the exact failure P8 is looking for into a gap in the data.
+ */
+export function statsAll(): DeviceStats[] {
+	const out: DeviceStats[] = [];
+	for (const buf of samples.values()) {
+		if (buf.length === 0) continue;
+		const last = buf[buf.length - 1];
+		const fps = buf.map((s) => s.fps).sort((a, b) => a - b);
+		out.push({
+			deviceId: last.deviceId,
+			role: last.role,
+			groupId: last.groupId,
+			samples: buf.length,
+			windowMs: last.receivedAt - buf[0].receivedAt,
+			fpsP50: Math.round(percentile(fps, 50) * 10) / 10,
+			fpsP05: Math.round(percentile(fps, 5) * 10) / 10,
+			fpsMin: Math.round(fps[0] * 10) / 10,
+			maxTempC: buf.reduce((max, s) => Math.max(max, s.temp), 0),
+			crashCount: buf.reduce((max, s) => Math.max(max, s.crashCount), 0),
+			commit: last.commit,
+			mode: last.mode,
+		});
+	}
+	return out;
 }
 
 /**

@@ -200,6 +200,20 @@ if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_FLEET_TOKEN="$(command grep -oP '^AERO_FLEET_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 fi
 
+# Central heartbeat collector, e.g.
+#   AERO_ADMIN_URL=http://collector:3000 AERO_FLEET_TOKEN=<shared> \
+#     bash deploy/pi/install.sh --role center --group wall-1
+#
+# Env override on a FRESH install only, mirroring AERO_FLEET_TOKEN below (an
+# existing value always wins, so re-runs never clobber a hand-tuned config).
+# Without this there was no way to aim a new Pi at a collector during install:
+# health-check.sh then defaults to posting at THIS device, where the samples
+# land in a per-server in-memory store that nothing aggregates. Every Pi looks
+# healthy on its own /admin/fleet/health page while the fleet view stays empty.
+if [[ -z "${EXISTING_ADMIN_URL}" && -n "${AERO_ADMIN_URL:-}" ]]; then
+	EXISTING_ADMIN_URL="${AERO_ADMIN_URL}"
+fi
+
 # Shared LAN secret for the telemetry heartbeat. Distinct from
 # AERO_ADMIN_TOKEN so health-check.sh holds a credential that can only report
 # metrics, never push scenes or trigger an OTA.

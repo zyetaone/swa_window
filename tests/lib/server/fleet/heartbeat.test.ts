@@ -46,3 +46,65 @@ describe('heartbeat JSONL persistence', () => {
 		expect(existsSync(log)).toBe(false);
 	});
 });
+
+/**
+ * statsAll() is the P8 perf gate read off field data instead of a bench run,
+ * so these pin the properties that decide a GO/NO-GO — above all that a
+ * stalling device cannot be made to look healthy.
+ */
+describe('heartbeat statsAll — P8 rollup', () => {
+	beforeEach(() => {
+		vi.stubEnv('AERO_HEARTBEAT_LOG', '');
+		vi.resetModules();
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	async function seed(fpsSeries: number[], deviceId = 'pi-a') {
+		const mod = await import('$lib/server/fleet/heartbeat');
+		for (const fps of fpsSeries) {
+			mod.recordHeartbeat({ deviceId, role: 'center', groupId: 'g', fps, temp: 60, uptime: 1, crashCount: 0 });
+		}
+		return mod;
+	}
+
+	it('reports the low tail, so a device that stalls cannot hide behind a good p95', async () => {
+		// 90 healthy samples + 10 stalls. A p95 would read 60 and look fine;
+		// p05 must expose the floor. This is the whole reason p05 is reported.
+		const mod = await seed([...Array(90).fill(60), ...Array(10).fill(6)]);
+		const [s] = mod.statsAll();
+		expect(s.fpsP50).toBe(60);
+		expect(s.fpsP05).toBe(6);
+		expect(s.fpsMin).toBe(6);
+	});
+
+	it('keeps fps:0 samples — a failed scrape IS the signal P8 looks for', async () => {
+		const mod = await seed([0, 0, 60, 60]);
+		const [s] = mod.statsAll();
+		expect(s.samples).toBe(4);
+		expect(s.fpsMin).toBe(0);
+	});
+
+	it('returns an actually-observed value (nearest-rank, never an interpolated average)', async () => {
+		const mod = await seed([10, 20, 30, 40]);
+		const [s] = mod.statsAll();
+		// Linear interpolation would yield 25 for p50 — a reading no device gave.
+		expect([10, 20, 30, 40]).toContain(s.fpsP50);
+	});
+
+	it('carries peak temp and worst crash count across the window, not just the last sample', async () => {
+		const mod = await import('$lib/server/fleet/heartbeat');
+		mod.recordHeartbeat({ deviceId: 'pi-b', fps: 60, temp: 84, uptime: 1, crashCount: 7 });
+		mod.recordHeartbeat({ deviceId: 'pi-b', fps: 60, temp: 55, uptime: 2, crashCount: 0 });
+		const s = mod.statsAll().find((d) => d.deviceId === 'pi-b')!;
+		expect(s.maxTempC).toBe(84);
+		expect(s.crashCount).toBe(7);
+	});
+
+	it('is empty before any device has reported', async () => {
+		const mod = await import('$lib/server/fleet/heartbeat');
+		expect(mod.statsAll()).toEqual([]);
+	});
+});

@@ -115,6 +115,37 @@ export interface FleetSummary {
 	totalCrashes: number;
 }
 
+/**
+ * Per-device rollup over the retained heartbeat window — the shape the P8
+ * perf gate needs (tools/perf/P8-CHECKLIST.md wants p50/p95 fps sustained,
+ * plus a thermal-throttle check), computed from real field samples instead of
+ * a bench run.
+ *
+ * ⚠ The meaningful fps tail is the LOW one. p95 of a frame-TIME series is the
+ * bad case, but p95 of an fps series is the device's best moments — a Pi that
+ * renders 60 fps while idle and stalls to 6 fps under cloud load has a
+ * flattering p95 and a damning p05. So this reports fpsP50 (typical) and
+ * fpsP05 (the floor 5% of samples sit below), and fpsMin for the true worst.
+ * Read "≥30 fps sustained" against fpsP05, not fpsP50.
+ */
+export interface DeviceStats {
+	deviceId: string;
+	role: string;
+	groupId: string;
+	/** Samples in the window. At 60s cadence, 500 ≈ 8.3h of coverage. */
+	samples: number;
+	/** Span from oldest to newest retained sample, ms. */
+	windowMs: number;
+	fpsP50: number;
+	fpsP05: number;
+	fpsMin: number;
+	maxTempC: number;
+	/** Highest crashCount seen in the window (NRestarts is monotonic per boot). */
+	crashCount: number;
+	commit?: string;
+	mode?: string;
+}
+
 // ─── Shared fleet cadences ─────────────────────────────────────────────────
 // SSOT for "how often does each device poll." Must match mDNS announce interval.
 

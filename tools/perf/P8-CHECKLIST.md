@@ -1,5 +1,25 @@
 # P8 — Pi 5 Perf Gate Checklist
 
+> ## ⚠ STATUS: the flip already happened. This gate never ran.
+>
+> `config-tree.svelte.ts` has shipped `useThreeOverlay: true` since **2026-07-27**
+> (`bceb86f`, a *"chore: commit in-progress lab/lighting refactor"* that swept the
+> flag along with unrelated work). It is on `origin/release`, so the fielded Pis
+> have been running the overlay since then. Nothing below was filled in, and the
+> §5 GO precondition — confirm the `/api/config` PATCH rollback lever reaches
+> 100 % of the fleet — was never checked either.
+>
+> Two things make that riskier than it sounds, both noted in the flipping commit
+> itself: the liveness watchdog treats only `fps <= 0` as dead, so a Pi grinding
+> at 8 fps is **neither detected nor recovered**; and none of the escape hatches
+> (`?overlay=0`, the SidePanel toggle, a fleet `config_patch`) survive a reboot,
+> because the flag is not in `PersistedState`.
+>
+> **Decision (2026-08-14): keep the overlay on and backfill this gate from field
+> telemetry** rather than flip back and lose the night/dawn quality that won the
+> Jul-8 visual A/B. See §7 — that path needs a collector, which is why
+> `AERO_ADMIN_URL` now has an install-time override.
+
 The single go/no-go for flipping `config.world.useThreeOverlay` to `true` by
 default (ADR-004). Run this **on real Pi 5 kiosk hardware** — SwiftShader / dev
 machines can't answer it. The whole question: *can a Pi 5 sustain Cesium + the
@@ -13,7 +33,7 @@ Acceptance (from ADR-004 / `README.md`):
 
 ## 0. Prep (on the Pi)
 
-- [ ] `bun run start` (production build + serve — NOT `bun run dev`; dev is unoptimised and skips the single-bundle path the kiosk actually ships)
+- [ ] `bun run start` (production build + serve — NOT `bun run dev`; dev is unoptimised and skips the route-split, minified output the kiosk actually ships)
 - [ ] Chromium launched with the real kiosk flags: `--kiosk --use-gl=angle --use-angle=gles --enable-webgl`
 - [ ] Fan attached + GPU turbo ready (thermals throttle fps within minutes without it)
 - [ ] Warm the tile cache once at each test location (first pass streams tiles; measure the *second* pass so tile I/O isn't polluting fps)
@@ -70,3 +90,77 @@ Record p50 / p95 fps for both states:
 Paste the CSVs + the table above into the ADR-004 "Current Status" section (or a
 dated note beside it) so the go/no-go is auditable. Include board temp + the
 Chromium/Cesium versions the run used.
+
+---
+
+## 7. Backfill from the field (the chosen path — §0-5 are the bench alternative)
+
+The overlay has been live on real hardware for weeks. That is *better* evidence
+than a bench run — it covers real thermals, real tile latency, real 24 h cycles,
+and the actual client-site enclosure. It only needs somewhere to accumulate.
+
+**Why this needs setting up at all:** `AERO_ADMIN_URL` defaults to
+`http://localhost:${AERO_PORT}`, so each Pi POSTs its heartbeat to *itself*. The
+store is per-server, so three Pis produce three private histories and no fleet
+view. Every device looks healthy on its own page while the aggregate does not
+exist.
+
+### 7.1 Stand up a collector (one-time)
+
+Run the app on a always-on host (not a kiosk Pi — they reboot nightly at 04:00),
+then re-run the installer on each Pi with both values. An existing `config.env`
+value always wins, so this is safe to re-run:
+
+```sh
+AERO_ADMIN_URL=http://<collector>:3000 \
+AERO_FLEET_TOKEN=<one-shared-secret> \
+  sudo bash deploy/pi/install.sh --role center --group corridor-a
+```
+
+⚠ The token must be **identical** on all three Pis *and* the collector —
+`/api/fleet/heartbeat` checks one `AERO_FLEET_TOKEN` and is fail-closed, and the
+installer otherwise generates a *different* one per device. Heartbeat failures
+are silent by design (fire-and-forget POST), so verify once by hand:
+
+```sh
+curl -H "Authorization: Bearer <shared>" -X POST http://<collector>:3000/api/fleet/heartbeat
+```
+
+200 = wired. 401 = the tokens differ. On the collector, confirm
+`AERO_HEARTBEAT_LOG` is writable — that JSONL is what survives a restart.
+
+### 7.2 Read the gate
+
+Wait for a full 24 h cycle (the retained window is 500 samples × 60 s ≈ 8.3 h per
+device, so sample at least once per shift), then:
+
+```sh
+curl -s http://<collector>:3000/api/fleet/heartbeat?stats | jq
+```
+
+Each device returns `{ fpsP50, fpsP05, fpsMin, maxTempC, crashCount, samples,
+windowMs, commit, mode }`.
+
+**Judge against `fpsP05`, not `fpsP50`.** For an fps series the bad tail is the
+*low* one — a Pi that idles at 60 and stalls to 6 under cloud load has a
+flattering p95 and a damning p05. `fpsP05` is the floor 5 % of samples sit below.
+
+| Reading | Verdict |
+|---|---|
+| `fpsP05 ≥ 30` on every device | GO — thresholds met under real conditions |
+| `fpsP05` 24–30 | GO for approach, marginal at cruise — check `maxTempC` for throttling |
+| `fpsP05 < 24`, or `fpsMin` 0 recurring | NO-GO — flip the default back |
+| `maxTempC` ≥ 80 °C | thermal blocker regardless of fps |
+| `crashCount` climbing | instability blocker regardless of fps |
+
+- [ ] Collector reachable, all 3 Pis reporting (`samples` rising on each)
+- [ ] 24 h of coverage captured
+- [ ] `fpsP05` recorded per device, per role
+- [ ] `maxTempC` under the throttle point
+- [ ] Verdict written into ADR-004 + §5 above
+
+### 7.3 Still do §4 by eye
+
+Telemetry cannot see a square sun sprite or banded bloom. The visual-artifact
+checks need a human in front of the glass — but they need no instrumentation, so
+they can be done on any site visit.

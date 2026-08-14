@@ -60,9 +60,16 @@ and `left`/`right` as followers.
 
 ## Admin URL for heartbeat
 
-`health-check.sh` reads `AERO_ADMIN_URL` from `/etc/aero/config.env`. Edit
-that file (or regenerate via `install.sh`) to point a fleet at one central
-admin host.
+`health-check.sh` reads `AERO_ADMIN_URL` from `/etc/aero/config.env`. Set it at
+install time — an existing value always wins, so re-runs never clobber it:
+
+```sh
+AERO_ADMIN_URL=http://<collector>:3000 \
+AERO_FLEET_TOKEN=<shared-secret> \
+  sudo bash deploy/pi/install.sh --role center --group corridor-a
+```
+
+Or edit `/etc/aero/config.env` directly on an already-provisioned device.
 
 If it is unset or empty the script defaults to `http://localhost:${AERO_PORT}`
 — the device posts to ITSELF. The heartbeat store is per-server and in-memory,

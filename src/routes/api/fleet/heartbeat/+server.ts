@@ -24,6 +24,7 @@ import {
 	recordHeartbeat,
 	historyForDevice,
 	latestAll,
+	statsAll,
 	summarize,
 	DEVICE_ID_PATTERN,
 	type HeartbeatSample,
@@ -56,6 +57,13 @@ export const GET: RequestHandler = async ({ url, request }) => {
 	const cors = lanCorsHeadersFull(request.headers.get('Origin'));
 	if (url.searchParams.has('summary')) {
 		return json(summarize(), { headers: cors });
+	}
+	// ?stats → per-device p50/p05/min fps + peak temp over the retained window.
+	// This is the P8 perf gate read off real field data rather than a bench run;
+	// see tools/perf/P8-CHECKLIST.md. Token-free like the rest of GET, and it
+	// exposes no debug fields (DeviceStats carries no lastError).
+	if (url.searchParams.has('stats')) {
+		return json(statsAll(), { headers: cors });
 	}
 	const deviceId = url.searchParams.get('deviceId');
 	if (deviceId) {
