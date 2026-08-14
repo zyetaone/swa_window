@@ -179,7 +179,13 @@ else
 fi
 
 sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' install"
-sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && '${BUN_BIN}' run build"
+# VITE_* are compile-time in Vite, so they must be present HERE — this build
+# runs before /etc/aero/config.env is written (step 5), and would otherwise
+# bake in "no local tile server" no matter what config.env later says. Passed
+# inside the bash -c string because sudo scrubs the caller's environment.
+# Same default as TILE_SERVER_URL_VALUE in step 5; the two are re-derived
+# rather than shared because that block has not run yet at this point.
+sudo -u "${PI_USER}" bash -c "cd '${INSTALL_DIR}' && VITE_TILE_SERVER_URL='${VITE_TILE_SERVER_URL:-/api/tiles}' '${BUN_BIN}' run build"
 
 # ─── Step 5: Write environment config ─────────────────────────────────────────
 
@@ -252,6 +258,9 @@ fi
 # turns every tile into a remote fetch on a box whose whole point is offline
 # operation. data/ is gitignored, so the cache survives the updater's reset.
 TILE_DIR_VALUE="${INSTALL_DIR}/data/tiles"
+# Client-side base for the same cache. Overridable for an external tile host;
+# the default is this app's own route, so no per-device host/port to maintain.
+TILE_SERVER_URL_VALUE="${VITE_TILE_SERVER_URL:-/api/tiles}"
 if [[ -d "${LEGACY_DIR}/data/tiles" && ! -d "${TILE_DIR_VALUE}" ]]; then
 	echo "  migrating tile cache from ${LEGACY_DIR}/data/tiles (copy — original left intact)"
 	install -d -m 755 -o "${PI_USER}" -g "${PI_USER}" "${INSTALL_DIR}/data"
@@ -273,6 +282,14 @@ AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
 TILE_DIR=${TILE_DIR_VALUE}
 CESIUM_ION_TOKEN=${EXISTING_ION_TOKEN}
+# Client-side base for the packaged tile cache. Vite inlines VITE_* at BUILD
+# time, so this is read by aero-updater.sh's rebuild (which exports config.env
+# via set -a), not at runtime. Relative on purpose — the app serves its own
+# tiles from /api/tiles, so there is no host or port to get wrong per device.
+# Safe to leave set even with an empty TILE_DIR: the client probes
+# /api/tiles/health, which reports hasTiles, and falls back to the remote
+# imagery/terrain hosts when the cache is empty.
+VITE_TILE_SERVER_URL=${TILE_SERVER_URL_VALUE}
 EOF
 # 0640 root:${PI_USER} — this file now carries the admin bearer token, so it
 # must not stay world-readable the way a pure-config file could.

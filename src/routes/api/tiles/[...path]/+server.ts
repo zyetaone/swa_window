@@ -16,7 +16,7 @@
  * GET /api/tiles/health                   → status
  */
 
-import { createReadStream, statSync } from 'node:fs';
+import { createReadStream, statSync, readdirSync } from 'node:fs';
 import type { RequestHandler } from './$types';
 import { lanCorsHeaders, corsPreflight } from '$lib/http/cors';
 import { safeResolveWithin } from '$lib/server/fs-guard';
@@ -30,6 +30,38 @@ const MIME: Record<string, string> = {
 };
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');
+
+/**
+ * Health for the local tile cache — reports whether tiles are actually THERE,
+ * not merely that this route answers.
+ *
+ * The distinction matters because the client's imagery path is not
+ * fail-soft: getSatelliteImagery() switches to the local URL whenever
+ * VITE_TILE_SERVER_URL is set, with no per-tile fallback to the remote host.
+ * Pointed at an empty TILE_DIR that yields a globe of 404s — every tile
+ * missing, base colour everywhere. A bare `{status:'ok'}` could not
+ * distinguish "server up, cache populated" from "server up, cache empty", so
+ * enabling the flag before rsyncing tiles silently blanked the world.
+ *
+ * `layers` lists top-level directories under TILE_DIR that contain something
+ * (one readdir of the root plus one per layer — cheap, and this is polled once
+ * per page load, not per tile).
+ */
+function tileHealth(): { status: string; hasTiles: boolean; layers: string[] } {
+	let layers: string[] = [];
+	try {
+		layers = readdirSync(TILE_DIR, { withFileTypes: true })
+			.filter((e) => e.isDirectory())
+			.map((e) => e.name)
+			// A layer directory that exists but is empty is not a usable layer —
+			// an interrupted rsync leaves exactly that.
+			.filter((name) => {
+				try { return readdirSync(`${TILE_DIR}${name}`).length > 0; }
+				catch { return false; }
+			});
+	} catch { /* TILE_DIR absent — hasTiles stays false */ }
+	return { status: 'ok', hasTiles: layers.length > 0, layers };
+}
 
 function serveTile(filePath: string, cors: Record<string, string>): Response {
 	const ext = filePath.substring(filePath.lastIndexOf('.'));
@@ -51,7 +83,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 	const cors = lanCorsHeaders(request.headers.get('Origin'));
 
 	if (path === 'health') {
-		return new Response(JSON.stringify({ status: 'ok' }), {
+		return new Response(JSON.stringify(tileHealth()), {
 			headers: { ...cors, 'Content-Type': 'application/json' },
 		});
 	}

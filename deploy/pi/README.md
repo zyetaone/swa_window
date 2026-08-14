@@ -98,6 +98,62 @@ receiver), so after pointing a fleet at a collector, verify once by hand:
 `curl -H "Authorization: Bearer <shared-secret>" -X POST http://<collector>:3000/api/fleet/heartbeat`
 should return 200, and 401 means the tokens differ.
 
+## Offline tiles
+
+The Pi can serve its own imagery, terrain and night-lights from disk instead of
+streaming them from EOX / NASA GIBS / CartoDB. On a client site with unreliable
+WiFi this is the difference between a window and a bare globe.
+
+Two settings, both written by `install.sh`:
+
+| Key | Side | Meaning |
+| --- | --- | --- |
+| `TILE_DIR` | server | Where tiles live on disk (default `${INSTALL_DIR}/data/tiles`) |
+| `VITE_TILE_SERVER_URL` | client | Base the browser fetches from (default `/api/tiles`) |
+
+`VITE_TILE_SERVER_URL` is **compile-time** — Vite inlines `VITE_*` into the
+bundle at build. `aero-updater.sh` exports `config.env` (`set -a`) before its
+rebuild so it survives every on-device update; before that it did not, and a
+rebuild silently reverted a fully-packaged kiosk to streaming.
+
+### Packaging a set
+
+From a workstation (not the Pi — this downloads a few GB):
+
+```sh
+cd tools/tile-packager
+bun run estimate      # footprint before committing to a download
+bun run start
+```
+
+Roughly **2.7 GB** covers 8 locations at 80 km radius: imagery z0–14 (1.57 GB),
+global VIIRS night-lights z0–8 (0.96 GB), roads z0–14 (0.09 GB), terrain z0–12
+(0.04 GB). Any modern SD card or NVMe on a Pi 5 has room several times over.
+
+Then copy to each Pi and let it pick them up:
+
+```sh
+rsync -av --progress ./data/tiles/ kiosk@<pi>:/opt/aero-window/data/tiles/
+ssh kiosk@<pi> 'sudo systemctl restart aero-app aero-kiosk'
+```
+
+### Verifying
+
+```sh
+curl -s http://<pi>:3000/api/tiles/health | jq
+```
+
+`{"status":"ok","hasTiles":true,"layers":["eox-sentinel2","cesium-terrain",…]}`
+
+**`hasTiles` is the field that matters.** Base imagery has no per-tile fallback
+— whatever source the client picks is the only one — so a populated-looking but
+empty `TILE_DIR` would render nothing. The client probes this endpoint on each
+load and uses the remote hosts whenever `hasTiles` is false, which is why the
+setting is safe to leave enabled on a device with no tiles yet. Terrain
+degrades separately and on its own: local → Cesium Ion → flat ellipsoid.
+
+Adding tiles later needs only a restart, not a rebuild — the probe is runtime.
+
 ## Clean shutdown
 
 All systemd units use `Restart=always` with `TimeoutStopSec=15` and do NOT

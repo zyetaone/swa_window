@@ -155,8 +155,14 @@ interface ImageryConfig {
  * composite, gorgeous at cruise altitude. ESRI is the last-resort fallback
  * if you explicitly disable Sentinel-2 via VITE_SENTINEL2=false.
  */
-export function getSatelliteImagery(): ImageryConfig {
-	if (TILE_SERVER_URL) {
+export function getSatelliteImagery(localAvailable = true): ImageryConfig {
+	// `localAvailable` is the checkLocalTileServer() verdict. Unlike terrain —
+	// which degrades local → Ion → ellipsoid on its own — this path has no
+	// per-tile fallback: whatever URL is returned here is the ONLY imagery
+	// source. Choosing local when the cache is empty means no imagery at all,
+	// so the caller must resolve availability first. Defaults true so the
+	// meaning of a bare call is unchanged for existing callers/tests.
+	if (TILE_SERVER_URL && localAvailable) {
 		// Local cache populated by tools/tile-packager. Sentinel-2 path layout
 		// matches the packager's storagePath: `eox-sentinel2/{z}/{y}/{x}.jpg`.
 		// When the cache misses, the device just shows the base color for that
@@ -190,7 +196,13 @@ export function getSatelliteImagery(): ImageryConfig {
 }
 
 /**
- * Check if the local tile server is online.
+ * Is the local tile cache usable — server reachable AND actually holding tiles?
+ *
+ * Both halves matter. The route answers 200 even when TILE_DIR is empty or
+ * missing, so "reachable" alone would green-light the local imagery URL and
+ * paint a globe of 404s. /health now reports `hasTiles`; an older server that
+ * doesn't send the field is treated as usable, since before this existed the
+ * flag was only ever set on devices that had been packaged.
  */
 export async function checkLocalTileServer(): Promise<boolean> {
 	if (!TILE_SERVER_URL) return false;
@@ -198,7 +210,9 @@ export async function checkLocalTileServer(): Promise<boolean> {
 		const resp = await fetch(`${TILE_SERVER_URL}/health`, {
 			signal: AbortSignal.timeout(500)
 		});
-		return resp.ok;
+		if (!resp.ok) return false;
+		const body = await resp.json().catch(() => null) as { hasTiles?: boolean } | null;
+		return body?.hasTiles !== false;
 	} catch {
 		return false;
 	}

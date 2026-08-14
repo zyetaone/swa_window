@@ -13,7 +13,7 @@
 import type * as CesiumType from 'cesium';
 import { altitudeDetailMix, nightLightGain } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
-import { getSatelliteImagery, TILE_SERVER_URL } from '$lib/world/cesium-setup';
+import { getSatelliteImagery, checkLocalTileServer, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
@@ -64,7 +64,11 @@ export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 
 export async function setupImagery(): Promise<void> {
 	const C = _cs;
-	const cfg = getSatelliteImagery();
+	// Resolve the local cache BEFORE choosing a source: base imagery has no
+	// per-tile fallback, so picking local against an empty TILE_DIR yields a
+	// bare globe. Same probe setupTerrain uses; ~500 ms worst case at boot, and
+	// it short-circuits instantly when no tile server is configured at all.
+	const cfg = getSatelliteImagery(await checkLocalTileServer());
 
 
 	_baseLayer = _addLayer(cfg.url, cfg.maxZoom, 0, cfg.webMercator);

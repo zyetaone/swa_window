@@ -27,8 +27,20 @@ export HOME="${HOME:-/root}"
 # AERO_BUN_BIN / AERO_BRANCH, so the layout is discovered, not hardcoded.
 # This is what lets ONE updater serve both provisioning schemes.
 if [[ -r /etc/aero/config.env ]]; then
+    # `set -a` so every key is EXPORTED, not merely set in this shell. The
+    # rebuild below is a child process, and Vite inlines VITE_* at compile
+    # time — without the export, VITE_TILE_SERVER_URL never reaches it and
+    # every on-device rebuild silently dropped the packaged tile cache,
+    # sending a kiosk that has 2.7 GB of local tiles back to streaming from
+    # the public internet.
+    # Exporting the whole file is safe: Vite only inlines VITE_*-prefixed
+    # names into the client bundle, so AERO_ADMIN_TOKEN / AERO_FLEET_TOKEN /
+    # CESIUM_ION_TOKEN stay out of it (the Ion token is deliberately
+    # unprefixed and served at runtime instead).
+    set -a
     # shellcheck disable=SC1091
     source /etc/aero/config.env
+    set +a
 fi
 
 INSTALL_DIR="${AERO_INSTALL_DIR:-/opt/zyeta-aero}"
