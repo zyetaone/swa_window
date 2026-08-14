@@ -25,6 +25,10 @@ export interface FleetClientModel {
 	syncToRealTime: boolean;
 	/** Navigate to a location, optionally setting weather. */
 	applyScene(location: LocationId, weather?: WeatherType): void;
+	/** Set weather WITHOUT moving the flight — the channel for the leader's
+	 *  ambient-roll weather (applyScene would cruise to the current location:
+	 *  blinds close, warp, reopen). Optional so test stubs stay valid. */
+	setWeather?(weather: WeatherType, opts?: { trackUserOverride?: boolean }): void;
 	/** Schedule a night-city flyover beat locked to a shared transitionAtMs.
 	 *  Optional so test stubs and older models stay valid; the client feature-tests. */
 	scheduleFlyover?(beat: VantageBeat, transitionAtMs: number): void;
@@ -55,6 +59,14 @@ export interface DisplayConfig {
 	timeOfDay?: number;
 	weather?: WeatherType;
 	cloudDensity?: number;
+	/**
+	 * Ambient siblings of cloudDensity. Added so the panorama leader can push
+	 * its periodic autopilot jitter to followers — the three values
+	 * tickRandomize rolls together must travel together, or the wall drifts
+	 * apart between location changes. Optional + flat, per invariant #2.
+	 */
+	cloudSpeed?: number;
+	hazeAmount?: number;
 	flightSpeed?: number;
 	syncToRealTime?: boolean;
 	showClouds?: boolean;

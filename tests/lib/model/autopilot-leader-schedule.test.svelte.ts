@@ -14,6 +14,10 @@
  * 3. The autopilot's weather roll must not arm the 8 s
  *    userAdjustingAtmosphere override — that override exists to gate the
  *    randomiser while a HUMAN is adjusting, and the roll IS the randomiser.
+ * 4. The leader's periodic ambient jitter (tickRandomize) must reach followers.
+ *    Followers never run the randomiser — directorTick returns early for them —
+ *    so a leader that only applies it locally leaves the 3-screen wall showing
+ *    different cloud density/haze until the next location change resyncs it.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
@@ -74,13 +78,18 @@ describe('AeroWindow autopilot leader lock-step', () => {
 		const flySpy = vi.spyOn(model.flight, 'flyTo');
 
 		// Tick until the director fires (its timers lazy-seed on the first tick).
+		// Select the decision by type rather than by position: a leader also
+		// broadcasts `set_config` for the autopilot's ambient jitter, and that
+		// is emitted FIRST (directorPatch.configs is applied before
+		// nextLocation), so broadcasts[0] is not necessarily the decision.
 		let guard = 0;
-		while (broadcasts.length === 0 && guard++ < 20) model.tick(0.1);
+		const decisions = () => broadcasts.filter((b) => b.type === 'director_decision');
+		while (decisions().length === 0 && guard++ < 20) model.tick(0.1);
 
-		expect(broadcasts).toHaveLength(1);
-		expect(broadcasts[0].type).toBe('director_decision');
-		expect(broadcasts[0].scenarioId).toBe('autopilot');
-		const transitionAtMs = broadcasts[0].transitionAtMs as number;
+		expect(decisions()).toHaveLength(1);
+		const decision = decisions()[0];
+		expect(decision.scenarioId).toBe('autopilot');
+		const transitionAtMs = decision.transitionAtMs as number;
 		expect(transitionAtMs).toBeGreaterThan(Date.now());
 		expect(transitionAtMs - Date.now()).toBeLessThanOrEqual(TRANSITION_DELAY_MS);
 
@@ -91,6 +100,30 @@ describe('AeroWindow autopilot leader lock-step', () => {
 		vi.advanceTimersByTime(transitionAtMs - Date.now() + 1);
 		expect(flySpy).toHaveBeenCalledTimes(1);
 		expect(model.flight.flightMode).not.toBe('orbit');
+	});
+
+	it('group leader broadcasts its ambient jitter so followers do not drift', () => {
+		applyConfigPatch('camera.parallax.role', 'center');
+		applyConfigPatch('director.autopilot.weatherChangeChance', 0);
+
+		let guard = 0;
+		const ambient = () => broadcasts.filter((b) => b.type === 'set_config');
+		while (ambient().length === 0 && guard++ < 20) model.tick(0.1);
+
+		expect(ambient().length).toBeGreaterThan(0);
+		// All three values tickRandomize rolls must travel together — sending
+		// density without speed/haze would leave the panes partly diverged.
+		const patch = ambient()[0].patch as Record<string, unknown>;
+		expect(typeof patch.cloudDensity).toBe('number');
+		expect(typeof patch.cloudSpeed).toBe('number');
+		expect(typeof patch.hazeAmount).toBe('number');
+	});
+
+	it('solo broadcasts no ambient jitter — there are no followers to sync', () => {
+		expect(model.config.camera.parallax.role).toBe('solo');
+		let guard = 0;
+		while (guard++ < 20) model.tick(0.1);
+		expect(broadcasts.filter((b) => b.type === 'set_config')).toHaveLength(0);
 	});
 
 	it('solo autopilot flies immediately — no followers, nothing broadcast', () => {

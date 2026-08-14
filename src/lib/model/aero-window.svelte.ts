@@ -37,7 +37,7 @@ import { isGroupLeader, resolveBinding } from '$lib/fleet/parallax.svelte';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 // TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
-import { TRANSITION_DELAY_MS, transitionDelayMs } from '$lib/fleet/protocol';
+import { TRANSITION_DELAY_MS, transitionDelayMs, type DisplayConfig } from '$lib/fleet/protocol';
 
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -438,6 +438,46 @@ export class AeroWindow {
 	}
 
 	/**
+	 * Fan-out the autopilot's periodic ambient jitter to corridor peers.
+	 *
+	 * tickRandomize runs on the LEADER ONLY — directorTick returns early for
+	 * followers (autopilot.svelte.ts:46) — and its output used to be applied
+	 * locally and never sent. So every 3–8 min the centre pane re-rolled its
+	 * cloud density / speed / haze (and sometimes the weather) while the edge
+	 * panes kept the old values, and the three-screen wall visibly disagreed
+	 * until the next location change resynced it via director_decision.
+	 *
+	 * The arrival path had already been fixed for this same bug class — see the
+	 * seeded-RNG jitter in setLocation and its `Was Math.random()` note — but
+	 * the periodic path was never brought along.
+	 *
+	 * Sent as `set_config`, the existing leader→follower ambient channel (it
+	 * already carried cloudDensity), rather than inventing a message type.
+	 * Deliberately NOT lock-stepped to a transitionAtMs like a location change:
+	 * these are slow atmospheric values with no cut to hide, so applying them a
+	 * few hundred ms apart is invisible, and skipping the schedule avoids the
+	 * pending-timeout bookkeeping that path needs.
+	 */
+	#broadcastAmbientJitter(configs: Array<{ path: string; value: unknown }>): void {
+		if (!this.#fleetBroadcast || this.config.camera.parallax.role !== 'center') return;
+		const patch: DisplayConfig = {};
+		for (const { path, value } of configs) {
+			if (path === 'atmosphere.clouds.density' && typeof value === 'number') patch.cloudDensity = value;
+			else if (path === 'atmosphere.clouds.speed' && typeof value === 'number') patch.cloudSpeed = value;
+			else if (path === 'atmosphere.haze.amount' && typeof value === 'number') patch.hazeAmount = value;
+			else if (path === 'weather' && isValidWeather(value)) patch.weather = value;
+		}
+		if (Object.keys(patch).length === 0) return;
+		this.#fleetBroadcast({
+			v: 2,
+			type: 'set_config',
+			patch,
+			decidedAtMs: Date.now(),
+			groupId: resolveBinding().groupId,
+		});
+	}
+
+	/**
 	 * Fan-out a location change to corridor peers. Shared by autopilot and
 	 * human flyTo so the wire shape cannot drift between the two paths.
 	 * Returns the transitionAtMs placed on the wire so the caller can lock
@@ -618,6 +658,7 @@ export class AeroWindow {
 				if (path === 'weather') this.setWeather(value as WeatherType, { trackUserOverride: false });
 				else this.applyConfigPatch(path, value);
 			}
+			this.#broadcastAmbientJitter(directorPatch.configs);
 		}
 		if (directorPatch.nextLocation) {
 			// A new location cancels any active/pending flyover beat — the

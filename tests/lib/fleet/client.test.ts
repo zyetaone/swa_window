@@ -39,6 +39,7 @@ class FakeEventSource {
 
 function makeModel(): FleetClientModel & {
 	applyScene: ReturnType<typeof vi.fn>;
+	setWeather: ReturnType<typeof vi.fn>;
 	scheduleFlyover: ReturnType<typeof vi.fn>;
 	setQualityMode: ReturnType<typeof vi.fn>;
 	applyConfigPatch: ReturnType<typeof vi.fn>;
@@ -51,6 +52,7 @@ function makeModel(): FleetClientModel & {
 		qualityMode: 'balanced',
 		syncToRealTime: false,
 		applyScene: vi.fn(),
+		setWeather: vi.fn(),
 		scheduleFlyover: vi.fn(),
 		setDisplayMode: vi.fn(),
 		setQualityMode: vi.fn(),
@@ -60,6 +62,7 @@ function makeModel(): FleetClientModel & {
 		applyConfigPatch: vi.fn(),
 	} as unknown as FleetClientModel & {
 		applyScene: ReturnType<typeof vi.fn>;
+		setWeather: ReturnType<typeof vi.fn>;
 		scheduleFlyover: ReturnType<typeof vi.fn>;
 		setQualityMode: ReturnType<typeof vi.fn>;
 		applyConfigPatch: ReturnType<typeof vi.fn>;
@@ -160,13 +163,19 @@ describe('vantage_beat corridor gating', () => {
 // in the client's set_config handler are the trust boundary for enum fields.
 
 describe('set_config enum validation', () => {
-	it('applies a valid weather', () => {
+	it('changes weather in place — never via applyScene, which would fake a cruise', () => {
 		command({ type: 'set_config', patch: { weather: 'rain' } });
-		expect(model.applyScene).toHaveBeenCalledWith('dubai', 'rain');
+		expect(model.setWeather).toHaveBeenCalledWith('rain', { trackUserOverride: false });
+		// The regression this pins: applyScene flyTo()s its target, and the
+		// target here is the CURRENT location — so routing weather through it
+		// made every leader weather roll run the edge panes through a bogus
+		// cruise (blinds close, warp, reopen) with nowhere to go.
+		expect(model.applyScene).not.toHaveBeenCalled();
 	});
 
 	it('ignores an invalid weather string instead of casting it', () => {
 		command({ type: 'set_config', patch: { weather: 'hurricane' } });
+		expect(model.setWeather).not.toHaveBeenCalled();
 		expect(model.applyScene).not.toHaveBeenCalled();
 	});
 
@@ -178,6 +187,51 @@ describe('set_config enum validation', () => {
 	it('ignores an invalid qualityMode instead of casting it', () => {
 		command({ type: 'set_config', patch: { qualityMode: 'potato' } });
 		expect(model.setQualityMode).not.toHaveBeenCalled();
+	});
+});
+
+// ─── ambient jitter fan-out ─────────────────────────────────────────────────
+// The panorama leader re-rolls clouds/haze every 3-8 min (tickRandomize) and
+// followers never run that code, so these three values must arrive over the
+// wire or the 3-screen wall drifts apart between location changes.
+
+describe('set_config ambient jitter (leader → followers)', () => {
+	it('applies all three ambient values the leader rolls together', () => {
+		command({ type: 'set_config', patch: { cloudDensity: 0.42, cloudSpeed: 0.8, hazeAmount: 0.07 } });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.clouds.density', 0.42);
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.clouds.speed', 0.8);
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.haze.amount', 0.07);
+	});
+
+	it('clamps out-of-range values — /api/command does not validate payloads', () => {
+		command({ type: 'set_config', patch: { cloudSpeed: 99, hazeAmount: -5 } });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.clouds.speed', 3);
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.haze.amount', 0);
+	});
+
+	it('ignores non-numeric ambient fields rather than writing NaN into the scene', () => {
+		command({ type: 'set_config', patch: { cloudSpeed: 'fast', hazeAmount: null } });
+		expect(model.applyConfigPatch).not.toHaveBeenCalledWith('atmosphere.clouds.speed', expect.anything());
+		expect(model.applyConfigPatch).not.toHaveBeenCalledWith('atmosphere.haze.amount', expect.anything());
+	});
+
+	// The leader stamps groupId on its ambient set_config, so the same corridor
+	// gating that protects director_decision/vantage_beat must cover it — with
+	// two corridors on one LAN, corridor A's leader would otherwise repaint
+	// corridor B's sky.
+	it('ignores an ambient push aimed at a different corridor', () => {
+		command({ type: 'set_config', groupId: 'corridor2', patch: { cloudDensity: 0.9 } });
+		expect(model.applyConfigPatch).not.toHaveBeenCalledWith('atmosphere.clouds.density', 0.9);
+	});
+
+	it('applies an ambient push for its own corridor', () => {
+		command({ type: 'set_config', groupId: 'corridor1', patch: { cloudDensity: 0.9 } });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.clouds.density', 0.9);
+	});
+
+	it('still applies an unscoped push — admin set_config carries no groupId', () => {
+		command({ type: 'set_config', patch: { cloudDensity: 0.7 } });
+		expect(model.applyConfigPatch).toHaveBeenCalledWith('atmosphere.clouds.density', 0.7);
 	});
 });
 

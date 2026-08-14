@@ -247,12 +247,14 @@ export class DeviceClient {
 		catch { return; }
 
 		// Corridor gating: group-scoped leader broadcasts (director_decision,
-		// vantage_beat) only apply to panes in the targeted corridor — with two
-		// corridors on one LAN, each leader must drive ONLY its own group.
-		// Absent groupId = legacy unscoped broadcast = apply (back-compat with
-		// pre-gating leaders). Skipped messages are not ours, so they fall out
-		// before the fleet_in telemetry record below (not logged as applied).
-		if (msg.type === 'director_decision' || msg.type === 'vantage_beat') {
+		// vantage_beat, and the leader's ambient-roll set_config — it carries
+		// groupId, see #broadcastAmbientJitter) only apply to panes in the
+		// targeted corridor — with two corridors on one LAN, each leader must
+		// drive ONLY its own group. Absent groupId = legacy unscoped broadcast
+		// (admin set_config pushes) = apply (back-compat). Skipped messages are
+		// not ours, so they fall out before the fleet_in telemetry record below
+		// (not logged as applied).
+		if (msg.type === 'director_decision' || msg.type === 'vantage_beat' || msg.type === 'set_config') {
 			if (!shouldApplyDirectorDecision(resolveBinding().groupId, msg.groupId as string | undefined)) {
 				return;
 			}
@@ -290,10 +292,20 @@ export class DeviceClient {
 					const d = p as Record<string, unknown>;
 					if (typeof d.altitude === 'number') this.#model.setAltitude(d.altitude);
 					if (typeof d.timeOfDay === 'number') this.#model.setTime(d.timeOfDay);
-					if (isValidWeather(d.weather)) this.#model.applyScene(this.#model.location, d.weather);
+					// Weather-only — NOT applyScene: applyScene flyTo()s the target,
+					// and the target here is the CURRENT location, so every leader
+					// weather roll made edge panes run a fake cruise (blinds close,
+					// warp, reopen). setWeather changes the weather in place.
+					if (isValidWeather(d.weather)) this.#model.setWeather?.(d.weather, { trackUserOverride: false });
 					if (typeof d.flightSpeed === 'number') this.#model.setFlightSpeed(d.flightSpeed);
 					if (typeof d.syncToRealTime === 'boolean') this.#model.syncToRealTime = d.syncToRealTime;
 					if (typeof d.cloudDensity === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
+					// Ambient siblings — the leader's autopilot jitter arrives as all
+					// three together (see #broadcastAmbientJitter). Clamps here are the
+					// trust boundary, not the authored range: /api/command does not
+					// validate payloads.
+					if (typeof d.cloudSpeed === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.speed', clamp(d.cloudSpeed, 0, 3));
+					if (typeof d.hazeAmount === 'number') this.#model.applyConfigPatch?.('atmosphere.haze.amount', clamp(d.hazeAmount, 0, 1));
 					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
 					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
 					if (isValidQualityMode(d.qualityMode)) this.#model.setQualityMode(d.qualityMode);
