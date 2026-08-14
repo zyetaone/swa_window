@@ -191,8 +191,12 @@ export class FlightSimEngine {
 		const patch: FlightPatch = {};
 		untrack(() => {
 			if (this.flightMode === 'cruise_departure') {
+				// Warp ramp only — do NOT advance the scenario path. Departure
+				// used to call #tickFlightPath while flightSpeed warps toward
+				// ~100, so authored legs wrapped many times in ~2 s; arrival's
+				// #initScenario then left mid-leg #scenarioProgress and the
+				// orbit resumed with a jump. Transit already freezes the path.
 				this.#tickDeparture(delta, patch, ctx);
-				this.#tickFlightPath(delta, ctx);
 			} else if (this.flightMode === 'cruise_transit') {
 				this.#tickTransit(delta, patch, ctx);
 			} else if (this.flightMode === 'arrival_hold') {
@@ -470,6 +474,11 @@ export class FlightSimEngine {
 		const rng = createSeededRng((daySeed() ^ hashString(locationId)) >>> 0);
 		this.#currentScenario = pickScenario(locationId, skyState, rng);
 		this.#scenarioWaypointIndex = 0;
+		// Always zero progress. flyTo() / setLocationWithSky() used to leave
+		// whatever fractional leg was running (or leftover from a warped
+		// departure that wrapped many legs), so the new scenario started
+		// mid-Catmull-Rom and the camera jumped after every city change.
+		this.#scenarioProgress = 0;
 		this.#scenarioLoopCount = 0;
 		this.#scenarioForward = true;
 	}

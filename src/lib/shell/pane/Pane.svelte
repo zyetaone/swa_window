@@ -18,12 +18,12 @@
 	import Blind from "$lib/shell/window/Blind.svelte";
 	import { useMouseParallax } from '$lib/shell/use-mouse-parallax.svelte';
 	import CabinClock from "$lib/shell/passenger/hud/CabinClock.svelte";
-	import { doubleTap } from '$lib/shell/use-double-tap';
+	import { tap } from '$lib/shell/use-tap';
 
 	const model = useAeroWindow();
 	const isFlight = $derived(model.displayMode === 'flight');
 
-	// Double-tap anywhere on the pane toggles the cabin clock. Attached on the
+	// A single tap anywhere on the pane toggles the cabin clock. Attached on the
 	// window CONTAINER, not the viewport: `<Blind />` is a SIBLING of
 	// `.window-viewport`, and when the blind is open it lays a full-window
 	// `.blind-grab` overlay on top to catch drag-to-close. A listener on the
@@ -34,7 +34,7 @@
 	// handler never fired.)
 	//
 	// Routed through applyConfigPatch so the change is CRDT-stamped and
-	// fleet-synced like every other config write — double-tap one Pi in a
+	// fleet-synced like every other config write — tap one Pi in a
 	// panorama and all three agree.
 	function toggleClock() {
 		model.applyConfigPatch?.('shell.clockVisible', !model.config.shell.clockVisible);
@@ -78,7 +78,7 @@ const glassVignetteOpacity = $derived(skyPalette.glassVignette);
 	role="region"
 	aria-roledescription="airplane window"
 	aria-label="Window Viewport"
-	use:doubleTap={{ onDoubleTap: toggleClock }}
+	use:tap={{ onTap: toggleClock }}
 >
 	<div
 		class="window-viewport"

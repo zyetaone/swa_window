@@ -85,6 +85,43 @@ describe('scenario playback pacing', () => {
 		expect(peak).toBeGreaterThan(1_000);
 	});
 
+	it('resets scenario progress on flyTo so arrival does not resume mid-leg', () => {
+		// Regression: #initScenario zeroed waypoint index but left
+		// #scenarioProgress mid-leg after a prior cruise/warp, so orbit
+		// resumed with a Catmull-Rom jump after every city change.
+		const engine = new FlightSimEngine();
+		engine.setLocationWithSky(CITY, 'dusk');
+		const ctx = makeCtx();
+		// Advance into a scenario leg.
+		for (let t = 0; t < 5; t += 0.1) {
+			engine.tick(0.1, ctx);
+			ctx.time += 0.1;
+			if (ctx.wallTimeSec !== undefined) ctx.wallTimeSec += 0.1;
+		}
+		const latBeforeFly = engine.lat;
+		// Cruise to another city; departure must NOT race the scenario path.
+		engine.flyTo('mumbai', 'dusk');
+		expect(engine.flightMode).toBe('cruise_departure');
+		for (let t = 0; t < 3; t += 0.1) {
+			engine.tick(0.1, ctx);
+			ctx.time += 0.1;
+		}
+		// Path frozen during warp: still at the pre-fly coordinates.
+		expect(engine.lat).toBeCloseTo(latBeforeFly, 5);
+		// Force arrival path: setLocationWithSky (what locationArrived does)
+		// must start the new scenario at progress 0 — first tick after arrive
+		// stays continuous with the seeded orbit, not a mid-leg jump.
+		engine.setLocationWithSky('mumbai', 'dusk');
+		const lat0 = engine.lat;
+		const lon0 = engine.lon;
+		engine.tick(0.1, ctx);
+		// One tick at progress≈0 stays near the orbit seed (small scenario step),
+		// not a multi-leg wrap jump of many km.
+		const dLat = Math.abs(engine.lat - lat0);
+		const dLon = Math.abs(engine.lon - lon0);
+		expect(dLat + dLon).toBeLessThan(0.05);
+	});
+
 	it('scales linearly with the speed knob, normalised so default = authored seconds', () => {
 		// Two engines, one at default and one at double, sampled at instants
 		// that should map to the same point on the authored path.
