@@ -13,6 +13,14 @@ import { pickScenario } from '$lib/director/scenarios';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 
 /**
+ * Default position of the `flightSpeed` knob, and the reference the scenario
+ * playback rate normalises against — authored waypoint `duration` values are
+ * SECONDS at this speed. SSOT for both, so the two can never drift apart:
+ * when they did, every authored approach played 4x fast.
+ */
+export const DEFAULT_FLIGHT_SPEED = 4.0;
+
+/**
  * Uniform Catmull-Rom interpolation of a scalar through 4 control points,
  * evaluated at local parameter t∈[0,1] between p1 and p2.
  *
@@ -58,7 +66,7 @@ export class FlightSimEngine {
 	flightMode = $state<FlightMode>('orbit');
 	cruiseTargetId = $state<LocationId | null>(null);
 	warpFactor = $state(0);
-	flightSpeed = $state(4.0);
+	flightSpeed = $state(DEFAULT_FLIGHT_SPEED);
 
 	// --- Orbit (plain; tests read bearing/angle for 3-Pi determinism) ---
 	orbitCenterLat = 25.2048;
@@ -280,7 +288,16 @@ export class FlightSimEngine {
 
 	#tickOrbit(delta: number, ctx: SimulationContext): void {
 		const orbit = ctx.camera.orbit;
-		const breathePhase = (ctx.time / orbit.breathePeriod) * Math.PI * 2;
+		// Wall clock, not ctx.time/delta: sim time is boot-relative and advanced
+		// by the dt-clamped delta, so on a slow Pi it runs slower than wall
+		// clock and panorama panes decorrelate (breathe radius alone mismatches
+		// up to majorMax−majorMin ≈ 19 km ground). wallTimeSec/wallDeltaSec come
+		// from Date.now() — identical across Pis within NTP drift. The seeded
+		// start angle (setLocationWithSky) only stays position-locked if the
+		// oscillators and the angle integral track the same clock on every pane.
+		const wallT = ctx.wallTimeSec ?? ctx.time;
+		const wallDelta = ctx.wallDeltaSec ?? delta;
+		const breathePhase = (wallT / orbit.breathePeriod) * Math.PI * 2;
 		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
 		this.orbitRadiusMajor = orbit.majorMin + breathe * (orbit.majorMax - orbit.majorMin);
 		this.orbitRadiusMinor = this.orbitRadiusMajor * (0.35 + breathe * 0.15);
@@ -293,7 +310,7 @@ export class FlightSimEngine {
 		const localSpeed = Math.sqrt(tx * tx + ty * ty);
 		// Advance the orbit angle in the chosen rotation sense (±1). Wrap
 		// both ends now that the angle can decrease as well as increase.
-		this.orbitAngle += this.orbitDirection * ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * delta;
+		this.orbitAngle += this.orbitDirection * ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * wallDelta;
 		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
 		if (this.orbitAngle < 0) this.orbitAngle += Math.PI * 2;
 
@@ -314,7 +331,7 @@ export class FlightSimEngine {
 		const vtx = tx * this.orbitDirection;
 		const vty = ty * this.orbitDirection;
 		const baseHeading = normalizeHeading((Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI);
-		const wander = Math.sin(ctx.time * 0.05) * 0.25 + Math.sin(ctx.time * 0.031) * 0.15 + Math.sin(ctx.time * 0.017) * 0.1;
+		const wander = Math.sin(wallT * 0.05) * 0.25 + Math.sin(wallT * 0.031) * 0.15 + Math.sin(wallT * 0.017) * 0.1;
 		this.heading = normalizeHeading(baseHeading + wander);
 	}
 
@@ -333,7 +350,19 @@ export class FlightSimEngine {
 		const p3 = fwd ? waypoints[(nextIdx + 1) % n] : waypoints[(nextIdx - 1 + n) % n];
 
 		const duration = p2.duration > 0 ? p2.duration : 30;
-		this.#scenarioProgress += (delta * this.flightSpeed) / duration;
+		// Wall-clock advance/jitter — same cross-pane decorrelation argument as
+		// #tickOrbit: clamped-delta integration runs slow on low-fps Pis.
+		const wallT = ctx.wallTimeSec ?? ctx.time;
+		const wallDelta = ctx.wallDeltaSec ?? delta;
+		// NORMALISE THE SPEED KNOB — DO NOT PASS IT RAW.
+		// Authored `duration` is SECONDS at the default knob position. The raw
+		// 4.0 knob was multiplied straight in, so every authored leg ran 4x
+		// fast: dubai-approach's 225 s circuit finished in 56 s, bleeding
+		// 28,000 -> 6,000 ft in ~25 s (~53,000 ft/min, against ~2,000 ft/min
+		// for a real airliner). The waypoints were plausible; the playback rate
+		// was eating them. Same bug class as the 0..5 night-light knob — see
+		// nightLightGain in world/altitude.
+		this.#scenarioProgress += (wallDelta * (this.flightSpeed / DEFAULT_FLIGHT_SPEED)) / duration;
 
 		// LINEAR param (was smoothstep) — Catmull-Rom now supplies the smoothing,
 		// so a steady param advances the camera THROUGH each waypoint instead of
@@ -341,8 +370,8 @@ export class FlightSimEngine {
 		const t = clamp(this.#scenarioProgress, 0, 1);
 
 		const js = 0.0003;
-		const jLat = Math.sin(ctx.time * 0.13) * js + Math.sin(ctx.time * 0.31) * js * 0.5;
-		const jLon = Math.sin(ctx.time * 0.17) * js + Math.sin(ctx.time * 0.37) * js * 0.5;
+		const jLat = Math.sin(wallT * 0.13) * js + Math.sin(wallT * 0.31) * js * 0.5;
+		const jLon = Math.sin(wallT * 0.17) * js + Math.sin(wallT * 0.37) * js * 0.5;
 
 		const newLat = catmullRom(p0.lat, p1.lat, p2.lat, p3.lat, t) + jLat;
 		const newLon = catmullRom(p0.lon, p1.lon, p2.lon, p3.lon, t) + jLon;
@@ -357,7 +386,7 @@ export class FlightSimEngine {
 		if (!ctx.userAdjustingAltitude && this.#flyoverAltitudeFt === null) {
 			this.altitude =
 				catmullRom(p0.altitude, p1.altitude, p2.altitude, p3.altitude, t) +
-				Math.sin(ctx.time * 0.07) * 50;
+				Math.sin(wallT * 0.07) * 50;
 		}
 
 		// Heading: smooth the AUTHORED waypoint headings with the same Catmull-Rom,
@@ -367,8 +396,8 @@ export class FlightSimEngine {
 		const u0 = u1 + shortestAngleDelta(u1, p0.heading);
 		const u2 = u1 + shortestAngleDelta(u1, p2.heading);
 		const u3 = u2 + shortestAngleDelta(u2, p3.heading);
-		this.heading = normalizeHeading(catmullRom(u0, u1, u2, u3, t) + Math.sin(ctx.time * 0.05) * 0.25);
-		this.pitch = this.#altitudePitch(ctx) + Math.sin(ctx.time * 0.04) * 1.0;
+		this.heading = normalizeHeading(catmullRom(u0, u1, u2, u3, t) + Math.sin(wallT * 0.05) * 0.25);
+		this.pitch = this.#altitudePitch(ctx) + Math.sin(wallT * 0.04) * 1.0;
 
 		if (this.#scenarioProgress >= 1) {
 			this.#scenarioProgress = 0;

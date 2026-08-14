@@ -60,10 +60,13 @@ describe('scenario loop-flip seed mixing', () => {
 		const engine = new FlightSimEngine();
 		engine.setLocationWithSky(HOME, 'day');
 		const ctx = makeCtx();
-		// One dubai-cruise loop is ~60s at the default flightSpeed; 140s
-		// covers the first two loop boundaries (and their flips) but stops
-		// before SCENARIO_MAX_LOOPS clears the scenario back to the orbit.
-		const signs = run(engine, ctx, 140);
+		// A loop is now the SUM OF ITS AUTHORED DURATIONS in seconds (~215 s
+		// for dubai-cruise). It used to be ~60 s because the raw 4.0 speed knob
+		// was multiplied into the progress rate — that 4x compression is the
+		// bug this window previously encoded. 500 s covers the first two loop
+		// boundaries (and their flips) but stops before SCENARIO_MAX_LOOPS
+		// clears the scenario back to the orbit.
+		const signs = run(engine, ctx, 500);
 		expect(new Set(signs)).toEqual(new Set([1, -1]));
 	});
 
@@ -74,8 +77,9 @@ describe('scenario loop-flip seed mixing', () => {
 		b.setLocationWithSky(HOME, 'day');
 		const ctx = makeCtx();
 		const dt = 0.1;
-		// 200s covers all SCENARIO_MAX_LOOPS loops and the hand-back to orbit.
-		for (let t = 0; t < 200; t += dt) {
+		// 800s covers all SCENARIO_MAX_LOOPS loops and the hand-back to orbit
+		// at the corrected (authored-seconds) playback rate.
+		for (let t = 0; t < 800; t += dt) {
 			a.tick(dt, ctx);
 			b.tick(dt, ctx);
 			ctx.time += dt;
