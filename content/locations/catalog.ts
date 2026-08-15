@@ -29,6 +29,15 @@ export interface Location {
 	name: string;
 	lat: number;
 	lon: number;
+	/**
+	 * IANA timezone id (e.g. America/Chicago). Real Time + DST-correct local
+	 * civil hours. SSOT for updateTimeFromSystem — do not invent offsets by hand.
+	 */
+	timeZone: string;
+	/**
+	 * Fixed standard-time offset hours (no DST). Fallback only when Intl
+	 * rejects `timeZone` (ancient runtime / typo). Prefer `timeZone`.
+	 */
 	utcOffset: number;
 	hasBuildings: boolean;
 	defaultAltitude: number;
@@ -38,7 +47,7 @@ export interface Location {
 
 // Shape used to validate LOCATIONS_DATA (id kept as string so satisfies can check
 // everything else without creating a circular reference through LocationId).
-type LocationShape = { id: string; name: string; lat: number; lon: number; utcOffset: number; hasBuildings: boolean; defaultAltitude: number; nightAltitude: number; scene: SceneDefaults };
+type LocationShape = { id: string; name: string; lat: number; lon: number; timeZone: string; utcOffset: number; hasBuildings: boolean; defaultAltitude: number; nightAltitude: number; scene: SceneDefaults };
 
 
 // ─── Scene archetypes ────────────────────────────────────────────────────────
@@ -108,20 +117,20 @@ const LOCATIONS_DATA = [
 	// reads as "lights going off" once the boot altitude finishes lerping
 	// down. Bumped night targets up to ~28–35kft so the camera holds a
 	// wide-area overview of the city light footprint.
-	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, utcOffset: 4, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 28000, scene: CITY_SCENE },
-	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
-	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, utcOffset: 5.5, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
+	{ id: 'dubai', name: 'Dubai', lat: 25.2048, lon: 55.2708, timeZone: 'Asia/Dubai', utcOffset: 4, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 28000, scene: CITY_SCENE },
+	{ id: 'mumbai', name: 'Mumbai', lat: 19.076, lon: 72.8777, timeZone: 'Asia/Kolkata', utcOffset: 5.5, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
+	{ id: 'hyderabad', name: 'Hyderabad', lat: 17.4435, lon: 78.3772, timeZone: 'Asia/Kolkata', utcOffset: 5.5, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
 	// Southwest Airlines hubs
-	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.797, utcOffset: -6, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
-	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, utcOffset: -7, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
-	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
-	{ id: 'denver', name: 'Denver', lat: 39.8561, lon: -104.6737, utcOffset: -7, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
-	{ id: 'chicago_midway', name: 'Chicago Midway', lat: 41.7868, lon: -87.7522, utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
+	{ id: 'dallas', name: 'Dallas', lat: 32.7767, lon: -96.797, timeZone: 'America/Chicago', utcOffset: -6, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
+	{ id: 'phoenix', name: 'Phoenix', lat: 33.4352, lon: -112.0101, timeZone: 'America/Phoenix', utcOffset: -7, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
+	{ id: 'las_vegas', name: 'Las Vegas', lat: 36.1699, lon: -115.1398, timeZone: 'America/Los_Angeles', utcOffset: -8, hasBuildings: true, defaultAltitude: 28000, nightAltitude: 30000, scene: CITY_SCENE },
+	{ id: 'denver', name: 'Denver', lat: 39.8561, lon: -104.6737, timeZone: 'America/Denver', utcOffset: -7, hasBuildings: true, defaultAltitude: 32000, nightAltitude: 34000, scene: CITY_SCENE },
+	{ id: 'chicago_midway', name: 'Chicago Midway', lat: 41.7868, lon: -87.7522, timeZone: 'America/Chicago', utcOffset: -6, hasBuildings: true, defaultAltitude: 30000, nightAltitude: 32000, scene: CITY_SCENE },
 	// Nature / scenic
-	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, utcOffset: 5.75, hasBuildings: false, defaultAltitude: 38000, nightAltitude: 42000, scene: MOUNTAIN_SCENE },
-	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, utcOffset: -10, hasBuildings: false, defaultAltitude: 40000, nightAltitude: 45000, scene: OCEAN_SCENE },
-	{ id: 'desert', name: 'Sahara Desert', lat: 23.4241, lon: 25.6628, utcOffset: 2, hasBuildings: false, defaultAltitude: 35000, nightAltitude: 42000, scene: DESERT_SCENE },
-	{ id: 'clouds', name: 'Above Clouds', lat: 35.6762, lon: 139.6503, utcOffset: 9, hasBuildings: false, defaultAltitude: 45000, nightAltitude: 48000, scene: CLOUDS_SCENE },
+	{ id: 'himalayas', name: 'Himalayas', lat: 27.9881, lon: 86.925, timeZone: 'Asia/Kathmandu', utcOffset: 5.75, hasBuildings: false, defaultAltitude: 38000, nightAltitude: 42000, scene: MOUNTAIN_SCENE },
+	{ id: 'ocean', name: 'Pacific Ocean', lat: 21.3069, lon: -157.8583, timeZone: 'Pacific/Honolulu', utcOffset: -10, hasBuildings: false, defaultAltitude: 40000, nightAltitude: 45000, scene: OCEAN_SCENE },
+	{ id: 'desert', name: 'Sahara Desert', lat: 23.4241, lon: 25.6628, timeZone: 'Africa/Cairo', utcOffset: 2, hasBuildings: false, defaultAltitude: 35000, nightAltitude: 42000, scene: DESERT_SCENE },
+	{ id: 'clouds', name: 'Above Clouds', lat: 35.6762, lon: 139.6503, timeZone: 'Asia/Tokyo', utcOffset: 9, hasBuildings: false, defaultAltitude: 45000, nightAltitude: 48000, scene: CLOUDS_SCENE },
 ] as const satisfies ReadonlyArray<LocationShape>;
 
 /**

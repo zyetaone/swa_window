@@ -51,6 +51,24 @@ export function initBuildings(Cesium: C, viewer: CesiumType.Viewer): void {
 	_nightFactor.reset();
 }
 
+/**
+ * Rooftop aviation beacon contract — kept as JS numbers so the shader
+ * template and the unit contract test share one SSOT (whole-skyline pulse
+ * regressions are invisible at typecheck).
+ */
+export const BUILDING_BEACON = {
+	/** smoothstep low — mid-rise blocks must NOT light (was 30 m). */
+	heightMinM: 120,
+	/** smoothstep high — fully on by this height. */
+	heightMaxM: 160,
+	/** XY block size for per-tower phase hash (metres of model space). */
+	phaseBlockM: 25,
+	/** Blink duty: on when fract(t*rate + phase) > this (≈0.45 duty). */
+	blinkThreshold: 0.55,
+	/** Cycles per second of the blink oscillator. */
+	blinkHz: 0.5,
+} as const;
+
 const BUILDING_VERTEX_GLSL = `
 	void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
 		v_normalMC = vsInput.attributes.normalMC;
@@ -156,11 +174,11 @@ const BUILDING_SHADER_GLSL = `
 		// lockstep: the 30–50 m threshold caught every mid-rise block, and a
 		// bare fract(u_time) shared one phase across all buildings. Real
 		// obstruction beacons are sparse (120 m+ structures) and never
-		// synchronised.
-		float isTall = smoothstep(120.0, 160.0, buildingHeight);
-		// Per-~25 m-block phase hash — deterministic, so all 3 Pis agree.
-		float beaconPhase = fract(sin(dot(floor(wp.xy / 25.0), vec2(12.9898, 78.233))) * 43758.5453);
-		float blink = step(0.55, fract(u_time * 0.5 + beaconPhase));
+		// synchronised. Numbers from BUILDING_BEACON (JS SSOT).
+		float isTall = smoothstep(${BUILDING_BEACON.heightMinM.toFixed(1)}, ${BUILDING_BEACON.heightMaxM.toFixed(1)}, buildingHeight);
+		// Per-block phase hash — deterministic, so all 3 Pis agree.
+		float beaconPhase = fract(sin(dot(floor(wp.xy / ${BUILDING_BEACON.phaseBlockM.toFixed(1)}), vec2(12.9898, 78.233))) * 43758.5453);
+		float blink = step(${BUILDING_BEACON.blinkThreshold.toFixed(2)}, fract(u_time * ${BUILDING_BEACON.blinkHz.toFixed(2)} + beaconPhase));
 		float rooftopLight = isRoof * isTall * blink;
 		vec3 aviationRed = vec3(1.0, 0.08, 0.03);
 

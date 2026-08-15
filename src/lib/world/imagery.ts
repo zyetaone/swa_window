@@ -18,6 +18,23 @@ import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
 
+/**
+ * Cesium `colorToAlpha` thresholds — SSOT for night imagery keying.
+ *
+ * Cesium makes a pixel transparent when its distance to `colorToAlpha`
+ * (black) is ≤ threshold. Too low → near-black basemap background stays
+ * opaque and paints a dark sheet over terrain. Too high → road strokes
+ * themselves get keyed out.
+ *
+ * Deep-review findings (shipped twice as silent failures):
+ *   - roads: 0.0 only matched exact #000; CartoDB bg is ~#0e1013 → 0.12
+ *   - VIIRS: true black NASA tiles → 0.01 hairline is enough
+ */
+export const COLOR_TO_ALPHA = {
+	viirsThreshold: 0.01,
+	roadThreshold: 0.12,
+} as const;
+
 interface WorldConfig {
 	readonly baseNightSaturation: number; readonly viirsAlphaBoost: number; readonly viirsBrightness: number;
 	readonly useThreeOverlay: boolean;
@@ -143,7 +160,8 @@ export async function setupImagery(): Promise<void> {
 			_viirsLayer.colorToAlpha = C.Color.BLACK;
 			_viirsLayer.hue = 0.0; _viirsLayer.saturation = 0.0;
 			_viirsLayer.brightness = 2.5; _viirsLayer.contrast = 0.8;
-			_viirsLayer.colorToAlphaThreshold = 0.01;
+			// See COLOR_TO_ALPHA — true-black NASA tiles only need a hairline.
+			_viirsLayer.colorToAlphaThreshold = COLOR_TO_ALPHA.viirsThreshold;
 		}
 	} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
 
@@ -160,19 +178,14 @@ export async function setupImagery(): Promise<void> {
 		// must NOT run alongside the raw cartodb layer (double glow). Raw
 		// cartodb remains the fallback for older caches and the remote CDN path.
 		const useComposite = tileBase && localTileLayerAvailable('viirs-roads');
+		const zoom = roadLayerZoomRange(!!tileBase);
 		_roadMaskLayer = _addLayer(
 			useComposite
 				? `${tileBase}/viirs-roads/{z}/{x}/{y}@2x.png`
 				: tileBase
 					? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
 					: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-			// The composite is baked z4–12 — and so is the local cartodb-dark
-			// fallback (packager zoomRange [4,12]); beyond 12 Cesium upsamples,
-			// which the glow modulation tolerates fine. Only the remote CDN
-			// serves z0–18. Keying the clamp on `tileBase`, not `useComposite`:
-			// an older cache without viirs-roads must not 404-churn z13+ tiles
-			// against the local server.
-			tileBase ? 12 : 18, tileBase ? 4 : 0, !!tileBase,
+			zoom.maximumLevel, zoom.minimumLevel, !!tileBase,
 		);
 		if (_roadMaskLayer) {
 			_roadMaskLayer.alpha = 0;
@@ -186,11 +199,11 @@ export async function setupImagery(): Promise<void> {
 			// nothing was keyed out and the whole tile composited as an opaque
 			// dark sheet OVER the lit terrain. The layer meant to add street glow
 			// was subtracting ground light instead.
-			// 0.12 clears the background (~#0e1013) while leaving road strokes,
-			// which are much brighter, intact. VIIRS uses the same mechanism with
-			// 0.01 because its background is true black.
+			// ROAD threshold clears CartoDB near-black background (~#0e1013)
+			// while leaving road strokes intact. VIIRS uses a lower threshold
+			// because its background is true black (see COLOR_TO_ALPHA).
 			_roadMaskLayer.colorToAlpha = C.Color.BLACK;
-			_roadMaskLayer.colorToAlphaThreshold = 0.12;
+			_roadMaskLayer.colorToAlphaThreshold = COLOR_TO_ALPHA.roadThreshold;
 			_roadMaskLayer.saturation = 0.0;
 			_roadMaskLayer.contrast = 1.5;
 			_roadMaskLayer.brightness = 1.0;
@@ -278,11 +291,12 @@ export function roadMaskAlpha(
 ): number {
 	// Floor raised 0.3 → 0.6 (span 0.7 → 0.4, so the low-altitude end still
 	// reaches 1.0). The road mask is the ONLY globally-available source of
-	// street-grid STRUCTURE — a z18 raster at 0.57 m/px, versus VIIRS at 583
-	// m/px. The old floor faded it to 0.32-0.46 across the 28-34k night-show
-	// band while VIIRS sat pinned at its ceiling, so the structured layer was
-	// quietest exactly where the blobby one was loudest (road:VIIRS was 0.69
-	// at 30,000 ft — now ~2.2). Roads carry the city; VIIRS fills behind.
+	// street-grid STRUCTURE — baked z4–12 (@2x ≈ 19 m/px native, upsampled
+	// past z12), versus VIIRS at 583 m/px. The old floor faded it to
+	// 0.32-0.46 across the 28-34k night-show band while VIIRS sat pinned at
+	// its ceiling, so the structured layer was quietest exactly where the
+	// blobby one was loudest (road:VIIRS was 0.69 at 30,000 ft — now ~2.2).
+	// Roads carry the city; VIIRS fills behind.
 	const gate = 0.6 + 0.4 * altitudeDetailMix(altitudeFt);
 	const nf = nightFactor;
 	// Normalise the 0..5 operator gain, exactly as viirsLayerAlpha does. Clamping
@@ -291,6 +305,23 @@ export function roadMaskAlpha(
 	// and most of the slider was inert.
 	const gain = nightLightGain(scale);
 	return clamp(nf * gain * gate + (1 - nf) * 0.08 * gate, 0, 1) * bootFade;
+}
+
+/**
+ * Zoom clamp for the road layer. Local caches — the viirs-roads composite
+ * AND the raw cartodb-dark fallback — are both baked z4–12 (packager
+ * zoomRange [4,12]); beyond z12 Cesium upsamples, which the glow modulation
+ * tolerates fine. Only the remote CDN serves z0–18.
+ *
+ * Keyed on LOCALITY, not on which local layer answered: an older cache
+ * without viirs-roads takes the cartodb fallback, and a 0–18 clamp there
+ * 404-churns z13+ requests against the local server at flyover zooms.
+ *
+ * Pure and exported for test — this exact bug class (local URL/params that
+ * don't match the packager's layout) already shipped silently twice.
+ */
+export function roadLayerZoomRange(local: boolean): { minimumLevel: number; maximumLevel: number } {
+	return local ? { minimumLevel: 4, maximumLevel: 12 } : { minimumLevel: 0, maximumLevel: 18 };
 }
 
 /**

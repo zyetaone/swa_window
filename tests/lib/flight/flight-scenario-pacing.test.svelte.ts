@@ -133,15 +133,24 @@ describe('scenario playback pacing', () => {
 
 		const ctxA = makeCtx();
 		const ctxB = makeCtx();
+		// Absolute progress uses wallTimeSec; keep wall clocks explicit.
+		ctxA.wallTimeSec = 0;
+		ctxB.wallTimeSec = 0;
 		// b covers the same authored distance in half the wall time.
-		for (let t = 0; t < 40; t += 0.1) { a.tick(0.1, ctxA); ctxA.time += 0.1; }
-		for (let t = 0; t < 20; t += 0.1) { b.tick(0.1, ctxB); ctxB.time += 0.1; }
+		for (let t = 0; t < 40; t += 0.1) {
+			a.tick(0.1, ctxA);
+			ctxA.time += 0.1;
+			ctxA.wallTimeSec = (ctxA.wallTimeSec ?? 0) + 0.1;
+		}
+		for (let t = 0; t < 20; t += 0.1) {
+			b.tick(0.1, ctxB);
+			ctxB.time += 0.1;
+			ctxB.wallTimeSec = (ctxB.wallTimeSec ?? 0) + 0.1;
+		}
 
-		// 3dp ≈ 100 m. Not tighter: the path carries a small sine jitter keyed
-		// to ctx.time (amplitude ~0.0003 deg, ~33 m), and the two engines are
-		// sampled at different ctx.time values by construction — so they follow
-		// the same authored curve with slightly different jitter phase.
-		expect(b.lat).toBeCloseTo(a.lat, 3);
-		expect(b.lon).toBeCloseTo(a.lon, 3);
+		// 2dp ≈ 1 km. Not tighter: sine jitter is keyed to wallT (different
+		// elapsed wall times at the same progress by construction).
+		expect(b.lat).toBeCloseTo(a.lat, 2);
+		expect(b.lon).toBeCloseTo(a.lon, 2);
 	});
 });

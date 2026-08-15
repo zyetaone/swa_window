@@ -99,6 +99,13 @@ export class FlightSimEngine {
 	// Scenario direction — toggled randomly on loop so the flight doesn't
 	// always trace the same waypoints in the same order.
 	#scenarioForward = true;
+	// ── Absolute-derivation epochs (multi-Pi self-heal) ────────────────────
+	// Integrating angle/progress with wallDelta alone drifts if a pane drops
+	// frames or NTP steps. Re-derive from (epoch, wallT) each tick so all
+	// Pis that share the seed + wall clock reconverge.
+	#orbitEpochWallT: number | null = null;
+	#orbitEpochAngle = 0;
+	#scenarioLegStartWallT: number | null = null;
 
 	// --- Derived ---
 	// Single source of truth for travel direction. Everything downstream that
@@ -163,6 +170,9 @@ export class FlightSimEngine {
 		// Randomise rotation sense so the camera sweep isn't always the same
 		// direction. Deterministic via the seeded rng → identical across Pis.
 		this.orbitDirection = rng() < 0.5 ? -1 : 1;
+		// Fresh orbit epoch — first #tickOrbit latches wallT against this angle.
+		this.#orbitEpochWallT = null;
+		this.#orbitEpochAngle = this.orbitAngle;
 		this.#initScenario(locationId, skyState);
 	}
 
@@ -301,17 +311,19 @@ export class FlightSimEngine {
 		else this.#tickOrbit(delta, ctx);
 	}
 
-	#tickOrbit(delta: number, ctx: SimulationContext): void {
+	#tickOrbit(_delta: number, ctx: SimulationContext): void {
 		const orbit = ctx.camera.orbit;
 		// Wall clock, not ctx.time/delta: sim time is boot-relative and advanced
 		// by the dt-clamped delta, so on a slow Pi it runs slower than wall
 		// clock and panorama panes decorrelate (breathe radius alone mismatches
 		// up to majorMax−majorMin ≈ 19 km ground). wallTimeSec/wallDeltaSec come
-		// from Date.now() — identical across Pis within NTP drift. The seeded
-		// start angle (setLocationWithSky) only stays position-locked if the
-		// oscillators and the angle integral track the same clock on every pane.
+		// from Date.now() — identical across Pis within NTP drift.
+		//
+		// Absolute derivation: re-integrate orbitAngle from a latched epoch
+		// (angle0, wallT0) to the current wallT with fixed substeps. Missed
+		// frames / different FPS no longer leave panes at different phases —
+		// they reconverge on the next tick that shares wallT.
 		const wallT = ctx.wallTimeSec ?? ctx.time;
-		const wallDelta = ctx.wallDeltaSec ?? delta;
 		const breathePhase = (wallT / orbit.breathePeriod) * Math.PI * 2;
 		const breathe = (Math.sin(breathePhase) + 1) * 0.5;
 		this.orbitRadiusMajor = orbit.majorMin + breathe * (orbit.majorMax - orbit.majorMin);
@@ -320,14 +332,23 @@ export class FlightSimEngine {
 		const a = this.orbitRadiusMajor;
 		const b = this.orbitRadiusMinor;
 
+		if (this.#orbitEpochWallT === null) {
+			this.#orbitEpochWallT = wallT;
+			this.#orbitEpochAngle = this.orbitAngle;
+		}
+		this.orbitAngle = integrateOrbitAngle({
+			angle0: this.#orbitEpochAngle,
+			wallT0: this.#orbitEpochWallT,
+			wallT,
+			a,
+			b,
+			direction: this.orbitDirection,
+			driftRate: orbit.driftRate,
+			flightSpeed: this.flightSpeed,
+		});
+
 		const tx = a * Math.cos(this.orbitAngle);
 		const ty = -b * Math.sin(this.orbitAngle);
-		const localSpeed = Math.sqrt(tx * tx + ty * ty);
-		// Advance the orbit angle in the chosen rotation sense (±1). Wrap
-		// both ends now that the angle can decrease as well as increase.
-		this.orbitAngle += this.orbitDirection * ((orbit.driftRate * this.flightSpeed) / Math.max(localSpeed, 0.001)) * wallDelta;
-		if (this.orbitAngle > Math.PI * 2) this.orbitAngle -= Math.PI * 2;
-		if (this.orbitAngle < 0) this.orbitAngle += Math.PI * 2;
 
 		const ex = a * Math.sin(this.orbitAngle);
 		const ey = b * Math.cos(this.orbitAngle);
@@ -350,7 +371,7 @@ export class FlightSimEngine {
 		this.heading = normalizeHeading(baseHeading + wander);
 	}
 
-	#tickScenario(delta: number, ctx: SimulationContext): void {
+	#tickScenario(_delta: number, ctx: SimulationContext): void {
 		if (!this.#currentScenario) return;
 		const waypoints = this.#currentScenario.waypoints;
 		const n = waypoints.length;
@@ -365,10 +386,11 @@ export class FlightSimEngine {
 		const p3 = fwd ? waypoints[(nextIdx + 1) % n] : waypoints[(nextIdx - 1 + n) % n];
 
 		const duration = p2.duration > 0 ? p2.duration : 30;
-		// Wall-clock advance/jitter — same cross-pane decorrelation argument as
-		// #tickOrbit: clamped-delta integration runs slow on low-fps Pis.
+		// Wall-clock absolute progress — same multi-Pi self-heal as #tickOrbit.
+		// Progress is (wallT − legStart) × speedNorm / duration, not a running
+		// sum of wallDelta, so missed frames reconverge.
 		const wallT = ctx.wallTimeSec ?? ctx.time;
-		const wallDelta = ctx.wallDeltaSec ?? delta;
+		if (this.#scenarioLegStartWallT === null) this.#scenarioLegStartWallT = wallT;
 		// NORMALISE THE SPEED KNOB — DO NOT PASS IT RAW.
 		// Authored `duration` is SECONDS at the default knob position. The raw
 		// 4.0 knob was multiplied straight in, so every authored leg ran 4x
@@ -377,7 +399,9 @@ export class FlightSimEngine {
 		// for a real airliner). The waypoints were plausible; the playback rate
 		// was eating them. Same bug class as the 0..5 night-light knob — see
 		// nightLightGain in world/altitude.
-		this.#scenarioProgress += (wallDelta * (this.flightSpeed / DEFAULT_FLIGHT_SPEED)) / duration;
+		const speedNorm = this.flightSpeed / DEFAULT_FLIGHT_SPEED;
+		const elapsed = Math.max(0, wallT - this.#scenarioLegStartWallT);
+		this.#scenarioProgress = (elapsed * speedNorm) / duration;
 
 		// LINEAR param (was smoothstep) — Catmull-Rom now supplies the smoothing,
 		// so a steady param advances the camera THROUGH each waypoint instead of
@@ -416,6 +440,7 @@ export class FlightSimEngine {
 
 		if (this.#scenarioProgress >= 1) {
 			this.#scenarioProgress = 0;
+			this.#scenarioLegStartWallT = wallT;
 			this.#scenarioWaypointIndex = nextIdx;
 			if (nextIdx === 0) {
 				this.#scenarioLoopCount++;
@@ -490,7 +515,61 @@ export class FlightSimEngine {
 		// departure that wrapped many legs), so the new scenario started
 		// mid-Catmull-Rom and the camera jumped after every city change.
 		this.#scenarioProgress = 0;
+		this.#scenarioLegStartWallT = null;
 		this.#scenarioLoopCount = 0;
 		this.#scenarioForward = true;
 	}
+}
+
+/**
+ * Re-integrate elliptical orbit angle from (angle0, wallT0) → wallT.
+ * Pure / exported for tests. Fixed 50 ms substeps bound cost and keep
+ * multi-Pi results identical for the same inputs.
+ */
+export function integrateOrbitAngle(opts: {
+	angle0: number;
+	wallT0: number;
+	wallT: number;
+	a: number;
+	b: number;
+	direction: number;
+	driftRate: number;
+	flightSpeed: number;
+	/** Substep size (seconds). Smaller = closer to continuous integral. */
+	stepSec?: number;
+}): number {
+	const { angle0, wallT0, wallT, a, b, direction, driftRate, flightSpeed } = opts;
+	const stepSec = opts.stepSec ?? 0.05;
+	if (!(wallT > wallT0) || !Number.isFinite(wallT) || !Number.isFinite(wallT0)) {
+		return wrapAngle(angle0);
+	}
+	let angle = angle0;
+	let t = wallT0;
+	// Cap work: 60 s of catch-up max (NTP jump / tab background). Beyond that
+	// we skip in one coarse step so a multi-minute suspend cannot spin the CPU.
+	const end = Math.min(wallT, wallT0 + 60);
+	while (t < end - 1e-9) {
+		const dt = Math.min(stepSec, end - t);
+		const tx = a * Math.cos(angle);
+		const ty = -b * Math.sin(angle);
+		const localSpeed = Math.sqrt(tx * tx + ty * ty);
+		angle += direction * ((driftRate * flightSpeed) / Math.max(localSpeed, 0.001)) * dt;
+		t += dt;
+	}
+	// Remaining span after the 60 s cap (rare) — single coarse step.
+	if (wallT > end) {
+		const dt = wallT - end;
+		const tx = a * Math.cos(angle);
+		const ty = -b * Math.sin(angle);
+		const localSpeed = Math.sqrt(tx * tx + ty * ty);
+		angle += direction * ((driftRate * flightSpeed) / Math.max(localSpeed, 0.001)) * dt;
+	}
+	return wrapAngle(angle);
+}
+
+function wrapAngle(a: number): number {
+	const twoPi = Math.PI * 2;
+	let x = a % twoPi;
+	if (x < 0) x += twoPi;
+	return x;
 }

@@ -39,6 +39,7 @@ import { Telemetry } from '$lib/model/telemetry.svelte';
 import { effectiveCloudDensityFor } from '$lib/model/atmosphere-rules';
 import { isGroupLeader, resolveBinding } from '$lib/fleet/parallax.svelte';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
+import { resolveLocalHours } from '$lib/model/local-time';
 // TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
 import { TRANSITION_DELAY_MS, transitionDelayMs, type DisplayConfig } from '$lib/fleet/protocol';
@@ -419,14 +420,16 @@ export class AeroWindow {
 	}
 
 	updateTimeFromSystem(): void {
-		// timeOfDay is LOCAL time at the depicted location, not device-local
-		// time — device getHours() was only correct when the kiosk's timezone
-		// happened to match the location. Derive from UTC + the location's
-		// utcOffset so "Real Time" follows the city on screen (a Hyderabad
-		// kiosk showing Dallas shows Dallas time).
-		const now = new Date();
-		const utcHours = now.getUTCHours() + now.getUTCMinutes() / 60;
-		this.timeOfDay = (utcHours + this.currentLocation.utcOffset + 24) % 24;
+		// timeOfDay is LOCAL civil time at the depicted location (or the admin
+		// IANA override). Prefer location.timeZone so DST is correct; fixed
+		// utcOffset is only a fallback (see resolveLocalHours).
+		const loc = this.currentLocation;
+		const override = this.config.director.daylight.timeZoneOverride?.trim() ?? '';
+		this.timeOfDay = resolveLocalHours({
+			timeZone: loc.timeZone,
+			utcOffset: loc.utcOffset,
+			zoneOverride: override,
+		});
 	}
 
 	pickNextLocation(): LocationId {

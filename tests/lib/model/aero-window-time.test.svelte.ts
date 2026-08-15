@@ -12,32 +12,59 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
+import { applyConfigPatch } from '$lib/model/config-tree.svelte';
 
 beforeEach(() => {
 	localStorage.clear();
+	// director.daylight.timeZoneOverride is process-global config — clear so
+	// tests that set an override cannot poison later cases.
+	applyConfigPatch('director.daylight.timeZoneOverride', '');
 });
 
 afterEach(() => {
 	vi.useRealTimers();
+	applyConfigPatch('director.daylight.timeZoneOverride', '');
 });
 
 describe('updateTimeFromSystem', () => {
-	it('computes location-local time from UTC + utcOffset (east of Greenwich)', () => {
+	it('computes location-local time via IANA zone (Dubai, no DST)', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
 		const model = new AeroWindow();
 		model.syncToRealTime = false; // isolate explicit update call
-		model.setLocation('dubai');   // utcOffset +4
+		model.setLocation('dubai');   // Asia/Dubai = UTC+4
 		model.updateTimeFromSystem();
 		expect(model.timeOfDay).toBeCloseTo(14.5, 5);
 	});
 
-	it('computes location-local time from UTC + utcOffset (west of Greenwich)', () => {
+	it('applies DST for Dallas (America/Chicago CDT in August)', () => {
+		vi.useFakeTimers();
+		// 10:30 UTC → 05:30 CDT (UTC−5), not the fixed utcOffset −6
+		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
+		const model = new AeroWindow();
+		model.syncToRealTime = false;
+		model.setLocation('dallas');
+		model.updateTimeFromSystem();
+		expect(model.timeOfDay).toBeCloseTo(5.5, 5);
+	});
+
+	it('honours director.daylight.timeZoneOverride over location zone', () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
 		const model = new AeroWindow();
 		model.syncToRealTime = false;
-		model.setLocation('ocean');   // utcOffset -10
+		model.setLocation('dallas');
+		model.applyConfigPatch('director.daylight.timeZoneOverride', 'UTC');
+		model.updateTimeFromSystem();
+		expect(model.timeOfDay).toBeCloseTo(10.5, 5);
+	});
+
+	it('computes location-local time for Pacific/Honolulu (no DST)', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
+		const model = new AeroWindow();
+		model.syncToRealTime = false;
+		model.setLocation('ocean');   // Pacific/Honolulu = UTC−10
 		model.updateTimeFromSystem();
 		expect(model.timeOfDay).toBeCloseTo(0.5, 5);
 	});
@@ -63,5 +90,34 @@ describe('updateTimeFromSystem', () => {
 		const model = new AeroWindow();
 		model.setTime(14.5);
 		expect(model.localTimeOfDay).toBe(14.5);
+	});
+});
+
+describe('wall-clock tick context', () => {
+	// Regression: wallDeltaSec was upper-capped (5 s) but never floored, so a
+	// runtime NTP step-BACK produced e.g. -3600 and slammed the orbit/scenario
+	// integrators far backward. Now clamped to [0, 5].
+	it('floors wallDeltaSec at 0 when the system clock steps backward', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
+		const model = new AeroWindow();
+		model.syncToRealTime = false;
+		const spy = vi.spyOn(model.flight, 'tick');
+		model.tick(0.016); // establishes the wall-clock baseline
+		vi.setSystemTime(new Date('2026-08-14T09:30:00Z')); // 1 h NTP step-back
+		model.tick(0.016);
+		expect(spy.mock.calls[1][1].wallDeltaSec).toBe(0);
+	});
+
+	it('caps wallDeltaSec at 5 s after a long suspend', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-14T10:30:00Z'));
+		const model = new AeroWindow();
+		model.syncToRealTime = false;
+		const spy = vi.spyOn(model.flight, 'tick');
+		model.tick(0.016);
+		vi.setSystemTime(new Date('2026-08-14T10:32:00Z')); // 2 min suspend
+		model.tick(0.016);
+		expect(spy.mock.calls[1][1].wallDeltaSec).toBe(5);
 	});
 });

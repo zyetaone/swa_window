@@ -186,6 +186,13 @@ export function setParallaxRole(role: DeviceRole): void {
 export const director = $state({
 	daylight: {
 		syncIntervalMs: 60_000,        // 1 minute
+		/**
+		 * Admin IANA zone override for Real Time. Empty = use the depicted
+		 * location's `timeZone`. When set (e.g. America/Chicago), all Real Time
+		 * updates follow that zone regardless of the city on screen — useful for
+		 * a wall that should always show HQ local time while flying elsewhere.
+		 */
+		timeZoneOverride: '',
 	},
 	autopilot: {
 		enabled: true,
