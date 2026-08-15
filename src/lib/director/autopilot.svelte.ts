@@ -76,10 +76,27 @@ export function directorReset(ctx: SimulationContext): void {
 	const ap = ctx.director.autopilot;
 	_directorTimer = 0;
 	_timeToNextLocation = randomBetween(ap.directorMinInterval, ap.directorMaxInterval);
-	// Arriving somewhere restarts the flyover cadence — no beat right after a
-	// cruise (lazy re-seed on the next tick).
-	_vantageTimer = 0;
-	_timeToNextVantage = null;
+	// ─── THE VANTAGE TIMER IS DELIBERATELY NOT RESET HERE ────────────────────
+	// It used to be, with the reasoning "arriving somewhere restarts the flyover
+	// cadence — no beat right after a cruise". That reasoning quietly made the
+	// beat UNREACHABLE, by arithmetic:
+	//
+	//   vantage.minIntervalSec  = 900   (15 min, the shortest possible wait)
+	//   directorMaxInterval     = 180   (3 min, the longest gap between arrivals)
+	//   directorReset() runs on EVERY arrival (flight.svelte.ts sets
+	//   patch.resetDirector on arrive; aero-window.svelte.ts consumes it)
+	//
+	// so the timer was zeroed at most every 180 s while needing to reach 900 s.
+	// It could never get there. The single descent-over-a-lit-city moment — the
+	// payoff for the entire VIIRS night-lights pipeline — has never fired under
+	// shipped defaults.
+	//
+	// The original intent is still honoured, just by the right mechanism:
+	// tickVantage already refuses to fire by day or during a manual altitude
+	// adjustment, and re-seeds its own interval after each beat. Location
+	// cadence resets on arrival; flyover cadence accumulates across arrivals,
+	// which is what "every 15-40 minutes of night flying" was always meant to
+	// describe.
 }
 
 // ─── Weather randomisation ──────────────────────────────────────────────────

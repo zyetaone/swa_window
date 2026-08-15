@@ -23,6 +23,7 @@ import { loadDisplayMode, saveDisplayMode, peekDisplayModeSavedAt } from '$lib/f
 import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
 import { AMBIENT_PERSIST_PATHS, type AmbientValue, type PeerSyncPath } from '$lib/model/peer-sync-paths';
 import { pickNextLocation } from '$lib/director/scenarios';
+import { lightingState } from '$lib/world/curves';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
 import { pickDailyShow } from '$content/shows';
 import { applyShowOpening } from '$lib/director/show-opening';
@@ -433,8 +434,28 @@ export class AeroWindow {
 	}
 
 	pickNextLocation(): LocationId {
+		// `nightLitCitiesOnly` means "only fly to LIT cities AT NIGHT" — its own
+		// config comment says so. It was being passed unconditionally, with no
+		// night gate, which is a different and much narrower rule: only ever fly
+		// to cities that have buildings, at any hour.
+		//
+		// The cost was four locations and eight authored scenarios that could
+		// never be reached by autopilot OR by a blind pull (which routes through
+		// this same picker): the Himalayas, the Pacific, the Sahara, and Above
+		// Clouds — every location in the catalogue with hasBuildings:false, and
+		// between them the most distinctive frames in the whole product.
+		//
+		// Gating on actual darkness restores them by day, which is also when a
+		// wide, quiet, low-information view next to someone's desk is worth the
+		// most. At night the lit-city restriction still applies, because that is
+		// when city lights are the thing worth flying to.
+		// Gated on cityLightAmount, the existing civil-twilight SSOT for "are the
+		// discrete city lights on" — deliberately NOT on vantage.minNightFactor,
+		// which belongs to the flyover beat. Borrowing that knob would mean
+		// retuning the beat silently rewrites the destination pool.
+		const lightsAreOn = lightingState(this.timeOfDay, this.nightFactor).cityLightAmount > 0;
 		return pickNextLocation(this.location, this.timeOfDay, {
-			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly,
+			nightLitOnly: this.config.director.autopilot.nightLitCitiesOnly && lightsAreOn,
 		});
 	}
 
