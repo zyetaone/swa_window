@@ -21,8 +21,9 @@ import { T } from '$lib/utils';
 import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE, nightPostFxOn, qualityPaintGates } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesAvailable } from './cesium-setup';
-import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
-import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
+import { mountLightning, tickLightning } from './lightning-stage';
+import { mountCesiumClouds, updateCesiumClouds } from './cloud-billboard-layer';
+import { teardownViewerState } from './viewer-lifecycle';
 import { initImagery, setupImagery, syncImagery } from './imagery';
 import { initBuildings, setupBuildings, syncBuildings, syncOfflineBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
 import { installHashPalette } from './hash-palette';
@@ -510,8 +511,10 @@ export class CesiumManager {
 	destroy(): void {
 		this.#hashPaletteCleanup?.();
 		this.#hashPaletteCleanup = null;
-		destroyLightning();
-		destroyCesiumClouds();
+		// Every subsystem that holds viewer-scoped state, in one call. Was two
+		// named destroys, which is precisely how a third subsystem's state ended
+		// up cleared by nothing — see world/viewer-lifecycle.
+		teardownViewerState();
 		if (!this.#viewer.isDestroyed()) {
 			if (this.#boundTick) this.#viewer.scene.postRender.removeEventListener(this.#boundTick);
 			this.#viewer.destroy();

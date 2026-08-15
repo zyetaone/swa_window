@@ -126,14 +126,23 @@ describe('the city cache does not outlive its viewer', () => {
 		expect(hasOfflineBuildings('denver')).toBe(false);
 	});
 
-	it('is wired into initBuildings, not merely available', async () => {
+	it('is reached by the buildings teardown, not merely available', async () => {
 		// Exporting the reset is useless if the lifecycle never calls it — the
 		// bug was an omission at the call site, so that is what gets pinned.
+		//
+		// Originally this looked for the call inside initBuildings. The teardown
+		// contract (world/viewer-lifecycle) since moved it into the extracted
+		// resetBuildingsViewerState, which initBuildings calls and which is also
+		// registered for destroy(). Following the indirection rather than
+		// loosening the assertion: the property that matters is that the
+		// buildings teardown clears the offline cache, wherever it lives.
 		const { readFile } = await import('node:fs/promises');
 		const src = await readFile('src/lib/world/buildings.ts', 'utf8');
+		const fn = src.slice(src.indexOf('export function resetBuildingsViewerState'));
+		expect(fn.slice(0, fn.indexOf('\n}'))).toContain('resetOfflineBuildings()');
+
 		const init = src.slice(src.indexOf('export function initBuildings'));
-		const body = init.slice(0, init.indexOf('\n}'));
-		expect(body).toContain('resetOfflineBuildings()');
+		expect(init.slice(0, init.indexOf('\n}'))).toContain('resetBuildingsViewerState()');
 	});
 });
 

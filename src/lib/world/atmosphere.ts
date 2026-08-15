@@ -15,6 +15,7 @@ import { lerp } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { lightingState } from '$lib/world/curves';
 import { EpsilonGate } from './util';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 interface AtmosphereConfigSlice {
 	skyDarken: number; moonlightIntensity: number; nightExposure: number;
@@ -91,25 +92,9 @@ let _moonPhaseCache = 1.0;
 
 export function initAtmosphere(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
-	_globeColor.reset();
-	_fogDensity.reset();
-	_fogBrightness.reset();
-	_lightIntensity.reset();
-	_skySatShift.reset();
-	_skyBrShift.reset();
-	_atmoKilled.reset();
-	_exposure.reset();
-	_atmoLight.reset();
-	_fogVisualScalar.reset();
-	// Not a gate, but the same re-init class: if the old viewer died at deep
-	// night with moonlight active, a stuck `true` keeps the moonlight branch
-	// from ever attaching to the fresh scene and the night globe renders
-	// day-lit until nf < 0.65 self-heals.
-	_isUsingMoonlight = false;
-	// Moon-phase cache is memoised per clock time; a stale cache from a dead
-	// viewer's timeline would serve the wrong phase until the time key moved.
-	_moonPhaseTime = -1;
-	_moonPhaseCache = 1.0;
+	// Gates, moonlight flag and moon-phase cache all live in the shared
+	// teardown now — see resetAtmosphereViewerState.
+	resetAtmosphereViewerState();
 	_originalSunLight = viewer.scene.light;
 	_moonlight = new Cesium.DirectionalLight({
 		direction: new Cesium.Cartesian3(0, 0, -1),
@@ -215,3 +200,33 @@ export function syncAtmosphere(model: AtmosphereModel, clockTime: CesiumType.Jul
 		ao.enabled = w.ambientOcclusion && w.qualityMode !== 'performance' && camAlt < 15_000;
 	}
 }
+
+/**
+ * Gate + cached-state teardown for a viewer that is going away.
+ *
+ * `_isUsingMoonlight` is not a gate but the same class: if the old viewer died
+ * at deep night with moonlight active, a stuck `true` keeps the moonlight
+ * branch from ever attaching to the fresh scene and the night globe renders
+ * day-lit until nf < 0.65 self-heals. The moon-phase cache is memoised per
+ * clock time, so a stale entry from a dead viewer's timeline would serve the
+ * wrong phase until the time key moved.
+ *
+ * Does NOT touch _originalSunLight / _moonlight: those are rebuilt from the
+ * incoming viewer in initAtmosphere and are meaningless without one.
+ */
+export function resetAtmosphereViewerState(): void {
+	_globeColor.reset();
+	_fogDensity.reset();
+	_fogBrightness.reset();
+	_lightIntensity.reset();
+	_skySatShift.reset();
+	_skyBrShift.reset();
+	_atmoKilled.reset();
+	_exposure.reset();
+	_atmoLight.reset();
+	_fogVisualScalar.reset();
+	_isUsingMoonlight = false;
+	_moonPhaseTime = -1;
+	_moonPhaseCache = 1.0;
+}
+registerViewerTeardown('atmosphere', resetAtmosphereViewerState);

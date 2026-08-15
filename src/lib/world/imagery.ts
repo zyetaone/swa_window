@@ -17,6 +17,7 @@ import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, loca
 import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 /**
  * Cesium `colorToAlpha` thresholds — SSOT for night imagery keying.
@@ -29,10 +30,24 @@ import { EpsilonGate } from './util';
  * Deep-review findings (shipped twice as silent failures):
  *   - roads: 0.0 only matched exact #000; CartoDB bg is ~#0e1013 → 0.12
  *   - VIIRS: true black NASA tiles → 0.01 hairline is enough
+ *
+ * Road layers need TWO thresholds (not one):
+ *   - CartoDB raw/CDN: near-black background → roadThreshold 0.12
+ *   - Baked viirs-roads: true-black background + packager floor glow in dim
+ *     cells. A 0.12 key on that path deletes the floor strokes the baker
+ *     keeps for sparse towns (euclid ~0.03 after floor 0.15). Composite uses
+ *     roadCompositeThreshold so those dim arteries survive.
  */
 export const COLOR_TO_ALPHA = {
 	viirsThreshold: 0.01,
+	/** Raw CartoDB / CDN — clears ~#0e1013 basemap, keeps full strokes. */
 	roadThreshold: 0.12,
+	/**
+	 * Baked viirs-roads composite. Background is true black; keep low enough
+	 * that packager floor glow (tools/tile-packager --floor, default 0.15)
+	 * still keys as road, not transparent.
+	 */
+	roadCompositeThreshold: 0.03,
 } as const;
 
 interface WorldConfig {
@@ -65,11 +80,20 @@ const _roadAlpha = new EpsilonGate<number>(0.001, -1);
 const _roadBrightness = new EpsilonGate<number>(0.01, -1);
 export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
-	// Drop layer handles from the PREVIOUS viewer. They belong to a viewer
-	// that is being (or has been) destroyed; keeping them means setupImagery
-	// skips re-adding — `if (_baseLayer)` is truthy — and every later sync
-	// writes into layers that are no longer in any scene. Nothing throws, the
-	// globe just renders bare.
+	resetImageryViewerState();
+}
+
+/**
+ * Drop layer handles from the PREVIOUS viewer. They belong to a viewer that is
+ * being (or has been) destroyed; keeping them means setupImagery skips
+ * re-adding — `if (_baseLayer)` is truthy — and every later sync writes into
+ * layers that are no longer in any scene. Nothing throws, the globe just
+ * renders bare.
+ *
+ * Registered with viewer-lifecycle so teardown happens on destroy as well as
+ * on the next mount.
+ */
+export function resetImageryViewerState(): void {
 	_baseLayer = null;
 	_viirsLayer = null;
 	_roadMaskLayer = null;
@@ -80,6 +104,7 @@ export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 	_roadBrightness.reset();
 	_lastNightFactor = -1;
 }
+registerViewerTeardown('imagery', resetImageryViewerState);
 
 export async function setupImagery(): Promise<void> {
 	const C = _cs;
@@ -217,11 +242,13 @@ export async function setupImagery(): Promise<void> {
 			// nothing was keyed out and the whole tile composited as an opaque
 			// dark sheet OVER the lit terrain. The layer meant to add street glow
 			// was subtracting ground light instead.
-			// ROAD threshold clears CartoDB near-black background (~#0e1013)
-			// while leaving road strokes intact. VIIRS uses a lower threshold
-			// because its background is true black (see COLOR_TO_ALPHA).
+			// Split thresholds — see COLOR_TO_ALPHA. CartoDB needs 0.12 for
+			// near-black basemap; composite is true black and must keep the
+			// packager's dim floor strokes (sparse towns / VIIRS gaps).
 			_roadMaskLayer.colorToAlpha = C.Color.BLACK;
-			_roadMaskLayer.colorToAlphaThreshold = COLOR_TO_ALPHA.roadThreshold;
+			_roadMaskLayer.colorToAlphaThreshold = useComposite
+				? COLOR_TO_ALPHA.roadCompositeThreshold
+				: COLOR_TO_ALPHA.roadThreshold;
 			_roadMaskLayer.saturation = 0.0;
 			// 1.5 → 1.75: more stroke/background separation before brightness
 			// scale — structure without needing a soaky VIIRS underlayer.

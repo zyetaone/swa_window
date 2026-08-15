@@ -31,6 +31,7 @@
 import type * as CesiumType from 'cesium';
 import { groundAltM } from '$content/locations';
 import type { LocationId } from '$lib/types';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 /** A footprint ready to hand to Cesium: ring in degrees + the two altitudes. */
 export interface BuildingExtrusion {
@@ -237,3 +238,7 @@ export function showOfflineCity(locationId: LocationId | null, enabled: boolean)
 		if (prim.show !== want) prim.show = want;
 	}
 }
+
+// The omission that prompted the whole contract: this cache belonged to
+// neither teardown convention, so nothing ever cleared it.
+registerViewerTeardown('buildings-geojson', resetOfflineBuildings);

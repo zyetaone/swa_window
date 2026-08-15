@@ -10,6 +10,7 @@
 import type * as CesiumType from 'cesium';
 import { getIonToken, checkLocalTileServer, TILE_SERVER_URL } from './cesium-setup';
 import { EpsilonGate } from './util';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 type C = typeof CesiumType;
 
@@ -20,11 +21,17 @@ const _exaggeration = new EpsilonGate<number>(0.01, -1);
 export function initTerrain(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium;
 	_viewer = viewer;
-	// See buildings/atmosphere/imagery: the gate outlives the viewer, so a
-	// remount must force the next write through or exaggeration stays at the
-	// new viewer's default.
+	resetTerrainViewerState();
+}
+
+/**
+ * The gate outlives the viewer, so a remount must force the next write through
+ * or exaggeration stays at the new viewer's default.
+ */
+export function resetTerrainViewerState(): void {
 	_exaggeration.reset();
 }
+registerViewerTeardown('terrain', resetTerrainViewerState);
 
 export async function setupTerrain(): Promise<void> {
 	const C = _cs;

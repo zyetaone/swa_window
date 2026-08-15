@@ -1,4 +1,22 @@
 /**
+ * viewer-lifecycle: tab-scoped
+ *
+ * This module holds module-level state and touches a Viewer, so the teardown
+ * coverage test flags it — correctly, by its own heuristic. It is exempt on
+ * purpose, and the exemption lives here so anyone adding state to this file
+ * has to think about which scope it belongs to.
+ *
+ * What lives here is scoped to the TAB, not to a viewer: the resolved Ion
+ * token and the local-tile-server probe result. Both are answers about the
+ * DEVICE, and neither changes when Cesium replaces a viewer. Clearing them on
+ * every remount would refetch the token and re-probe the tile server on each
+ * auto-retry — turning a recovery path into a slower one, and adding network
+ * round-trips to exactly the moment the app is already struggling.
+ *
+ * If genuinely viewer-scoped state is ever added to this file, it does NOT get
+ * to inherit this exemption: give it its own reset and register that.
+ */
+/**
  * Cesium Global Config
  *
  * Centralizes Ion tokens and environmental settings for the Cesium engine.

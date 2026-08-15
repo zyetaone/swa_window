@@ -31,6 +31,7 @@ import { altitudeDetailMix, NIGHT_EMISSIVE_WHITE_POINT } from '$lib/world/altitu
 import { enableNightIbl } from './night-ibl';
 import { CESIUM_QUALITY_PRESETS } from './cesium-setup';
 import { EpsilonGate } from './util';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 type C = typeof CesiumType;
 
@@ -56,22 +57,28 @@ export function initBuildings(Cesium: C, viewer: CesiumType.Viewer): void {
 	// Same reason as imagery: the tileset + custom shader belong to the
 	// previous viewer's scene. Holding them past a remount makes syncBuildings
 	// push uniforms into a primitive no longer attached to anything.
+	resetBuildingsViewerState();
+}
+
+/**
+ * Tier 1 handles belong to the scene that just went away; tier 2's cached city
+ * primitives would otherwise report as still loaded, leaving the new viewer
+ * with no skyline at all. `_offlineTier` is re-decided by setupBuildings.
+ *
+ * The gates are module-level singletons but the VIEWER is not: on remount the
+ * fresh viewer has Cesium defaults while the gates still hold the previous
+ * viewer's last-written values, so the first sync sees "unchanged" and skips
+ * applying them.
+ */
+export function resetBuildingsViewerState(): void {
 	tileset = null;
 	_shader = null;
-	// Tier 2 has exactly the same problem: its cached city primitives belong to
-	// the scene that just went away, and the cache would otherwise report them
-	// as still loaded — leaving the new viewer with no skyline at all.
-	// _offlineTier is re-decided by setupBuildings on the next boot.
 	resetOfflineBuildings();
 	_offlineTier = false;
-	// Gates are module-level singletons but the VIEWER is not: on remount
-	// (auto-retry, HMR, page nav) the fresh viewer has Cesium defaults while
-	// the gates still hold the previous viewer's last-written values, so the
-	// first sync sees "unchanged" and skips applying them. Same fix as
-	// atmosphere/imagery.
 	_show.reset();
 	_nightFactor.reset();
 }
+registerViewerTeardown('buildings', resetBuildingsViewerState);
 
 /**
  * Rooftop aviation beacon contract — kept as JS numbers so the shader
