@@ -183,10 +183,20 @@ export class AmbientAudio {
 		return true;
 	}
 
-	/** Ramp a param instead of stepping it — a step is a click. */
+	/**
+	 * Ramp a param instead of stepping it — a step is a click.
+	 *
+	 * Skips when the target hasn't moved. Callers are driven by an $effect on
+	 * scene state, and re-issuing cancelScheduledValues + setTargetAtTime for
+	 * an unchanged target doesn't just waste work: cancelling restarts the
+	 * ramp from wherever it got to, so a target re-sent faster than RAMP_S
+	 * converges asymptotically and never actually arrives. The guard is what
+	 * makes the ramp finish.
+	 */
 	#ramp(node: GainNode | null, value: number): void {
 		const ctx = this.#ctx;
 		if (!node || !ctx) return;
+		if (Math.abs(node.gain.value - value) < 1e-4) return;
 		node.gain.cancelScheduledValues(ctx.currentTime);
 		node.gain.setTargetAtTime(value, ctx.currentTime, RAMP_S);
 	}
@@ -226,11 +236,18 @@ export class AmbientAudio {
 
 		const ctx = this.#ctx;
 		if (this.#engineFilter && ctx) {
-			this.#engineFilter.frequency.setTargetAtTime(
-				engineCutoffHz(opts.altitudeFt),
-				ctx.currentTime,
-				1.5, // slow — altitude changes over minutes, not frames
-			);
+			// Same guard as #ramp, for the same reason: callers re-apply on
+			// every scene change, and re-targeting an unchanged cutoff would
+			// restart the glide forever. Callers also quantize altitude (see
+			// AmbientAudioHost) so this is reached seldom rather than per frame.
+			const hz = engineCutoffHz(opts.altitudeFt);
+			if (Math.abs(this.#engineFilter.frequency.value - hz) > 0.5) {
+				this.#engineFilter.frequency.setTargetAtTime(
+					hz,
+					ctx.currentTime,
+					1.5, // slow — altitude changes over minutes, not frames
+				);
+			}
 		}
 
 		this.setMusic(state.musicUrl, state.musicVolume, opts.musicAllowed);
@@ -268,9 +285,13 @@ export class AmbientAudio {
 			this.#musicSrc = url;
 		}
 		this.#ramp(this.#musicGain, clamp01(volume));
-		// play() rejects until the context is unlocked; the kiosk ships
-		// --autoplay-policy=no-user-gesture-required so this only bites in dev.
-		void this.#music?.play().catch(() => {});
+		// Only when actually stopped. play() on a playing element is harmless
+		// but allocates a Promise per call, and this runs off a scene $effect —
+		// per-frame promise churn is exactly the kind of thing that shows up as
+		// GC sawtooth on a Pi and nowhere else.
+		// The kiosk ships --autoplay-policy=no-user-gesture-required, so the
+		// rejection path only bites in dev and on the admin iPad.
+		if (this.#music?.paused) void this.#music.play().catch(() => {});
 	}
 
 	/**

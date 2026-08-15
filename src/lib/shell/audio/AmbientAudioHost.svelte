@@ -25,10 +25,31 @@
 
 	const audio = new AmbientAudio();
 
-	// rainOpacity is already "how wet is this weather" on a 0..1-ish scale, so
-	// the weather layer rides the same recipe the visuals do rather than a
-	// second hand-maintained mapping that could disagree with the rain on glass.
-	const wet = $derived(Math.min(1, WEATHER_EFFECTS[weather]?.rainOpacity ?? 0));
+	// Weather rides the same recipe the visuals do, rather than a second
+	// hand-maintained mapping that could drift from the rain on the glass.
+	//
+	// Normalised against the WETTEST recipe rather than used raw: rainOpacity
+	// is an alpha for a CSS layer and tops out at 0.35, so feeding it straight
+	// in meant the weather fader could never exceed 35% however far the
+	// operator pushed it. Derived from the recipes so adding a wetter one
+	// re-scales the range instead of silently pinning the top of it.
+	const MAX_RAIN = Math.max(
+		...Object.values(WEATHER_EFFECTS).map((fx) => fx.rainOpacity),
+		0.0001, // never divide by zero if every recipe goes dry
+	);
+	const wet = $derived(
+		Math.min(1, (WEATHER_EFFECTS[weather]?.rainOpacity ?? 0) / MAX_RAIN),
+	);
+
+	// ─── Why altitude is quantized ──────────────────────────────────────────
+	// flight.altitude is lerped EVERY FRAME by #tickAltitude, so reading it
+	// raw made this effect re-run at 60 Hz — re-scheduling four Web Audio
+	// params and allocating a play() promise per frame, on a Pi, forever.
+	//
+	// 500 ft is well under the ~110 Hz of cutoff travel spread across the
+	// altitude range, so banding is inaudible, but it collapses the update
+	// rate from 60/s to roughly one per several seconds of drift.
+	const altitudeBand = $derived(Math.round(altitudeFt / 500) * 500);
 
 	$effect(() => {
 		audio.apply(
@@ -40,7 +61,7 @@
 				musicVolume: config.audio.musicVolume,
 				musicUrl: config.audio.musicUrl,
 			},
-			{ altitudeFt, wet, musicAllowed: isLeader },
+			{ altitudeFt: altitudeBand, wet, musicAllowed: isLeader },
 		);
 	});
 
