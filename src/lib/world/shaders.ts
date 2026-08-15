@@ -15,6 +15,29 @@
  */
 
 /**
+ * Should the night post-FX pair (bloom + whichever grade is active) run?
+ *
+ * ─── WHY THIS IS NOT THE QUALITY GATE ───────────────────────────────────────
+ * bloom and the grades used to ride `qualityMode !== 'performance'` alongside
+ * shadows/FXAA/AO. The rationale was sound for daytime — every grade term is
+ * multiplied by u_nightFactor, so by day the whole pass costs a full-screen
+ * blit to produce an identity transform. But `performance` is the shipped Pi
+ * default, so the gate also removed them at night, which is the one time they
+ * ARE the look: bloom is the only source of spatial glow in the pipeline (the
+ * grades' additive is per-pixel and cannot bleed into neighbours), and the
+ * hash palette's ambient lift is what stops unlit terrain crushing to black.
+ *
+ * So gate on NIGHT, not on tier. Cost lands only where it buys something.
+ *
+ * Hysteresis (0.05 on / 0.02 off) because a bare threshold sits right where
+ * nightFactor creeps across it at dusk, and the transition installs/removes a
+ * post-process stage — cheap twice a day, not cheap every frame for a minute.
+ */
+export function nightPostFxOn(nightFactor: number, prev: boolean): boolean {
+	return nightFactor >= (prev ? 0.02 : 0.05);
+}
+
+/**
  * Cesium postProcessStage name for the grade below. SSOT shared with
  * hash-palette.ts and NightVariantPanel for install/uninstall.
  */

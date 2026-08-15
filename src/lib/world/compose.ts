@@ -19,7 +19,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
-import { COLOR_GRADE_STAGE } from './shaders';
+import { COLOR_GRADE_STAGE, nightPostFxOn } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesAvailable } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
@@ -78,6 +78,11 @@ export class CesiumManager {
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
 	#lastColorGradeEnabled: boolean | null = null;
+	// Night post-FX latch. Read per tick with hysteresis (nightPostFxOn) and
+	// folded into #syncQuality's memo key, so bloom + grade install once at
+	// dusk and uninstall once at dawn instead of every frame.
+	#nightFxOn = false;
+	#lastNightFxOn: boolean | null = null;
 	// Hash-palette stage lifecycle — installed/uninstalled reactively in
 	// #syncQuality when config.world.useHashPalette changes, not once at boot.
 	#hashPaletteCleanup: (() => void) | null = null;
@@ -264,7 +269,11 @@ export class CesiumManager {
 			},
 			this.#getBootFade(),
 		);
-		if (this.#colorGradeStage && this.#lastQualityMode !== 'performance') {
+		// Latch the night post-FX decision for #syncQuality (called later in the
+		// same tick). Hysteresis lives in nightPostFxOn so the dusk crossing
+		// can't thrash the stage install.
+		this.#nightFxOn = nightPostFxOn(m.nightFactor, this.#nightFxOn);
+		if (this.#colorGradeStage && (this.#lastQualityMode !== 'performance' || this.#nightFxOn)) {
 			// Hash palette wins when enabled: the two grading stages must never
 			// stack (double-grade), so color-grade stays off under useHashPalette.
 			const should = m.nightFactor >= 0.001 && !m.config.world.useHashPalette;
@@ -347,17 +356,10 @@ export class CesiumManager {
 		}
 		const bloom = v.scene.postProcessStages?.bloom;
 		if (bloom) {
-			const allow = this.#model.config.world.qualityMode !== 'performance';
-			bloom.enabled = allow;
-			if (allow) {
-				const w = this.#model.config.world;
-				bloom.uniforms.contrast = w.bloomContrast;
-				bloom.uniforms.brightness = w.bloomBrightness;
-				bloom.uniforms.sigma = w.bloomSigma;
-				bloom.uniforms.delta = 1.0;
-				bloom.uniforms.stepSize = 1.0;
-				(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
-			}
+			// Enabled-state and the tunable uniforms are owned by #syncQuality
+			// (called at the end of this function, and again every tick). Only
+			// the non-tunable constant is set here.
+			(bloom as unknown as { glowOnly?: boolean }).glowOnly = false;
 		}
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -381,20 +383,38 @@ export class CesiumManager {
 	#syncQuality(): void {
 		const mode = this.#model.config.world.qualityMode;
 		const useHash = this.#model.config.world.useHashPalette;
-		if (mode === this.#lastQualityMode && useHash === this.#lastUseHashPalette) return;
+		// Latch read once per tick in #syncImagery; part of the memo key so a
+		// dusk/dawn crossing re-runs this even when the config is unchanged.
+		const nightFx = this.#nightFxOn;
+		if (
+			mode === this.#lastQualityMode
+			&& useHash === this.#lastUseHashPalette
+			&& nightFx === this.#lastNightFxOn
+		) return;
 		this.#lastQualityMode = mode;
 		this.#lastUseHashPalette = useHash;
-		const allow = mode !== 'performance';
+		this.#lastNightFxOn = nightFx;
+
+		// TWO gates, deliberately different (see nightPostFxOn in shaders.ts):
+		//
+		//   quality — shadows / FXAA / AO. Cost is all-day and the benefit is
+		//             all-day, so it stays tied to the operator's tier choice.
+		//   postFx  — bloom + grade. Cost is all-day but the benefit is
+		//             night-only, so it follows the sun instead of the tier.
+		//
+		// These were one flag. That made `performance` (the shipped Pi default)
+		// render night with no glow and no grade at all — the tuned bloomSigma
+		// and the whole hash palette were inert on the wall.
+		const quality = mode !== 'performance';
+		const postFx = quality || nightFx;
+
 		// Hash palette follows the flag at runtime: install on true, uninstall
 		// (remove stage + restore aero-color-grade) on false. Boot-only install
 		// left the stage permanently enabled after a runtime toggle-off while
 		// #syncImagery re-enabled color-grade — the double-grade.
-		// It is also a full-screen grade, so it obeys the same quality gate as
-		// aero-color-grade below: in performance mode neither grade runs. The
-		// shipped default (performance + useHashPalette: true) otherwise ran
-		// this pass 24/7 on every Pi — pure cost by day, where every term
-		// multiplies out to identity.
-		const wantHash = useHash && allow;
+		// It is also a full-screen grade, so it rides `postFx` with bloom: it
+		// installs at dusk and uninstalls at dawn rather than running 24/7.
+		const wantHash = useHash && postFx;
 		if (wantHash && !this.#hashPaletteCleanup) {
 			this.#hashPaletteCleanup = installHashPalette(
 				this.#C, this.#viewer,
@@ -413,25 +433,30 @@ export class CesiumManager {
 			this.#lastColorGradeEnabled = null;
 		}
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
-		if (bloom) bloom.enabled = allow;
+		if (bloom) bloom.enabled = postFx;
 		// Warm palette is load-bearing, but hash palette wins when enabled —
-		// the two grading stages must never stack (double-grade). Gated by the
-		// same `allow` as bloom/shadows/fxaa: in performance mode this
-		// full-screen grade stays off instead of running 24/7. In quality mode
-		// (#lastQualityMode !== 'performance') #syncImagery re-takes
-		// enabled-management per tick, so behaviour there is unchanged.
-		if (this.#colorGradeStage) this.#colorGradeStage.enabled = allow && !wantHash;
+		// the two grading stages must never stack (double-grade). Rides `postFx`
+		// with bloom. When postFx is on, #syncImagery re-takes enabled-management
+		// per tick (it also honours the useHashPalette half of this condition).
+		if (this.#colorGradeStage) this.#colorGradeStage.enabled = postFx && !wantHash;
 		const v = this.#viewer;
-		if (v.shadowMap) v.shadowMap.enabled = allow;
+		if (v.shadowMap) v.shadowMap.enabled = quality;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(v.scene.postProcessStages as any).fxaa.enabled = allow;
+		(v.scene.postProcessStages as any).fxaa.enabled = quality;
+		// atmosphere.ts re-decides this per tick behind its own <15 000 ft gate;
+		// this only sets the floor when the tier changes.
 		const ao = v.scene.postProcessStages.ambientOcclusion;
-		if (ao) ao.enabled = allow;
-		if (bloom && allow) {
+		if (ao) ao.enabled = quality;
+		// Uniforms must be written whenever bloom is enabled, not just in
+		// quality mode — the night path would otherwise bloom with Cesium's
+		// defaults and none of the tuned sigma/contrast.
+		if (bloom && postFx) {
 			const w = this.#model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;
 			bloom.uniforms.brightness = w.bloomBrightness;
 			bloom.uniforms.sigma = w.bloomSigma;
+			bloom.uniforms.delta = 1.0;
+			bloom.uniforms.stepSize = 1.0;
 		}
 	}
 
