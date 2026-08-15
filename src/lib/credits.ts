@@ -24,6 +24,19 @@ export const PRODUCT_PARTNERS = ['Zyeta', 'SWA'] as const;
 
 export const PRODUCT_YEAR = 2026;
 
+/**
+ * Release stage, shown on OPERATOR surfaces only (admin, wiki) — never on the
+ * window itself.
+ *
+ * The kiosk is a fiction: an airplane window. A "BETA" chip floating over it
+ * would break that the same way an error toast would, and the audience has no
+ * use for the information. The people who need it are the client and whoever is
+ * running the fleet, and both of them look at /admin or /wiki, not at the glass.
+ *
+ * Set to null when the product leaves beta; every consumer already guards on it.
+ */
+export const PRODUCT_STAGE: string | null = 'Beta';
+
 /** One-line credit for footers and meta. */
 export const PRODUCT_CREDIT_LINE =
 	`${PRODUCT_NAME} · ${PRODUCT_OWNER} · engineered by ${ENGINEERED_BY} · ${PRODUCT_YEAR}`;

@@ -3,6 +3,7 @@
 	import { startPeerSync, getAmbientSyncFailures, clearAmbientSyncFailures } from '$lib/fleet/peer-sync.svelte';
 	import { formatAltitudeFt, formatSpeedX, formatTime, formatUptime } from '$lib/utils';
 	import { fanOut } from '$lib/fleet/fan-out';
+	import { PRODUCT_STAGE } from '$lib/credits';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
 	import AtmosphereControls from '$lib/shell/operator/panel/AtmosphereControls.svelte';
 	import FlightControls from '$lib/shell/operator/panel/FlightControls.svelte';
@@ -403,6 +404,7 @@
 	<header class="header">
 		<div class="header-left">
 			<h1>Aero Admin</h1>
+			{#if PRODUCT_STAGE}<span class="stage-badge">{PRODUCT_STAGE}</span>{/if}
 			<span class="subtitle">Fleet Management</span>
 		</div>
 		<div class="header-right">
@@ -856,6 +858,21 @@
 		font-size: 20px;
 		font-weight: 700;
 		color: #fafafa;
+	}
+
+	/* Operator-facing release stage. Deliberately absent from the kiosk window
+	   itself — see PRODUCT_STAGE in $lib/credits. */
+	.stage-badge {
+		align-self: center;
+		background: rgba(214,158,46,0.16);
+		border: 1px solid rgba(214,158,46,0.42);
+		color: #d69e2e;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		padding: 2px 8px;
+		border-radius: 10px;
 	}
 
 	.subtitle {

@@ -8,6 +8,7 @@
 		PRODUCT_NAME,
 		PRODUCT_OWNER,
 		PRODUCT_SHORT,
+		PRODUCT_STAGE,
 		PRODUCT_YEAR,
 	} from '$lib/credits';
 </script>
@@ -37,6 +38,7 @@
 			<a href="#perf">Pi performance</a>
 		</nav>
 		<div class="hero-meta">
+			{#if PRODUCT_STAGE}<span class="stage-badge">{PRODUCT_STAGE}</span>{/if}
 			<span>SvelteKit 2 + Svelte 5 Runes</span>
 			<span>Cesium + WebGL</span>
 			<span>Bun Runtime</span>
@@ -1037,6 +1039,17 @@
 		padding: 4px 14px;
 		border-radius: 20px;
 		font-size: 13px;
+	}
+
+	/* Amber, not the meta chips' blue: the stage badge is a status, not another
+	   spec. It should be the one thing in the row that reads as "note this". */
+	.hero-meta span.stage-badge {
+		background: rgba(214,158,46,0.16);
+		border-color: rgba(214,158,46,0.42);
+		color: #d69e2e;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
 	}
 
 	/* ── Sections ──────────────────────────────────────────────────── */
