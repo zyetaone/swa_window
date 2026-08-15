@@ -21,6 +21,32 @@ import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 export const DEFAULT_FLIGHT_SPEED = 4.0;
 
 /**
+ * Slow climb/descent offset in feet, to add to a location's preferred altitude.
+ *
+ * Phase is taken from the WALL CLOCK rather than an accumulating local timer,
+ * which is the whole reason this is safe on a 3-pane wall: every Pi evaluates
+ * the same sine at the same instant and gets the same number, so no broadcast
+ * or seed rendezvous is needed, and a Pi that reboots mid-cycle rejoins at the
+ * correct phase instead of restarting it at zero and drifting from its
+ * neighbours for the next several minutes.
+ *
+ * `now` is injectable so this is testable without waiting seven minutes.
+ */
+export function altitudeDriftFt(
+	amplitudeFt: number,
+	periodSec: number,
+	now: number = Date.now(),
+): number {
+	// Finite-checked, not just `<= 0`: an older persisted config or a partial
+	// SimulationContext delivers `undefined` here, and `undefined <= 0` is
+	// false — so a bare sign test lets it through and every altitude downstream
+	// becomes NaN, which silently freezes the camera rather than erroring.
+	if (!Number.isFinite(amplitudeFt) || !Number.isFinite(periodSec)) return 0;
+	if (amplitudeFt <= 0 || periodSec <= 0) return 0;
+	return Math.sin((now / 1000) * (2 * Math.PI / periodSec)) * amplitudeFt;
+}
+
+/**
  * Uniform Catmull-Rom interpolation of a scalar through 4 control points,
  * evaluated at local parameter t∈[0,1] between p1 and p2.
  *
@@ -484,9 +510,19 @@ export class FlightSimEngine {
 			return;
 		}
 		const loc = LOCATION_MAP.get(ctx.locationId);
-		const targetAlt = ctx.nightFactor > 0.5
+		const baseAlt = ctx.nightFactor > 0.5
 			? (loc?.nightAltitude ?? altCfg.default)
 			: (loc?.defaultAltitude ?? altCfg.default);
+		// Breathe slowly around that altitude so the ground changes scale
+		// between hops instead of holding one number (see the config comment on
+		// driftAmplitudeFt). Phase comes from the WALL CLOCK, so every pane
+		// computes the same offset at the same instant and a rebooted pane
+		// rejoins mid-cycle rather than restarting it.
+		const targetAlt = clamp(
+			baseAlt + altitudeDriftFt(altCfg.driftAmplitudeFt, altCfg.driftPeriodSec),
+			altCfg.min,
+			altCfg.max,
+		);
 		// Lerp toward the location's preferred altitude. Rate softened
 		// 0.1 → 0.04 (10s → ~25s time constant) so the initial descent
 		// from config default 35kft to a city nightAltitude doesn't

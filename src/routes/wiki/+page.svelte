@@ -659,7 +659,23 @@
 		<p class="audio-note">Field-failure modes that "State" doesn't capture: LAN partition, mDNS race, captive portal not dismissed, cold-boot Pi with un-converged NTP, peer not yet discovered. Day 6 + Day 7 hardening promotes these from footnotes to first-class concerns.</p>
 
 		<h3 class="hidden-h3">What about Audio?</h3>
-		<p class="hidden-blurb">Audio is a v2 feature, not the missing pillar. Implementation reality: zero <code>AudioContext</code> references in <code>src/</code>; the motion module's <code>engineVibeFreqX</code> (7Hz) / <code>engineVibeFreqY</code> (11Hz) are <em>state-update rates</em>, not waveforms — feeding <code>breathingPeriod</code> (a multi-second period) to a Web Audio oscillator gives sub-audible LFO, not engine drone. Pi 5 Chromium also needs <code>--autoplay-policy=no-user-gesture-required</code> in the kiosk flags. Worth doing post-ship; not architectural foundation.</p>
+		<p class="hidden-blurb">Audio is a v2 feature, not the missing pillar. Implementation reality: zero <code>AudioContext</code> references in <code>src/</code>; the motion module's <code>engineVibeFreqX</code> (7Hz) / <code>engineVibeFreqY</code> (11Hz) are <em>state-update rates</em>, not waveforms — feeding <code>breathingPeriod</code> (a multi-second period) to a Web Audio oscillator gives sub-audible LFO, not engine drone. Worth doing post-ship; not architectural foundation.</p>
+		<p class="hidden-blurb">
+			<strong>Both hardware prerequisites are met.</strong> Output: the Waveshare panels carry
+			built-in speakers, so the fleet needs no external audio hardware — the Pi 5 has no
+			headphone jack and would otherwise have required a USB device per pane. Playback:
+			<code>--autoplay-policy=no-user-gesture-required</code> is already set in the kiosk
+			flags, so a page nobody ever clicks can still start sound.
+		</p>
+		<p class="hidden-blurb">
+			The shape when it is built: one Web Audio gain node per layer — cabin rumble,
+			weather-matched rain, chimes, music bed — with layer volumes as ordinary config leaves,
+			so the admin mixer inherits the existing patch and peer-sync path rather than needing a
+			second control plane. One constraint is specific to this install: a music bed must play
+			on the <em>leader alone</em>. Three panes sounding the same bed a few milliseconds apart
+			phase against each other, and a wall that comb-filters itself sounds broken in a way no
+			single screen ever would.
+		</p>
 	</section>
 
 	<!-- ═══════════════════════════════════════════════════════════════ VERDICT -->

@@ -399,21 +399,32 @@ export class CesiumManager {
 		//
 		//   quality — shadows / FXAA / AO. Cost is all-day and the benefit is
 		//             all-day, so it stays tied to the operator's tier choice.
-		//   postFx  — bloom + grade. Cost is all-day but the benefit is
-		//             night-only, so it follows the sun instead of the tier.
+		//   bloomOn — bloom. Its only job is spatial glow on night lights, so it
+		//             follows the sun rather than the tier.
+		//   postFx  — the grade stage, which now has both a night half and a day
+		//             half, so it runs whenever either half has work to do.
 		//
 		// These were one flag. That made `performance` (the shipped Pi default)
 		// render night with no glow and no grade at all — the tuned bloomSigma
 		// and the whole hash palette were inert on the wall.
 		const quality = mode !== 'performance';
-		const postFx = quality || nightFx;
+		const w0 = this.#model.config.world;
+		// The grade now has a DAY half too (dayContrast / dayVibrance in
+		// hash-palette.ts), added because the imagery layer's own contrast and
+		// saturation are pinned at measured values and cannot be pushed further
+		// without reintroducing the purple-ocean clipping. So the pass is worth
+		// its cost whenever either half is doing something — which is what
+		// `gradeByDay` tests. With both day knobs at 0 it falls back to exactly
+		// the night-only behaviour, and bloom stays night-gated regardless:
+		// bloom has no daytime job here.
+		const gradeByDay = w0.dayContrast > 0 || w0.dayVibrance > 0;
+		const bloomOn = quality || nightFx;
+		const postFx = bloomOn || gradeByDay;
 
 		// Hash palette follows the flag at runtime: install on true, uninstall
 		// (remove stage + restore aero-color-grade) on false. Boot-only install
 		// left the stage permanently enabled after a runtime toggle-off while
 		// #syncImagery re-enabled color-grade — the double-grade.
-		// It is also a full-screen grade, so it rides `postFx` with bloom: it
-		// installs at dusk and uninstalls at dawn rather than running 24/7.
 		const wantHash = useHash && postFx;
 		if (wantHash && !this.#hashPaletteCleanup) {
 			this.#hashPaletteCleanup = installHashPalette(
@@ -421,6 +432,8 @@ export class CesiumManager {
 				() => this.#model.nightFactor, () => this.#model.nightLightScale,
 				() => this.#model.config.world.darkVoidStrength, () => this.#model.config.world.envLight,
 				() => this.#model.config.world.additiveStrength,
+				() => this.#model.config.world.dayContrast,
+				() => this.#model.config.world.dayVibrance,
 			);
 			// installHashPalette flips aero-color-grade.enabled directly, behind
 			// #syncImagery's gate — invalidate so the next tick re-writes it.
@@ -433,7 +446,7 @@ export class CesiumManager {
 			this.#lastColorGradeEnabled = null;
 		}
 		const bloom = this.#viewer?.scene.postProcessStages?.bloom;
-		if (bloom) bloom.enabled = postFx;
+		if (bloom) bloom.enabled = bloomOn;
 		// Warm palette is load-bearing, but hash palette wins when enabled —
 		// the two grading stages must never stack (double-grade). Rides `postFx`
 		// with bloom. When postFx is on, #syncImagery re-takes enabled-management
@@ -450,7 +463,7 @@ export class CesiumManager {
 		// Uniforms must be written whenever bloom is enabled, not just in
 		// quality mode — the night path would otherwise bloom with Cesium's
 		// defaults and none of the tuned sigma/contrast.
-		if (bloom && postFx) {
+		if (bloom && bloomOn) {
 			const w = this.#model.config.world;
 			bloom.uniforms.contrast = w.bloomContrast;
 			bloom.uniforms.brightness = w.bloomBrightness;

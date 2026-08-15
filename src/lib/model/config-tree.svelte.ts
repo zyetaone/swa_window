@@ -84,6 +84,8 @@ interface CameraShape {
 		default: number;
 		min: number;
 		max: number;
+		driftAmplitudeFt: number;
+		driftPeriodSec: number;
 	};
 	parallax: {
 		role: DeviceRole;
@@ -133,6 +135,22 @@ const _camera: CameraShape = {
 		default: 35000,         // feet
 		min: 10000,
 		max: 65000,
+		// Slow climb/descent breathing around the location's preferred altitude.
+		// Without it the aircraft settles within ~25 s of arrival and then holds
+		// one number until the next hop — the ground never changes scale, which
+		// is the single biggest tell that this is a camera on a rail rather than
+		// an aeroplane.
+		//
+		// Driven by WALL CLOCK, not by a random roll or an accumulating local
+		// timer: all three panes evaluate the same sine at the same instant, so
+		// the panorama cannot drift apart (invariant #4). A Pi that reboots
+		// mid-cycle rejoins at the correct phase rather than restarting it.
+		//
+		// 3500 ft over 7 min is deliberately below the conscious-notice
+		// threshold — the intent is that the view breathes, not that anyone sees
+		// it climb. Set amplitude 0 to disable.
+		driftAmplitudeFt: 3500,
+		driftPeriodSec: 420,
 	},
 	parallax: {
 		role: 'solo' as DeviceRole,
@@ -262,6 +280,14 @@ export const world = $state({
 	nightExposure: 1.15, // 0.95 → 1.15 (Aug-2026 review): global night lift — the wall read too dark at deep night
 	darkVoidStrength: 0.01, // dark-crush floor (nearly off)
 	envLight: 4.0, // terrain ambient floor (night visibility)
+	// Daytime half of the grade pass. The base imagery layer's own contrast and
+	// saturation are pinned at measured values (see imagery.ts — raising them
+	// clipped a channel on 100% of ocean pixels and turned the Pacific purple),
+	// so daytime depth comes from the post-process instead, using a
+	// non-clipping S-curve and headroom-aware vibrance.
+	// 0 = off for both. Modest by default: this needs eyes on the wall.
+	dayContrast: 0.35,
+	dayVibrance: 0.20,
 		atmosphereLight: 2.0, // 1.6 → 2.0 (Aug-2026): ground ambient bleed at night, pairs with the exposure lift
 		skyDarken: 1.8, // sky-atmosphere brightness shift
 	viirsBrightness: 3.0, // VIIRS layer brightness

@@ -21,6 +21,8 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform float u_darkVoidStrength;
 	uniform float u_envLight;
 	uniform float u_additiveStrength;
+	uniform float u_dayContrast;
+	uniform float u_dayVibrance;
 	// MUST be declared. Cesium prepends the version/precision preamble and the
 	// out_FragColor declaration, but NOT the varying — COLOR_GRADING_GLSL in
 	// shaders.ts declares its own, and this shader was written without one, so
@@ -112,6 +114,39 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float darkness = 1.0 - smoothstep(0.0, 0.35, lum);
 		rgb += ambient * darkness * (0.35 + 1.6 * lum);
 
+		// ─── DAY GRADE — CONTRAST AND VIBRANCE THAT CANNOT CLIP ─────────────
+		// The base imagery layer's own contrast/saturation are pinned at
+		// MEASURED values (imagery.ts) because raising them clipped a channel on
+		// 100% of ocean pixels and turned the Pacific purple. So depth by day
+		// has to come from somewhere that cannot repeat that failure.
+		//
+		// Two properties make this safe where the linear controls were not:
+		//
+		//  1. The S-curve is smoothstep-shaped, so it maps 0→0 and 1→1 EXACTLY
+		//     and is monotonic between. It redistributes midtones without ever
+		//     pushing a channel outside [0,1] — the same reason gamma is the
+		//     imagery layer's only safe lever, applied to contrast instead of
+		//     brightness.
+		//  2. Vibrance scales by how UNSATURATED a pixel already is, so flat
+		//     terrain gains and already-vivid pixels are left alone. Blanket
+		//     saturation does the opposite: it pushes hardest exactly where
+		//     there is least headroom, which is how blue water lost its red and
+		//     green channels.
+		//
+		// Weighted by (1 - nightFactor): this is the daytime half of the pass
+		// whose night half is everything above it, so the stage now earns its
+		// full-screen cost at every hour instead of only after dark.
+		float dayW = 1.0 - u_nightFactor;
+		if (dayW > 0.001) {
+			vec3 s = clamp(rgb, 0.0, 1.0);
+			vec3 curved = s * s * (3.0 - 2.0 * s);
+			rgb = mix(rgb, mix(s, curved, u_dayContrast), dayW);
+
+			float dLum = dot(rgb, vec3(0.2125, 0.7154, 0.0721));
+			float sat = max(max(rgb.r, rgb.g), rgb.b) - min(min(rgb.r, rgb.g), rgb.b);
+			rgb = mix(rgb, mix(vec3(dLum), rgb, 1.0 + u_dayVibrance), dayW * (1.0 - sat));
+		}
+
 		out_FragColor = vec4(clamp(rgb, 0.0, 1.0), color.a);
 	}
 `;
@@ -124,6 +159,8 @@ export function installHashPalette(
 	getDarkVoidStrength: () => number,
 	getEnvLight: () => number,
 	getAdditiveStrength: () => number,
+	getDayContrast: () => number,
+	getDayVibrance: () => number,
 ): () => void {
 	const stages = viewer.scene.postProcessStages;
 	if (!stages) return () => {};
@@ -160,6 +197,8 @@ export function installHashPalette(
 			u_darkVoidStrength: getDarkVoidStrength,
 			u_envLight: getEnvLight,
 			u_additiveStrength: getAdditiveStrength,
+			u_dayContrast: getDayContrast,
+			u_dayVibrance: getDayVibrance,
 		},
 	});
 	stages.add(stage);
