@@ -11,6 +11,7 @@ import type { LocationId, SkyState, FlightScenario } from '$lib/types';
 import { SCENARIOS } from '$content/scenarios';
 import { LOCATION_IDS, LOCATION_MAP } from '$content/locations';
 import { getSkyState } from '$lib/utils';
+import { resolveLocalHours } from '$lib/model/local-time';
 
 const SCENARIOS_BY_LOCATION = new Map<LocationId, FlightScenario[]>();
 for (const s of SCENARIOS) {
@@ -59,6 +60,8 @@ export interface PickNextLocationOptions {
 	 * so the picker still progresses rather than stalling.
 	 */
 	nightLitOnly?: boolean;
+	/** Injectable clock — candidates are scored by their OWN local hour. */
+	now?: Date;
 }
 
 /**
@@ -70,7 +73,6 @@ export function pickNextLocation(
 	timeOfDay: number,
 	options: PickNextLocationOptions = {},
 ): LocationId {
-	const skyState = getSkyState(timeOfDay);
 	let allLocations = [...LOCATION_IDS].filter(id => id !== currentId);
 	if (allLocations.length === 0) return currentId;
 
@@ -82,8 +84,34 @@ export function pickNextLocation(
 	}
 
 	const allScenarios = SCENARIOS.filter(s => s.locationId !== currentId);
+	const now = options.now ?? new Date();
 
 	const scored = allLocations.map((id: LocationId) => {
+		// ─── SCORE THE SKY YOU ARE FLYING TO, NOT THE ONE YOU ARE LEAVING ────
+		// This used to score every candidate against getSkyState(timeOfDay) —
+		// the DEPARTURE city's local time. But timeOfDay is recomputed to the
+		// destination's own civil time on arrival, and the catalogue spans
+		// UTC+9 to UTC-10, so the sky being optimised for was routinely twelve
+		// hours from the sky that actually appeared. `dubai-approach`, authored
+		// preferredTime 'dusk', got picked because you were leaving Hyderabad at
+		// dusk — then landed in Dubai at 15:00 and flew a dusk approach in flat
+		// afternoon light. Every preferredTime in the catalogue was being
+		// matched against a city the viewer had just left.
+		//
+		// This also fixes the office-hours darkness, without lying about any
+		// sky. Five of the eight lit cities are American, so during Indian
+		// working hours most of the pool is in deep night — which is why the
+		// wall kept going dark at 11am. Scoring by arrival time lets the pool
+		// follow the sun on its own: Dubai/Mumbai/Hyderabad during the working
+		// day, the American cities and the whole night-lights pipeline in the
+		// evening once the office is empty. A free daily arc at no content cost,
+		// and what a real long-haul window does anyway.
+		const loc = LOCATION_MAP.get(id);
+		const arrivalHours = loc
+			? resolveLocalHours({ timeZone: loc.timeZone, utcOffset: loc.utcOffset, now })
+			: timeOfDay;
+		const skyState = getSkyState(arrivalHours);
+
 		const locScenarios = allScenarios.filter(s => s.locationId === id);
 		let score = 0;
 		for (const s of locScenarios) {
