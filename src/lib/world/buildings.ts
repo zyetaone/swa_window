@@ -1,6 +1,17 @@
 /**
  * Buildings — OSM 3D Tiles + procedural lit-window CustomShader.
  *
+ * Two tiers, mirroring what terrain and imagery already do:
+ *   1. Cesium Ion 3D Tiles + the lit-window CustomShader (needs a token).
+ *   2. Packaged GeoJSON extrusions — see ./buildings-geojson. No token, no
+ *      network. Coarser: extruded footprints lit by Cesium's own sun, with no
+ *      per-window lighting.
+ *
+ * Tier 1 stays primary and untouched; it is what the fleet runs today and
+ * what the night look was tuned against. Tier 2 only ever renders where the
+ * product previously showed an EMPTY SKY, so it is measured against nothing
+ * rather than against tier 1.
+ *
  * Call lifecycle:
  *   initBuildings(C, v)               — once, stores refs
  *   setupBuildings(enabled)            — once, async, creates tileset + shader
@@ -10,7 +21,10 @@
  */
 
 import type * as CesiumType from 'cesium';
+import type { LocationId } from '$lib/types';
+import { LOCATION_MAP } from '$content/locations';
 import { getIonToken } from './cesium-setup';
+import { loadOfflineCity, showOfflineCity, hasOfflineBuildings } from './buildings-geojson';
 import { getViirsField } from './viirs-field';
 import { smoothstep } from '$lib/utils';
 import { altitudeDetailMix, NIGHT_EMISSIVE_WHITE_POINT } from '$lib/world/altitude';
@@ -28,6 +42,8 @@ let _cs: C;
 let _viewer: CesiumType.Viewer;
 
 let tileset: CesiumType.Cesium3DTileset | null = null;
+/** True when tier 1 (Ion) is unavailable, so tier 2 is allowed to draw. */
+let _offlineTier = false;
 let _shader: BuildingsShader | null = null;
 let _time = 0;
 let _cityBrightness = 1;
@@ -219,7 +235,15 @@ export async function setupBuildings(
 	buildingsEnabled: boolean,
 	useDynamicEnvironmentMap = false,
 ): Promise<void> {
-	if (!getIonToken()) { console.warn('[Buildings] Ion token missing — disabled'); return; }
+	if (!getIonToken()) {
+		// No token: fall through to the packaged-GeoJSON tier instead of
+		// returning to an empty sky. Nothing is loaded here — the city isn't
+		// known until the first syncBuildings — this only records that tier 1
+		// is unavailable so tier 2 is allowed to draw.
+		_offlineTier = true;
+		console.info('[Buildings] No Ion token — using packaged GeoJSON footprints');
+		return;
+	}
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const C = _cs as any;
 	try {
@@ -362,4 +386,46 @@ export function setBuildingsWireframe(enabled: boolean): void {
 
 export function updateBuildingsQuality(maximumScreenSpaceError: number): void {
 	if (tileset) tileset.maximumScreenSpaceError = maximumScreenSpaceError;
+}
+
+/**
+ * Tier-2 per-tick: make sure the current city's footprints exist and are the
+ * only ones showing.
+ *
+ * Separate from syncBuildings rather than another pair of positional
+ * parameters on a function that already takes eight. It is also a genuinely
+ * different job: syncBuildings drives shader uniforms every frame, this one
+ * does nothing at all unless the location changed.
+ *
+ * No-op unless tier 1 failed — with a token present the Ion tileset is the
+ * skyline and this must not add a second, coarser one on top of it.
+ */
+export function syncOfflineBuildings(
+	locationId: LocationId,
+	buildingsEnabled: boolean,
+	exaggeration = 1,
+): void {
+	if (!_offlineTier || !_viewer) return;
+	// Nature locations have no skyline by design (himalayas, ocean, desert).
+	// Read from the catalogue rather than taking it as a parameter: it is
+	// static content, and threading it through compose would widen the
+	// CesiumModelView interface for a fact the catalogue already owns.
+	if (!LOCATION_MAP.get(locationId)?.hasBuildings) {
+		showOfflineCity(null, false);
+		return;
+	}
+	if (!hasOfflineBuildings(locationId)) {
+		void loadOfflineCity(_cs, _viewer, locationId, exaggeration);
+	}
+	showOfflineCity(locationId, buildingsEnabled);
+}
+
+/** Test seam — lets a test drive the tier decision without a GPU. */
+export function _setOfflineTierForTest(on: boolean): void {
+	_offlineTier = on;
+}
+
+/** True when the Ion tier is unavailable and GeoJSON is carrying the skyline. */
+export function isOfflineBuildingTier(): boolean {
+	return _offlineTier;
 }

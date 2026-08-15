@@ -24,7 +24,7 @@ import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesA
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
 import { initImagery, setupImagery, syncImagery } from './imagery';
-import { initBuildings, setupBuildings, syncBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
+import { initBuildings, setupBuildings, syncBuildings, syncOfflineBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere } from './atmosphere';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain';
@@ -293,6 +293,13 @@ export class CesiumManager {
 			m.config.world.buildingsEnabled, m.config.world.windowLightIntensity,
 			this.#getBootFade(),
 			cityLightAmount,
+		);
+		// Tier 2 — no-op when the Ion tileset is present. Cheap: does nothing
+		// at all unless the location changed (see syncOfflineBuildings).
+		syncOfflineBuildings(
+			m.location,
+			m.config.world.buildingsEnabled,
+			m.terrainExaggeration,
 		);
 	}
 

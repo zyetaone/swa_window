@@ -1,0 +1,125 @@
+/**
+ * The offline buildings tier — the one buildings never had.
+ *
+ * Terrain and imagery both degrade local → remote → flat. Buildings were Ion
+ * or nothing, so a tokenless install showed an empty sky over a lit city.
+ *
+ * The GL is untestable here, so these cover the two things that are actually
+ * easy to get wrong and impossible to see in a diff: the ground offset, and
+ * which tier is allowed to draw.
+ */
+import { describe, it, expect } from 'vitest';
+import { extrusionsFromGeojson } from '$lib/world/buildings-geojson';
+import { groundAltM } from '$content/locations';
+
+const fc = (features: unknown[]) => ({ type: 'FeatureCollection', features });
+const box = (height?: unknown) => ({
+	type: 'Feature',
+	properties: height === undefined ? {} : { height },
+	geometry: {
+		type: 'Polygon',
+		coordinates: [[[78.48, 17.38], [78.49, 17.38], [78.49, 17.39], [78.48, 17.38]]],
+	},
+});
+
+describe('buildings sit on the ground, not the ellipsoid', () => {
+	it('lifts every footprint to the city ground altitude', () => {
+		// THE bug this file exists for. OSM `height` is above-ground, Cesium
+		// extrudes from the ellipsoid. Without the offset a Denver tower is
+		// ~1600 m underground — the city renders empty, with no error, which
+		// is indistinguishable from "the tier failed to load".
+		const [d] = extrusionsFromGeojson(fc([box(100)]), 'denver');
+		expect(d.baseAltM).toBeCloseTo(groundAltM('denver'));
+		expect(d.topAltM).toBeCloseTo(groundAltM('denver') + 100);
+	});
+
+	it('puts a high-altitude city above a low one', () => {
+		const [den] = extrusionsFromGeojson(fc([box(50)]), 'denver');
+		const [dub] = extrusionsFromGeojson(fc([box(50)]), 'dubai');
+		expect(den.baseAltM).toBeGreaterThan(dub.baseAltM);
+	});
+
+	it('scales the base by vertical exaggeration so buildings track terrain', () => {
+		// verticalExaggeration stretches TERRAIN but not primitives, so an
+		// unscaled base leaves buildings floating above or sunk below the
+		// ground they stand on.
+		const [flat] = extrusionsFromGeojson(fc([box(50)]), 'denver', 1);
+		const [tall] = extrusionsFromGeojson(fc([box(50)]), 'denver', 2);
+		expect(tall.baseAltM).toBeCloseTo(flat.baseAltM * 2);
+	});
+
+	it('keeps building height itself out of the exaggeration', () => {
+		// Only the GROUND is exaggerated; a 50 m building is still 50 m tall.
+		const [tall] = extrusionsFromGeojson(fc([box(50)]), 'denver', 2);
+		expect(tall.topAltM - tall.baseAltM).toBeCloseTo(50);
+	});
+});
+
+describe('malformed features degrade instead of breaking the sky', () => {
+	it('substitutes a default height rather than dropping untagged footprints', () => {
+		const [d] = extrusionsFromGeojson(fc([box(undefined)]), 'dubai');
+		expect(d.topAltM).toBeGreaterThan(d.baseAltM);
+	});
+
+	it('clamps an absurd height instead of spearing the sky', () => {
+		const [d] = extrusionsFromGeojson(fc([box(999_999)]), 'dubai');
+		expect(d.topAltM - d.baseAltM).toBeLessThanOrEqual(830);
+	});
+
+	it('rejects non-numeric, negative and NaN heights', () => {
+		for (const bad of ['tall', -20, NaN, null]) {
+			const [d] = extrusionsFromGeojson(fc([box(bad)]), 'dubai');
+			expect(d.topAltM, String(bad)).toBeGreaterThan(d.baseAltM);
+			expect(Number.isFinite(d.topAltM), String(bad)).toBe(true);
+		}
+	});
+
+	it('skips rings with too few real vertices', () => {
+		const degenerate = {
+			type: 'Feature',
+			properties: { height: 10 },
+			geometry: { type: 'Polygon', coordinates: [[[1, 2], [3, 4]]] },
+		};
+		expect(extrusionsFromGeojson(fc([degenerate]), 'dubai')).toHaveLength(0);
+	});
+
+	it('skips out-of-range coordinates rather than wrapping the globe', () => {
+		const bogus = {
+			type: 'Feature',
+			properties: { height: 10 },
+			geometry: { type: 'Polygon', coordinates: [[[999, 2], [3, 400], [5, 6]]] },
+		};
+		expect(extrusionsFromGeojson(fc([bogus]), 'dubai')).toHaveLength(0);
+	});
+
+	it('ignores non-Polygon geometry', () => {
+		const line = {
+			type: 'Feature',
+			properties: { height: 10 },
+			geometry: { type: 'LineString', coordinates: [[1, 2], [3, 4]] },
+		};
+		expect(extrusionsFromGeojson(fc([line]), 'dubai')).toHaveLength(0);
+	});
+
+	it('returns empty for junk input rather than throwing into the render loop', () => {
+		for (const junk of [null, undefined, {}, { features: 'nope' }, 42]) {
+			expect(extrusionsFromGeojson(junk, 'dubai')).toEqual([]);
+		}
+	});
+});
+
+describe('the packaged data this tier depends on is real', () => {
+	it('parses the shipped city files into usable extrusions', async () => {
+		// Guards the tier end-to-end short of the GPU: if the packager output
+		// ever changes shape, this fails here rather than as an empty sky on
+		// a Pi with no token.
+		const { readFile } = await import('node:fs/promises');
+		for (const city of ['hyderabad', 'dubai', 'denver'] as const) {
+			const raw = JSON.parse(await readFile(`data/buildings/${city}.geojson`, 'utf8'));
+			const out = extrusionsFromGeojson(raw, city);
+			expect(out.length, city).toBeGreaterThan(0);
+			expect(out.every((e) => e.topAltM > e.baseAltM), city).toBe(true);
+			expect(out.every((e) => e.ring.length >= 6), city).toBe(true);
+		}
+	});
+});
