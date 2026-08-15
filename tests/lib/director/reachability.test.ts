@@ -12,18 +12,26 @@ import { pickNextLocation } from '$lib/director/scenarios';
 import { LOCATIONS } from '$content/locations';
 
 describe('vantage beat is reachable', () => {
-	it('cannot require more night-flying time than the gap between arrivals allows', () => {
-		// directorReset() runs on every arrival. If it also zeroed the vantage
-		// timer — as it used to — the beat could only fire when its minimum
-		// interval was SHORTER than the longest gap between arrivals. It is
-		// not, by a factor of five, which is precisely why the beat never fired.
+	it('can now accumulate a full beat inside a single location hold', () => {
+		// HISTORY, because the numbers moved twice and the reasoning is easy to
+		// lose. The beat needs 900 s of continuous night flying. It used to be
+		// unreachable for two independent reasons stacked on each other:
+		// directorReset() zeroed its timer on every arrival, AND arrivals came
+		// every 90-180 s. Fixing only the reset would have left it firing at
+		// best rarely; fixing only the cadence would have left the reset
+		// wiping it. Both had to move.
 		//
-		// The timer now accumulates across arrivals, so this comparison no
-		// longer gates reachability. The assertion is kept as a tripwire: if
-		// someone reintroduces the reset, these numbers are the reason it
-		// breaks, and this failure points straight at it.
+		// This asserts the property that now holds and did not before: a hold
+		// can last long enough to earn a beat on its own, without relying on
+		// the timer surviving across hops. That makes the beat a thing you can
+		// actually expect to see rather than a statistical accident.
+		//
+		// The previous version of this test compared minIntervalSec against
+		// directorMaxInterval as a tripwire for the reset bug. That comparison
+		// was a proxy, and the cadence change made it meaningless (they are now
+		// equal), so it has been replaced rather than loosened.
 		const ap = director.autopilot;
-		expect(ap.vantage.minIntervalSec).toBeGreaterThan(ap.directorMaxInterval);
+		expect(ap.vantage.minIntervalSec).toBeLessThanOrEqual(ap.directorMaxInterval);
 	});
 
 	it('has a night threshold below full darkness, so it can fire during the night ramp', () => {

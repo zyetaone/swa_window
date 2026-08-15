@@ -10,6 +10,41 @@
  * coherent rather than NaN.
  */
 
+/**
+ * Formatter cache, keyed by IANA zone.
+ *
+ * `new Intl.DateTimeFormat(...)` is genuinely expensive — it resolves locale
+ * data on every construction — while the resulting formatter is stateless and
+ * safe to reuse across instants. Building one per call was fine for the
+ * original single-location use, but the director now scores EVERY candidate
+ * destination by its own local hour on each hop, so the cost went from one
+ * construction to one per location.
+ *
+ * Bounded by the location catalogue (a dozen zones), so this is a lookup table,
+ * not an unbounded cache. A failed construction is cached as null too, so an
+ * invalid zone id costs one throw rather than one per call forever.
+ */
+const _fmtCache = new Map<string, Intl.DateTimeFormat | null>();
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat | null {
+	const hit = _fmtCache.get(timeZone);
+	if (hit !== undefined) return hit;
+	let fmt: Intl.DateTimeFormat | null = null;
+	try {
+		fmt = new Intl.DateTimeFormat('en-GB', {
+			timeZone,
+			hour: 'numeric',
+			minute: 'numeric',
+			second: 'numeric',
+			hourCycle: 'h23',
+		});
+	} catch {
+		fmt = null; // RangeError on unknown IANA id
+	}
+	_fmtCache.set(timeZone, fmt);
+	return fmt;
+}
+
 /** Civil hours [0, 24) in `timeZone` at `now`. */
 export function localHoursInTimeZone(
 	timeZone: string,
@@ -17,13 +52,9 @@ export function localHoursInTimeZone(
 ): number | null {
 	if (!timeZone || typeof timeZone !== 'string') return null;
 	try {
-		const parts = new Intl.DateTimeFormat('en-GB', {
-			timeZone,
-			hour: 'numeric',
-			minute: 'numeric',
-			second: 'numeric',
-			hourCycle: 'h23',
-		}).formatToParts(now);
+		const fmt = formatterFor(timeZone);
+		if (!fmt) return null;
+		const parts = fmt.formatToParts(now);
 		const num = (type: Intl.DateTimeFormatPartTypes): number => {
 			const v = parts.find((p) => p.type === type)?.value;
 			return v != null ? Number(v) : NaN;

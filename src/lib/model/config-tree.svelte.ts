@@ -218,13 +218,47 @@ export const director = $state({
 		// Was 120–300 / 240–360 — felt stuck on one city for long stretches on Pi.
 		initialMinDelay: 45,
 		initialMaxDelay: 90,
-		subsequentMinDelay: 60,
-		subsequentMaxDelay: 120,
+		// Ambient re-roll (weather / cloud jitter), NOT a location change.
+		// 60-120 s → 180-360 s. With hops slowed to 7-15 min this became the
+		// dominant churn: something visibly stepped every minute or two, which
+		// undoes most of the calm the hop change buys. Weather that re-rolls
+		// twice as often as a real front moves reads as flicker, not weather.
+		// Also halves the fleet's ambient broadcast traffic, since each roll is
+		// a leader→peers message.
+		subsequentMinDelay: 180,
+		subsequentMaxDelay: 360,
 		weatherChangeChance: 0.2,
 		weatherPool: Object.freeze(['clear', 'cloudy', 'cloudy', 'rain', 'overcast', 'storm']) as readonly WeatherType[],
 		// Between location hops while in orbit (seconds, wall-clock).
-		directorMinInterval: 90,       // 1:30
-		directorMaxInterval: 180,      // 3:00
+		// ─── 90-180 s → 420-900 s (7-15 min) ────────────────────────────────
+		// Two reasons, one of them not a matter of taste at all.
+		//
+		// THE MEASURABLE ONE. The authored scenarios run 160-270 s (21 of them,
+		// median ~210). The old hop window was 90-180 s, so the hop fired before
+		// the circuit finished in EVERY case — even the shortest scenario
+		// outlasts the longest old hop. No authored flight path has ever played
+		// to completion on this wall. Roughly 4,400 seconds of hand-authored
+		// choreography was being shown exclusively as fragments.
+		//
+		// THE EXPERIENCE ONE. Every hop is a full occlusion event: the blind is
+		// forced shut on departure and open on arrival. At the old cadence a
+		// desk worker got 20-40 blind slams an hour, 500+ across a working day.
+		// That is a slideshow with a shutter, not the calm ambient piece this is
+		// sold as — and peripheral motion is the one thing that reliably steals
+		// focus from someone trying to work. The old numbers were tuned for a
+		// passer-by, who needs a change inside their 15-second window; the desk
+		// worker needs the exact opposite.
+		//
+		// A location should be somewhere you settle into. Dynamism now comes
+		// from WITHIN the location instead of from cutting away: the altitude
+		// breathes (altitudeDriftFt), the night lights glimmer, weather drifts.
+		// Longer holds also finally make the vantage flyover beat reachable — it
+		// needs 900 s of continuous night flying, which no 180 s hop could ever
+		// accumulate even after its reset bug was fixed.
+		//
+		// These are NOT peer-synced, so this default genuinely reaches the Pis.
+		directorMinInterval: 420,      // 7:00
+		directorMaxInterval: 900,      // 15:00
 				nightLitCitiesOnly: true, // auto-flight only to lit cities at night
 				vantage: {
 			enabled: true,
