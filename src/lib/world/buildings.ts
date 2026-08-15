@@ -24,7 +24,7 @@ import type * as CesiumType from 'cesium';
 import type { LocationId } from '$lib/types';
 import { LOCATION_MAP } from '$content/locations';
 import { getIonToken } from './cesium-setup';
-import { loadOfflineCity, showOfflineCity, hasOfflineBuildings } from './buildings-geojson';
+import { loadOfflineCity, showOfflineCity, hasOfflineBuildings, resetOfflineBuildings } from './buildings-geojson';
 import { getViirsField } from './viirs-field';
 import { smoothstep } from '$lib/utils';
 import { altitudeDetailMix, NIGHT_EMISSIVE_WHITE_POINT } from '$lib/world/altitude';
@@ -58,6 +58,12 @@ export function initBuildings(Cesium: C, viewer: CesiumType.Viewer): void {
 	// push uniforms into a primitive no longer attached to anything.
 	tileset = null;
 	_shader = null;
+	// Tier 2 has exactly the same problem: its cached city primitives belong to
+	// the scene that just went away, and the cache would otherwise report them
+	// as still loaded — leaving the new viewer with no skyline at all.
+	// _offlineTier is re-decided by setupBuildings on the next boot.
+	resetOfflineBuildings();
+	_offlineTier = false;
 	// Gates are module-level singletons but the VIEWER is not: on remount
 	// (auto-retry, HMR, page nav) the fresh viewer has Cesium defaults while
 	// the gates still hold the previous viewer's last-written values, so the

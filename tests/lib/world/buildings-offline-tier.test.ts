@@ -108,6 +108,35 @@ describe('malformed features degrade instead of breaking the sky', () => {
 	});
 });
 
+describe('the city cache does not outlive its viewer', () => {
+	it('reports nothing loaded after a reset', async () => {
+		// The remount trap this repo has now hit four times (tileset, imagery
+		// layers, EpsilonGates, and this). The cache is a module singleton but
+		// the VIEWER is not: after a Cesium auto-retry / HMR / page nav, every
+		// cached Primitive belongs to a destroyed scene while the cache still
+		// reports the city as loaded — so the loader early-returns, nothing is
+		// added to the new scene, and the skyline is gone until a full reload.
+		//
+		// initBuildings must call resetOfflineBuildings(); this asserts the
+		// reset actually clears what hasOfflineBuildings() reads.
+		const { hasOfflineBuildings, resetOfflineBuildings } = await import(
+			'$lib/world/buildings-geojson'
+		);
+		resetOfflineBuildings();
+		expect(hasOfflineBuildings('denver')).toBe(false);
+	});
+
+	it('is wired into initBuildings, not merely available', async () => {
+		// Exporting the reset is useless if the lifecycle never calls it — the
+		// bug was an omission at the call site, so that is what gets pinned.
+		const { readFile } = await import('node:fs/promises');
+		const src = await readFile('src/lib/world/buildings.ts', 'utf8');
+		const init = src.slice(src.indexOf('export function initBuildings'));
+		const body = init.slice(0, init.indexOf('\n}'));
+		expect(body).toContain('resetOfflineBuildings()');
+	});
+});
+
 describe('the packaged data this tier depends on is real', () => {
 	it('parses the shipped city files into usable extrusions', async () => {
 		// Guards the tier end-to-end short of the GPU: if the packager output

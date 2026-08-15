@@ -135,8 +135,22 @@ export function hasOfflineBuildings(id: LocationId): boolean {
 	return _cityPrimitives.has(id);
 }
 
-/** Test seam: drop cached state between cases. */
-export function _resetOfflineBuildings(): void {
+/**
+ * Drop all cached primitives. MUST be called from initBuildings on every
+ * viewer (re)mount.
+ *
+ * Not a test seam — a lifecycle requirement, and the same one that already
+ * bit the tileset, the imagery layers and the EpsilonGates. This map is a
+ * module singleton but the VIEWER is not: on remount (Cesium auto-retry, HMR,
+ * page nav) every cached Primitive still belongs to the DESTROYED scene, while
+ * hasOfflineBuildings() keeps reporting the city as loaded. loadOfflineCity
+ * then early-returns, nothing is ever added to the new scene, and the skyline
+ * is gone until a full reload.
+ *
+ * Clearing is enough: viewer.destroy() takes its own primitives with it, so
+ * there is nothing here to dispose separately.
+ */
+export function resetOfflineBuildings(): void {
 	_cityPrimitives.clear();
 	_inFlight.clear();
 }
