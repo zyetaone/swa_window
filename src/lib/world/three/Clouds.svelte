@@ -58,7 +58,6 @@
 	 * ─────────────────────────────────────────────────────────────────────
 	 */
 	import { T, useTask, useThrelte } from '@threlte/core';
-	import { untrack } from 'svelte';
 	import { useTexture } from '@threlte/extras';
 	import {
 		Matrix4,
@@ -331,8 +330,9 @@
 	// $effect can fire multiple times per reactive flush when deps resolve
 	// at staggered times; useTask guarantees exactly one execution per
 	// render frame, avoiding the ~2.5µs Svelte dep-tracking overhead.
+	// useTask runs outside Svelte tracking (renderer.setAnimationLoop) —
+	// no untrack() needed (same contract as Wing.svelte).
 	useTask(() => {
-	untrack(() => {
 			// Skip all per-sprite work while the cloud group is unmounted
 			// (showClouds off / no anchor): useTask fires regardless of the
 			// {#if} below, so without this ~1840 sprites were re-lit and
@@ -495,7 +495,6 @@
 				);
 				mat.opacity = baseO * opaScale;
 			}
-	});
 	});
 
 	// Per-frame: rotate each sprite + wind-drift around city vertical.

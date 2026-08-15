@@ -182,8 +182,12 @@
 
 	// ─── Slider handlers ─────────────────────────────────────────────────────
 
-	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) { model.timeOfDay = parseFloat(e.currentTarget.value); }
-	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) { model.flight.altitude = parseFloat(e.currentTarget.value); }
+	function onGlobalTime(e: Event & { currentTarget: HTMLInputElement }) {
+		model.setTime(parseFloat(e.currentTarget.value));
+	}
+	function onGlobalAlt(e: Event & { currentTarget: HTMLInputElement }) {
+		model.setAltitude(parseFloat(e.currentTarget.value));
+	}
 
 	// ─── Variant A: push to prod config ───────────────────────────────────────
 

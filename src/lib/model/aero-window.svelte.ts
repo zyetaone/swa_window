@@ -265,7 +265,12 @@ export class AeroWindow {
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
 		// location/weather intentionally ignored — boot show owns the scene.
-		if (saved.altitude !== undefined) this.flight.altitude = saved.altitude;
+		if (saved.altitude !== undefined) {
+			// Engine clamp only — do not use setAltitude() (that arms the 8 s
+			// user-override and would pause director altitude logic after boot).
+			const { min, max } = this.config.camera.altitude;
+			this.flight.setAltitude(saved.altitude, { min, max });
+		}
 		// Config-tree restores go through applyConfigPatch so the same
 		// validation/type gates apply, but WITHOUT a CRDT stamp (#booting) —
 		// an admin push issued while the Pi was offline carries an older
@@ -694,7 +699,12 @@ export class AeroWindow {
 		const ctx = this.#createContext();
 
 		const flightPatch = this.flight.tick(delta, ctx);
-		if (flightPatch.blindOpen !== undefined) this.config.shell.blindOpen = flightPatch.blindOpen;
+		// Cruise FSM blind open/close — same gate as human use-blind (single
+		// write path). stamp:false: local-only chrome during flyTo; not a
+		// fleet decision (shell.blindOpen is not PEER_SYNC'd).
+		if (flightPatch.blindOpen !== undefined) {
+			this.applyConfigPatch('shell.blindOpen', flightPatch.blindOpen, { stamp: false });
+		}
 		if (flightPatch.locationArrived)         this.setLocation(flightPatch.locationArrived);
 		if (flightPatch.resetDirector)           directorReset(ctx);
 

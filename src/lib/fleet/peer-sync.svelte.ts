@@ -50,7 +50,7 @@ export interface AmbientSyncFailure {
 }
 
 const MAX_AMBIENT_FAILURES = 20;
-const _ambientFailures = $state<AmbientSyncFailure[]>([]);
+let _ambientFailures = $state<AmbientSyncFailure[]>([]);
 
 /** Readonly view of recent ambient push failures, oldest first (reactive). */
 export function getAmbientSyncFailures(): readonly AmbientSyncFailure[] {
@@ -58,14 +58,16 @@ export function getAmbientSyncFailures(): readonly AmbientSyncFailure[] {
 }
 
 export function clearAmbientSyncFailures(): void {
-	_ambientFailures.length = 0;
+	// Reassign (don't mutate length/push) — same style as telemetry ring flushes;
+	// stays correct if this ever becomes $state.raw.
+	_ambientFailures = [];
 }
 
 function recordAmbientSyncFailure(deviceId: string, path: string): void {
-	_ambientFailures.push({ deviceId, path, at: Date.now() });
-	if (_ambientFailures.length > MAX_AMBIENT_FAILURES) {
-		_ambientFailures.splice(0, _ambientFailures.length - MAX_AMBIENT_FAILURES);
-	}
+	const next = [..._ambientFailures, { deviceId, path, at: Date.now() }];
+	_ambientFailures = next.length > MAX_AMBIENT_FAILURES
+		? next.slice(next.length - MAX_AMBIENT_FAILURES)
+		: next;
 }
 
 const _configRoot = config as unknown as Record<string, unknown>;

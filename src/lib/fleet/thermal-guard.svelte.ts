@@ -30,8 +30,8 @@ export function startThermalGuard(model: AeroWindow): () => void {
 		try {
 			const res = await fetch('/api/internal/thermal', { cache: 'no-store' });
 			if (res.status === 204 || !res.ok) return;
-			const state = (await res.json()) as ThermalStateFile;
-			if (state.action !== 'shed') return;
+			const thermal = (await res.json()) as ThermalStateFile;
+			if (thermal.action !== 'shed') return;
 
 			// Already as lean as we force — skip CRDT noise.
 			const q = model.config.world.qualityMode;
@@ -42,9 +42,9 @@ export function startThermalGuard(model: AeroWindow): () => void {
 			model.applyConfigPatch('world.useThreeOverlay', false);
 			model.telemetry.recordEvent('info', {
 				event: 'thermal_shed',
-				tempC: state.tempC,
-				throttledRaw: state.throttledRaw,
-				livePressure: state.flags?.livePressure ?? false,
+				tempC: thermal.tempC,
+				throttledRaw: thermal.throttledRaw,
+				livePressure: thermal.flags?.livePressure ?? false,
 			});
 		} catch {
 			/* best-effort — never break the kiosk for a thermal poll miss */
