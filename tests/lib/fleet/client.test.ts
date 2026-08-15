@@ -320,3 +320,47 @@ describe('config_patch remote-stamp routing', () => {
 		expect(model.applyConfigPatch).toHaveBeenCalledWith('world.showClouds', true);
 	});
 });
+
+// ─── scene_resync ───────────────────────────────────────────────────────────
+
+describe('scene_resync recovers a pane that rebooted mid-day', () => {
+	// The gap this closes: boot is deterministic (pickDailyShow) and the SSE
+	// replay buffer covers a browser reload, but that buffer lives in the Pi's
+	// OWN server process — so a Pi reboot returns with an empty one and the
+	// pane sits on the rotation show until the director next hops.
+	const resync = (locationId: string) => ({
+		v: 2,
+		type: 'scene_resync',
+		locationId,
+		weather: 'clear',
+		decidedAtMs: Date.now(),
+		groupId: 'corridor1',
+	});
+
+	it('flies a stale pane to where the wall actually is', () => {
+		// Stub model reports location 'dubai'; the wall has moved on.
+		command(resync('mumbai'));
+		expect(model.applyScene).toHaveBeenCalledWith('mumbai', 'clear');
+	});
+
+	it('is a NO-OP for a pane already showing that location', () => {
+		// This guard is the whole safety argument. applyScene() calls
+		// exitFlyover() and #stampRoute() BEFORE it reaches flight.flyTo's own
+		// early-return, so an unguarded resync would silently kill an
+		// in-progress vantage beat on a perfectly healthy pane.
+		command(resync('dubai'));
+		expect(model.applyScene).not.toHaveBeenCalled();
+	});
+
+	it('ignores an unknown location rather than flying nowhere', () => {
+		command(resync('atlantis'));
+		expect(model.applyScene).not.toHaveBeenCalled();
+	});
+
+	it('respects corridor gating like every other leader broadcast', () => {
+		// Two corridors on one LAN: a resync from the other corridor's leader
+		// must not drag this pane out of its own group's scene.
+		command({ ...resync('mumbai'), groupId: 'corridor2' });
+		expect(model.applyScene).not.toHaveBeenCalled();
+	});
+});

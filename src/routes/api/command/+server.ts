@@ -9,6 +9,10 @@
  *     the v2 director_decision shape (kept for continuity).
  *   type: 'vantage_beat'      — leader telling followers to enter a night-city
  *     flyover (pitch down) at `transitionAtMs` for `durationMs`, then exit.
+ *   type: 'scene_resync'      — leader telling a peer that just (re)joined
+ *                               where the wall currently is. Receiver ignores
+ *                               it when already on that location, so it is
+ *                               safe to send liberally.
  *   type: 'set_scene'         — admin forcing a scene change.
  *   type: 'set_mode'          — admin switching display mode.
  *

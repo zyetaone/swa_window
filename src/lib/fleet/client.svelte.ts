@@ -31,7 +31,7 @@ import {
 import { peerJsonHeaders } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { resolveDeviceId } from '$lib/fleet/device-id';
-import { resolveBinding, shouldApplyDirectorDecision } from '$lib/fleet/parallax.svelte';
+import { resolveBinding, shouldApplyDirectorDecision, isGroupLeader } from '$lib/fleet/parallax.svelte';
 import { APP_COMMIT } from '$lib/version';
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'retrying';
@@ -63,6 +63,10 @@ export class DeviceClient {
 	#statusInterval: ReturnType<typeof setInterval> | null = null;
 	#peerInterval: ReturnType<typeof setInterval> | null = null;
 	#peers: PeerAddress[] = [];
+	// Every deviceId ever seen in a peer list this session. Compared against
+	// (rather than the previous #peers) so an mDNS blip doesn't read as a
+	// rejoin — see #refreshPeers.
+	#peersSeen = new Set<string>();
 	#bootTime = Date.now();
 	#destroyed = false;
 	// Track pending director_decision setTimeouts so we can cancel them on
@@ -184,8 +188,58 @@ export class DeviceClient {
 			const res = await fetch('/api/devices', { cache: 'no-store' });
 			if (!res.ok) return;
 			const body = await res.json() as { devices: Array<PeerAddress & { self?: boolean }> };
-			this.#peers = body.devices.filter((d) => !d.self && d.deviceId !== this.#deviceId);
+			const next = body.devices.filter((d) => !d.self && d.deviceId !== this.#deviceId);
+
+			// A peer that wasn't in the previous list has just (re)joined —
+			// either a fresh Pi or one that rebooted. This 30 s poll is the only
+			// place the leader learns that, so it's where the resync belongs;
+			// adding a separate join notification would mean a second mechanism
+			// telling us something this one already knows.
+			//
+			// #peersSeen (not the previous #peers) is the comparison basis, so a
+			// peer that merely blips out of one /api/devices response — mDNS is
+			// not perfectly stable — doesn't get counted as a rejoin every time
+			// it flickers.
+			const rejoined = next.filter((p) => !this.#peersSeen.has(p.deviceId));
+			this.#peers = next;
+			for (const p of next) this.#peersSeen.add(p.deviceId);
+
+			if (rejoined.length > 0) this.#resyncPeers(rejoined);
 		} catch { /* mDNS not populated yet or offline — try again next tick */ }
+	}
+
+	/**
+	 * Tell freshly-joined peers where the wall actually is.
+	 *
+	 * Leader-only: a follower has no authority over the scene, and if every
+	 * pane did this on discovering every other pane, three panes disagreeing
+	 * would fight rather than converge.
+	 *
+	 * Sent per-peer rather than via publishV2 so a rejoin doesn't put a message
+	 * in front of panes that are already correct. They would ignore it (the
+	 * handler guards on current location) but there is no reason to ask them to.
+	 */
+	#resyncPeers(peers: PeerAddress[]): void {
+		if (this.#destroyed) return;
+		if (!isGroupLeader(resolveBinding().role)) return;
+		const msg = {
+			v: 2 as const,
+			type: 'scene_resync',
+			locationId: this.#model.location,
+			weather: this.#model.weather,
+			decidedAtMs: Date.now(),
+			groupId: resolveBinding().groupId,
+		};
+		this.#model.telemetry?.recordEvent('fleet_out', { type: msg.type });
+		void (async () => {
+			for (const peer of peers) {
+				void fetch(`${urlFor(peer)}/api/command`, {
+					method: 'POST',
+					headers: await peerJsonHeaders(peer.host),
+					body: JSON.stringify(msg),
+				}).catch(() => { /* peer went away again — next poll retries */ });
+			}
+		})();
 	}
 
 	#sendStatus(): void {
@@ -278,7 +332,12 @@ export class DeviceClient {
 		// (admin set_config pushes) = apply (back-compat). Skipped messages are
 		// not ours, so they fall out before the fleet_in telemetry record below
 		// (not logged as applied).
-		if (msg.type === 'director_decision' || msg.type === 'vantage_beat' || msg.type === 'set_config') {
+		if (
+			msg.type === 'director_decision'
+			|| msg.type === 'vantage_beat'
+			|| msg.type === 'set_config'
+			|| msg.type === 'scene_resync'
+		) {
 			if (!shouldApplyDirectorDecision(resolveBinding().groupId, msg.groupId as string | undefined)) {
 				return;
 			}
@@ -383,6 +442,36 @@ export class DeviceClient {
 					}, delay);
 					this.#pendingTransitions.add(id);
 				}
+				break;
+			}
+			case 'scene_resync': {
+				// A pane that rebooted mid-day cannot learn where the wall is.
+				// Boot is deterministic (pickDailyShow) and the SSE replay buffer
+				// covers a browser reload, but the buffer lives in the Pi's own
+				// server process — so a Pi reboot comes back with an empty one and
+				// the pane sits on the rotation show until the director next hops,
+				// now up to 15 minutes.
+				//
+				// The leader sends this when it sees a peer (re)appear. The guard
+				// below is what makes it safe: applying it is a NO-OP for any pane
+				// already showing the location, so a stray or duplicated resync
+				// costs nothing and the leader never has to be clever about who
+				// needs one.
+				//
+				// The guard has to live HERE rather than relying on flight.flyTo's
+				// own early-return, because applyScene() calls exitFlyover() and
+				// #stampRoute() BEFORE it reaches flyTo — so an unguarded resync
+				// would silently kill an in-progress vantage beat on a healthy pane.
+				if (!isValidLocation(msg.locationId)) break;
+				if (this.#model.location === msg.locationId) break;
+				const weather = isValidWeather(msg.weather) ? msg.weather : undefined;
+				// Applied immediately, NOT scheduled to a shared transitionAtMs.
+				// Lock-step exists to hide a cut across three panes flipping
+				// together; this pane is already showing the wrong city on its
+				// own, so there is no seam to protect and the priority is simply
+				// to be correct sooner. It arrives as a normal cruise, which reads
+				// as the aircraft flying there.
+				this.#model.applyScene(msg.locationId, weather);
 				break;
 			}
 			case 'vantage_beat': {
