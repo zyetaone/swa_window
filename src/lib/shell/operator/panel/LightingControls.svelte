@@ -78,13 +78,33 @@
 	/>
 	<RangeSlider
 		id="viirsBrightness"
-		label="VIIRS Brightness ×"
+		label="VIIRS Brightness × (halo only)"
 		min={0.5}
 		max={3.0}
 		step={0.05}
 		value={cfg.world.viirsBrightness}
 		oninput={patchNum(patch, 'world.viirsBrightness')}
 		formatValue={(v) => v.toFixed(2)}
+	/>
+	<RangeSlider
+		id="nightMaskGamma"
+		label="Night Mask Gamma (roads through gaps)"
+		min={1.0}
+		max={3.5}
+		step={0.05}
+		value={cfg.world.nightMaskGamma}
+		oninput={patchNum(patch, 'world.nightMaskGamma')}
+		formatValue={(v) => v.toFixed(2)}
+	/>
+	<RangeSlider
+		id="bloomSigma"
+		label="Bloom Spread"
+		min={1.0}
+		max={6.0}
+		step={0.1}
+		value={cfg.world.bloomSigma}
+		oninput={patchNum(patch, 'world.bloomSigma')}
+		formatValue={(v) => v.toFixed(1)}
 	/>
 	<Toggle label="Hash Palette (Night)" checked={cfg.world.useHashPalette} onchange={(e) => patch('world.useHashPalette', e.currentTarget.checked)} />
 </section>

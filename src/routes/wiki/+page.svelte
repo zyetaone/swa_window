@@ -771,11 +771,22 @@
 					Cesium's terms; Sentinel-2 Cloudless (the <em>s2cloudless-2024</em> layer) is
 					© EOX IT Services under CC BY-NC-SA 4.0 — a NonCommercial licence, which a paid
 					installation needs EOX's separate commercial licence to satisfy; the road mask is
-					© CARTO under CARTO's basemap terms, with map data © OpenStreetMap contributors;
+					© CARTO, whose basemaps are documented as available <em>exclusively</em> with an
+					Enterprise licence — free use is limited to non-commercial and grantee projects,
+					so a paid install needs that licence too — with map data © OpenStreetMap
+					contributors;
 					VIIRS night-lights radiance is NASA public-domain; road and building geometry is ©
 					OpenStreetMap contributors under ODbL. Attribution travels with any install or
 					screenshot that shows them. Software stack credits: Svelte / SvelteKit, CesiumJS,
 					Three.js (optional overlay), Bun, Raspberry Pi OS / Chromium.
+				</p>
+				<p>
+					<strong>Audio carries no third-party licence at all.</strong> The cabin bed is
+					synthesized at runtime — looped white noise shaped by a lowpass for the engine
+					and a bandpass for weather — so no recording is sampled, bundled or redistributed,
+					and the engine's cutoff can track altitude in a way a fixed loop cannot. The only
+					exception is the optional music bed, which is a URL the operator supplies;
+					whatever plays there is licensed by whoever configures it, not by this product.
 				</p>
 			</div>
 			<div class="omission-item">

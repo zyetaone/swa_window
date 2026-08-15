@@ -22,6 +22,12 @@ export const PEER_SYNC_PATHS = [
 	'atmosphere.clouds.density',
 	'atmosphere.clouds.speed',
 	'atmosphere.haze.amount',
+	'audio.enabled',
+	'audio.engineVolume',
+	'audio.masterVolume',
+	'audio.musicUrl',
+	'audio.musicVolume',
+	'audio.weatherVolume',
 	'director.autopilot.nightLitCitiesOnly',
 	'shell.clockVisible',
 	'shell.hudVisible',
@@ -29,10 +35,12 @@ export const PEER_SYNC_PATHS = [
 	'shell.touchEnabled',
 	'shell.windowFrame',
 	'world.additiveStrength',
+	'world.bloomSigma',
 	'world.buildingsEnabled',
 	'world.moonlightIntensity',
 	'world.nightExposure',
 	'world.nightLightIntensity',
+	'world.nightMaskGamma',
 	'world.qualityMode',
 	'world.showClouds',
 	'world.skyDarken',
@@ -52,7 +60,8 @@ export type AmbientValue = number | boolean | string;
 type AmbientPathSpec =
 	| { kind: 'boolean' }
 	| { kind: 'number'; min: number; max: number }
-	| { kind: 'enum'; values: readonly AmbientValue[] };
+	| { kind: 'enum'; values: readonly AmbientValue[] }
+	| { kind: 'url'; maxLength: number };
 
 /**
  * Per-path validation for values restored from localStorage. Bounds mirror
@@ -65,6 +74,12 @@ export const AMBIENT_PATH_SPECS = {
 	'atmosphere.clouds.density': { kind: 'number', min: 0, max: 1 },
 	'atmosphere.clouds.speed': { kind: 'number', min: 0.1, max: 3 },
 	'atmosphere.haze.amount': { kind: 'number', min: 0, max: 0.15 },
+	'audio.enabled': { kind: 'boolean' },
+	'audio.engineVolume': { kind: 'number', min: 0, max: 1 },
+	'audio.masterVolume': { kind: 'number', min: 0, max: 1 },
+	'audio.musicUrl': { kind: 'url', maxLength: 2048 },
+	'audio.musicVolume': { kind: 'number', min: 0, max: 1 },
+	'audio.weatherVolume': { kind: 'number', min: 0, max: 1 },
 	'director.autopilot.nightLitCitiesOnly': { kind: 'boolean' },
 	'shell.clockVisible': { kind: 'boolean' },
 	'shell.hudVisible': { kind: 'boolean' },
@@ -72,10 +87,12 @@ export const AMBIENT_PATH_SPECS = {
 	'shell.touchEnabled': { kind: 'boolean' },
 	'shell.windowFrame': { kind: 'boolean' },
 	'world.additiveStrength': { kind: 'number', min: 0, max: 15 },
+	'world.bloomSigma': { kind: 'number', min: 1, max: 6 },
 	'world.buildingsEnabled': { kind: 'boolean' },
 	'world.moonlightIntensity': { kind: 'number', min: 0, max: 1 },
 	'world.nightExposure': { kind: 'number', min: 0.4, max: 1.5 },
 	'world.nightLightIntensity': { kind: 'number', min: 0, max: 5 },
+	'world.nightMaskGamma': { kind: 'number', min: 1, max: 3.5 },
 	'world.qualityMode': { kind: 'enum', values: QUALITY_MODES },
 	'world.showClouds': { kind: 'boolean' },
 	'world.skyDarken': { kind: 'number', min: 0.5, max: 4 },
@@ -135,5 +152,37 @@ export function validateAmbientValue(path: PeerSyncPath, value: unknown): Ambien
 		}
 		case 'enum':
 			return spec.values.includes(value as AmbientValue) ? (value as AmbientValue) : undefined;
+		case 'url':
+			return validateMediaUrl(value, spec.maxLength);
 	}
+}
+
+/**
+ * The only string that crosses this wire, and it becomes an `Audio` src — so
+ * it is a genuine trust boundary, not a formality. Both of its inputs are
+ * attacker-reachable in the threat model this repo already assumes: any peer
+ * on the LAN can PATCH /api/config, and localStorage survives whatever the
+ * kiosk browser was pointed at before.
+ *
+ * Scheme allowlist rather than a blocklist: `javascript:` is the obvious one,
+ * but `data:` and `blob:` are the ones a blocklist forgets, and both are
+ * perfectly good ways to hand the kiosk arbitrary content. Only same-origin
+ * relative paths and explicit http(s) survive.
+ *
+ * Protocol-relative `//host/x` is rejected too — it reads like a path but
+ * resolves to a remote origin.
+ */
+function validateMediaUrl(value: unknown, maxLength: number): string | undefined {
+	if (typeof value !== 'string') return undefined;
+	const url = value.trim();
+	if (url === '') return ''; // empty = "no music", the default; must round-trip
+	if (url.length > maxLength) return undefined;
+	// Control chars / stray whitespace can smuggle a scheme past a naive
+	// prefix check — `java\nscript:` is the classic. Also drops embedded
+	// spaces, which no legitimate URL needs unescaped.
+	// eslint-disable-next-line no-control-regex
+	if (/[\u0000-\u0020\u007f]/.test(url)) return undefined;
+	if (url.startsWith('//')) return undefined;
+	if (url.startsWith('/')) return url; // same-origin, e.g. /media/bed.mp3
+	return /^https?:\/\//i.test(url) ? url : undefined;
 }

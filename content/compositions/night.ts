@@ -165,16 +165,16 @@ export const NIGHT_PALETTE = {
 	 * is the shipped night-show band; structure comes from building windows
 	 * and the z18 road mask. VIIRS is "where is the city" fill only.
 	 *
-	 * 0.6 → 0.30: zoom-8 VIIRS is ~583 m/px; at 30k ft one sample spans ~88
-	 * screen px. It cannot resolve roads/buildings — only a soft city blob.
+	 * 0.6 → 0.30 → 0.20 → 0.14: zoom-8 VIIRS is ~583 m/px; at 30k ft one
+	 * sample spans ~88 screen px. It cannot resolve roads/buildings — only a
+	 * soft city blob. Lower ceiling = less "soaky" amber puddle; roads carry
+	 * the city, VIIRS only seeds where light is (mask + faint halo).
 	 */
 	viirs: {
-		// 0.30 → 0.20. VIIRS is a 583 m/px radiance product: its own blur is the
-		// blob. It is now consumed as a MASK by the post-process grade rather
-		// than composited as visible light, and the road mask above it carries
-		// the structure — so the layer itself only has to seed where light is,
-		// not look like light.
-		maxAlpha:         0.20,
+		// 0.20 → 0.15 (2026-08 de-soak). Structure = road mask (+ buildings).
+		// Prefer baked `viirs-roads` composite on-disk when available so streets
+		// only glow inside real lit areas (tools/tile-packager viirs-roads).
+		maxAlpha:         0.15,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 		// Fraction of the altitude gate that survives at ground level. The

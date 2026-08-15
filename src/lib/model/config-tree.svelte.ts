@@ -165,6 +165,31 @@ const _camera: CameraShape = {
 	},
 };
 
+/**
+ * Cabin ambience. Synthesized in `$lib/shell/audio/ambient-audio` — there are
+ * no audio files in this repo, so nothing here points at a bundled asset.
+ *
+ * `enabled` ships FALSE. Audio is the one subsystem whose correct level cannot
+ * be judged anywhere but the room: the Waveshare panels have built-in speakers
+ * of unknown response, and three of them share one corridor. Shipping it on at
+ * a guessed volume risks an install that is actively unpleasant and that
+ * nobody on site knows how to mute. The operator turns it on once, sets the
+ * level against the real room, and it persists from there.
+ *
+ * `musicUrl` is operator-supplied and empty by default. A music bed is the
+ * only layer we cannot synthesize, and shipping one would mean shipping
+ * someone else's licence (see the EOX/CARTO findings) — so the product
+ * provides the slot, not the content.
+ */
+export const audio = $state({
+	enabled: false,
+	masterVolume: 0.5,
+	engineVolume: 0.6, // the bed — carries the cabin
+	weatherVolume: 0.4, // rides on top only when it's actually raining
+	musicVolume: 0.3, // ducked under the ambience by default
+	musicUrl: '',
+});
+
 export const camera = $state(_camera);
 
 export type CameraConfig = typeof _camera;
@@ -303,34 +328,37 @@ export const world = $state({
 	// or ?hashpalette=0 to revert to aero-color-grade for comparison.
 	useHashPalette: true,
 		baseNightSaturation: 0.50, // keep colour at dusk, shader desat handles deep night
-		nightLightIntensity: 5.0, // VIIRS + shader city-glow intensity
+		nightLightIntensity: 5.0, // VIIRS + shader city-glow intensity (0..5; gain-normalised)
 		bloomContrast: 128,
-	bloomBrightness: -0.1, // less darkening, brighter glow
-	bloomSigma: 4.5, // bloom spread (wider VIIRS glow)
+	// Roads-first night (2026-08 de-soak): wider sigma + high brightness turned
+	// city cores into one amber puddle. Tighter bloom lets road strokes and
+	// window points stay distinct; night bloom stays ON (see qualityPaintGates).
+	bloomBrightness: -0.22,
+	bloomSigma: 2.8,
 	buildingsEnabled: true,
 	buildingEmissiveMax: 0.6, // max window-glow intensity at night
-		// 3.0 → 1.6. VIIRS is now used as a MASK rather than as light itself
-		// (hash-palette.ts), so the additive no longer has to carry the whole
-		// city on its own — the road mask underneath supplies the structure.
-		// Held at the old 3.0 on top of a sharpened mask, cities read as a
-		// solid amber sheet.
-		additiveStrength: 1.6, // emissive boost on lit pixels
+		// 3.0 → 1.6 → 1.25. VIIRS is a MASK (hash-palette.ts); roads carry
+		// structure. High additive on a soft mask = solid amber sheet ("soaky").
+		// 1.25 keeps road/window cores lit without re-soaking districts.
+		additiveStrength: 1.25, // emissive boost on lit pixels
 		// Mask shaping — the "photoshop" controls.
 		// maskGamma > 1 pulls the mask toward its bright cores, so the soft
 		// VIIRS halo falls away and the roads / lit building profiles read
 		// through the gaps instead of drowning in the aggregate. 1.0 = the old
-		// unsharpened behaviour.
-		nightMaskGamma: 1.8,
+		// unsharpened behaviour. 2.4 = roads-first cores (2026-08 de-soak).
+		nightMaskGamma: 2.4,
 		// District-scale patchiness, ± this fraction. Real city light is uneven;
 		// a flat field reads as a printed map.
-		nightMaskNoise: 0.35,
+		nightMaskNoise: 0.42,
 		// Atmospheric scintillation on the brighter cells. Deliberately small —
 		// this should be felt, not seen. 0 disables.
-		nightGlimmer: 0.12,
+		nightGlimmer: 0.10,
 		moonlightIntensity: 0.08,
 	nightExposure: 1.15, // 0.95 → 1.15 (Aug-2026 review): global night lift — the wall read too dark at deep night
 	darkVoidStrength: 0.01, // dark-crush floor (nearly off)
-	envLight: 4.0, // terrain ambient floor (night visibility)
+	// 4.0 → 3.0: ambient floor still lifts pure black; lower than the old
+	// wash while keeping terrain readable on matte office panels.
+	envLight: 3.0,
 	// Daytime half of the grade pass. The base imagery layer's own contrast and
 	// saturation are pinned at measured values (see imagery.ts — raising them
 	// clipped a channel on 100% of ocean pixels and turned the Pacific purple),
@@ -341,7 +369,9 @@ export const world = $state({
 	dayVibrance: 0.20,
 		atmosphereLight: 2.0, // 1.6 → 2.0 (Aug-2026): ground ambient bleed at night, pairs with the exposure lift
 		skyDarken: 1.8, // sky-atmosphere brightness shift
-	viirsBrightness: 3.0, // VIIRS layer brightness
+	// 3.0 → 1.55: VIIRS is fill/halo only; roads + windows are the city.
+	// syncImagery multiplies this into layer.brightness — keep modest.
+	viirsBrightness: 1.55,
 	// 1.4 → 1.0: this multiplies INTO viirsLayerAlpha's gate product, which is
 	// then clamped back to maxAlpha. At 1.4 the product overshot 1.0 at every
 	// night-show altitude, pinning alpha flat and disabling the altitude gate
@@ -398,13 +428,13 @@ export const shell = $state({
 // The root wrapper is a plain object on purpose: its fields are never
 // reassigned (all mutation goes through setByPath into the namespaces), so
 // the reactivity already lives in the five $state namespace proxies.
-export const config = { atmosphere, camera, director, world, shell };
+export const config = { atmosphere, audio, camera, director, world, shell };
 
 // Flat namespace map — single dispatch point for all path-targeted patches.
 // `satisfies` couples the keys to the framework-free CONFIG_NAMESPACE_KEYS
 // SSOT (also consumed by the /api/config wire allowlist): add or rename a
 // namespace in only one place and the compiler flags the other.
-const NAMESPACES = { atmosphere, camera, director, world, shell } as const satisfies Record<ConfigNamespace, object>;
+const NAMESPACES = { atmosphere, audio, camera, director, world, shell } as const satisfies Record<ConfigNamespace, object>;
 
 // ─── CRDT layer ─────────────────────────────────────────────────────────────
 

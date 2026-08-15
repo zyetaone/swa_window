@@ -176,7 +176,8 @@ export async function setupImagery(): Promise<void> {
 			_viirsLayer.dayAlpha = 0; _viirsLayer.nightAlpha = 1;
 			_viirsLayer.colorToAlpha = C.Color.BLACK;
 			_viirsLayer.hue = 0.0; _viirsLayer.saturation = 0.0;
-			_viirsLayer.brightness = 2.5; _viirsLayer.contrast = 0.8;
+			// Soft fill only — roads on top carry structure (see road brightness).
+			_viirsLayer.brightness = 1.6; _viirsLayer.contrast = 0.85;
 			// See COLOR_TO_ALPHA — true-black NASA tiles only need a hairline.
 			_viirsLayer.colorToAlphaThreshold = COLOR_TO_ALPHA.viirsThreshold;
 		}
@@ -222,7 +223,9 @@ export async function setupImagery(): Promise<void> {
 			_roadMaskLayer.colorToAlpha = C.Color.BLACK;
 			_roadMaskLayer.colorToAlphaThreshold = COLOR_TO_ALPHA.roadThreshold;
 			_roadMaskLayer.saturation = 0.0;
-			_roadMaskLayer.contrast = 1.5;
+			// 1.5 → 1.75: more stroke/background separation before brightness
+			// scale — structure without needing a soaky VIIRS underlayer.
+			_roadMaskLayer.contrast = 1.75;
 			_roadMaskLayer.brightness = 1.0;
 		}
 	} catch (e) { console.warn('[Imagery] CartoDB roads failed:', e); }
@@ -373,7 +376,9 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	if (_viirsLayer) {
 		const viirsAlpha = viirsLayerAlpha(nf, scale, model.altitude, w.viirsAlphaBoost, bootFade);
 		const viirsShow = (show || (prev < 0.01 && nf > 0.01)) && viirsAlpha > 0.001;
-		const viirsBrightness = 5.0 * w.viirsBrightness;
+		// 5.0× → 3.2×: with default viirsBrightness 1.55 this lands ~5.0 instead
+		// of ~15. Soft VIIRS at 15× brightness re-soaked cities under the grade.
+		const viirsBrightness = 3.2 * w.viirsBrightness;
 
 		_viirsShow.update(viirsShow, (v) => { _viirsLayer!.show = v; });
 		_viirsAlpha.update(viirsAlpha, (v) => { _viirsLayer!.alpha = v; });
@@ -381,23 +386,11 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 	}
 	if (_roadMaskLayer) {
 		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
-		// Night 3.0 → 6.0. Measured from a real CartoDB dark_nolabels z14 tile over
-		// Hyderabad: colorToAlpha keys out 81.3% as background and keeps 18.7% as
-		// road strokes, but those average only 28.6/255. Through brightness 3.0 +
-		// contrast 1.5 at alpha 0.667 they composited to 58/255 over a 44/255
-		// ground — 1.32x contrast, on lines ~2 screen px wide at 30k ft, which
-		// reads as vague texture rather than a street grid. 4.5 lands ~101/255,
-		// about 2.3x. Aug-2026 visual review asked for the network to actually
-		// GLOW against the dark terrain: 6.0 lands ~135/255 (~3x) — the streets
-		// read as lit arteries over the VIIRS halo, not faint texture.
-		// 6.0 → 8.0 at deep night (2.5 + nf*5.5). "Higher city punch, lower night
-		// lights" is one trade, not two changes: VIIRS drops (maxAlpha 0.30 →
-		// 0.20, additive 3.0 → 1.6) and the road network takes over the load it
-		// was carrying. That swap is the whole point — the blob was never the
-		// city, the street grid is. Roads are baked at ~19 m/px against VIIRS's
-		// 583 m/px, so every unit of brightness moved from one to the other buys
-		// roughly thirty times the spatial detail.
-		const roadBrightness = 2.5 + nf * 5.5;
+		// Roads carry the city; VIIRS fills behind (roadMaskAlpha comments).
+		// Deep night brightness lands ~9–10 so thin strokes still read as lit
+		// arteries over a quieter VIIRS halo (2026-08 de-soak).
+		// Prefer baked viirs-roads when present — streets only glow in lit areas.
+		const roadBrightness = 3.0 + nf * 6.5;
 		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
 		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
 		// field to the Three side. Those overlays (CityLightField bokeh,

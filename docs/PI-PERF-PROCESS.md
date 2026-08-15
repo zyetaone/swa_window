@@ -105,10 +105,12 @@ See `docs/SIMPLIFICATION-DECISIONS.md`. Summary:
 
 - **Wing stays on** fielded Pis (`useThreeOverlay` default true).
 - **Daisy-chain:** quality + Three peer-sync and ambient-persist (whole wall).
-- **Pi lean under performance:** day shadows/FXAA/AO off; Three **cloud count**
-  scaled by `PERFORMANCE_CLOUD_COUNT_SCALE` (wing still mounted). Night bloom /
-  hash palette remain on for the city-lights look.
-- **Night Lab:** enhance further (DEV `?lab=1`); not deleted.
+- **Pi lean under performance:** day shadows/FXAA/AO off; **day grade pass
+  off** (`qualityPaintGates` — dayContrast/dayVibrance do not keep postFx on);
+  Three **cloud count** scaled by `PERFORMANCE_CLOUD_COUNT_SCALE` (wing still
+  mounted). Night bloom / hash palette remain on for the city-lights look.
+- **Night Lab:** enhance further (DEV `?lab=1`); not deleted until the photo
+  is chosen (see SIMPLIFICATION-DECISIONS).
 
 ## Related code
 

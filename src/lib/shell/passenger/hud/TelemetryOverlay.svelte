@@ -9,17 +9,25 @@
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 
 	const model = useAeroWindow();
-	const destName = $derived(model.flight.cruiseDestinationName ?? '');
+	const destName = $derived(model.flight.cruiseDestinationName ?? model.routeToName ?? '');
+	const fromName = $derived(model.routeFromName ?? '');
 	const isCruising = $derived(model.flight.flightMode !== 'orbit');
 	// Whisper only while the FSM is between places. Quiet orbit = pure view.
 	const showWhisper = $derived(isCruising && destName.length > 0);
+	const hasFrom = $derived(fromName.length > 0 && fromName !== destName);
 </script>
 
 {#if showWhisper}
 	<div class="hud-wrapper" aria-hidden="true">
 		<div class="whisper">
 			<span class="label">En route</span>
-			<span class="place">{destName}</span>
+			<span class="place">
+				{#if hasFrom}
+					<span class="from">{fromName}</span>
+					<span class="arrow">→</span>
+				{/if}
+				<span class="to">{destName}</span>
+			</span>
 		</div>
 	</div>
 {/if}
@@ -60,11 +68,20 @@
 		opacity: 0.55;
 	}
 	.place {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: flex-end;
+		gap: 0.35rem 0.45rem;
 		font-size: 1.05rem;
 		font-weight: 300;
 		letter-spacing: 0.14em;
 		text-transform: uppercase;
 		font-family: 'Ubuntu', system-ui, sans-serif;
+	}
+	.arrow {
+		opacity: 0.7;
+		letter-spacing: 0;
 	}
 	@keyframes whisper-in {
 		from { opacity: 0; transform: translateY(-6px); }

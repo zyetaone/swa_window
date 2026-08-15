@@ -11,13 +11,23 @@ import {
 	clearAmbientSyncFailures,
 } from '$lib/fleet/peer-sync.svelte';
 import { applyConfigPatch, config } from '$lib/model/config-tree.svelte';
+import { CONFIG_NAMESPACE_KEYS } from '$lib/model/config-namespaces';
 import type { RestAdminStore } from '$lib/fleet/rest-admin.svelte';
 
 describe('PEER_SYNC_PATHS', () => {
 	it('lists unique dotted paths under known namespaces', () => {
+		// Namespaces come from the SSOT, not a literal. This assertion used to
+		// inline /^(atmosphere|director|world|shell)\./, which meant adding a
+		// sixth namespace failed HERE rather than anywhere meaningful — a test
+		// re-deriving a list the product already owns. CONFIG_NAMESPACE_KEYS is
+		// the same source /api/config builds its wire allowlist from, so this
+		// now fails only when a path is genuinely unroutable.
+		const ns = new Set<string>(CONFIG_NAMESPACE_KEYS);
 		const seen = new Set<string>();
 		for (const path of PEER_SYNC_PATHS) {
-			expect(path).toMatch(/^(atmosphere|director|world|shell)\./);
+			const [head, ...rest] = path.split('.');
+			expect(ns.has(head), `${path} has no such namespace`).toBe(true);
+			expect(rest.length, `${path} must address a leaf`).toBeGreaterThan(0);
 			expect(seen.has(path)).toBe(false);
 			seen.add(path);
 		}

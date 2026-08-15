@@ -6,6 +6,7 @@
 	import { PRODUCT_STAGE } from '$lib/credits';
 	import { subscribeWallClock, wallClockNow, formatClock } from '$lib/shell/passenger/wall-clock.svelte';
 	import AtmosphereControls from '$lib/shell/operator/panel/AtmosphereControls.svelte';
+	import AudioControls from '$lib/shell/operator/panel/AudioControls.svelte';
 	import FlightControls from '$lib/shell/operator/panel/FlightControls.svelte';
 	import LightingControls from '$lib/shell/operator/panel/LightingControls.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
@@ -596,6 +597,7 @@
 				<FlightControls />
 				<AtmosphereControls />
 				<LightingControls />
+				<AudioControls />
 				{#if ambientFailures.length > 0}
 					<p class="update-result has-failures">
 						{ambientFailures.length} ambient sync {ambientFailures.length === 1 ? 'failure' : 'failures'}

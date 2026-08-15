@@ -106,6 +106,12 @@ export class AeroWindow {
 	// Environment
 	weather = $state<WeatherType>('cloudy');
 
+	// Passenger route watermark (closed blind "Dallas → Dubai"). Stamped when
+	// a cruise starts (blind pull / autopilot / fleet applyScene); holds until
+	// the next hop so the blind still names the leg after arrival.
+	routeFromName = $state<string | null>(null);
+	routeToName = $state<string | null>(null);
+
 	// Display — fleet-controlled mode (admin set_mode). Consumed by Pane →
 	// MediaStage. $state so templates re-render when the fleet flips mode.
 	displayMode = $state<DisplayMode>('flight');
@@ -153,6 +159,14 @@ export class AeroWindow {
 
 	// ── Derived ───────────────────────────────────────────────────────────────
 	currentLocation = $derived(LOCATION_MAP.get(this.location) ?? LOCATIONS[0]);
+	/** Closed-blind / whisper line: "Dallas → Dubai", else current place name. */
+	routeLabel = $derived(
+		this.routeFromName
+			&& this.routeToName
+			&& this.routeFromName !== this.routeToName
+			? `${this.routeFromName} → ${this.routeToName}`
+			: this.currentLocation.name,
+	);
 	// timeOfDay IS the local civil time at the depicted location — the whole
 	// sky pipeline assumes it (computeSunDirection maps t=12 to sun-overhead,
 	// skyState/nightFactor key on local dawn/dusk, and compose's #syncClock
@@ -404,6 +418,9 @@ export class AeroWindow {
 	 *  schedules applyScene on followers. Cancels any cruise already pending. */
 	#scheduleFlyTo(locationId: LocationId, transitionAtMs: number): void {
 		this.#cancelScheduledFlyTo();
+		// Stamp route at schedule time so a closed blind shows From → To during
+		// the 2.5 s lock-step wait, not only after cruise engines start.
+		this.#stampRoute(locationId);
 		// Clamped via transitionDelayMs for the same reason as the flyover
 		// beat: a bad clock must neither freeze the scene nor overflow
 		// setTimeout into firing instantly.
@@ -412,6 +429,14 @@ export class AeroWindow {
 			this.flight.flyTo(locationId, this.skyState);
 		}, transitionDelayMs(transitionAtMs));
 		this.#pendingFlyToTimer = id;
+	}
+
+	/** Record origin → destination names for the passenger blind watermark. */
+	#stampRoute(toId: LocationId): void {
+		const toName = LOCATION_MAP.get(toId)?.name ?? toId;
+		// Origin is the place we still are (location only flips on arrival).
+		this.routeFromName = this.currentLocation.name;
+		this.routeToName = toName;
 	}
 
 	#cancelScheduledFlyTo(): void {
@@ -499,7 +524,10 @@ export class AeroWindow {
 		this.exitFlyover();   // a blind pull mid-beat must not carry flyover altitude/pitch into the cruise (autopilot + applyScene already do this)
 		const transitionAtMs = this.#broadcastLocationDecision(locationId, 'manual');
 		if (transitionAtMs !== null) this.#scheduleFlyTo(locationId, transitionAtMs);
-		else this.flight.flyTo(locationId, this.skyState);
+		else {
+			this.#stampRoute(locationId);
+			this.flight.flyTo(locationId, this.skyState);
+		}
 	}
 
 	/**
@@ -588,6 +616,7 @@ export class AeroWindow {
 	applyScene(locationId: LocationId, weather?: WeatherType): void {
 		this.exitFlyover();   // a location change ends any active flyover beat
 		this.#cancelScheduledFlyTo();   // …and supersedes a pending autopilot cruise
+		this.#stampRoute(locationId);
 		this.flight.flyTo(locationId, this.skyState);
 		if (weather) { this.weather = weather; this.#syncWeatherConfig(); }
 	}
@@ -700,7 +729,10 @@ export class AeroWindow {
 			// scheduling would only add a dead 2.5 s delay.
 			const transitionAtMs = this.#broadcastLocationDecision(directorPatch.nextLocation, 'autopilot');
 			if (transitionAtMs !== null) this.#scheduleFlyTo(directorPatch.nextLocation, transitionAtMs);
-			else this.flight.flyTo(directorPatch.nextLocation, this.skyState);
+			else {
+				this.#stampRoute(directorPatch.nextLocation);
+				this.flight.flyTo(directorPatch.nextLocation, this.skyState);
+			}
 		} else if (directorPatch.vantageBeat) {
 			// Leader chose a night-city flyover. Same rule as the location
 			// decision above: broadcast + lock-step only when there are

@@ -19,7 +19,7 @@ import type { LocationId, WeatherType, QualityMode } from '$lib/types';
 import type { world } from '$lib/model/config-tree.svelte';
 import { T } from '$lib/utils';
 import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
-import { COLOR_GRADE_STAGE, nightPostFxOn } from './shaders';
+import { COLOR_GRADE_STAGE, nightPostFxOn, qualityPaintGates } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesAvailable } from './cesium-setup';
 import { mountLightning, tickLightning, destroyLightning } from './lightning-stage';
 import { mountCesiumClouds, updateCesiumClouds, destroyCesiumClouds } from './cloud-billboard-layer';
@@ -395,36 +395,27 @@ export class CesiumManager {
 		this.#lastUseHashPalette = useHash;
 		this.#lastNightFxOn = nightFx;
 
-		// TWO gates, deliberately different (see nightPostFxOn in shaders.ts):
+		// Gates SSOT: qualityPaintGates() in shaders.ts (unit-tested).
 		//
-		//   quality — shadows / FXAA / AO. Cost is all-day and the benefit is
-		//             all-day, so it stays tied to the operator's tier choice.
-		//   bloomOn — bloom. Its only job is spatial glow on night lights, so it
-		//             follows the sun rather than the tier.
-		//   postFx  — the grade stage, which now has both a night half and a day
-		//             half, so it runs whenever either half has work to do.
+		//   quality — shadows / FXAA / AO. All-day cost; tier-tied.
+		//   bloomOn — spatial glow on night lights; sun-tied (nightFx) so
+		//             performance still gets night bloom (was a Pi blackout bug).
+		//   gradeByDay — day half of hash/color grade. **Off under performance**
+		//             even when dayContrast/dayVibrance knobs are set — those
+		//             knobs are balanced/ultra. Under performance they used to
+		//             keep a full-screen grade blit running all day.
+		//   postFx  — any grade/bloom work worth installing stages for.
 		//
-		// These were one flag. That made `performance` (the shipped Pi default)
-		// render night with no glow and no grade at all — the tuned bloomSigma
-		// and the whole hash palette were inert on the wall.
-		//
-		// Pi lean (docs/SIMPLIFICATION-DECISIONS.md): quality=false drops
-		// day-only cost (shadows / FXAA / AO). Night bloom + hash stay on via
-		// nightFx — wing/Three stays mounted; cloud sprite count is scaled
-		// separately under performance (cloud-cluster-budget).
-		const quality = mode !== 'performance';
+		// Pi lean (docs/SIMPLIFICATION-DECISIONS.md): day-only paint off under
+		// performance; night bloom + hash stay via nightFx; wing/Three stays
+		// mounted; cloud sprite count scaled separately (cloud-cluster-budget).
 		const w0 = this.#model.config.world;
-		// The grade now has a DAY half too (dayContrast / dayVibrance in
-		// hash-palette.ts), added because the imagery layer's own contrast and
-		// saturation are pinned at measured values and cannot be pushed further
-		// without reintroducing the purple-ocean clipping. So the pass is worth
-		// its cost whenever either half is doing something — which is what
-		// `gradeByDay` tests. With both day knobs at 0 it falls back to exactly
-		// the night-only behaviour, and bloom stays night-gated regardless:
-		// bloom has no daytime job here.
-		const gradeByDay = w0.dayContrast > 0 || w0.dayVibrance > 0;
-		const bloomOn = quality || nightFx;
-		const postFx = bloomOn || gradeByDay;
+		const { quality, bloomOn, postFx } = qualityPaintGates({
+			mode,
+			nightFx,
+			dayContrast: w0.dayContrast,
+			dayVibrance: w0.dayVibrance,
+		});
 
 		// Hash palette follows the flag at runtime: install on true, uninstall
 		// (remove stage + restore aero-color-grade) on false. Boot-only install

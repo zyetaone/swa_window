@@ -16,7 +16,7 @@
 	import { savePersistedState } from "$lib/model/persistence";
 	import { clearOverlayDisabled } from "$lib/world/lifecycle-overlay-recovery";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
-	import { resolveBinding } from "$lib/fleet/parallax.svelte";
+	import { resolveBinding, isGroupLeader } from "$lib/fleet/parallax.svelte";
 	import { startThermalGuard } from "$lib/fleet/thermal-guard.svelte";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/pane/Pane.svelte";
@@ -28,6 +28,8 @@
 	import TimeControl from "$lib/shell/operator/panel/TimeControl.svelte";
 	import FlightControls from "$lib/shell/operator/panel/FlightControls.svelte";
 	import AtmosphereControls from "$lib/shell/operator/panel/AtmosphereControls.svelte";
+	import AudioControls from "$lib/shell/operator/panel/AudioControls.svelte";
+	import AmbientAudioHost from "$lib/shell/audio/AmbientAudioHost.svelte";
 	import LightingControls from "$lib/shell/operator/panel/LightingControls.svelte";
 	import WeatherPicker from "$lib/shell/operator/panel/WeatherPicker.svelte";
 	// Lab panels: DEV-only dynamic import so production client graph never
@@ -270,6 +272,16 @@
 
 		<Pane />
 
+		<!-- Renders nothing; drives the synthesized cabin ambience. Music is
+		     gated to the group leader so three panes can't play a melody a few
+		     hundred ms apart — the noise layers are uncorrelated on purpose
+		     (see ambient-audio.ts header). -->
+		<AmbientAudioHost
+			altitudeFt={model.flight.altitude}
+			weather={model.weather}
+			isLeader={isGroupLeader(model.config.camera.parallax.role)}
+		/>
+
 		{#if showCabinChrome}
 			<div class="cabin-details">
 				<div class="rivet rivet-tl"></div>
@@ -301,6 +313,8 @@
 				<AtmosphereControls />
 				<div class="divider"></div>
 				<LightingControls />
+				<div class="divider"></div>
+				<AudioControls />
 				{#if import.meta.env.DEV && labMode}
 					<div class="divider"></div>
 					{#await import('$lib/shell/operator/panel/LabControls.svelte') then { default: LabControls }}

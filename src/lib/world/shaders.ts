@@ -38,6 +38,35 @@ export function nightPostFxOn(nightFactor: number, prev: boolean): boolean {
 }
 
 /**
+ * Post-process / expensive-paint gates for a quality tier.
+ *
+ * SSOT for compose `#syncQuality`. Pure so Pi-lean invariants are unit-testable
+ * without a Viewer.
+ *
+ *   quality   — shadows / FXAA / AO (all-day cost; tier-tied)
+ *   gradeByDay — day half of hash/color grade. **Off under performance** even
+ *               when dayContrast/dayVibrance knobs are non-zero — those knobs
+ *               are for balanced/ultra. Under performance, day knobs used to
+ *               keep a full-screen grade blit running all day (Pi lean gap).
+ *   bloomOn   — bloom; night via nightFx, or always when quality tier is higher
+ *   postFx    — any grade/bloom work worth installing stages for
+ */
+export function qualityPaintGates(opts: {
+	mode: 'performance' | 'balanced' | 'ultra';
+	nightFx: boolean;
+	dayContrast: number;
+	dayVibrance: number;
+}): { quality: boolean; gradeByDay: boolean; bloomOn: boolean; postFx: boolean } {
+	const quality = opts.mode !== 'performance';
+	// Pi lean: day grade only on non-performance tiers.
+	const gradeByDay =
+		quality && (opts.dayContrast > 0 || opts.dayVibrance > 0);
+	const bloomOn = quality || opts.nightFx;
+	const postFx = bloomOn || gradeByDay;
+	return { quality, gradeByDay, bloomOn, postFx };
+}
+
+/**
  * Cesium postProcessStage name for the grade below. SSOT shared with
  * hash-palette.ts and NightVariantPanel for install/uninstall.
  */

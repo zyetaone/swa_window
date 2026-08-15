@@ -1,5 +1,5 @@
 /**
- * The five config namespaces — THE single copy of the key list.
+ * The six config namespaces — THE single copy of the key list.
  *
  * Two consumers that must never share more than these strings:
  *   - config-tree.svelte.ts builds its NAMESPACES map of live $state
@@ -13,5 +13,5 @@
  *
  * Framework-free on purpose. Keep it that way.
  */
-export const CONFIG_NAMESPACE_KEYS = ['atmosphere', 'camera', 'director', 'world', 'shell'] as const;
+export const CONFIG_NAMESPACE_KEYS = ['atmosphere', 'audio', 'camera', 'director', 'world', 'shell'] as const;
 export type ConfigNamespace = (typeof CONFIG_NAMESPACE_KEYS)[number];

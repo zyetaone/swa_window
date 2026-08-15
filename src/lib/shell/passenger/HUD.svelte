@@ -32,6 +32,9 @@
 	// announcements via text-change detection, no edge tracking needed.
 	const liveAnnouncement = $derived.by(() => {
 		if (model.flight.isTransitioning && model.flight.cruiseDestinationName) {
+			if (model.routeFromName && model.routeFromName !== model.flight.cruiseDestinationName) {
+				return `Flying from ${model.routeFromName} to ${model.flight.cruiseDestinationName}`;
+			}
 			return `Flying to ${model.flight.cruiseDestinationName}`;
 		}
 		return `Arrived at ${model.currentLocation.name}`;

@@ -40,7 +40,10 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 
 		float brightGuard = smoothstep(0.75, 0.95, lum);
-		float lightMask = smoothstep(0.15, 0.65, lum);
+		// Harder knee than 0.15→0.65: soft VIIRS + low knee turned whole
+		// districts into lightMask≈1, then additive + bloom made one amber soak.
+		// Roads (thin bright strokes) and window points still clear the higher floor.
+		float lightMask = smoothstep(0.22, 0.55, lum);
 
 		// The chroma-bias gate that used to live here is gone. It asked "is this
 		// pixel warm (red > blue)?" and cut lightMask to 15% when the answer was
@@ -115,7 +118,11 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float twinkle = sin(u_wallTime * 1.7 + cell * 6.2831853) * 0.5 + 0.5;
 		mask *= 1.0 - u_glimmer * twinkle * step(0.55, cell);
 
-		rgb += lightColor * lum * mask * u_additiveStrength * u_nightFactor;
+		// Additive rides the sharpened mask. Weight by a soft core of lum so
+		// thin road strokes (high local contrast) punch; soft VIIRS mounds
+		// (mid lum, wide) stay as placement only.
+		float core = smoothstep(0.18, 0.55, lum);
+		rgb += lightColor * mask * core * u_additiveStrength * u_nightFactor;
 		rgb = min(rgb, vec3(4.0));
 
 		// Base darkening — lightMask guards cities.
@@ -126,9 +133,10 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 		float darkVoid = 1.0 - smoothstep(0.05, 0.2, lum);
 		rgb = mix(rgb, vec3(0.0), darkVoid * u_nightFactor * u_darkVoidStrength * (1.0 - brightGuard));
 
-		// Pollution corona.
-		float pollution = smoothstep(0.10, 0.5, lum) * u_nightFactor;
-		rgb = min(rgb + vec3(0.18, 0.09, 0.02) * pollution * u_lightIntensity, vec3(1.0));
+		// Pollution corona — kept subtle. Old 0.10→0.5 + 0.18 orange washed
+		// half the ground into one amber puddle on top of bloom.
+		float pollution = smoothstep(0.22, 0.55, lum) * u_nightFactor;
+		rgb = min(rgb + vec3(0.10, 0.05, 0.015) * pollution * u_lightIntensity, vec3(1.0));
 
 		// Ambient floor — warm tint so terrain never goes pure black.
 		//
