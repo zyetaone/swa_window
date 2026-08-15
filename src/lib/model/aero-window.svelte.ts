@@ -10,14 +10,21 @@
  */
 
 import { getContext, setContext, hasContext } from 'svelte';
-import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt, readByPath } from '$lib/utils';
+import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
 import { type SlideshowSpec } from '$lib/fleet/display-payload';
 import { loadDisplayMode } from '$lib/fleet/display-mode-persist';
 import { applyDisplayMode } from '$lib/model/aero-window-display';
+import {
+	applyPersistedToHost,
+	buildPersistedSnapshot,
+} from '$lib/model/aero-window-persist-map';
+import {
+	broadcastAmbientJitter,
+	broadcastLocationDecision,
+} from '$lib/model/aero-window-fleet';
 import { loadPersistedState, hasPersistedState, type PersistedState } from '$lib/model/persistence';
-import { AMBIENT_PERSIST_PATHS, type AmbientValue, type PeerSyncPath } from '$lib/model/peer-sync-paths';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { lightingState } from '$lib/world/curves';
 import { LOCATIONS, LOCATION_MAP } from '$content/locations';
@@ -39,7 +46,8 @@ import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
 import { resolveLocalHours } from '$lib/model/local-time';
 // TRANSITION_DELAY_MS comes from the fleet protocol so sender + receiver share
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
-import { TRANSITION_DELAY_MS, transitionDelayMs, type DisplayConfig } from '$lib/fleet/protocol';
+import { TRANSITION_DELAY_MS } from '$lib/fleet/protocol';
+import { SceneTimers } from './aero-window-timers';
 
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -279,35 +287,9 @@ export class AeroWindow {
 	}
 
 	#applyPersisted(saved: Partial<PersistedState>): void {
-		// location/weather intentionally ignored — boot show owns the scene.
-		if (saved.altitude !== undefined) {
-			// Engine clamp only — do not use setAltitude() (that arms the 8 s
-			// user-override and would pause director altitude logic after boot).
-			const { min, max } = this.config.camera.altitude;
-			this.flight.setAltitude(saved.altitude, { min, max });
-		}
-		// Config-tree restores go through applyConfigPatch so the same
-		// validation/type gates apply, but WITHOUT a CRDT stamp (#booting) —
-		// an admin push issued while the Pi was offline carries an older
-		// wall-clock timestamp and must still win LWW over these restored
-		// local defaults.
-		if (saved.cloudDensity !== undefined) this.applyConfigPatch('atmosphere.clouds.density', saved.cloudDensity);
-		if (saved.buildingsEnabled !== undefined) this.applyConfigPatch('world.buildingsEnabled', saved.buildingsEnabled);
-		if (saved.showClouds !== undefined) this.applyConfigPatch('world.showClouds', saved.showClouds);
-		// Ambient peer-sync values (haze, nightLightIntensity, qualityMode, …)
-		// — same applyConfigPatch route, same unstamped boot semantics.
-		if (saved.ambient) {
-			for (const [path, value] of Object.entries(saved.ambient)) {
-				this.applyConfigPatch(path, value);
-			}
-		}
-		// syncToRealTime is deliberately NOT restored (see persistence.ts). Boot
-		// always comes up with Real Time ON. Dropping the WRITE alone would not
-		// have been enough: every fielded Pi that already has `false` in its blob
-		// would keep restoring it forever, since the stored value is applied
-		// after the code default. Ignoring the read is what actually recovers
-		// those devices, on their next reboot, with no hand-clearing of
-		// localStorage.
+		// location/weather/syncToRealTime ignored — boot policy (see persistence.ts).
+		// applyConfigPatch is unstamped while #booting so offline admin LWW wins.
+		applyPersistedToHost(this, saved);
 	}
 
 	// ── Actions ───────────────────────────────────────────────────────────────
@@ -360,78 +342,42 @@ export class AeroWindow {
 		if (opts?.trackUserOverride !== false) this.onUserInteraction('atmosphere');
 	}
 
-	// ── Night-city flyover beat ─────────────────────────────────────────────
-	// enter/exit are the atomic edges; scheduleFlyover locks BOTH edges to a
-	// shared wall-clock instant so the leader and all followers pitch down and
-	// pop back at the same moment (no panorama tear). The leader schedules from
-	// its tick; each follower schedules from the fleet client's vantage_beat
-	// handler with the SAME transitionAtMs. Pending timers are cancelled on any
-	// location change and on destroy.
-	#flyoverTimers = new Set<ReturnType<typeof setTimeout>>();
+	// ── Scene timers ─────────────────────────────────────────────────────────
+	// Flyover beat + lock-step cruise both live in SceneTimers — see
+	// ./aero-window-timers. They were two timer collections and three teardown
+	// call sites in this file, which made "does every path cancel everything?"
+	// a question you could only answer by reading all 800 lines.
+	//
+	// The methods below stay on the class because they are the public surface
+	// the fleet client and protocol type against (FleetClientModel.scheduleFlyover).
+	readonly #timers = new SceneTimers(() => ({
+		skyState: this.skyState,
+		config: this.config,
+		flight: this.flight,
+		applyConfigPatch: (path, value) => this.applyConfigPatch(path, value),
+		stampRoute: (toId) => this.#stampRoute(toId),
+	}));
 
 	enterFlyover(pitchDeg: number, altitudeFt: number): void {
-		this.applyConfigPatch('camera.flyoverPitchDeg', pitchDeg);   // CRDT-stamped so peer Pis see the flyover
-		this.flight.setFlyoverAltitude(Math.max(altitudeFt, this.config.camera.altitude.min));
+		this.#timers.enterFlyover(pitchDeg, altitudeFt);
 	}
 
 	exitFlyover(): void {
-		for (const id of this.#flyoverTimers) clearTimeout(id);
-		this.#flyoverTimers.clear();
-		this.applyConfigPatch('camera.flyoverPitchDeg', 0);
-		this.flight.clearFlyoverAltitude();
+		this.#timers.exitFlyover();
 	}
 
-	/** Schedule enter@transitionAtMs and exit@transitionAtMs+durationMs. Called
-	 *  by the leader (tick) and every follower (fleet client) with the same
-	 *  transitionAtMs → all Pis lock-step. Cancels any beat already pending. */
+	/** Schedule enter@transitionAtMs and exit@transitionAtMs+durationMs, locked
+	 *  to the same instant on leader and every follower. */
 	scheduleFlyover(beat: VantageBeat, transitionAtMs: number): void {
-		this.exitFlyover();   // cancel any in-flight beat + its timers first
-		// Clamped for the same reason as director_decision: a peer with a bad
-		// clock must not freeze the beat for hours or overflow setTimeout into
-		// firing instantly. transitionDelayMs is the shared bound.
-		const enterDelay = transitionDelayMs(transitionAtMs);
-		const enterId = setTimeout(() => {
-			this.#flyoverTimers.delete(enterId);
-			this.enterFlyover(beat.pitchDeg, beat.altitudeFt);
-			const exitId = setTimeout(() => {
-				this.#flyoverTimers.delete(exitId);
-				this.exitFlyover();
-			}, beat.durationMs);
-			this.#flyoverTimers.add(exitId);
-		}, enterDelay);
-		this.#flyoverTimers.add(enterId);
+		this.#timers.scheduleFlyover(beat, transitionAtMs);
 	}
 
-	// ── Scheduled cruise (fleet lock-step) ────────────────────────────────────
-	// When a director_decision is broadcast, the leader must start its own
-	// flyTo at the SAME wall-clock instant the followers apply theirs (the
-	// fleet client schedules applyScene off the broadcast transitionAtMs).
-	// Starting immediately left the leader's blinds reopening
-	// ~TRANSITION_DELAY_MS ahead of the edge panes — the tear the schedule
-	// exists to prevent. No broadcast (solo — no followers) means no
-	// lock-step, so the leader flies immediately instead. Single slot: any
-	// newer scene change supersedes a pending one. Cancelled on destroy.
-	#pendingFlyToTimer: ReturnType<typeof setTimeout> | null = null;
-
-	/** Schedule a local flyTo at the shared transitionAtMs — the leader side
-	 *  of the director_decision contract, mirroring how the fleet client
-	 *  schedules applyScene on followers. Cancels any cruise already pending. */
 	#scheduleFlyTo(locationId: LocationId, transitionAtMs: number): void {
-		this.#cancelScheduledFlyTo();
-		// Stamp route at schedule time so a closed blind shows From → To during
-		// the 2.5 s lock-step wait, not only after cruise engines start.
-		this.#stampRoute(locationId);
-		// Clamped via transitionDelayMs for the same reason as the flyover
-		// beat: a bad clock must neither freeze the scene nor overflow
-		// setTimeout into firing instantly.
-		const id = setTimeout(() => {
-			this.#pendingFlyToTimer = null;
-			this.flight.flyTo(locationId, this.skyState);
-		}, transitionDelayMs(transitionAtMs));
-		this.#pendingFlyToTimer = id;
+		this.#timers.scheduleFlyTo(locationId, transitionAtMs);
 	}
 
-	/** Record origin → destination names for the passenger blind watermark. */
+	/** Record origin → destination names for the passenger blind watermark.
+	 *  Stays here: it writes $state, which this class owns. */
 	#stampRoute(toId: LocationId): void {
 		const toName = LOCATION_MAP.get(toId)?.name ?? toId;
 		// Origin is the place we still are (location only flips on arrival).
@@ -440,10 +386,7 @@ export class AeroWindow {
 	}
 
 	#cancelScheduledFlyTo(): void {
-		if (this.#pendingFlyToTimer !== null) {
-			clearTimeout(this.#pendingFlyToTimer);
-			this.#pendingFlyToTimer = null;
-		}
+		this.#timers.cancelScheduledFlyTo();
 	}
 
 	setFlightSpeed(n: number): void {
@@ -552,22 +495,12 @@ export class AeroWindow {
 	 * pending-timeout bookkeeping that path needs.
 	 */
 	#broadcastAmbientJitter(configs: Array<{ path: string; value: unknown }>): void {
-		if (!this.#fleetBroadcast || this.config.camera.parallax.role !== 'center') return;
-		const patch: DisplayConfig = {};
-		for (const { path, value } of configs) {
-			if (path === 'atmosphere.clouds.density' && typeof value === 'number') patch.cloudDensity = value;
-			else if (path === 'atmosphere.clouds.speed' && typeof value === 'number') patch.cloudSpeed = value;
-			else if (path === 'atmosphere.haze.amount' && typeof value === 'number') patch.hazeAmount = value;
-			else if (path === 'weather' && isValidWeather(value)) patch.weather = value;
-		}
-		if (Object.keys(patch).length === 0) return;
-		this.#fleetBroadcast({
-			v: 2,
-			type: 'set_config',
-			patch,
-			decidedAtMs: Date.now(),
-			groupId: resolveBinding().groupId,
-		});
+		broadcastAmbientJitter(
+			this.#fleetBroadcast,
+			this.config.camera.parallax.role,
+			resolveBinding().groupId,
+			configs,
+		);
 	}
 
 	/**
@@ -575,25 +508,15 @@ export class AeroWindow {
 	 * human flyTo so the wire shape cannot drift between the two paths.
 	 * Returns the transitionAtMs placed on the wire so the caller can lock
 	 * its own local transition to the same instant — or null when nothing
-	 * was broadcast (no fleet hook, or solo: a panorama leader is `center`;
-	 * solo is a leader for LOCAL autopilot only and has no followers to
-	 * lock-step with). Callers fly immediately on null.
+	 * was broadcast (no fleet hook, or solo). Callers fly immediately on null.
 	 */
 	#broadcastLocationDecision(locationId: LocationId, scenarioId: string): number | null {
-		if (!this.#fleetBroadcast || this.config.camera.parallax.role !== 'center') return null;
-		const now = Date.now();
-		const transitionAtMs = now + TRANSITION_DELAY_MS;
-		this.#fleetBroadcast({
-			v: 2,
-			type: 'director_decision',
-			scenarioId,
-			locationId,
-			weather: this.weather,
-			decidedAtMs: now,
-			transitionAtMs,
-			groupId: resolveBinding().groupId,
-		});
-		return transitionAtMs;
+		return broadcastLocationDecision(
+			this.#fleetBroadcast,
+			this.config.camera.parallax.role,
+			resolveBinding().groupId,
+			{ locationId, scenarioId, weather: this.weather },
+		);
 	}
 
 	/**
@@ -644,26 +567,7 @@ export class AeroWindow {
 	}
 
 	getPersistedSnapshot(): PersistedState {
-		// Ambient peer-sync values (AMBIENT_PERSIST_PATHS — the PEER_SYNC_PATHS
-		// entries not already covered by the named fields below) so an
-		// admin-pushed ambient state survives a kiosk reboot.
-		const ambient: Partial<Record<PeerSyncPath, AmbientValue>> = {};
-		const root = this.config as unknown as Record<string, unknown>;
-		for (const path of AMBIENT_PERSIST_PATHS) {
-			const value = readByPath(root, path);
-			if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
-				ambient[path] = value;
-			}
-		}
-		return {
-			// location/weather omitted — load never restores them; boot rotates.
-			altitude: this.flight.altitude,
-			cloudDensity: this.config.atmosphere.clouds.density,
-			buildingsEnabled: this.config.world.buildingsEnabled,
-			showClouds: this.config.world.showClouds,
-			// syncToRealTime omitted — never persisted (boot always Real Time ON).
-			ambient,
-		};
+		return buildPersistedSnapshot(this);
 	}
 
 	// ── Tick pipeline ─────────────────────────────────────────────────────────
@@ -819,8 +723,9 @@ export class AeroWindow {
 
 	destroy(): void {
 		// override timestamps are module-level — nothing to teardown there.
-		this.exitFlyover();   // cancel any pending flyover enter/exit timers
-		this.#cancelScheduledFlyTo();   // …and any pending lock-step cruise
+		// One call now covers both timer collections; previously this named
+		// each one and a new timer could be added without being cancelled here.
+		this.#timers.destroy();
 	}
 }
 
