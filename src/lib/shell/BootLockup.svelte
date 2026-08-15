@@ -20,12 +20,46 @@
 
 	const model = useAeroWindow();
 
-	// Live once the active path is producing a view. Deliberately NOT latched
-	// for flight: if Cesium stalls, re-cover. Media modes stay live without
-	// FPS because the globe render loop is intentionally paused.
+	// Live once the active path is producing a view. Media modes stay live
+	// without FPS because the globe render loop is intentionally paused.
 	const isLive = $derived(
 		model.displayMode !== 'flight' || model.measuredFps > 0,
 	);
+
+	// ─── COVERING AGAIN NEEDS A SUSTAINED STALL, NOT ONE ZERO SAMPLE ─────────
+	// Re-covering on a genuine stall is right and stays. Re-covering on a
+	// single zero-fps sample is what produced the reported "it starts, stops,
+	// then starts again" cold boot.
+	//
+	// The Pi panel genuinely runs at 2-4 fps (see AeroWindow.measuredFps, which
+	// exists precisely because a per-second counter has no resolution there).
+	// At that rate one tile decode, one GC pause, or the first location hop is
+	// enough for the median frame period to read as zero for a sample — and the
+	// splash slammed back over a perfectly healthy scene, then lifted again.
+	// Worst right after boot, when tile decoding is heaviest and the viewer is
+	// most likely to be watching.
+	//
+	// So: lift on the first honest frame and require STALL_GRACE_MS of
+	// continuous starvation before covering again. Same hysteresis reasoning as
+	// nightPostFxOn in shaders.ts — an instantaneous test on a noisy signal
+	// controlling an expensive, visible transition.
+	const STALL_GRACE_MS = 5_000;
+	let everLive = $state(false);
+	let stalled = $state(false);
+	$effect(() => {
+		if (isLive) {
+			everLive = true;
+			stalled = false;
+			return;
+		}
+		if (!everLive) return; // still the genuine first-boot hold
+		const t = setTimeout(() => { stalled = true; }, STALL_GRACE_MS);
+		return () => clearTimeout(t);
+	});
+
+	// What the view actually keys off: uncovered once we have seen a frame and
+	// are not in a sustained stall.
+	const uncovered = $derived(everLive && !stalled);
 
 	// Safety: if Cesium never renders a frame (WebGL failure, stalled init),
 	// dissolve after 15s. A half-rendered globe is better than a permanent
@@ -52,7 +86,7 @@
 	});
 </script>
 
-<div class={['boot-lockup', (isLive || forcedDissolve) && 'dissolved']} aria-hidden={isLive || forcedDissolve}>
+<div class={['boot-lockup', (uncovered || forcedDissolve) && 'dissolved']} aria-hidden={uncovered || forcedDissolve}>
 	<div class="lockup">
 		<div class="wordmark">
 			<span class="word">Aero</span>

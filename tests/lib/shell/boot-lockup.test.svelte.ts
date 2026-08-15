@@ -77,30 +77,56 @@ describe('BootLockup', () => {
 		model.setDisplayMode('video', 'https://cdn.example.com/a.mp4');
 		flushSync();
 		expect(dissolved()).toBe(true);
-		// Back to flight with zero fps re-covers.
+		// Back to flight with zero fps re-covers — but only after the stall
+		// grace period, not on the first zero sample (see below).
 		model.setDisplayMode('flight');
+		flushSync();
+		expect(dissolved()).toBe(true);
+		vi.advanceTimersByTime(5_000);
 		flushSync();
 		expect(dissolved()).toBe(false);
 	});
 
-	it('a live frame clears the latch — a later stall re-covers the view', () => {
+	it('a momentary zero-fps sample does NOT re-cover the view', () => {
+		// The reported cold-boot symptom: the wall started, stopped, then
+		// started again. The Pi panel genuinely runs at 2-4 fps, so one tile
+		// decode or GC pause makes the median frame period read as zero for a
+		// sample — and the splash slammed back over a healthy scene. Covering
+		// on a sustained stall is right; covering on one sample is the bug.
 		boot();
-		vi.advanceTimersByTime(15_000); // forced dissolve, latch set
+		model.telemetry.recordFramePeriod(16.7);
 		flushSync();
 		expect(dissolved()).toBe(true);
 
-		// Rendering recovers: fps goes live.
-		model.telemetry.recordFramePeriod(16.7);
-		flushSync();
-		expect(model.measuredFps).toBeGreaterThan(0);
-		expect(dissolved()).toBe(true); // live — correctly uncovered
-
-		// A LATER genuine stall must re-cover (the header contract), which is
-		// only possible if forcedDissolve was reset on recovery.
 		model.telemetry.periodMsRecent = [];
 		flushSync();
 		expect(model.measuredFps).toBe(0);
-		expect(dissolved()).toBe(false);
+		// Still uncovered: a blip must not slam the splash back.
+		expect(dissolved()).toBe(true);
+
+		// And a frame arriving inside the grace window cancels it outright.
+		vi.advanceTimersByTime(4_000);
+		model.telemetry.recordFramePeriod(16.7);
+		flushSync();
+		vi.advanceTimersByTime(10_000);
+		flushSync();
+		expect(dissolved()).toBe(true);
+	});
+
+	it('a SUSTAINED stall still re-covers — the safety property is delayed, not removed', () => {
+		boot();
+		model.telemetry.recordFramePeriod(16.7);
+		flushSync();
+		expect(dissolved()).toBe(true);
+
+		// Renderer dies and stays dead.
+		model.telemetry.periodMsRecent = [];
+		flushSync();
+		vi.advanceTimersByTime(5_000);
+		flushSync();
+		expect(model.measuredFps).toBe(0);
+		expect(dissolved()).toBe(false); // covered again — audience sees the
+		                                 // splash, never a frozen globe
 	});
 
 	it('a re-covered stall that persists 15s reports again (new fault, not a duplicate)', () => {
