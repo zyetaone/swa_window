@@ -10,7 +10,11 @@
 #
 # Contract with admin:
 #   POST ${AERO_ADMIN_URL}/api/fleet/heartbeat
-#   Body: { deviceId, role, groupId, fps, temp, uptime, crashCount }
+#   Body: { deviceId, role, groupId, fps, temp, uptime, crashCount,
+#           throttledRaw, thermalAction, ... }
+#
+# Thermal load-shed: writes /run/aero/thermal.json for the local kiosk
+# (GET /api/internal/thermal). Policy mirrors src/lib/fleet/throttle.ts.
 # =============================================================================
 
 set -u
@@ -56,6 +60,52 @@ if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
 	TEMP_C=$(( TEMP_MILLI / 1000 ))
 fi
 
+# ─── Thermal / power throttle (vcgencmd get_throttled) ───────────────────────
+# Bitfield: 0 under-voltage, 1 freq-capped, 2 throttled, 3 soft-temp (live);
+# 16–19 sticky "has occurred since boot". Policy matches src/lib/server/fleet/throttle.ts:
+# shed GPU load at ≥78 °C or any live pressure bit; clear only ≤70 °C (hysteresis).
+THROTTLED_RAW=0
+if command -v vcgencmd >/dev/null 2>&1; then
+	# Output looks like: throttled=0x50000
+	THROTTLE_LINE="$(vcgencmd get_throttled 2>/dev/null || true)"
+	THROTTLE_HEX="$(echo "${THROTTLE_LINE}" | sed -n 's/.*throttled=\(0x[0-9a-fA-F]*\).*/\1/p')"
+	if [[ -n "${THROTTLE_HEX}" ]]; then
+		THROTTLED_RAW=$(( THROTTLE_HEX ))
+	fi
+fi
+# Live pressure bits 0–3.
+LIVE_PRESSURE=0
+if (( (THROTTLED_RAW & 0xF) != 0 )); then
+	LIVE_PRESSURE=1
+fi
+
+# Hysteresis file so we do not flap quality mode at the threshold.
+THERMAL_STATE_DIR="${AERO_THERMAL_DIR:-/run/aero}"
+THERMAL_STATE_FILE="${THERMAL_STATE_DIR}/thermal.json"
+THERMAL_SHED_C="${AERO_THERMAL_SHED_C:-78}"
+THERMAL_CLEAR_C="${AERO_THERMAL_CLEAR_C:-70}"
+PREV_ACTION="ok"
+if [[ -r "${THERMAL_STATE_FILE}" ]]; then
+	PREV_ACTION="$(tr ',' '\n' < "${THERMAL_STATE_FILE}" | command grep -o '"action":"[^"]*"' | head -1 | cut -d'"' -f4 || echo ok)"
+	PREV_ACTION="${PREV_ACTION:-ok}"
+fi
+THERMAL_ACTION="ok"
+if (( LIVE_PRESSURE == 1 )) || (( TEMP_C >= THERMAL_SHED_C )); then
+	THERMAL_ACTION="shed"
+elif [[ "${PREV_ACTION}" == "shed" ]] && (( TEMP_C > THERMAL_CLEAR_C )); then
+	THERMAL_ACTION="shed"
+fi
+
+# Atomic-ish write for the kiosk (GET /api/internal/thermal, loopback only).
+if mkdir -p "${THERMAL_STATE_DIR}" 2>/dev/null; then
+	NOW_MS="$(( $(date +%s) * 1000 ))"
+	# flags object is decoded again in TS; raw + action are load-bearing.
+	cat > "${THERMAL_STATE_FILE}.tmp" <<TEOF
+{"tempC":${TEMP_C},"throttledRaw":${THROTTLED_RAW},"action":"${THERMAL_ACTION}","updatedAtMs":${NOW_MS}}
+TEOF
+	mv -f "${THERMAL_STATE_FILE}.tmp" "${THERMAL_STATE_FILE}" 2>/dev/null || true
+fi
+
 # FPS + running commit + display mode — scrape the device's own /api/status
 # (the browser heartbeats there every 5s). If the app is down, default to 0
 # so the admin sees it as failing.
@@ -89,7 +139,7 @@ fi
 # ─── POST to admin ───────────────────────────────────────────────────────────
 
 PAYLOAD=$(cat <<EOF
-{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}","mode":"${MODE}"}
+{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}","mode":"${MODE}","throttledRaw":${THROTTLED_RAW},"thermalAction":"${THERMAL_ACTION}"}
 EOF
 )
 

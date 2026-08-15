@@ -78,6 +78,28 @@ describe('GET /api/fleet/heartbeat', () => {
 		expect('lastError' in mine[0]).toBe(false);
 	});
 
+	it('carries throttle bits and thermalAction for fleet health', async () => {
+		// bit 2 = currently throttled
+		recordHeartbeat({
+			...SAMPLE,
+			deviceId: 'pi-hot-1',
+			temp: 82,
+			throttledRaw: 0x4,
+			thermalAction: 'shed',
+		});
+		const res = await get();
+		const body = await res.json() as Array<Record<string, unknown>>;
+		const mine = body.find((s) => s.deviceId === 'pi-hot-1');
+		expect(mine).toMatchObject({
+			temp: 82,
+			throttledRaw: 4,
+			thermalAction: 'shed',
+		});
+		const throttle = mine?.throttle as { throttled?: boolean; livePressure?: boolean } | undefined;
+		expect(throttle?.throttled).toBe(true);
+		expect(throttle?.livePressure).toBe(true);
+	});
+
 	it('strips lastError from the per-device history response', async () => {
 		recordHeartbeat(SAMPLE);
 		const res = await get('?deviceId=pi-gw-1');

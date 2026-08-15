@@ -20,6 +20,7 @@
 	let samples = $state.raw<HeartbeatSample[]>([]);
 	let summary = $state<FleetSummary>({
 		total: 0, online: 0, offline: 0, avgFps: 0, maxTempC: 0, totalCrashes: 0,
+		shedding: 0, throttledLive: 0,
 	});
 	let error = $state<string | null>(null);
 	// False until the first successful poll — summary shows '—' instead of
@@ -60,6 +61,20 @@
 		if (fps < 55) return 'var(--warn)';
 		return 'var(--ok)';
 	}
+
+	function throttleLabel(s: HeartbeatSample): string | null {
+		if (s.thermalAction === 'shed') return 'SHEDding';
+		if (s.throttle?.livePressure) {
+			const bits: string[] = [];
+			if (s.throttle.underVoltage) bits.push('UV');
+			if (s.throttle.freqCapped) bits.push('cap');
+			if (s.throttle.throttled) bits.push('throt');
+			if (s.throttle.softTempLimit) bits.push('softT');
+			return bits.join('+') || 'live';
+		}
+		if (s.throttle?.throttledOccurred || s.throttle?.underVoltageOccurred) return 'had throttle';
+		return null;
+	}
 </script>
 
 <svelte:head>
@@ -82,6 +97,12 @@
 		<div class="stat"><strong>{loaded ? summary.avgFps.toFixed(1) : '—'}</strong> avg fps</div>
 		<div class="stat"><strong>{loaded ? `${summary.maxTempC}°C` : '—'}</strong> max</div>
 		<div class="stat"><strong>{loaded ? summary.totalCrashes : '—'}</strong> crashes</div>
+		<div class="stat" class:warn-stat={(summary.throttledLive ?? 0) > 0 || (summary.shedding ?? 0) > 0}>
+			<strong>{loaded ? (summary.shedding ?? 0) : '—'}</strong> shedding
+		</div>
+		<div class="stat" class:warn-stat={(summary.throttledLive ?? 0) > 0}>
+			<strong>{loaded ? (summary.throttledLive ?? 0) : '—'}</strong> throttle live
+		</div>
 	</section>
 
 	<section class="tiles">
@@ -104,6 +125,17 @@
 							{s.mode === 'screensaver' ? 'Slideshow' : s.mode === 'video' ? 'Video' : s.mode === 'flight' ? 'Flight' : (s.mode ?? '—')}
 						</dd>
 					</div>
+					{#if throttleLabel(s)}
+						<div class="full">
+							<dt>Thermal</dt>
+							<dd
+								class={s.thermalAction === 'shed' || s.throttle?.livePressure ? 'thermal-hot' : 'thermal-hist'}
+								title={s.throttledRaw != null ? `throttled=0x${s.throttledRaw.toString(16)}` : undefined}
+							>
+								{throttleLabel(s)}
+							</dd>
+						</div>
+					{/if}
 				</dl>
 				<footer>
 					last heartbeat {Math.round((Date.now() - s.receivedAt) / 1000)}s ago
@@ -148,6 +180,7 @@
 		margin-bottom: 1.5rem;
 	}
 	.stat strong { font-size: 1.25rem; color: #fff; }
+	.stat.warn-stat strong { color: var(--warn); }
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -188,9 +221,12 @@
 	}
 	dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0; }
 	dl > div { display: flex; justify-content: space-between; }
+	dl > div.full { grid-column: 1 / -1; }
 	dt { color: #9ca3af; }
 	dd { margin: 0; font-weight: 600; }
 	dd.mode-media { color: #93c5fd; }
+	dd.thermal-hot { color: var(--error); letter-spacing: 0.04em; }
+	dd.thermal-hist { color: var(--warn); font-weight: 500; }
 	.tile footer { font-size: 0.75rem; color: var(--no-data); margin-top: 0.75rem; }
 	.empty { color: #9ca3af; grid-column: 1 / -1; text-align: center; padding: 2rem; }
 </style>

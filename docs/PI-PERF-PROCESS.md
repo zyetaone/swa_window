@@ -71,9 +71,38 @@ Deploy only through the **`release`** branch path (CI green → updater). Never 
 | Enabling ultra quality “to look better” on Pi | Trades remaining CPU for detail nobody sees at 3 fps |
 | Duplicate GL “tuning” docs not tied to measured argv | Silent disable regression class |
 
+## Thermal / power throttle control
+
+Pi firmware already throttles clocks under heat or under-voltage — we do not
+disable that. We **report** and **shed GPU work early** so Cesium is not still
+pulling full load while the SoC collapses.
+
+| Signal | Source |
+|--------|--------|
+| CPU °C | `/sys/class/thermal/thermal_zone0/temp` |
+| Throttle bits | `vcgencmd get_throttled` (live 0–3, sticky 16–19) |
+| Policy | `src/lib/fleet/throttle.ts` — shed at **≥78 °C** or any live bit; stay shed until **≤70 °C** |
+| Device write | `deploy/pi/health-check.sh` → `/run/aero/thermal.json` every 60s |
+| Heartbeat | `throttledRaw` + `thermalAction` → admin **Fleet health** |
+| Kiosk action | `startThermalGuard` polls `/api/internal/thermal` (loopback) → local `qualityMode=performance` + `useThreeOverlay=false` |
+
+**Does not auto-restore** higher quality when cool — operator raises from admin after the wall settles (avoids thrash).
+
+**Not peer-synced** — one hot pane must not force the whole corridor to performance.
+
+| Env (optional) | Default | Meaning |
+|----------------|---------|---------|
+| `AERO_THERMAL_SHED_C` | 78 | °C to enter shed |
+| `AERO_THERMAL_CLEAR_C` | 70 | °C hysteresis clear (health-check only) |
+| `AERO_THERMAL_DIR` | `/run/aero` | state directory |
+| `AERO_THERMAL_STATE_PATH` | `/run/aero/thermal.json` | server read path |
+
+Admin tiles show **SHEDding** / live UV·cap·throt flags. Summary counts `shedding` and `throttledLive`.
+
 ## Related code
 
 - Quality presets: `src/lib/world/cesium-setup.ts` (`CESIUM_QUALITY_PRESETS`)  
 - Default `qualityMode: 'performance'`: `config-tree.svelte.ts`  
 - Liveness / reload budget: `lifecycle-liveness.ts`  
+- Thermal policy + guard: `src/lib/fleet/throttle.ts`, `thermal-guard.svelte.ts`  
 - Credits / product owner: `src/lib/credits.ts`

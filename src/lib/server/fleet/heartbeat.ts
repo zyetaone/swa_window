@@ -24,6 +24,8 @@
  *     uptime:      number    // seconds since boot
  *     crashCount:  number    // aero-kiosk.service NRestarts
  *     mode?:       string    // display mode from /api/status (flight|video|screensaver)
+ *     throttledRaw?: number  // vcgencmd get_throttled bitfield
+ *     thermalAction?: 'ok'|'shed'  // load-shed policy (see throttle.ts)
  *   }
  *
  * This is a pure state module — no DOM, no fetch. It's imported by the
@@ -34,6 +36,12 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import type { DeviceStats, FleetSummary } from '$lib/fleet/protocol';
 import { ONLINE_THRESHOLD_MS } from '$lib/fleet/protocol';
+import {
+	decodeThrottleFlags,
+	parseThrottledRaw,
+	type ThermalAction,
+	type ThrottleFlags,
+} from '$lib/fleet/throttle';
 
 export interface HeartbeatSample {
 	/** Wall-clock ms when the admin received the sample. */
@@ -53,6 +61,12 @@ export interface HeartbeatSample {
 	mode?: string;
 	/** Apply-ack: last admin push the kiosk browser applied (optional — older builds). */
 	lastAppliedCommandId?: string;
+	/** vcgencmd get_throttled bitfield (0 if non-Pi / old health-check). */
+	throttledRaw?: number;
+	/** Decoded flags for UI — always derived from throttledRaw when present. */
+	throttle?: ThrottleFlags;
+	/** Load-shed policy last computed on the device (ok | shed). */
+	thermalAction?: ThermalAction;
 }
 
 /** How many samples we keep per device. 500 × 60s ≈ 8.3h. */
@@ -161,7 +175,16 @@ export function recordHeartbeat(input: unknown): HeartbeatSample | null {
 		lastAppliedCommandId: typeof o.lastAppliedCommandId === 'string' && o.lastAppliedCommandId.length > 0
 			? o.lastAppliedCommandId.slice(0, 64)
 			: undefined,
+		thermalAction: o.thermalAction === 'shed' || o.thermalAction === 'ok'
+			? o.thermalAction
+			: undefined,
 	};
+
+	// Thermal / power throttle (optional — older health-check omits the field).
+	if ('throttledRaw' in o) {
+		sample.throttledRaw = parseThrottledRaw(o.throttledRaw);
+		sample.throttle = decodeThrottleFlags(sample.throttledRaw);
+	}
 
 	const buf = samples.get(deviceId) ?? [];
 	buf.push(sample);
@@ -251,6 +274,8 @@ export function statsAll(): DeviceStats[] {
 			commit: last.commit,
 			mode: last.mode,
 			lastAppliedCommandId: last.lastAppliedCommandId,
+			throttledRaw: last.throttledRaw,
+			thermalAction: last.thermalAction,
 		});
 	}
 	return out;
@@ -268,6 +293,8 @@ export function summarize(now: number = Date.now()): FleetSummary {
 		online.length > 0 ? online.reduce((sum, s) => sum + s.fps, 0) / online.length : 0;
 	const maxTempC = online.reduce((max, s) => Math.max(max, s.temp), 0);
 	const totalCrashes = all.reduce((sum, s) => sum + s.crashCount, 0);
+	const shedding = online.filter((s) => s.thermalAction === 'shed').length;
+	const throttledLive = online.filter((s) => s.throttle?.livePressure).length;
 	return {
 		total: all.length,
 		online: online.length,
@@ -275,6 +302,8 @@ export function summarize(now: number = Date.now()): FleetSummary {
 		avgFps: Math.round(avgFps * 10) / 10,
 		maxTempC,
 		totalCrashes,
+		shedding,
+		throttledLive,
 	};
 }
 

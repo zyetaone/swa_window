@@ -139,6 +139,10 @@ export interface FleetSummary {
 	avgFps: number;
 	maxTempC: number;
 	totalCrashes: number;
+	/** Online devices currently under thermal/power load-shed. */
+	shedding?: number;
+	/** Online devices with any live throttle bit set. */
+	throttledLive?: number;
 }
 
 /**
@@ -172,6 +176,10 @@ export interface DeviceStats {
 	mode?: string;
 	/** Apply-ack id relayed from the kiosk /api/status (optional). */
 	lastAppliedCommandId?: string;
+	/** Latest vcgencmd get_throttled raw (optional). */
+	throttledRaw?: number;
+	/** Latest load-shed action (optional). */
+	thermalAction?: 'ok' | 'shed';
 }
 
 // ─── Shared fleet cadences ─────────────────────────────────────────────────

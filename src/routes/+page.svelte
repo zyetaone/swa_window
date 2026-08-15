@@ -17,6 +17,7 @@
 	import { clearOverlayDisabled } from "$lib/world/lifecycle-overlay-recovery";
 	import { createDeviceClient } from "$lib/fleet/client.svelte";
 	import { resolveBinding } from "$lib/fleet/parallax.svelte";
+	import { startThermalGuard } from "$lib/fleet/thermal-guard.svelte";
 	import BootLockup from "$lib/shell/BootLockup.svelte";
 	import Pane from "$lib/shell/pane/Pane.svelte";
 	import Controls from "$lib/shell/passenger/HUD.svelte";
@@ -89,7 +90,10 @@
 		// leader. Solo devices set the hook too, but the model only emits
 		// when role is 'center' — solo never broadcasts and flies immediately.
 		model.setFleetBroadcast((msg) => client.publishV2(msg));
+		// Pi thermal / power throttle → local GPU load-shed (see thermal-guard).
+		const stopThermal = startThermalGuard(model);
 		return () => {
+			stopThermal();
 			model.setFleetBroadcast(null);
 			client.destroy();
 		};

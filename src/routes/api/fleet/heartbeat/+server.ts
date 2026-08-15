@@ -2,7 +2,8 @@
  * Fleet heartbeat endpoint.
  *
  * POST /api/fleet/heartbeat
- *   Body: { deviceId, role, groupId, fps, temp, uptime, crashCount }
+ *   Body: { deviceId, role, groupId, fps, temp, uptime, crashCount,
+ *           throttledRaw?, thermalAction?, ... }
  *   Each Pi hits this every 60s via deploy/pi/health-check.sh.
  *   Payload is validated by recordHeartbeat() — bad input → 400.
  *
