@@ -2,6 +2,8 @@
   "name": "aero-dynamicwindow",
   "private": true,
   "version": "0.0.1",
+  "description": "Zyeta Aero Dynamic Window — circadian airplane-window kiosk. Engineered by rdtect.",
+  "author": "rdtect for Zyeta",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

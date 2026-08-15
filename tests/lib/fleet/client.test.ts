@@ -259,9 +259,20 @@ describe('apply-ack recording', () => {
 		expect(model.lastAppliedCommandId).toBe('cmd-mode-1');
 	});
 
+	it('does not ack set_mode when setDisplayMode returns false (rejected payload / LWW)', () => {
+		model.setDisplayMode = vi.fn().mockReturnValue(false);
+		command({ type: 'set_mode', mode: 'video', payload: 'https://x.test/v.mp4', commandId: 'cmd-mode-fail' });
+		expect(model.lastAppliedCommandId).toBeUndefined();
+	});
+
 	it('records the commandId after applying a set_config command', () => {
 		command({ type: 'set_config', patch: { cloudDensity: 0.5 }, commandId: 'cmd-cfg-1' });
 		expect(model.lastAppliedCommandId).toBe('cmd-cfg-1');
+	});
+
+	it('does not ack set_config when no field was applied', () => {
+		command({ type: 'set_config', patch: { notAField: true }, commandId: 'cmd-cfg-empty' });
+		expect(model.lastAppliedCommandId).toBeUndefined();
 	});
 
 	it('records the commandId after applying a config_patch event', () => {

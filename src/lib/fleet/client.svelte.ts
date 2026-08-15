@@ -21,7 +21,13 @@ import type { FleetClientModel } from '$lib/fleet/protocol';
 import { isValidLocation } from '$content/locations';
 import { isValidWeather, isValidDisplayMode, isValidQualityMode } from '$lib/types';
 import { setCRDTDeviceId } from '$lib/model/crdt-store';
-import { urlFor, STATUS_INTERVAL_MS, PEER_REFRESH_INTERVAL_MS, transitionDelayMs } from '$lib/fleet/protocol';
+import {
+	urlFor,
+	STATUS_INTERVAL_MS,
+	PEER_REFRESH_INTERVAL_MS,
+	transitionDelayMs,
+	clampDecidedAtMs,
+} from '$lib/fleet/protocol';
 import { peerJsonHeaders } from '$lib/http/peer-token';
 import { clamp } from '$lib/utils';
 import { resolveDeviceId } from '$lib/fleet/device-id';
@@ -293,12 +299,12 @@ export class DeviceClient {
 				// decidedAtMs from admin (wall-clock of the push). Missing on
 				// legacy commands → Date.now() so they still apply, but cannot
 				// undo a *newer* local Escape stored with a later savedAt.
-				const decidedAtMs =
-					typeof msg.decidedAtMs === 'number' && Number.isFinite(msg.decidedAtMs)
-						? (msg.decidedAtMs as number)
-						: Date.now();
-				this.#model.setDisplayMode(mode, msg.payload as string | undefined, { decidedAtMs });
-				this.#recordAck(msg.commandId);
+				// Clamp kills far-future stamps that would pin media against Escape.
+				const decidedAtMs = clampDecidedAtMs(msg.decidedAtMs);
+				const ok = this.#model.setDisplayMode(mode, msg.payload as string | undefined, { decidedAtMs });
+				// Apply-ack = "mode applied", not "message parsed". False on
+				// bad payload / stale LWW must not green the admin counter.
+				if (ok !== false) this.#recordAck(msg.commandId);
 				break;
 			}
 			case 'set_config': {
@@ -310,26 +316,42 @@ export class DeviceClient {
 				const p = msg.patch;
 				if (p && typeof p === 'object' && !Array.isArray(p)) {
 					const d = p as Record<string, unknown>;
-					if (typeof d.altitude === 'number') this.#model.setAltitude(d.altitude);
-					if (typeof d.timeOfDay === 'number') this.#model.setTime(d.timeOfDay);
+					let applied = 0;
+					if (typeof d.altitude === 'number') { this.#model.setAltitude(d.altitude); applied++; }
+					if (typeof d.timeOfDay === 'number') { this.#model.setTime(d.timeOfDay); applied++; }
 					// Weather-only — NOT applyScene: applyScene flyTo()s the target,
 					// and the target here is the CURRENT location, so every leader
 					// weather roll made edge panes run a fake cruise (blinds close,
 					// warp, reopen). setWeather changes the weather in place.
-					if (isValidWeather(d.weather)) this.#model.setWeather?.(d.weather, { trackUserOverride: false });
-					if (typeof d.flightSpeed === 'number') this.#model.setFlightSpeed(d.flightSpeed);
-					if (typeof d.syncToRealTime === 'boolean') this.#model.syncToRealTime = d.syncToRealTime;
-					if (typeof d.cloudDensity === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
+					if (isValidWeather(d.weather)) { this.#model.setWeather?.(d.weather, { trackUserOverride: false }); applied++; }
+					if (typeof d.flightSpeed === 'number') { this.#model.setFlightSpeed(d.flightSpeed); applied++; }
+					if (typeof d.syncToRealTime === 'boolean') { this.#model.syncToRealTime = d.syncToRealTime; applied++; }
+					if (typeof d.cloudDensity === 'number') {
+						this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
+						applied++;
+					}
 					// Ambient siblings — the leader's autopilot jitter arrives as all
 					// three together (see #broadcastAmbientJitter). Clamps here are the
 					// trust boundary, not the authored range: /api/command does not
 					// validate payloads.
-					if (typeof d.cloudSpeed === 'number') this.#model.applyConfigPatch?.('atmosphere.clouds.speed', clamp(d.cloudSpeed, 0, 3));
-					if (typeof d.hazeAmount === 'number') this.#model.applyConfigPatch?.('atmosphere.haze.amount', clamp(d.hazeAmount, 0, 1));
-					if (typeof d.showClouds === 'boolean') this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
-					if (typeof d.nightLightIntensity === 'number') this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
-					if (isValidQualityMode(d.qualityMode)) this.#model.setQualityMode(d.qualityMode);
-					this.#recordAck(msg.commandId);
+					if (typeof d.cloudSpeed === 'number') {
+						this.#model.applyConfigPatch?.('atmosphere.clouds.speed', clamp(d.cloudSpeed, 0, 3));
+						applied++;
+					}
+					if (typeof d.hazeAmount === 'number') {
+						this.#model.applyConfigPatch?.('atmosphere.haze.amount', clamp(d.hazeAmount, 0, 1));
+						applied++;
+					}
+					if (typeof d.showClouds === 'boolean') {
+						this.#model.applyConfigPatch?.('world.showClouds', d.showClouds);
+						applied++;
+					}
+					if (typeof d.nightLightIntensity === 'number') {
+						this.#model.applyConfigPatch?.('world.nightLightIntensity', clamp(d.nightLightIntensity, 0, 5));
+						applied++;
+					}
+					if (isValidQualityMode(d.qualityMode)) { this.#model.setQualityMode(d.qualityMode); applied++; }
+					if (applied > 0) this.#recordAck(msg.commandId);
 				}
 				break;
 			}

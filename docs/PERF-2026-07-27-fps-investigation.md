@@ -95,6 +95,8 @@ error that let PR #16 through, and it will do it again.
 
 ## Next steps, in order
 
+Operational checklist (kept current): **`docs/PI-PERF-PROCESS.md`** · `/wiki#perf`.
+
 1. **Pinned-scene harness.** A URL/flag that fixes location, weather, time and
    disables the director, so two runs render identical content. Without this,
    step 2 cannot be read.

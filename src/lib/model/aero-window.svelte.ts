@@ -1,6 +1,9 @@
 /**
  * AeroWindow — authoritative reactive simulation state + Svelte context DI.
  *
+ * Product: Zyeta Aero Dynamic Window. Engine / architecture: rdtect
+ * (see `$lib/credits`). This class is the SSOT for kiosk simulation state.
+ *
  * Usage:
  *   Root component: const model = createAeroWindow()
  *   Child components: const model = useAeroWindow()
@@ -756,12 +759,15 @@ export class AeroWindow {
 		const c = this.#ctx;
 		c.time                  = this.#time;
 		// Wall-clock companions to `time`/`delta` — see SimulationContext.
-		// Capped at 5 s so a suspended tab can't teleport the orbit on wake.
+		// Capped at 5 s so a suspended tab can't teleport the orbit on wake,
+		// and floored at 0 so a runtime NTP step-BACK can't slam orbitAngle /
+		// scenarioProgress far negative (they're integrators — a −3600 s delta
+		// would park the scenario accumulator in a long recovery).
 		const wallMs = Date.now();
 		c.wallTimeSec  = wallMs / 1000;
 		c.wallDeltaSec = this.#lastWallMs === 0
 			? 0
-			: Math.min((wallMs - this.#lastWallMs) / 1000, 5);
+			: Math.min(Math.max((wallMs - this.#lastWallMs) / 1000, 0), 5);
 		this.#lastWallMs = wallMs;
 		c.lat                   = this.flight.lat;
 		c.lon                   = this.flight.lon;

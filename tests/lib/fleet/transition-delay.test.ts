@@ -17,6 +17,8 @@ import {
 	transitionDelayMs,
 	TRANSITION_DELAY_MS,
 	MAX_TRANSITION_LEAD_MS,
+	clampDecidedAtMs,
+	DECIDED_AT_FUTURE_SKEW_MS,
 } from '$lib/fleet/protocol';
 
 const NOW = 1_800_000_000_000;
@@ -60,5 +62,23 @@ describe('transitionDelayMs', () => {
 		expect(MAX_TRANSITION_LEAD_MS).toBeGreaterThan(TRANSITION_DELAY_MS * 4);
 		expect(transitionDelayMs(NOW + TRANSITION_DELAY_MS + 5_000, NOW))
 			.toBe(TRANSITION_DELAY_MS + 5_000);
+	});
+});
+
+describe('clampDecidedAtMs', () => {
+	const now = 1_700_000_000_000;
+
+	it('returns now for non-finite input', () => {
+		expect(clampDecidedAtMs(undefined, now)).toBe(now);
+		expect(clampDecidedAtMs(NaN, now)).toBe(now);
+	});
+
+	it('clamps far-future stamps so Escape cannot be locked out', () => {
+		const far = now + DECIDED_AT_FUTURE_SKEW_MS * 10;
+		expect(clampDecidedAtMs(far, now)).toBe(now + DECIDED_AT_FUTURE_SKEW_MS);
+	});
+
+	it('passes through stamps inside the skew window', () => {
+		expect(clampDecidedAtMs(now + 5_000, now)).toBe(now + 5_000);
 	});
 });

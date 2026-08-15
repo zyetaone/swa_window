@@ -2,6 +2,8 @@
 
 Circadian-aware digital airplane window display built with SvelteKit, Cesium, and CSS effect layers for Raspberry Pi kiosk deployments.
 
+**Zyeta product · engineered by [rdtect](https://github.com/rdtect)** — attribution SSOT: `src/lib/credits.ts`. Stakeholder docs (architecture, terms, lifecycle, credits): **`/wiki`**.
+
 ## Quick start
 
 ```bash
@@ -46,12 +48,14 @@ bun run dev
 
 ## Key docs
 
-- `/architecture` route — living visual documentation of the 7+2 pillars (Game Loop, State, Rendering, Camera, Input, Content, Night, plus hidden Time + Networking). Reachable in the running app.
-- `docs/SHIP-READINESS.md` — current install triage; status marks (✅ done / ⚠ untested / ❓ open / 🔴 risky) by feature
-- `docs/ARCHITECTURE-original-framing.md` — v1 architecture framing, preserved for posterity
-- `CHANGELOG.md` — repo-level release history
-- `docs/ADR-001-offline-tile-architecture.md` — offline tile architecture decision record
-- `docs/standards.md` — Rules 0-10 (content/control split, named exports, effect layout, …)
-- `docs/CODEMAPS/INDEX.md` — module-level navigation map
-- `deploy/README.md` — current Pi provisioning status and caveats
-- `CLAUDE.md` — architecture and workflow guidance for coding agents
+- **`/wiki`** — living stakeholder page: architecture, **terms of operation**, lifecycle, **credits (Zyeta · rdtect)**, Pi performance process. SSR-only (`csr=false`), not on the kiosk cold path.
+- `docs/ARCHITECTURE.md` — canonical engine architecture
+- `docs/PI-PERF-PROCESS.md` — how to measure and improve Pi frame rate without lying to yourself
+- `docs/PERF-2026-07-27-fps-investigation.md` — measured 2–4 fps baseline and ruled-out causes
+- `docs/SHIP-READINESS.md` — install triage (✅ / ⚠ / ❓ / 🔴)
+- `docs/ARCHITECTURE-original-framing.md` — v1 framing (historical)
+- `docs/ADR-001-offline-tile-architecture.md` — offline tile ADR
+- `docs/standards.md` — Rules 0–10
+- `docs/CODEMAPS/INDEX.md` — module map
+- `deploy/README.md` — Pi provisioning
+- `AGENTS.md` — agent / contributor architecture rules

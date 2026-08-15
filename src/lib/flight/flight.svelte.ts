@@ -200,7 +200,7 @@ export class FlightSimEngine {
 			} else if (this.flightMode === 'cruise_transit') {
 				this.#tickTransit(delta, patch, ctx);
 			} else if (this.flightMode === 'arrival_hold') {
-				this.#tickArrivalHold(delta, patch);
+				this.#tickArrivalHold(delta, patch, ctx);
 			} else {
 				this.#tickFlightPath(delta, ctx);
 			}
@@ -235,8 +235,15 @@ export class FlightSimEngine {
 		this.camPitch += (this.pitch - this.camPitch) * k;
 	}
 
+	/** Wall-clock step when available — same class as orbit/director/bank. */
+	#wallDt(delta: number, ctx: SimulationContext): number {
+		const w = ctx.wallDeltaSec;
+		return typeof w === 'number' && Number.isFinite(w) && w > 0 ? w : delta;
+	}
+
 	#tickDeparture(delta: number, patch: FlightPatch, ctx: SimulationContext): void {
-		this.#cruiseElapsed += delta;
+		const dt = this.#wallDt(delta, ctx);
+		this.#cruiseElapsed += dt;
 		const cruiseCfg = ctx.camera.cruise;
 		const warpDuration = cruiseCfg.departureDurationSec;
 		const t = clamp(this.#cruiseElapsed / warpDuration, 0, 1);
@@ -258,8 +265,9 @@ export class FlightSimEngine {
 	}
 
 	#tickTransit(delta: number, patch: FlightPatch, ctx: SimulationContext): void {
-		this.#cruiseElapsed += delta;
-		const decay = clamp(this.warpFactor - delta * 2.5, 0, 1);
+		const dt = this.#wallDt(delta, ctx);
+		this.#cruiseElapsed += dt;
+		const decay = clamp(this.warpFactor - dt * 2.5, 0, 1);
 		this.warpFactor = decay * decay;
 		this.flightSpeed = this.#preWarpSpeed + this.warpFactor * 100;
 
@@ -277,8 +285,11 @@ export class FlightSimEngine {
 		}
 	}
 
-	#tickArrivalHold(delta: number, _patch: FlightPatch): void {
-		this.#arrivalHoldElapsed += delta;
+	#tickArrivalHold(delta: number, _patch: FlightPatch, ctx?: SimulationContext): void {
+		// ctx optional so existing call sites that only pass delta still compile;
+		// when present, wall clock keeps arrival hold honest on a slow Pi.
+		const dt = ctx ? this.#wallDt(delta, ctx) : delta;
+		this.#arrivalHoldElapsed += dt;
 		if (this.#arrivalHoldElapsed >= this.#arrivalHoldTargetSec) {
 			this.flightMode = 'orbit';
 			this.#arrivalHoldElapsed = 0;

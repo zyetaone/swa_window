@@ -189,6 +189,30 @@ export const ONLINE_THRESHOLD_MS = 3 * 60_000;
 export const TRANSITION_DELAY_MS = 2500;
 
 /**
+ * How far into the past/future a set_mode `decidedAtMs` may sit relative to
+ * receiver wall-clock. Past bound absorbs NTP skew + admin→SSE latency; future
+ * bound blocks a far-future stamp from pinning media mode against Escape
+ * (LWW vs local Date.now()). Same order of magnitude as MAX_TRANSITION_LEAD_MS.
+ */
+export const DECIDED_AT_PAST_SKEW_MS = 60_000;
+export const DECIDED_AT_FUTURE_SKEW_MS = 60_000;
+
+/**
+ * Clamp a set_mode decision timestamp into [now − past, now + future].
+ * Non-finite / missing → now. Used on the kiosk before LWW against savedAt.
+ */
+export function clampDecidedAtMs(
+	raw: unknown,
+	now: number = Date.now(),
+): number {
+	if (typeof raw !== 'number' || !Number.isFinite(raw)) return now;
+	const lo = now - DECIDED_AT_PAST_SKEW_MS;
+	const hi = now + DECIDED_AT_FUTURE_SKEW_MS;
+	return Math.min(hi, Math.max(lo, raw));
+}
+
+
+/**
  * Upper bound on how far in the future a peer may schedule us. Generous
  * relative to TRANSITION_DELAY_MS so ordinary clock skew still lands, but
  * bounded.

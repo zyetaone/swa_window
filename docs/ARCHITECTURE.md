@@ -1,7 +1,10 @@
 # AeroWindow Architecture (canonical)
 
-> **Status (2026-08-10):** Live tree is authoritative. CODEMAPS may lag —
+> **Status (2026-08-15):** Live tree is authoritative. CODEMAPS may lag —
 > prefer this file + `AGENTS.md` + `src/lib/*` folders.
+>
+> **Product:** Zyeta · **Engineered by:** rdtect (`src/lib/credits.ts`).  
+> Stakeholder view (architecture + terms + credits): **`/wiki`**.
 >
 > See also: `AGENTS.md` for day-to-day patterns (Cesium isolation, untrack rule).
 

@@ -2,6 +2,10 @@
  * Server entry — starts the LAN mDNS peer advertiser, then hands HTTP over
  * to adapter-node's own server (build/index.js).
  *
+ * Product: Zyeta Aero Dynamic Window · engineered by rdtect
+ * (attribution SSOT: src/lib/credits.ts — do not re-import here; this file
+ * is Bun-native and not Vite-built for defines, but a plain comment is fine).
+ *
  * Post-WS: there's no custom transport layer here anymore. Admin talks
  * to each device's REST endpoints (/api/config, /api/status, /api/command)
  * over LAN, and each device's browser subscribes to its own SvelteKit-

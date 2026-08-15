@@ -98,7 +98,8 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 | `src/lib/bundle/` | Content-bundle **wire types only** (no runtime mount) |
 | `src/lib/server/bundle/` | Bundle disk + asset/geojson serve |
 | `src/lib/http/` | Auth, CORS, peer token (LAN host guard) |
-| `src/routes/` | `/` kiosk · `/admin/*` fleet UI · `/api/*` · `/wiki` static |
+| `src/routes/` | `/` kiosk · `/admin/*` fleet UI · `/api/*` · `/wiki` (architecture · terms · credits) |
+| `src/lib/credits.ts` | Product attribution SSOT — Zyeta · engineered by rdtect |
 | `content/` | Authored artifacts — Rule 0 content/control split |
 | `tests/` | Mirrors `src/` + `content/` |
 | `docs/` | Architecture, ADRs, CODEMAPS |

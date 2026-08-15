@@ -8,11 +8,15 @@
 	 * re-export deploy/pi/branding/aero-splash.png from the same markup or the
 	 * handoff will visibly step.
 	 *
+	 * Branding: Zyeta product · SWA install · engine by rdtect
+	 * (see `$lib/credits` — keep partners in sync with Plymouth/splash).
+	 *
 	 * Held until the scene is ready to show:
 	 *   - flight: `measuredFps > 0` (first honest Cesium frame)
 	 *   - video/slideshow: displayMode itself (globe is parked; no FPS)
 	 */
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
+	import { ENGINEERED_BY, PRODUCT_PARTNERS, PRODUCT_SHORT } from '$lib/credits';
 
 	const model = useAeroWindow();
 
@@ -57,12 +61,13 @@
 		<div class="rule-row">
 			<span class="hair"></span>
 			<span class="partners">
-				<span class="partner">Zyeta</span>
+				<span class="partner">{PRODUCT_PARTNERS[0]}</span>
 				<span class="cross">×</span>
-				<span class="partner">SWA</span>
+				<span class="partner">{PRODUCT_PARTNERS[1]}</span>
 			</span>
 			<span class="hair right"></span>
 		</div>
+		<p class="engineered">{PRODUCT_SHORT} · engineered by {ENGINEERED_BY}</p>
 	</div>
 </div>
 
@@ -160,6 +165,18 @@
 		font-family: Ubuntu, 'Ubuntu Sans', system-ui, sans-serif;
 		font-weight: 300;
 		color: var(--sw-blue, #304cb2);
+	}
+
+	/* Quiet credit — must not fight the SWA partner line; fades under it. */
+	.engineered {
+		margin: 0;
+		font-family: 'JetBrains Mono', ui-monospace, monospace;
+		font-size: 1.05vw;
+		font-weight: 400;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		text-indent: 0.18em;
+		color: rgba(126, 132, 150, 0.55);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

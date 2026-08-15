@@ -1,26 +1,47 @@
 <script lang="ts">
-	// Static project wiki — architecture, terms, lifecycle. No app context needed.
+	// Static project wiki — architecture, terms, lifecycle, credits.
+	// csr=false: no client JS (see +page.ts). Import pure modules only.
+	import {
+		ENGINEERED_BY,
+		PRODUCT_CREDIT_BLURB,
+		PRODUCT_CREDIT_LINE,
+		PRODUCT_NAME,
+		PRODUCT_OWNER,
+		PRODUCT_SHORT,
+		PRODUCT_YEAR,
+	} from '$lib/credits';
 </script>
 
 <svelte:head>
-	<title>Wiki — Aero Window</title>
+	<title>Wiki — {PRODUCT_SHORT}</title>
 	<meta
 		name="description"
-		content="Aero Dynamic Window — architecture, operating terms, and product lifecycle"
+		content="{PRODUCT_NAME} — architecture, terms of operation, lifecycle, and credits ({PRODUCT_OWNER} · {ENGINEERED_BY})"
 	/>
 </svelte:head>
 
 <main class="arch-doc">
 	<!-- ═══════════════════════════════════════════════════════════════ HERO -->
 	<header class="hero">
-		<h1>Aero Window</h1>
-		<p class="subtitle">Wiki — Architecture, Terms &amp; Lifecycle</p>
-		<p class="deck">A circadian-aware digital airplane window. Seven pillars built. Two more hiding in plain sight — Time and Networking, doing real work with no owner.</p>
+		<h1>{PRODUCT_SHORT}</h1>
+		<p class="subtitle">Wiki — Architecture · Terms · Lifecycle · Credits</p>
+		<p class="deck">
+			A circadian-aware digital airplane window for office wellbeing.
+			{PRODUCT_CREDIT_BLURB}
+		</p>
+		<nav class="wiki-toc" aria-label="Wiki sections">
+			<a href="#architecture">Architecture</a>
+			<a href="#terms">Terms</a>
+			<a href="#lifecycle">Lifecycle</a>
+			<a href="#credits">Credits</a>
+			<a href="#perf">Pi performance</a>
+		</nav>
 		<div class="hero-meta">
 			<span>SvelteKit 2 + Svelte 5 Runes</span>
 			<span>Cesium + WebGL</span>
 			<span>Bun Runtime</span>
 			<span>Raspberry Pi 5 Kiosk</span>
+			<span>{PRODUCT_OWNER} · {ENGINEERED_BY}</span>
 		</div>
 	</header>
 
@@ -86,7 +107,7 @@
 	</section>
 
 	<!-- ═══════════════════════════════════════════════════════════════ ARCHITECTURE -->
-	<section>
+	<section id="architecture">
 		<h2>Engine Architecture — Five Layers</h2>
 		<p class="hidden-blurb">AeroWindow is a real-time engine, not an SPA. The architecture follows Svelte 5's reactive model above Cesium's native render graph — state and computation in runes, synchronisation into Cesium via <code>$effect</code>, only one imperative subsystem (the Flight Engine).</p>
 		<div class="arch-stack">
@@ -652,16 +673,16 @@
 				<span class="stat-label">source files</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">417</span>
+				<span class="big-num">800+</span>
 				<span class="stat-label">tests passing</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">12</span>
+				<span class="big-num">15</span>
 				<span class="stat-label">locations</span>
 			</div>
 			<div class="verdict-stat">
-				<span class="big-num">21</span>
-				<span class="stat-label">flight scenarios</span>
+				<span class="big-num">10</span>
+				<span class="stat-label">daily show slots</span>
 			</div>
 			<div class="verdict-stat">
 				<span class="big-num">6</span>
@@ -670,23 +691,34 @@
 		</div>
 		<div class="verdict-body">
 			<p><strong>Seven pillars stand.</strong> The architecture is clean — single RAF, single flat state tree, single compositor, single Z-source. The content pipeline is authorable by non-engineers. CRDT syncs 6 Pis without a central server.</p>
-			<p><strong>Two more pillars are hiding in plain sight.</strong> Time has six consumers and no owner — every smoothstep night gate reads it, the triptych sync depends on it, no module owns it. Networking is buried under State's CRDT bullet, but it's 12 files of fleet code with their own failure modes — LAN partition, mDNS race, NTP drift. Naming them is the v1.1 patch this architecture needs before the SWA install lands.</p>
+			<p><strong>Two more pillars are hiding in plain sight.</strong> Time has six consumers and no owner — every smoothstep night gate reads it, the triptych sync depends on it, no module owns it. Networking is buried under State's CRDT bullet, but it's a full fleet stack with its own failure modes — LAN partition, mDNS race, NTP drift.</p>
 			<p><strong>Audio is a v2 feature, not the missing pillar.</strong> Interesting, but not load-bearing.</p>
+			<p class="credit-inline">{PRODUCT_CREDIT_BLURB} Full source map: <code>docs/ARCHITECTURE.md</code>.</p>
 		</div>
 	</section>
 
 	<!-- ═══════════════════════════════════════════════════════════════ TERMS -->
-	<section>
+	<section id="terms">
 		<h2>Terms of Operation</h2>
 		<p class="hidden-blurb">
 			What the system does, what it needs, and what it owes third parties. This is the
-			operational statement of terms; where a signed supply or service agreement exists for
-			an install, that agreement governs and this section describes it rather than replacing
-			it.
+			<strong>operational statement of terms</strong> for the {PRODUCT_NAME} product
+			({PRODUCT_OWNER}, engineered by {ENGINEERED_BY}). Where a signed supply or service
+			agreement exists for an install, <em>that agreement governs</em>; this section
+			describes field behaviour rather than replacing contract language.
 		</p>
 		<div class="omission-list">
 			<div class="omission-item">
-				<h4>No people are recorded</h4>
+				<h4>1. Product identity</h4>
+				<p>
+					{PRODUCT_NAME} ({PRODUCT_SHORT}) is a {PRODUCT_OWNER} product. Engine, architecture,
+					and fleet systems were engineered by {ENGINEERED_BY}. Install branding (for example
+					Southwest Airlines on a fielded wall) is a customer face; it does not transfer
+					software ownership or inventorship.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>2. No people are recorded</h4>
 				<p>
 					There is no camera, no microphone, no sensor pointed at the room. The display is
 					output-only. Nothing about who walks past it is measured, stored, or transmitted —
@@ -694,55 +726,79 @@
 				</p>
 			</div>
 			<div class="omission-item">
-				<h4>Telemetry stays on the LAN</h4>
+				<h4>3. Telemetry stays on the LAN</h4>
 				<p>
 					Each device posts a heartbeat — frame rate, uptime, commit hash, recent error
-					lines — to the admin surface on the local network. It contains no personal data
-					and leaves the premises only if the operator opts a device into the remote push
-					worker.
+					lines, optional apply-ack id — to the admin surface on the local network. It
+					contains no personal data and leaves the premises only if the operator opts a
+					device into a remote push worker. Apply-ack is best-effort observability
+					("published ≠ applied" is the failure mode it exists to catch); it is not a
+					cryptographic proof of integrity.
 				</p>
 			</div>
 			<div class="omission-item">
-				<h4>Network egress is bounded and listed</h4>
+				<h4>4. Network egress is bounded and listed</h4>
 				<p>
 					Map tiles, terrain and night-light imagery are packaged offline before install, so
 					a fielded device runs on a dark LAN. When a tile is missing it falls back to its
-					origin CDN. The full outbound list is Cesium Ion, EOX Sentinel-2, NASA GIBS,
-					OpenStreetMap, and — only when configured — the operator's own Cloudflare Worker.
+					origin CDN. The full outbound list is Cesium Ion (build-time packaging only when
+					possible), EOX Sentinel-2, NASA GIBS / VIIRS, CartoDB basemaps, OpenStreetMap-
+					derived buildings, and — only when configured — the operator's own update worker.
 				</p>
 			</div>
 			<div class="omission-item">
-				<h4>Third-party data carries attribution</h4>
+				<h4>5. Third-party data carries attribution</h4>
 				<p>
 					Terrain and imagery are licensed, not owned. Cesium Ion terrain is used under
 					Cesium's terms; Sentinel-2 Cloudless is © EOX IT Services under CC BY-NC-SA;
 					VIIRS night-lights radiance is NASA public-domain; road and building geometry is ©
 					OpenStreetMap contributors under ODbL. Attribution travels with any install or
-					screenshot that shows them.
+					screenshot that shows them. Software stack credits: Svelte / SvelteKit, CesiumJS,
+					Three.js (optional overlay), Bun, Raspberry Pi OS / Chromium.
 				</p>
 			</div>
 			<div class="omission-item">
-				<h4>Admin actions are token-gated</h4>
+				<h4>6. Admin actions are token-gated</h4>
 				<p>
 					Every mutating endpoint — config patch, command fan-out, content upload, update
 					trigger, WiFi reset — requires a bearer token and returns 503 when its token is
 					unset, so an unconfigured device fails closed rather than open. Holding the token
-					means holding control of the wall; it is the operator's to protect.
+					means holding control of the wall; it is the operator's to protect. Fleet
+					heartbeat tokens are lower privilege and cannot push scenes.
 				</p>
 			</div>
 			<div class="omission-item">
-				<h4>Not a safety or information system</h4>
+				<h4>7. Not a safety or information system</h4>
 				<p>
 					The view is composed, not reported. Sun position and moon phase are real; weather,
 					location, altitude and traffic are authored fiction on a rotation. Nothing on the
-					screen should be read as a forecast, a flight, or a status board.
+					screen should be read as a forecast, a flight, or a status board. Do not use the
+					wall for emergency egress guidance, operational aviation, or medical environments
+					that require certified displays.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>8. Operator responsibilities</h4>
+				<p>
+					Site power, LAN, physical security of the Pis, and protection of admin tokens
+					remain the operator's. The device will keep showing its last good release without
+					cloud contact; that is by design (see Lifecycle).
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>9. Warranty &amp; disclaimer (software)</h4>
+				<p>
+					Unless a signed agreement says otherwise, the software is provided for the
+					supported lifecycle as-is for the intended kiosk use. {PRODUCT_OWNER} and
+					{ENGINEERED_BY} disclaim liability for consequential damage from misuse, modified
+					firmware, or operation outside the documented Raspberry Pi 5 kiosk profile.
 				</p>
 			</div>
 		</div>
 	</section>
 
 	<!-- ═══════════════════════════════════════════════════════════════ LIFECYCLE -->
-	<section>
+	<section id="lifecycle">
 		<h2>Product Lifecycle — 6 Months</h2>
 		<p class="hidden-blurb">
 			The supported lifecycle for an install is <strong>six months from handover</strong>,
@@ -804,9 +860,86 @@
 		</div>
 	</section>
 
+	<!-- ═══════════════════════════════════════════════════════════════ CREDITS -->
+	<section id="credits">
+		<h2>Credits</h2>
+		<p class="hidden-blurb">{PRODUCT_CREDIT_BLURB}</p>
+		<div class="omission-list">
+			<div class="omission-item">
+				<h4>{PRODUCT_OWNER}</h4>
+				<p>
+					Product owner and fleet operator brand. Install relationships (for example SWA
+					Hyderabad) sit with {PRODUCT_OWNER}.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>{ENGINEERED_BY}</h4>
+				<p>
+					Engine, architecture, fleet protocol, offline tile pipeline, and kiosk runtime.
+					Attribution SSOT lives in <code>src/lib/credits.ts</code> and is mirrored in boot
+					lockup, package metadata, and this wiki — so a rebrand cannot leave three
+					conflicting stories.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Open data &amp; stack</h4>
+				<p>
+					EOX Sentinel-2 Cloudless · NASA VIIRS · OpenStreetMap · CesiumJS · Svelte 5 /
+					SvelteKit · Three.js (optional) · Bun · Raspberry Pi 5 / Chromium kiosk.
+				</p>
+			</div>
+		</div>
+	</section>
+
+	<!-- ═══════════════════════════════════════════════════════════════ PI PERF -->
+	<section id="perf">
+		<h2>Pi performance — local process</h2>
+		<p class="hidden-blurb">
+			Measured kiosk reality (2026-07): ~2–4 fps at 2560×1080, with <em>simulation</em>
+			under 1 ms — the cost is Cesium scene / tiles / postprocess, not Svelte. Full write-up:
+			<code>docs/PERF-2026-07-27-fps-investigation.md</code> and
+			<code>docs/PI-PERF-PROCESS.md</code>.
+		</p>
+		<div class="omission-list">
+			<div class="omission-item">
+				<h4>Measure with a pinned scene</h4>
+				<p>
+					Autopilot rotates cities; single fps samples are noise. Fix location, weather,
+					time, and disable director before comparing builds. Prefer median of several
+					runs on the same commit.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Ship defaults already lean</h4>
+				<p>
+					<code>qualityMode: 'performance'</code>, offline tiles first, local buildings.
+					Do not lower panel resolution as a "fix" — fill rate is not the bottleneck.
+					Do not trust a Chromium GL flag without reading GPU process argv.
+				</p>
+			</div>
+			<div class="omission-item">
+				<h4>Local process (engineer laptop → Pi)</h4>
+				<p>
+					1) <code>bun run check && bun run test && bun run build</code> on main.
+					2) Deploy only via the <code>release</code> branch gate.
+					3) On device: confirm tile cache health, <code>qualityMode</code>, Three overlay
+					off if A/B shows cost.
+					4) Ablate postprocess / buildings SSE before chasing app logic.
+				</p>
+			</div>
+		</div>
+	</section>
+
 	<footer class="arch-footer">
-		<p>Aero Dynamic Window · SvelteKit 2 + Cesium + Bun · Raspberry Pi 5 Kiosk · SWA Hyderabad install · 2026</p>
-		<p class="arch-footer-sub">v1.2 (2026-07-28). Subsystem Manager Pattern now formalised across <code>src/lib/world/</code> (8 leaf managers + orchestrator). Original v1 framing preserved at <code>docs/ARCHITECTURE-original-framing.md</code>. Z-order is managed locally in <code>src/lib/shell/Pane.svelte</code> (no shared z-table); sky-state thresholds from <code>src/lib/utils.ts</code>; subsystem pattern documented at <code>AGENTS.md</code>.</p>
+		<p>{PRODUCT_CREDIT_LINE}</p>
+		<p class="arch-footer-sub">
+			SvelteKit 2 + Cesium + Bun · Raspberry Pi 5 kiosk · SWA field install.
+			Living architecture: this page + <code>docs/ARCHITECTURE.md</code> + <code>AGENTS.md</code>.
+			Subsystem pattern formalised under <code>src/lib/world/</code>; Z-order local to
+			<code>Pane.svelte</code>. Wiki route is SSR-only (<code>csr=false</code>) so kiosk
+			bundles never pay for this prose.
+		</p>
+		<p class="arch-footer-sub">© {PRODUCT_YEAR} {PRODUCT_OWNER} · engineered by {ENGINEERED_BY}</p>
 	</footer>
 </main>
 
@@ -857,6 +990,34 @@
 		color: #8890b0;
 		max-width: 560px;
 		margin: 0 auto 24px;
+	}
+
+	.wiki-toc {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px 18px;
+		justify-content: center;
+		margin: 0 auto 22px;
+		max-width: 560px;
+	}
+
+	.wiki-toc a {
+		color: #a8b0d0;
+		font-size: 13px;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		text-decoration: none;
+		border-bottom: 1px solid rgba(255, 191, 39, 0.35);
+		padding-bottom: 2px;
+	}
+
+	.wiki-toc a:hover {
+		color: #ffbf27;
+	}
+
+	.credit-inline {
+		color: #8890b0;
+		font-size: 14px;
 	}
 
 	.hero-meta {
