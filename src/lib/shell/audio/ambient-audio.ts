@@ -34,7 +34,19 @@
  * played three times a few hundred ms apart is a flam, not ambience.
  */
 
-/** Clamp helper — volumes arrive from admin sliders and persisted JSON. */
+/**
+ * Clamp to 0..1, mapping NaN to 0.
+ *
+ * ─── NOT a duplicate of `clamp(v, 0, 1)` from $lib/utils ────────────────────
+ * That one is `Math.max(min, Math.min(max, value))`, and both of those return
+ * NaN when handed NaN. Here the input is a volume that came off an admin
+ * slider or persisted JSON, and the output goes straight into an AudioParam:
+ * a NaN there does not clamp to silence, it poisons the param and the layer
+ * stops responding for the rest of the session — with no error.
+ *
+ * Left local and named differently on purpose. If a future dedup pass folds
+ * this into the shared clamp, that bug comes back silently.
+ */
 function clamp01(n: number): number {
 	return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
 }
