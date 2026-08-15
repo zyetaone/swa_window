@@ -16,6 +16,7 @@ import {
 	type LightningComposition,
 } from '$content/compositions/lightning';
 import { createSeededRng, daySeed } from './prng';
+import { registerViewerTeardown } from './viewer-lifecycle';
 
 const STAGE_NAME = 'aero-lightning';
 
@@ -197,3 +198,7 @@ export function destroyLightning(): void {
 	// or its character silently shifts for the rest of the new session.
 	_stormIndex = 0;
 }
+
+// Teardown was already explicit here; registering puts it in the single list
+// so CesiumManager.destroy() no longer has to name subsystems individually.
+registerViewerTeardown('lightning', destroyLightning);
