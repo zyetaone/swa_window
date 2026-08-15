@@ -141,7 +141,24 @@ export async function setupImagery(): Promise<void> {
 		_baseLayer.gamma = _baseDayGamma;
 	}
 
-	const tileBase = TILE_SERVER_URL?.replace(/\/$/, '');
+	// ─── ⚠ GATED ON localTiles, NOT ON THE URL BEING SET ────────────────────
+	// TILE_SERVER_URL is written by install.sh on EVERY Pi (default
+	// `/api/tiles`), so its presence says nothing about whether tiles exist.
+	// checkLocalTileServer() above is what actually probes /api/tiles/health for
+	// hasTiles, and the base imagery already consults it — getSatelliteImagery
+	// takes localTiles and falls back to the remote host when the cache is
+	// empty. The VIIRS and road layers below did not, and pointed at the local
+	// path purely because the variable was non-empty.
+	//
+	// On the current fleet, where the ~2.7 GB has never been rsynced, that meant
+	// every VIIRS and road tile 404'd while base imagery streamed happily from
+	// EOX. The visible result at night: terrain and lit building windows, and NO
+	// ground light field and NO street grid at all — the two layers that carry
+	// the city. Silent, because a 404 on an ImageryLayer is a blank tile, not an
+	// error, and /api/tiles/health reports layer DIRECTORIES rather than content.
+	//
+	// One flag, three layers. Now they agree.
+	const tileBase = localTiles ? TILE_SERVER_URL?.replace(/\/$/, '') : undefined;
 
 	// Add order = composite order: base → VIIRS → road mask. Roads sit ON TOP
 	// ("Roads carry the city; VIIRS fills behind" — roadMaskAlpha): VIIRS is a
