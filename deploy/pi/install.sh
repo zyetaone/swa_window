@@ -25,7 +25,14 @@ set -euo pipefail
 AERO_ROLE="${AERO_ROLE:-solo}"
 AERO_GROUP="${AERO_GROUP:-default}"
 REPO_URL="${AERO_REPO_URL:-https://github.com/zyetaone/z-aero-window.git}"
-REPO_BRANCH="${AERO_REPO_BRANCH:-main}"
+# `release`, not `main`: release is fast-forwarded by CI only after check +
+# tests + build + smoke-test pass, so a fresh install lands on a commit that was
+# individually proven, the same one the updater would converge it to within
+# ~3 min anyway (aero-updater.timer OnBootSec=3min). Defaulting to main meant a
+# new Pi briefly ran a commit whose own CI run may never have completed — a
+# narrow window, but a pointless one when the gated branch is right there.
+# Pass --branch main (or AERO_REPO_BRANCH=main) for a dev/test install.
+REPO_BRANCH="${AERO_REPO_BRANCH:-release}"
 INSTALL_DIR="/opt/aero-window"
 PI_USER="${SUDO_USER:-pi}"
 BUN_BIN="/home/${PI_USER}/.bun/bin/bun"
@@ -199,11 +206,13 @@ EXISTING_ADMIN_URL=""
 EXISTING_ADMIN_TOKEN=""
 EXISTING_ION_TOKEN=""
 EXISTING_FLEET_TOKEN=""
+EXISTING_WIFI_RESET_TOKEN=""
 if [[ -r /etc/aero/config.env ]]; then
 	EXISTING_ADMIN_URL="$(command grep -oP '^AERO_ADMIN_URL=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_ADMIN_TOKEN="$(command grep -oP '^AERO_ADMIN_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_ION_TOKEN="$(command grep -oP '^CESIUM_ION_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 	EXISTING_FLEET_TOKEN="$(command grep -oP '^AERO_FLEET_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
+	EXISTING_WIFI_RESET_TOKEN="$(command grep -oP '^AERO_WIFI_RESET_TOKEN=\K.*' /etc/aero/config.env 2>/dev/null || true)"
 fi
 
 # Central heartbeat collector, e.g.
@@ -237,6 +246,29 @@ if [[ -z "${EXISTING_FLEET_TOKEN}" ]]; then
 		EXISTING_FLEET_TOKEN="$(openssl rand -hex 24)"
 	else
 		EXISTING_FLEET_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+	fi
+fi
+
+# WiFi-reset secret for POST /api/wifi/reset — purges saved profiles and reboots
+# into the captive setup portal, so a client whose WiFi password changed can be
+# re-paired without a site visit.
+#
+# AUTO-GENERATED for the same reason as the fleet token, and this one was
+# ACTUALLY BROKEN: install.sh never wrote AERO_WIFI_RESET_TOKEN at all, and the
+# endpoint is fail-closed, so the self-recovery hatch returned 503 on every
+# fielded Pi. The feature existed in code, was documented in its own docstring,
+# and could not fire anywhere in the fleet.
+#
+# Distinct from the other two on purpose: this token reboots a device off the
+# network, which is the most destructive remote action available, so it is not
+# folded into AERO_ADMIN_TOKEN. Re-runs preserve an operator's own value.
+if [[ -z "${EXISTING_WIFI_RESET_TOKEN}" ]]; then
+	if [[ -n "${AERO_WIFI_RESET_TOKEN:-}" ]]; then
+		EXISTING_WIFI_RESET_TOKEN="${AERO_WIFI_RESET_TOKEN}"
+	elif command -v openssl >/dev/null 2>&1; then
+		EXISTING_WIFI_RESET_TOKEN="$(openssl rand -hex 24)"
+	else
+		EXISTING_WIFI_RESET_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 	fi
 fi
 
@@ -278,6 +310,7 @@ AERO_PORT=3000
 AERO_ADMIN_URL=${EXISTING_ADMIN_URL}
 AERO_ADMIN_TOKEN=${EXISTING_ADMIN_TOKEN}
 AERO_FLEET_TOKEN=${EXISTING_FLEET_TOKEN}
+AERO_WIFI_RESET_TOKEN=${EXISTING_WIFI_RESET_TOKEN}
 AERO_BUN_BIN=${BUN_BIN}
 AERO_BRANCH=release
 TILE_DIR=${TILE_DIR_VALUE}

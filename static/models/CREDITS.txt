@@ -1,1 +1,13 @@
-wing.glb derived from SW 737 (CC-BY-4.0, A Random Modeler) — see static/models/southwest-737/license.txt
+wing.glb — derived from a Southwest 737 model by "A Random Modeler", CC-BY-4.0.
+
+CC-BY-4.0 permits commercial use and requires attribution.
+
+The original licence text is NOT vendored here. This file previously pointed at
+static/models/southwest-737/license.txt, which does not exist in the repo — the
+directory was never committed, so the pointer dangled. Recover the full licence
+text and the canonical source URL from wherever the model was obtained
+(Sketchfab or equivalent) and vendor it beside this file, rather than restoring
+a reference to a path that isn't there.
+
+Attribution for this asset is currently carried only by /wiki, which nothing in
+the app links to.

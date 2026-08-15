@@ -750,7 +750,10 @@
 				<h4>5. Third-party data carries attribution</h4>
 				<p>
 					Terrain and imagery are licensed, not owned. Cesium Ion terrain is used under
-					Cesium's terms; Sentinel-2 Cloudless is © EOX IT Services under CC BY-NC-SA;
+					Cesium's terms; Sentinel-2 Cloudless (the <em>s2cloudless-2024</em> layer) is
+					© EOX IT Services under CC BY-NC-SA 4.0 — a NonCommercial licence, which a paid
+					installation needs EOX's separate commercial licence to satisfy; the road mask is
+					© CARTO under CARTO's basemap terms, with map data © OpenStreetMap contributors;
 					VIIRS night-lights radiance is NASA public-domain; road and building geometry is ©
 					OpenStreetMap contributors under ODbL. Attribution travels with any install or
 					screenshot that shows them. Software stack credits: Svelte / SvelteKit, CesiumJS,
