@@ -38,7 +38,24 @@ export interface PersistedState {
 	cloudDensity: number;
 	buildingsEnabled: boolean;
 	showClouds: boolean;
-	syncToRealTime: boolean;
+	/**
+	 * ─── LEGACY. READ FOR VALIDATION, NEVER RESTORED, NEVER WRITTEN ──────────
+	 * Real Time now always comes back ON at boot.
+	 *
+	 * Turning it off freezes the sky at whatever hour it held. That is a useful
+	 * thing to do for a demo and a terrible thing to persist: an unattended wall
+	 * that reboots nightly would show the same frozen afternoon forever, and
+	 * because the stored value is applied AFTER the code default, no change to
+	 * the default could ever recover it. The failure is silent — a frozen sky
+	 * looks like a working sky until someone notices it has not moved all week.
+	 *
+	 * Same reasoning as location and weather, which have never been restored:
+	 * boot must land in a known-good state, not in whoever-touched-it-last.
+	 * Operators can still toggle it at runtime; it just does not outlive the
+	 * session. Kept in the type so legacy blobs still validate rather than
+	 * being rejected wholesale.
+	 */
+	syncToRealTime?: boolean;
 	/**
 	 * Ambient peer-sync config values keyed by config path — every
 	 * PEER_SYNC_PATHS entry (`$lib/model/peer-sync-paths`) except the three
@@ -79,11 +96,14 @@ export function loadPersistedState(): Partial<PersistedState> {
 			parsed.cloudDensity = safeNum(parsed.cloudDensity, 0.85, 0, 1);
 		}
 
-		// Scene state is never restored: boot always uses pickDailyShow /
-		// showRotationSeed. Legacy blobs may still carry location/weather/dayKey.
+		// Scene / mode state is never restored: boot always uses pickDailyShow /
+		// showRotationSeed and known-good defaults. Legacy blobs may still carry
+		// location/weather/dayKey/syncToRealTime.
 		delete parsed.location;
 		delete parsed.weather;
 		delete parsed.dayKey;
+		// Real Time always boots ON (demo-frozen sky must not outlive the session).
+		delete parsed.syncToRealTime;
 
 		// Validate boolean flags
 		if (parsed.buildingsEnabled !== undefined && typeof parsed.buildingsEnabled !== 'boolean') {
@@ -91,9 +111,6 @@ export function loadPersistedState(): Partial<PersistedState> {
 		}
 		if (parsed.showClouds !== undefined && typeof parsed.showClouds !== 'boolean') {
 			delete parsed.showClouds;
-		}
-		if (parsed.syncToRealTime !== undefined && typeof parsed.syncToRealTime !== 'boolean') {
-			delete parsed.syncToRealTime;
 		}
 
 		// Ambient peer-sync values — validated per path against
@@ -121,11 +138,34 @@ export function loadPersistedState(): Partial<PersistedState> {
 	}
 }
 
+/**
+ * Has this device EVER persisted state? Distinct from "did load return
+ * anything", which is the question callers used to ask by testing
+ * `Object.keys(loadPersistedState()).length === 0`.
+ *
+ * Those two diverged once load began stripping fields: a blob whose every key
+ * is stripped (a dev box that had only ever stored `syncToRealTime`) loads as
+ * `{}` and became indistinguishable from a browser that had never run the app.
+ * The DEV deep-night default keys off "fresh environment", so it started firing
+ * for people who had state — silently forcing Real Time off in dev and
+ * contradicting the boot rule it sits next to.
+ */
+export function hasPersistedState(): boolean {
+	if (typeof window === 'undefined') return false;
+	try {
+		return localStorage.getItem(STORAGE_KEY) !== null;
+	} catch {
+		return false;
+	}
+}
+
 export function savePersistedState(state: PersistedState): void {
 	if (typeof window === 'undefined') return;
 	try {
 		// Never write location/weather — boot must open from the rotation seed.
-		const { location: _l, weather: _w, ...rest } = state;
+		// Never write syncToRealTime — boot must open with Real Time ON, so a
+		// demo-frozen sky cannot outlive the session that froze it.
+		const { location: _l, weather: _w, syncToRealTime: _s, ...rest } = state;
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 	} catch {
 		// Storage full or blocked — silently ignore

@@ -71,7 +71,7 @@
 		// changes no other field, and an unchanged hash would skip the save —
 		// the whole point of PersistedState.ambient. Key order is stable
 		// (AMBIENT_PERSIST_PATHS iteration order), so stringify is safe.
-		const hash = `${Math.round(data.altitude / 100)}|${data.cloudDensity}|${data.buildingsEnabled}|${data.showClouds}|${data.syncToRealTime}|${JSON.stringify(data.ambient)}`;
+		const hash = `${Math.round(data.altitude / 100)}|${data.cloudDensity}|${data.buildingsEnabled}|${data.showClouds}|${JSON.stringify(data.ambient)}`;
 		if (hash === _lastSnapHash) return;
 		_lastSnapHash = hash;
 		const timeout = setTimeout(() => savePersistedState(data), 2000);

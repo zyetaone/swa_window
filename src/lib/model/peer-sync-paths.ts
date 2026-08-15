@@ -87,9 +87,29 @@ export const AMBIENT_PATH_SPECS = {
  * EXCEPT the three covered by PersistedState's legacy named fields
  * (`cloudDensity`, `buildingsEnabled`, `showClouds`). Storing those twice
  * would give the restore path two competing sources for one leaf.
+ *
+ * ─── AND EXCEPT `shell.windowFrame`, WHICH MUST RESET EVERY BOOT ────────────
+ * The distinction this list should encode is between SITE TUNING and MODES.
+ *
+ * Site tuning — night-light intensity, haze, quality — is work an operator did
+ * deliberately for this room, and losing it on reboot would mean redoing that
+ * work. It belongs here.
+ *
+ * `shell.windowFrame` is a mode with one known-good state. The wall's frame is
+ * PHYSICAL: the Waveshare bezel is the window surround, so drawing the oval on
+ * top of it gives a doubled frame. Persisting the toggle meant one operator
+ * tapping it once — or one stale value synced from a peer — left the wall wrong
+ * through every future reboot, and changing the code default could never undo
+ * it, because the stored value is applied after the default.
+ *
+ * Still peer-synced, so admin can toggle it live fleet-wide for a demo. It just
+ * no longer outlives the session that set it.
  */
 export const AMBIENT_PERSIST_PATHS: readonly PeerSyncPath[] = PEER_SYNC_PATHS.filter(
-	(p) => p !== 'atmosphere.clouds.density' && p !== 'world.buildingsEnabled' && p !== 'world.showClouds',
+	(p) => p !== 'atmosphere.clouds.density'
+		&& p !== 'world.buildingsEnabled'
+		&& p !== 'world.showClouds'
+		&& p !== 'shell.windowFrame',
 );
 
 /**

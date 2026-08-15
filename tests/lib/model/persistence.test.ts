@@ -10,7 +10,7 @@ describe('loadPersistedState', () => {
 		expect(loadPersistedState()).toEqual({});
 	});
 
-	it('never restores location or weather (boot rotation owns the scene)', () => {
+	it('never restores location, weather, or syncToRealTime (boot owns modes)', () => {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify({
 			location: 'dubai',
 			altitude: 30000,
@@ -23,9 +23,9 @@ describe('loadPersistedState', () => {
 		const result = loadPersistedState();
 		expect(result.location).toBeUndefined();
 		expect(result.weather).toBeUndefined();
+		expect(result.syncToRealTime).toBeUndefined();
 		expect(result.altitude).toBe(30000);
 		expect(result.cloudDensity).toBe(0.5);
-		expect(result.syncToRealTime).toBe(false);
 	});
 
 	it('strips dayKey from consumers', () => {
@@ -73,7 +73,7 @@ describe('savePersistedState', () => {
 		localStorage.clear();
 	});
 
-	it('does not write location or weather', () => {
+	it('does not write location, weather, or syncToRealTime', () => {
 		savePersistedState({
 			location: 'dubai',
 			weather: 'rain',
@@ -87,6 +87,20 @@ describe('savePersistedState', () => {
 		const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
 		expect(parsed.location).toBeUndefined();
 		expect(parsed.weather).toBeUndefined();
+		expect(parsed.syncToRealTime).toBeUndefined();
 		expect(parsed.altitude).toBe(32000);
+	});
+
+	it('does not restore shell.windowFrame from ambient (mode, not site tuning)', () => {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			altitude: 30000,
+			ambient: {
+				'shell.windowFrame': true,
+				'world.qualityMode': 'balanced',
+			},
+		}));
+		const r = loadPersistedState();
+		expect(r.ambient?.['shell.windowFrame']).toBeUndefined();
+		expect(r.ambient?.['world.qualityMode']).toBe('balanced');
 	});
 });

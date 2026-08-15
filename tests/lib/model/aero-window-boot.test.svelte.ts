@@ -24,17 +24,16 @@ describe('AeroWindow boot', () => {
 		expect(model.flight.orbitCenterLon).toBeCloseTo(loc!.lon, 5);
 	});
 
-	it('does not clobber timeOfDay with wall-clock when syncToRealTime is false', () => {
-		// Regression: boot called updateTimeFromSystem() unconditionally while
-		// the recurring sync in +page.svelte is gated on syncToRealTime — a
-		// persisted syncToRealTime:false kiosk booted to wall-clock and then
-		// froze there. 23:30 wall-clock vs the show's dawn opening keeps the
-		// assertion well clear of coincidence.
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date('2026-08-14T23:30:00'));
-		localStorage.setItem(STORAGE_KEY, JSON.stringify({ syncToRealTime: false }));
+	it('ignores persisted syncToRealTime:false and boots with Real Time ON', () => {
+		// Demo-frozen sky must not outlive the session. Legacy blobs that
+		// stored false would otherwise pin a frozen afternoon forever.
+		// Include altitude so DEV deep-night (empty-persist) branch does not run.
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({
+			altitude: 32000,
+			syncToRealTime: false,
+		}));
 		const model = new AeroWindow();
-		expect(Math.abs(model.timeOfDay - 23.5)).toBeGreaterThan(2);
+		expect(model.syncToRealTime).toBe(true);
 	});
 
 	it('restores persisted ambient peer-sync values over show-opening defaults', () => {

@@ -20,7 +20,7 @@ import {
 	type SlideshowSpec,
 } from '$lib/fleet/display-payload';
 import { loadDisplayMode, saveDisplayMode, peekDisplayModeSavedAt } from '$lib/fleet/display-mode-persist';
-import { loadPersistedState, type PersistedState } from '$lib/model/persistence';
+import { loadPersistedState, hasPersistedState, type PersistedState } from '$lib/model/persistence';
 import { AMBIENT_PERSIST_PATHS, type AmbientValue, type PeerSyncPath } from '$lib/model/peer-sync-paths';
 import { pickNextLocation } from '$lib/director/scenarios';
 import { lightingState } from '$lib/world/curves';
@@ -212,10 +212,15 @@ export class AeroWindow {
 		// default while developing. Production install ships with the show's
 		// dawn opening; this branch is gated on import.meta.env.DEV so it never
 		// reaches the Pi.
+		// hasPersistedState(), not `Object.keys(persisted).length === 0`: load
+		// strips fields it refuses to restore, so a dev box that had only ever
+		// stored one of those loads as {} and would otherwise look like a browser
+		// that had never run the app — firing this branch and forcing Real Time
+		// off for someone who does have state.
 		if (
 			typeof window !== 'undefined'
 			&& import.meta.env.DEV
-			&& Object.keys(persisted).length === 0
+			&& !hasPersistedState()
 		) {
 			this.syncToRealTime = false;
 			this.timeOfDay = 22;
@@ -286,7 +291,13 @@ export class AeroWindow {
 				this.applyConfigPatch(path, value);
 			}
 		}
-		this.syncToRealTime = saved.syncToRealTime ?? true;
+		// syncToRealTime is deliberately NOT restored (see persistence.ts). Boot
+		// always comes up with Real Time ON. Dropping the WRITE alone would not
+		// have been enough: every fielded Pi that already has `false` in its blob
+		// would keep restoring it forever, since the stored value is applied
+		// after the code default. Ignoring the read is what actually recovers
+		// those devices, on their next reboot, with no hand-clearing of
+		// localStorage.
 	}
 
 	// ── Actions ───────────────────────────────────────────────────────────────
@@ -683,7 +694,8 @@ export class AeroWindow {
 			altitude: this.flight.altitude,
 			cloudDensity: this.config.atmosphere.clouds.density,
 			buildingsEnabled: this.config.world.buildingsEnabled,
-			showClouds: this.config.world.showClouds, syncToRealTime: this.syncToRealTime,
+			showClouds: this.config.world.showClouds,
+			// syncToRealTime omitted — never persisted (boot always Real Time ON).
 			ambient,
 		};
 	}
