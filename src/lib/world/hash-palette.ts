@@ -23,6 +23,10 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 	uniform float u_additiveStrength;
 	uniform float u_dayContrast;
 	uniform float u_dayVibrance;
+	uniform float u_maskGamma;
+	uniform float u_maskNoise;
+	uniform float u_glimmer;
+	uniform float u_wallTime;
 	// MUST be declared. Cesium prepends the version/precision preamble and the
 	// out_FragColor declaration, but NOT the varying — COLOR_GRADING_GLSL in
 	// shaders.ts declares its own, and this shader was written without one, so
@@ -76,7 +80,42 @@ export const HASH_PALETTE_SHADER = /* glsl */ `
 
 		float redSpark = step(0.97, fract(hash * 7.3));
 		lightColor = mix(lightColor, trafficRed, redSpark * lightMask * 0.8);
-		rgb += lightColor * lum * lightMask * u_additiveStrength * u_nightFactor;
+
+		// ─── TREAT VIIRS AS A MASK, NOT AS LIGHT ────────────────────────────
+		// VIIRS is a 583 m/px radiance product. Added straight, its own blur IS
+		// the picture, so a city arrives as one smooth mound of amber — the
+		// blob. The road mask underneath already carries the actual structure
+		// (filaments, junctions, the dark gaps between districts); the fix is to
+		// stop VIIRS competing with it and start using it the way you would use
+		// a luminance mask in Photoshop: to decide WHERE light goes, not to BE
+		// the light.
+		//
+		// maskGamma pushes the mask toward its cores. At 1.0 this is the old
+		// behaviour; above 1.0 the soft halo falls away much faster than the
+		// bright centres, so the roads and the lit building profiles read
+		// through the gaps instead of being buried under the aggregate.
+		float mask = pow(lightMask, u_maskGamma);
+
+		// Break the remaining smoothness with a coarse noise gradient. Real city
+		// light is patchy at district scale — lit arterials, dark parks, an
+		// industrial edge that goes black. One low-frequency hash gives that
+		// unevenness for a few ALU ops, no texture fetch.
+		float cell = fract(sin(dot(floor(v_textureCoordinates * 220.0), vec2(41.13, 289.7))) * 24634.6345);
+		mask *= mix(1.0 - u_maskNoise, 1.0 + u_maskNoise, cell);
+
+		// Glimmer. Sub-pixel sources (a window, a car, a streetlight seen from
+		// 30 000 ft) scintillate through the atmosphere; a perfectly steady
+		// field reads as a printed map. Each cell gets its own phase from the
+		// hash, so neighbours are never in step.
+		//
+		// u_wallTime is WALL-CLOCK seconds, not frame count and not
+		// performance.now(): all three panes must scintillate identically or the
+		// seam shimmers. Same reason altitude drift takes its phase from the
+		// clock (altitudeDriftFt in flight.svelte.ts).
+		float twinkle = sin(u_wallTime * 1.7 + cell * 6.2831853) * 0.5 + 0.5;
+		mask *= 1.0 - u_glimmer * twinkle * step(0.55, cell);
+
+		rgb += lightColor * lum * mask * u_additiveStrength * u_nightFactor;
 		rgb = min(rgb, vec3(4.0));
 
 		// Base darkening — lightMask guards cities.
@@ -161,6 +200,9 @@ export function installHashPalette(
 	getAdditiveStrength: () => number,
 	getDayContrast: () => number,
 	getDayVibrance: () => number,
+	getMaskGamma: () => number,
+	getMaskNoise: () => number,
+	getGlimmer: () => number,
 ): () => void {
 	const stages = viewer.scene.postProcessStages;
 	if (!stages) return () => {};
@@ -199,6 +241,13 @@ export function installHashPalette(
 			u_additiveStrength: getAdditiveStrength,
 			u_dayContrast: getDayContrast,
 			u_dayVibrance: getDayVibrance,
+			u_maskGamma: getMaskGamma,
+			u_maskNoise: getMaskNoise,
+			u_glimmer: getGlimmer,
+			// Wall clock, wrapped to keep float precision sane over a 24/7 run.
+			// Every pane reads the same instant, so the glimmer is identical
+			// across the seam without any broadcast.
+			u_wallTime: () => (Date.now() % 3600000) / 1000,
 		},
 	});
 	stages.add(stage);

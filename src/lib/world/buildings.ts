@@ -227,6 +227,42 @@ export async function setupBuildings(
 		if (!tileset) return;
 		tileset.show = buildingsEnabled;
 		tileset.maximumScreenSpaceError = CESIUM_QUALITY_PRESETS.balanced.maximumScreenSpaceError;
+
+		// ─── ONCE LOADED, KEEP IT ───────────────────────────────────────────
+		// Buildings were visibly vanishing and re-appearing during flight. That
+		// is not a loading delay, it is EVICTION: the tileset's cache defaults
+		// are sized for a free-roaming globe app where the camera can go
+		// anywhere, so tiles behind the camera get dropped and then have to be
+		// re-fetched and re-decoded when the orbit brings them back around.
+		//
+		// This kiosk is the opposite case. It orbits a handful of fixed cities
+		// forever on a machine with 8 GB of RAM and, once packaged, no network
+		// worth speaking of. Re-fetching a tile we already had is pure loss:
+		// the reload is visible as a hole in the skyline, and it costs more
+		// than simply holding the geometry.
+		//
+		// A generous cache is also strictly cheaper at STEADY STATE than the
+		// churn it replaces — no re-request, no re-parse, no re-upload to the
+		// GPU every orbit. The peak cost is bounded by the fact that the fleet
+		// only ever visits eight locations.
+		const t = tileset as unknown as {
+			cacheBytes?: number;
+			maximumCacheOverflowBytes?: number;
+			maximumMemoryUsage?: number;
+			preloadWhenHidden?: boolean;
+			preloadFlightDestinations?: boolean;
+		};
+		// Cesium renamed this: cacheBytes on current versions, maximumMemoryUsage
+		// (in MB) on older ones. Set whichever exists rather than pinning a
+		// version — an unknown property assignment is silently inert either way.
+		t.cacheBytes = 1_536 * 1024 * 1024;
+		t.maximumCacheOverflowBytes = 768 * 1024 * 1024;
+		t.maximumMemoryUsage = 1_536;
+		// Keep tiles warm across the blind-closed cruise transition, and prefetch
+		// the destination during a hop so arrival is not a skyline building
+		// itself in front of the viewer.
+		t.preloadWhenHidden = true;
+		t.preloadFlightDestinations = true;
 		tileset.shadows = _cs.ShadowMode.ENABLED;
 		tileset.colorBlendMode = _cs.Cesium3DTileColorBlendMode.HIGHLIGHT;
 

@@ -39,12 +39,15 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 		}
 	});
 
-	it('cityGlowAmount is 0 in day, gates in past nf 0.32 (evening recalibration)', () => {
+	it('cityGlowAmount is 0 in day, gates in past nf 0.58 (stays behind the lights)', () => {
 		expect(lightingState(12, 0).cityGlowAmount).toBe(0);
-		// Gate moved 0.45 → 0.32 so the city's warm glow rises through the
-		// evening band (value-pin updated alongside curves.ts).
+		// Gate moved 0.32 → 0.58, tracking cityLightAmount's move to 0.45. The
+		// two are one pair, not two knobs: the glow must stay BEHIND the lights
+		// that cast it, so moving only the lights would have inverted the
+		// ordering and had the haze brighten before its own source.
 		expect(lightingState(18.3, 0.32).cityGlowAmount).toBe(0);
-		expect(lightingState(19, 0.45).cityGlowAmount).toBeGreaterThan(0);
+		expect(lightingState(19, 0.45).cityGlowAmount).toBe(0);
+		expect(lightingState(19.5, 0.7).cityGlowAmount).toBeGreaterThan(0);
 		const mid = lightingState(20, 0.8).cityGlowAmount;
 		expect(mid).toBeGreaterThan(0);
 		expect(mid).toBeLessThanOrEqual(1);
@@ -53,11 +56,22 @@ describe('lighting — unified day/dusk/night SSOT', () => {
 	});
 
 	it('cityLightAmount (discrete lights) gates earlier than the diffuse glow', () => {
-		// 0 in day, comes on at civil twilight (nf 0.15), reaches 1 at deep night.
+		// 0 in day, comes on past nf 0.45, reaches 1 at deep night.
+		//
+		// Gate moved 0.15 → 0.45. At 0.15 the lights did not go OUT until nf had
+		// fallen that far, which in the 05:00-07:00 dawn band is 06:57 — so the
+		// ground was fully daylit (VIIRS floors at 0.55, i.e. off by ~06:24)
+		// while building windows still glowed at up to 37%. Over Dubai, with
+		// sunrise around 05:35, that is broad morning daylight with every tower
+		// lit. Deep night is unchanged: this still returns exactly 1.0 at nf 1.
 		expect(lightingState(12, 0).cityLightAmount).toBe(0);
 		expect(lightingState(18, 0.15).cityLightAmount).toBe(0);
-		expect(lightingState(18.5, 0.3).cityLightAmount).toBeGreaterThan(0);
+		expect(lightingState(18.2, 0.4).cityLightAmount).toBe(0);
+		expect(lightingState(18.5, 0.6).cityLightAmount).toBeGreaterThan(0);
 		expect(lightingState(23, 1).cityLightAmount).toBe(1);
+		// The daylit-tower regression, pinned directly: by mid-dawn the discrete
+		// lights must be effectively out, not at a third of full.
+		expect(lightingState(6.5, 0.5).cityLightAmount).toBeLessThan(0.05);
 		// The integration contract: the discrete lights lead the diffuse skyglow
 		// they cast — at any partial-dusk nf, cityLightAmount ≥ cityGlowAmount, so
 		// the lights are never dimmer than the haze glow above them.

@@ -169,7 +169,12 @@ export const NIGHT_PALETTE = {
 	 * screen px. It cannot resolve roads/buildings — only a soft city blob.
 	 */
 	viirs: {
-		maxAlpha:         0.30,
+		// 0.30 → 0.20. VIIRS is a 583 m/px radiance product: its own blur is the
+		// blob. It is now consumed as a MASK by the post-process grade rather
+		// than composited as visible light, and the road mask above it carries
+		// the structure — so the layer itself only has to seed where light is,
+		// not look like light.
+		maxAlpha:         0.20,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,
 		// Fraction of the altitude gate that survives at ground level. The

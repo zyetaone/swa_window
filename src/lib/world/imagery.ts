@@ -373,7 +373,14 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 		// about 2.3x. Aug-2026 visual review asked for the network to actually
 		// GLOW against the dark terrain: 6.0 lands ~135/255 (~3x) — the streets
 		// read as lit arteries over the VIIRS halo, not faint texture.
-		const roadBrightness = 2.0 + nf * 4.0;
+		// 6.0 → 8.0 at deep night (2.5 + nf*5.5). "Higher city punch, lower night
+		// lights" is one trade, not two changes: VIIRS drops (maxAlpha 0.30 →
+		// 0.20, additive 3.0 → 1.6) and the road network takes over the load it
+		// was carrying. That swap is the whole point — the blob was never the
+		// city, the street grid is. Roads are baked at ~19 m/px against VIIRS's
+		// 583 m/px, so every unit of brightness moved from one to the other buys
+		// roughly thirty times the spatial detail.
+		const roadBrightness = 2.5 + nf * 5.5;
 		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
 		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
 		// field to the Three side. Those overlays (CityLightField bokeh,

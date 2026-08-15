@@ -92,13 +92,23 @@ describe('viirsLayerAlpha', () => {
 		}
 		// Not merely ordered — meaningfully separated. A near-flat ramp would
 		// satisfy monotonicity while still reading as one constant on screen.
-		expect(alphas[alphas.length - 1] - alphas[0]).toBeGreaterThan(0.05);
+		// Threshold scaled with maxAlpha 0.30 → 0.20 (0.05 × 2/3 = 0.033). The
+		// span is proportional to the ceiling, so holding the old absolute
+		// number would have failed a change that did not flatten the ramp at
+		// all — it only lowered it.
+		expect(alphas[alphas.length - 1] - alphas[0]).toBeGreaterThan(0.033);
 	});
 
 	it('holds the deep-night level at the reference altitude', () => {
 		// 30,000 ft is the night altitude the city shows sit at. Guards against a
 		// maxAlpha edit silently changing the look while the ratios still pass.
-		expect(viirsLayerAlpha(1.0, 5.0, 30_000, DEFAULT_BOOST)).toBeCloseTo(0.25, 2);
+		//
+		// 0.25 → 0.1667 with maxAlpha 0.30 → 0.20, exactly proportional (×2/3),
+		// which is the evidence the reduction was a clean scale and not a shape
+		// change. VIIRS is now consumed as a MASK by the grade rather than
+		// composited as visible light, with the road mask carrying the street
+		// structure it used to smother.
+		expect(viirsLayerAlpha(1.0, 5.0, 30_000, DEFAULT_BOOST)).toBeCloseTo(0.1667, 2);
 	});
 
 	it('goes inert if alphaBoost is raised — the regression, pinned', () => {

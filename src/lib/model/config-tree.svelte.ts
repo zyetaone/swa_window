@@ -275,7 +275,24 @@ export const world = $state({
 	bloomSigma: 4.5, // bloom spread (wider VIIRS glow)
 	buildingsEnabled: true,
 	buildingEmissiveMax: 0.6, // max window-glow intensity at night
-		additiveStrength: 3.0, // emissive boost on lit pixels
+		// 3.0 → 1.6. VIIRS is now used as a MASK rather than as light itself
+		// (hash-palette.ts), so the additive no longer has to carry the whole
+		// city on its own — the road mask underneath supplies the structure.
+		// Held at the old 3.0 on top of a sharpened mask, cities read as a
+		// solid amber sheet.
+		additiveStrength: 1.6, // emissive boost on lit pixels
+		// Mask shaping — the "photoshop" controls.
+		// maskGamma > 1 pulls the mask toward its bright cores, so the soft
+		// VIIRS halo falls away and the roads / lit building profiles read
+		// through the gaps instead of drowning in the aggregate. 1.0 = the old
+		// unsharpened behaviour.
+		nightMaskGamma: 1.8,
+		// District-scale patchiness, ± this fraction. Real city light is uneven;
+		// a flat field reads as a printed map.
+		nightMaskNoise: 0.35,
+		// Atmospheric scintillation on the brighter cells. Deliberately small —
+		// this should be felt, not seen. 0 disables.
+		nightGlimmer: 0.12,
 		moonlightIntensity: 0.08,
 	nightExposure: 1.15, // 0.95 → 1.15 (Aug-2026 review): global night lift — the wall read too dark at deep night
 	darkVoidStrength: 0.01, // dark-crush floor (nearly off)

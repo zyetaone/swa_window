@@ -434,6 +434,9 @@ export class CesiumManager {
 				() => this.#model.config.world.additiveStrength,
 				() => this.#model.config.world.dayContrast,
 				() => this.#model.config.world.dayVibrance,
+				() => this.#model.config.world.nightMaskGamma,
+				() => this.#model.config.world.nightMaskNoise,
+				() => this.#model.config.world.nightGlimmer,
 			);
 			// installHashPalette flips aero-color-grade.enabled directly, behind
 			// #syncImagery's gate — invalidate so the next tick re-writes it.

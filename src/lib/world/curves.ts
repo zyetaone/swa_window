@@ -241,7 +241,17 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	// twilight in it — gating until nf 0.45 left the 18:30-19:30 "evening"
 	// band with no warm presence at all once the veil was deleted. Smooth
 	// gate still reaches exactly 1 at deep night (nf = 1).
-	_state.cityGlowAmount = nf <= 0.32 ? 0 : smoothstep((nf - 0.32) / 0.68);
+	// Gate raised 0.32 → 0.58 to STAY BEHIND cityLightAmount, which moved to
+	// 0.45. The ordering is the contract — lights come on first, then the glow
+	// they throw into the haze — and it would have inverted if only one of the
+	// pair moved. Glow leading its own source is the giveaway that a night sky
+	// was assembled rather than lit.
+	//
+	// Both ends improve. At dusk the sequence is now lights ~18:36, glow ~18:57,
+	// instead of lights at 18:04 — a second past sunset, which was always too
+	// eager. At dawn glow clears at ~06:20 just before the lights at ~06:36, so
+	// the haze brightens out from under them rather than after them.
+	_state.cityGlowAmount = nf <= 0.58 ? 0 : smoothstep((nf - 0.58) / 0.42);
 
 	// Discrete city lights (streetlights, lit windows, the Three carpet + neon
 	// that derive from VIIRS) come on TOGETHER through civil twilight — ONE
@@ -250,7 +260,30 @@ export function lightingState(timeOfDay: number, nightFactor: number, sunElevSin
 	// neon nf-0.15; they now share this). Gated 0.15, ahead of the diffuse
 	// cityGlowAmount above by design: the lights come on first, then the glow
 	// they throw into the haze. smoothstep reaches exactly 1 at deep night.
-	_state.cityLightAmount = nf <= 0.15 ? 0 : smoothstep((nf - 0.15) / 0.85);
+	// ─── GATE RAISED 0.15 → 0.45: LIGHTS MUST GO OUT WITH THE NIGHT ──────────
+	// The gate is not just "when do lights come on", it is also "when do they go
+	// OUT", and at 0.15 they went out far too late. Both ends read the same
+	// nightFactor, but the ground layers floor it at 0.55 while this floored at
+	// 0.15, so the two disagreed about when night ended by half an hour:
+	//
+	//   time   nightFactor   cityLight(old)   VIIRS
+	//   06:00     0.707          0.726        0.424
+	//   06:30     0.500          0.369        0.000   ← ground daylit, towers lit
+	//   06:45     0.354          0.145        0.000
+	//   07:00     0.000          0.000        0.000
+	//
+	// So from ~06:24 the ground was fully daylit while building windows still
+	// glowed at up to 37%, for a full half hour. Over Dubai — sunrise ~05:35 in
+	// summer — that is broad morning daylight with every tower still lit, which
+	// is the single most obvious "this is fake" tell the wall can produce.
+	//
+	// 0.45 puts the extinguish in step with the ground stack: buildings are down
+	// to ~1% by 06:30 instead of 37%.
+	//
+	// Deep night is UNCHANGED and deliberately so — at nf = 1 this still returns
+	// exactly 1.0, so the lit-window look that already reads well keeps its full
+	// brightness. Only the twilight schedule tightens.
+	_state.cityLightAmount = nf <= 0.45 ? 0 : smoothstep((nf - 0.45) / 0.55);
 	// Stars from late dusk; moon a touch earlier.
 	_state.starVisibility = clamp((nf - 0.4) * 1.5, 0, 1);
 	_state.moonContribution = clamp((nf - 0.15) * 1.18, 0, 1);
