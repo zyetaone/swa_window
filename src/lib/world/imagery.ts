@@ -166,9 +166,13 @@ export async function setupImagery(): Promise<void> {
 				: tileBase
 					? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
 					: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-			// The composite is baked z4–12 (raw cartodb goes to z18; beyond 12
-			// Cesium upsamples, which the glow modulation tolerates fine).
-			useComposite ? 12 : 18, useComposite ? 4 : 0, !!tileBase,
+			// The composite is baked z4–12 — and so is the local cartodb-dark
+			// fallback (packager zoomRange [4,12]); beyond 12 Cesium upsamples,
+			// which the glow modulation tolerates fine. Only the remote CDN
+			// serves z0–18. Keying the clamp on `tileBase`, not `useComposite`:
+			// an older cache without viirs-roads must not 404-churn z13+ tiles
+			// against the local server.
+			tileBase ? 12 : 18, tileBase ? 4 : 0, !!tileBase,
 		);
 		if (_roadMaskLayer) {
 			_roadMaskLayer.alpha = 0;
