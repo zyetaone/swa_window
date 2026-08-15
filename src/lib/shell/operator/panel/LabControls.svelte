@@ -42,7 +42,7 @@
 	}}>
 		<option value="cesium">Cesium (DOM effects)</option>
 		<option value="hybrid">Hybrid (Cesium + Three)</option>
-		<option value="night-lab">Night Lab (variants)</option>
+		<option value="night-lab">Night Lab (enhance A–G)</option>
 	</select>
 </fieldset>
 

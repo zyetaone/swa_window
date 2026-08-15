@@ -407,6 +407,11 @@ export class CesiumManager {
 		// These were one flag. That made `performance` (the shipped Pi default)
 		// render night with no glow and no grade at all — the tuned bloomSigma
 		// and the whole hash palette were inert on the wall.
+		//
+		// Pi lean (docs/SIMPLIFICATION-DECISIONS.md): quality=false drops
+		// day-only cost (shadows / FXAA / AO). Night bloom + hash stay on via
+		// nightFx — wing/Three stays mounted; cloud sprite count is scaled
+		// separately under performance (cloud-cluster-budget).
 		const quality = mode !== 'performance';
 		const w0 = this.#model.config.world;
 		// The grade now has a DAY half too (dayContrast / dayVibrance in

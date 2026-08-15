@@ -93,7 +93,7 @@
 	<h4>Display</h4>
 	<label class="quality">
 		<span class="quality-label">
-			<span>Quality</span>
+			<span>Quality (fleet)</span>
 			<span class="quality-value">{cfg.world.qualityMode}</span>
 		</span>
 		<select
@@ -108,7 +108,9 @@
 	</label>
 	<!-- Toggling Three ON clears the persisted low-fps auto-disable so it
 	     does not clobber the choice on next boot. -->
-	<Toggle label="Three.js Overlay" checked={cfg.world.useThreeOverlay} onchange={(e) => {
+	<!-- Daisy-chain: peer-synced + ambient-persisted — all panes share wing/Three
+	     and quality like one multi-monitor chain (see SIMPLIFICATION-DECISIONS). -->
+	<Toggle label="Three.js Overlay (fleet)" checked={cfg.world.useThreeOverlay} onchange={(e) => {
 		const on = e.currentTarget.checked;
 		patch('world.useThreeOverlay', on);
 		if (on) clearOverlayDisabled();

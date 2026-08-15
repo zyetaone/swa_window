@@ -172,7 +172,11 @@
 		// is sparse; dens=1 keeps the prior storm budget (95 / 32). Seeded rng
 		// is sequential — lower dens is a strict PREFIX of the same field
 		// (3-Pi identical). See clusterCountsForDensity().
-		const { distant: distantCount, close: closeCount } = clusterCountsForDensity(dens);
+		// Pi lean (wing stays on): under qualityMode performance, cut sprite
+		// count — daisy-chained fleet shares the tier via ambient peer-sync.
+		const { distant: distantCount, close: closeCount } = clusterCountsForDensity(dens, {
+			performance: model.config.world.qualityMode === 'performance',
+		});
 
 		for (let c = 0; c < distantCount; c++) {
 			emitCluster(textures, pool, 42_000, 265_000, 8000, 16000, 9, 8, 0.03, rng);

@@ -99,10 +99,22 @@ pulling full load while the SoC collapses.
 
 Admin tiles show **SHEDding** / live UV·cap·throt flags. Summary counts `shedding` and `throttledLive`.
 
+## Product lean decisions (2026-08)
+
+See `docs/SIMPLIFICATION-DECISIONS.md`. Summary:
+
+- **Wing stays on** fielded Pis (`useThreeOverlay` default true).
+- **Daisy-chain:** quality + Three peer-sync and ambient-persist (whole wall).
+- **Pi lean under performance:** day shadows/FXAA/AO off; Three **cloud count**
+  scaled by `PERFORMANCE_CLOUD_COUNT_SCALE` (wing still mounted). Night bloom /
+  hash palette remain on for the city-lights look.
+- **Night Lab:** enhance further (DEV `?lab=1`); not deleted.
+
 ## Related code
 
 - Quality presets: `src/lib/world/cesium-setup.ts` (`CESIUM_QUALITY_PRESETS`)  
 - Default `qualityMode: 'performance'`: `config-tree.svelte.ts`  
+- Cloud budget: `world/three/cloud-cluster-budget.ts`  
 - Liveness / reload budget: `lifecycle-liveness.ts`  
 - Thermal policy + guard: `src/lib/fleet/throttle.ts`, `thermal-guard.svelte.ts`  
 - Credits / product owner: `src/lib/credits.ts`

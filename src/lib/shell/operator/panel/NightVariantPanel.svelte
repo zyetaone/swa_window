@@ -1,9 +1,13 @@
 <script lang="ts">
 	/**
 	 * NightVariantPanel — visual A/B comparison harness for night-light rendering
-	 * variants. 7 base variants (A-G) + stackable H. Mounted by /playground in
-	 * "Night Lab" mode. Receives the shared AeroWindow model; owns its own
-	 * variant state + Cesium mutation effects.
+	 * variants. 7 base variants (A-G) + stackable H. Mounted from /?lab=1 →
+	 * Night Lab (DEV only, dynamic import — never on the Pi).
+	 *
+	 * ─── STATUS (docs/SIMPLIFICATION-DECISIONS.md) ───────────────────────────
+	 * Night look is NOT frozen: enhance A–G and hand-port winners into
+	 * hash-palette.ts / config-tree. Do NOT add variant I/J/K. Promote or
+	 * delete; do not grow the set.
 	 *
 	 * Variants represent genuinely different aesthetic choices, not parameter
 	 * tweaks on the same idea. Variant G is the Apr-15 hash-palette resurrection.
@@ -152,7 +156,7 @@
 
 	function resetCamera(): void {
 		model.flight.setLocationWithSky('hyderabad', 'night');
-		model.flight.altitude = GLOBAL_DEFAULTS.altitude;
+		model.setAltitude(GLOBAL_DEFAULTS.altitude);
 	}
 
 	function resetVariantDefaults(): void {
@@ -163,7 +167,9 @@
 
 	function resetStackH(): void { Object.assign(tunablesH, H_DEFAULTS); }
 	function resetAll(): void {
-		model.timeOfDay = GLOBAL_DEFAULTS.timeOfDay; model.flight.altitude = GLOBAL_DEFAULTS.altitude;
+		// Setters clamp + track overrides — do not raw-assign time/altitude.
+		model.setTime(GLOBAL_DEFAULTS.timeOfDay);
+		model.setAltitude(GLOBAL_DEFAULTS.altitude);
 		Object.assign(tunablesA, A_DEFAULTS); Object.assign(tunablesB, B_DEFAULTS);
 		Object.assign(tunablesC, C_DEFAULTS); Object.assign(tunablesD, D_DEFAULTS);
 		Object.assign(tunablesE, E_DEFAULTS); Object.assign(tunablesF, F_DEFAULTS);
@@ -400,7 +406,11 @@
 <aside class="panel" aria-label="Variant comparison">
 	<header>
 		<h2>Night Lab</h2>
-		<p class="hint">Hyderabad · autopilot off · ultra quality</p>
+		<p class="hint">DEV · ?lab=1 · enhance A–G · promote winners to production</p>
+		<p class="policy" role="note">
+			Night look still open. Tune existing variants; hand-port into
+			<code>hash-palette.ts</code> / config. No new letter variants.
+		</p>
 	</header>
 
 	<fieldset class="globals">
@@ -506,7 +516,18 @@
 <style>
 	.panel { position: absolute; top: 16px; left: 16px; width: 320px; max-height: calc(100vh - 32px); overflow-y: auto; background: rgba(10, 10, 30, 0.88); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 16px; z-index: 30; backdrop-filter: blur(8px); color: #eee; }
 	.panel header h2 { font-size: 14px; margin: 0 0 4px; color: #fff; letter-spacing: 0.5px; }
-	.panel header .hint { margin: 0 0 12px; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+	.panel header .hint { margin: 0 0 6px; font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+	.panel header .policy {
+		margin: 0 0 12px;
+		font-size: 11px;
+		line-height: 1.35;
+		color: #c9b27c;
+		background: rgba(255, 191, 39, 0.08);
+		border: 1px solid rgba(255, 191, 39, 0.2);
+		border-radius: 6px;
+		padding: 8px 10px;
+	}
+	.panel header .policy code { font-size: 10px; color: #e8d5a3; }
 	fieldset { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; margin: 0 0 12px; padding: 8px 10px; }
 	fieldset legend { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #666; padding: 0 6px; }
 	.variants .row { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: baseline; padding: 6px 4px; border-radius: 6px; cursor: pointer; transition: background 0.15s ease; }

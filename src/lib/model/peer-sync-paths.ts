@@ -10,6 +10,11 @@
  * readable.
  *
  * Device-local chrome (role FOV, etc.) stays out of this list.
+ *
+ * Daisy-chain (fleet wall = one display system): `world.useThreeOverlay` and
+ * `world.qualityMode` stay in this list AND in AMBIENT_PERSIST so one pane's
+ * lighting tier fans out and survives reboot — like monitors on a shared
+ * video chain. See docs/SIMPLIFICATION-DECISIONS.md.
  */
 import { QUALITY_MODES } from '$lib/types';
 

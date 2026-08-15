@@ -13,13 +13,9 @@ import { getContext, setContext, hasContext } from 'svelte';
 import { clamp, getSkyState, nightFactor as nightFactorAt, dawnDuskFactor as dawnDuskFactorAt, readByPath } from '$lib/utils';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { isValidWeather, type SkyState, type LocationId, type WeatherType, type QualityMode, type DisplayMode, type SimulationContext, type VantageBeat } from '$lib/types';
-import {
-	parseVideoPayload,
-	parseSlideshowPayload,
-	encodeSlideshowPayload,
-	type SlideshowSpec,
-} from '$lib/fleet/display-payload';
-import { loadDisplayMode, saveDisplayMode, peekDisplayModeSavedAt } from '$lib/fleet/display-mode-persist';
+import { type SlideshowSpec } from '$lib/fleet/display-payload';
+import { loadDisplayMode } from '$lib/fleet/display-mode-persist';
+import { applyDisplayMode } from '$lib/model/aero-window-display';
 import { loadPersistedState, hasPersistedState, type PersistedState } from '$lib/model/persistence';
 import { AMBIENT_PERSIST_PATHS, type AmbientValue, type PeerSyncPath } from '$lib/model/peer-sync-paths';
 import { pickNextLocation } from '$lib/director/scenarios';
@@ -577,10 +573,7 @@ export class AeroWindow {
 	 * media modes (stay on current) so a bad admin push cannot blank the wall.
 	 * flight always applies and clears media state.
 	 *
-	 * `opts.decidedAtMs` — wall-clock of the decision (admin stamp or local now).
-	 * Stale fleet SSE (decidedAtMs < last savedAt) is ignored so a local Escape
-	 * is not undone by replaying an older set_mode. `opts.force` skips that gate
-	 * (boot restore from localStorage).
+	 * Implementation: `applyDisplayMode` in aero-window-display.ts (LWW + parse).
 	 *
 	 * @returns true if the mode was applied; false if rejected (also logged).
 	 */
@@ -589,63 +582,7 @@ export class AeroWindow {
 		payload?: string,
 		opts?: { decidedAtMs?: number; force?: boolean },
 	): boolean {
-		const at =
-			typeof opts?.decidedAtMs === 'number' && Number.isFinite(opts.decidedAtMs)
-				? opts.decidedAtMs
-				: Date.now();
-		if (!opts?.force) {
-			const prevAt = peekDisplayModeSavedAt();
-			if (prevAt > 0 && at < prevAt) {
-				this.telemetry.recordEvent('info', {
-					event: 'set_mode_rejected',
-					mode,
-					reason: 'stale_decision',
-					decidedAtMs: at,
-					savedAt: prevAt,
-				});
-				return false;
-			}
-		}
-
-		if (mode === 'flight') {
-			this.displayMode = 'flight';
-			this.videoUrl = '';
-			this.slideshow = null;
-			saveDisplayMode('flight', undefined, at);
-			return true;
-		}
-		if (mode === 'video') {
-			const url = parseVideoPayload(payload);
-			if (!url) {
-				this.telemetry.recordEvent('info', {
-					event: 'set_mode_rejected',
-					mode,
-					reason: 'invalid_video_url',
-				});
-				return false;
-			}
-			this.displayMode = 'video';
-			this.videoUrl = url;
-			this.slideshow = null;
-			saveDisplayMode('video', url, at);
-			return true;
-		}
-		// screensaver = image slideshow
-		const spec = parseSlideshowPayload(payload);
-		if (!spec) {
-			this.telemetry.recordEvent('info', {
-				event: 'set_mode_rejected',
-				mode,
-				reason: 'invalid_slideshow_payload',
-			});
-			return false;
-		}
-		this.displayMode = 'screensaver';
-		this.slideshow = spec;
-		this.videoUrl = '';
-		// Persist the normalized wire form so reload re-parses cleanly.
-		saveDisplayMode('screensaver', encodeSlideshowPayload(spec.urls, spec.intervalSec), at);
-		return true;
+		return applyDisplayMode(this, mode, payload, opts);
 	}
 
 	applyScene(locationId: LocationId, weather?: WeatherType): void {

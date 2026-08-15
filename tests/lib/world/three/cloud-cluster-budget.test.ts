@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { clusterCountsForDensity, drawCluster } from '$lib/world/three/cloud-cluster-budget';
+import {
+	clusterCountsForDensity,
+	drawCluster,
+	PERFORMANCE_CLOUD_COUNT_SCALE,
+} from '$lib/world/three/cloud-cluster-budget';
 import { createSeededRng } from '$lib/world/prng';
 
 describe('clusterCountsForDensity', () => {
@@ -7,8 +11,16 @@ describe('clusterCountsForDensity', () => {
 		expect(clusterCountsForDensity(0)).toEqual({ distant: 8, close: 3 });
 	});
 
-	it('matches prior storm budget at dens=1 (Pi worst-case unchanged)', () => {
+	it('matches full storm budget at dens=1 when not in performance mode', () => {
 		expect(clusterCountsForDensity(1)).toEqual({ distant: 95, close: 32 });
+	});
+
+	it('scales counts down under performance (Pi lean, wing still mounted)', () => {
+		const full = clusterCountsForDensity(1);
+		const lean = clusterCountsForDensity(1, { performance: true });
+		expect(lean.distant).toBe(Math.max(1, Math.round(full.distant * PERFORMANCE_CLOUD_COUNT_SCALE)));
+		expect(lean.close).toBe(Math.max(0, Math.round(full.close * PERFORMANCE_CLOUD_COUNT_SCALE)));
+		expect(lean.distant).toBeLessThan(full.distant);
 	});
 
 	it('scales between and clamps outside 0..1', () => {

@@ -10,11 +10,24 @@
  */
 import { clamp } from '$lib/utils';
 
-export function clusterCountsForDensity(dens: number): { distant: number; close: number } {
+/**
+ * Scale applied under world.qualityMode === 'performance' (Pi default).
+ * Keeps wing/Three mounted (product decision: wing on fielded Pis) while
+ * cutting sprite load ~45%. dens=1 worst case was the Pi budget ceiling.
+ */
+export const PERFORMANCE_CLOUD_COUNT_SCALE = 0.55;
+
+export function clusterCountsForDensity(
+	dens: number,
+	opts?: { performance?: boolean },
+): { distant: number; close: number } {
 	const d = clamp(dens, 0, 1);
+	const scale = opts?.performance ? PERFORMANCE_CLOUD_COUNT_SCALE : 1;
 	return {
-		distant: Math.round(8 + d * 87),
-		close: Math.round(3 + d * 29),
+		// At least 1 distant cluster so the field never goes fully empty mid-day
+		// when dens is low and performance scale is on.
+		distant: Math.max(1, Math.round((8 + d * 87) * scale)),
+		close: Math.max(0, Math.round((3 + d * 29) * scale)),
 	};
 }
 
