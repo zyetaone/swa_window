@@ -9,17 +9,32 @@
 import { describe, it, expect, vi } from 'vitest';
 import { tap, TAP_TUNING } from '$lib/shell/use-tap';
 
-const { MOVE_TOLERANCE_PX } = TAP_TUNING;
+const { MOVE_TOLERANCE_PX, MAX_PRESS_MS } = TAP_TUNING;
 
 function harness() {
 	const node = document.createElement('div');
 	const onTap = vi.fn();
 	const action = tap(node, { onTap });
 
-	const ev = (type: string, x: number, y: number) =>
-		node.dispatchEvent(
-			Object.assign(new Event(type, { bubbles: true }), { clientX: x, clientY: y }),
-		);
+	const ev = (
+		type: string,
+		x: number,
+		y: number,
+		props: { timeStamp?: number; isPrimary?: boolean; button?: number } = {},
+	) => {
+		const e = Object.assign(new Event(type, { bubbles: true }), {
+			clientX: x,
+			clientY: y,
+			...(props.isPrimary !== undefined ? { isPrimary: props.isPrimary } : {}),
+			...(props.button !== undefined ? { button: props.button } : {}),
+		});
+		// timeStamp is a read-only accessor on Event.prototype — shadow it with
+		// an own property so tests can simulate long holds.
+		if (props.timeStamp !== undefined) {
+			Object.defineProperty(e, 'timeStamp', { value: props.timeStamp });
+		}
+		node.dispatchEvent(e);
+	};
 
 	return {
 		onTap,
@@ -38,6 +53,21 @@ function harness() {
 			ev('pointerdown', x, y);
 			ev('pointermove', x + jitter, y);
 			ev('pointerup', x + jitter, y);
+		},
+		/** A hold: down, then up after `heldMs` with no movement. */
+		hold(heldMs: number, x = 100, y = 100) {
+			ev('pointerdown', x, y, { timeStamp: 1000 });
+			ev('pointerup', x, y, { timeStamp: 1000 + heldMs });
+		},
+		/** A secondary finger taps while the first is down. */
+		secondFinger(x = 300, y = 300) {
+			ev('pointerdown', x, y, { isPrimary: false });
+			ev('pointerup', x, y);
+		},
+		/** A right-click press. */
+		rightClick(x = 100, y = 100) {
+			ev('pointerdown', x, y, { button: 2 });
+			ev('pointerup', x, y, { button: 2 });
 		},
 	};
 }
@@ -85,6 +115,38 @@ describe('tap', () => {
 	it('a pointercancel does not fire a tap', () => {
 		const h = harness();
 		h.cancel();    // palm rejection / scroll takeover mid-press
+		expect(h.onTap).not.toHaveBeenCalled();
+		h.destroy();
+	});
+
+	// The blind-coexistence contract, part two: a long hold belongs to the
+	// blind's long-press acceleration (use-blind.svelte.ts arms at ~400 ms).
+	// Releasing a held blind without dragging must not flash the clock.
+	it('does NOT fire for a long press (blind hold)', () => {
+		const h = harness();
+		h.hold(MAX_PRESS_MS + 100);
+		expect(h.onTap).not.toHaveBeenCalled();
+		h.destroy();
+	});
+
+	it('a press just under the hold limit still counts as a tap', () => {
+		const h = harness();
+		h.hold(MAX_PRESS_MS - 100);
+		expect(h.onTap).toHaveBeenCalledTimes(1);
+		h.destroy();
+	});
+
+	it('a second finger mid-press neither fires nor moves the tap origin', () => {
+		const h = harness();
+		h.tap();                    // first finger tap counts
+		h.secondFinger();           // palm / second finger must not
+		expect(h.onTap).toHaveBeenCalledTimes(1);
+		h.destroy();
+	});
+
+	it('right-click is not a tap', () => {
+		const h = harness();
+		h.rightClick();
 		expect(h.onTap).not.toHaveBeenCalled();
 		h.destroy();
 	});
