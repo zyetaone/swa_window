@@ -48,6 +48,7 @@ import { resolveLocalHours } from '$lib/model/local-time';
 // one number: the receiver bounds incoming schedules against it (transitionDelayMs).
 import { TRANSITION_DELAY_MS } from '$lib/fleet/protocol';
 import { SceneTimers } from './aero-window-timers';
+import { SimulationContextBuilder } from './aero-window-context';
 
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -156,7 +157,6 @@ export class AeroWindow {
 	// Read internally via #createContext to feed engines; no external consumer.
 	#time = 0;
 	// Wall-clock of the previous tick (Date.now() ms). 0 = no frame seen yet.
-	#lastWallMs = 0;
 
 	// Private perf counters. 0 = no frame seen yet, so the first frame only
 	// establishes the baseline and contributes no period sample.
@@ -662,52 +662,19 @@ export class AeroWindow {
 		this.telemetry.recordFrame(performance.now() - frameStart);
 	}
 
-	// Reuse a single context object each frame — avoids per-frame GC pressure
-	#ctx: SimulationContext = {
-		time: 0, lat: 0, lon: 0, altitude: 0, heading: 0, pitch: 0, bankAngle: 0,
-		weather: 'cloudy', skyState: 'day', nightFactor: 0, dawnDuskFactor: 0,
-		locationId: 'hyderabad', userAdjustingAltitude: false, userAdjustingTime: false,
-		userAdjustingAtmosphere: false, cloudDensity: 0, cloudSpeed: 0, haze: 0,
-		warpFactor: 0,
-		turbulenceLevel: 'light',
+	// Context assembly lives in ./aero-window-context — mechanical marshalling
+	// wrapped around the wall-clock clamp, which has real edge cases (suspended
+	// tab, NTP step-back) that are worth testing without a model.
+	//
+	// tick() itself stays here on purpose: it is the update ORDER, and that is
+	// the thing you want readable in sequence at the top level.
+	readonly #ctxBuilder = new SimulationContextBuilder({
 		camera: _config.camera,
 		director: _config.director,
-	};
+	} as Pick<SimulationContext, 'camera' | 'director'>);
 
 	#createContext(): SimulationContext {
-		const c = this.#ctx;
-		c.time                  = this.#time;
-		// Wall-clock companions to `time`/`delta` — see SimulationContext.
-		// Capped at 5 s so a suspended tab can't teleport the orbit on wake,
-		// and floored at 0 so a runtime NTP step-BACK can't slam orbitAngle /
-		// scenarioProgress far negative (they're integrators — a −3600 s delta
-		// would park the scenario accumulator in a long recovery).
-		const wallMs = Date.now();
-		c.wallTimeSec  = wallMs / 1000;
-		c.wallDeltaSec = this.#lastWallMs === 0
-			? 0
-			: Math.min(Math.max((wallMs - this.#lastWallMs) / 1000, 0), 5);
-		this.#lastWallMs = wallMs;
-		c.lat                   = this.flight.lat;
-		c.lon                   = this.flight.lon;
-		c.altitude              = this.flight.altitude;
-		c.heading               = this.flight.heading;
-		c.pitch                 = this.flight.pitch;
-		c.bankAngle             = this.motion.bankAngle;
-		c.weather               = this.weather;
-		c.skyState              = this.skyState;
-		c.nightFactor           = this.nightFactor;
-		c.dawnDuskFactor        = this.dawnDuskFactor;
-		c.locationId            = this.location;
-		c.userAdjustingAltitude = this.userAdjustingAltitude;
-		c.userAdjustingTime     = this.userAdjustingTime;
-		c.userAdjustingAtmosphere = this.userAdjustingAtmosphere;
-		c.cloudDensity = this.config.atmosphere.clouds.density;
-		c.cloudSpeed   = this.config.atmosphere.clouds.speed;
-		c.haze         = this.config.atmosphere.haze.amount;
-		c.warpFactor   = this.flight.warpFactor;
-		c.turbulenceLevel       = WEATHER_EFFECTS[this.weather].turbulence;
-		return c;
+		return this.#ctxBuilder.build(this, this.#time);
 	}
 
 	// Feed the real, *unclamped* wall-clock gap between frames to telemetry.
