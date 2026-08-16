@@ -49,6 +49,7 @@ import { resolveLocalHours } from '$lib/model/local-time';
 import { TRANSITION_DELAY_MS } from '$lib/fleet/protocol';
 import { SceneTimers } from './aero-window-timers';
 import { SimulationContextBuilder } from './aero-window-context';
+import { decideBoot, DEV_NIGHT_HOUR } from './aero-window-boot';
 
 
 // ─── User override state ──────────────────────────────────────────────────────
@@ -235,13 +236,18 @@ export class AeroWindow {
 		// stored one of those loads as {} and would otherwise look like a browser
 		// that had never run the app — firing this branch and forcing Real Time
 		// off for someone who does have state.
-		if (
-			typeof window !== 'undefined'
-			&& import.meta.env.DEV
-			&& !hasPersistedState()
-		) {
+		// Gates resolved together in ./aero-window-boot — each one below has
+		// broken before, and each failed silently as "the wall is showing the
+		// wrong thing" rather than as an error.
+		const boot = decideBoot({
+			isDev: import.meta.env.DEV,
+			hasWindow: typeof window !== 'undefined',
+			hasPersisted: hasPersistedState(),
+			syncToRealTime: this.syncToRealTime,
+		});
+		if (boot.applyDevNightOverride) {
 			this.syncToRealTime = false;
-			this.timeOfDay = 22;
+			this.timeOfDay = DEV_NIGHT_HOUR;
 		}
 
 		// Move the flight to the resolved boot location. applyShowOpening only
@@ -254,11 +260,12 @@ export class AeroWindow {
 		// a persisted setLocation() recomputes the identical orbit.
 		this.flight.setLocationWithSky(this.location, this.skyState);
 
-		// Gate on syncToRealTime: the recurring sync (+page.svelte) is gated, so
-		// an ungated boot call clobbered timeOfDay and then froze — killing both
-		// the DEV deep-night default above and any persisted syncToRealTime:false
-		// kiosk's show-opening time.
-		if (typeof window !== 'undefined' && this.syncToRealTime) {
+		// Gated on syncToRealTime (matching the recurring sync in +page.svelte)
+		// AND on the dev override, which would otherwise be overwritten by the
+		// real hour one line after being set. Previously that exclusion was
+		// implicit — it worked only because the override had just mutated
+		// syncToRealTime and this re-read it.
+		if (boot.syncTimeFromSystem) {
 			this.updateTimeFromSystem();
 		}
 
