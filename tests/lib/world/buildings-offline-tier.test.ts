@@ -9,6 +9,7 @@
  * which tier is allowed to draw.
  */
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
 import { extrusionsFromGeojson } from '$lib/world/buildings-geojson';
 import { groundAltM } from '$content/locations';
 
@@ -146,7 +147,27 @@ describe('the city cache does not outlive its viewer', () => {
 	});
 });
 
-describe('the packaged data this tier depends on is real', () => {
+/**
+ * `data/` is gitignored in full (.gitignore:41) — it is packager OUTPUT, tens
+ * of thousands of tiles, deliberately not in the repo. So this block can only
+ * run where the packager has been run: a dev machine or the packaging job.
+ *
+ * It was originally unconditional, which passed locally and took CI red on the
+ * first push — the exact hazard of asserting against files the repo does not
+ * contain. Made conditional rather than deleted: the shape of the packager's
+ * output is worth checking wherever it actually exists, and the shape
+ * assertions above already cover the parser itself on every run, from inline
+ * fixtures, so CI is not left with a hole.
+ *
+ * The skip is announced rather than silent — a quietly-skipped test reads as a
+ * passing one.
+ */
+const packagedData = existsSync('data/buildings');
+if (!packagedData) {
+	console.info('[buildings-offline-tier] data/buildings absent — packaged-data checks skipped');
+}
+
+describe.runIf(packagedData)('the packaged data this tier depends on is real', () => {
 	it('parses the shipped city files into usable extrusions', async () => {
 		// Guards the tier end-to-end short of the GPU: if the packager output
 		// ever changes shape, this fails here rather than as an empty sky on
