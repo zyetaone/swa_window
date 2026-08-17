@@ -9,7 +9,7 @@
  * which tier is allowed to draw.
  */
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { extrusionsFromGeojson } from '$lib/world/buildings-geojson';
 import { groundAltM } from '$content/locations';
 
@@ -148,24 +148,61 @@ describe('the city cache does not outlive its viewer', () => {
 });
 
 /**
- * `data/` is gitignored in full (.gitignore:41) — it is packager OUTPUT, tens
- * of thousands of tiles, deliberately not in the repo. So this block can only
- * run where the packager has been run: a dev machine or the packaging job.
+ * `data/` is gitignored — it is packager OUTPUT, 189 MB of raster tiles from
+ * CARTO / EOX / Esri that we are not licensed to redistribute.
  *
- * It was originally unconditional, which passed locally and took CI red on the
- * first push — the exact hazard of asserting against files the repo does not
- * contain. Made conditional rather than deleted: the shape of the packager's
- * output is worth checking wherever it actually exists, and the shape
- * assertions above already cover the parser itself on every run, from inline
- * fixtures, so CI is not left with a hole.
+ * `data/buildings` is the documented exception and IS tracked (see .gitignore):
+ * ~1.3 MB of OSM footprints under ODbL, and the only source for the offline
+ * tier. Ignoring it made that tier structurally undeliverable, since git pull
+ * is the deploy mechanism.
  *
- * The skip is announced rather than silent — a quietly-skipped test reads as a
- * passing one.
+ * So these blocks now run everywhere, CI included. The guard stays anyway: it
+ * costs one syscall and it keeps the file honest on a checkout where the
+ * exception has been reverted, rather than failing with ENOENT — which is
+ * exactly how the unconditional version took main red on its first push.
+ *
+ * The skip announces itself. A silently-skipped test reads as a passing one.
  */
 const packagedData = existsSync('data/buildings');
 if (!packagedData) {
 	console.info('[buildings-offline-tier] data/buildings absent — packaged-data checks skipped');
 }
+
+describe.runIf(packagedData)('every city that should have a skyline has one packaged', () => {
+	it('covers each hasBuildings location in the catalogue', async () => {
+		// The silent failure this prevents: adding a city to the catalogue with
+		// hasBuildings:true but no packaged extract. On a device with an Ion
+		// token nothing looks wrong — tier 1 covers it. On a tokenless one the
+		// city renders with terrain and no skyline, which is indistinguishable
+		// from the tier being broken.
+		//
+		// Runs in CI now that data/buildings is tracked, so the catalogue and
+		// the packaged data cannot drift apart unnoticed.
+		const { LOCATIONS } = await import('$content/locations');
+		const missing = LOCATIONS
+			.filter((l) => l.hasBuildings)
+			.map((l) => l.id)
+			.filter((id) => !existsSync(`data/buildings/${id}.geojson`));
+		expect(
+			missing,
+			`catalogue locations with hasBuildings:true but no packaged extract: ${missing.join(', ')}. `
+				+ 'Run tools/tile-packager for the new city, or set hasBuildings:false.',
+		).toEqual([]);
+	});
+
+	it('ships no extract that no location asks for', async () => {
+		// The other direction. These files are in git now, so dead weight is
+		// permanent weight — a renamed or removed city leaves its extract behind
+		// and nothing ever notices.
+		const { LOCATIONS } = await import('$content/locations');
+		const wanted = new Set(LOCATIONS.filter((l) => l.hasBuildings).map((l) => l.id));
+		const stray = readdirSync('data/buildings')
+			.filter((f) => f.endsWith('.geojson'))
+			.map((f) => f.replace(/\.geojson$/, ''))
+			.filter((id) => !wanted.has(id as never));
+		expect(stray, `packaged extracts no catalogue location uses: ${stray.join(', ')}`).toEqual([]);
+	});
+});
 
 describe.runIf(packagedData)('the packaged data this tier depends on is real', () => {
 	it('parses the shipped city files into usable extrusions', async () => {

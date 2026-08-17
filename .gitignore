@@ -39,6 +39,24 @@ tile-server/*.lock
 
 # Runtime content (pushed bundles + uploaded assets)
 data/
+# ...EXCEPT the OSM vector extracts. See docs note below.
+#
+# data/ is packager OUTPUT and rightly ignored — 189 MB of raster tiles from
+# CARTO / EOX / Esri, none of which we are licensed to redistribute, so caching
+# them in the repo would be a WORSE licence position than streaming them.
+#
+# data/buildings is different on both counts. It is ~1.3 MB of OSM footprints
+# under ODbL — free to redistribute with attribution, which /wiki already
+# carries — and it is the ONLY source for the offline buildings tier
+# (world/buildings-geojson). Ignoring it made that tier structurally
+# undeliverable: install.sh points TILE_DIR at ${INSTALL_DIR}/data, inside the
+# git checkout, and git pull IS the deploy mechanism — so an ignored path is one
+# the fleet can never receive. Tracking it means the tier ships with the code.
+#
+# data/roads stays ignored: same licence, but nothing consumes /api/roads/:city
+# yet, so it would be 4.1 MB of speculation.
+!data/buildings/
+!data/buildings/*.geojson
 
 # graphify knowledge-graph output (regenerable)
 graphify-out/
