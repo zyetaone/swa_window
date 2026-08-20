@@ -162,7 +162,7 @@ export function roadClassAlpha(cls: RoadClass, base: number, altitudeFt: number)
 
 interface CityRoads {
 	/** One primitive per class present — per-class width and one alpha uniform. */
-	byClass: Map<RoadClass, { primitive: CesiumType.Primitive; color: CesiumType.Color }>;
+	byClass: Map<RoadClass, { primitive: CesiumType.Primitive; material: CesiumType.Material }>;
 }
 
 /**
@@ -261,11 +261,19 @@ export async function loadOfflineRoads(
 				// color uniform, so the per-frame cost of the entire grid is one
 				// alpha write per class — not a per-instance attribute update
 				// across thousands of geometries.
-				const color = C.Color.fromCssColorString('#ffd9a0').withAlpha(0);
+				// ⚠ MUTATE material.uniforms.color, NOT THE COLOR PASSED IN.
+				// Material.fromType clones its uniforms, so the object handed to
+				// it is NOT the one the shader reads. Writing to the outer Color
+				// left every line at the alpha it was constructed with — 0 — and
+				// presented as primitives that report show:true, ready:true and
+				// draw absolutely nothing. Cost an afternoon; hold the material.
+				const material = C.Material.fromType('Color', {
+					color: C.Color.fromCssColorString('#ffd9a0').withAlpha(0),
+				});
 				const primitive = new C.Primitive({
 					geometryInstances: instances,
 					appearance: new C.PolylineMaterialAppearance({
-						material: C.Material.fromType('Color', { color }),
+						material,
 						// ⚠ FIXED AT CONSTRUCTION. An opaque-pass primitive ignores
 						// the animated alpha entirely and presents as "the uniform
 						// does nothing".
@@ -277,7 +285,7 @@ export async function loadOfflineRoads(
 				});
 				primitive.show = false;
 				viewer.scene.primitives.add(primitive);
-				byClass.set(cls, { primitive, color });
+				byClass.set(cls, { primitive, material });
 			}
 
 			if (byClass.size > 0) _cityRoads.set(locationId, { byClass });
@@ -334,11 +342,22 @@ export function syncOfflineRoads(
 			if (entry.primitive.show !== want) entry.primitive.show = want;
 			if (!want) continue;
 			const a = roadClassAlpha(cls, base, altitudeFt);
-			// Cesium reads the Color object the Material holds, so mutating alpha
-			// in place is the whole update — no uniform reassignment needed.
-			if (Math.abs(entry.color.alpha - a) > 0.001) entry.color.alpha = a;
+			// The Material's OWN color — see the clone warning at construction.
+			const uc = entry.material.uniforms.color as CesiumType.Color;
+			if (Math.abs(uc.alpha - a) > 0.001) uc.alpha = a;
 		}
 	}
 }
 
 registerViewerTeardown('roads-geojson', resetOfflineRoads);
+
+export function __debugRoads(): unknown {
+	const out: Record<string, unknown> = { viewer: !!_viewer };
+	for (const [id, city] of _cityRoads) {
+		out[id] = [...city.byClass].map(([cls, e]) => ({
+			cls, show: e.primitive.show,
+			alpha: (e.material.uniforms.color as { alpha: number }).alpha,
+		}));
+	}
+	return out;
+}
