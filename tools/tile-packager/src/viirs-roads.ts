@@ -8,6 +8,11 @@
  * real lit area. A floor (default 0.15) keeps a minimum of road glow in
  * sparse-but-real towns — see glowFactor() in viirs-roads-math.ts.
  *
+ * Runtime note: the app keys transparency with colorToAlpha. CartoDB uses
+ * threshold 0.12 (near-black basemap); the composite path uses ~0.03 so this
+ * floor is not keyed out. Keep floor and roadCompositeThreshold in dialogue
+ * (src/lib/world/imagery.ts COLOR_TO_ALPHA).
+ *
  * Reads the existing packager cache, writes a NEW layer alongside it:
  *
  *   input:  <tiles>/cartodb-dark/{z}/{x}/{y}@2x.png      (untouched)

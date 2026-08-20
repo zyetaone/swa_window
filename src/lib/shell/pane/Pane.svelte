@@ -23,20 +23,19 @@
 	const model = useAeroWindow();
 	const isFlight = $derived(model.displayMode === 'flight');
 
-	// A single tap anywhere on the pane toggles the cabin clock. Attached on the
-	// window CONTAINER, not the viewport: `<Blind />` is a SIBLING of
-	// `.window-viewport`, and when the blind is open it lays a full-window
-	// `.blind-grab` overlay on top to catch drag-to-close. A listener on the
-	// viewport therefore never sees a tap in the middle of the window — the
-	// overlay is not a descendant, so nothing bubbles to it. The container is
-	// the nearest ancestor of BOTH, which is where the gesture has to live.
-	// (Found by probing the running kiosk: taps landed on `.blind-grab` and the
-	// handler never fired.)
+	// A single tap anywhere on the pane toggles the cabin clock — flight only.
+	// Video/slideshow are full-bleed content: taps must not pop chrome or fan
+	// clockVisible across the fleet. Attached on the window CONTAINER, not the
+	// viewport: `<Blind />` is a SIBLING of `.window-viewport`, and when the
+	// blind is open it lays a full-window `.blind-grab` overlay on top to catch
+	// drag-to-close. A listener on the viewport never sees a mid-window tap —
+	// the overlay is not a descendant. The container is the nearest ancestor of
+	// BOTH. (Found by probing the running kiosk.)
 	//
 	// Routed through applyConfigPatch so the change is CRDT-stamped and
-	// fleet-synced like every other config write — tap one Pi in a
-	// panorama and all three agree.
+	// fleet-synced — tap one flight pane in a panorama and all three agree.
 	function toggleClock() {
+		if (model.displayMode !== 'flight') return;
 		model.applyConfigPatch?.('shell.clockVisible', !model.config.shell.clockVisible);
 	}
 

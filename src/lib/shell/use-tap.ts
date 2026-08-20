@@ -17,6 +17,9 @@
  * replaced it — the clock is furniture an office passer-by should reach in
  * one touch, and the drag guard already keeps the blind gesture from
  * false-firing.
+ *
+ * Media modes: Pane.svelte no-ops the handler when displayMode !== 'flight'
+ * so video/slideshow taps do not pop the cabin clock.
  */
 
 /** Max px the pointer may travel within one tap before it counts as a drag, not a tap. */

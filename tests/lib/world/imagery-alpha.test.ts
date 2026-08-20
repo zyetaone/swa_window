@@ -171,7 +171,7 @@ describe('COLOR_TO_ALPHA (deep-review SSOT)', () => {
 	// Cesium keys transparent when distance-to-black ≤ threshold. These
 	// values are load-bearing: 0.0 left CartoDB near-black opaque; roads
 	// painted a dark sheet. VIIRS true-black only needs a hairline.
-	it('keeps road threshold above CartoDB near-black (~0.05–0.08)', () => {
+	it('keeps CartoDB road threshold above near-black (~0.05–0.08)', () => {
 		expect(COLOR_TO_ALPHA.roadThreshold).toBeGreaterThanOrEqual(0.1);
 		expect(COLOR_TO_ALPHA.roadThreshold).toBeLessThan(0.25);
 	});
@@ -180,5 +180,16 @@ describe('COLOR_TO_ALPHA (deep-review SSOT)', () => {
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeGreaterThan(0);
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeLessThan(0.05);
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeLessThan(COLOR_TO_ALPHA.roadThreshold);
+	});
+
+	it('uses a lower composite threshold so packager floor glow survives', () => {
+		// floor 0.15 × stroke ~28.6/255 → euclid ≈ 0.03. Composite threshold
+		// must sit above that (keep stroke) but well below CartoDB's 0.12.
+		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeGreaterThan(0.02);
+		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeLessThan(0.06);
+		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeLessThan(COLOR_TO_ALPHA.roadThreshold);
+		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeGreaterThanOrEqual(
+			COLOR_TO_ALPHA.viirsThreshold,
+		);
 	});
 });
