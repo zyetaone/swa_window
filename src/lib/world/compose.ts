@@ -26,6 +26,7 @@ import { mountCesiumClouds, updateCesiumClouds } from './cloud-billboard-layer';
 import { teardownViewerState } from './viewer-lifecycle';
 import { initImagery, setupImagery, syncImagery } from './imagery';
 import { initBuildings, setupBuildings, syncBuildings, syncOfflineBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
+import { initRoads, syncOfflineRoads } from './roads-geojson';
 import { installHashPalette } from './hash-palette';
 import { initAtmosphere, syncAtmosphere } from './atmosphere';
 import { initTerrain, setupTerrain, syncTerrain } from './terrain';
@@ -121,6 +122,7 @@ export class CesiumManager {
 		this.#viewer = new CesiumModule.Viewer(container, VIEWER_OPTIONS);
 		initImagery(CesiumModule, this.#viewer);
 		initBuildings(CesiumModule, this.#viewer);
+		initRoads(CesiumModule, this.#viewer);
 		initAtmosphere(CesiumModule, this.#viewer);
 		initTerrain(CesiumModule, this.#viewer);
 	}
@@ -301,6 +303,12 @@ export class CesiumManager {
 			m.location,
 			m.config.world.buildingsEnabled,
 			m.terrainExaggeration,
+		);
+		// The night street grid, on the same lifecycle as the skyline it sits
+		// under. Hidden outright in daylight, so this costs nothing before dusk.
+		syncOfflineRoads(
+			m.location, m.nightFactor, m.nightLightScale, m.flight.altitude,
+			this.#getBootFade(), m.terrainExaggeration,
 		);
 	}
 

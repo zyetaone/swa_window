@@ -38,7 +38,12 @@ tile-packager/*.lock
 tile-server/*.lock
 
 # Runtime content (pushed bundles + uploaded assets)
-data/
+# `data/*`, NOT `data/` — git does not descend into an excluded DIRECTORY, so a
+# nested `!data/roads/` under a bare `data/` never re-includes anything. That
+# was invisible for data/buildings only because those files were already
+# tracked when the exception was written, and gitignore does not apply to
+# tracked files. Excluding the ENTRIES instead lets the negations below work.
+data/*
 # ...EXCEPT the OSM vector extracts. See docs note below.
 #
 # data/ is packager OUTPUT and rightly ignored — 189 MB of raster tiles from
@@ -53,10 +58,19 @@ data/
 # git checkout, and git pull IS the deploy mechanism — so an ignored path is one
 # the fleet can never receive. Tracking it means the tier ships with the code.
 #
-# data/roads stays ignored: same licence, but nothing consumes /api/roads/:city
-# yet, so it would be 4.1 MB of speculation.
+# data/roads is tracked for the same two reasons, as of the CARTO removal.
+# It is 4.1 MB of ODbL road centrelines, and it is now the ONLY source for the
+# night street grid (world/roads-geojson) — the CartoDB raster it replaced was
+# 132 MB of the tile cache and Enterprise-only for commercial use. The size
+# argument runs the same way: 4.1 MB rides `git pull` to the fleet today, where
+# the 2.7 GB tile rsync never has.
 !data/buildings/
-!data/buildings/*.geojson
+!data/roads/
+
+# ⚠ `data/*` above is ROOT-ANCHORED — a pattern with an internal slash is —
+# while the bare `data/` it replaced matched at ANY depth. This path silently
+# stopped being covered and 18k packager tiles turned up untracked. Re-stated.
+tools/tile-packager/data/
 
 # graphify knowledge-graph output (regenerable)
 graphify-out/

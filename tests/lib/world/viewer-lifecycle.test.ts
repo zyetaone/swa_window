@@ -26,6 +26,7 @@ import '$lib/world/imagery';
 import '$lib/world/terrain';
 import '$lib/world/buildings';
 import '$lib/world/buildings-geojson';
+import '$lib/world/roads-geojson';
 import '$lib/world/atmosphere';
 import '$lib/world/lightning-stage';
 import '$lib/world/cloud-billboard-layer';

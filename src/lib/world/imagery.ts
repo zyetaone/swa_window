@@ -13,7 +13,7 @@
 import type * as CesiumType from 'cesium';
 import { altitudeDetailMix, nightLightGain } from '$lib/world/altitude';
 import { VIIRS_GIBS_BASE } from '$lib/world/viirs-field';
-import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, localTileLayerAvailable, TILE_SERVER_URL } from '$lib/world/cesium-setup';
+import { getSatelliteImagery, checkLocalTileServer, setLocalTilesAvailable, TILE_SERVER_URL } from '$lib/world/cesium-setup';
 import { clamp, smoothstep } from '$lib/utils';
 import { NIGHT_PALETTE } from '$content/compositions/night';
 import { EpsilonGate } from './util';
@@ -23,31 +23,28 @@ import { registerViewerTeardown } from './viewer-lifecycle';
  * Cesium `colorToAlpha` thresholds — SSOT for night imagery keying.
  *
  * Cesium makes a pixel transparent when its distance to `colorToAlpha`
- * (black) is ≤ threshold. Too low → near-black basemap background stays
- * opaque and paints a dark sheet over terrain. Too high → road strokes
- * themselves get keyed out.
+ * (black) is ≤ threshold — evaluated on the RAW sampled colour, BEFORE
+ * brightness/contrast (GlobeFS.glsl sampleAndBlend). Too low → near-black
+ * basemap background stays opaque and paints a dark sheet over terrain.
+ * Too high → road strokes themselves get keyed out.
  *
  * Deep-review findings (shipped twice as silent failures):
  *   - roads: 0.0 only matched exact #000; CartoDB bg is ~#0e1013 → 0.12
  *   - VIIRS: true black NASA tiles → 0.01 hairline is enough
  *
- * Road layers need TWO thresholds (not one):
- *   - CartoDB raw/CDN: near-black background → roadThreshold 0.12
- *   - Baked viirs-roads: true-black background + packager floor glow in dim
- *     cells. A 0.12 key on that path deletes the floor strokes the baker
- *     keeps for sparse towns (euclid ~0.03 after floor 0.15). Composite uses
- *     roadCompositeThreshold so those dim arteries survive.
+ * Only the RAW cartodb/CDN road layer is keyed. The baked viirs-roads
+ * composite carries its own graded alpha channel (road-presence mask baked
+ * by tools/tile-packager — see ALPHA_LO/ALPHA_HI there): the composite
+ * scales background AND strokes by the same VIIRS glowFactor, so NO client
+ * threshold can keep floor-dimmed strokes (~2–6/255) while still keying
+ * bright-core background (~9/255). A 0.12 key deletes the floor; a 0.03 key
+ * renders downtown as a dark sheet. Keying that layer is the bug, at any
+ * threshold — do not reintroduce it.
  */
 export const COLOR_TO_ALPHA = {
 	viirsThreshold: 0.01,
 	/** Raw CartoDB / CDN — clears ~#0e1013 basemap, keeps full strokes. */
 	roadThreshold: 0.12,
-	/**
-	 * Baked viirs-roads composite. Background is true black; keep low enough
-	 * that packager floor glow (tools/tile-packager --floor, default 0.15)
-	 * still keys as road, not transparent.
-	 */
-	roadCompositeThreshold: 0.03,
 } as const;
 
 interface WorldConfig {
@@ -70,7 +67,6 @@ let _baseDaySaturation = 1.0;
 let _baseDayGamma = 1.0;
 let _baseNightGamma = 1.0;
 let _viirsLayer: CesiumType.ImageryLayer | null = null;
-let _roadMaskLayer: CesiumType.ImageryLayer | null = null;
 
 let _lastNightFactor = -1;
 const _viirsShow = new EpsilonGate<boolean>(0, false);
@@ -96,7 +92,6 @@ export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 export function resetImageryViewerState(): void {
 	_baseLayer = null;
 	_viirsLayer = null;
-	_roadMaskLayer = null;
 	_viirsShow.reset();
 	_viirsAlpha.reset();
 	_viirsBrightness.reset();
@@ -208,54 +203,12 @@ export async function setupImagery(): Promise<void> {
 		}
 	} catch (e) { console.warn('[Imagery] VIIRS layer failed:', e); }
 
-	try {
-		// ─── ⚠ THE @2x SUFFIX IS LOAD-BEARING ─────────────────────────────────
-		// The packager's storagePath is `cartodb-dark/{z}/{x}/{y}@2x.png`; a bare
-		// `{y}.png` URL 404s against the packaged cache, and /health lists layer
-		// DIRECTORIES — so this mismatch shipped silently: every local road tile
-		// 404'd while health reported the layer present.
-		//
-		// Prefer the baked viirs-roads composite when the cache has it
-		// (tools/tile-packager `viirs-roads`): road glow pre-multiplied by VIIRS
-		// luminance, so streets bloom only inside real lit areas and this layer
-		// must NOT run alongside the raw cartodb layer (double glow). Raw
-		// cartodb remains the fallback for older caches and the remote CDN path.
-		const useComposite = tileBase && localTileLayerAvailable('viirs-roads');
-		const zoom = roadLayerZoomRange(!!tileBase);
-		_roadMaskLayer = _addLayer(
-			useComposite
-				? `${tileBase}/viirs-roads/{z}/{x}/{y}@2x.png`
-				: tileBase
-					? `${tileBase}/cartodb-dark/{z}/{x}/{y}@2x.png`
-					: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
-			zoom.maximumLevel, zoom.minimumLevel, !!tileBase,
-		);
-		if (_roadMaskLayer) {
-			_roadMaskLayer.alpha = 0;
-			_roadMaskLayer.show = false;
-			_roadMaskLayer.dayAlpha = 0;
-			_roadMaskLayer.nightAlpha = 1;
-			// ─── ⚠ THRESHOLD MUST EXCEED THE TILE'S BACKGROUND ──────────────────
-			// Cesium keys a pixel transparent when its distance to `colorToAlpha`
-			// is <= threshold. At 0.0 only EXACTLY #000000 qualifies, and the
-			// CartoDB dark basemap's background is near-black but NOT black — so
-			// nothing was keyed out and the whole tile composited as an opaque
-			// dark sheet OVER the lit terrain. The layer meant to add street glow
-			// was subtracting ground light instead.
-			// Split thresholds — see COLOR_TO_ALPHA. CartoDB needs 0.12 for
-			// near-black basemap; composite is true black and must keep the
-			// packager's dim floor strokes (sparse towns / VIIRS gaps).
-			_roadMaskLayer.colorToAlpha = C.Color.BLACK;
-			_roadMaskLayer.colorToAlphaThreshold = useComposite
-				? COLOR_TO_ALPHA.roadCompositeThreshold
-				: COLOR_TO_ALPHA.roadThreshold;
-			_roadMaskLayer.saturation = 0.0;
-			// 1.5 → 1.75: more stroke/background separation before brightness
-			// scale — structure without needing a soaky VIIRS underlayer.
-			_roadMaskLayer.contrast = 1.75;
-			_roadMaskLayer.brightness = 1.0;
-		}
-	} catch (e) { console.warn('[Imagery] CartoDB roads failed:', e); }
+	// ─── THE ROAD MASK USED TO BE ADDED HERE ────────────────────────────────
+	// It was a CartoDB `dark_nolabels` raster (and the `viirs-roads` composite
+	// baked from it) — Enterprise-only for commercial use, and 132 MB of the
+	// 139 MB tile cache. Replaced by world/roads-geojson, which draws the same
+	// grid as ODbL vector polylines and still drives its alpha from
+	// roadMaskAlpha() below, so the tuned night curve is unchanged.
 }
 
 function _addLayer(url: string, maximumLevel: number, minimumLevel: number, webMercator: boolean): CesiumType.ImageryLayer | null {
@@ -411,26 +364,5 @@ export function syncImagery(model: ImageryTickInput, bootFade: number): void {
 		_viirsAlpha.update(viirsAlpha, (v) => { _viirsLayer!.alpha = v; });
 		_viirsBrightness.update(viirsBrightness, (v) => { _viirsLayer!.brightness = v; });
 	}
-	if (_roadMaskLayer) {
-		const roadAlpha = roadMaskAlpha(nf, scale, model.altitude, bootFade);
-		// Roads carry the city; VIIRS fills behind (roadMaskAlpha comments).
-		// Deep night brightness lands ~9–10 so thin strokes still read as lit
-		// arteries over a quieter VIIRS halo (2026-08 de-soak).
-		// Prefer baked viirs-roads when present — streets only glow in lit areas.
-		const roadBrightness = 3.0 + nf * 6.5;
-		// ─── ⚠ NOT GATED ON useThreeOverlay ─────────────────────────────────────
-		// This used to be `show = !w.useThreeOverlay`, deferring the ground light
-		// field to the Three side. Those overlays (CityLightField bokeh,
-		// NeonLineLayer) were deleted in 3bf9cf4, and the flag defaults TRUE — so
-		// the guard has been switching the road mask OFF in favour of a renderer
-		// that draws nothing but clouds and the wing. Confirmed live: the layer sat
-		// at show=false on every night frame.
-		// Net effect: night cities had no street-grid light at all, just building
-		// windows floating over unlit ground, which reads as "too dark".
-		// world/three/ has no ground-lighting component; if one is ever added, gate
-		// it there rather than reinstating a flag that silently blanks this layer.
-		_roadMaskLayer.show = true;
-		_roadAlpha.update(roadAlpha, (v) => { _roadMaskLayer!.alpha = v; });
-		_roadBrightness.update(roadBrightness, (v) => { _roadMaskLayer!.brightness = v; });
-	}
+	// Roads: see world/roads-geojson, driven from the same roadMaskAlpha().
 }
