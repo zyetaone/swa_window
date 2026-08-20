@@ -161,8 +161,12 @@ export function roadClassAlpha(cls: RoadClass, base: number, altitudeFt: number)
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 interface CityRoads {
-	/** One primitive per class present — per-class width and one alpha uniform. */
-	byClass: Map<RoadClass, { primitive: CesiumType.Primitive; material: CesiumType.Material }>;
+	/**
+	 * One collection per highway class. Every polyline in a collection shares
+	 * ONE Material instance, so the per-frame cost of the whole grid is one
+	 * alpha write per class — five writes, not thousands.
+	 */
+	byClass: Map<RoadClass, { lines: CesiumType.PolylineCollection; material: CesiumType.Material }>;
 }
 
 /**
@@ -184,12 +188,12 @@ export function hasOfflineRoads(id: LocationId): boolean {
 }
 
 /**
- * Drop all cached primitives. MUST run on every viewer (re)mount.
+ * Drop all cached collections. MUST run on every viewer (re)mount.
  *
  * The remount trap this repo has now hit five times (tileset, imagery layers,
  * EpsilonGates, offline buildings, and this): the map is a module singleton but
  * the VIEWER is not, so after a Cesium auto-retry / HMR / page nav every cached
- * Primitive belongs to a destroyed scene while hasOfflineRoads() still reports
+ * collection belongs to a destroyed scene while hasOfflineRoads() still reports
  * the city as loaded — the loader early-returns, nothing joins the new scene,
  * and the grid is gone until a full reload.
  *
@@ -207,7 +211,21 @@ export function initRoads(C: typeof CesiumType, viewer: CesiumType.Viewer): void
 }
 
 /**
- * Fetch + build the per-class primitives for one city. Idempotent and cached.
+ * Fetch + build the per-class collections for one city. Idempotent and cached.
+ *
+ * ─── ⚠ POLYLINECOLLECTION, NOT Primitive + PolylineGeometry ─────────────────
+ * The obvious construction — GeometryInstances of PolylineGeometry in a single
+ * batched Primitive, the way buildings-geojson batches its footprints — builds
+ * and reports `ready: true`, `show: true`, a valid bounding sphere, and draws
+ * NOTHING. Verified on a real GPU against a hardcoded control line in a
+ * PolylineCollection at the same position, altitude and colour: the control
+ * drew, the Primitive did not. Not depth (tested with depthTest off), not
+ * translucency/OIT (tested opaque), not the lift (tested at 3,000 m), not
+ * arcType.
+ *
+ * Do not "optimise" this back into a batched Primitive without a frame that
+ * proves the lines are on screen. PolylineCollection does its own bucketing
+ * anyway, which is what a batched Primitive was for.
  *
  * Failure is quiet by design: no grid is the state we were already in, and the
  * fiction is never broken with an error.
@@ -230,62 +248,29 @@ export async function loadOfflineRoads(
 			const roads = polylinesFromGeojson(await res.json(), locationId, exaggeration);
 			if (roads.length === 0) return;
 
-			const grouped = new Map<RoadClass, RoadPolyline[]>();
-			for (const r of roads) {
-				const list = grouped.get(r.cls);
-				if (list) list.push(r);
-				else grouped.set(r.cls, [r]);
-			}
-
 			const byClass: CityRoads['byClass'] = new Map();
-			for (const [cls, list] of grouped) {
-				const instances = list.map(
-					(r) =>
-						new C.GeometryInstance({
-							geometry: new C.PolylineGeometry({
-								positions: C.Cartesian3.fromDegreesArrayHeights(
-									withHeights(r.coords, r.altM),
-								),
-								width: ROAD_STYLE[cls].width,
-								// Straight segments. City roads are tens of metres
-								// long, so geodesic subdivision buys nothing visible
-								// and costs vertices the Pi has to transform.
-								arcType: C.ArcType.NONE,
-								vertexFormat: C.PolylineMaterialAppearance.VERTEX_FORMAT,
-							}),
-						}),
-				);
-				if (instances.length === 0) continue;
-
-				// The whole reason for per-class primitives: a Material carries ONE
-				// color uniform, so the per-frame cost of the entire grid is one
-				// alpha write per class — not a per-instance attribute update
-				// across thousands of geometries.
-				// ⚠ MUTATE material.uniforms.color, NOT THE COLOR PASSED IN.
-				// Material.fromType clones its uniforms, so the object handed to
-				// it is NOT the one the shader reads. Writing to the outer Color
-				// left every line at the alpha it was constructed with — 0 — and
-				// presented as primitives that report show:true, ready:true and
-				// draw absolutely nothing. Cost an afternoon; hold the material.
-				const material = C.Material.fromType('Color', {
-					color: C.Color.fromCssColorString('#ffd9a0').withAlpha(0),
+			for (const r of roads) {
+				let entry = byClass.get(r.cls);
+				if (!entry) {
+					// ⚠ HOLD THE MATERIAL, NOT THE COLOR HANDED TO IT.
+					// Material.fromType CLONES its uniforms, so the Color passed in
+					// is not the one the shader reads. Writing to the outer object
+					// left every line pinned at its construction alpha of 0 — a
+					// layer fully present in the scene, drawing nothing.
+					const material = C.Material.fromType('Color', {
+						color: C.Color.fromCssColorString('#ffd9a0').withAlpha(0),
+					});
+					const lines = new C.PolylineCollection();
+					lines.show = false;
+					viewer.scene.primitives.add(lines);
+					entry = { lines, material };
+					byClass.set(r.cls, entry);
+				}
+				entry.lines.add({
+					positions: C.Cartesian3.fromDegreesArrayHeights(withHeights(r.coords, r.altM)),
+					width: ROAD_STYLE[r.cls].width,
+					material: entry.material,
 				});
-				const primitive = new C.Primitive({
-					geometryInstances: instances,
-					appearance: new C.PolylineMaterialAppearance({
-						material,
-						// ⚠ FIXED AT CONSTRUCTION. An opaque-pass primitive ignores
-						// the animated alpha entirely and presents as "the uniform
-						// does nothing".
-						translucent: true,
-					}),
-					allowPicking: false,
-					releaseGeometryInstances: true,
-					asynchronous: true,
-				});
-				primitive.show = false;
-				viewer.scene.primitives.add(primitive);
-				byClass.set(cls, { primitive, material });
 			}
 
 			if (byClass.size > 0) _cityRoads.set(locationId, { byClass });
@@ -312,7 +297,7 @@ function withHeights(coords: number[], altM: number): number[] {
  *
  * Loads on demand, shows exactly the current city, hides everything else, and
  * writes at most one alpha uniform per class — and none at all during the day,
- * where every primitive is simply hidden and costs zero draw calls.
+ * where every collection is simply hidden and costs zero draw calls.
  */
 export function syncOfflineRoads(
 	locationId: LocationId,
@@ -339,7 +324,7 @@ export function syncOfflineRoads(
 	for (const [id, city] of _cityRoads) {
 		const want = lit && id === locationId;
 		for (const [cls, entry] of city.byClass) {
-			if (entry.primitive.show !== want) entry.primitive.show = want;
+			if (entry.lines.show !== want) entry.lines.show = want;
 			if (!want) continue;
 			const a = roadClassAlpha(cls, base, altitudeFt);
 			// The Material's OWN color — see the clone warning at construction.
@@ -350,14 +335,3 @@ export function syncOfflineRoads(
 }
 
 registerViewerTeardown('roads-geojson', resetOfflineRoads);
-
-export function __debugRoads(): unknown {
-	const out: Record<string, unknown> = { viewer: !!_viewer };
-	for (const [id, city] of _cityRoads) {
-		out[id] = [...city.byClass].map(([cls, e]) => ({
-			cls, show: e.primitive.show,
-			alpha: (e.material.uniforms.color as { alpha: number }).alpha,
-		}));
-	}
-	return out;
-}
