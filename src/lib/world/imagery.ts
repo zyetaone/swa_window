@@ -1,12 +1,18 @@
 /**
- * Imagery — Cesium satellite + VIIRS + CartoDB imagery layers.
+ * Imagery — Cesium satellite base + VIIRS night lights.
  *
- * Owns base terrain imagery, VIIRS night lights, and CartoDB road mask.
+ * Owns base terrain imagery and the VIIRS night-light layer. The CartoDB road
+ * mask that used to live here is gone: it was Enterprise-only for commercial
+ * use, and the street grid is now drawn as ODbL vector polylines by
+ * world/roads-geojson. This file still owns the road ALPHA CURVE
+ * (roadMaskAlpha), which that layer imports — see its docstring for why the
+ * curve stayed here while the rendering left.
+ *
  * Setup is async (network). Sync is per-tick with EpsilonGate idempotency.
  *
  * Call lifecycle:
  *   initImagery(C, v)        — once, stores refs
- *   setupImagery()            — once, async, creates 3 imagery layers
+ *   setupImagery()            — once, async, creates 2 imagery layers
  *   syncImagery(model, fade)  — per-tick
  */
 
@@ -275,7 +281,19 @@ export function viirsLayerAlpha(
 }
 
 /**
- * CartoDB road-mask layer alpha.
+ * Road-light alpha curve — "how lit is the street grid right now".
+ *
+ * ⚠ THE NAME IS HISTORICAL. There is no mask layer any more. This was the
+ * alpha of a CartoDB raster imagery layer; that layer was removed for licensing
+ * and the grid is now vector polylines in world/roads-geojson, which imports
+ * this function verbatim. The curve stayed here because it is shared SSOT with
+ * viirsLayerAlpha — the two are tuned against each other and drift apart the
+ * moment they live in different files.
+ *
+ * Verified against the vector renderer on a real GPU at 30,000 ft over
+ * Hyderabad: the range this produces (~0.27 for arteries at the night band)
+ * renders a legible city. A "vector gain" multiplier was tried and reverted —
+ * see ROAD_VECTOR_GAIN's obituary in roads-geojson for the misdiagnosis.
  *
  * Clamped for the same reason as VIIRS: `scale` multiplies in, so at the 5.0
  * default this evaluated to 1.5-3.7 and was assigned with NO clamp at all
@@ -290,13 +308,23 @@ export function roadMaskAlpha(
 	bootFade = 1,
 ): number {
 	// Floor raised 0.3 → 0.6 (span 0.7 → 0.4, so the low-altitude end still
-	// reaches 1.0). The road mask is the ONLY globally-available source of
-	// street-grid STRUCTURE — baked z4–12 (@2x ≈ 19 m/px native, upsampled
-	// past z12), versus VIIRS at 583 m/px. The old floor faded it to
-	// 0.32-0.46 across the 28-34k night-show band while VIIRS sat pinned at
-	// its ceiling, so the structured layer was quietest exactly where the
-	// blobby one was loudest (road:VIIRS was 0.69 at 30,000 ft — now ~2.2).
+	// reaches 1.0). Roads are the structured source of street-grid detail;
+	// VIIRS is a 583 m/px blur. The old floor faded roads to 0.32-0.46 across
+	// the 28-34k night-show band while VIIRS sat pinned at its ceiling, so the
+	// structured layer was quietest exactly where the blobby one was loudest.
 	// Roads carry the city; VIIRS fills behind.
+	//
+	// ⚠ THE ORIGINAL JUSTIFICATION FOR THIS FLOOR NO LONGER HOLDS AS WRITTEN.
+	// It argued the road mask was "the ONLY globally-available source" of
+	// structure, "baked z4–12". Both facts died with the raster: the vector
+	// grid is not baked at any zoom, and it is NOT global — each city ships a
+	// ~5-8 km extract (denver is 4.2 x 2.3 km), against a ~100 km view at the
+	// night band. So the road:VIIRS balance this floor targets now holds only
+	// over the flown city, and VIIRS alone carries the far field. The floor
+	// still measures right for the near field, which is why it is unchanged —
+	// but re-derive it, do not re-cite the old numbers, if you touch it. That
+	// is exactly how the nightLightGain regressions catalogued in altitude.ts
+	// happened.
 	const gate = 0.6 + 0.4 * altitudeDetailMix(altitudeFt);
 	const nf = nightFactor;
 	// Normalise the 0..5 operator gain, exactly as viirsLayerAlpha does. Clamping

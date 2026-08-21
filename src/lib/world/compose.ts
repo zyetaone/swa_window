@@ -2,7 +2,8 @@
  * CesiumManager — thin orchestrator for the Cesium globe.
  *
  * Delegates to reactive feature modules:
- *   imagery.ts    — base imagery, VIIRS, CartoDB roads
+ *   imagery.ts    — base imagery, VIIRS (+ the shared road alpha curve)
+ *   roads-geojson — ODbL vector night street grid (replaced the CartoDB raster)
  *   buildings.ts  — OSM 3D Tiles + procedural shader
  *   atmosphere.ts — sky, fog, globe color, moonlight, exposure
  * Owns directly: viewer lifecycle, post-processing,

@@ -28,6 +28,7 @@ import type { LocationId } from '$lib/types';
 import { altitudeDetailMix } from '$lib/world/altitude';
 import { clamp } from '$lib/utils';
 import { roadMaskAlpha } from '$lib/world/imagery';
+import { EpsilonGate } from './util';
 import { registerViewerTeardown } from './viewer-lifecycle';
 
 /** OSM highway classes the packager emits, brightest/widest first. */
@@ -277,6 +278,8 @@ interface RoadBin {
 	cls: RoadClass;
 	/** Stable phase offset so bins do not all breathe in lockstep. */
 	phase: number;
+	/** Same idempotency pattern every sibling subsystem uses for uniform writes. */
+	alpha: EpsilonGate<number>;
 }
 
 interface CityRoads {
@@ -321,6 +324,9 @@ export function hasOfflineRoads(id: LocationId): boolean {
  * Clearing is enough: viewer.destroy() takes its own primitives with it.
  */
 export function resetOfflineRoads(): void {
+	// Clearing the maps drops the gates with the bins they belong to, so there
+	// is no separate gate reset to forget — the EpsilonGate remount trap that
+	// bit imagery.ts cannot recur here by construction.
 	_cityRoads.clear();
 	_inFlight.clear();
 }
@@ -392,7 +398,13 @@ async function loadOfflineRoads(
 					const lines = new C.PolylineCollection();
 					lines.show = false;
 					viewer.scene.primitives.add(lines);
-					bin = { lines, material, cls: r.cls, phase: roadBinPhase(r.cls, lamp) };
+					bin = {
+						lines,
+						material,
+						cls: r.cls,
+						phase: roadBinPhase(r.cls, lamp),
+						alpha: new EpsilonGate<number>(0.001, -1),
+					};
 					bins.set(key, bin);
 				}
 				bin.lines.add({
@@ -463,9 +475,10 @@ export function syncOfflineRoads(
 				0,
 				1,
 			);
-			// The Material's OWN color — see the clone warning at construction.
-			const uc = bin.material.uniforms.color as CesiumType.Color;
-			if (Math.abs(uc.alpha - a) > 0.001) uc.alpha = a;
+			bin.alpha.update(a, (v) => {
+				// The Material's OWN color — see the clone warning at construction.
+				(bin.material.uniforms.color as CesiumType.Color).alpha = v;
+			});
 		}
 	}
 }

@@ -9,7 +9,8 @@
  *
  * ─── THE GATES ──────────────────────────────────────────────────────────────
  *   1. VIIRS Cesium layer  → alpha × (1 − mix)          (imagery.ts)
- *   2. CartoDB road mask   → alpha × (0.3 + 0.7 * mix)  (imagery.ts)
+ *   2. Road light grid     → alpha × (0.6 + 0.4 * mix)  (imagery.ts roadMaskAlpha,
+ *                                                        drawn by roads-geojson)
  *   3. Building windows    → density × (1 − mix)        (buildings.ts u_windowDensity)
  * The former Three-side consumers (CityLightField bokeh, NeonLineLayer neon)
  * were retired with the layers themselves.
@@ -17,7 +18,7 @@
  * ─── CONTRACT ────────────────────────────────────────────────────────────────
  * Pure + allocation-free. Consumers call altitudeDetailMix(camAltFt) and derive
  * their specific gate from the shared 0..1 result:
- *   NEAR layers (neon, building emissive, CartoDB):  scale by  mix
+ *   NEAR layers (neon, building emissive, road grid): scale by  mix
  *   FAR  layers (VIIRS aggregate):                   scale by (1 − mix)
  */
 

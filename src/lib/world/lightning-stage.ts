@@ -71,9 +71,15 @@ let _nextStrike = 10;
 // step across Pis because `hasLightning` is derived from the leader's
 // broadcast weather, so every device sees the same transitions.
 let _stormIndex = 0;
-let _rng: () => number = Math.random;
-
+// Seeded from the start rather than Math.random. This default is unreachable
+// in practice — _prevHasLightning starts false, so the first hasLightning tick
+// is always a false→true transition and beginStorm() reseeds before any
+// consumer reads _rng — but a bare Math.random in a visual path on a 3-Pi wall
+// is a landmine for the next determinism sweep, which has to re-derive that
+// whole argument to clear it. Cheaper to not be there.
 const STORM_SALT = 0x5c07;
+
+let _rng: () => number = createSeededRng(STORM_SALT);
 
 /** Reset the strike sequence for a new storm. */
 function beginStorm(index: number = _stormIndex): void {
