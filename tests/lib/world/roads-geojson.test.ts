@@ -11,8 +11,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync } from 'node:fs';
-import { polylinesFromGeojson, roadClassAlpha, ROAD_CLASSES } from '$lib/world/roads-geojson';
+import {
+	polylinesFromGeojson,
+	roadClassAlpha,
+	roadLampIndex,
+	roadFlicker,
+	ROAD_CLASSES,
+	ROAD_LAMPS,
+} from '$lib/world/roads-geojson';
 import { groundAltM } from '$content/locations';
+import { roadMaskAlpha } from '$lib/world/imagery';
 
 const fc = (features: unknown[]) => ({ type: 'FeatureCollection', features });
 const road = (cls?: unknown, coords?: unknown) => ({
@@ -229,6 +237,150 @@ describe.runIf(packagedData)('the packaged data this layer depends on is real', 
 			// The arteries are what carry the city; an extract of nothing but
 			// residential lanes means the packager filter regressed.
 			expect(out.some((r) => r.cls !== 'residential'), city).toBe(true);
+		}
+	});
+});
+
+describe('lamp colour is varied but fleet-deterministic', () => {
+	// THE fleet requirement. Three Pis render three slices of ONE window; a
+	// colour rolled with Math.random() makes the same street orange on the left
+	// screen and blue in the middle. Same class of bug as the ambient-jitter
+	// desync, which shipped and was visible on the wall.
+	it('gives the same road the same lamp every time it is asked', () => {
+		const coords = [78.4812, 17.3841, 78.4899, 17.3902];
+		const first = roadLampIndex(coords);
+		for (let i = 0; i < 50; i++) expect(roadLampIndex(coords)).toBe(first);
+	});
+
+	it('depends only on the coordinates, not on call order or insertion', () => {
+		// A counter- or index-based assignment would pass the test above and
+		// still desync, because the three Pis do not load features in lockstep.
+		const a = [78.4812, 17.3841, 78.49, 17.39];
+		const b = [78.5001, 17.4102, 78.51, 17.42];
+		const forward = [roadLampIndex(a), roadLampIndex(b)];
+		const backward = [roadLampIndex(b), roadLampIndex(a)].reverse();
+		expect(forward).toEqual(backward);
+	});
+
+	it('always returns a real lamp', () => {
+		for (let i = 0; i < 2000; i++) {
+			const idx = roadLampIndex([78 + i * 0.0013, 17 + i * 0.0007]);
+			expect(Number.isInteger(idx)).toBe(true);
+			expect(ROAD_LAMPS[idx]).toBeDefined();
+		}
+	});
+
+	it('actually spreads across the palette instead of collapsing to one bin', () => {
+		// A hash that degenerates would silently undo the whole point: one
+		// colour everywhere, which is what the flat #ffd9a0 looked like.
+		const seen = new Set<number>();
+		for (let i = 0; i < 2000; i++) seen.add(roadLampIndex([78 + i * 0.0013, 17 + i * 0.0007]));
+		expect(seen.size).toBeGreaterThan(1);
+	});
+
+	it('keeps sodium the majority and LED the minority', () => {
+		// Real cities are mostly sodium/warm with an LED minority. An even split
+		// reads as a colour test card, not a city.
+		const counts = [0, 0, 0];
+		for (let i = 0; i < 3000; i++) counts[roadLampIndex([78 + i * 0.0013, 17 + i * 0.0007])]++;
+		expect(counts[0]).toBeGreaterThan(counts[2]);
+	});
+});
+
+describe('flicker breathes without reading as a rendering bug', () => {
+	it('stays within a few percent of unity', () => {
+		for (let phase = 0; phase < 18; phase++) {
+			for (let t = 0; t < 24; t += 0.01) {
+				const f = roadFlicker(phase, t);
+				expect(f).toBeGreaterThan(0.9);
+				expect(f).toBeLessThan(1.1);
+			}
+		}
+	});
+
+	it('is a pure function of the SYNCED clock, so all three Pis agree', () => {
+		// A local dt accumulator would pass "it varies" and still drift the wall
+		// apart within minutes. Same input must give the same output, always.
+		for (const t of [0, 6.5, 21.9999, 22, 23.75]) {
+			expect(roadFlicker(3, t)).toBe(roadFlicker(3, t));
+		}
+	});
+
+	it('does not put every bin in lockstep', () => {
+		// Bins breathing together is just a global brightness wobble, which
+		// reads as the whole layer pulsing rather than as lamps varying.
+		const t = 22.4;
+		const vals = Array.from({ length: 8 }, (_, p) => roadFlicker(p, t));
+		expect(new Set(vals.map((v) => v.toFixed(4))).size).toBeGreaterThan(4);
+	});
+
+	it('actually varies over time', () => {
+		const vals = Array.from({ length: 40 }, (_, i) => roadFlicker(1, 22 + i * 0.0005));
+		expect(new Set(vals.map((v) => v.toFixed(4))).size).toBeGreaterThan(3);
+	});
+});
+
+describe('the grid survives the night-show altitude band', () => {
+	// THE regression this section exists for, caught in a real-GPU frame:
+	// roadMaskAlpha was calibrated for a raster imagery layer. nightLightGain
+	// caps it at 0.40 at the default scale and altitude drags it to 0.267 by
+	// 30,000 ft. On a raster that still reads; on a glow polyline it vanished
+	// completely, leaving only building blobs — the exact failure this whole
+	// layer exists to prevent.
+	//
+	// These assert the OUTPUT is visible, not that some constant equals 2.6, so
+	// the mask, the gain and the class weights can all be retuned freely as
+	// long as the city still reads at cruise.
+	const NIGHT_BAND = [28_000, 30_000, 32_000, 34_000];
+	const SCALE = 2.0; // the shipped default
+
+	it('keeps arteries clearly visible at every night-band altitude', () => {
+		// 0.2 is not arbitrary: below roughly this the glow stroke stops reading
+		// against the graded ground. Verified in real-GPU frames over Hyderabad
+		// at 30,000 ft — the shipped curve lands motorways at ~0.27 here and the
+		// city is legible. A change that drops these below 0.2 is a regression
+		// even if every other test still passes.
+		for (const alt of NIGHT_BAND) {
+			const base = roadMaskAlpha(1, SCALE, alt);
+			expect(roadClassAlpha('motorway', base, alt), `motorway@${alt}`).toBeGreaterThan(0.2);
+		}
+	});
+
+	it('still lets side streets fill in on approach', () => {
+		// The other half of the contract: low and slow should show the full grid,
+		// not just the arteries.
+		const low = roadMaskAlpha(1, SCALE, 4_000);
+		const cruise = roadMaskAlpha(1, SCALE, 34_000);
+		expect(roadClassAlpha('residential', low, 4_000)).toBeGreaterThan(
+			roadClassAlpha('residential', cruise, 34_000) * 8,
+		);
+	});
+
+	it('fades side streets out by cruise so they cannot alias into haze', () => {
+		const high = roadMaskAlpha(1, SCALE, 34_000);
+		expect(roadClassAlpha('residential', high, 34_000)).toBeLessThan(0.1);
+	});
+
+	it('keeps the class hierarchy intact at the night band', () => {
+		const base = roadMaskAlpha(1, SCALE, 30_000);
+		const a = ROAD_CLASSES.map((c) => roadClassAlpha(c, base, 30_000));
+		for (let i = 1; i < a.length; i++) {
+			expect(a[i], `${ROAD_CLASSES[i]} vs ${ROAD_CLASSES[i - 1]}`).toBeLessThanOrEqual(a[i - 1]);
+		}
+	});
+
+	it('never drives any class past opaque, at any knob position', () => {
+		// nightLightScale is an operator-facing slider that has historically been
+		// left at 4.6-6.8, so the clamp is load-bearing rather than defensive.
+		for (const scale of [0.5, 1, 2, 3.5, 5, 6.8]) {
+			for (const alt of [1_000, 4_000, 15_000, 30_000, 40_000]) {
+				const base = roadMaskAlpha(1, scale, alt);
+				for (const c of ROAD_CLASSES) {
+					const v = roadClassAlpha(c, base, alt);
+					expect(v, `${c}@${alt}/${scale}`).toBeLessThanOrEqual(1);
+					expect(v, `${c}@${alt}/${scale}`).toBeGreaterThanOrEqual(0);
+				}
+			}
 		}
 	});
 });

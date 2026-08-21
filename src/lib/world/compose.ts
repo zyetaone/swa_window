@@ -308,6 +308,9 @@ export class CesiumManager {
 		// under. Hidden outright in daylight, so this costs nothing before dusk.
 		syncOfflineRoads(
 			m.location, m.nightFactor, m.nightLightScale, m.flight.altitude,
+			// timeOfDay drives the lamp flicker and is ALREADY fleet-synced —
+			// see roadFlicker on why a local dt accumulator would desync the wall.
+			m.timeOfDay,
 			this.#getBootFade(), m.terrainExaggeration,
 		);
 	}
