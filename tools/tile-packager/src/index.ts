@@ -21,6 +21,7 @@ import { LOCATIONS } from '../../../content/locations';
 import type { LocationId } from '../../../content/locations';
 import { enumerateTiles, estimateBytes, formatBytes, type TileSource } from './rules';
 import { SOURCES, tileFilePath, fetchIonLayerJson, BUILDINGS_CONFIG, overpassToGeoJson } from './sources';
+import { ROADS_CONFIG, radiusGroups, overpassToRoadGeoJson } from './roads';
 import { STATIC_ASSETS, type AssetCategory } from './assets';
 
 // ─── CLI ────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ interface Args {
 	sources: TileSource[] | 'all';
 	concurrency: number;
 	skipBuildings: boolean;
+	skipRoads: boolean;
 	skipAssets: boolean;
 }
 
@@ -44,6 +46,7 @@ function parseArgs(): Args {
 		sources: 'all',
 		concurrency: 6,
 		skipBuildings: false,
+		skipRoads: false,
 		skipAssets: false,
 	};
 	for (let i = 0; i < a.length; i++) {
@@ -54,6 +57,7 @@ function parseArgs(): Args {
 			case '--sources':       out.sources = a[++i].split(',') as TileSource[]; break;
 			case '--concurrency':   out.concurrency = Number(a[++i]) || 6; break;
 			case '--skip-buildings': out.skipBuildings = true; break;
+			case '--skip-roads':    out.skipRoads = true; break;
 			case '--skip-assets':   out.skipAssets = true; break;
 			case '-h':
 			case '--help':
@@ -65,6 +69,7 @@ function parseArgs(): Args {
   bun run start -- --sources eox-sentinel2       Subset of tile sources (default: all)
   bun run start -- --concurrency 6               Parallel downloads (default 6)
   bun run start -- --skip-buildings              Don't run Overpass buildings pass
+  bun run start -- --skip-roads                  Don't run Overpass roads pass
   bun run start -- --skip-assets                 Don't copy static assets
 
 Tile sources:
@@ -273,6 +278,76 @@ async function main() {
 		}
 		console.log(`✅ Buildings: ${built} built, ${bSkipped} skipped, ${bFailed} failed`);
 		console.log(`⏱  ${((Date.now() - buildingsStart) / 1000).toFixed(1)}s for buildings`);
+	}
+
+	// ─── OSM Roads pass ─────────────────────────────────────────────────────
+	// Per-location Overpass queries → slim LineString GeoJSON for the night
+	// street grid (world/roads-geojson). One query PER RADIUS GROUP, not per
+	// class: arterials are pulled from a wide ring and side streets from a
+	// narrow one, because a uniform radius either postage-stamps the frame or
+	// pays quadratically for residential geometry that altitudeDetailMix fades
+	// to nothing at cruise. See roads.ts for the full argument.
+	//
+	// Serial, and politely spaced — these are public Overpass mirrors and the
+	// 40 km arterial query is a genuinely large ask.
+	if (!args.skipRoads) {
+		console.log();
+		console.log(`🛣  Roads (Overpass → GeoJSON) for ${locations.length} location(s)...`);
+		const roadsStart = Date.now();
+		let rBuilt = 0;
+		let rSkipped = 0;
+		let rFailed = 0;
+		const groups = radiusGroups();
+		for (const loc of locations) {
+			const outPath = join(args.output, ROADS_CONFIG.storagePath(loc.id));
+			if (existsSync(outPath)) {
+				rSkipped++;
+				continue;
+			}
+			// Shared across groups so an arterial caught by the wide query is not
+			// emitted again by the narrow one — overlapping rings would duplicate
+			// exactly the geometry that draws brightest.
+			const seen = new Set<number>();
+			const features: import('./roads').RoadFeature[] = [];
+			let failed = false;
+			for (const group of groups) {
+				const query = ROADS_CONFIG.buildOverpassQuery(
+					loc.lat, loc.lon, group.radius, group.classes,
+				);
+				let ok = false;
+				for (const endpoint of ROADS_CONFIG.endpoints) {
+					try {
+						const res = await fetch(endpoint, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+							body: `data=${encodeURIComponent(query)}`,
+						});
+						if (!res.ok) continue;
+						const json = (await res.json()) as Parameters<typeof overpassToRoadGeoJson>[0];
+						features.push(...overpassToRoadGeoJson(json, seen).features);
+						ok = true;
+						break;
+					} catch {
+						// try next endpoint
+					}
+				}
+				if (!ok) { failed = true; break; }
+				await new Promise((r) => setTimeout(r, 1_000));
+			}
+			if (failed || features.length === 0) {
+				// Partial output would be worse than none: the city would render a
+				// half-grid that looks like a bug rather than a missing extract.
+				console.log(`  ✗ ${loc.id}: Overpass failed or returned nothing`);
+				rFailed++;
+				continue;
+			}
+			await mkdir(dirname(outPath), { recursive: true });
+			await writeFile(outPath, JSON.stringify({ type: 'FeatureCollection', features }));
+			console.log(`  ✓ ${loc.id}: ${features.length} roads`);
+			rBuilt++;
+		}
+		console.log(`✅ Roads: ${rBuilt} built, ${rSkipped} skipped, ${rFailed} failed`);
+		console.log(`⏱  ${((Date.now() - roadsStart) / 1000).toFixed(1)}s for roads`);
 	}
 
 	// ─── Static assets pass ─────────────────────────────────────────────────
