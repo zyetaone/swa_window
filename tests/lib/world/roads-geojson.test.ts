@@ -16,6 +16,7 @@ import {
 	roadClassAlpha,
 	roadLampIndex,
 	roadFlicker,
+	roadBinPhase,
 	ROAD_CLASSES,
 	ROAD_LAMPS,
 } from '$lib/world/roads-geojson';
@@ -304,6 +305,27 @@ describe('flicker breathes without reading as a rendering bug', () => {
 		for (const t of [0, 6.5, 21.9999, 22, 23.75]) {
 			expect(roadFlicker(3, t)).toBe(roadFlicker(3, t));
 		}
+	});
+
+	it('gives a bin the same phase regardless of load order', () => {
+		// THE order-dependence bug: phase was the bin's insertion index, so any
+		// difference in parse order between the three Pis gave the same bin a
+		// different phase and the wall breathed out of step. Identity-derived
+		// phase is immune, and this is what proves it.
+		const pairs: Array<[typeof ROAD_CLASSES[number], number]> = [
+			['motorway', 0], ['residential', 2], ['tertiary', 1],
+		];
+		const forward = pairs.map(([c, l]) => roadBinPhase(c, l));
+		const shuffled = [...pairs].reverse().map(([c, l]) => roadBinPhase(c, l)).reverse();
+		expect(forward).toEqual(shuffled);
+	});
+
+	it('gives every distinct bin a distinct phase', () => {
+		const seen = new Set<number>();
+		for (const c of ROAD_CLASSES) {
+			for (let l = 0; l < ROAD_LAMPS.length; l++) seen.add(roadBinPhase(c, l));
+		}
+		expect(seen.size).toBe(ROAD_CLASSES.length * ROAD_LAMPS.length);
 	});
 
 	it('does not put every bin in lockstep', () => {

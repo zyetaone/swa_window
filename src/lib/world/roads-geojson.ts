@@ -247,6 +247,23 @@ export function roadLampIndex(coords: number[]): number {
  * a bin breathes together; per-road flicker would need per-road materials,
  * which is the thing the bin design exists to avoid.
  */
+/**
+ * Phase offset for one (class x lamp) bin.
+ *
+ * ⚠ DERIVED FROM THE BIN'S IDENTITY, NEVER ITS INSERTION ORDER.
+ * This was `bins.size` at construction, which is order-dependent: bins are
+ * created in whatever order the features happen to arrive, so any difference in
+ * parse order between the three Pis would give the same bin a different phase
+ * and the wall would breathe out of step. Same class of bug as seeding colour
+ * from a counter instead of the coordinates — it looks deterministic in a
+ * single-process test and desyncs in the field.
+ *
+ * Pure and exported so the order-independence is assertable.
+ */
+export function roadBinPhase(cls: RoadClass, lamp: number): number {
+	return ROAD_CLASSES.indexOf(cls) * ROAD_LAMPS.length + lamp;
+}
+
 export function roadFlicker(binPhase: number, timeOfDayHours: number): number {
 	const t = timeOfDayHours * 3600;
 	return 1 + 0.04 * Math.sin(t * 0.7 + binPhase * 2.399963);
@@ -258,8 +275,6 @@ interface RoadBin {
 	lines: CesiumType.PolylineCollection;
 	material: CesiumType.Material;
 	cls: RoadClass;
-	/** Index into ROAD_LAMPS — fixes both the colour and the glow falloff. */
-	lamp: number;
 	/** Stable phase offset so bins do not all breathe in lockstep. */
 	phase: number;
 }
@@ -317,7 +332,8 @@ export function initRoads(C: typeof CesiumType, viewer: CesiumType.Viewer): void
 }
 
 /**
- * Fetch + build the per-class collections for one city. Idempotent and cached.
+ * Fetch + build the per-bin collections for one city. Idempotent and cached.
+ * Not exported: syncOfflineRoads is the only caller and the only entry point.
  *
  * ─── ⚠ POLYLINECOLLECTION, NOT Primitive + PolylineGeometry ─────────────────
  * The obvious construction — GeometryInstances of PolylineGeometry in a single
@@ -336,7 +352,7 @@ export function initRoads(C: typeof CesiumType, viewer: CesiumType.Viewer): void
  * Failure is quiet by design: no grid is the state we were already in, and the
  * fiction is never broken with an error.
  */
-export async function loadOfflineRoads(
+async function loadOfflineRoads(
 	locationId: LocationId,
 	exaggeration = 1,
 ): Promise<void> {
@@ -376,7 +392,7 @@ export async function loadOfflineRoads(
 					const lines = new C.PolylineCollection();
 					lines.show = false;
 					viewer.scene.primitives.add(lines);
-					bin = { lines, material, cls: r.cls, lamp, phase: bins.size };
+					bin = { lines, material, cls: r.cls, phase: roadBinPhase(r.cls, lamp) };
 					bins.set(key, bin);
 				}
 				bin.lines.add({
