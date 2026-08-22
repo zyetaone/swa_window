@@ -73,6 +73,23 @@ export function radiusGroups(): Array<{ radius: number; classes: RoadClass[] }> 
 		.map(([radius, classes]) => ({ radius, classes }));
 }
 
+/**
+ * ⚠ OVERPASS 406s A REQUEST WITH NO User-Agent, AND IT LOOKS LIKE A RATE LIMIT.
+ *
+ * `curl` sets one automatically; `fetch` (bun/node/undici) does not. The result
+ * is a flat HTTP 406 "Not Acceptable" on every request, while /api/status
+ * cheerfully reports free slots and the identical query pasted into curl
+ * returns 200 — which reads exactly like being throttled, and sends you off
+ * adding backoff that cannot possibly help. Cost an entire batch run.
+ *
+ * Identifying the client is also just the polite thing to do against a free
+ * public mirror we are asking for 5 MB at a time.
+ */
+export const OVERPASS_HEADERS = {
+	'Content-Type': 'application/x-www-form-urlencoded',
+	'User-Agent': 'z-aero-window-tile-packager/1.0 (+https://github.com/zyetaone)',
+} as const;
+
 export const ROADS_CONFIG = {
 	storagePath: (city: string) => `../data/roads/${city}.geojson`,
 	/**

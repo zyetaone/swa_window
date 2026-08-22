@@ -21,7 +21,7 @@ import { LOCATIONS } from '../../../content/locations';
 import type { LocationId } from '../../../content/locations';
 import { enumerateTiles, estimateBytes, formatBytes, type TileSource } from './rules';
 import { SOURCES, tileFilePath, fetchIonLayerJson, BUILDINGS_CONFIG, overpassToGeoJson } from './sources';
-import { ROADS_CONFIG, radiusGroups, overpassToRoadGeoJson } from './roads';
+import { ROADS_CONFIG, radiusGroups, overpassToRoadGeoJson, OVERPASS_HEADERS } from './roads';
 import { STATIC_ASSETS, type AssetCategory } from './assets';
 
 // ─── CLI ────────────────────────────────────────────────────────────────────
@@ -253,7 +253,9 @@ async function main() {
 				try {
 					const res = await fetch(endpoint, {
 						method: 'POST',
-						headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+						// Same User-Agent requirement as the roads pass — see
+						// OVERPASS_HEADERS. This pass had the same latent 406.
+						headers: OVERPASS_HEADERS,
 						body: `data=${encodeURIComponent(query)}`,
 					});
 					if (!res.ok) continue;
@@ -319,7 +321,7 @@ async function main() {
 					try {
 						const res = await fetch(endpoint, {
 							method: 'POST',
-							headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+							headers: OVERPASS_HEADERS,
 							body: `data=${encodeURIComponent(query)}`,
 						});
 						if (!res.ok) continue;
