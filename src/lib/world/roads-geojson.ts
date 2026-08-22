@@ -485,16 +485,22 @@ export function syncOfflineRoads(
 					1,
 				)
 				: 0;
-			// ─── ⚠ HIDING A SUB-VISIBLE BIN IS THE MAIN PERF LEVER ──────────────
-			// A collection with show=true is submitted for drawing at ANY alpha,
-			// including alpha nobody can see. Residential is ~58% of a city's
-			// polylines (12,595 of Hyderabad's 21,781) and altitudeDetailMix fades
-			// it to ~0.013 at the 30,000 ft night band — so without this the
-			// renderer spends the majority of its road budget on lines that
-			// contribute nothing to the frame.
+			// Hide, rather than draw at an alpha nobody can see. A collection with
+			// show=true is submitted for drawing at ANY alpha; residential is ~58%
+			// of a city's polylines (12,595 of Hyderabad's 21,781) and
+			// altitudeDetailMix fades it to ~0.013 at the 30,000 ft night band.
 			//
-			// Measured on this exact scene, same camera: 100.3 ms -> see the
-			// commit message. show=false is free; a near-zero alpha is not.
+			// ⚠ HONEST STATUS: this shows NO measurable win on a desktop GPU.
+			// Same scene, same camera, single tab: 41.7 ms p50 with it on and
+			// 41.7 ms with it off — the road layer is simply not the bottleneck
+			// there. It is kept because the target is a Pi 5, which is fill-rate
+			// bound in a way a desktop is not, and because drawing geometry that
+			// cannot be seen is wrong on its own terms. Treat the Pi benefit as
+			// UNMEASURED until P8-CHECKLIST line 74 is actually run.
+			//
+			// (An earlier version of this comment claimed a 100.3 -> 41.7 ms win.
+			// That was an artifact of three Aero Window tabs each running a Cesium
+			// render loop during the measurement, not this code.)
 			const want = here && a > MIN_VISIBLE_ALPHA;
 			if (bin.lines.show !== want) bin.lines.show = want;
 			if (!want) continue;
