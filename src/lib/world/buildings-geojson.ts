@@ -175,7 +175,7 @@ export async function loadOfflineCity(
 
 	const job = (async () => {
 		try {
-			const res = await fetch(`/api/buildings/${locationId}`, { cache: 'force-cache' });
+			const res = await fetch(`/api/buildings/${locationId}`);
 			if (!res.ok) return;
 			const extrusions = extrusionsFromGeojson(await res.json(), locationId, exaggeration);
 			if (extrusions.length === 0) return;

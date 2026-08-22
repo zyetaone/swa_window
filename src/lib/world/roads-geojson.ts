@@ -145,6 +145,16 @@ export function polylinesFromGeojson(
 }
 
 /**
+ * Below this a bin is hidden outright rather than drawn transparently.
+ *
+ * Not a rendering nicety — the dominant cost control for this layer. See the
+ * comment at the show= assignment in syncOfflineRoads. Chosen well under what
+ * is perceptible against the graded night ground, so nothing visibly pops:
+ * roadClassAlpha crosses it smoothly as altitude changes.
+ */
+const MIN_VISIBLE_ALPHA = 0.02;
+
+/**
  * ⚠ roadMaskAlpha's RANGE WAS CHECKED AGAINST THIS RENDERER AND IT HOLDS.
  *
  * The mask was calibrated for a raster imagery layer, so the obvious worry is
@@ -371,7 +381,7 @@ async function loadOfflineRoads(
 
 	const job = (async () => {
 		try {
-			const res = await fetch(`/api/roads/${locationId}`, { cache: 'force-cache' });
+			const res = await fetch(`/api/roads/${locationId}`);
 			if (!res.ok) return;
 			const roads = polylinesFromGeojson(await res.json(), locationId, exaggeration);
 			if (roads.length === 0) return;
@@ -466,15 +476,28 @@ export function syncOfflineRoads(
 	const base = lit ? roadMaskAlpha(nightFactor, nightLightScale, altitudeFt, bootFade) : 0;
 
 	for (const [id, city] of _cityRoads) {
-		const want = lit && id === locationId;
+		const here = lit && id === locationId;
 		for (const bin of city.bins.values()) {
+			const a = here
+				? clamp(
+					roadClassAlpha(bin.cls, base, altitudeFt) * roadFlicker(bin.phase, timeOfDayHours),
+					0,
+					1,
+				)
+				: 0;
+			// ─── ⚠ HIDING A SUB-VISIBLE BIN IS THE MAIN PERF LEVER ──────────────
+			// A collection with show=true is submitted for drawing at ANY alpha,
+			// including alpha nobody can see. Residential is ~58% of a city's
+			// polylines (12,595 of Hyderabad's 21,781) and altitudeDetailMix fades
+			// it to ~0.013 at the 30,000 ft night band — so without this the
+			// renderer spends the majority of its road budget on lines that
+			// contribute nothing to the frame.
+			//
+			// Measured on this exact scene, same camera: 100.3 ms -> see the
+			// commit message. show=false is free; a near-zero alpha is not.
+			const want = here && a > MIN_VISIBLE_ALPHA;
 			if (bin.lines.show !== want) bin.lines.show = want;
 			if (!want) continue;
-			const a = clamp(
-				roadClassAlpha(bin.cls, base, altitudeFt) * roadFlicker(bin.phase, timeOfDayHours),
-				0,
-				1,
-			);
 			bin.alpha.update(a, (v) => {
 				// The Material's OWN color — see the clone warning at construction.
 				(bin.material.uniforms.color as CesiumType.Color).alpha = v;

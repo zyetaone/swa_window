@@ -13,4 +13,5 @@
 import { serveCityGeojson } from '$lib/server/bundle/geojson';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = ({ params }) => serveCityGeojson(params.city, 'roads');
+export const GET: RequestHandler = ({ params, request }) =>
+	serveCityGeojson(params.city, 'roads', request.headers.get('if-none-match'));
