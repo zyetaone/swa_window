@@ -51,7 +51,7 @@ export interface ClusterDraw {
  * will emit. That is exactly what makes "lower density = strict PREFIX of
  * the same seeded field" true: clusterCountsForDensity changes only how
  * MANY times Clouds.svelte calls this, never WHAT a call draws. Pinned by
- * the prefix test in tests/lib/world/three/cloud-cluster-budget.test.ts —
+ * the prefix test in tests/lib/world/clouds/cluster-budget.test.ts —
  * if per-cluster draws ever become density-dependent, that test and the
  * 3-Pi seam contract must change together.
  */

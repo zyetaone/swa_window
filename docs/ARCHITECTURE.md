@@ -257,7 +257,7 @@ Three rules:
 | Old | New | Phase |
 |---|---|---|
 | `world/lightning-stage.ts` | `world/lightning-stage.ts` (module functions) | **1** [shipped] |
-| `world/cloud-billboard-layer.ts` | `world/cloud-billboard-layer.ts` (module functions) | **1** [shipped] |
+| `world/clouds/billboard-layer.ts` | `world/clouds/billboard-layer.ts` (module functions) | **1** [shipped] |
 | (color-grade in `compose.ts`) | inline PostProcessStage in `compose.ts` | **1** [shipped] |
 | `world/imagery.ts` | `world/imagery.ts` (hybrid) | **2** [shipped] |
 | `world/buildings.ts` | `world/buildings.ts` (hybrid) | **2** [shipped] |
@@ -267,7 +267,7 @@ Three rules:
 | `world/compose.ts` | (kept, slimmed) | **4** [shipped] |
 
 > Phase 1 shipped: lightning, clouds, color-grade are now reactive
-> features. Both `lightning-stage.ts` and `cloud-billboard-layer.ts`
+> features. Both `lightning-stage.ts` and `clouds/billboard-layer.ts`
 > export module-level `mount*(C, v)` + `tick/update*()` + `destroy*()`
 > functions — the legacy imperative classes (`LightningStage`,
 > `CloudBillboardLayer`) were deleted. Color-grade lives inline in

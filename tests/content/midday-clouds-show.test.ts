@@ -18,7 +18,7 @@ import { WEATHER_EFFECTS } from '$content/weather';
 import { LOCATION_MAP } from '$content/locations';
 import { getSkyState } from '$lib/utils';
 
-/** cloud-billboard-layer's CLOUD_ALT_M — the deck's world height, in metres. */
+/** clouds/billboard-layer's CLOUD_ALT_M — the deck's world height, in metres. */
 const DECK_ALT_M = 7_000;
 const FT_PER_M = 3.28084;
 

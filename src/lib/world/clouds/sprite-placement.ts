@@ -1,5 +1,5 @@
 /**
- * cloud-sprite-placement — the shared per-sprite geometry used by BOTH cloud
+ * clouds/sprite-placement — the shared per-sprite geometry used by BOTH cloud
  * renderers (the Cesium billboard layer and the Three overlay).
  *
  * ─── WHY THIS IS SHARED ─────────────────────────────────────────────────────

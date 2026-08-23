@@ -83,7 +83,7 @@ describe('every viewer-scoped world module is registered for teardown', () => {
 	it('registers a teardown for each of them', () => {
 		const registered = new Set(registeredViewerTeardowns());
 		// Registry keys are subsystem names, not filenames, and a module may
-		// register under a friendlier one ('cloud-billboard-layer' →
+		// register under a friendlier one ('clouds/billboard-layer' →
 		// 'cloud-billboards'), so a prefix match either way counts as covered.
 		const covered = (mod: string) =>
 			registered.has(mod)

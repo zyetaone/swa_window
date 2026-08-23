@@ -44,5 +44,5 @@ Production print (not lab): **roads + building windows carry the city; VIIRS is 
 - Defaults: `config-tree.svelte.ts`
 - Daisy-chain paths: `peer-sync-paths.ts`
 - Post-FX gates: `world/compose.ts`
-- Cloud budget: `world/three/cloud-cluster-budget.ts` + `Clouds.svelte`
+- Cloud budget: `world/clouds/cluster-budget.ts` + `Clouds.svelte`
 - Lab: `NightVariantPanel.svelte`, `LabControls.svelte`

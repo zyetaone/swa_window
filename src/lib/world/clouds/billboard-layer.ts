@@ -145,7 +145,7 @@ export function updateCesiumClouds(
 			// Raw oz — the Three overlay places at the same oz verbatim
 			// (Clouds.svelte `sprite.position.set(ox, oy, oz)`); mirroring Z
 			// around the cluster centre here broke the identical-placement
-			// contract in cloud-sprite-placement.ts.
+			// contract in clouds/sprite-placement.ts.
 			const worldZ = oz;
 
 			const d = metresToGeoDelta(worldX, worldZ, lat);
@@ -195,7 +195,7 @@ export function updateCesiumClouds(
 			// Raw oz — the Three overlay places at the same oz verbatim
 			// (Clouds.svelte `sprite.position.set(ox, oy, oz)`); mirroring Z
 			// around the cluster centre here broke the identical-placement
-			// contract in cloud-sprite-placement.ts.
+			// contract in clouds/sprite-placement.ts.
 			const worldZ = oz;
 
 			const d = metresToGeoDelta(worldX, worldZ, lat);

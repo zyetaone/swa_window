@@ -1,5 +1,5 @@
 /**
- * cloud-billboard-layer lifecycle — mount-race liveness.
+ * clouds/billboard-layer lifecycle — mount-race liveness.
  *
  * Same race as lightning-stage: CesiumViewer.onDestroy can fire while
  * CesiumManager.start() is suspended in an await, so destroy() runs first
@@ -118,7 +118,7 @@ describe('mountCesiumClouds liveness', () => {
 /**
  * worldZ raw-oz pin.
  *
- * The placement contract (cloud-sprite-placement.ts header) is that BOTH
+ * The placement contract (clouds/sprite-placement.ts header) is that BOTH
  * cloud renderers put each sprite at the SAME (ox, oy, oz): the Three
  * overlay does `sprite.position.set(ox, oy, oz)` verbatim, so the Cesium
  * billboard layer must use raw `oz` too. An earlier build mirrored Z
@@ -128,10 +128,10 @@ describe('mountCesiumClouds liveness', () => {
  * billboard position recovers to raw ox / oz — the mirrored form fails.
  *
  * The band constants below mirror the module-private values in
- * cloud-billboard-layer.ts ON PURPOSE: a band retune must be deliberate
+ * clouds/billboard-layer.ts ON PURPOSE: a band retune must be deliberate
  * enough to update this pin.
  */
-const M_PER_DEG_LAT = 111_320; // matches cloud-sprite-placement.ts
+const M_PER_DEG_LAT = 111_320; // matches clouds/sprite-placement.ts
 
 const BANDS = [
 	{ countMin: 60, countSpan: 50, rMin: 42_000, rSpan: 265_000 - 42_000, chSpan: 4600, baseMin: 18_000, baseSpan: 32_000 - 18_000, spriteMin: 9, spriteSpan: 8, lonely: 0.03 },

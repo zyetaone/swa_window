@@ -77,7 +77,7 @@ export class CesiumManager {
 	readonly #viewer: CesiumType.Viewer;
 
 	// Lightning stage is module-level state in lightning-stage.ts (not tracked here).
-	// Cesium clouds are module-level state in cloud-billboard-layer.ts (not tracked here).
+	// Cesium clouds are module-level state in clouds/billboard-layer.ts (not tracked here).
 	#colorGradeStage: CesiumType.PostProcessStage | null = null;
 	#lastQualityMode: QualityMode | null = null;
 	#lastColorGradeEnabled: boolean | null = null;
@@ -428,7 +428,7 @@ export class CesiumManager {
 		//
 		// Pi lean (docs/SIMPLIFICATION-DECISIONS.md): day-only paint off under
 		// performance; night bloom + hash stay via nightFx; wing/Three stays
-		// mounted; cloud sprite count scaled separately (cloud-cluster-budget).
+		// mounted; cloud sprite count scaled separately (clouds/cluster-budget).
 		const w0 = this.#model.config.world;
 		const { quality, bloomOn, postFx } = qualityPaintGates({
 			mode,

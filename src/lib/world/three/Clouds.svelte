@@ -3,7 +3,7 @@
 	 * Clouds — PNG-sprite CLUSTER composition at the WGS84 cloud deck.
 	 *
 	 * TWO BANDS (counts are density-scaled — SSOT is clusterCountsForDensity
-	 * in ./cloud-cluster-budget.ts; ranges below are dens=0..1):
+	 * in ../clouds/cluster-budget.ts; ranges below are dens=0..1):
 	 *   - DISTANT: 8-95 large clusters at 42-307 km radius. 8-24 km
 	 *              baseScale. 9-16 sprites/cluster. Horizon weather systems.
 	 *   - CLOSE:   3-32 small clusters at 1.5-32 km radius. 1.5-4.5 km
@@ -201,7 +201,7 @@
 		// this, so a lower density is a strict PREFIX of the same seeded
 		// field. The header draws come from the shared pure helper so the
 		// sequence is pinned count-independent (see drawCluster in
-		// ./cloud-cluster-budget.ts and its prefix test). Do NOT let density
+		// ../clouds/cluster-budget.ts and its prefix test). Do NOT let density
 		// or the cluster index leak into ANY draw here — including the
 		// per-sprite loop below — or adjacent screens diverge.
 		const { cx, cz, ch, baseScale, spriteCount, shear: clusterShear } =

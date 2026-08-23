@@ -116,7 +116,7 @@ See `docs/SIMPLIFICATION-DECISIONS.md`. Summary:
 
 - Quality presets: `src/lib/world/cesium-setup.ts` (`CESIUM_QUALITY_PRESETS`)  
 - Default `qualityMode: 'performance'`: `config-tree.svelte.ts`  
-- Cloud budget: `world/three/cloud-cluster-budget.ts`  
+- Cloud budget: `world/clouds/cluster-budget.ts`  
 - Liveness / reload budget: `lifecycle-liveness.ts`  
 - Thermal policy + guard: `src/lib/fleet/throttle.ts`, `thermal-guard.svelte.ts`  
 - Credits / product owner: `src/lib/credits.ts`

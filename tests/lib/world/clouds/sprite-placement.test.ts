@@ -1,5 +1,5 @@
 /**
- * cloud-sprite-placement — shared geometry for both cloud renderers.
+ * clouds/sprite-placement — shared geometry for both cloud renderers.
  *
  * The property that actually matters is the RNG DRAW ORDER. Both renderers
  * build their deck from a daySeed()-seeded stream so all three Pis in a
