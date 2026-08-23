@@ -25,7 +25,7 @@ import {
 	ANCHOR_SCALE,
 	SPRITE_SCALE_MIN,
 	SPRITE_SCALE_SPAN,
-} from '$lib/world/cloud-sprite-placement';
+} from '$lib/world/clouds/sprite-placement';
 
 const SEED = 20260804;
 const CX = 100, CH = 7000, CZ = -250, BASE = 40;

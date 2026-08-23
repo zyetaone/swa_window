@@ -29,9 +29,16 @@ import '$lib/world/buildings-geojson';
 import '$lib/world/roads-geojson';
 import '$lib/world/atmosphere';
 import '$lib/world/lightning-stage';
-import '$lib/world/cloud-billboard-layer';
+import '$lib/world/clouds/billboard-layer';
 
 const DIR = 'src/lib/world';
+
+/** Every .ts under `dir`, at any depth, as paths relative to the repo root. */
+function walk(dir: string): string[] {
+	return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+		e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`],
+	);
+}
 
 /**
  * Does this module hold state that belongs to one particular viewer?
@@ -42,10 +49,16 @@ const DIR = 'src/lib/world';
  */
 function viewerScopedModules(): string[] {
 	const out: string[] = [];
-	for (const file of readdirSync(DIR)) {
+	// RECURSIVE. It used to be a flat readdirSync of world/, which meant the
+	// contract silently stopped at the directory boundary: world/three/ has
+	// never been checked by it, and colocating any guarded module into a
+	// subfolder would have quietly dropped it from the scan while leaving this
+	// file green. A guard that a `git mv` can disarm is the "reads as solved"
+	// failure this suite exists to prevent, one level up.
+	for (const file of walk(DIR)) {
 		if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
-		if (file === 'viewer-lifecycle.ts') continue;
-		const src = readFileSync(`${DIR}/${file}`, 'utf8');
+		if (file.endsWith('viewer-lifecycle.ts')) continue;
+		const src = readFileSync(file, 'utf8');
 		// Opt-out, declared in the module itself rather than listed here, so the
 		// reasoning sits where someone adding state will actually read it. Used
 		// by cesium-setup, whose token + tile-probe answers are about the DEVICE
@@ -54,7 +67,7 @@ function viewerScopedModules(): string[] {
 		const mutableModuleState =
 			/^let\s/m.test(src) || /^const\s+_\w+\s*=\s*new\s+(Map|Set|Array|WeakMap)/m.test(src);
 		const touchesViewer = /Viewer\b/.test(src);
-		if (mutableModuleState && touchesViewer) out.push(file.replace(/\.ts$/, ''));
+		if (mutableModuleState && touchesViewer) out.push(file.slice(DIR.length + 1).replace(/\.ts$/, ''));
 	}
 	return out;
 }

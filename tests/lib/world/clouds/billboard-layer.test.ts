@@ -13,9 +13,9 @@ import {
 	mountCesiumClouds,
 	updateCesiumClouds,
 	destroyCesiumClouds,
-} from '$lib/world/cloud-billboard-layer';
+} from '$lib/world/clouds/billboard-layer';
 import { createSeededRng, daySeed } from '$lib/world/prng';
-import { spriteOffset, spriteScale } from '$lib/world/cloud-sprite-placement';
+import { spriteOffset, spriteScale } from '$lib/world/clouds/sprite-placement';
 
 interface FakeBillboard {
 	position: { lon: number; lat: number; alt: number };

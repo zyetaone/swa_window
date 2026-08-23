@@ -12,9 +12,9 @@
 
 import type { WeatherType } from '$lib/types';
 import type * as CesiumType from 'cesium';
-import { createSeededRng, daySeed } from './prng';
-import { metresToGeoDelta, spriteOffset, spriteScale } from './cloud-sprite-placement';
-import { registerViewerTeardown } from './viewer-lifecycle';
+import { createSeededRng, daySeed } from '../prng';
+import { metresToGeoDelta, spriteOffset, spriteScale } from './sprite-placement';
+import { registerViewerTeardown } from '../viewer-lifecycle';
 
 const CLOUD_ALT_M = 7_000; // ~26k ft
 
@@ -232,4 +232,4 @@ export function destroyCesiumClouds(): void {
 }
 
 // See lightning-stage: already explicit, now in the shared list.
-registerViewerTeardown('cloud-billboard-layer', destroyCesiumClouds);
+registerViewerTeardown('clouds', destroyCesiumClouds);

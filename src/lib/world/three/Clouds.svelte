@@ -75,8 +75,8 @@
 	import { enuAnchorMatrix } from './enu';
 	import { useAeroWindow } from '$lib/model/aero-window.svelte';
 	import { createSeededRng, daySeed } from '$lib/world/prng';
-	import { spriteOffset, spriteScale } from '$lib/world/cloud-sprite-placement';
-	import { clusterCountsForDensity, drawCluster } from './cloud-cluster-budget';
+	import { spriteOffset, spriteScale } from '$lib/world/clouds/sprite-placement';
+	import { clusterCountsForDensity, drawCluster } from '../clouds/cluster-budget';
 	import { lightingState } from '$lib/world/curves';
 
 	let {

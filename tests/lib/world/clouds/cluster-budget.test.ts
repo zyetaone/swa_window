@@ -3,7 +3,7 @@ import {
 	clusterCountsForDensity,
 	drawCluster,
 	PERFORMANCE_CLOUD_COUNT_SCALE,
-} from '$lib/world/three/cloud-cluster-budget';
+} from '$lib/world/clouds/cluster-budget';
 import { createSeededRng } from '$lib/world/prng';
 
 describe('clusterCountsForDensity', () => {

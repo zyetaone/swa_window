@@ -23,7 +23,7 @@ import { syncCamera, type CameraRead, type CameraSyncSlice } from './camera';
 import { COLOR_GRADE_STAGE, nightPostFxOn, qualityPaintGates } from './shaders';
 import { VIEWER_OPTIONS, applySceneDefaults, CESIUM_QUALITY_PRESETS, localTilesAvailable } from './cesium-setup';
 import { mountLightning, tickLightning } from './lightning-stage';
-import { mountCesiumClouds, updateCesiumClouds } from './cloud-billboard-layer';
+import { mountCesiumClouds, updateCesiumClouds } from './clouds/billboard-layer';
 import { teardownViewerState } from './viewer-lifecycle';
 import { initImagery, setupImagery, syncImagery } from './imagery';
 import { initBuildings, setupBuildings, syncBuildings, syncOfflineBuildings, setBuildingsWireframe, updateBuildingsQuality } from './buildings';
