@@ -51,6 +51,24 @@ export const COLOR_TO_ALPHA = {
 	viirsThreshold: 0.01,
 	/** Raw CartoDB / CDN — clears ~#0e1013 basemap, keeps full strokes. */
 	roadThreshold: 0.12,
+	/**
+	 * Baked viirs-roads composite. Background is true black; keep low enough
+	 * that packager floor glow (tools/tile-packager --floor, default 0.15)
+	 * still keys as road, not transparent.
+	 *
+	 * ⚠ RESTORED, NOT REVIVED. No client code reads this any more — the raster
+	 * road layers were removed for licensing and the grid is vector polylines
+	 * now (world/roads-geojson). It is kept because the COMMITTED
+	 * tests/lib/world/imagery-alpha.test.ts asserts this contract, and a
+	 * concurrent branch is still working on the packager's viirs-roads step
+	 * that produces the tiles this describes.
+	 *
+	 * Deleting it took main red and blocked the whole fleet deploy, because a
+	 * local `bun run check` was green only thanks to that other branch's
+	 * UNCOMMITTED rewrite of the same test file. Remove this together with the
+	 * packager step, in one coordinated commit — not before.
+	 */
+	roadCompositeThreshold: 0.03,
 } as const;
 
 interface WorldConfig {
