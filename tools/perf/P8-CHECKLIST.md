@@ -72,6 +72,18 @@ Record p50 / p95 fps for both states:
 - [ ] **Godrays** at low sun — present, not blown out
 - [ ] **Wing** — livery + nav-light strobe render clean, no z-fighting against the horizon
 - [ ] **Neon roads / city bokeh** — crisp, no shimmer or moiré at cruise
+- [ ] **Over the deck** (`?location=clouds&weather=cloudy&time=13`) — open sky
+      above, an unbroken cloud floor below, no hard-edged billboard quads. This
+      show is IN the rotation and has never been seen on a real GPU: it was
+      authored and test-pinned but the desktop check was inconclusive (RAF
+      throttled to 0 fps in every capture, and the control scene rendered wrong
+      too). Cloud COST needs no separate run — monsoon-mumbai already ships
+      104-127 clusters against this show's 92-127, at a comparable daylit hour.
+      It is the LOOK that is unverified. If it reads wrong, the fix is the hour
+      or the weather in `content/shows/midday-clouds.show.ts` — no renderer
+      change, and `cloudy` was chosen over `overcast` deliberately (overcast
+      carries rainOpacity 0.18 + filterBrightness 0.9, i.e. the view from
+      inside weather).
 
 ## 5. Decision
 
