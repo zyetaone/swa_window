@@ -96,8 +96,6 @@ let _lastNightFactor = -1;
 const _viirsShow = new EpsilonGate<boolean>(0, false);
 const _viirsAlpha = new EpsilonGate<number>(0.001, -1);
 const _viirsBrightness = new EpsilonGate<number>(0.01, -1);
-const _roadAlpha = new EpsilonGate<number>(0.001, -1);
-const _roadBrightness = new EpsilonGate<number>(0.01, -1);
 export function initImagery(Cesium: C, viewer: CesiumType.Viewer): void {
 	_cs = Cesium; _viewer = viewer;
 	resetImageryViewerState();
@@ -119,8 +117,6 @@ export function resetImageryViewerState(): void {
 	_viirsShow.reset();
 	_viirsAlpha.reset();
 	_viirsBrightness.reset();
-	_roadAlpha.reset();
-	_roadBrightness.reset();
 	_lastNightFactor = -1;
 }
 registerViewerTeardown('imagery', resetImageryViewerState);

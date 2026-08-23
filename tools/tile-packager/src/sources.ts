@@ -39,13 +39,6 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 		urlForTile: (t) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${t.z}/${t.y}/${t.x}`,
 		zoomRange: [4, 14],
 	},
-	'cartodb-dark': {
-		source: 'cartodb-dark',
-		// Uses dark_nolabels — no place-name overlay over the city-light glow.
-		storagePath: 'cartodb-dark/{z}/{x}/{y}@2x.png',
-		urlForTile: (t) => `https://basemaps.cartocdn.com/dark_nolabels/${t.z}/${t.x}/${t.y}@2x.png`,
-		zoomRange: [4, 12],
-	},
 	'viirs-night-lights': {
 		source: 'viirs-night-lights',
 		storagePath: 'viirs-night-lights/{z}/{y}/{x}.jpg',

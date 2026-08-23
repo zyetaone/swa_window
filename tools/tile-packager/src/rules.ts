@@ -54,7 +54,6 @@ export function enumerateTiles(
 export const TILE_AVG_BYTES = {
 	'eox-sentinel2': 25_000,
 	'esri-world-imagery': 18_000,
-	'cartodb-dark': 1_500,
 	'viirs-night-lights': 11_000,
 	// Cesium Ion quantized-mesh terrain — tiles contain only the mesh
 	// fragment for that square; lossy compressed. Small at low zoom.
