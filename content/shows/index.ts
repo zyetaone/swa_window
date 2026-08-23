@@ -23,6 +23,7 @@ import { monsoonMumbaiShow } from './monsoon-mumbai.show';
 import { dawnHimalayasShow } from './dawn-himalayas.show';
 import { pacificEveningShow } from './pacific-evening.show';
 import { middayPhoenixShow } from './midday-phoenix.show';
+import { middayCloudsShow } from './midday-clouds.show';
 import { duskDallasShow } from './dusk-dallas.show';
 import { nightChicagoShow } from './night-chicago.show';
 import { dawnDenverShow } from './dawn-denver.show';
@@ -42,6 +43,7 @@ export const DAILY_ROTATION: readonly Show[] = [
 	duskDallasShow,        // Dallas golden hour
 	nightChicagoShow,      // Chicago night lights
 	dawnDenverShow,        // Denver dawn
+	middayCloudsShow,      // 45 kft midday, blue sky over a cloud floor
 	// nightCloudsShow stays OUT: hasBuildings:false + deep night = black void
 	// without VIIRS/city floor (see night-clouds.show.ts).
 ];
