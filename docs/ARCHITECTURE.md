@@ -290,8 +290,12 @@ Three rules:
 > because it belongs to the per-viewer allocation lifetime. 8 tests
 > in `tests/lib/world/camera.test.ts` pin the math.
 
-> **Phase 4 shipped**: `compose.ts` is now ~376 lines (was 670+). The
-> `#tick` method is 8 lines of imperative dispatch (was 50+). The
+> **Phase 4 shipped**: `compose.ts` dropped to ~376 lines (was 670+).
+> It sits at **535** today and has been ~520 since mid-August — the
+> growth is the post-process concern (`#setupPostProcess` +
+> `#syncQuality`, ~135 lines), not leaf work creeping back. See the
+> coupling note below before trying to extract it.
+> The `#tick` method is 8 lines of imperative dispatch (was 50+). The
 > `CesiumManager` class is the orchestrator only — every leaf concern
 > (atmosphere, terrain, imagery, buildings, lightning, clouds,
 > color-grade, camera sync) lives in its own `.ts` file with
@@ -323,6 +327,32 @@ Cesium handles everything else natively: stars, sun, moon, bloom,
 tonemap, lightning post-process, building OSM tiles, VIIRS night
 lights. The Three overlay is not another engine; it's a thin canvas
 consumer that mirrors the Cesium camera each frame.
+
+### Why the post-process concern has not been extracted
+
+`#syncQuality` looks like the obvious next Phase-4 extraction — it is the
+largest method in the file. It does not extract on its own, and the reason is
+worth recording so the attempt is not made twice.
+
+`#syncImagery` and `#syncQuality` **co-own** four fields, bidirectionally:
+
+| Field | Written by | Read / invalidated by |
+|---|---|---|
+| `#nightFxOn` | `#syncImagery` | `#syncQuality` |
+| `#lastQualityMode` | `#syncQuality` | `#syncImagery` |
+| `#lastColorGradeEnabled` | `#syncImagery` | `#syncQuality` (invalidates) |
+| `#colorGradeStage` | `#setupPostProcess` | both |
+
+They share one Cesium stage and hand a memo-invalidation flag back and forth
+so the two grading paths never stack (the double-grade bug). Moving
+`#syncQuality` alone converts four private fields into a cross-module mutable
+protocol — strictly worse than the class that currently contains them.
+
+The coherent unit, if this is ever done, is the WHOLE post-process concern —
+`#setupPostProcess` + `#syncQuality` + the color-grade half of `#syncImagery`
+— as one module owning all five fields, following the hybrid pattern with its
+own `registerViewerTeardown`. That is a real refactor of tuned night-path
+code, so it wants a reason beyond tidiness.
 
 ## Non-goals
 
