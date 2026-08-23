@@ -17,9 +17,8 @@ import { DAILY_ROTATION } from '$content/shows';
 import { WEATHER_EFFECTS } from '$content/weather';
 import { LOCATION_MAP } from '$content/locations';
 import { getSkyState } from '$lib/utils';
+import { CLOUD_ALT_M } from '$lib/world/clouds/billboard-layer';
 
-/** clouds/billboard-layer's CLOUD_ALT_M — the deck's world height, in metres. */
-const DECK_ALT_M = 7_000;
 const FT_PER_M = 3.28084;
 
 describe('Over the Deck plays the premise it was authored for', () => {
@@ -35,7 +34,7 @@ describe('Over the Deck plays the premise it was authored for', () => {
 		// inside-the-weather view, which monsoon-mumbai already covers.
 		const loc = LOCATION_MAP.get(middayCloudsShow.opening.location);
 		expect(loc).toBeDefined();
-		expect(loc!.defaultAltitude / FT_PER_M).toBeGreaterThan(DECK_ALT_M * 1.5);
+		expect(loc!.defaultAltitude / FT_PER_M).toBeGreaterThan(CLOUD_ALT_M * 1.5);
 	});
 
 	it('picks a weather whose deck is thick enough to read as a floor', () => {

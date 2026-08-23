@@ -57,7 +57,11 @@ function viewerScopedModules(): string[] {
 	// failure this suite exists to prevent, one level up.
 	for (const file of walk(DIR)) {
 		if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
-		if (file.endsWith('viewer-lifecycle.ts')) continue;
+		// Exact path, not endsWith: a future `legacy-viewer-lifecycle.ts` or a
+		// `clouds/viewer-lifecycle.ts` would satisfy a suffix test and be
+		// skipped — re-opening, in the exclusion, the same hole the recursion
+		// above just closed.
+		if (file === `${DIR}/viewer-lifecycle.ts`) continue;
 		const src = readFileSync(file, 'utf8');
 		// Opt-out, declared in the module itself rather than listed here, so the
 		// reasoning sits where someone adding state will actually read it. Used
@@ -73,11 +77,15 @@ function viewerScopedModules(): string[] {
 }
 
 describe('every viewer-scoped world module is registered for teardown', () => {
+	// Walk once: the scan reads every .ts under world/ and both assertions
+	// below want the same answer.
+	const scoped = viewerScopedModules();
+
 	it('finds the modules it is supposed to be guarding', () => {
 		// Guards the guard: if the heuristic ever matches nothing (a refactor,
 		// a rename, a moved directory) the assertion below would pass
 		// vacuously and this whole file would silently stop protecting.
-		expect(viewerScopedModules().length).toBeGreaterThanOrEqual(5);
+		expect(scoped.length).toBeGreaterThanOrEqual(5);
 	});
 
 	it('registers a teardown for each of them', () => {
@@ -88,7 +96,7 @@ describe('every viewer-scoped world module is registered for teardown', () => {
 		const covered = (mod: string) =>
 			registered.has(mod)
 			|| [...registered].some((name) => mod.startsWith(name) || name.startsWith(mod));
-		const missing = viewerScopedModules().filter((mod) => !covered(mod));
+		const missing = scoped.filter((mod) => !covered(mod));
 		expect(
 			missing,
 			`viewer-scoped world modules with no registered teardown: ${missing.join(', ')}. `

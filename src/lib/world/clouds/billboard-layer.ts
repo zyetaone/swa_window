@@ -16,7 +16,13 @@ import { createSeededRng, daySeed } from '../prng';
 import { metresToGeoDelta, spriteOffset, spriteScale } from './sprite-placement';
 import { registerViewerTeardown } from '../viewer-lifecycle';
 
-const CLOUD_ALT_M = 7_000; // ~26k ft
+/**
+ * Deck height in metres (~23k ft). Exported because it is not only this
+ * module's business: the "Over the Deck" show exists on the premise that the
+ * `clouds` location cruises ABOVE it, and its test has to check that against
+ * the real number rather than a copy that can drift out from under it.
+ */
+export const CLOUD_ALT_M = 7_000;
 
 // ---- DISTANT BAND ----
 const DISTANT_RADIUS_MIN = 42_000;
