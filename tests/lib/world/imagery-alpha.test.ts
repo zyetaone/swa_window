@@ -182,14 +182,12 @@ describe('COLOR_TO_ALPHA (deep-review SSOT)', () => {
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeLessThan(COLOR_TO_ALPHA.roadThreshold);
 	});
 
-	it('uses a lower composite threshold so packager floor glow survives', () => {
-		// floor 0.15 × stroke ~28.6/255 → euclid ≈ 0.03. Composite threshold
-		// must sit above that (keep stroke) but well below CartoDB's 0.12.
-		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeGreaterThan(0.02);
-		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeLessThan(0.06);
-		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeLessThan(COLOR_TO_ALPHA.roadThreshold);
-		expect(COLOR_TO_ALPHA.roadCompositeThreshold).toBeGreaterThanOrEqual(
-			COLOR_TO_ALPHA.viirsThreshold,
-		);
+	it('does NOT key the baked composite — it carries its own alpha', () => {
+		// The composite scales background AND strokes by the same VIIRS
+		// glowFactor, so no client threshold can separate them (0.12 kills the
+		// floor; 0.03 leaves bright-core background opaque). The bake writes a
+		// graded road-presence mask into PNG alpha instead. Re-adding a
+		// composite threshold to this SSOT must fail loudly.
+		expect('roadCompositeThreshold' in COLOR_TO_ALPHA).toBe(false);
 	});
 });
