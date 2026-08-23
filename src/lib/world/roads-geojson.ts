@@ -283,13 +283,20 @@ export function roadFlicker(binPhase: number, timeOfDayHours: number): number {
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 interface RoadBin {
-	lines: CesiumType.PolylineCollection;
+	/**
+	 * Either a draped GroundPolylinePrimitive (preferred — follows terrain) or
+	 * a PolylineCollection at a fixed altitude (fallback). Both expose `show`,
+	 * which is all the per-frame path needs.
+	 */
+	lines: { show: boolean };
 	material: CesiumType.Material;
 	cls: RoadClass;
 	/** Stable phase offset so bins do not all breathe in lockstep. */
 	phase: number;
 	/** Same idempotency pattern every sibling subsystem uses for uniform writes. */
 	alpha: EpsilonGate<number>;
+	/** Roads collected during parse, consumed once when the bin is realised. */
+	pending: RoadPolyline[];
 }
 
 interface CityRoads {
@@ -405,30 +412,38 @@ async function loadOfflineRoads(
 						glowPower: ROAD_LAMPS[lamp].glow * ROAD_STYLE[r.cls].glowScale,
 						taperPower: 1.0,
 					});
-					const lines = new C.PolylineCollection();
-					lines.show = false;
-					viewer.scene.primitives.add(lines);
 					bin = {
-						lines,
+						lines: { show: false },
 						material,
 						cls: r.cls,
 						phase: roadBinPhase(r.cls, lamp),
 						alpha: new EpsilonGate<number>(0.001, -1),
+						pending: [],
 					};
 					bins.set(key, bin);
 				}
-				bin.lines.add({
-					positions: C.Cartesian3.fromDegreesArrayHeights(withHeights(r.coords, r.altM)),
-					// Glow needs pixels to fall off across; a 1 px line has nowhere
-					// to put the halo. Widths are ~2x the flat-material values.
-					width: ROAD_STYLE[r.cls].width,
-					material: bin.material,
-				});
+				bin.pending.push(r);
+			}
+
+			// ─── Realise each bin ───────────────────────────────────────────────
+			// Two-phase (collect, then build) because the DRAPED path wants all of
+			// a bin's geometry at once as GeometryInstances, while the fallback
+			// wants them added one at a time. Collecting first keeps one loop.
+			const draped = C.GroundPolylinePrimitive.isSupported(viewer.scene);
+			for (const bin of bins.values()) {
+				bin.lines = draped
+					? buildDrapedBin(C, viewer, bin)
+					: buildFlatBin(C, viewer, bin);
+				bin.pending = [];
 			}
 
 			if (bins.size > 0) _cityRoads.set(locationId, { bins });
-		} catch {
-			// Offline, malformed JSON, or no packaged data — stay silent.
+		} catch (e) {
+			// Never break the fiction — no audience-visible error, the night city
+			// simply has no grid. But do say so on the console, exactly as the
+			// imagery layers do: this catch previously hid a hard construction
+			// failure and presented it as "the data must be missing".
+			console.warn('[Roads] layer failed for', locationId, e);
 		} finally {
 			_inFlight.delete(locationId);
 		}
@@ -443,6 +458,92 @@ function withHeights(coords: number[], altM: number): number[] {
 	const out: number[] = [];
 	for (let i = 0; i < coords.length; i += 2) out.push(coords[i], coords[i + 1], altM);
 	return out;
+}
+
+/**
+ * Draped bin — the roads sit ON the terrain, following every rise and cut.
+ *
+ * ─── ⚠ WHY DRAPING AND NOT A CONSTANT LIFT ──────────────────────────────────
+ * The fallback below places every line at `groundAltM(city) + 8 m`, i.e. on a
+ * flat plane at the city's nominal elevation. That is fine over Dubai and
+ * Dallas and visibly wrong anywhere with relief: Denver's ground swings ~700 m
+ * across its extract, so a single plane buries whole neighbourhoods inside
+ * hillsides and floats others in mid-air. Hyderabad's Deccan ridges do the same
+ * thing at a smaller scale, which reads as roads that mysteriously stop.
+ *
+ * GroundPolylineGeometry re-projects onto whatever terrain is loaded, so the
+ * grid stays welded to the surface at every LOD and needs no per-vertex height
+ * sampling (which would be async, 21k polylines deep, and wrong until tiles
+ * stream in).
+ *
+ * `isSupported` is a real gate, not defensive noise: draping needs depth
+ * texture support, and on a driver without it Cesium THROWS at construction
+ * rather than degrading. On this fleet that would be a black night city with a
+ * console error nobody reads.
+ */
+function buildDrapedBin(
+	C: typeof CesiumType,
+	viewer: CesiumType.Viewer,
+	bin: RoadBin,
+): { show: boolean } {
+	const instances = bin.pending.map(
+		(r) =>
+			new C.GeometryInstance({
+				geometry: new C.GroundPolylineGeometry({
+					positions: C.Cartesian3.fromDegreesArray(r.coords),
+					width: ROAD_STYLE[r.cls].width,
+					// ⚠ NO arcType HERE. GroundPolylineGeometry accepts only
+					// GEODESIC and RHUMB and THROWS a DeveloperError on
+					// ArcType.NONE — which the flat path does use, so copying the
+					// option across is the obvious mistake. The throw lands in the
+					// loader's catch and presents as "this city has no road data",
+					// which is why that catch now logs.
+					//
+					// Draping implies following the surface, so a straight-line arc
+					// is meaningless by construction. Geodesic subdivision is the
+					// price of the feature, not an oversight.
+				}),
+			}),
+	);
+	const primitive = new C.GroundPolylinePrimitive({
+		geometryInstances: instances,
+		appearance: new C.PolylineMaterialAppearance({ material: bin.material }),
+		// The kiosk never picks roads; skipping the pick pass saves a full extra
+		// render of this geometry every frame.
+		allowPicking: false,
+		releaseGeometryInstances: true,
+		asynchronous: true,
+	});
+	primitive.show = false;
+	viewer.scene.groundPrimitives.add(primitive);
+	return primitive;
+}
+
+/**
+ * Flat bin — every line on one plane at the city's nominal ground altitude.
+ *
+ * Fallback only, for a device whose driver cannot drape. Keeps the night city
+ * present and roughly right rather than absent, which is the same bargain the
+ * offline buildings tier makes. See ROAD_LIFT_M for the z-fighting margin.
+ */
+function buildFlatBin(
+	C: typeof CesiumType,
+	viewer: CesiumType.Viewer,
+	bin: RoadBin,
+): { show: boolean } {
+	const lines = new C.PolylineCollection();
+	lines.show = false;
+	for (const r of bin.pending) {
+		lines.add({
+			positions: C.Cartesian3.fromDegreesArrayHeights(withHeights(r.coords, r.altM)),
+			// Glow needs pixels to fall off across; a 1 px line has nowhere to put
+			// the halo. Widths are ~2x the flat-material values.
+			width: ROAD_STYLE[r.cls].width,
+			material: bin.material,
+		});
+	}
+	viewer.scene.primitives.add(lines);
+	return lines;
 }
 
 /**
