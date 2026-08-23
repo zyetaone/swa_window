@@ -22,9 +22,13 @@ import { CLOUD_ALT_M } from '$lib/world/clouds/billboard-layer';
 const FT_PER_M = 3.28084;
 
 describe('Over the Deck plays the premise it was authored for', () => {
-	it('opens in full daylight, not dawn or dusk', () => {
-		// "Blue sky above" is only true in the day band. An hour that drifted
-		// into dusk would still render a sky — just not this show's sky.
+	it('names an hour in the day band, even though the fleet overrides it', () => {
+		// ⚠ THIS ASSERTS AUTHORIAL INTENT, NOT WHAT RENDERS. A show's
+		// timeOfDay does NOT survive boot on a Pi: syncToRealTime defaults true
+		// and persistence refuses to restore it, so updateTimeFromSystem()
+		// replaces this with the real civil hour at the destination. The hour
+		// below governs only when a human pins it (?time=, admin) — which is
+		// exactly why this show is not in the rotation.
 		expect(getSkyState(middayCloudsShow.opening.timeOfDay)).toBe('day');
 	});
 
@@ -52,9 +56,16 @@ describe('Over the Deck plays the premise it was authored for', () => {
 		expect(w.filterBrightness).toBe(1);
 	});
 
-	it('is actually in the rotation', () => {
-		// night-clouds is the cautionary case: authored, correct, and excluded,
-		// so the `clouds` location never played at all until this show.
-		expect(DAILY_ROTATION.map((s) => s.id)).toContain('midday-clouds');
+	it('is NOT in the daily rotation', () => {
+		// Regression pin. It WAS added to the rotation and shipped that way,
+		// on the assumption that `timeOfDay: 13` kept it daylit. It does not:
+		// the fleet overwrites the hour with real local time at `clouds`
+		// (Asia/Tokyo), and 4 of the 12 two-hour UTC slots put that between
+		// 21:00 and 05:00 — hasBuildings:false with no city floor, i.e. the
+		// same black void that keeps night-clouds out.
+		//
+		// Re-adding it needs a sky-aware pick or a moonlit cloud floor, not a
+		// different authored hour. Until then this must stay out.
+		expect(DAILY_ROTATION.map((s) => s.id)).not.toContain('midday-clouds');
 	});
 });

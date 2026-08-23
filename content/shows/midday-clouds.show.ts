@@ -1,6 +1,14 @@
 /**
  * Above the deck at midday — blue sky over, cloud floor under.
  *
+ * ⚠ NOT IN DAILY_ROTATION — operator/URL only. It was added to the rotation
+ * and shipped that way for a few hours on 2026-08-23, on the assumption that
+ * the `timeOfDay` below keeps it daylit. It does not: syncToRealTime defaults
+ * true and persistence refuses to restore it, so the fleet replaces this hour
+ * with the real civil hour at the destination. `clouds` is Asia/Tokyo, and 4
+ * of the 12 two-hour UTC slots put it in deep night — the same void that
+ * keeps night-clouds out. The hour below governs only when a human pins it.
+ *
  * The `clouds` location (45 kft, CLOUDS_SCENE) already existed but had
  * exactly one show, night-clouds, which is deliberately OUT of the rotation:
  * hasBuildings:false plus deep night is a black void with nothing to light.
@@ -29,7 +37,7 @@ export const middayCloudsShow: Show = {
 	name: 'Over the Deck',
 	description:
 		'Midday at 45,000 feet — open blue above, an unbroken cloud floor ' +
-		'below. The altitude beat the rotation only had a night version of.',
+		'below. Operator-selected: the rotation cannot guarantee the hour.',
 	opening: {
 		location: 'clouds',
 		weather: 'cloudy',

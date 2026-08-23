@@ -73,8 +73,10 @@ Record p50 / p95 fps for both states:
 - [ ] **Wing** — livery + nav-light strobe render clean, no z-fighting against the horizon
 - [ ] **Neon roads / city bokeh** — crisp, no shimmer or moiré at cruise
 - [ ] **Over the deck** (`?location=clouds&weather=cloudy&time=13`) — open sky
-      above, an unbroken cloud floor below, no hard-edged billboard quads. This
-      show is IN the rotation and has never been seen on a real GPU: it was
+      above, an unbroken cloud floor below, no hard-edged billboard quads.
+      Operator/URL only — NOT in the rotation (the fleet overrides a show's
+      authored hour, so `clouds` would land in deep night 4 slots in 12). It
+      has never been seen on a real GPU: it was
       authored and test-pinned but the desktop check was inconclusive (RAF
       throttled to 0 fps in every capture, and the control scene rendered wrong
       too). Cloud COST needs no separate run — monsoon-mumbai already ships

@@ -23,7 +23,6 @@ import { monsoonMumbaiShow } from './monsoon-mumbai.show';
 import { dawnHimalayasShow } from './dawn-himalayas.show';
 import { pacificEveningShow } from './pacific-evening.show';
 import { middayPhoenixShow } from './midday-phoenix.show';
-import { middayCloudsShow } from './midday-clouds.show';
 import { duskDallasShow } from './dusk-dallas.show';
 import { nightChicagoShow } from './night-chicago.show';
 import { dawnDenverShow } from './dawn-denver.show';
@@ -43,9 +42,23 @@ export const DAILY_ROTATION: readonly Show[] = [
 	duskDallasShow,        // Dallas golden hour
 	nightChicagoShow,      // Chicago night lights
 	dawnDenverShow,        // Denver dawn
-	middayCloudsShow,      // 45 kft midday, blue sky over a cloud floor
 	// nightCloudsShow stays OUT: hasBuildings:false + deep night = black void
 	// without VIIRS/city floor (see night-clouds.show.ts).
+	//
+	// middayCloudsShow stays OUT FOR THE SAME REASON, which is not obvious from
+	// reading it: its opening says timeOfDay 13.0, but a show's authored hour
+	// never reaches the fleet. syncToRealTime defaults true and persistence
+	// deliberately refuses to restore it ("boot must open with Real Time ON"),
+	// so updateTimeFromSystem() overwrites timeOfDay with the real civil hour
+	// at the DESTINATION. `clouds` is Asia/Tokyo, and 4 of the 12 two-hour UTC
+	// slots land it between 21:00 and 05:00 local — the identical void, reached
+	// through the hour instead of through the author.
+	//
+	// Both are reachable by URL and from the admin panel, where the operator
+	// picks the moment. Letting either back into the rotation needs the pick to
+	// be sky-aware (pickNextLocation already scores destination sky; this one
+	// does not), or the `clouds` location needs a moonlit floor to be worth
+	// looking at after dark.
 ];
 
 export { defaultShow };
