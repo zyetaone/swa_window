@@ -104,4 +104,37 @@ describe('AeroWindow.setDisplayMode', () => {
 		expect(model.displayMode).toBe('video');
 		expect(model.videoUrl).toBe('https://cdn.example.com/b.mp4');
 	});
+	it('lets force bypass the stale gate, which is what boot restore relies on', () => {
+		// The only caller of `force` is the post-boot media restore: it re-applies
+		// the STORED mode with the STORED savedAt, which is by definition not
+		// newer than what is in storage. Without the bypass a reload would land
+		// on flight and the operator's video would silently be gone — on a kiosk
+		// that reboots unattended, permanently.
+		const model = new AeroWindow();
+		expect(model.setDisplayMode('flight', undefined, { decidedAtMs: 20_000 })).toBe(true);
+		// Older stamp: rejected normally...
+		expect(
+			model.setDisplayMode('video', 'https://cdn.example.com/a.mp4', { decidedAtMs: 10_000 }),
+		).toBe(false);
+		// ...and applied with force.
+		expect(
+			model.setDisplayMode('video', 'https://cdn.example.com/a.mp4', {
+				decidedAtMs: 10_000,
+				force: true,
+			}),
+		).toBe(true);
+		expect(model.displayMode).toBe('video');
+	});
+
+	it('does not let force smuggle an invalid payload through', () => {
+		// force skips the LWW gate ONLY. The payload validators are a trust
+		// boundary — a fleet push carrying javascript: must not become
+		// applicable just because it also set force.
+		const model = new AeroWindow();
+		expect(
+			model.setDisplayMode('video', 'javascript:alert(1)', { force: true }),
+		).toBe(false);
+		expect(model.displayMode).toBe('flight');
+		expect(model.videoUrl).toBe('');
+	});
 });
