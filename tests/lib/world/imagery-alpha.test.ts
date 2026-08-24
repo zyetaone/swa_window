@@ -19,7 +19,6 @@ import { describe, it, expect } from 'vitest';
 import {
 	viirsLayerAlpha,
 	roadMaskAlpha,
-	roadLayerZoomRange,
 	COLOR_TO_ALPHA,
 } from '$lib/world/imagery';
 import { NIGHT_PALETTE } from '$content/compositions/night';
@@ -153,41 +152,14 @@ describe('roadMaskAlpha', () => {
 	});
 });
 
-describe('roadLayerZoomRange', () => {
-	// Both local caches (viirs-roads composite AND the cartodb-dark fallback)
-	// are baked z4–12. A 0–18 clamp against the local server 404-churns z13+
-	// requests at every flyover zoom — the sibling of the @2x bug: local
-	// parameters that don't match the packager's layout fail silently.
-	it('clamps local layers to the baked z4–12 range', () => {
-		expect(roadLayerZoomRange(true)).toEqual({ minimumLevel: 4, maximumLevel: 12 });
-	});
-
-	it('leaves the remote CDN at its full z0–18 range', () => {
-		expect(roadLayerZoomRange(false)).toEqual({ minimumLevel: 0, maximumLevel: 18 });
-	});
-});
-
-describe('COLOR_TO_ALPHA (deep-review SSOT)', () => {
-	// Cesium keys transparent when distance-to-black ≤ threshold. These
-	// values are load-bearing: 0.0 left CartoDB near-black opaque; roads
-	// painted a dark sheet. VIIRS true-black only needs a hairline.
-	it('keeps CartoDB road threshold above near-black (~0.05–0.08)', () => {
-		expect(COLOR_TO_ALPHA.roadThreshold).toBeGreaterThanOrEqual(0.1);
-		expect(COLOR_TO_ALPHA.roadThreshold).toBeLessThan(0.25);
-	});
-
+describe('COLOR_TO_ALPHA (VIIRS imagery only)', () => {
 	it('keeps VIIRS threshold a hairline above true black only', () => {
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeGreaterThan(0);
 		expect(COLOR_TO_ALPHA.viirsThreshold).toBeLessThan(0.05);
-		expect(COLOR_TO_ALPHA.viirsThreshold).toBeLessThan(COLOR_TO_ALPHA.roadThreshold);
 	});
 
-	it('does NOT key the baked composite — it carries its own alpha', () => {
-		// The composite scales background AND strokes by the same VIIRS
-		// glowFactor, so no client threshold can separate them (0.12 kills the
-		// floor; 0.03 leaves bright-core background opaque). The bake writes a
-		// graded road-presence mask into PNG alpha instead. Re-adding a
-		// composite threshold to this SSOT must fail loudly.
+	it('does not carry raster-road thresholds — streets are vector + viirs-field', () => {
+		expect('roadThreshold' in COLOR_TO_ALPHA).toBe(false);
 		expect('roadCompositeThreshold' in COLOR_TO_ALPHA).toBe(false);
 	});
 });

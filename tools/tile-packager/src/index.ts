@@ -35,6 +35,8 @@ interface Args {
 	skipBuildings: boolean;
 	skipRoads: boolean;
 	skipAssets: boolean;
+	roadsOnly: boolean;
+	forceRoads: boolean;
 }
 
 function parseArgs(): Args {
@@ -48,6 +50,8 @@ function parseArgs(): Args {
 		skipBuildings: false,
 		skipRoads: false,
 		skipAssets: false,
+		roadsOnly: false,
+		forceRoads: false,
 	};
 	for (let i = 0; i < a.length; i++) {
 		switch (a[i]) {
@@ -59,6 +63,8 @@ function parseArgs(): Args {
 			case '--skip-buildings': out.skipBuildings = true; break;
 			case '--skip-roads':    out.skipRoads = true; break;
 			case '--skip-assets':   out.skipAssets = true; break;
+			case '--roads-only':    out.roadsOnly = true; break;
+			case '--force-roads':   out.forceRoads = true; break;
 			case '-h':
 			case '--help':
 				console.log(`Usage:
@@ -71,6 +77,8 @@ function parseArgs(): Args {
   bun run start -- --skip-buildings              Don't run Overpass buildings pass
   bun run start -- --skip-roads                  Don't run Overpass roads pass
   bun run start -- --skip-assets                 Don't copy static assets
+  bun run start -- --roads-only                  Overpass roads pass only (no tiles)
+  bun run start -- --force-roads                 Re-fetch roads even if on disk
 
 Tile sources:
   eox-sentinel2     Sentinel-2 cloudless imagery (free, no auth)
@@ -95,19 +103,27 @@ Environment:
 
 async function main() {
 	const args = parseArgs();
+	if (args.roadsOnly) {
+		args.skipBuildings = true;
+		args.skipAssets = true;
+	}
 	const locations = args.locations === 'all'
 		? LOCATIONS
 		: LOCATIONS.filter((l) => (args.locations as LocationId[]).includes(l.id));
+	const roadLocations = locations.filter((l) => l.hasBuildings);
 
 	const sources = args.sources === 'all'
 		? Object.values(SOURCES)
 		: Object.values(SOURCES).filter((s) => (args.sources as TileSource[]).includes(s.source));
 
 	console.log(`📍 Locations:  ${locations.length} (${locations.map((l) => l.id).join(', ')})`);
-	console.log(`🗺  Sources:    ${sources.length} (${sources.map((s) => s.source).join(', ')})`);
-	console.log(`📂 Output:     ${args.output}`);
-	console.log();
+	if (!args.roadsOnly) {
+		console.log(`🗺  Sources:    ${sources.length} (${sources.map((s) => s.source).join(', ')})`);
+		console.log(`📂 Output:     ${args.output}`);
+		console.log();
+	}
 
+	if (!args.roadsOnly) {
 	// Plan: enumerate all (source, location, tile) triples upfront for accurate total.
 	// Each job carries its source config so the worker knows whether to attach
 	// auth headers (e.g. Cesium Ion Bearer token) at fetch time.
@@ -225,6 +241,7 @@ async function main() {
 	console.log('\n');
 	console.log(`✅ Tile phase: ${downloaded} downloaded, ${skipped} skipped (cached), ${failed} failed`);
 	console.log(`⏱  ${((Date.now() - startMs) / 1000).toFixed(1)}s for tiles`);
+	}
 
 	// ─── OSM Buildings pass ─────────────────────────────────────────────────
 	// Per-location Overpass query → slim extrusion GeoJSON. Serial so we don't
@@ -293,15 +310,15 @@ async function main() {
 	// 40 km arterial query is a genuinely large ask.
 	if (!args.skipRoads) {
 		console.log();
-		console.log(`🛣  Roads (Overpass → GeoJSON) for ${locations.length} location(s)...`);
+		console.log(`🛣  Roads (Overpass → GeoJSON) for ${roadLocations.length} city location(s)...`);
 		const roadsStart = Date.now();
 		let rBuilt = 0;
 		let rSkipped = 0;
 		let rFailed = 0;
 		const groups = radiusGroups();
-		for (const loc of locations) {
+		for (const loc of roadLocations) {
 			const outPath = join(args.output, ROADS_CONFIG.storagePath(loc.id));
-			if (existsSync(outPath)) {
+			if (existsSync(outPath) && !args.forceRoads) {
 				rSkipped++;
 				continue;
 			}

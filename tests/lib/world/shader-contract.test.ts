@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { BUILDING_BEACON } from '$lib/world/buildings';
 
 /** Extract every `/* glsl *\/`-tagged or *_SHADER/*_GLSL template literal. */
 function extractShaders(file: string): Record<string, string> {
@@ -113,4 +114,38 @@ describe('post-process fragment shaders', () => {
 			});
 		});
 	}
+});
+
+describe('building beacon contract (whole-skyline red pulse regression)', () => {
+	// Two failures once made every rooftop beacon in the city pulse red IN
+	// LOCKSTEP: the height gate was low enough to light mid-rise blocks, and
+	// the blink oscillator had no per-building phase. The shader body
+	// interpolates BUILDING_BEACON, so the extracted GLSL below contains the
+	// ${...} expressions verbatim — assert on structure there, on values here.
+	const beacon = SHADERS['src/lib/world/buildings.ts:BUILDING_SHADER_GLSL'];
+
+	it('finds the buildings shader', () => {
+		expect(beacon).toBeDefined();
+	});
+
+	it('blink is phase-offset per block — lockstep can never come back', () => {
+		// The regression form was `step(0.4, fract(u_time * 0.5))` — a pure
+		// function of time, identical for every building on earth.
+		expect(beacon).toMatch(/beaconPhase\s*=\s*fract\(\s*sin\(\s*dot\(/);
+		expect(beacon).toMatch(/fract\(\s*u_time[\s\S]{0,80}?\+\s*beaconPhase\s*\)/);
+	});
+
+	it('gates beacons to tall rooftops only', () => {
+		expect(beacon).toMatch(/isTall\s*=\s*smoothstep\(/);
+		expect(beacon).toMatch(/isRoof\s*\*\s*isTall\s*\*\s*blink/);
+	});
+
+	it('keeps the shipped height gate — mid-rise blocks must not light', () => {
+		// Was 30 m: at that gate half the skyline blinked. Assert at the SSOT
+		// so a revert fails here even though the GLSL interpolates the values.
+		expect(BUILDING_BEACON.heightMinM).toBeGreaterThanOrEqual(100);
+		expect(BUILDING_BEACON.heightMaxM).toBeGreaterThan(BUILDING_BEACON.heightMinM);
+		expect(BUILDING_BEACON.phaseBlockM).toBeGreaterThan(0);
+		expect(BUILDING_BEACON.blinkHz).toBeGreaterThan(0);
+	});
 });

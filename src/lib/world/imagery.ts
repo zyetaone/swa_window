@@ -26,31 +26,18 @@ import { EpsilonGate } from './util';
 import { registerViewerTeardown } from './viewer-lifecycle';
 
 /**
- * Cesium `colorToAlpha` thresholds — SSOT for night imagery keying.
+ * Cesium `colorToAlpha` threshold — SSOT for VIIRS night imagery keying.
  *
  * Cesium makes a pixel transparent when its distance to `colorToAlpha`
  * (black) is ≤ threshold — evaluated on the RAW sampled colour, BEFORE
- * brightness/contrast (GlobeFS.glsl sampleAndBlend). Too low → near-black
- * basemap background stays opaque and paints a dark sheet over terrain.
- * Too high → road strokes themselves get keyed out.
+ * brightness/contrast (GlobeFS.glsl sampleAndBlend).
  *
- * Deep-review findings (shipped twice as silent failures):
- *   - roads: 0.0 only matched exact #000; CartoDB bg is ~#0e1013 → 0.12
- *   - VIIRS: true black NASA tiles → 0.01 hairline is enough
- *
- * Only the RAW cartodb/CDN road layer is keyed. The baked viirs-roads
- * composite carries its own graded alpha channel (road-presence mask baked
- * by tools/tile-packager — see ALPHA_LO/ALPHA_HI there): the composite
- * scales background AND strokes by the same VIIRS glowFactor, so NO client
- * threshold can keep floor-dimmed strokes (~2–6/255) while still keying
- * bright-core background (~9/255). A 0.12 key deletes the floor; a 0.03 key
- * renders downtown as a dark sheet. Keying that layer is the bug, at any
- * threshold — do not reintroduce it.
+ * Night street lamps are vector polylines (`world/roads-geojson`) modulated
+ * at runtime via `viirs-field` + `viirs-glow.ts` — not a raster road layer.
+ * The optional `viirs-roads` tile bake (ADR-002) remains for legacy caches only.
  */
 export const COLOR_TO_ALPHA = {
 	viirsThreshold: 0.01,
-	/** Raw CartoDB / CDN — clears ~#0e1013 basemap, keeps full strokes. */
-	roadThreshold: 0.12,
 } as const;
 
 interface WorldConfig {
@@ -329,23 +316,6 @@ export function roadMaskAlpha(
 	// and most of the slider was inert.
 	const gain = nightLightGain(scale);
 	return clamp(nf * gain * gate + (1 - nf) * 0.08 * gate, 0, 1) * bootFade;
-}
-
-/**
- * Zoom clamp for the road layer. Local caches — the viirs-roads composite
- * AND the raw cartodb-dark fallback — are both baked z4–12 (packager
- * zoomRange [4,12]); beyond z12 Cesium upsamples, which the glow modulation
- * tolerates fine. Only the remote CDN serves z0–18.
- *
- * Keyed on LOCALITY, not on which local layer answered: an older cache
- * without viirs-roads takes the cartodb fallback, and a 0–18 clamp there
- * 404-churns z13+ requests against the local server at flyover zooms.
- *
- * Pure and exported for test — this exact bug class (local URL/params that
- * don't match the packager's layout) already shipped silently twice.
- */
-export function roadLayerZoomRange(local: boolean): { minimumLevel: number; maximumLevel: number } {
-	return local ? { minimumLevel: 4, maximumLevel: 12 } : { minimumLevel: 0, maximumLevel: 18 };
 }
 
 /**

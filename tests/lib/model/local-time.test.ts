@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+	isValidTimeZone,
 	localHoursInTimeZone,
 	localHoursFromUtcOffset,
 	resolveLocalHours,
@@ -55,5 +56,20 @@ describe('resolveLocalHours', () => {
 			now,
 		});
 		expect(h).toBeCloseTo(14.5, 5);
+	});
+});
+
+describe('isValidTimeZone', () => {
+	it('accepts real IANA zone ids', () => {
+		expect(isValidTimeZone('America/Chicago')).toBe(true);
+		expect(isValidTimeZone('UTC')).toBe(true);
+		expect(isValidTimeZone('Asia/Kathmandu')).toBe(true);
+	});
+
+	it('rejects garbage — the wire/localStorage trust boundary', () => {
+		expect(isValidTimeZone('Not/AZone')).toBe(false);
+		expect(isValidTimeZone('')).toBe(false);
+		expect(isValidTimeZone(undefined)).toBe(false);
+		expect(isValidTimeZone(42)).toBe(false);
 	});
 });

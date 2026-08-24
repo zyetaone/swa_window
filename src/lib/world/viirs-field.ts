@@ -59,7 +59,7 @@ const TILE_Z = 7;
 const VIIRS_TILE = (z: number, y: number, x: number) =>
 	`${VIIRS_GIBS_BASE}/${z}/${y}/${x}.png`;
 
-interface ViirsField {
+export interface ViirsField {
 	/** VIIRS luminance at a geographic point, 0 (dark) … 1 (bright core).
 	 *  Nearest-pixel — cheapest, but snaps to the coarse ~1.2 km/px tile grid
 	 *  (blocky for dense point placement). */
@@ -242,4 +242,33 @@ export function getViirsField(lat: number, lon: number): ViirsField | null {
 	};
 	img.src = VIIRS_TILE(z, ty, tx);
 	return null;
+}
+
+/**
+ * Wait for the VIIRS field covering (lat, lon) — used when vector roads load so
+ * lamp brightness can follow real lit cores on the first frame.
+ */
+export function awaitViirsField(lat: number, lon: number, maxMs = 5000): Promise<ViirsField | null> {
+	if (typeof document === 'undefined') return Promise.resolve(null);
+	const { key } = tileKey(lat, lon);
+	const existing = getViirsField(lat, lon);
+	if (existing) return Promise.resolve(existing);
+
+	return new Promise((resolve) => {
+		const t0 = performance.now();
+		const poll = () => {
+			const field = getViirsField(lat, lon);
+			if (field) {
+				resolve(field);
+				return;
+			}
+			const state = _cache.get(key);
+			if (state === 'failed' || performance.now() - t0 > maxMs) {
+				resolve(null);
+				return;
+			}
+			setTimeout(poll, 50);
+		};
+		poll();
+	});
 }

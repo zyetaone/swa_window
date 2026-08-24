@@ -16,6 +16,10 @@
  *   dest    — rect that extract occupies on the road tile's pixel grid
  */
 
+import { glowFactor, luma601, VIIRS_ROAD_GLOW_FLOOR } from '../../../src/lib/world/viirs-glow.ts';
+
+export { glowFactor, luma601, VIIRS_ROAD_GLOW_FLOOR };
+
 export interface Rect {
 	left: number;
 	top: number;
@@ -109,32 +113,36 @@ export function viirsCoverForRoadTile(
 }
 
 /**
- * Rec.601 luma. The cached VIIRS tiles were downloaded with saturation 0, so
- * in practice r ≈ g ≈ b — this stays correct even if that ever changes.
- */
-export function luma601(r: number, g: number, b: number): number {
-	return 0.299 * r + 0.587 * g + 0.114 * b;
-}
-
-/**
- * Road-glow multiplier for a VIIRS luminance sample (0–255).
+ * Baked-alpha band on the RAW road tile's max channel (0–255), measured
+ * against the packaged cartodb-dark cache: background lives at ≤ 10, road
+ * strokes (incl. anti-aliased edges) at ~12–41. Below ALPHA_LO the pixel is
+ * fully transparent; above ALPHA_HI fully opaque; linear between, which
+ * preserves stroke anti-aliasing.
  *
- * Linear remap lum ∈ [0,255] → factor ∈ [floor, 1]. Chosen over a hard
- * max(floor, lum/255) knee because it preserves VIIRS' intra-city gradient
- * across the whole range — downtown cores still out-bloom the suburbs — while
- * the floor guarantees sparse-but-real towns (and cache-edge tiles whose
- * VIIRS cover is missing) keep a minimum of road structure instead of going
- * fully dark.
+ * WHY BAKED ALPHA, NOT CLIENT KEYING: Cesium's colorToAlpha keying runs on
+ * the raw sampled colour, BEFORE brightness/contrast (GlobeFS.glsl
+ * sampleAndBlend), and it keys on ABSOLUTE levels. The composite scales
+ * background AND strokes by the same glowFactor, so no threshold can keep
+ * floor-dimmed strokes (≈2–6/255) while still keying bright-core background
+ * (≈9/255) — 0.12 kills the floor, 0.03 lets bright backgrounds render as a
+ * dark sheet. Baking the road/background decision into the alpha channel
+ * sidesteps keying entirely and lets client brightness lift dim strokes back
+ * to visible.
  */
-export function glowFactor(luminance: number, floor: number): number {
-	const lum = Math.min(255, Math.max(0, luminance)) / 255;
-	return floor + (1 - floor) * lum;
+export const ALPHA_LO = 12;
+export const ALPHA_HI = 28;
+
+/** Graded road-presence alpha for a raw road pixel's max channel (0–255 → 0–255). */
+export function roadPresenceAlpha(maxChannel: number): number {
+	const t = (maxChannel - ALPHA_LO) / (ALPHA_HI - ALPHA_LO);
+	return Math.round(Math.min(1, Math.max(0, t)) * 255);
 }
 
 /**
- * In-place multiply of an RGBA road-tile raw buffer by the per-pixel glow
- * factor derived from a same-size RGB VIIRS raw buffer. Alpha untouched —
- * the app keys transparency off black via colorToAlpha, not the alpha channel.
+ * In-place bake of an RGBA road tile: RGB multiplied by the per-pixel glow
+ * factor derived from a same-size RGB VIIRS buffer; alpha REWRITTEN to the
+ * graded road-presence mask taken from the pixel's PRE-modulation brightness
+ * (see ALPHA_LO/ALPHA_HI for why the client must not key this layer).
  */
 export function modulateRoadPixels(
 	roadRaw: Uint8Array,
@@ -143,12 +151,16 @@ export function modulateRoadPixels(
 	floor: number,
 ): void {
 	for (let i = 0; i < pixelCount; i++) {
+		const rr = roadRaw[i * 4];
+		const rg = roadRaw[i * 4 + 1];
+		const rb = roadRaw[i * 4 + 2];
+		roadRaw[i * 4 + 3] = roadPresenceAlpha(Math.max(rr, rg, rb));
 		const r = viirsRaw[i * 3];
 		const g = viirsRaw[i * 3 + 1];
 		const b = viirsRaw[i * 3 + 2];
 		const f = glowFactor(luma601(r, g, b), floor);
-		roadRaw[i * 4] = Math.round(roadRaw[i * 4] * f);
-		roadRaw[i * 4 + 1] = Math.round(roadRaw[i * 4 + 1] * f);
-		roadRaw[i * 4 + 2] = Math.round(roadRaw[i * 4 + 2] * f);
+		roadRaw[i * 4] = Math.round(rr * f);
+		roadRaw[i * 4 + 1] = Math.round(rg * f);
+		roadRaw[i * 4 + 2] = Math.round(rb * f);
 	}
 }

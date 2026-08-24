@@ -5,6 +5,7 @@
 	"scripts": {
 		"start": "bun src/index.ts",
 		"estimate": "bun src/index.ts --estimate",
-		"viirs-roads": "bun src/viirs-roads.ts"
+		"viirs-roads": "bun src/viirs-roads.ts",
+		"roads": "bun src/index.ts -- --roads-only --force-roads"
 	}
 }

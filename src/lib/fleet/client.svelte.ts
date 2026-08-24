@@ -384,7 +384,11 @@ export class DeviceClient {
 					// warp, reopen). setWeather changes the weather in place.
 					if (isValidWeather(d.weather)) { this.#model.setWeather?.(d.weather, { trackUserOverride: false }); applied++; }
 					if (typeof d.flightSpeed === 'number') { this.#model.setFlightSpeed(d.flightSpeed); applied++; }
-					if (typeof d.syncToRealTime === 'boolean') { this.#model.syncToRealTime = d.syncToRealTime; applied++; }
+					if (typeof d.syncToRealTime === 'boolean') {
+						this.#model.syncToRealTime = d.syncToRealTime;
+						if (d.syncToRealTime) this.#model.updateTimeFromSystem?.();
+						applied++;
+					}
 					if (typeof d.cloudDensity === 'number') {
 						this.#model.applyConfigPatch?.('atmosphere.clouds.density', clamp(d.cloudDensity, 0, 1));
 						applied++;

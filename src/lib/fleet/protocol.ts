@@ -41,6 +41,8 @@ export interface FleetClientModel {
 	setAltitude(alt: number): void;
 	setTime(t: number): void;
 	setFlightSpeed(n: number): void;
+	/** Re-read civil time from zone / Real Time — invoked when admin push enables sync. */
+	updateTimeFromSystem?(): void;
 	/**
 	 * Path-targeted patch — applied through RootConfig.applyConfigPatch.
 	 * Returns true if the path was recognised. Optional so test stubs and

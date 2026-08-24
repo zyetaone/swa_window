@@ -17,6 +17,7 @@ import {
 	roadLampIndex,
 	roadFlicker,
 	roadBinPhase,
+	roadViirsScaleForPolyline,
 	ROAD_CLASSES,
 	ROAD_LAMPS,
 } from '$lib/world/roads-geojson';
@@ -178,10 +179,10 @@ describe('the road cache does not outlive its viewer', () => {
 });
 
 /**
- * `data/roads` is tracked as of the CARTO removal — 4.1 MB of ODbL centrelines,
- * and now the ONLY source for the night street grid. Same reasoning as
- * data/buildings: git pull is the deploy mechanism, so an ignored path is one
- * the fleet can never receive.
+ * `data/roads` is tracked as of the CARTO removal — ~48 MB of ODbL centrelines
+ * (per-class Overpass radii; arterials to 40 km), and now the ONLY source for
+ * the night street grid. Same reasoning as data/buildings: git pull is the
+ * deploy mechanism, so an ignored path is one the fleet can never receive.
  *
  * The guard stays anyway. It costs one syscall and keeps the file honest on a
  * checkout where the exception has been reverted, rather than failing with
@@ -285,6 +286,45 @@ describe('lamp colour is varied but fleet-deterministic', () => {
 		const counts = [0, 0, 0];
 		for (let i = 0; i < 3000; i++) counts[roadLampIndex([78 + i * 0.0013, 17 + i * 0.0007])]++;
 		expect(counts[0]).toBeGreaterThan(counts[2]);
+	});
+});
+
+describe('roadViirsScaleForPolyline — VIIRS gates lamp brightness', () => {
+	const coords = [78.48, 17.38, 78.49, 17.39];
+	const field = {
+		sample: () => 0,
+		sampleBilinear: () => 0,
+	};
+	const brightField = {
+		sample: () => 1,
+		sampleBilinear: () => 1,
+	};
+
+	it('dims lamps in dark VIIRS cells but keeps a floor', () => {
+		const dark = roadViirsScaleForPolyline(coords, field);
+		expect(dark).toBeGreaterThanOrEqual(0.15);
+		expect(dark).toBeLessThan(0.25);
+	});
+
+	it('brightens lamps over lit cores', () => {
+		expect(roadViirsScaleForPolyline(coords, brightField)).toBeGreaterThan(
+			roadViirsScaleForPolyline(coords, field),
+		);
+	});
+
+	it('uses a mid fallback when the field is not ready', () => {
+		const fallback = roadViirsScaleForPolyline(coords, null);
+		expect(fallback).toBeGreaterThan(0.15);
+		expect(fallback).toBeLessThan(1);
+	});
+});
+
+describe('cityRoadsAwaitingViirs', () => {
+	it('tracks cities that loaded before VIIRS was ready', async () => {
+		const { cityRoadsAwaitingViirs, resetOfflineRoads } = await import('$lib/world/roads-geojson');
+		resetOfflineRoads();
+		// Seeded by loadOfflineRoads when field is null — export is the seam.
+		expect(cityRoadsAwaitingViirs('dubai')).toBe(false);
 	});
 });
 

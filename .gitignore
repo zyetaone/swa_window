@@ -59,11 +59,10 @@ data/*
 # the fleet can never receive. Tracking it means the tier ships with the code.
 #
 # data/roads is tracked for the same two reasons, as of the CARTO removal.
-# It is 4.1 MB of ODbL road centrelines, and it is now the ONLY source for the
-# night street grid (world/roads-geojson) — the CartoDB raster it replaced was
-# 132 MB of the tile cache and Enterprise-only for commercial use. The size
-# argument runs the same way: 4.1 MB rides `git pull` to the fleet today, where
-# the 2.7 GB tile rsync never has.
+# It is ~48 MB of ODbL road centrelines (per-class radii; arterials to 40 km),
+# and it is now the ONLY source for the night street grid (world/roads-geojson)
+# — the CartoDB raster it replaced was 132 MB of the tile cache and
+# Enterprise-only for commercial use. Still rides `git pull` to the fleet.
 !data/buildings/
 !data/roads/
 

@@ -17,6 +17,7 @@
  * video chain. See docs/SIMPLIFICATION-DECISIONS.md.
  */
 import { QUALITY_MODES } from '$lib/types';
+import { isValidTimeZone } from './local-time';
 
 export const PEER_SYNC_PATHS = [
 	'atmosphere.clouds.density',
@@ -29,6 +30,7 @@ export const PEER_SYNC_PATHS = [
 	'audio.musicVolume',
 	'audio.weatherVolume',
 	'director.autopilot.nightLitCitiesOnly',
+	'director.daylight.timeZoneOverride',
 	'shell.clockVisible',
 	'shell.hudVisible',
 	'shell.mouseParallax',
@@ -61,7 +63,8 @@ type AmbientPathSpec =
 	| { kind: 'boolean' }
 	| { kind: 'number'; min: number; max: number }
 	| { kind: 'enum'; values: readonly AmbientValue[] }
-	| { kind: 'url'; maxLength: number };
+	| { kind: 'url'; maxLength: number }
+	| { kind: 'zone' };
 
 /**
  * Per-path validation for values restored from localStorage. Bounds mirror
@@ -81,6 +84,7 @@ export const AMBIENT_PATH_SPECS = {
 	'audio.musicVolume': { kind: 'number', min: 0, max: 1 },
 	'audio.weatherVolume': { kind: 'number', min: 0, max: 1 },
 	'director.autopilot.nightLitCitiesOnly': { kind: 'boolean' },
+	'director.daylight.timeZoneOverride': { kind: 'zone' },
 	'shell.clockVisible': { kind: 'boolean' },
 	'shell.hudVisible': { kind: 'boolean' },
 	'shell.mouseParallax': { kind: 'boolean' },
@@ -154,6 +158,13 @@ export function validateAmbientValue(path: PeerSyncPath, value: unknown): Ambien
 			return spec.values.includes(value as AmbientValue) ? (value as AmbientValue) : undefined;
 		case 'url':
 			return validateMediaUrl(value, spec.maxLength);
+		case 'zone': {
+			// '' = "follow the depicted location" — must round-trip like the
+			// empty music URL. Anything else must be a real IANA zone id.
+			if (typeof value !== 'string') return undefined;
+			const tz = value.trim();
+			return tz === '' || isValidTimeZone(tz) ? tz : undefined;
+		}
 	}
 }
 

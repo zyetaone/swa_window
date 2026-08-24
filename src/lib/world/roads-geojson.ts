@@ -8,14 +8,13 @@
  * baked `viirs-roads` composite built from it).
  *
  * The same geometry already sits in `data/roads/<city>.geojson`: OSM under
- * ODbL, 4.1 MB for all eight cities — 32× smaller than the tiles it replaces,
- * and critically it reaches the fleet, because `git pull` IS the deploy
- * mechanism and the 2.7 GB tile rsync has never happened.
+ * ODbL, ~48 MB for all eight cities (per-class radii up to 40 km for
+ * arterials) — still far smaller than the tile cache it replaced, and it
+ * reaches the fleet because `git pull` IS the deploy mechanism.
  *
  * The night CURVE is not re-derived here. `roadMaskAlpha()` stays in imagery.ts
- * and is imported verbatim: it is the most carefully calibrated function in the
- * app and swapping the renderer underneath it is already enough change for one
- * commit.
+ * and is imported verbatim. VIIRS luminance per segment (`viirs-glow.ts` +
+ * `viirs-field`) gates lamp brightness so streets bloom only inside lit cores.
  *
  * This was proposed and reverted twice before (fe043a0) on two objections, both
  * now stale: it needed a runtime Overpass call (the data is pre-baked and served
@@ -28,6 +27,13 @@ import type { LocationId } from '$lib/types';
 import { altitudeDetailMix } from '$lib/world/altitude';
 import { clamp } from '$lib/utils';
 import { roadMaskAlpha } from '$lib/world/imagery';
+import {
+	viirsGlowBucketCenter,
+	viirsGlowBucketIndex,
+	viirsRoadGlowScale,
+	VIIRS_ROAD_GLOW_FLOOR,
+} from '$lib/world/viirs-glow';
+import { awaitViirsField, getViirsField, type ViirsField } from '$lib/world/viirs-field';
 import { EpsilonGate } from './util';
 import { registerViewerTeardown } from './viewer-lifecycle';
 
@@ -280,6 +286,28 @@ export function roadFlicker(binPhase: number, timeOfDayHours: number): number {
 	return 1 + 0.04 * Math.sin(t * 0.7 + binPhase * 2.399963);
 }
 
+/**
+ * VIIRS luminance at a road's first vertex → lamp scale. Pure, fleet-safe.
+ *
+ * Vector roads replace the baked `viirs-roads` raster: the same glow curve
+ * (`viirs-glow.ts`) runs at load time via `viirs-field` sampling so lamps
+ * only bloom inside real lit areas, with a floor in sparse suburbs.
+ */
+export function roadViirsScaleForPolyline(
+	coords: number[],
+	field: ViirsField | null,
+	floor = VIIRS_ROAD_GLOW_FLOOR,
+): number {
+	if (coords.length < 2) return viirsGlowBucketCenter(viirsGlowBucketIndex(floor, floor), floor);
+	if (!field) {
+		// Field still loading or failed — mid-scale fallback, not full bright.
+		return viirsGlowBucketCenter(Math.floor(viirsGlowBucketIndex(1, floor) / 2), floor);
+	}
+	const lat = coords[1];
+	const lon = coords[0];
+	return viirsRoadGlowScale(field.sampleBilinear(lat, lon), floor);
+}
+
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 interface RoadBin {
@@ -291,6 +319,8 @@ interface RoadBin {
 	lines: { show: boolean };
 	material: CesiumType.Material;
 	cls: RoadClass;
+	/** VIIRS-modulated lamp scale [floor, 1] — streets dim in dark outskirts. */
+	viirsScale: number;
 	/** Stable phase offset so bins do not all breathe in lockstep. */
 	phase: number;
 	/** Same idempotency pattern every sibling subsystem uses for uniform writes. */
@@ -301,13 +331,11 @@ interface RoadBin {
 
 interface CityRoads {
 	/**
-	 * One collection per (class x lamp) bin — at most 18, typically ~12.
-	 *
-	 * Every polyline in a bin shares ONE Material, so the per-frame cost of the
-	 * entire grid is one alpha write per bin: a dozen writes, not thousands.
-	 * That is the reason colour variety is binned rather than per-road.
+	 * One collection per (class x lamp x viirs-bucket) bin — at most ~144, typically ~30.
 	 */
 	bins: Map<string, RoadBin>;
+	/** How this city's bins were realised — needed to remove from the right scene bucket. */
+	draped: boolean;
 }
 
 /**
@@ -317,8 +345,14 @@ interface CityRoads {
  */
 const _cityRoads = new Map<LocationId, CityRoads>();
 
+/** Cities whose VIIRS sample used the mid fallback — re-bin when the field arrives. */
+const _cityViirsFallback = new Set<LocationId>();
+
 /** In-flight loads, so a rapid hop sequence can't request the same city twice. */
 const _inFlight = new Map<LocationId, Promise<void>>();
+
+/** In-flight VIIRS refresh jobs — one per city. */
+const _viirsRefresh = new Map<LocationId, Promise<void>>();
 
 let _cs: typeof CesiumType | null = null;
 let _viewer: CesiumType.Viewer | null = null;
@@ -346,6 +380,43 @@ export function resetOfflineRoads(): void {
 	// bit imagery.ts cannot recur here by construction.
 	_cityRoads.clear();
 	_inFlight.clear();
+	_cityViirsFallback.clear();
+	_viirsRefresh.clear();
+}
+
+function destroyCityRoads(locationId: LocationId): void {
+	const city = _cityRoads.get(locationId);
+	const viewer = _viewer;
+	const C = _cs;
+	if (!city || !viewer || !C) return;
+	for (const bin of city.bins.values()) {
+		if (city.draped) {
+			viewer.scene.groundPrimitives.remove(bin.lines as CesiumType.GroundPolylinePrimitive);
+		} else {
+			viewer.scene.primitives.remove(bin.lines as CesiumType.PolylineCollection);
+		}
+	}
+	_cityRoads.delete(locationId);
+	_cityViirsFallback.delete(locationId);
+}
+
+/**
+ * Re-load a city when VIIRS was unavailable on the first bake. Cheap: only runs
+ * for cities in `_cityViirsFallback` once `getViirsField` succeeds.
+ */
+function refreshCityViirsIfReady(locationId: LocationId, exaggeration: number): void {
+	if (!_cityViirsFallback.has(locationId)) return;
+	const loc = LOCATION_MAP.get(locationId);
+	if (!loc || !getViirsField(loc.lat, loc.lon)) return;
+	if (_viirsRefresh.has(locationId) || _inFlight.has(locationId)) return;
+
+	const job = (async () => {
+		destroyCityRoads(locationId);
+		await loadOfflineRoads(locationId, exaggeration);
+	})().finally(() => {
+		_viirsRefresh.delete(locationId);
+	});
+	_viirsRefresh.set(locationId, job);
 }
 
 export function initRoads(C: typeof CesiumType, viewer: CesiumType.Viewer): void {
@@ -393,10 +464,17 @@ async function loadOfflineRoads(
 			const roads = polylinesFromGeojson(await res.json(), locationId, exaggeration);
 			if (roads.length === 0) return;
 
+			const loc = LOCATION_MAP.get(locationId);
+			// Kick off field load before per-road sampling; await covers first visit.
+			if (loc) getViirsField(loc.lat, loc.lon);
+			const field = loc ? await awaitViirsField(loc.lat, loc.lon) : null;
+
 			const bins: CityRoads['bins'] = new Map();
 			for (const r of roads) {
 				const lamp = roadLampIndex(r.coords);
-				const key = `${r.cls}|${lamp}`;
+				const viirsScale = roadViirsScaleForPolyline(r.coords, field);
+				const glowKey = viirsGlowBucketIndex(viirsScale);
+				const key = `${r.cls}|${lamp}|${glowKey}`;
 				let bin = bins.get(key);
 				if (!bin) {
 					// ⚠ HOLD THE MATERIAL, NOT THE COLOR HANDED TO IT.
@@ -416,6 +494,7 @@ async function loadOfflineRoads(
 						lines: { show: false },
 						material,
 						cls: r.cls,
+						viirsScale: viirsGlowBucketCenter(glowKey),
 						phase: roadBinPhase(r.cls, lamp),
 						alpha: new EpsilonGate<number>(0.001, -1),
 						pending: [],
@@ -437,7 +516,11 @@ async function loadOfflineRoads(
 				bin.pending = [];
 			}
 
-			if (bins.size > 0) _cityRoads.set(locationId, { bins });
+			if (bins.size > 0) {
+				_cityRoads.set(locationId, { bins, draped });
+				if (field) _cityViirsFallback.delete(locationId);
+				else _cityViirsFallback.add(locationId);
+			}
 		} catch (e) {
 			// Never break the fiction — no audience-visible error, the night city
 			// simply has no grid. But do say so on the console, exactly as the
@@ -570,6 +653,7 @@ export function syncOfflineRoads(
 	if (isCity && !_cityRoads.has(locationId)) {
 		void loadOfflineRoads(locationId, exaggeration);
 	}
+	if (isCity) refreshCityViirsIfReady(locationId, exaggeration);
 
 	// Same gate the raster used: below this the layer contributes nothing, so
 	// hide rather than draw thousands of fully-transparent lines.
@@ -581,7 +665,9 @@ export function syncOfflineRoads(
 		for (const bin of city.bins.values()) {
 			const a = here
 				? clamp(
-					roadClassAlpha(bin.cls, base, altitudeFt) * roadFlicker(bin.phase, timeOfDayHours),
+					roadClassAlpha(bin.cls, base, altitudeFt)
+						* bin.viirsScale
+						* roadFlicker(bin.phase, timeOfDayHours),
 					0,
 					1,
 				)
@@ -611,6 +697,11 @@ export function syncOfflineRoads(
 			});
 		}
 	}
+}
+
+/** Test seam — city loaded before VIIRS field was ready and awaiting re-bin. */
+export function cityRoadsAwaitingViirs(id: LocationId): boolean {
+	return _cityViirsFallback.has(id);
 }
 
 registerViewerTeardown('roads-geojson', resetOfflineRoads);

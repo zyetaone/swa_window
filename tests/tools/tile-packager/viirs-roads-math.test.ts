@@ -102,21 +102,53 @@ describe('glowFactor', () => {
 });
 
 describe('modulateRoadPixels', () => {
-	it('multiplies RGB by the glow factor and leaves alpha untouched', () => {
-		// One road pixel at 50% grey, fully opaque; VIIRS fully black → floor.
+	it('multiplies RGB by the glow factor and bakes road-presence alpha', () => {
+		// One road pixel at 50% grey; VIIRS fully black → floor. Raw max
+		// channel 200 ≥ ALPHA_HI → fully opaque baked alpha.
 		const road = new Uint8Array([100, 200, 50, 255]);
 		const viirs = new Uint8Array([0, 0, 0]);
 		modulateRoadPixels(road, viirs, 1, 0.2);
 		expect(road[0]).toBe(20); // 100 · 0.2
 		expect(road[1]).toBe(40); // 200 · 0.2
 		expect(road[2]).toBe(10); // 50 · 0.2
-		expect(road[3]).toBe(255); // alpha preserved
+		expect(road[3]).toBe(255); // baked alpha: 200 is a solid stroke
 	});
 
-	it('leaves road pixels unchanged over a fully lit VIIRS sample', () => {
+	it('leaves road RGB unchanged over a fully lit VIIRS sample', () => {
 		const road = new Uint8Array([100, 200, 50, 128]);
 		const viirs = new Uint8Array([255, 255, 255]);
 		modulateRoadPixels(road, viirs, 1, 0.15);
-		expect([...road]).toEqual([100, 200, 50, 128]);
+		// Alpha is rewritten from the PRE-modulation max channel (200 → 255),
+		// whatever it was before.
+		expect([...road]).toEqual([100, 200, 50, 255]);
+	});
+
+	it('keys basemap background fully transparent (the colorToAlpha replacement)', () => {
+		// Measured cartodb-dark background: max channel ≤ 10 — below ALPHA_LO.
+		// VIIRS bright (factor 1) so RGB survives unmultiplied: the alpha
+		// channel, not client keying, must be what removes this pixel.
+		const road = new Uint8Array([9, 9, 9, 255]);
+		const viirs = new Uint8Array([200, 200, 200]);
+		modulateRoadPixels(road, viirs, 1, 0.15);
+		expect(road[3]).toBe(0);
+	});
+
+	it('preserves stroke anti-aliasing as a graded alpha ramp', () => {
+		// Mid-band stroke edge: (20 − 12) / (28 − 12) = 0.5 → ~128.
+		const road = new Uint8Array([20, 18, 16, 255]);
+		const viirs = new Uint8Array([0, 0, 0]);
+		modulateRoadPixels(road, viirs, 1, 0.15);
+		expect(road[3]).toBe(128);
+	});
+
+	it('keeps floor-dimmed strokes VISIBLE — the guarantee client keying voided', () => {
+		// A real stroke (raw max 36, the measured p99.9) in a dark-VIIRS cell:
+		// RGB dims to ~5/255 (under any workable colorToAlpha threshold) but
+		// the baked alpha keeps the pixel, so client brightness can lift it.
+		const road = new Uint8Array([36, 30, 24, 255]);
+		const viirs = new Uint8Array([0, 0, 0]);
+		modulateRoadPixels(road, viirs, 1, 0.15);
+		expect(road[0]).toBe(5);  // dim — floor glow
+		expect(road[3]).toBe(255); // but present
 	});
 });

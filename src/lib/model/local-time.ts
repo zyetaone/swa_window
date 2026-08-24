@@ -5,6 +5,12 @@
  * UTC−6 standard / UTC−5 daylight). Real Time must follow the depicted
  * city's calendar, so we resolve via `Intl` + IANA zone id.
  *
+ * Why `Intl`, not Temporal: ECMAScript's Temporal API (Stage 4) offers
+ * `ZonedDateTime` with cleaner DST math, but kiosk runtimes here are Bun +
+ * Chromium — `Intl.DateTimeFormat` with `timeZone` is universally available,
+ * cached below, and sufficient for civil hours [0, 24). Revisit when Temporal
+ * ships unflagged everywhere we deploy.
+ *
  * Fallback: if the zone is invalid (typo / ancient runtime), use the
  * location's fixed `utcOffset` hours so the wall still shows something
  * coherent rather than NaN.
@@ -43,6 +49,15 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat | null {
 	}
 	_fmtCache.set(timeZone, fmt);
 	return fmt;
+}
+
+/**
+ * True when `Intl` recognises the IANA zone id. The trust-boundary check for
+ * values arriving over the wire (config patches, persisted ambient state) —
+ * never let a garbage zone reach the time pipeline.
+ */
+export function isValidTimeZone(timeZone: unknown): timeZone is string {
+	return typeof timeZone === 'string' && timeZone.length > 0 && formatterFor(timeZone) !== null;
 }
 
 /** Civil hours [0, 24) in `timeZone` at `now`. */

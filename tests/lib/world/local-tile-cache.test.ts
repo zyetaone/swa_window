@@ -66,8 +66,7 @@ describe('checkLocalTileServer', () => {
 	});
 
 	it('exposes the probed layer list for layer-specific decisions', async () => {
-		// setupImagery picks the baked viirs-roads composite over raw cartodb
-		// only when the cache actually has it — an older cache must fall back.
+		// Health probe still reports viirs-roads for legacy caches; runtime uses vector roads.
 		stubHealth({ status: 'ok', hasTiles: true, layers: ['eox-sentinel2', 'viirs-roads'] });
 		const { checkLocalTileServer, localTileLayerAvailable } = await load();
 		await checkLocalTileServer();

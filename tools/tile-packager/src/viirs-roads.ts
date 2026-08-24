@@ -1,17 +1,24 @@
 #!/usr/bin/env bun
 /**
- * Aero Window — VIIRS × roads composite baker
+ * Aero Window — VIIRS × roads composite baker (LEGACY CACHE ONLY)
+ *
+ * The kiosk renders night streets as ODbL vector polylines (`world/roads-geojson`)
+ * with per-segment VIIRS modulation via `viirs-field` + `viirs-glow.ts`.
+ * This tool remains for manufacturing tile caches on devices that still ship
+ * the raster layer — it is NOT loaded by the app at runtime.
  *
  * Bakes a combined night layer: each cartodb-dark road tile's RGB is
  * multiplied by the luminance of the VIIRS night-lights cover over the same
- * geo footprint, so street networks bloom only where VIIRS says there is a
- * real lit area. A floor (default 0.15) keeps a minimum of road glow in
- * sparse-but-real towns — see glowFactor() in viirs-roads-math.ts.
+ * geo footprint. A floor (default 0.15) keeps a minimum of road glow in
+ * sparse-but-real towns — see glowFactor() in viirs-glow.ts / viirs-roads-math.ts.
  *
- * Runtime note: the app keys transparency with colorToAlpha. CartoDB uses
- * threshold 0.12 (near-black basemap); the composite path uses ~0.03 so this
- * floor is not keyed out. Keep floor and roadCompositeThreshold in dialogue
- * (src/lib/world/imagery.ts COLOR_TO_ALPHA).
+ * Runtime note: the app does NOT colorToAlpha-key this layer. Keying runs on
+ * the raw sampled colour before brightness/contrast (GlobeFS.glsl), and the
+ * composite scales background and strokes by the same glowFactor — so no
+ * threshold can keep floor-dimmed strokes while still keying bright-core
+ * background. The bake therefore writes a graded road-presence mask into the
+ * PNG alpha channel (see ALPHA_LO/ALPHA_HI in viirs-roads-math.ts); the raw
+ * cartodb-dark fallback keeps client keying at threshold 0.12.
  *
  * Reads the existing packager cache, writes a NEW layer alongside it:
  *
@@ -19,10 +26,8 @@
  *           <tiles>/viirs-night-lights/{z}/{y}/{x}.jpg   (untouched)
  *   output: <tiles>/viirs-roads/{z}/{x}/{y}@2x.png       (new layer)
  *
- * Output mirrors the cartodb-dark on-disk layout exactly, so the runtime
- * serves it via the existing /api/tiles passthrough with zero server
- * changes — the app just points a second UrlTemplateImageryProvider at
- * {tileBase}/viirs-roads/{z}/{x}/{y}@2x.png (z4–12, 512×512 PNG).
+ * Output mirrors the cartodb-dark on-disk layout exactly, served via
+ * `/api/tiles` passthrough for legacy installs — not wired in setupImagery().
  *
  * Missing VIIRS cover (cache gap) is treated as black → roads fall back to
  * the floor glow, counted and reported at the end.
@@ -184,10 +189,10 @@ async function compositeTile(
 	await sharp(roadRaw, {
 		raw: { width: ROAD_PX, height: ROAD_PX, channels: 4 },
 	})
-		// Palette PNG: cartodb source tiles are 4-bit colormaps, and modulation
-		// can't create new hues — ≤16 distinct colours per tile, so 256-colour
-		// palette output is lossless here and ~30% smaller than RGBA.
-		.png({ palette: true, dither: 0 })
+		// Plain RGBA PNG — NOT palette: the baked road-presence alpha is a
+		// graded ramp (stroke anti-aliasing), and palette+tRNS quantization
+		// would band it. The ~30% size penalty over palette buys correct edges.
+		.png()
 		.toFile(outPath);
 
 	return { missingViirs };

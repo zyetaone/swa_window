@@ -23,7 +23,7 @@ export function patchNum(patch: (path: string, value: unknown) => void, path: st
  * writes go through the module-level gate and reach peers via startPeerSync).
  *
  * When a dual-tree control adds a new patch path, also add it to
- * `PEER_SYNC_PATHS` in `$lib/fleet/peer-sync.svelte` so admin ambient edits
+ * `PEER_SYNC_PATHS` in `$lib/model/peer-sync-paths.ts` so admin ambient edits
  * fan out to the wall.
  *
  * Getting this wrong is silent. Reading `config` directly in the kiosk shows

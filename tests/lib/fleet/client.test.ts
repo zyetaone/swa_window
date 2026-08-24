@@ -43,6 +43,7 @@ function makeModel(): FleetClientModel & {
 	scheduleFlyover: ReturnType<typeof vi.fn>;
 	setQualityMode: ReturnType<typeof vi.fn>;
 	applyConfigPatch: ReturnType<typeof vi.fn>;
+	updateTimeFromSystem: ReturnType<typeof vi.fn>;
 } {
 	return {
 		measuredFps: 60,
@@ -59,6 +60,7 @@ function makeModel(): FleetClientModel & {
 		setAltitude: vi.fn(),
 		setTime: vi.fn(),
 		setFlightSpeed: vi.fn(),
+		updateTimeFromSystem: vi.fn(),
 		applyConfigPatch: vi.fn(),
 	} as unknown as FleetClientModel & {
 		applyScene: ReturnType<typeof vi.fn>;
@@ -66,6 +68,7 @@ function makeModel(): FleetClientModel & {
 		scheduleFlyover: ReturnType<typeof vi.fn>;
 		setQualityMode: ReturnType<typeof vi.fn>;
 		applyConfigPatch: ReturnType<typeof vi.fn>;
+		updateTimeFromSystem: ReturnType<typeof vi.fn>;
 	};
 }
 
@@ -187,6 +190,12 @@ describe('set_config enum validation', () => {
 	it('ignores an invalid qualityMode instead of casting it', () => {
 		command({ type: 'set_config', patch: { qualityMode: 'potato' } });
 		expect(model.setQualityMode).not.toHaveBeenCalled();
+	});
+
+	it('refreshes wall clock when push enables Real Time', () => {
+		command({ type: 'set_config', patch: { syncToRealTime: true } });
+		expect(model.syncToRealTime).toBe(true);
+		expect(model.updateTimeFromSystem).toHaveBeenCalledOnce();
 	});
 });
 

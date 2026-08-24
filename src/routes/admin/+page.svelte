@@ -9,6 +9,7 @@
 	import AudioControls from '$lib/shell/operator/panel/AudioControls.svelte';
 	import FlightControls from '$lib/shell/operator/panel/FlightControls.svelte';
 	import LightingControls from '$lib/shell/operator/panel/LightingControls.svelte';
+	import TimeControl from '$lib/shell/operator/panel/TimeControl.svelte';
 	import { WEATHER_TYPES, DISPLAY_MODES, DEVICE_ROLES } from '$lib/types';
 	import type { LocationId, WeatherType, DisplayMode } from '$lib/types';
 	import { LOCATIONS, isValidLocation } from '$content/locations';
@@ -156,6 +157,12 @@
 	const altitudeLabel = $derived(formatAltitudeFt(scene.altitude, 0));
 	const timeLabel = $derived(formatTime(scene.timeOfDay));
 	const speedLabel = $derived(formatSpeedX(scene.flightSpeed));
+	const sceneLocationZone = $derived(
+		LOCATIONS.find((l) => l.id === scene.location)?.timeZone ?? '',
+	);
+	const sceneLocationUtcOffset = $derived(
+		LOCATIONS.find((l) => l.id === scene.location)?.utcOffset,
+	);
 
 	function getTargets(): string[] {
 		return selectedDevices.size > 0
@@ -261,7 +268,7 @@
 		if (targets.length === 0) return;
 		const patch = {
 			altitude: scene.altitude,
-			timeOfDay: scene.timeOfDay,
+			...(scene.syncToRealTime ? {} : { timeOfDay: scene.timeOfDay }),
 			flightSpeed: scene.flightSpeed,
 			syncToRealTime: scene.syncToRealTime,
 			weather: scene.weather,
@@ -591,10 +598,14 @@
 				<h3>
 					Ambient <span class="hint-muted">— auto-syncs to fleet</span>
 				</h3>
+				<p class="section-caption">
+					Live tuning — changes fan out immediately. Time zone follows the depicted city unless overridden below.
+				</p>
 				<!-- Same dual-tree panels as kiosk SidePanel. FlightControls
 				     shows night-lit only (no AeroWindow → no speed/alt sliders).
 				     usePanelConfig → applyConfigPatch; peer-sync fans out. -->
 				<FlightControls />
+				<TimeControl locationZone={sceneLocationZone} locationUtcOffset={sceneLocationUtcOffset} />
 				<AtmosphereControls />
 				<LightingControls />
 				<AudioControls />
@@ -618,6 +629,9 @@
 
 			<section class="control-section">
 				<h3>Scene — one-shot push</h3>
+				<p class="section-caption">
+					Overrides location, weather, altitude, and clock on button press. Does not change the ambient time zone above.
+				</p>
 				<label>
 					<div class="slider-header">
 						<span>Altitude</span>
@@ -625,13 +639,19 @@
 					</div>
 					<input type="range" min="5000" max="48000" step="1000" bind:value={scene.altitude} class="range" />
 				</label>
-				<label>
-					<div class="slider-header">
-						<span>Time of Day</span>
-						<span class="slider-value">{timeLabel}</span>
-					</div>
-					<input type="range" min="0" max="24" step="0.25" bind:value={scene.timeOfDay} class="range" />
-				</label>
+				{#if scene.syncToRealTime}
+					<p class="scene-time-note">
+						Clock follows Real Time in the ambient zone — manual time is not sent on push.
+					</p>
+				{:else}
+					<label>
+						<div class="slider-header">
+							<span>Time of Day</span>
+							<span class="slider-value">{timeLabel}</span>
+						</div>
+						<input type="range" min="0" max="24" step="0.25" bind:value={scene.timeOfDay} class="range" />
+					</label>
+				{/if}
 				<label>
 					<div class="slider-header">
 						<span>Flight Speed</span>
@@ -641,7 +661,7 @@
 				</label>
 				<label class="toggle-label">
 					<input type="checkbox" bind:checked={scene.syncToRealTime} />
-					<span>Sync to Real Time</span>
+					<span>Real Time on push</span>
 				</label>
 				<button class="btn btn-primary" onclick={handlePushScene_Full}>
 					Push Scene {selectedDevices.size > 0 ? `(${selectedDevices.size})` : '(All)'}
@@ -1493,6 +1513,12 @@
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		margin-bottom: 6px;
+	}
+	.scene-time-note {
+		font-size: 11px;
+		line-height: 1.45;
+		color: var(--muted);
+		margin: 0 0 10px;
 	}
 	.section-caption {
 		font-size: 11px;

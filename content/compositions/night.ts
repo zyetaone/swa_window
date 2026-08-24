@@ -171,9 +171,9 @@ export const NIGHT_PALETTE = {
 	 * the city, VIIRS only seeds where light is (mask + faint halo).
 	 */
 	viirs: {
-		// 0.20 → 0.15 (2026-08 de-soak). Structure = road mask (+ buildings).
-		// Prefer baked `viirs-roads` composite on-disk when available so streets
-		// only glow inside real lit areas (tools/tile-packager viirs-roads).
+		// 0.20 → 0.15 (2026-08 de-soak). Structure = vector road lamps + buildings.
+		// Street brightness follows VIIRS at runtime (roads-geojson × viirs-field);
+		// the optional viirs-roads tile bake is legacy cache only.
 		maxAlpha:         0.15,
 		smoothstepFloor:  0.55,
 		smoothstepCeil:   0.9,

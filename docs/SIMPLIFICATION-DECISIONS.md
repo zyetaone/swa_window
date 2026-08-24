@@ -35,7 +35,7 @@ Production print (not lab): **roads + building windows carry the city; VIIRS is 
 | `NIGHT_PALETTE.viirs.maxAlpha` | ↓ 0.14 | Soft 583 m/px blob must not be the picture |
 | `additiveStrength` / mask gamma / bloom sigma | ↓ punch soak, ↑ gamma | Stop solid amber sheet |
 | Road layer brightness / contrast | ↑ | Street grid is structure |
-| Baked `viirs-roads` | Prefer when cached | Streets glow only inside lit areas |
+| Baked `viirs-roads` | Vector roads + `viirs-field` at runtime | Streets glow only inside lit areas (no raster layer) |
 
 "Photo chosen" freeze still requires eyes on the wall + explicit freeze note.
 
