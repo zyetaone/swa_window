@@ -208,12 +208,26 @@
 	// Actions — push results
 	let pushResult = $state<{ ok: number; failed: string[] } | null>(null);
 
-	async function handlePushScene() {
+	/**
+	 * The push skeleton the three handlers below all shared: resolve targets,
+	 * mint one commandId for the whole fan-out, track it, fan out, and report.
+	 *
+	 * The commandId is the point. Kiosks echo it in their heartbeat, so the
+	 * result line counts real APPLIES rather than HTTP 200s — and it has to be
+	 * one id across all targets of a single push. Three hand-copied versions of
+	 * that plumbing is three places for it to drift.
+	 *
+	 * `after` runs inside the same try, because a caller that re-reads state to
+	 * confirm the push wants a failure there reported as a failed push, not
+	 * swallowed next to a success line.
+	 */
+	async function pushCommand(
+		op: (id: string, commandId: string) => Promise<unknown>,
+		after?: () => Promise<void>,
+	) {
 		const targets = getTargets();
 		if (targets.length === 0) return;
 		pushResult = null;
-		// Apply-ack: one commandId for the whole fan-out; kiosks echo it in
-		// their heartbeat so the result line can count real applies, not 200s.
 		const commandId = newCommandId();
 		store.trackCommand(commandId, targets);
 		try {
@@ -221,17 +235,24 @@
 			// per-peer POSTs under Promise.all, but one rejecting peer failed
 			// the whole report (ok: 0 with 2 of 3 applied). fanOut attributes
 			// success/failure per target.
-			pushResult = await fanOut(targets, (id) =>
-				store.pushScene(id, scene.location, scene.weather, commandId));
+			pushResult = await fanOut(targets, (id) => op(id, commandId));
+			await after?.();
 		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
 	}
 
+	async function handlePushScene() {
+		await pushCommand((id, commandId) =>
+			store.pushScene(id, scene.location, scene.weather, commandId));
+	}
+
 	async function handlePushMode() {
-		const targets = getTargets();
-		if (targets.length === 0) return;
+		// Checked here as well as inside pushCommand, deliberately: validation
+		// below writes pushResult, so with nothing selected the operator would
+		// get "video URL required" instead of the no-op they asked for.
+		if (getTargets().length === 0) return;
 		// Absolute-ify /api/assets paths against this admin origin so every Pi
 		// fetches media from the host that holds the files (not its own empty store).
-		const origin = typeof window !== 'undefined' ? window.location.origin : '';
+		const origin = adminOrigin;
 		let payload: string | undefined;
 		if (pushMode === 'video') {
 			const abs = toAbsoluteMediaUrl(videoUrl, origin);
@@ -251,21 +272,19 @@
 			payload = encodeSlideshowPayload(absolute, slideIntervalSec);
 		}
 		// flight: no payload
-		pushResult = null;
-		const commandId = newCommandId();
-		store.trackCommand(commandId, targets);
-		try {
-			pushResult = await fanOut(targets, (id) => store.pushMode(id, pushMode, payload, commandId));
-			// Heartbeats are slow — re-poll status so Mode chips reflect the push.
-			// Short delay lets devices apply set_mode before we read /api/status.
-			await new Promise((r) => setTimeout(r, 400));
-			await store.refreshStatus();
-		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
+		await pushCommand(
+			(id, commandId) => store.pushMode(id, pushMode, payload, commandId),
+			async () => {
+				// Heartbeats are slow — re-poll status so Mode chips reflect the
+				// push. Short delay lets devices apply set_mode before we read
+				// /api/status.
+				await new Promise((r) => setTimeout(r, 400));
+				await store.refreshStatus();
+			},
+		);
 	}
 
 	async function handlePushScene_Full() {
-		const targets = getTargets();
-		if (targets.length === 0) return;
 		const patch = {
 			altitude: scene.altitude,
 			...(scene.syncToRealTime ? {} : { timeOfDay: scene.timeOfDay }),
@@ -273,12 +292,7 @@
 			syncToRealTime: scene.syncToRealTime,
 			weather: scene.weather,
 		};
-		pushResult = null;
-		const commandId = newCommandId();
-		store.trackCommand(commandId, targets);
-		try {
-			pushResult = await fanOut(targets, (id) => store.pushSceneFull(id, patch, commandId));
-		} catch (e) { pushResult = { ok: 0, failed: [String(e)] }; }
+		await pushCommand((id, commandId) => store.pushSceneFull(id, patch, commandId));
 	}
 
 	function toggleSelectAll() {
@@ -349,13 +363,19 @@
 		video: 'Video',
 	};
 
-	/** Pretty-print device.currentMode on cards (wire uses screensaver). */
+	/**
+	 * Pretty-print device.currentMode on cards (wire uses screensaver).
+	 *
+	 * Its own Record rather than MODE_LABELS directly: the card wants the
+	 * shorter 'Flight', not the picker's 'Flight Sim'. But it must stay
+	 * Record<DisplayMode, string> — the previous if-chain fell through to the
+	 * raw wire string, so a mode added anywhere else would have shown up here
+	 * as `screensaver` instead of failing to compile.
+	 */
+	const CARD_MODE_LABELS: Record<DisplayMode, string> = { ...MODE_LABELS, flight: 'Flight' };
 	function formatDeviceMode(mode: string | undefined): string {
 		if (!mode) return '—';
-		if (mode === 'screensaver') return 'Slideshow';
-		if (mode === 'video') return 'Video';
-		if (mode === 'flight') return 'Flight';
-		return mode;
+		return CARD_MODE_LABELS[mode as DisplayMode] ?? mode;
 	}
 	// Record<DisplayMode, string> is exhaustive-checked, so adding a mode to
 	// DISPLAY_MODES is a compile error here until it gets a label.

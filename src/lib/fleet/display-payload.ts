@@ -15,6 +15,22 @@ export const MIN_SLIDESHOW_INTERVAL_SEC = 3;
 export const MAX_SLIDESHOW_INTERVAL_SEC = 300;
 
 /**
+ * Trim, drop non-strings, keep only URLs the fleet will actually fetch.
+ *
+ * The three callers below (parse, encode, validate) each ran this same two-step
+ * chain by hand. They must agree: encode writes the wire payload, parse reads
+ * it back, and setModePayloadError decides what the operator is told — a URL
+ * that survives one but not another is a push that reports success and shows
+ * nothing.
+ */
+function cleanMediaUrls(urls: readonly unknown[]): string[] {
+	return urls
+		.filter((u): u is string => typeof u === 'string')
+		.map((u) => u.trim())
+		.filter(isAllowedMediaUrl);
+}
+
+/**
  * Hard caps so set_mode stays under publish-route's 4 KB body budget
  * (envelope + mode field leave ~3.5 KB for the JSON payload).
  */
@@ -60,13 +76,9 @@ export function parseSlideshowPayload(payload: string | undefined): SlideshowSpe
 	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
 	const rec = parsed as Record<string, unknown>;
 	if (!Array.isArray(rec.urls)) return null;
-	const urls = rec.urls
-		.filter((u): u is string => typeof u === 'string')
-		.map((u) => u.trim())
-		.filter(isAllowedMediaUrl)
-		// Cap on parse too — encode already slices, but a hand-crafted or
-		// legacy SSE payload must not expand into an unbounded slideshow.
-		.slice(0, MAX_SLIDESHOW_URLS);
+	// Cap on parse too — encode already slices, but a hand-crafted or
+	// legacy SSE payload must not expand into an unbounded slideshow.
+	const urls = cleanMediaUrls(rec.urls).slice(0, MAX_SLIDESHOW_URLS);
 	if (urls.length === 0) return null;
 	let intervalSec = DEFAULT_SLIDESHOW_INTERVAL_SEC;
 	if (typeof rec.intervalSec === 'number' && Number.isFinite(rec.intervalSec)) {
@@ -80,7 +92,7 @@ export function parseSlideshowPayload(payload: string | undefined): SlideshowSpe
 
 /** Build screensaver wire payload from admin UI state. */
 export function encodeSlideshowPayload(urls: string[], intervalSec = DEFAULT_SLIDESHOW_INTERVAL_SEC): string {
-	const clean = urls.map((u) => u.trim()).filter(isAllowedMediaUrl).slice(0, MAX_SLIDESHOW_URLS);
+	const clean = cleanMediaUrls(urls).slice(0, MAX_SLIDESHOW_URLS);
 	const sec = Math.min(
 		MAX_SLIDESHOW_INTERVAL_SEC,
 		Math.max(MIN_SLIDESHOW_INTERVAL_SEC, Math.round(intervalSec)),
@@ -105,9 +117,7 @@ export function setModePayloadError(
 		}
 		return null;
 	}
-	const urls = (Array.isArray(urlsOrVideo) ? urlsOrVideo : [])
-		.map((u) => u.trim())
-		.filter(isAllowedMediaUrl);
+	const urls = cleanMediaUrls(Array.isArray(urlsOrVideo) ? urlsOrVideo : []);
 	if (urls.length === 0) return 'add at least one slideshow image';
 	if (urls.length > MAX_SLIDESHOW_URLS) {
 		return `too many images (max ${MAX_SLIDESHOW_URLS}; remove ${urls.length - MAX_SLIDESHOW_URLS})`;
