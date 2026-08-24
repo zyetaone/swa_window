@@ -84,3 +84,63 @@ describe('saveAsset / listAssets / readAsset', () => {
 		expect(await assets.readAsset('00000000ffffffff.mp4')).toBeNull();
 	});
 });
+
+describe('openAsset — streamed serving', () => {
+	/**
+	 * The route serves media with this, not readAsset. Uploads are capped at
+	 * 50 MB and the device serving them is also running the render loop, so
+	 * "the bytes arrive correctly" is only half the contract — the other half
+	 * is that they are never all in memory at once. These pin the half a test
+	 * can actually observe: identity of the bytes, and an accurate size.
+	 */
+	it('streams back exactly the bytes that were saved', async () => {
+		const body = new Uint8Array(Array.from({ length: 5000 }, (_, i) => i % 256));
+		const saved = await assets.saveAsset('clip.mp4', body);
+
+		const opened = await assets.openAsset(saved.filename);
+		expect(opened).not.toBeNull();
+
+		const chunks: Uint8Array[] = [];
+		const reader = opened!.stream.getReader();
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			chunks.push(value);
+		}
+		const joined = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+		let at = 0;
+		for (const c of chunks) { joined.set(c, at); at += c.length; }
+		expect(joined).toEqual(body);
+	});
+
+	it('reports the size without the caller reading the stream', async () => {
+		// Content-Length comes from here. If it disagreed with the body the
+		// browser would truncate or hang the video rather than error visibly.
+		const body = new Uint8Array(1234);
+		const saved = await assets.saveAsset('clip.mp4', body);
+		const opened = await assets.openAsset(saved.filename);
+		expect(opened!.size).toBe(1234);
+		await opened!.stream.cancel();
+	});
+
+	it('arrives in more than one chunk for a large asset', async () => {
+		// The point of the change: a 50 MB upload must not materialise as one
+		// buffer. A single-chunk stream would satisfy every other assertion
+		// here while doing exactly what this replaced.
+		const body = new Uint8Array(300_000);
+		const saved = await assets.saveAsset('big.mp4', body);
+		const opened = await assets.openAsset(saved.filename);
+		let chunks = 0;
+		const reader = opened!.stream.getReader();
+		for (;;) {
+			const { done } = await reader.read();
+			if (done) break;
+			chunks++;
+		}
+		expect(chunks).toBeGreaterThan(1);
+	});
+
+	it('returns null for an absent asset rather than throwing', async () => {
+		expect(await assets.openAsset('deadbeefdeadbeef.mp4')).toBeNull();
+	});
+});

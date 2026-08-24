@@ -20,9 +20,10 @@
  */
 
 import { readdir, readFile, writeFile, mkdir, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, createReadStream } from 'node:fs';
 import { join, extname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 
 function assetsDir(): string {
 	return process.env.AERO_ASSETS_DIR ?? './data/assets';
@@ -110,4 +111,41 @@ export async function readAsset(filename: string): Promise<Uint8Array | null> {
 	const path = join(assetsDir(), filename);
 	if (!existsSync(path)) return null;
 	return await readFile(path);
+}
+
+/**
+ * Open an asset for streaming, with its size. Null if it isn't present.
+ *
+ * ─── WHY NOT readAsset() FOR SERVING ────────────────────────────────────────
+ * readAsset buffers the WHOLE file. Uploads are capped at 50 MB, and the
+ * device serving them is a Pi that is simultaneously running a 60 fps Cesium
+ * render loop — materialising 50 MB per request (twice, once for the Buffer
+ * and once for the Blob wrapper) is allocation and GC pressure landing exactly
+ * where dropped frames are visible on the wall.
+ *
+ * readAsset stays for callers that genuinely want the bytes in hand.
+ *
+ * ⚠ NO Range/206 HERE, ON PURPOSE. Streaming is the half that pays: it removes
+ * the buffer. Range buys SEEKING, and this fleet plays media start to finish
+ * from a `Cache-Control: immutable` URL — nothing seeks, and a replay is a
+ * cache hit rather than a refetch. Advertising `Accept-Ranges: bytes` without
+ * honouring the header would be worse than staying silent, because a client
+ * that believes it may then request a range it will not get. If a seekable
+ * surface ever appears, implement the header and the 206 together.
+ */
+export async function openAsset(
+	filename: string,
+): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null> {
+	const path = join(assetsDir(), filename);
+	if (!existsSync(path)) return null;
+	const info = await stat(path);
+	if (!info.isFile()) return null;
+	const node = createReadStream(path);
+	return {
+		// Node stream -> web stream. The double cast is the node:stream/web vs
+		// DOM ReadableStream split: structurally the same object, two separate
+		// declarations, and only one of them is what Response accepts.
+		stream: Readable.toWeb(node) as unknown as ReadableStream<Uint8Array>,
+		size: info.size,
+	};
 }

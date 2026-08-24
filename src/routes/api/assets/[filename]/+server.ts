@@ -4,7 +4,7 @@
  */
 
 import { error } from '@sveltejs/kit';
-import { readAsset, mimeFor } from '$lib/server/bundle/assets';
+import { openAsset, mimeFor } from '$lib/server/bundle/assets';
 import type { RequestHandler } from './$types';
 
 // Allow content-addressed names (16-hex hash + ext) — strict to avoid path traversal.
@@ -14,16 +14,15 @@ export const GET: RequestHandler = async ({ params }) => {
 	const filename = params.filename;
 	if (!filename || !NAME_PATTERN.test(filename)) error(400, 'invalid filename');
 
-	const bytes = await readAsset(filename);
-	if (!bytes) error(404, 'asset not found');
+	// Streamed, not buffered: a 50 MB video read into memory competes with the
+	// render loop on the same Pi. See openAsset for why there is no Range here.
+	const asset = await openAsset(filename);
+	if (!asset) error(404, 'asset not found');
 
-	// Wrap in Blob so the Response BodyInit type accepts it cleanly across
-	// the @sveltejs/kit + @types/node typing surface (Uint8Array directly
-	// is technically valid as a BufferSource but typing is finicky).
-	return new Response(new Blob([new Uint8Array(bytes)]), {
+	return new Response(asset.stream, {
 		headers: {
 			'Content-Type': mimeFor(filename),
-			'Content-Length': String(bytes.byteLength),
+			'Content-Length': String(asset.size),
 			// Content-addressed → safe to cache forever
 			'Cache-Control': 'public, max-age=31536000, immutable',
 		},
