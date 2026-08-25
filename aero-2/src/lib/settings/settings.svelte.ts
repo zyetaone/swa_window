@@ -28,14 +28,6 @@ function parseNum(
 
 /**
  * The legal range of every numeric knob — the SSOT for clamping.
- *
- * The sliders in `Settings.svelte` and the `nudge()` gate previously carried
- * their own copies of these bounds, and they disagreed: `nudge('azimuthDeg')`
- * wrapped into 0..360 while the slider and `applyUrl` both used -180..180, so
- * one press of "pan left" from the -90 default produced 255 — a real value,
- * off the end of its own slider.
- *
- * One table. Everything that writes a knob reads it from here.
  */
 export const KNOB_RANGE = {
 	azimuthDeg: [-180, 180],
@@ -43,7 +35,12 @@ export const KNOB_RANGE = {
 	detail: [0, 1],
 	floorM: [0, 20_000],
 	ceilingM: [0, 20_000],
-	shade: [0, 1]
+	shade: [0, 1],
+	wingScale: [0.3, 3.0],
+	wingOffsetX: [-500, 500],
+	wingOffsetY: [-500, 500],
+	wingPitchDeg: [-45, 45],
+	wingRollFactor: [0, 3.0]
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type NumericKnob = keyof typeof KNOB_RANGE;
@@ -61,13 +58,18 @@ export class PaneSettings {
 	floorM = $state<number>(ALTITUDE_FLOOR_M);
 	ceilingM = $state<number>(ALTITUDE_CEILING_M);
 	shade = $state<number>(HILLSHADE_DEFAULT);
-	/** Which way round the orbit is flown. Not a numeric knob — it has two values. */
+	/** Which way round the orbit is flown. */
 	direction = $state<1 | -1>(1);
-	/**
-	 * Where on the loop the flight starts, in radians. Seeded from the day and
-	 * the place so the orbit shifts between days but never between panes.
-	 */
+	/** Phase offset in radians from daySeed. */
 	phase = $state<number>(0);
+
+	/** Aircraft Wing silhouette alignment knobs (X, Y, Scale, Pitch, Roll) */
+	wing = $state<boolean>(true);
+	wingScale = $state<number>(1.0);
+	wingOffsetX = $state<number>(0);
+	wingOffsetY = $state<number>(0);
+	wingPitchDeg = $state<number>(0);
+	wingRollFactor = $state<number>(1.0);
 
 	constructor(initial?: Partial<PaneSettings>) {
 		if (initial) Object.assign(this, initial);
@@ -83,23 +85,24 @@ export class PaneSettings {
 		this.floorM = parseNum(url.searchParams, 'floor', place.climbFloorM);
 		this.ceilingM = parseNum(url.searchParams, 'ceiling', place.climbCeilingM);
 		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT);
+		this.wingScale = parseNum(url.searchParams, 'wingScale', 1.0);
+		this.wingOffsetX = parseNum(url.searchParams, 'wingX', 0);
+		this.wingOffsetY = parseNum(url.searchParams, 'wingY', 0);
+		this.wingPitchDeg = parseNum(url.searchParams, 'wingPitch', 0);
+		this.wingRollFactor = parseNum(url.searchParams, 'wingRoll', 1.0);
 	}
 
 	reset(): void {
 		this.azimuthDeg = DEFAULT_WINDOW_AZIMUTH_DEG;
 		this.pitchDeg = DEFAULT_PITCH_DEG;
 		this.shade = HILLSHADE_DEFAULT;
+		this.wingScale = 1.0;
+		this.wingOffsetX = 0;
+		this.wingOffsetY = 0;
+		this.wingPitchDeg = 0;
+		this.wingRollFactor = 1.0;
 	}
 
-	/**
-	 * The single write gate for numeric knobs: clamps (or wraps, for a bearing)
-	 * into `KNOB_RANGE`, and ignores NaN.
-	 *
-	 * Use this rather than `bind:value={config.x}` or a bare assignment. A write
-	 * is not just a local mutation on a three-Pi wall — it has to land in a legal
-	 * range, and later be validated, merged and broadcast so the panes keep
-	 * showing one continuous window. Fleet sync hooks in here and nowhere else.
-	 */
 	set(key: NumericKnob, value: number): void {
 		if (!Number.isFinite(value)) return;
 		if (key === 'azimuthDeg') {
@@ -110,12 +113,10 @@ export class PaneSettings {
 		this[key] = Math.min(hi, Math.max(lo, value));
 	}
 
-	/** Fly the loop the other way round. */
 	reverse(): void {
 		this.direction = this.direction === 1 ? -1 : 1;
 	}
 
-	/** Nudge a knob by a delta, through the same gate. */
 	nudge(key: NumericKnob, delta: number): void {
 		this.set(key, this[key] + delta);
 	}

@@ -1,41 +1,37 @@
 <script lang="ts">
 	/**
-	 * MiniMap — top-down inset showing the aircraft on its orbit.
+	 * MiniMap — top-down inset showing the aircraft on its orbit with an elevation profile.
 	 *
-	 * Sync is one-way by design: the frame loop in Stage writes `display.view`
-	 * once per frame, and everything here is `$derived` from it. One writer,
-	 * many readers. Binding the two maps together would be two writers for one
-	 * truth, which is how they drift apart.
-	 *
-	 * The map is deliberately STATIC — centred on the orbit, never moved. The
-	 * first version re-centred on the aircraft every frame, and MapLibre never
-	 * finished loading its style: `isStyleLoaded()` stayed false, the GeoJSON
-	 * source never became ready, and the track rendered zero features. Type
-	 * check, unit tests and the console were all clean; only a screenshot showed
-	 * the loop was simply absent. A fixed camera also costs the Pi nothing.
-	 *
-	 * The aircraft is a DOM marker positioned by projecting lat/lon through the
-	 * map — no second GL layer, and it updates with the pose rather than a frame
-	 * behind it.
+	 * Displays:
+	 * 1. Plan View: Orbit ground track ring, forward-flying aircraft marker (▲),
+	 *    and sideways passenger camera sightline to the city center.
+	 * 2. Elevation View: Side-profile climb/descent cosine wave with live altitude indicator.
 	 */
-	import {
-		MapLibre,
-		RasterTileSource,
-		RasterLayer,
-		GeoJSONSource,
-		LineLayer
-	} from 'svelte-maplibre-gl';
+	import { MapLibre, RasterTileSource, RasterLayer } from 'svelte-maplibre-gl';
 	import type { Map as MlMap } from 'maplibre-gl';
 
 	import { useDisplay } from '../display.svelte.js';
-	import { FlightTrack, ALTITUDE_CEILING_M } from './orbit.js';
+	import { FlightTrack, ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from './orbit.js';
 	import { TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/settings/tiles.js';
+
+	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
 
 	interface Props {
 		/** Fixed zoom. Low enough to hold the whole ~55 km orbit. */
 		zoom?: number;
 	}
-	const { zoom = 7.4 }: Props = $props();
+	const { zoom = 6.9 }: Props = $props();
+
+	/**
+	 * An empty style, defined ONCE at module scope.
+	 *
+	 * Inlining `style={{ version: 8, sources: {}, layers: [] }}` creates a NEW
+	 * object on every render. MapLibre treats that as a new style and restarts
+	 * loading, so `style._loaded` never settles true — and svelte-maplibre-gl
+	 * queues every addSource/addLayer behind `waitForStyleLoaded`, which then never
+	 * fires. Raster tiles still drew (they are added a different way), so the only
+	 * symptom was that GeoJSON layers silently rendered nothing.
+	 */
 
 	const display = useDisplay();
 	const tiles = tileTemplates();
@@ -45,8 +41,7 @@
 	const place = $derived(display.config.place);
 
 	/**
-	 * The ring changes only with place and direction, never per frame —
-	 * recomputing 240 poses every frame would be pure waste on the Pi.
+	 * Ground track coordinates ring (240 samples).
 	 */
 	const ring = $derived(
 		new FlightTrack(
@@ -58,10 +53,28 @@
 		).groundTrack()
 	);
 
-	const trackGeoJson = $derived({
-		type: 'Feature' as const,
-		properties: {},
-		geometry: { type: 'LineString' as const, coordinates: ring }
+	/**
+	 * The ring, projected to pixels and drawn as plain SVG.
+	 *
+	 * NOT a GeoJSON source + LineLayer, which is the obvious approach and does
+	 * not work here: svelte-maplibre-gl queues addSource/addLayer behind
+	 * `waitForStyleLoaded`, and against a minimal inline style spec that gate
+	 * never opened — the layer existed, with correct data, and rendered zero
+	 * features. Raster tiles take a different path and drew fine, which made it
+	 * look like a data problem rather than a lifecycle one.
+	 *
+	 * Projecting ~240 points on place change is cheaper than a second GL layer,
+	 * and it cannot fail silently: wrong points means a visibly wrong shape.
+	 */
+	const ringPath = $derived.by(() => {
+		const m = map;
+		if (!m || ring.length === 0) return '';
+		let d = '';
+		for (let i = 0; i < ring.length; i++) {
+			const pt = m.project(ring[i]);
+			d += `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+		}
+		return `${d}Z`;
 	});
 
 	/** Live pose, straight off the view the main window just drew. */
@@ -69,15 +82,16 @@
 	const lon = $derived(display.view.lon ?? place.lon);
 	const heading = $derived(display.view.planeHeadingDeg ?? 0);
 	const aglM = $derived(display.view.aglM ?? 0);
+	const wallSec = $derived(display.view.wallSec ?? 0);
 
-	/** Climb bar, 0..1 of the ceiling — the altitude is always moving. */
-	const climb = $derived(Math.min(1, aglM / ALTITUDE_CEILING_M));
+	/** Climb bar & elevation phase (0..1). */
+	const climb = $derived(
+		Math.min(1, Math.max(0, (aglM - ALTITUDE_FLOOR_M) / (ALTITUDE_CEILING_M - ALTITUDE_FLOOR_M)))
+	);
+	const climbPhase = $derived((wallSec % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC);
 
 	/**
-	 * Project the aircraft to pixels within the inset.
-	 *
-	 * `map.project` is a pure read, so this stays a `$derived` off the pose and
-	 * never touches the map's camera.
+	 * Project the aircraft marker to pixels within the circular inset.
 	 */
 	const marker = $derived.by(() => {
 		const m = map;
@@ -85,13 +99,53 @@
 		const p = m.project([lon, lat]);
 		return { x: p.x, y: p.y };
 	});
+
+	/**
+	 * Project the camera's ground look-at target.
+	 */
+	const targetMarker = $derived.by(() => {
+		const m = map;
+		if (!m || display.view.targetLon === undefined || display.view.targetLat === undefined)
+			return null;
+		const p = m.project([display.view.targetLon, display.view.targetLat]);
+		return { x: p.x, y: p.y };
+	});
+
+	/**
+	 * Projected SVG path for the entire orbital ground track.
+	 * Immune to WebGL GeoJSON worker CSP limitations.
+	 */
+	const pathD = $derived.by(() => {
+		const m = map;
+		if (!m || !ring.length) return '';
+		const pts = ring.map(([rLon, rLat]) => m.project([rLon, rLat]));
+		if (pts.length === 0) return '';
+		return `M ${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')} Z`;
+	});
+
+	// Elevation profile wave SVG path (sine/cosine climb waveform)
+	const ELEV_WIDTH = 150;
+	const ELEV_HEIGHT = 24;
+	const elevPathD = $derived.by(() => {
+		const points: string[] = [];
+		for (let x = 0; x <= ELEV_WIDTH; x += 4) {
+			const phase = x / ELEV_WIDTH;
+			const normY = (1 - Math.cos(phase * Math.PI * 2)) * 0.5;
+			const y = ELEV_HEIGHT - normY * (ELEV_HEIGHT - 4) - 2;
+			points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+		}
+		return `M ${points.join(' L ')}`;
+	});
+
+	const elevDotX = $derived(climbPhase * ELEV_WIDTH);
+	const elevDotY = $derived(ELEV_HEIGHT - climb * (ELEV_HEIGHT - 4) - 2);
 </script>
 
-<div class="minimap">
+<div class="minimap" aria-label="Flight Orbit Minimap">
 	<MapLibre
 		bind:map
 		class="fill"
-		style={{ version: 8, sources: {}, layers: [] }}
+		style={BLANK_STYLE}
 		center={[place.lon, place.lat]}
 		{zoom}
 		interactive={false}
@@ -103,16 +157,30 @@
 			tileSize={TILE_SIZE}
 			maxzoom={TILE_MAXZOOM.gibs}
 		>
-			<RasterLayer paint={{ 'raster-opacity': 0.55, 'raster-saturation': -0.6 }} />
+			<RasterLayer paint={{ 'raster-opacity': 0.6, 'raster-saturation': -0.4 }} />
 		</RasterTileSource>
-
-		<GeoJSONSource id="mini-track" data={trackGeoJson}>
-			<LineLayer
-				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-				paint={{ 'line-color': '#7fd4ff', 'line-width': 1.4, 'line-opacity': 0.9 }}
-			/>
-		</GeoJSONSource>
 	</MapLibre>
+
+	<!-- Projected SVG Ground Track & Sightline Overlay -->
+	<svg class="track-svg" viewBox="0 0 190 190" aria-hidden="true">
+		{#if pathD}
+			<path d={pathD} class="track-path-glow" />
+			<path d={pathD} class="track-path" />
+		{/if}
+
+		<!-- Sideways Passenger Window Sightline -->
+		{#if marker && targetMarker}
+			<line x1={marker.x} y1={marker.y} x2={targetMarker.x} y2={targetMarker.y} class="sightline" />
+			<circle cx={targetMarker.x} cy={targetMarker.y} r="2.5" class="target-dot" />
+		{/if}
+	</svg>
+
+	<!-- Aircraft Heading Marker (▲ points in flight direction) -->
+	{#if ringPath}
+		<svg class="track" viewBox="0 0 190 190" aria-hidden="true">
+			<path d={ringPath} fill="none" stroke="#7fd4ff" stroke-width="1.3" stroke-opacity="0.9" />
+		</svg>
+	{/if}
 
 	{#if marker}
 		<div
@@ -126,8 +194,7 @@
 		</div>
 	{/if}
 
-	<!-- Reverse the loop. Writes through the settings object, so the window and
-	     the minimap turn together — they read the same direction. -->
+	<!-- Reverse Direction Button -->
 	<button
 		type="button"
 		class="reverse"
@@ -138,12 +205,19 @@
 		{display.config.direction === 1 ? '↻' : '↺'}
 	</button>
 
-	<div class="climb" aria-hidden="true">
-		<div class="climb-fill" style:height="{climb * 100}%"></div>
+	<!-- Altitude Elevation Waveform Inset (Side View) -->
+	<div class="elevation-profile" title="Altitude Profile (Climb & Descent)">
+		<svg width={ELEV_WIDTH} height={ELEV_HEIGHT} viewBox="0 0 {ELEV_WIDTH} {ELEV_HEIGHT}">
+			<!-- Base Wave Curve -->
+			<path d={elevPathD} class="elev-wave" />
+			<!-- Active Altitude Dot -->
+			<circle cx={elevDotX} cy={elevDotY} r="3" class="elev-dot" />
+		</svg>
 	</div>
 
+	<!-- Telemetry Footer Readout -->
 	<div class="readout">
-		<span>{(aglM / 1000).toFixed(1)} km · {Math.round(heading)}°</span>
+		<span>{(aglM / 1000).toFixed(1)} km · {Math.round(heading)}° HDG</span>
 	</div>
 </div>
 
@@ -156,75 +230,132 @@
 		height: 190px;
 		border-radius: 50%;
 		overflow: hidden;
-		border: 1px solid rgba(255, 255, 255, 0.22);
+		border: 1px solid rgba(255, 255, 255, 0.25);
 		box-shadow:
-			0 8px 28px rgba(0, 0, 0, 0.55),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+			0 8px 28px rgba(0, 0, 0, 0.65),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 		background: #04070d;
 		z-index: 30;
+		user-select: none;
+	}
+
+	.track-svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+
+	.track-path-glow {
+		fill: none;
+		stroke: rgba(56, 189, 248, 0.4);
+		stroke-width: 4;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.track-path {
+		fill: none;
+		stroke: #38bdf8;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.sightline {
+		stroke: rgba(56, 189, 248, 0.7);
+		stroke-width: 1.2;
+		stroke-dasharray: 2 3;
+	}
+
+	.target-dot {
+		fill: #38bdf8;
+		filter: drop-shadow(0 0 4px #38bdf8);
+	}
+
+	.track {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
 	}
 
 	.plane {
 		position: absolute;
 		translate: -50% -50%;
-		font-size: 12px;
+		font-size: 13px;
 		line-height: 1;
-		color: #fff;
-		text-shadow: 0 0 5px rgba(0, 0, 0, 0.95);
+		color: #ffffff;
+		text-shadow:
+			0 0 6px rgba(0, 0, 0, 1),
+			0 0 10px #38bdf8;
 		pointer-events: none;
 	}
 
 	.reverse {
 		position: absolute;
-		top: 0.45rem;
-		right: 0.45rem;
-		width: 1.4rem;
-		height: 1.4rem;
+		top: 0.5rem;
+		right: 0.5rem;
+		width: 1.5rem;
+		height: 1.5rem;
 		display: grid;
 		place-items: center;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		line-height: 1;
-		color: rgba(255, 255, 255, 0.85);
-		background: rgba(0, 0, 0, 0.45);
-		border: 1px solid rgba(255, 255, 255, 0.2);
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(15, 23, 42, 0.7);
+		backdrop-filter: blur(4px);
+		border: 1px solid rgba(255, 255, 255, 0.25);
 		border-radius: 50%;
 		cursor: pointer;
+		z-index: 5;
+		transition: all 0.15s;
 	}
 	.reverse:hover {
-		background: rgba(0, 0, 0, 0.7);
+		background: rgba(56, 189, 248, 0.3);
 		color: #fff;
+		border-color: #38bdf8;
 	}
 
-	.climb {
+	.elevation-profile {
 		position: absolute;
-		left: 0.5rem;
-		top: 50%;
-		translate: 0 -50%;
-		width: 3px;
-		height: 52%;
-		border-radius: 2px;
-		background: rgba(255, 255, 255, 0.16);
-		overflow: hidden;
+		bottom: 1.5rem;
+		left: 50%;
+		translate: -50% 0;
 		pointer-events: none;
+		z-index: 4;
+		opacity: 0.85;
 	}
-	.climb-fill {
-		position: absolute;
-		inset: auto 0 0 0;
-		background: linear-gradient(to top, #7fd4ff, #d8f3ff);
-		border-radius: 2px;
+
+	.elev-wave {
+		fill: none;
+		stroke: rgba(255, 255, 255, 0.35);
+		stroke-width: 1.5;
+		stroke-dasharray: 2 3;
+	}
+
+	.elev-dot {
+		fill: #38bdf8;
+		stroke: #ffffff;
+		stroke-width: 1;
+		filter: drop-shadow(0 0 4px #38bdf8);
 	}
 
 	.readout {
 		position: absolute;
 		inset: auto 0 0 0;
-		padding: 0.3rem 0 0.55rem;
+		padding: 0.3rem 0 0.35rem;
 		text-align: center;
-		font-size: 0.5rem;
+		font-size: 0.52rem;
+		font-weight: 600;
 		letter-spacing: 0.05em;
 		font-variant-numeric: tabular-nums;
-		color: rgba(255, 255, 255, 0.82);
-		background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+		color: rgba(255, 255, 255, 0.9);
+		background: linear-gradient(to top, rgba(4, 7, 13, 0.85), transparent);
 		pointer-events: none;
+		z-index: 5;
 	}
 
 	:global(.minimap .fill) {

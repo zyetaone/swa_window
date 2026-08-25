@@ -16,6 +16,19 @@
 	import Sky from './Sky.svelte';
 	import LookControls from '../flight/LookControls.svelte';
 
+	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
+
+	/**
+	 * An empty style, defined ONCE at module scope.
+	 *
+	 * Inlining `style={{ version: 8, sources: {}, layers: [] }}` creates a NEW
+	 * object on every render. MapLibre treats that as a new style and restarts
+	 * loading, so `style._loaded` never settles true — and svelte-maplibre-gl
+	 * queues every addSource/addLayer behind `waitForStyleLoaded`, which then never
+	 * fires. Raster tiles still drew (they are added a different way), so the only
+	 * symptom was that GeoJSON layers silently rendered nothing.
+	 */
+
 	const display = useDisplay();
 
 	let map = $state<MlMap | undefined>();
@@ -58,7 +71,7 @@
 	<MapLibre
 		bind:map
 		class="fill"
-		style={{ version: 8, sources: {}, layers: [] }}
+		style={BLANK_STYLE}
 		center={[display.config.place.lon, display.config.place.lat]}
 		zoom={9}
 		anisotropicFilterPitch={20}

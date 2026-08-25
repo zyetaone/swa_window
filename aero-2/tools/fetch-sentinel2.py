@@ -42,6 +42,7 @@ import sys
 import time
 import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 STAC = "https://earth-search.aws.element84.com/v1/search"
@@ -167,30 +168,42 @@ def main() -> None:
     work = Path(a.out) / f"_s2-{a.place}"
     work.mkdir(parents=True, exist_ok=True)
 
-    # Warp each scene to web mercator, cropped to the visible bbox and snapped
-    # to the z14 pixel grid, so gdal2tiles never resamples a second time.
-    x0, y0 = mercator(bbox[0], bbox[1])
-    x1, y1 = mercator(bbox[2], bbox[3])
-    warped = []
-    for i, (mgrs, (cloud, href)) in enumerate(sorted(tiles.items()), 1):
+    # Warp each scene to web mercator on the z14 pixel grid, so gdal2tiles never
+    # resamples a second time.
+    #
+    # Deliberately NOT cropped to the bbox with -te. Each scene covers only its
+    # own corner of it, so -te made twelve full-bbox grids that were mostly
+    # nodata — about twice the total pixels, for padding the mosaic discards.
+    # -tap keeps every output on the same grid, which is all gdalbuildvrt needs
+    # to stitch rasters of differing extents.
+    #
+    # Run in parallel: each warp is network-bound on a remote COG, so they
+    # overlap almost perfectly. Sequentially this stage took ~5 min per scene.
+    def warp(item):
+        i, (mgrs, (cloud, href)) = item
         dst = work / f"{mgrs}.tif"
-        warped.append(str(dst))
         if dst.exists():
-            print(f"[{i}/{len(tiles)}] {mgrs} cached")
-            continue
-        print(f"[{i}/{len(tiles)}] {mgrs} cloud {cloud:.2f}%")
-        run([
+            print(f"[{i}/{len(tiles)}] {mgrs} cached", flush=True)
+            return str(dst)
+        print(f"[{i}/{len(tiles)}] {mgrs} cloud {cloud:.2f}% ...", flush=True)
+        subprocess.run([
             "gdalwarp", "-q",
             "-t_srs", "EPSG:3857",
-            "-te", str(x0), str(y0), str(x1), str(y1),
-            "-tr", str(Z14_RES), str(Z14_RES),
+            "-tr", str(Z14_RES), str(Z14_RES), "-tap",
             "-r", "cubic",
             "-co", "COMPRESS=DEFLATE", "-co", "TILED=YES",
-            "-wo", "NUM_THREADS=ALL_CPUS",
-            "-multi", "--config", "GDAL_CACHEMAX", "1024",
+            "-wo", "NUM_THREADS=2",
+            "--config", "GDAL_CACHEMAX", "512",
             "--config", "AWS_NO_SIGN_REQUEST", "YES",
+            "--config", "GDAL_HTTP_MAX_RETRY", "5",
+            "--config", "GDAL_HTTP_RETRY_DELAY", "2",
             f"/vsicurl/{href}", str(dst),
-        ])
+        ], check=True)
+        print(f"[{i}/{len(tiles)}] {mgrs} done", flush=True)
+        return str(dst)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        warped = list(pool.map(warp, enumerate(sorted(tiles.items()), 1)))
 
     vrt = work / "mosaic.vrt"
     # NO -addalpha. An alpha band forces gdal2tiles to emit PNG, which for a
@@ -200,7 +213,12 @@ def main() -> None:
     # for alpha to protect — only the outer rim, which the camera never reaches.
     run(["gdalbuildvrt", "-q", str(vrt), *warped])
 
-    tiles_dir = Path(a.out) / "sentinel2" / a.place
+    # One flat layer dir for every place, NOT sentinel2/<place>/. Two reasons:
+    # `pack-pmtiles.ts <layer>` and /api/tiles both expect layer/{z}/{x}/{y},
+    # and separate archives per city would mean per-place routing in the app
+    # for no gain. Cities this far apart share no tile at z8-14, so running
+    # this for a second place merges into the same tree without collision.
+    tiles_dir = Path(a.out) / "sentinel2"
     print(f"tiling z{a.min_zoom}-{a.max_zoom} -> {tiles_dir}")
     run([
         "gdal2tiles.py", "--xyz", "-w", "none", "--processes", "8",
@@ -213,8 +231,10 @@ def main() -> None:
             "worstCloudPct": round(worst, 3), "bbox": bbox,
             "minZoom": a.min_zoom, "maxZoom": a.max_zoom,
             "licence": "Copernicus Sentinel data — commercial use permitted"}
-    (tiles_dir / "source.json").write_text(json.dumps(meta, indent=1))
-    print(f"done. {tiles_dir}/source.json records the scene and licence.")
+    (tiles_dir / f"source-{a.place}.json").write_text(json.dumps(meta, indent=1))
+    print(f"done. {tiles_dir}/source-{a.place}.json records the scene and licence.")
+    print(f"next: bun tools/pack-pmtiles.ts sentinel2 data/tiles/sentinel2.pmtiles")
+    print(f"the warp scratch in {work} is safe to delete once packed.")
 
 
 if __name__ == "__main__":

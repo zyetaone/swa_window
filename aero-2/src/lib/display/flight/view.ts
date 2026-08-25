@@ -18,7 +18,7 @@ export interface CameraParams {
 	phase?: number;
 }
 
-export const DEFAULT_WINDOW_AZIMUTH_DEG = -90;
+export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
 export const DEFAULT_PITCH_DEG = -18;
 
 const DEG2RAD = Math.PI / 180;
