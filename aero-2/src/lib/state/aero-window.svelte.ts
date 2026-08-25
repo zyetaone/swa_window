@@ -1,10 +1,10 @@
 /**
  * Root of the simulation: config + location + the flight engine that moves it.
  */
-import { Location } from '#lib/content/locations.js';
-import { ConfigTree } from '#lib/sim/config.js';
-import { FlightEngine } from '#lib/sim/flight.svelte.js';
-import type { GlobeSyncSlice } from '#lib/sim/frame.js';
+import { Location } from '#lib/assets/data/locations.js';
+import { ConfigTree } from '#lib/state/config.js';
+import { FlightEngine } from '#lib/state/engine.svelte.js';
+import type { FlightFrame } from '#lib/state/pose.js';
 
 export class AeroWindow {
 	readonly config = new ConfigTree();
@@ -20,7 +20,7 @@ export class AeroWindow {
 		this.flight.tick();
 	}
 
-	frame(): GlobeSyncSlice {
+	frame(): FlightFrame {
 		return this.flight.frame();
 	}
 }

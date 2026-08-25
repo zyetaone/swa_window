@@ -1,13 +1,13 @@
 /**
  * Globe lighting follows the night factor.
  */
-import type { GlobeRuntime, Subsystem, WorldFrame } from '#lib/world/contract.js';
-import { EpsilonGate } from '#lib/utils.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
+import { EpsilonGate } from '#lib/render/gate.js';
 
 export class LightingSync implements Subsystem {
 	readonly #gate = new EpsilonGate(0.005);
 
-	sync(rt: GlobeRuntime, frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
 		const nightFactor = frame.nightFactor;
 		if (!this.#gate.changed(nightFactor)) return;
 		rt.viewer.scene.globe.enableLighting = nightFactor > 0.05;

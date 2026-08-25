@@ -1,8 +1,8 @@
 /**
  * Real heightmaps when the pack ships quantized-mesh, ellipsoid otherwise.
  */
-import type { GlobeRuntime, Subsystem, WorldFrame } from '#lib/world/contract.js';
-import { tileCache, tileServerBase } from '#lib/world/tiles.svelte.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
+import { tileCache, tileServerBase } from '#lib/render/tiles.svelte.js';
 
 export class TerrainSync implements Subsystem {
 	/** Plain field: nothing subscribes to this, only #apply and one test read it. */
@@ -15,7 +15,7 @@ export class TerrainSync implements Subsystem {
 		await this.#apply(rt);
 	}
 
-	sync(rt: GlobeRuntime, _frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, _frame: RenderFrame): void {
 		if (!this.#ready) return;
 		// Cheap guard before the async call — otherwise this allocates a promise
 		// 60x a second only to early-return inside it.

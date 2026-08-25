@@ -1,27 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CameraPose, GlobeSyncSlice } from '#lib/sim/frame.js';
-import { resolveAtmosphere, selectImagery } from '#lib/rules.js';
-import { GlobeRuntime, WorldFrame } from '#lib/world/contract.js';
-import { tileCache } from '#lib/world/tiles.svelte.js';
-import { worldRuntime } from '#lib/world/runtime.svelte.js';
-import { configureScene, globe } from '#lib/world/attach.svelte.js';
-import { AtmosphereSync } from '#lib/world/sync/atmosphere.js';
-import { CameraSync } from '#lib/world/sync/camera.js';
-import { ImagerySync } from '#lib/world/sync/imagery.svelte.js';
-import { LightingSync } from '#lib/world/sync/lighting.js';
-import { LodSync, screenSpaceErrorFor } from '#lib/world/sync/lod.js';
-import { TerrainSync } from '#lib/world/sync/terrain.js';
+import { CameraPose, FlightFrame } from '#lib/state/pose.js';
+import { resolveAtmosphere } from '#lib/rules/atmosphere.js';
+import { selectImagery } from '#lib/rules/imagery.js';
+import { GlobeRuntime, RenderFrame } from '#lib/render/types.js';
+import { tileCache } from '#lib/render/tiles.svelte.js';
+import { worldRuntime } from '#lib/render/runtime.svelte.js';
+import { configureScene, globe } from '#lib/render/attach.svelte.js';
+import { AtmosphereSync } from '#lib/render/sync/atmosphere.js';
+import { CameraSync } from '#lib/render/sync/camera.js';
+import { ImagerySync } from '#lib/render/sync/imagery.svelte.js';
+import { LightingSync } from '#lib/render/sync/lighting.js';
+import { LodSync, screenSpaceErrorFor } from '#lib/render/sync/lod.js';
+import { TerrainSync } from '#lib/render/sync/terrain.js';
 
-function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): GlobeSyncSlice {
+function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): FlightFrame {
 	const altitudeM = overrides.altitudeM ?? 1000;
-	return new GlobeSyncSlice(new CameraPose(0, 0, altitudeM, 0, -10), overrides.timeOfDay ?? 12);
+	return new FlightFrame(new CameraPose(0, 0, altitudeM, 0, -10), overrides.timeOfDay ?? 12);
 }
 
-function testFrame(overrides: { altitudeM?: number; nightFactor?: number } = {}): WorldFrame {
+function testFrame(overrides: { altitudeM?: number; nightFactor?: number } = {}): RenderFrame {
 	const altitudeM = overrides.altitudeM ?? 1000;
 	const nightFactor = overrides.nightFactor ?? 0;
 	const atmosphere = resolveAtmosphere(altitudeM);
-	return new WorldFrame(
+	return new RenderFrame(
 		new CameraPose(0, 0, altitudeM, 0, -10),
 		atmosphere,
 		selectImagery({ groundDetail: atmosphere.groundDetail, nightFactor, current: null }),

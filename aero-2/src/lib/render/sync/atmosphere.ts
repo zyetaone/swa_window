@@ -1,8 +1,8 @@
 /**
  * Paints the band the aircraft is in.
  */
-import type { GlobeRuntime, Subsystem, WorldFrame } from '#lib/world/contract.js';
-import { EpsilonGate } from '#lib/utils.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
+import { EpsilonGate } from '#lib/render/gate.js';
 
 /**
  * Paints the band the aircraft is currently in: fog thickens with altitude and
@@ -18,7 +18,7 @@ import { EpsilonGate } from '#lib/utils.js';
 export class AtmosphereSync implements Subsystem {
 	readonly #gate = new EpsilonGate(25);
 
-	sync(rt: GlobeRuntime, frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
 		if (!this.#gate.changed(frame.camera.altitudeM)) return;
 		const { scene } = rt.viewer;
 		const a = frame.atmosphere;

@@ -103,7 +103,7 @@ describe('GET /api/tiles/[...path]', () => {
 		vi.stubEnv('NODE_ENV', 'development');
 		vi.stubGlobal('fetch', vi.fn());
 		vi.resetModules();
-		const mod = await import('../../../src/routes/api/tiles/[...path]/+server.ts');
+		const mod = await import('../../src/routes/api/tiles/[...path]/+server.ts');
 		GET = mod.GET as typeof GET;
 	});
 
@@ -164,7 +164,7 @@ describe('GET /api/tiles/[...path]', () => {
 	it('returns 404 for a missing tile when remote fallback is off', async () => {
 		vi.stubEnv('AERO_TILE_REMOTE_FALLBACK', '0');
 		vi.resetModules();
-		const mod = await import('../../../src/routes/api/tiles/[...path]/+server.ts');
+		const mod = await import('../../src/routes/api/tiles/[...path]/+server.ts');
 		GET = mod.GET as typeof GET;
 
 		const res = await GET({

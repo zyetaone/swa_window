@@ -2,9 +2,9 @@
  * Trades tessellation detail for altitude — the ground is only worth
  * resolving when you can see it.
  */
-import type { GlobeRuntime, Subsystem, WorldFrame } from '#lib/world/contract.js';
-import { SSE_CRUISE, SSE_GROUND } from '#lib/content/imagery.js';
-import { EpsilonGate } from '#lib/utils.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
+import { SSE_CRUISE, SSE_GROUND } from '#lib/assets/data/imagery.js';
+import { EpsilonGate } from '#lib/render/gate.js';
 
 const SSE_HYSTERESIS = 2;
 
@@ -16,7 +16,7 @@ export function screenSpaceErrorFor(groundDetail: number): number {
 export class LodSync implements Subsystem {
 	readonly #gate = new EpsilonGate(SSE_HYSTERESIS);
 
-	sync(rt: GlobeRuntime, frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
 		const target = screenSpaceErrorFor(frame.atmosphere.groundDetail);
 		if (!this.#gate.changed(target)) return;
 		rt.viewer.scene.globe.maximumScreenSpaceError = target;

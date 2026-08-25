@@ -2,7 +2,7 @@
  * The model → world boundary. Leaf module: imports nothing.
  *
  * Keeping these here rather than beside AeroWindow is what breaks the cycle —
- * flight needs the DTOs, the window root needs flight.
+ * the engine needs the DTOs, the AeroWindow root needs the engine.
  */
 
 export class CameraPose {
@@ -23,7 +23,7 @@ export class CameraPose {
  * can disagree with its own inputs, and on three machines that disagreement is a
  * torn window no single-machine test would catch. The world derives them now.
  */
-export class GlobeSyncSlice {
+export class FlightFrame {
 	constructor(
 		readonly camera: CameraPose,
 		readonly timeOfDay: number,

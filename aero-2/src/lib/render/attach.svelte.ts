@@ -3,9 +3,9 @@
  * the world layer.
  */
 import type { Attachment } from 'svelte/attachments';
-import type { Scene, Viewer } from '#lib/world/contract.js';
-import { SSE_GROUND } from '#lib/content/imagery.js';
-import { worldRuntime } from '#lib/world/runtime.svelte.js';
+import type { Scene, Viewer } from '#lib/render/types.js';
+import { SSE_GROUND } from '#lib/assets/data/imagery.js';
+import { worldRuntime } from '#lib/render/runtime.svelte.js';
 
 declare const CESIUM_BASE_URL: string;
 

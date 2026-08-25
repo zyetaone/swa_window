@@ -2,10 +2,10 @@
  * Swaps the base texture and its zoom cap. Stateful: holds the layer it
  * last applied so an unchanged pick costs nothing.
  */
-import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, WorldFrame } from '#lib/world/contract.js';
-import { IMAGERY_SOURCES } from '#lib/content/imagery.js';
-import { gateImagerySelection, type ImagerySelection } from '#lib/rules.js';
-import { tileCache, tileServerBase } from '#lib/world/tiles.svelte.js';
+import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, RenderFrame } from '#lib/render/types.js';
+import { IMAGERY_SOURCES } from '#lib/assets/data/imagery.js';
+import { gateImagerySelection, type ImagerySelection } from '#lib/rules/imagery.js';
+import { tileCache, tileServerBase } from '#lib/render/tiles.svelte.js';
 
 export class ImagerySync implements Subsystem {
 	mode = $state<ImageryMode>('none');
@@ -31,7 +31,7 @@ export class ImagerySync implements Subsystem {
 		this.#ready = true;
 	}
 
-	sync(rt: GlobeRuntime, frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
 		if (!this.#ready || this.mode !== 'local') return;
 
 		const gated = gateImagerySelection(frame.imagery, (id) => tileCache.layerAvailable(id));

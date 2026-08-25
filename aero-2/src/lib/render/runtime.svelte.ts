@@ -1,22 +1,19 @@
 /**
  * Owns the viewer's lifetime and walks the subsystem list once per frame.
  */
-import type { CesiumModule, ImageryMode, Viewer } from '#lib/world/contract.js';
-import { GlobeRuntime, WorldFrame, type Subsystem } from '#lib/world/contract.js';
-import type { GlobeSyncSlice } from '#lib/sim/frame.js';
-import {
-	nightLighting,
-	resolveAtmosphere,
-	selectImagery,
-	type ImagerySelection,
-} from '#lib/rules.js';
-import { tileCache } from '#lib/world/tiles.svelte.js';
-import { AtmosphereSync } from '#lib/world/sync/atmosphere.js';
-import { CameraSync } from '#lib/world/sync/camera.js';
-import { ImagerySync } from '#lib/world/sync/imagery.svelte.js';
-import { LightingSync } from '#lib/world/sync/lighting.js';
-import { LodSync } from '#lib/world/sync/lod.js';
-import { TerrainSync } from '#lib/world/sync/terrain.js';
+import type { CesiumModule, ImageryMode, Viewer } from '#lib/render/types.js';
+import { GlobeRuntime, RenderFrame, type Subsystem } from '#lib/render/types.js';
+import type { FlightFrame } from '#lib/state/pose.js';
+import { resolveAtmosphere } from '#lib/rules/atmosphere.js';
+import { selectImagery, type ImagerySelection } from '#lib/rules/imagery.js';
+import { nightLighting } from '#lib/rules/lighting.js';
+import { tileCache } from '#lib/render/tiles.svelte.js';
+import { AtmosphereSync } from '#lib/render/sync/atmosphere.js';
+import { CameraSync } from '#lib/render/sync/camera.js';
+import { ImagerySync } from '#lib/render/sync/imagery.svelte.js';
+import { LightingSync } from '#lib/render/sync/lighting.js';
+import { LodSync } from '#lib/render/sync/lod.js';
+import { TerrainSync } from '#lib/render/sync/terrain.js';
 
 export class WorldRuntime {
 	opened = $state(false);
@@ -64,14 +61,14 @@ export class WorldRuntime {
 	 * Push one frame. Safe before open() — the model ticks before the viewer
 	 * exists, and again right after open() to fill the gap before the next RAF.
 	 */
-	sync(slice: GlobeSyncSlice): void {
+	sync(slice: FlightFrame): void {
 		const rt = this.#runtime;
 		if (!rt) return;
 		for (const s of this.#subsystems) s.sync(rt, this.#resolve(slice));
 	}
 
 	/** Derive once per frame. Imagery is stateful — it holds its own last pick. */
-	#resolve(slice: GlobeSyncSlice): WorldFrame {
+	#resolve(slice: FlightFrame): RenderFrame {
 		const atmosphere = resolveAtmosphere(slice.camera.altitudeM);
 		const nightFactor = nightLighting.factor(slice.timeOfDay);
 		this.#imagerySelection = selectImagery({
@@ -79,7 +76,7 @@ export class WorldRuntime {
 			nightFactor,
 			current: this.#imagerySelection,
 		});
-		return new WorldFrame(slice.camera, atmosphere, this.#imagerySelection, nightFactor);
+		return new RenderFrame(slice.camera, atmosphere, this.#imagerySelection, nightFactor);
 	}
 }
 

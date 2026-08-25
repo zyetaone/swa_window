@@ -2,12 +2,12 @@
  * Puts the camera where the flight says it is. The only subsystem that runs
  * every frame unconditionally — the pose changes every frame.
  */
-import type { GlobeRuntime, Subsystem, WorldFrame } from '#lib/world/contract.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
 
 export class CameraSync implements Subsystem {
 	#scratch: import('cesium').Cartesian3 | null = null;
 
-	sync(rt: GlobeRuntime, frame: WorldFrame): void {
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
 		const { Cesium, viewer } = rt;
 		const camera = frame.camera;
 		this.#scratch ??= new Cesium.Cartesian3();

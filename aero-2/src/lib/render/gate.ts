@@ -1,11 +1,6 @@
-export function normalizeHeading(deg: number): number {
-	return ((deg % 360) + 360) % 360;
-}
-
-/** True when `target` has drifted far enough from `held` to retile or swap. */
-export function exceedsDeadband(held: number | null, target: number, threshold: number): boolean {
-	return held === null || Math.abs(target - held) >= threshold;
-}
+/**
+ * Change damping for the render layer.
+ */
 
 /**
  * Damps a noisy scalar: `changed()` is true only once the value has moved far

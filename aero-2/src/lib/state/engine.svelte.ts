@@ -1,12 +1,13 @@
 /**
  * Flight simulation engine — updates orbit pose and time of day.
  */
-import { altitudeAt, orbitPose } from '#lib/rules.js';
-import { ALTITUDE_FLOOR_M } from '#lib/content/flight.js';
-import type { Location } from '#lib/content/locations.js';
-import type { ConfigTree } from '#lib/sim/config.js';
-import { CameraPose, GlobeSyncSlice } from '#lib/sim/frame.js';
-import { resolveLocalHours } from '#lib/sim/local-time.js';
+import { altitudeAt } from '#lib/rules/climb.js';
+import { orbitPose } from '#lib/rules/orbit.js';
+import { ALTITUDE_FLOOR_M } from '#lib/assets/data/climb.js';
+import type { Location } from '#lib/assets/data/locations.js';
+import type { ConfigTree } from '#lib/state/config.js';
+import { CameraPose, FlightFrame } from '#lib/state/pose.js';
+import { resolveLocalHours } from '#lib/state/clock.js';
 
 export class FlightEngine {
 	lat = $state(0);
@@ -76,7 +77,7 @@ export class FlightEngine {
 		return new CameraPose(this.lat, this.lon, this.altitudeM, this.headingDeg, view.pitchDeg);
 	}
 
-	frame(): GlobeSyncSlice {
-		return new GlobeSyncSlice(this.cameraPose(), this.timeOfDay);
+	frame(): FlightFrame {
+		return new FlightFrame(this.cameraPose(), this.timeOfDay);
 	}
 }

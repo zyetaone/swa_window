@@ -1,10 +1,11 @@
 /**
- * The world's internal contract. Leaf module by design: the sync modules import
- * it and the runtime imports them, so putting these next to WorldRuntime would
- * make that a cycle.
+ * Shapes both halves of render/ agree on. Leaf module by design: the sync
+ * modules import it and the runtime imports them, so putting these next to
+ * WorldRuntime would make that a cycle.
  */
-import type { CameraPose } from '#lib/sim/frame.js';
-import type { AtmosphereState, ImagerySelection } from '#lib/rules.js';
+import type { CameraPose } from '#lib/state/pose.js';
+import type { AtmosphereState } from '#lib/rules/atmosphere.js';
+import type { ImagerySelection } from '#lib/rules/imagery.js';
 
 export type CesiumModule = typeof import('cesium');
 export type Viewer = import('cesium').Viewer;
@@ -26,7 +27,7 @@ export class GlobeRuntime {
  * Derived here rather than in the model so there is exactly one place these can
  * be computed, and no way for a stale copy to ride across the boundary.
  */
-export class WorldFrame {
+export class RenderFrame {
 	constructor(
 		readonly camera: CameraPose,
 		readonly atmosphere: AtmosphereState,
@@ -47,6 +48,6 @@ export class WorldFrame {
 export interface Subsystem {
 	/** Async one-time init. Awaited in list order during open(). */
 	setup?(rt: GlobeRuntime): Promise<void>;
-	sync(rt: GlobeRuntime, frame: WorldFrame): void;
+	sync(rt: GlobeRuntime, frame: RenderFrame): void;
 	reset?(): void;
 }
