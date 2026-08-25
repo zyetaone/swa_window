@@ -10,8 +10,6 @@ declare global {
 
 	/** Injected by vite.config.ts `define` — points at the copied Cesium assets. */
 	const CESIUM_BASE_URL: string;
-	/** Build-time commit stamp, surfaced fleet-wide via /api/status. */
-	const __APP_COMMIT__: string;
 }
 
 export {};

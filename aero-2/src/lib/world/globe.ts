@@ -1,63 +1,95 @@
-import { Ion, Viewer, Cartesian3, Math as CesiumMath } from 'cesium';
 import type { Attachment } from 'svelte/attachments';
 
-// Cesium resolves its workers/assets against this global. `define` in
-// vite.config.ts points it at the vite-plugin-static-copy output.
 declare const CESIUM_BASE_URL: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(globalThis as any).CESIUM_BASE_URL = CESIUM_BASE_URL;
 
 /**
- * Mounts a Cesium viewer onto the attached element and tears it down when the
- * element leaves the DOM.
+ * Tile-selection error, in pixels. The fielded Pis run the `performance`
+ * preset, so this is the ship-path value — not a dev-only luxury setting.
+ */
+const MAX_SCREEN_SPACE_ERROR = 8;
+
+/**
+ * How much to relax tile-selection error with distance.
  *
- * This is the Single-Viewer Rule expressed as an attachment: exactly one
- * viewer per element, and the cleanup is structurally tied to the mount
- * rather than to a separately-registered teardown that could be forgotten.
+ * An oblique window view sees to the horizon — ~357 km at 10 km altitude,
+ * versus ~11 km looking straight down. The far field is therefore hundreds of
+ * tiles resolving into a handful of pixels, while the near field is a handful
+ * of tiles covering most of the screen. A single global error budget spends
+ * most of itself where nothing is legible.
+ *
+ * Raising this coarsens distant tiles only, which is both free perceptually
+ * and physically correct: air is not transparent for 357 km, so sharp horizon
+ * detail was the artifact and haze is the correction. Cesium's default is 2.
+ *
+ * Calibration knob — the right value is whatever looks right on the wall at
+ * cruise, and that can only be settled on real screens.
+ */
+const FOG_SSE_FACTOR = 16;
+
+function ensureCesiumBaseUrl(): void {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(globalThis as any).CESIUM_BASE_URL ??= CESIUM_BASE_URL;
+}
+
+/**
+ * Mounts a Cesium viewer on the attached element. Dynamic-imports Cesium so
+ * the bundle defers until the element exists. Exactly one viewer per element;
+ * cleanup is tied to DOM teardown via the attachment return.
  */
 export function globe(token?: string): Attachment<HTMLElement> {
 	return (element) => {
-		if (token) Ion.defaultAccessToken = token;
+		ensureCesiumBaseUrl();
 
-		const viewer = new Viewer(element, {
-			// Kiosk chrome: the window shows a world, not an app.
-			animation: false,
-			baseLayerPicker: false,
-			fullscreenButton: false,
-			geocoder: false,
-			homeButton: false,
-			infoBox: false,
-			navigationHelpButton: false,
-			sceneModePicker: false,
-			selectionIndicator: false,
-			timeline: false,
-		});
+		let viewer: import('cesium').Viewer | null = null;
+		let cancelled = false;
 
-		viewer.cesiumWidget.creditContainer.remove();
+		void (async () => {
+			const Cesium = await import('cesium');
+			if (cancelled) return;
 
-		// Hyderabad, roughly the fielded location.
-		//
-		// Orientation is NOT optional here. Cesium's default for setView is
-		// nadir — straight down — which reads as a top-down map, not a window.
-		// A passenger looks out and DOWN at a shallow angle, so pitch is a
-		// modest negative and the horizon stays in frame.
-		viewer.camera.setView({
-			destination: Cartesian3.fromDegrees(78.4867, 17.385, 10_000),
-			orientation: {
-				heading: CesiumMath.toRadians(20),
-				pitch: CesiumMath.toRadians(-18),
-				roll: 0,
-			},
-		});
+			if (token) Cesium.Ion.defaultAccessToken = token;
 
-		// Dev-only handle. Screenshot capture from an automated tab throttles
-		// rAF, so Cesium paints no frame and pixel captures come back black
-		// even when the page renders fine for a human. State is verified
-		// through this handle instead of through pixels.
-		if (import.meta.env.DEV) {
-			(globalThis as Record<string, unknown>).__viewer = viewer;
-		}
+			viewer = new Cesium.Viewer(element, {
+				animation: false,
+				baseLayerPicker: false,
+				fullscreenButton: false,
+				geocoder: false,
+				homeButton: false,
+				infoBox: false,
+				navigationHelpButton: false,
+				sceneModePicker: false,
+				selectionIndicator: false,
+				timeline: false,
+			});
 
-		return () => viewer.destroy();
+			viewer.cesiumWidget.creditContainer.remove();
+
+			// Distance-aware LOD. Fog must be enabled for screenSpaceErrorFactor
+			// to apply at all — it is the fog distance that drives the relaxation.
+			const { scene } = viewer;
+			scene.globe.maximumScreenSpaceError = MAX_SCREEN_SPACE_ERROR;
+			scene.fog.enabled = true;
+			scene.fog.screenSpaceErrorFactor = FOG_SSE_FACTOR;
+
+			// Hyderabad — shallow passenger pitch, not nadir.
+			viewer.camera.setView({
+				destination: Cesium.Cartesian3.fromDegrees(78.4867, 17.385, 10_000),
+				orientation: {
+					heading: Cesium.Math.toRadians(20),
+					pitch: Cesium.Math.toRadians(-18),
+					roll: 0,
+				},
+			});
+
+			if (import.meta.env.DEV) {
+				(globalThis as Record<string, unknown>).__viewer = viewer;
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+			viewer?.destroy();
+			viewer = null;
+		};
 	};
 }
