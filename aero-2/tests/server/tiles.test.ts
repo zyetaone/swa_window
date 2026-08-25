@@ -50,6 +50,18 @@ describe('remoteTileUrl', () => {
 			'https://a.basemaps.cartocdn.com/dark_all/4/11/7.png'
 		);
 	});
+
+	// Elevation is only allowed out through here. If this stops matching, the
+	// client silently loses terrain rather than loudly failing.
+	it('maps terrarium back to XYZ order', () => {
+		expect(remoteTileUrl('terrarium/4/7/11.png')).toBe(
+			'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/4/11/7.png'
+		);
+	});
+
+	it('refuses a layer that is not on the allowlist', () => {
+		expect(remoteTileUrl('some-paid-basemap/4/7/11.png')).toBeNull();
+	});
 });
 
 describe('remoteFallbackEnabled', () => {

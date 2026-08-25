@@ -12,6 +12,8 @@ export function tileServerBase(): string {
 export class TileCache {
 	layers = $state<string[]>([]);
 	probing = $state(false);
+	/** Whether the tile server is allowed to proxy misses. Server-declared. */
+	remoteFallback = $state(false);
 
 	hasTiles = $derived(this.layers.length > 0);
 
@@ -21,6 +23,7 @@ export class TileCache {
 
 	async probe(): Promise<void> {
 		this.probing = true;
+		this.remoteFallback = false;
 		const base = tileServerBase();
 		try {
 			const resp = await fetch(`${base}/health`, { signal: AbortSignal.timeout(500) });
@@ -31,11 +34,13 @@ export class TileCache {
 			const body = (await resp.json().catch(() => null)) as {
 				hasTiles?: boolean;
 				layers?: unknown;
+				remoteFallback?: boolean;
 			} | null;
 			const found = Array.isArray(body?.layers)
 				? body.layers.filter((l): l is string => typeof l === 'string')
 				: [];
 			this.layers = body?.hasTiles === false ? [] : found;
+			this.remoteFallback = body?.remoteFallback === true;
 		} catch {
 			this.layers = [];
 		} finally {
@@ -46,6 +51,7 @@ export class TileCache {
 	reset(): void {
 		this.layers = [];
 		this.probing = false;
+		this.remoteFallback = false;
 	}
 }
 

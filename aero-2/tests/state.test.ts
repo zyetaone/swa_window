@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AeroWindow } from '#lib/window/aero-window.svelte.js';
 import { Location } from '#lib/world/locations.js';
 import { resolveLocalHours } from '#lib/flight/clock.js';
@@ -52,14 +52,41 @@ describe('window azimuth', () => {
 	});
 
 	it('a pane offset is the only per-screen difference', () => {
-		// Three panes, one aircraft: same position and time, three azimuths.
-		const panes = [-105, -90, -75].map((az) => {
-			const m = new AeroWindow(Location.hyderabad(), az);
-			m.tick();
-			return m.frame();
-		});
-		expect(panes[1].camera.lat).toBe(panes[0].camera.lat);
-		expect(panes[2].camera.altitudeM).toBe(panes[0].camera.altitudeM);
-		expect(panes[1].camera.headingDeg).not.toBe(panes[0].camera.headingDeg);
+		// Three panes, one aircraft: SAME INSTANT, three azimuths. The time has to
+		// be pinned - pose is a pure function of Date.now(), so ticking three
+		// windows across a millisecond boundary legitimately yields three
+		// positions. That is the invariant working, not breaking, and this test
+		// flaked until it stopped straddling real time.
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-25T09:30:00Z'));
+		try {
+			const panes = [-105, -90, -75].map((az) => {
+				const m = new AeroWindow(Location.hyderabad(), az);
+				m.tick();
+				return m.frame();
+			});
+			expect(panes[1].camera.lat).toBe(panes[0].camera.lat);
+			expect(panes[2].camera.altitudeM).toBe(panes[0].camera.altitudeM);
+			expect(panes[1].camera.headingDeg).not.toBe(panes[0].camera.headingDeg);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('same wall-clock instant, independent instances, identical pose', () => {
+		// The fleet invariant itself: three Pis are three processes that share
+		// nothing but the clock. Construction order and object identity must not
+		// leak into the pose.
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-08-25T17:45:12.345Z'));
+		try {
+			const a = new AeroWindow(Location.hyderabad(), -90);
+			const b = new AeroWindow(Location.hyderabad(), -90);
+			a.tick();
+			b.tick();
+			expect(b.frame().camera).toEqual(a.frame().camera);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

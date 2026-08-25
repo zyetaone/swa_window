@@ -96,6 +96,11 @@ export function remoteTileUrl(subPath: string): string | null {
 	if (!m?.groups) return null;
 	const { layer, z, y, x, ext } = m.groups;
 	switch (layer) {
+		// Elevation. Public domain, no key. Listed here rather than hardcoded in
+		// the client so that "does this kiosk reach the internet" has exactly one
+		// answer, in one file.
+		case 'terrarium':
+			return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 		case 'eox-sentinel2':
 			return `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/${z}/${y}/${x}.jpg`;
 		case 'esri-world-imagery':

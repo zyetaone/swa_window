@@ -29,7 +29,12 @@ const MIME: Record<string, string> = {
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');
 
-function tileHealth(): { status: string; hasTiles: boolean; layers: string[] } {
+function tileHealth(): {
+	status: string;
+	hasTiles: boolean;
+	layers: string[];
+	remoteFallback: boolean;
+} {
 	let layers: string[] = [];
 	try {
 		layers = readdirSync(TILE_DIR, { withFileTypes: true })
@@ -45,7 +50,14 @@ function tileHealth(): { status: string; hasTiles: boolean; layers: string[] } {
 	} catch {
 		/* TILE_DIR absent */
 	}
-	return { status: 'ok', hasTiles: layers.length > 0, layers };
+	// The client cannot infer this, and navigator.onLine lies on a LAN with no
+	// route out. Ask the server, which actually knows.
+	return {
+		status: 'ok',
+		hasTiles: layers.length > 0,
+		layers,
+		remoteFallback: remoteFallbackEnabled()
+	};
 }
 
 function serveBytes(body: BodyInit, contentType: string, cors: Record<string, string>): Response {

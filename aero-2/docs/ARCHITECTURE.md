@@ -134,30 +134,30 @@ The probe reaches the same data by a different road: MapLibre decodes terrarium
 natively (`encoding="terrarium"`), so the same PNGs drive both the displaced
 mesh and the hillshade. One fetch, two uses.
 
-> **Known gap — elevation does not honour Invariant 4.** Imagery goes through
-> `/api/tiles`, which fails closed in production. Elevation does not:
-> `terrariumTileUrl()` hardcodes `s3.amazonaws.com`, so a kiosk with a working
-> LAN fetches heightmaps straight from the internet, pack or no pack. Two
-> further wrinkles: `remoteTileUrl()`'s allowlist contains only the three
-> sources we rejected on licence (`eox-sentinel2`, `esri-world-imagery`,
-> `cartodb-dark`) and neither terrarium nor GIBS; and `navigator.onLine` is
-> true on a LAN with no route out, which picks `terrarium` and then fails every
-> tile instead of falling back to `ellipsoid`.
->
-> Routing terrarium through `/api/tiles/xyz/terrarium/…` closes all three, but
-> it is not a free fix: on a Pi with no local pack the honest result is a **flat
-> planet**, where today it quietly works by reaching the internet. That is a
-> product call — correctness of the offline promise versus visible terrain —
-> and it is open.
+Elevation goes through `/api/tiles` like everything else, so a local pack is
+used when one exists and the deployment decides whether misses may be proxied.
+`remoteTileUrl()` is the single place that answers "can this kiosk reach the
+internet, and for what" — terrarium is on that allowlist; nothing else needs to
+be for the ground to work.
+
+Mode selection asks the tile server, via `/health`, rather than
+`navigator.onLine` — which reports true on a LAN with no route out, picked
+`terrarium`, and then failed every tile instead of falling back cleanly.
+
+> **Still open:** with no local pack and no `AERO_TILE_REMOTE_FALLBACK=1`, a
+> production kiosk gets `ellipsoid` — a flat planet. That is now an explicit
+> deploy choice rather than a hidden internet dependency, but the real fix is
+> shipping a terrarium pack so neither is needed.
 
 ## Invariants
 
 1. Single Viewer — via the `globe()` attachment only.
 2. Cesium isolation — runtime `import('cesium')` in `cesium/` and `actions.ts` files only.
 3. Runes live in `.svelte.ts`; `model.ts` and `rules.ts` never hold them.
-4. Offline **imagery** — `/api/tiles` first; remote proxy only when `NODE_ENV=development`
-   (fails closed on unset, so the Pi never silently reaches the internet); Ion when the cache is empty.
-   **Elevation is currently exempt and should not be** — see the known gap above.
+4. Offline tiles — `/api/tiles` first, **imagery and elevation alike**; remote proxy only when
+   `NODE_ENV=development` or `AERO_TILE_REMOTE_FALLBACK=1` (fails closed on unset, so the Pi never
+   silently reaches the internet); Ion when the cache is empty. Every reachable remote origin is
+   listed in `remoteTileUrl()` and nowhere else.
 5. Fleet determinism — every pose is an absolute function of wall-clock time.
    No per-process epoch, no accumulated `dt`, no `Math.random()` in the hot path.
 

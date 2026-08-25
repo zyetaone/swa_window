@@ -27,13 +27,22 @@ export class LodSync implements Subsystem {
 export type TerrainMode = 'ellipsoid' | 'mesh' | 'terrarium';
 
 /**
- * Local quantized-mesh pack if we shipped one; otherwise open terrarium tiles
- * over the network; otherwise a smooth ellipsoid. Never a hard failure — the
- * fiction survives a flat planet, it does not survive a stack trace.
+ * Local quantized-mesh pack if we shipped one; else terrarium heightmaps if the
+ * tile server can actually produce them — from a pack on disk, or by proxy when
+ * the deployment opted into that; else a smooth ellipsoid. Never a hard failure:
+ * the fiction survives a flat planet, it does not survive a stack trace.
+ *
+ * This used to ask `navigator.onLine`, which is true on a LAN with no route out.
+ * That picked terrarium and then failed every single tile. The tile server knows
+ * the real answer, so it is asked instead.
  */
+function terrariumReachable(): boolean {
+	return tileCache.layerAvailable('terrarium') || tileCache.remoteFallback;
+}
+
 function targetMode(): TerrainMode {
 	if (tileCache.layerAvailable('cesium-terrain')) return 'mesh';
-	if (navigator.onLine !== false) return 'terrarium';
+	if (terrariumReachable()) return 'terrarium';
 	return 'ellipsoid';
 }
 

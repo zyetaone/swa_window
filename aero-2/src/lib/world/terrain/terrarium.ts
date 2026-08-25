@@ -1,21 +1,26 @@
 /**
- * Elevation from AWS terrarium tiles — open data (SRTM / 3DEP derived), no key,
+ * Elevation from terrarium tiles — open data (SRTM / 3DEP derived), no key,
  * no licence to honour beyond attribution.
  *
  * Terrarium encodes metres in RGB: (R * 256 + G + B / 256) - 32768. We decode a
  * tile to a Float32Array and hand it to Cesium's own HeightmapTerrainData, so
  * none of the meshing is ours.
+ *
+ * Fetched through `/api/tiles` like everything else. It used to hit AWS
+ * directly, which meant elevation quietly opted out of the offline promise the
+ * rest of the stack keeps: a local pack was never consulted even when present,
+ * and a kiosk reached the internet with nothing declaring that it would.
  */
 import type { CesiumModule } from '#lib/cesium/types.js';
-
-const TERRARIUM_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium';
+import { tileServerBase } from '#lib/cesium/tiles.svelte.js';
 
 /** Terrarium publishes z0-15; past that the data is resampled, not finer. */
 export const TERRARIUM_MAX_LEVEL = 13;
 const TILE_PX = 256;
 
+/** XYZ form; the tile route remaps it onto the WMTS layout used on disk. */
 export function terrariumTileUrl(z: number, x: number, y: number): string {
-	return `${TERRARIUM_URL}/${z}/${x}/${y}.png`;
+	return `${tileServerBase()}/xyz/terrarium/${z}/${x}/${y}.png`;
 }
 
 /** RGB -> metres, per the terrarium spec. */
