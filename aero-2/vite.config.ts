@@ -2,9 +2,6 @@ import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
-// Cesium's runtime assets are copied into static/ by scripts/sync-cesium.mjs
-const cesiumBaseUrl = 'cesiumStatic';
-
 // Under `vitest`, resolve Svelte's BROWSER entry so components can be mounted in tests.
 const IS_TEST = process.env.VITEST !== undefined;
 
@@ -15,38 +12,14 @@ export default defineConfig({
 			adapter: adapter(),
 			csp: {
 				directives: {
+					// GIBS, USGS and terrarium are all fetched server-side, through
+					// /api/tiles — the browser never talks to any of those hosts
+					// directly, so img-src/connect-src need nothing beyond self.
 					'default-src': ['self'],
 					'script-src': ['self', 'unsafe-eval'],
 					'style-src': ['self', 'unsafe-inline'],
-					'img-src': [
-						'self',
-						'data:',
-						'blob:',
-						// aero-2's own window: GIBS + USGS colour, terrarium elevation.
-						'https://gibs.earthdata.nasa.gov',
-						'https://basemap.nationalmap.gov',
-						'https://s3.amazonaws.com',
-						// cesium/ is unreferenced by any route as of 2026-08-25, not deleted.
-						// Left allowed so it isn't a second edit if it gets reconnected.
-						'https://*.arcgis.com',
-						'https://*.arcgisonline.com',
-						'https://*.cesium.com',
-						'https://assets.ion.cesium.com',
-						'https://*.bing.com'
-					],
-					'connect-src': [
-						'self',
-						'ws:',
-						'wss:',
-						'http:',
-						'https:',
-						'https://*.arcgis.com',
-						'https://*.arcgisonline.com',
-						'https://*.cesium.com',
-						'https://api.cesium.com',
-						'https://assets.ion.cesium.com',
-						'https://*.bing.com'
-					],
+					'img-src': ['self', 'data:', 'blob:'],
+					'connect-src': ['self', 'ws:', 'wss:'],
 					'worker-src': ['self', 'blob:'],
 					'child-src': ['blob:'],
 					'font-src': ['self']
@@ -58,21 +31,8 @@ export default defineConfig({
 		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
 		host: true
 	},
-	define: {
-		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`)
-	},
 	build: {
-		chunkSizeWarningLimit: 5000,
-		rollupOptions: {
-			output: {
-				manualChunks(id: string): string | undefined {
-					if (id.includes('node_modules/cesium')) {
-						return 'cesium';
-					}
-					return undefined;
-				}
-			}
-		}
+		chunkSizeWarningLimit: 2000
 	},
 	test: {
 		environment: 'happy-dom',

@@ -9,12 +9,8 @@ declare global {
 	}
 
 	interface ImportMetaEnv {
-		readonly VITE_CESIUM_ION_TOKEN?: string;
 		readonly VITE_TILE_SERVER_URL?: string;
 	}
-
-	/** Injected by vite.config.ts `define` — points at the copied Cesium assets. */
-	const CESIUM_BASE_URL: string;
 }
 
 export {};

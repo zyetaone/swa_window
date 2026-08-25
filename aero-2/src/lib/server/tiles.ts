@@ -90,23 +90,28 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
 	return env.NODE_ENV === 'development';
 }
 
-/** Remote origin when the local pack is sparse (dev / partial cache). */
+/**
+ * Remote origin when the local pack is sparse (dev / partial cache). This is
+ * the ONLY place any of these hosts is named — the client only ever asks
+ * `/api/tiles/...`, so "does this kiosk reach the internet, and for what" has
+ * exactly one answer, in one file.
+ */
 export function remoteTileUrl(subPath: string): string | null {
 	const m = subPath.match(WMTS_TILE_PATH);
 	if (!m?.groups) return null;
-	const { layer, z, y, x, ext } = m.groups;
+	const { layer, z, y, x } = m.groups;
 	switch (layer) {
-		// Elevation. Public domain, no key. Listed here rather than hardcoded in
-		// the client so that "does this kiosk reach the internet" has exactly one
-		// answer, in one file.
+		// Elevation. Public domain, no key.
 		case 'terrarium':
 			return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
-		case 'eox-sentinel2':
-			return `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/${z}/${y}/${x}.jpg`;
-		case 'esri-world-imagery':
-			return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
-		case 'cartodb-dark':
-			return ext === 'png' ? `https://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png` : null;
+		// Base colour. Public domain. `default` asks GIBS for the best available
+		// date instead of a hardcoded one, which would silently go stale.
+		case 'gibs':
+			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/default/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
+		// Detail colour. Public domain, US-only — resolveLocalTile 404s silently
+		// outside NAIP coverage, and the client already gates the layer off there.
+		case 'usgs':
+			return `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
 		default:
 			return null;
 	}

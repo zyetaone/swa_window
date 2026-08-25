@@ -2,7 +2,7 @@
 
 Minimal rewrite of [Aero Dynamic Window](../) — one slice at a time.
 
-**Stack:** SvelteKit · Svelte 5 runes · Cesium · adapter-node (Pi kiosk).
+**Stack:** SvelteKit · Svelte 5 runes · MapLibre GL · adapter-node (Pi kiosk).
 
 ```sh
 bun install
@@ -10,20 +10,25 @@ bun run dev      # http://0.0.0.0:5173
 bun run check && bun run test
 ```
 
-Layout and invariants: `docs/ARCHITECTURE.md`.
+Layout and invariants: `docs/ARCHITECTURE.md`. Cesium was the ship path
+until 2026-08-25; its code was removed, not archived — see
+`docs/ADR-005-aero-2-threlte-renderer.md` for why and what a reversal costs.
 
-## Offline imagery
+## Offline tiles
 
-1. Populate `data/tiles/` (or symlink to parent repo `../data/tiles`).
+1. Populate `data/tiles/` with `gibs/`, `usgs/` and `terrarium/` layers (WMTS
+   layout: `{layer}/{z}/{y}/{x}.ext`), or symlink to parent repo `../data/tiles`.
 2. Optional `TILE_DIR=data/tiles` in `.env`.
 3. `bun run build && node build/index.js`
 
-The globe probes `GET /api/tiles/health` at boot. Day imagery prefers `eox-sentinel2`, then `esri-world-imagery`. Night swap to `cartodb-dark` only when that pack exists locally.
+`/api/tiles/health` reports which layers are present. Nothing hard-fails on
+an empty cache: missing colour is a blank tile, missing elevation is a flat
+ellipsoid.
 
 ### Dev with a sparse cache
 
-`bun run dev` enables **remote tile fallback** when `NODE_ENV=development` (Vite sets this): missing local tiles are proxied from EOX / Esri / Carto. On the Pi — unset `NODE_ENV`, no fallback unless `AERO_TILE_REMOTE_FALLBACK=1`.
-
-## Dev without local tiles
-
-Empty `data/tiles/` → ellipsoid terrain. Optional `VITE_CESIUM_ION_TOKEN` enables Ion imagery fallback when the health probe reports no layers.
+`bun run dev` enables **remote tile fallback** when `NODE_ENV=development`
+(Vite sets this): missing local tiles are proxied from GIBS / USGS /
+terrarium — see `remoteTileUrl()` in `src/lib/server/tiles.ts`, the one place
+any of those hosts is named. On the Pi — unset `NODE_ENV`, no fallback unless
+`AERO_TILE_REMOTE_FALLBACK=1`.

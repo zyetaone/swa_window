@@ -1,17 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
 import { altitudeAt } from '#lib/flight/rules.js';
-import {
-	gateImagerySelection,
-	selectDetailLevel,
-	selectImagery,
-	type ImagerySelection
-} from '#lib/world/imagery/rules.js';
 import { NightLighting } from '#lib/world/lighting/rules.js';
 import { orbitPose } from '#lib/flight/rules.js';
 import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/model.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/model.js';
-import { IMAGERY_SOURCES } from '#lib/world/imagery/model.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {
@@ -104,118 +97,6 @@ describe('resolveAtmosphere', () => {
 			return r + g + b;
 		});
 		for (let i = 1; i < luma.length; i++) expect(luma[i]).toBeLessThan(luma[i - 1]);
-	});
-});
-
-const DAY = 0;
-const NIGHT = 1;
-const day = IMAGERY_SOURCES.find((s) => s.nightAnchor === 0)!;
-
-describe('selectImagery', () => {
-	it('picks the day source by day and the night source by night', () => {
-		expect(selectImagery({ groundDetail: 1, nightFactor: DAY, current: null }).sourceId).toBe(
-			'eox-sentinel2'
-		);
-		expect(selectImagery({ groundDetail: 1, nightFactor: NIGHT, current: null }).sourceId).toBe(
-			'cartodb-dark'
-		);
-	});
-
-	it('never requests deeper than the packs actually hold', () => {
-		for (let g = 0; g <= 1.0001; g += 0.05) {
-			for (const nf of [DAY, NIGHT]) {
-				const sel = selectImagery({ groundDetail: g, nightFactor: nf, current: null });
-				const src = IMAGERY_SOURCES.find((s) => s.id === sel.sourceId)!;
-				expect(sel.maximumLevel).toBeGreaterThanOrEqual(src.zoomRange[0]);
-				expect(sel.maximumLevel).toBeLessThanOrEqual(src.zoomRange[1]);
-			}
-		}
-	});
-
-	it('spends less detail at cruise than on the ground', () => {
-		const low = selectImagery({
-			groundDetail: resolveAtmosphere(300).groundDetail,
-			nightFactor: DAY,
-			current: null
-		});
-		const cruise = selectImagery({
-			groundDetail: resolveAtmosphere(11_600).groundDetail,
-			nightFactor: DAY,
-			current: null
-		});
-		expect(cruise.maximumLevel).toBeLessThan(low.maximumLevel);
-	});
-
-	it('does not flip the base texture back and forth at the day/night crossover', () => {
-		let current: ImagerySelection | null = selectImagery({
-			groundDetail: 1,
-			nightFactor: 0.45,
-			current: null
-		});
-		const first = current.sourceId;
-		let swaps = 0;
-		for (const nf of [0.5, 0.48, 0.52, 0.49, 0.51, 0.5, 0.47]) {
-			const next: ImagerySelection = selectImagery({
-				groundDetail: 1,
-				nightFactor: nf,
-				current
-			});
-			if (next.sourceId !== current.sourceId) swaps++;
-			current = next;
-		}
-		expect(swaps).toBe(0);
-		expect(current.sourceId).toBe(first);
-	});
-
-	it('still swaps once night is unambiguous', () => {
-		const dayPick = selectImagery({ groundDetail: 1, nightFactor: 0.1, current: null });
-		const nightPick = selectImagery({ groundDetail: 1, nightFactor: 0.95, current: dayPick });
-		expect(nightPick.sourceId).not.toBe(dayPick.sourceId);
-	});
-
-	it('holds the zoom cap against sub-step jitter, but yields to a real change', () => {
-		const held = selectDetailLevel(day, 0.5, 8);
-		expect(held).toBe(8);
-
-		const moved = selectDetailLevel(day, 0.0, 8);
-		expect(moved).toBeLessThan(8);
-	});
-
-	it('recomputes the level from scratch when the source changes under it', () => {
-		const dayPick = selectImagery({ groundDetail: 0.2, nightFactor: 0.0, current: null });
-		const forced: ImagerySelection = { ...dayPick, maximumLevel: 12 };
-		const nightPick = selectImagery({ groundDetail: 0.2, nightFactor: 1.0, current: forced });
-		expect(nightPick.sourceId).not.toBe(forced.sourceId);
-		expect(nightPick.maximumLevel).toBeLessThan(12);
-	});
-
-	it('is deterministic and total — the 3-Pi wall depends on both', () => {
-		for (const bad of [Number.NaN, -1, 2, Number.POSITIVE_INFINITY]) {
-			const a = selectImagery({ groundDetail: bad, nightFactor: bad, current: null });
-			const b = selectImagery({ groundDetail: bad, nightFactor: bad, current: null });
-			expect(a).toEqual(b);
-			expect(Number.isFinite(a.maximumLevel)).toBe(true);
-		}
-	});
-});
-
-describe('gateImagerySelection', () => {
-	const dayPick = selectImagery({ groundDetail: 1, nightFactor: 0, current: null });
-
-	it('keeps the selection when the layer exists', () => {
-		expect(gateImagerySelection(dayPick, () => true)).toEqual(dayPick);
-	});
-
-	it('falls back to eox when cartodb is missing at night', () => {
-		const nightPick = selectImagery({ groundDetail: 1, nightFactor: 1, current: null });
-		const gated = gateImagerySelection(nightPick, (id) => id === 'eox-sentinel2');
-		expect(gated.sourceId).toBe('eox-sentinel2');
-		expect(gated.urlTemplate).toBe('/api/tiles/eox-sentinel2/{z}/{y}/{x}.jpg');
-	});
-
-	it('falls back to esri when only esri is cached', () => {
-		const gated = gateImagerySelection(dayPick, (id) => id === 'esri-world-imagery');
-		expect(gated.sourceId).toBe('esri-world-imagery');
 	});
 });
 

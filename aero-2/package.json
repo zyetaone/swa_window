@@ -4,8 +4,8 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "bun run sync-cesium && vite dev",
-		"build": "bun run sync-cesium && vite build",
+		"dev": "vite dev",
+		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -13,23 +13,21 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "prettier --check .",
-		"format": "prettier --write .",
-		"sync-cesium": "node scripts/sync-cesium.mjs"
+		"format": "prettier --write ."
 	},
 	"dependencies": {
-		"cesium": "^1.143.0"
+		"maplibre-gl": "^6.6.0",
+		"svelte-maplibre-gl": "^2.2.1"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-node": "next",
 		"@sveltejs/kit": "next",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"happy-dom": "^20.11.1",
-		"maplibre-gl": "^6.6.0",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
-		"svelte-maplibre-gl": "^2.2.1",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
 		"vitest": "^4.1.10"

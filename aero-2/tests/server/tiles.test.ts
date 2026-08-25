@@ -39,15 +39,15 @@ describe('resolveTileDir', () => {
 });
 
 describe('remoteTileUrl', () => {
-	it('maps esri-world-imagery to ArcGIS', () => {
-		expect(remoteTileUrl('esri-world-imagery/4/7/11.jpg')).toBe(
-			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/7/11'
+	it('maps usgs to ArcGIS — WMTS z/y/x order matches ArcGIS z/row/col, no reorder', () => {
+		expect(remoteTileUrl('usgs/4/7/11.jpg')).toBe(
+			'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/4/7/11'
 		);
 	});
 
-	it('maps cartodb-dark XYZ order in the remote URL', () => {
-		expect(remoteTileUrl('cartodb-dark/4/7/11.png')).toBe(
-			'https://a.basemaps.cartocdn.com/dark_all/4/11/7.png'
+	it('maps gibs to the best-available date, not a hardcoded one', () => {
+		expect(remoteTileUrl('gibs/4/7/11.jpg')).toBe(
+			'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/default/GoogleMapsCompatible_Level9/4/7/11.jpg'
 		);
 	});
 
@@ -160,13 +160,13 @@ describe('GET /api/tiles/[...path]', () => {
 		);
 
 		const res = await GET({
-			params: { path: 'esri-world-imagery/4/7/7.jpg' },
-			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg')
+			params: { path: 'usgs/4/7/7.jpg' },
+			request: new Request('http://localhost/api/tiles/usgs/4/7/7.jpg')
 		});
 
 		expect(res.status).toBe(200);
 		expect(fetch).toHaveBeenCalledWith(
-			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/7/7',
+			'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/4/7/7',
 			expect.objectContaining({ signal: expect.any(AbortSignal) })
 		);
 	});
@@ -178,8 +178,8 @@ describe('GET /api/tiles/[...path]', () => {
 		GET = mod.GET as typeof GET;
 
 		const res = await GET({
-			params: { path: 'esri-world-imagery/4/7/7.jpg' },
-			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg')
+			params: { path: 'usgs/4/7/7.jpg' },
+			request: new Request('http://localhost/api/tiles/usgs/4/7/7.jpg')
 		});
 
 		expect(res.status).toBe(404);

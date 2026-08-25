@@ -1,5 +1,5 @@
 /**
- * Tile Server — serves pre-downloaded tiles from TILE_DIR for offline Cesium.
+ * Tile Server — serves pre-downloaded tiles from TILE_DIR so the window works offline.
  *
  *   1. WMTS layout  — /api/tiles/{layer}/{z}/{y}/{x}.ext
  *   2. XYZ proxy    — /api/tiles/xyz/{layer}/{z}/{x}/{y}.ext → WMTS on disk

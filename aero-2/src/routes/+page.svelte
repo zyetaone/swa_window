@@ -1,8 +1,9 @@
 <script lang="ts">
 	/**
 	 * The window. Promoted from the ADR-005 Phase 0 probe on 2026-08-25.
-	 * Cesium's wiring (cesium/, window/scene.svelte.ts, CabinWindow.svelte)
-	 * still exists but is unreferenced by any route — no /lab/cesium.
+	 * MapLibre is now the only renderer: Cesium's wiring, dependency and
+	 * runtime assets were deleted the same day, so there is no fallback route
+	 * and no second engine to keep in sync.
 	 *
 	 * Phase 1 (the Pi 5 side-by-side) has NOT run. This promotion is a dev-time
 	 * bet on look and licence, not a measured performance verdict — see
@@ -31,6 +32,8 @@
 	import { resolveLocalHours } from '#lib/flight/clock.js';
 	import { lookTarget } from '#lib/experience/probe-camera.js';
 	import { gameLoop } from '#lib/window/game-loop.js';
+	import { tileServerBase } from '#lib/window/tile-server.js';
+	import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG, ORBIT } from '#lib/window/config.js';
 
 	const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
 	// `Number('')` is 0 and `Number('abc')` is NaN, and a NaN azimuth silently
@@ -44,8 +47,8 @@
 	};
 	// Location.byId's own default is hyderabad — the fielded kiosk's home.
 	const place = Location.byId(q.get('place'));
-	const azimuthDeg = num('azimuth', -90);
-	const pitchDeg = num('pitch', -18);
+	const azimuthDeg = num('azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
+	const pitchDeg = num('pitch', DEFAULT_PITCH_DEG);
 	// NAIP covers the US only, so anywhere else would just stream 404s. Bounding
 	// box, not a coverage API - ponytail: wrong for Alaska/Hawaii, and that is fine
 	// until a location lands there. ?detail=0 forces the GIBS-only floor, which is
@@ -62,26 +65,30 @@
 	// already fetch, and the eye reads ridgelines as "sharp" far more than pixels.
 	const shade = num('shade', 0.35);
 
-	// Elevation: AWS terrarium. Open data, and MapLibre decodes it natively —
-	// which is the whole reason this probe costs hours instead of days.
-	const TERRARIUM = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
+	// All three layers go through /api/tiles — a
+	// local pack is used when one exists, and remoteTileUrl() in
+	// server/tiles.ts is the ONLY place any of these hosts is named. This used
+	// to hit AWS/NASA/USGS directly from the client, which meant the window
+	// quietly opted out of the offline promise: no local pack was ever
+	// consulted, and a kiosk with no route out simply failed instead of
+	// falling back to what was on disk.
+	const base = tileServerBase();
+
+	// Elevation: terrarium. Open data, and MapLibre decodes it natively — one
+	// fetch drives both the displaced mesh and the hillshade below.
+	const TERRARIUM = [`${base}/xyz/terrarium/{z}/{x}/{y}.png`];
 
 	// Base colour: NASA GIBS, public domain. Its Level9 grid tops out at z9 =
 	// ~306 m/px. That is the ENTIRE reason the ground looked blurry: at 3 000 m
 	// AGL and -18 deg, a screen pixel covers ~5.6 m, so z9 is a ~55x upsample.
 	// It stays as the floor layer because it never has a hole in it, anywhere.
-	const GIBS_DATE = '2026-08-20';
-	const GIBS = [
-		`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
-	];
+	const GIBS = [`${base}/xyz/gibs/{z}/{x}/{y}.jpg`];
 
 	// Detail colour: USGS NAIP via The National Map. Public domain (a US federal
 	// work), no key, no attribution obligation, z16 = ~2.4 m/px. It is US-ONLY,
 	// which is the honest shape of the "all free" constraint: there is no global
 	// equivalent. Over Hyderabad this layer is simply absent and GIBS shows through.
-	const USGS = [
-		'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}'
-	];
+	const USGS = [`${base}/xyz/usgs/{z}/{x}/{y}.jpg`];
 
 	let map = $state<MlMap | undefined>();
 
@@ -110,11 +117,7 @@
 				orbitAngle0: 0.5,
 				orbitBearingRad: 0,
 				direction: 1,
-				majorMin: 0.08,
-				majorMax: 0.25,
-				breathePeriod: 180,
-				driftRate: 3.42e-4,
-				flightSpeed: 6
+				...ORBIT
 			});
 			lat = pose.lat;
 			lon = pose.lon;

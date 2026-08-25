@@ -1,25 +1,39 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AeroWindow } from '#lib/window/aero-window.svelte.js';
+import { altitudeAt, normalizeHeading, orbitPose } from '#lib/flight/rules.js';
+import { lookTarget } from '#lib/experience/probe-camera.js';
 import { Location } from '#lib/world/locations.js';
 import { resolveLocalHours } from '#lib/flight/clock.js';
+import { ORBIT } from '#lib/window/config.js';
 
-describe('AeroWindow', () => {
-	it('frame() carries the primaries the world derives from', () => {
-		const model = new AeroWindow();
-		model.tick();
-		const frame = model.frame();
-		expect(frame.camera.lat).toBeTypeOf('number');
-		expect(frame.camera.lon).toBeTypeOf('number');
-		// The slice carries primaries only — the world derives the rest.
-		expect(frame.camera.altitudeM).toBe(model.flight.altitudeM);
-		expect(frame.timeOfDay).toBe(model.flight.timeOfDay);
+/**
+ * Mirrors the per-frame composition in routes/+page.svelte, so these tests
+ * exercise the actual live path rather than a stand-in. There is no class
+ * wrapping this any more — the window IS this function, called once a frame.
+ */
+function frameAt(wallT: number, place = Location.hyderabad(), azimuthDeg = -90, pitchDeg = -18) {
+	const pose = orbitPose({
+		wallT,
+		centerLat: place.lat,
+		centerLon: place.lon,
+		orbitAngle0: 0.5,
+		orbitBearingRad: 0,
+		direction: 1,
+		...ORBIT
 	});
+	const aglM = altitudeAt(wallT, place.climbFloorM, place.climbCeilingM);
+	const windowHeadingDeg = normalizeHeading(pose.headingDeg + azimuthDeg);
+	const target = lookTarget(pose.lat, pose.lon, aglM, windowHeadingDeg, pitchDeg);
+	return { pose, aglM, windowHeadingDeg, target };
+}
 
-	it('tick advances position over wall time', () => {
-		const model = new AeroWindow();
-		const lat0 = model.flight.lat;
-		model.tick();
-		expect(model.flight.lat).not.toBe(lat0);
+describe('frameAt', () => {
+	it('produces finite, in-range numbers', () => {
+		const { pose, aglM, windowHeadingDeg } = frameAt(1_787_650_000);
+		expect(pose.lat).toBeTypeOf('number');
+		expect(pose.lon).toBeTypeOf('number');
+		expect(Number.isFinite(aglM)).toBe(true);
+		expect(windowHeadingDeg).toBeGreaterThanOrEqual(0);
+		expect(windowHeadingDeg).toBeLessThan(360);
 	});
 });
 
@@ -35,20 +49,15 @@ describe('resolveLocalHours', () => {
 
 describe('window azimuth', () => {
 	it('looks out of the side, not down the track — this is a window, not a windscreen', () => {
-		const model = new AeroWindow(Location.hyderabad(), -90);
-		model.tick();
-		const track = model.flight.headingDeg;
-		const looking = model.frame().camera.headingDeg;
-		const delta = ((((looking - track) % 360) + 540) % 360) - 180;
+		const { pose, windowHeadingDeg } = frameAt(1_787_650_000, Location.hyderabad(), -90);
+		const delta = ((((windowHeadingDeg - pose.headingDeg) % 360) + 540) % 360) - 180;
 		expect(delta).toBeCloseTo(-90, 6);
 	});
 
 	it('wraps rather than emitting a negative heading', () => {
-		const model = new AeroWindow(Location.hyderabad(), -270);
-		model.tick();
-		const h = model.frame().camera.headingDeg;
-		expect(h).toBeGreaterThanOrEqual(0);
-		expect(h).toBeLessThan(360);
+		const { windowHeadingDeg } = frameAt(1_787_650_000, Location.hyderabad(), -270);
+		expect(windowHeadingDeg).toBeGreaterThanOrEqual(0);
+		expect(windowHeadingDeg).toBeLessThan(360);
 	});
 
 	it('a pane offset is the only per-screen difference', () => {
@@ -57,34 +66,23 @@ describe('window azimuth', () => {
 		// windows across a millisecond boundary legitimately yields three
 		// positions. That is the invariant working, not breaking, and this test
 		// flaked until it stopped straddling real time.
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date('2026-08-25T09:30:00Z'));
-		try {
-			const panes = [-105, -90, -75].map((az) => {
-				const m = new AeroWindow(Location.hyderabad(), az);
-				m.tick();
-				return m.frame();
-			});
-			expect(panes[1].camera.lat).toBe(panes[0].camera.lat);
-			expect(panes[2].camera.altitudeM).toBe(panes[0].camera.altitudeM);
-			expect(panes[1].camera.headingDeg).not.toBe(panes[0].camera.headingDeg);
-		} finally {
-			vi.useRealTimers();
-		}
+		const wallT = new Date('2026-08-25T09:30:00Z').getTime() / 1000;
+		const panes = [-105, -90, -75].map((az) => frameAt(wallT, Location.hyderabad(), az));
+		expect(panes[1].pose.lat).toBe(panes[0].pose.lat);
+		expect(panes[2].aglM).toBe(panes[0].aglM);
+		expect(panes[1].windowHeadingDeg).not.toBe(panes[0].windowHeadingDeg);
 	});
 
-	it('same wall-clock instant, independent instances, identical pose', () => {
+	it('same wall-clock instant, independent calls, identical pose', () => {
 		// The fleet invariant itself: three Pis are three processes that share
-		// nothing but the clock. Construction order and object identity must not
-		// leak into the pose.
+		// nothing but the clock. Call order must not leak into the pose.
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-08-25T17:45:12.345Z'));
 		try {
-			const a = new AeroWindow(Location.hyderabad(), -90);
-			const b = new AeroWindow(Location.hyderabad(), -90);
-			a.tick();
-			b.tick();
-			expect(b.frame().camera).toEqual(a.frame().camera);
+			const wallT = Date.now() / 1000;
+			const a = frameAt(wallT);
+			const b = frameAt(wallT);
+			expect(b).toEqual(a);
 		} finally {
 			vi.useRealTimers();
 		}
