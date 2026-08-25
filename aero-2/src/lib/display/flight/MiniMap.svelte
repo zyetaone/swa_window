@@ -38,7 +38,7 @@
 	/**
 	 * Ground track coordinates ring (240 samples).
 	 */
-	const ring = $derived(
+	const track = $derived(
 		new FlightTrack(
 			place.lat,
 			place.lon,
@@ -52,8 +52,15 @@
 			// shape under a marker following the real one: measured 3.89 km apart
 			// at worst for Hyderabad, 14% of the orbit radius.
 			display.config.phase
-		).groundTrack()
+		)
 	);
+
+	/**
+	 * ONE track drives both the ring and the elevation strip. They are two views
+	 * of the same flight, and deriving either of them separately is how they
+	 * drift apart.
+	 */
+	const ring = $derived(track.groundTrack());
 
 	/** Live pose, straight off the view the main window just drew. */
 	const lat = $derived(display.view.lat ?? place.lat);
@@ -78,7 +85,18 @@
 		if (hi <= lo) return 0;
 		return Math.min(1, Math.max(0, (aglM - lo) / (hi - lo)));
 	});
-	const climbPhase = $derived((wallSec % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC);
+	/**
+	 * The dot's X must run on the SAME clock as its Y.
+	 *
+	 * `aglM` comes from the view, which advances `wallSec * speed` before
+	 * sampling the climb (`view.ts`). Using raw `wallSec` here moved the dot
+	 * along the strip at 1x while its height moved at `speed` — and `speed`
+	 * defaults to 4, so the dot was always off its own curve.
+	 */
+	const effectiveSec = $derived(wallSec * display.config.speed);
+	const climbPhase = $derived(
+		(((effectiveSec % CLIMB_PERIOD_SEC) + CLIMB_PERIOD_SEC) % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC
+	);
 
 	/**
 	 * Project the aircraft marker to pixels within the circular inset.
@@ -125,11 +143,20 @@
 	// Elevation profile wave SVG path (sine/cosine climb waveform)
 	const ELEV_WIDTH = 104;
 	const ELEV_HEIGHT = 24;
+	/**
+	 * Drawn from the altitude the aircraft ACTUALLY flies, not a re-derived
+	 * cosine. The climb carries a seeded wander (see ORBIT.altitudeWanderFrac),
+	 * so a hand-drawn cosine is no longer the profile being flown, and the dot
+	 * would sit beside its own curve. Same defect as drawing the orbit ring from
+	 * different parameters than the flight — one source, two views.
+	 */
 	const elevPathD = $derived.by(() => {
+		const lo = display.config.floorM;
+		const hi = display.config.ceilingM;
 		const points: string[] = [];
 		for (let x = 0; x <= ELEV_WIDTH; x += 4) {
-			const phase = x / ELEV_WIDTH;
-			const normY = (1 - Math.cos(phase * Math.PI * 2)) * 0.5;
+			const agl = track.altitudeAt((x / ELEV_WIDTH) * CLIMB_PERIOD_SEC);
+			const normY = hi > lo ? Math.min(1, Math.max(0, (agl - lo) / (hi - lo))) : 0;
 			const y = ELEV_HEIGHT - normY * (ELEV_HEIGHT - 4) - 2;
 			points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
 		}
@@ -219,12 +246,12 @@
 	.minimap {
 		position: absolute;
 		right: 1.25rem;
-		/* Clear the HUD ribbon, which is pinned to bottom: 0.
-		   Measured overlapping it by 43px, hiding the HDG readout. The ribbon is
-		   36px on one row but wraps to ~63px at narrow widths, so this clears the
-		   WRAPPED height — an offset that only clears the single-row case breaks
-		   again on the first viewport that wraps. */
-		bottom: 4.75rem;
+		/* Sit above the HUD ribbon, which is pinned to bottom: 0 and publishes its
+		   measured height as --hud-height. A hard-coded offset cannot work: the
+		   ribbon wraps to two or three rows as the viewport narrows, so a value
+		   that clears one row overlaps at the next breakpoint — 4.75rem cleared
+		   900px and 600px wide, then overlapped by 8px at 420px. */
+		bottom: calc(var(--hud-height, 36px) + 0.75rem);
 		width: 190px;
 		height: 190px;
 		border-radius: 50%;

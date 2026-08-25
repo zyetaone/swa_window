@@ -29,7 +29,22 @@ export const ORBIT = {
 	 * correct value here is ~3.5 deg, which nobody would notice; this is a
 	 * readable exaggeration, not a simulation.
 	 */
-	maxBankDeg: 8,
+	maxBankDeg: 14,
+
+	/**
+	 * How far the altitude wanders off the clean climb curve, as a fraction of
+	 * the floor-to-ceiling band. A real airliner does not trace a cosine; it
+	 * holds, drifts, and steps. Tapered to zero at both ends of the band so it
+	 * can never breach the floor or the ceiling.
+	 */
+	altitudeWanderFrac: 0.08,
+
+	/**
+	 * How much the ellipse itself deviates, as a fraction of its radius. Keyed
+	 * to THETA rather than to time, so the loop still closes on itself — a
+	 * time-keyed wobble would leave a seam where the track met its own start.
+	 */
+	pathWanderFrac: 0.06,
 	flightSpeed: 6.0
 } as const;
 
@@ -136,10 +151,32 @@ export class FlightTrack {
 			Math.min(1, (1 - Math.cos(breathePhase * TWO_PI)) * 0.5 + harmonic)
 		);
 
-		const a = ORBIT.majorMin + (ORBIT.majorMax - ORBIT.majorMin) * breathe;
-		const b = a * ORBIT.aspect;
-
 		const theta = (wallSec * ORBIT.driftRate * TWO_PI * this.direction + this.phase) % TWO_PI;
+
+		/**
+		 * Deviate the ellipse itself, so the ground track is not a perfect oval.
+		 *
+		 * Two properties this has to keep, both of which are load-bearing and
+		 * both of which a naive version breaks:
+		 *
+		 * 1. Keyed to THETA, not to time. At theta and theta+2*PI the wobble is
+		 *    the same, so the loop closes exactly on itself; a time-keyed one
+		 *    drifts and leaves a seam on the minimap where the track misses its
+		 *    own start.
+		 * 2. EVEN in theta — pure cosines, with the seed in the AMPLITUDE rather
+		 *    than inside the argument. Reversing the loop negates theta, and the
+		 *    reversed flight must trace the same ground track backwards. With
+		 *    `sin(2*theta + seed)` it does not, and the mirror test catches it.
+		 */
+		const blend = Math.cos(this.phase * 5.3);
+		// |shape| <= |blend| + (1 - |blend|) = 1, by construction.
+		const shape = Math.cos(theta * 2) * blend + Math.cos(theta * 3) * (1 - Math.abs(blend));
+		// Maps to [1 - pathWanderFrac, 1]: the wobble only ever draws the track
+		// IN, never out, so `majorMax` stays a true bound on the orbit extent.
+		const wobble = 1 - ORBIT.pathWanderFrac * (1 + shape) * 0.5;
+
+		const a = (ORBIT.majorMin + (ORBIT.majorMax - ORBIT.majorMin) * breathe) * wobble;
+		const b = a * ORBIT.aspect;
 		const cosLat = Math.cos((this.centerLat * Math.PI) / 180);
 
 		const dLat = a * Math.sin(theta);
@@ -194,7 +231,31 @@ export class FlightTrack {
 	altitudeAt(wallSec: number): number {
 		const phase = (wallSec % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC;
 		const smooth = (1 - Math.cos(phase * TWO_PI)) * 0.5;
-		return this.floorM + (this.ceilingM - this.floorM) * smooth;
+		const band = this.ceilingM - this.floorM;
+		const base = this.floorM + band * smooth;
+
+		/**
+		 * Wander, so the climb is not a clean cosine every single cycle.
+		 *
+		 * Seeded from `phase`, which carries `daySeed` — NOT from Math.random or
+		 * from anything relative to page load. Three Pis form one window and
+		 * never exchange pose; a per-load random would give each pane its own
+		 * altitude and split the wall into three unrelated views. Per-day is the
+		 * strongest variation available without a sync channel.
+		 *
+		 * Three incommensurable periods, so the sum does not visibly repeat.
+		 */
+		const seed = this.phase;
+		const wander =
+			Math.sin(wallSec / 211 + seed * 7.1) * 0.6 +
+			Math.sin(wallSec / 97 + seed * 3.7) * 0.3 +
+			Math.sin(wallSec / 43 + seed * 11.3) * 0.1;
+
+		// sin(phase*PI) is 0 at both ends of the band and 1 in the middle, so the
+		// wander cannot push the aircraft through its own floor or ceiling.
+		const taper = Math.sin(phase * Math.PI);
+		const out = base + wander * band * ORBIT.altitudeWanderFrac * taper;
+		return Math.min(this.ceilingM, Math.max(this.floorM, out));
 	}
 
 	/**

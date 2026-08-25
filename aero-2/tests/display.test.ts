@@ -463,20 +463,43 @@ describe('elevation strip normalisation', () => {
 	 */
 	const stripY = (norm: number, h = 24) => h - norm * (h - 4) - 2;
 
-	it('places the altitude dot on its own curve for every location', () => {
+	/**
+	 * The strip must be sampled from `altitudeAt`, the same function the dot's
+	 * height comes from — NOT from a hand-drawn cosine.
+	 *
+	 * It used to be a cosine, and that was fine while the climb WAS a cosine.
+	 * It no longer is: the profile carries a seeded wander (see
+	 * ORBIT.altitudeWanderFrac) so no two days fly the same climb. A cosine
+	 * strip therefore draws a curve the aircraft does not fly, and the dot sits
+	 * beside it — the same "drawn from different parameters than the flight"
+	 * defect as the orbit ring and its phase.
+	 *
+	 * The second assertion is the one with teeth: it proves the wander is big
+	 * enough to matter, so this test cannot quietly pass if the wander is
+	 * removed and the strip silently reverts to a cosine.
+	 */
+	it('draws the strip from the flown altitude, not from a cosine', () => {
 		for (const place of [Location.hyderabad(), Location.denver()]) {
 			const track = new FlightTrack(place.lat, place.lon, place.climbFloorM, place.climbCeilingM);
-			for (let i = 0; i <= 20; i++) {
-				const phase = i / 20;
+			let worstAgainstCosine = 0;
+
+			for (let i = 0; i <= 40; i++) {
+				const phase = i / 40;
 				const agl = track.altitudeAt(phase * CLIMB_PERIOD_SEC);
 
-				// Where the dot goes: AGL normalised against THIS place's envelope.
-				const norm = (agl - place.climbFloorM) / (place.climbCeilingM - place.climbFloorM);
-				// Where the curve is: the raw cosine the strip is drawn from.
-				const curveNorm = (1 - Math.cos(phase * Math.PI * 2)) * 0.5;
+				// The wander must never breach the envelope it wanders inside.
+				expect(agl).toBeGreaterThanOrEqual(place.climbFloorM);
+				expect(agl).toBeLessThanOrEqual(place.climbCeilingM);
 
-				expect(Math.abs(stripY(norm) - stripY(curveNorm))).toBeLessThan(0.01);
+				const norm = (agl - place.climbFloorM) / (place.climbCeilingM - place.climbFloorM);
+				const cosineNorm = (1 - Math.cos(phase * Math.PI * 2)) * 0.5;
+				worstAgainstCosine = Math.max(
+					worstAgainstCosine,
+					Math.abs(stripY(norm) - stripY(cosineNorm))
+				);
 			}
+
+			expect(worstAgainstCosine).toBeGreaterThan(0.5);
 		}
 	});
 
