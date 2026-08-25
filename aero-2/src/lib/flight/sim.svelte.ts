@@ -7,7 +7,7 @@
 import { untrack } from 'svelte';
 
 import type { PaneParams } from '#lib/domain/pane.js';
-import { windowView, type WindowView } from './flight.js';
+import { windowView, type WindowView } from './pose.js';
 
 export class FlightSim {
 	readonly #getParams: () => PaneParams;

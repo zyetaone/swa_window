@@ -4,8 +4,7 @@
  *
  * Plain `.ts` on purpose. This was 217 lines of trigonometry inside a
  * `.svelte.ts` file, which advertises "this module holds reactive state" to
- * every reader and every tool. Only the `FlightSim` class next door actually
- * does; it lives in `flight-sim.svelte.ts`.
+ * every reader and every tool. Only `sim.svelte.ts` next door actually does.
  *
  * Being rune-free is what lets `windowView()` be tested without a browser,
  * which is the only way the three-Pi determinism claim is checkable at all.

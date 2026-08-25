@@ -8,8 +8,8 @@
 	import type { Map as MlMap } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
-	import { useAeroWindow } from '#lib/sim/aero-window.svelte.js';
-	import { gameLoop } from '#lib/sim/game-loop.js';
+	import { useAeroWindow } from '#lib/flight/aero-window.svelte.js';
+	import { gameLoop } from '#lib/flight/game-loop.js';
 
 	interface Props {
 		children?: Snippet;

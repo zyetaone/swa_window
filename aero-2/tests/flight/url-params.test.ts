@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readPaneParams } from '#lib/sim/url-params.js';
+import { readPaneParams } from '#lib/flight/url-params.js';
 import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG } from '#lib/domain/pane.js';
 import { inNaipCoverage, tileTemplates } from '#lib/domain/imagery.js';
 

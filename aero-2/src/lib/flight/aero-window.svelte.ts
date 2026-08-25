@@ -2,7 +2,7 @@
  * AeroWindow — Svelte 5 root simulation state container & Context DI.
  */
 import { getContext, setContext } from 'svelte';
-import { FlightSim } from './flight-sim.svelte.js';
+import { FlightSim } from './sim.svelte.js';
 import { nightFactor, resolveAtmosphere } from '#lib/domain/atmosphere.js';
 import { BLIND_HUD_THRESHOLD, type PaneParams } from '#lib/domain/pane.js';
 

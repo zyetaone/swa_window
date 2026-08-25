@@ -2,7 +2,7 @@
 	/**
 	 * PassengerHud — elegant passenger in-flight status display.
 	 */
-	import { useAeroWindow } from '#lib/sim/aero-window.svelte.js';
+	import { useAeroWindow } from '#lib/flight/aero-window.svelte.js';
 
 	const windowState = useAeroWindow();
 

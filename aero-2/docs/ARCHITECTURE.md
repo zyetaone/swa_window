@@ -12,21 +12,21 @@ Four product layers, and imports may only point **downward**:
 ```text
 cabin/    🪟 inside the cabin — bezel, glass, blind, HUD
 stage/    🌍 outside the window — MapLibre, tiles, terrain, sky
-sim/      🎛️ the invisible part — state, flight physics, the frame loop
+flight/   🎛️ the invisible part — pose maths, state, the frame loop
 domain/   📐 the shared vocabulary — imports NOTHING
 server/   🌐 server-only tile proxy — imports NOTHING
 ```
 
 `node tools/check-layers.mjs` asserts this, and it runs as part of both
 `bun run check` and `bun run test`. It is not decoration: this repo previously
-claimed "no import cycles" in prose while `sim/` and `stage/` imported each
-other in **both** directions. A rule nothing enforces is a rule nothing keeps.
+claimed "no import cycles" in prose while the simulation and `stage/` imported
+each other in **both** directions. A rule nothing enforces is a rule nothing keeps.
 
 ### Why `domain/` exists
 
-`PaneParams` is the contract every layer reads. It used to live in `sim/`,
-which also reads everything else — so `sim → stage → sim` and `sim → flight →
-sim` were both real cycles. A shared contract cannot live in the layer that
+`PaneParams` is the contract every layer reads. It used to live beside the
+simulation, which also reads everything else — so `flight → stage → flight` was
+a real cycle, in both directions. A shared contract cannot live in the layer that
 consumes the most; it belongs at the bottom, where nothing can point back down
 at it.
 
@@ -35,7 +35,7 @@ the product's vocabulary, not settings someone tweaks.
 
 `atmosphere.ts` and `imagery.ts` moved there for the same reason. They are pure
 data and pure functions that import nothing, so filing them under `stage/`
-(which imports `sim/`) made every consumer of a band table transitively depend
+(which imports `flight/`) made every consumer of a band table transitively depend
 on the renderer.
 
 ## 2. Directory tree
@@ -49,9 +49,9 @@ src/
   │   │   ├── atmosphere.ts         # Bands, altitude blend, night curve
   │   │   └── imagery.ts            # Tile templates, NAIP bounds, zoom caps
   │   │
-  │   ├── sim/                      # 🎛️ Simulation, physics & state
-  │   │   ├── flight.ts             # Pure: orbit, altitude, lookTarget, clock
-  │   │   ├── flight-sim.svelte.ts  # The one reactive class holding the pose
+  │   ├── flight/                   # 🎛️ Simulation, physics & state
+  │   │   ├── pose.ts               # Pure: orbit, altitude, lookTarget, clock
+  │   │   ├── sim.svelte.ts         # The one reactive class holding the pose
   │   │   ├── aero-window.svelte.ts # AeroWindow + createAeroWindow/useAeroWindow
   │   │   ├── url-params.ts         # URL knobs → PaneParams
   │   │   └── game-loop.ts          # requestAnimationFrame driver
@@ -88,17 +88,18 @@ src/
 
 Two that are easy to get wrong, and were:
 
-- **`.svelte.ts` means the file holds runes.** `flight.ts` is 220 lines of pure
-  trigonometry and is plain `.ts`; only `flight-sim.svelte.ts` has `$state`.
+- **`.svelte.ts` means the file holds runes.** `pose.ts` is 220 lines of pure
+  trigonometry and is plain `.ts`; only `sim.svelte.ts` has `$state`.
   Putting maths in a `.svelte.ts` advertises reactivity that isn't there, and
   hides the one file that genuinely has it.
 - **Never name anything just `window`.** It already means the browser global,
   the cabin window, the `AeroWindow` class and the three-pane wall. One pane is
-  a `pane`; the root state object is `aero-window`. There were briefly two
-  unrelated files called `window`.
+  a `pane`; the root state object is `aero-window`; the simulation is `flight/`.
+  There have been, at different points, two unrelated files called `window` and
+  a `window/` folder holding no window code at all.
 
 Files are named for what they hold, not their layer role: `url-params.ts`
-parses URLs, `flight-sim.svelte.ts` is the FlightSim class. `tests/` mirrors
+parses URLs, `pose.ts` answers where the aircraft is, `sim.svelte.ts` holds it. `tests/` mirrors
 `src/lib/` one-for-one.
 
 ## 4. Composition and z-order
@@ -128,7 +129,7 @@ once; it only looked correct because `position: fixed` escaped the container.
 3. **Context DI** — `createAeroWindow()` at the root; descendants read
    `useAeroWindow()`. No prop-drilling of simulation state.
 4. **Renderer isolation** — only `stage/` and `+page.svelte` import MapLibre.
-   `domain/` and `sim/` name no renderer at all, which is what made replacing
+   `domain/` and `flight/` name no renderer at all, which is what made replacing
    Cesium a route-level change rather than a rewrite.
 5. **Offline tiles** — everything goes through `/api/tiles`, path-guarded, with
    a local pack preferred. `server/tiles.ts` is the only file naming a real

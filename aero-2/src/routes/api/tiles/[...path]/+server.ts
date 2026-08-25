@@ -24,9 +24,7 @@ const OCTET = 'application/octet-stream';
 const MIME: Record<string, string> = {
 	'.jpg': 'image/jpeg',
 	'.jpeg': 'image/jpeg',
-	'.png': 'image/png',
-	'.terrain': 'application/vnd.quantized-mesh',
-	'.json': 'application/json'
+	'.png': 'image/png'
 };
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');

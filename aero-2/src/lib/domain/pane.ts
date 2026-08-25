@@ -8,9 +8,9 @@
  * This module is the BASE of the dependency graph and **imports nothing but
  * `locations.ts`**. That is the whole point of it existing.
  *
- * `PaneParams` used to live in `sim/`, which every other folder needs — so
- * `stage/` imported from `sim/` while `sim/` imported straight back,
- * a genuine cycle in both directions. A shared contract that everything reads
+ * `PaneParams` used to live alongside the simulation, which every other folder
+ * needs — so `stage/` imported from it while it imported straight back, a
+ * genuine cycle in both directions. A shared contract that everything reads
  * cannot live in a layer that reads everything. It lives here instead, at the
  * bottom, where nothing can point back down at.
  */

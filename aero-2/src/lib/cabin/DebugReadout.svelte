@@ -2,7 +2,7 @@
 	/**
 	 * DebugReadout — dev-only telemetry strip.
 	 */
-	import { useAeroWindow } from '#lib/sim/aero-window.svelte.js';
+	import { useAeroWindow } from '#lib/flight/aero-window.svelte.js';
 
 	const windowState = useAeroWindow();
 </script>
