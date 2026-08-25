@@ -1,12 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import {
-	altitudeAt,
-	nightFactor,
-	orbitPose,
-	resolveAtmosphere,
-	resolveLocalHours,
-	windowView
-} from '#lib/display/flight.js';
+import { altitudeAt, orbitPose } from '#lib/display/flight/orbit.js';
+import { windowView } from '#lib/display/flight/camera.js';
+import { resolveAtmosphere } from '#lib/display/atmosphere/bands.js';
+import { resolveLocalHours, nightFactor } from '#lib/display/atmosphere/sun.js';
 import {
 	ATMOSPHERE_BANDS,
 	TRANSITION_HALF_WIDTH_M,
@@ -20,12 +16,24 @@ import {
 
 const paramsFor = (search = '') => readPaneConfig(new URL(`http://kiosk.local/${search}`));
 
-/** Altitude comfortably inside a band's core, away from either boundary. */
+/**
+ * An altitude squarely inside band `index`, clear of the blend zone at either
+ * edge.
+ *
+ * The midpoint is NOT good enough: the ground band spans 0–1000 m, so its
+ * midpoint is 500 m, but blending starts at `topM - TRANSITION_HALF_WIDTH_M`
+ * = 400 m. The midpoint therefore sits inside the transition and legitimately
+ * reports a `nextBandId`. Step in from the top edge instead, and fall back to
+ * the midpoint only when the band is too narrow for that to be inside it.
+ */
 function coreAltitude(index: number): number {
 	const floor = index === 0 ? 0 : ATMOSPHERE_BANDS[index - 1].topM;
 	const ceil = ATMOSPHERE_BANDS[index].topM;
 	if (!Number.isFinite(ceil)) return floor + TRANSITION_HALF_WIDTH_M * 4;
-	return (floor + ceil) / 2;
+
+	// Just below where the blend into the next band begins.
+	const belowBlend = ceil - TRANSITION_HALF_WIDTH_M * 1.5;
+	return belowBlend > floor ? belowBlend : (floor + ceil) / 2;
 }
 
 // ── URL Knobs & Param Parsing ────────────────────────────────────────────────

@@ -10,7 +10,7 @@
 	import { readPaneConfig } from '#lib/config.svelte.js';
 	import { createDisplay } from '#lib/display/display.svelte.js';
 	import WorldStage from '#lib/display/WorldStage.svelte';
-	import CabinFrame from '#lib/display/CabinFrame.svelte';
+	import CabinFrame from '#lib/display/cabin/CabinFrame.svelte';
 
 	createDisplay(readPaneConfig(page.url));
 </script>

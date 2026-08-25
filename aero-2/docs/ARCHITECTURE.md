@@ -31,13 +31,22 @@ Rather than scattering a ~13-file application across artificial horizontal folde
 ```text
 src/
   ├── lib/
-  │   ├── config.svelte.ts          # ⚙️ SSOT & Reactive Config: $state PaneConfig, locations, bands, tile templates
+  │   ├── config.svelte.ts          # ⚙️ SSOT: Locations, tile templates, PaneConfig ($state)
   │   │
   │   ├── display/                  # 🖥️ Hardware/Kiosk Display product slice
-  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite, sky & inlined look controls
-  │   │   ├── CabinFrame.svelte     # 🪟 Inside Cabin: Integrated oval bezel, depth shadow, glass reflection & vignette
-  │   │   ├── display.svelte.ts     # Unified AeroDisplay reactive model & Context DI ($state)
-  │   │   └── flight.ts             # Pure simulation math: orbit, altitude, atmosphere, night curves
+  │   │   ├── display.svelte.ts     # 🎛️ Root AeroDisplay model & Context DI (createDisplay / useDisplay)
+  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite, sky & inlined controls
+  │   │   │
+  │   │   ├── flight/               # ✈️ Aircraft Kinematics & Camera Projection
+  │   │   │   ├── orbit.ts          # Orbital trajectory, heading, climb/descent altitude curve
+  │   │   │   └── camera.ts         # Window camera geometry, azimuth, pitch & MapLibre view options
+  │   │   │
+  │   │   ├── atmosphere/           # 🌤️ Atmosphere, Fog & Solar Lighting
+  │   │   │   ├── bands.ts          # Atmosphere bands (ground, haze, midDeck, cirrus, stratosphere) & blending
+  │   │   │   └── sun.ts            # Local diurnal time-of-day clock, sun elevation & night factor curve
+  │   │   │
+  │   │   └── cabin/                # 🪟 Aircraft Cabin Chrome
+  │   │       └── CabinFrame.svelte # Oval window bezel, depth shadow, glass reflection & vignette
   │   │
   │   ├── server/                   # 🌐 Server-only tile proxy (imports nothing)
   │   │   └── tiles.ts              # Path-guarded offline tile server
@@ -57,7 +66,7 @@ src/
 
 ## 3. Naming rules
 
-- **`.svelte.ts` means the file holds runes.** `config.svelte.ts` and `display.svelte.ts` contain Svelte 5 runes (`$state`); `flight.ts` is pure math and is plain `.ts`.
+- **`.svelte.ts` means the file holds runes.** `config.svelte.ts` and `display.svelte.ts` contain Svelte 5 runes (`$state`); pure math files in `flight/` and `atmosphere/` are plain `.ts`.
 - **Single Source of Truth (`config.svelte.ts`)**: All tuning constants, locations, atmosphere bands, tile definitions, and query param parsing live in `config.svelte.ts` with reactive properties bindable to operator panels.
 - **Files are named for what they hold.** `WorldStage.svelte` renders the outside world, `CabinFrame.svelte` renders the inside cabin, `flight.ts` computes flight physics, `display.svelte.ts` manages the simulation state. `tests/` mirrors the structure cleanly (`tests/display.test.ts`, `tests/tiles.test.ts`, `tests/regressions.test.ts`).
 

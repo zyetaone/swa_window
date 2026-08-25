@@ -16,6 +16,7 @@
 	} from 'svelte-maplibre-gl';
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type { Map as MlMap } from 'maplibre-gl';
+	import { LngLat } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	import {
@@ -34,11 +35,47 @@
 	const tiles = tileTemplates();
 
 	let map = $state<MlMap | undefined>();
-	let pitch = $state(60);
 
-	const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-	const pan = (dx: number) => map?.panBy([dx, 0], { duration: 300 });
-	const look = (deg: number) => (pitch = clamp(pitch + deg, 0, 85));
+	/**
+	 * Fly the plane.
+	 *
+	 * The camera is positioned by real ALTITUDE and aimed at a real ground
+	 * point, via `calculateCameraOptionsFromTo`, rather than faked with a zoom
+	 * level.
+	 */
+	$effect(() => {
+		const m = map;
+		if (!m) return;
+
+		let raf: number;
+		const loop = () => {
+			const v = display.advanceTo(Date.now() / 1000);
+			m.jumpTo(
+				m.calculateCameraOptionsFromTo(
+					new LngLat(v.planeLon, v.planeLat),
+					v.planeAglM + display.config.place.groundElevationM,
+					new LngLat(v.targetLon, v.targetLat),
+					display.config.place.groundElevationM
+				)
+			);
+			raf = requestAnimationFrame(loop);
+		};
+
+		raf = requestAnimationFrame(loop);
+		return () => cancelAnimationFrame(raf);
+	});
+
+	/**
+	 * Controls steer the SIMULATION, not the map.
+	 *
+	 * Panning the map directly (`map.panBy`) or binding pitch would be undone on
+	 * the very next frame, because the frame loop re-derives the whole camera
+	 * from the flight pose. Changing the params the pose is computed FROM is the
+	 * only thing that survives, and it is also what a fleet broadcast would
+	 * carry. Writes go through `config.nudge`, the single gate.
+	 */
+	const pan = (deg: number) => display.config.nudge('azimuthDeg', deg);
+	const look = (deg: number) => display.config.nudge('pitchDeg', deg);
 
 	const rgb = (c: readonly [number, number, number], a = 1) =>
 		`rgba(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)}, ${a})`;
@@ -53,7 +90,6 @@
 		style={{ version: 8, sources: {}, layers: [] }}
 		center={[display.config.place.lon, display.config.place.lat]}
 		zoom={9}
-		bind:pitch
 		anisotropicFilterPitch={20}
 		attributionControl={{ compact: true }}
 	>
@@ -116,12 +152,12 @@
 
 		<!-- 5. Camera Look & Pan Controls -->
 		<CustomControl position="bottom-right" class="look-controls">
-			<button type="button" onclick={() => look(10)} aria-label="Show more sky">▲</button>
+			<button type="button" onclick={() => look(5)} aria-label="Show more sky">▲</button>
 			<div class="row">
-				<button type="button" onclick={() => pan(-120)} aria-label="Pan left">◀</button>
-				<button type="button" onclick={() => pan(120)} aria-label="Pan right">▶</button>
+				<button type="button" onclick={() => pan(-15)} aria-label="Pan left">◀</button>
+				<button type="button" onclick={() => pan(15)} aria-label="Pan right">▶</button>
 			</div>
-			<button type="button" onclick={() => look(-10)} aria-label="Show more ground">▼</button>
+			<button type="button" onclick={() => look(-5)} aria-label="Show more ground">▼</button>
 		</CustomControl>
 	</MapLibre>
 </div>

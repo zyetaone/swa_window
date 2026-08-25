@@ -57,6 +57,48 @@ async function serveRemote(url: string, cors: Record<string, string>): Promise<R
 	}
 }
 
+/**
+ * Node `ReadStream` → web `ReadableStream`, abort-safe.
+ *
+ * A raw `createReadStream(...)` cast to `BodyInit` happens to work until a
+ * client goes away mid-tile — which browsers do constantly, because panning
+ * cancels in-flight tile requests. undici then closes an already-closed
+ * controller and throws `ERR_INVALID_STATE` from a microtask, where there is no
+ * request context to catch it, and the whole server process dies.
+ *
+ * That is a kiosk-fatal bug: one abandoned tile takes down the display until
+ * systemd restarts it. Guarding `closed` makes the double-close a no-op, and
+ * `cancel()` destroys the fd so aborted requests do not leak file handles.
+ */
+function nodeStreamToWeb(
+	nodeStream: ReturnType<typeof createReadStream>
+): ReadableStream<Uint8Array> {
+	let closed = false;
+
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			nodeStream.on('data', (chunk) => {
+				if (closed) return;
+				controller.enqueue(new Uint8Array(chunk as Buffer));
+			});
+			nodeStream.on('end', () => {
+				if (closed) return;
+				closed = true;
+				controller.close();
+			});
+			nodeStream.on('error', (err) => {
+				if (closed) return;
+				closed = true;
+				controller.error(err);
+			});
+		},
+		cancel() {
+			closed = true;
+			nodeStream.destroy();
+		}
+	});
+}
+
 function serveLocalFile(
 	filePath: string,
 	cors: Record<string, string>,
@@ -76,7 +118,7 @@ function serveLocalFile(
 
 	if (range) {
 		const { start, end } = range;
-		return new Response(createReadStream(filePath, { start, end }) as unknown as BodyInit, {
+		return new Response(nodeStreamToWeb(createReadStream(filePath, { start, end })), {
 			status: 206,
 			headers: {
 				...cors,
@@ -89,7 +131,7 @@ function serveLocalFile(
 		});
 	}
 
-	return serveTile(createReadStream(filePath) as unknown as BodyInit, type, cors, {
+	return serveTile(nodeStreamToWeb(createReadStream(filePath)), type, cors, {
 		'Content-Length': String(size),
 		'Accept-Ranges': 'bytes'
 	});

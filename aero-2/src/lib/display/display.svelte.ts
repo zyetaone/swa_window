@@ -3,8 +3,10 @@
  * Owns the reactive aircraft view pose, reactive PaneConfig, and simulation tick loop.
  */
 import { getContext, setContext, untrack } from 'svelte';
-import { windowView, resolveAtmosphere, nightFactor, type WindowView } from './flight.js';
-import { PaneConfig, createPaneConfig, type AtmosphereState, type PaneParams } from '#lib/config.svelte.js';
+import { windowView, type WindowView } from './flight/camera.js';
+import { resolveAtmosphere, type AtmosphereState } from './atmosphere/bands.js';
+import { nightFactor } from './atmosphere/sun.js';
+import { createPaneConfig, type PaneConfig } from '#lib/config.svelte.js';
 
 const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 
@@ -12,20 +14,19 @@ export class AeroDisplay {
 	readonly config: PaneConfig;
 	view = $state<WindowView>({} as WindowView);
 
-	constructor(configOrParams?: PaneConfig | PaneParams | (() => PaneParams)) {
+	constructor(configOrParams?: PaneConfig | (() => PaneConfig)) {
 		if (typeof configOrParams === 'function') {
-			const initial = configOrParams();
-			this.config = initial instanceof PaneConfig ? initial : createPaneConfig(initial);
-		} else if (configOrParams instanceof PaneConfig) {
+			this.config = configOrParams();
+		} else if (configOrParams) {
 			this.config = configOrParams;
 		} else {
-			this.config = createPaneConfig(configOrParams);
+			this.config = createPaneConfig();
 		}
 
 		this.view = untrack(() => windowView(Date.now() / 1000, this.config));
 	}
 
-	get params(): PaneParams {
+	get params(): PaneConfig {
 		return this.config;
 	}
 
@@ -37,14 +38,14 @@ export class AeroDisplay {
 		return nightFactor(this.view.timeOfDay);
 	}
 
-	tick(wallSec: number = Date.now() / 1000): WindowView {
+	advanceTo(wallSec: number = Date.now() / 1000): WindowView {
 		const next = windowView(wallSec, this.config);
 		this.view = next;
 		return next;
 	}
 }
 
-export function createDisplay(configOrParams?: PaneConfig | PaneParams | (() => PaneParams)): AeroDisplay {
+export function createDisplay(configOrParams?: PaneConfig | (() => PaneConfig)): AeroDisplay {
 	const display = new AeroDisplay(configOrParams);
 	setContext(DISPLAY_KEY, display);
 	return display;
