@@ -15,9 +15,9 @@ export const TILE_ATTRIBUTION =
 
 export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
 
-export const HILLSHADE_DEFAULT = 0.35;
+export const HILLSHADE_DEFAULT = 0.85;
 export const HILLSHADE_SHADOW_COLOR = '#1a2436';
-export const TERRAIN_EXAGGERATION = 1;
+export const TERRAIN_EXAGGERATION = 2.5;
 
 export const IMAGERY_GRADE = {
 	saturation: -0.08,

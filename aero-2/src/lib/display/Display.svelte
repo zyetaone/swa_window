@@ -8,6 +8,7 @@
 	 * down the cabin frame or operator UI.
 	 */
 	import Stage from './world/Stage.svelte';
+	import Clouds from './world/Clouds.svelte';
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
 	import Hud from './cabin/Hud.svelte';
@@ -15,13 +16,14 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
+		clouds?: boolean;
 		wing?: boolean;
 		minimap?: boolean;
 		hud?: boolean;
 		children?: Snippet;
 	}
 
-	let { wing = true, minimap = true, hud = true, children }: Props = $props();
+	let { clouds = true, wing = true, minimap = true, hud = true, children }: Props = $props();
 
 	function onStageError(error: unknown) {
 		console.error('[AeroDisplay] 3D World Stage error caught by boundary:', error);
@@ -44,6 +46,9 @@
 		{/snippet}
 	</svelte:boundary>
 
+	{#if clouds}
+		<Clouds />
+	{/if}
 	{#if wing}
 		<Wing />
 	{/if}

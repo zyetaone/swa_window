@@ -15,33 +15,22 @@
 
 	const display = useDisplay();
 
-	// Live FPS Counter state
-	let fps = $state(60);
-	let frameTimeMs = $state(16.6);
+	// Live FPS Counter state (driven from main simulation tick — zero extra RAF loops)
+	const fps = $derived(display.fps);
+	const frameTimeMs = $derived(display.frameTimeMs);
 
+	/**
+	 * The ribbon's real rendered height, republished as `--hud-height`.
+	 *
+	 * The contents wrap to two or three rows as the viewport narrows, so its
+	 * height is not a constant. Anything stacked above it must clear the ACTUAL
+	 * height; a hard-coded offset that clears one row overlaps at the next
+	 * breakpoint, which is what the minimap did at 420 px wide.
+	 */
+	let ribbonHeight = $state(36);
 	$effect(() => {
-		let raf: number;
-		let lastTime = performance.now();
-		let frameCount = 0;
-		let lastFpsUpdate = lastTime;
-
-		const countLoop = (now: number) => {
-			frameCount++;
-			const delta = now - lastTime;
-			lastTime = now;
-
-			if (now - lastFpsUpdate >= 500) {
-				fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
-				frameTimeMs = Number(delta.toFixed(1));
-				frameCount = 0;
-				lastFpsUpdate = now;
-			}
-
-			raf = requestAnimationFrame(countLoop);
-		};
-
-		raf = requestAnimationFrame(countLoop);
-		return () => cancelAnimationFrame(raf);
+		if (typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--hud-height', `${visible ? ribbonHeight : 0}px`);
 	});
 
 	function formatTime(hours: number): string {
@@ -71,7 +60,18 @@
 </script>
 
 {#if visible}
-	<aside class="hud-ribbon-bar" aria-label="Flight Telemetry Ribbon">
+	<!--
+		Publishes its own height as `--hud-height` on the document root, so
+		anything stacked above it (the minimap) clears the ACTUAL ribbon rather
+		than a hard-coded guess. The ribbon wraps to two or three rows as the
+		viewport narrows; a fixed offset that clears one row overlaps at the next
+		breakpoint, which is exactly what happened.
+	-->
+	<aside
+		class="hud-ribbon-bar"
+		bind:clientHeight={ribbonHeight}
+		aria-label="Flight Telemetry Ribbon"
+	>
 		<!-- Telemetry Sections -->
 		<div class="ribbon-content">
 			{#if showFps}
@@ -142,7 +142,10 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		height: 36px;
+		/* min-height, not height: the contents wrap to a second and third row at
+		   narrow widths. A fixed 36px let them overflow the declared box, so
+		   anything positioned above the ribbon could not know its real height. */
+		min-height: 36px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;

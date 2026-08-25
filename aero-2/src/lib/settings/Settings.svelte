@@ -64,6 +64,17 @@
 						oninput={(e) => config.set('azimuthDeg', e.currentTarget.valueAsNumber)}
 					/>
 				</label>
+				<label class="field">
+					<span>Flight Speed Multiplier ({config.speed.toFixed(1)}x)</span>
+					<input
+						type="range"
+						min="0.2"
+						max="25.0"
+						step="0.1"
+						value={config.speed}
+						oninput={(e) => config.set('speed', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
 			</section>
 
 			<section class="section">
@@ -175,6 +186,81 @@
 						oninput={(e) => config.set('shade', e.currentTarget.valueAsNumber)}
 					/>
 				</label>
+				<label class="field">
+					<span>3D Terrain Exaggeration ({config.exaggeration.toFixed(2)}x)</span>
+					<input
+						type="range"
+						min="0.2"
+						max="6.0"
+						step="0.05"
+						value={config.exaggeration}
+						oninput={(e) => config.set('exaggeration', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<label class="checkbox-field">
+					<input
+						type="checkbox"
+						checked={config.colorRelief}
+						onchange={(e) => (config.colorRelief = e.currentTarget.checked)}
+					/>
+					<span>Hypsometric Color Relief Tint</span>
+				</label>
+			</section>
+
+			<section class="section">
+				<h4>Atmospheric Cloud Deck</h4>
+				<label class="checkbox-field">
+					<input
+						type="checkbox"
+						checked={config.clouds}
+						onchange={(e) => (config.clouds = e.currentTarget.checked)}
+					/>
+					<span>Show Cloud Deck</span>
+				</label>
+				<label class="field">
+					<span>Cloud Density ({Math.round(config.cloudDensity * 100)}%)</span>
+					<input
+						type="range"
+						min="0"
+						max="1"
+						step="0.05"
+						value={config.cloudDensity}
+						oninput={(e) => config.set('cloudDensity', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<label class="field">
+					<span>Drift Speed ({config.cloudSpeed.toFixed(1)}x)</span>
+					<input
+						type="range"
+						min="0"
+						max="5.0"
+						step="0.1"
+						value={config.cloudSpeed}
+						oninput={(e) => config.set('cloudSpeed', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<label class="field">
+					<span>Deck Altitude ({Math.round(config.cloudAltitudeM).toLocaleString()} m)</span>
+					<input
+						type="range"
+						min="500"
+						max="12000"
+						step="250"
+						value={config.cloudAltitudeM}
+						oninput={(e) => config.set('cloudAltitudeM', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<label class="field">
+					<span>Cloud Opacity ({Math.round(config.cloudOpacity * 100)}%)</span>
+					<input
+						type="range"
+						min="0.1"
+						max="1.0"
+						step="0.05"
+						value={config.cloudOpacity}
+						oninput={(e) => config.set('cloudOpacity', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
 			</section>
 
 			<div class="actions">
@@ -249,6 +335,49 @@
 						<span>Atmosphere</span>
 						<strong>{display.atmosphere.bandId}</strong>
 					</div>
+				</div>
+			</section>
+
+			<section class="section">
+				<h4>Configuration & Fleet Sync</h4>
+				<div class="admin-actions-grid">
+					<button
+						type="button"
+						class="btn"
+						onclick={() => {
+							config.applyUrl(new URL(window.location.href));
+						}}
+					>
+						🔄 Update & Sync URL
+					</button>
+					<button
+						type="button"
+						class="btn"
+						onclick={() => {
+							const u = new URL(window.location.href);
+							u.searchParams.set('place', config.place.id);
+							u.searchParams.set('azimuth', config.azimuthDeg.toString());
+							u.searchParams.set('pitch', config.pitchDeg.toString());
+							u.searchParams.set('speed', config.speed.toString());
+							u.searchParams.set('wingScale', config.wingScale.toString());
+							u.searchParams.set('wingX', config.wingOffsetX.toString());
+							u.searchParams.set('wingY', config.wingOffsetY.toString());
+							window.history.replaceState({}, '', u.toString());
+							navigator.clipboard?.writeText(u.toString());
+						}}
+					>
+						📋 Copy Shareable URL
+					</button>
+				</div>
+			</section>
+
+			<section class="section">
+				<h4>Display Mode Push</h4>
+				<div class="mode-push-grid">
+					<button type="button" class="btn active-mode">✈️ Flight Globe</button>
+					<button type="button" class="btn">🎬 Video Stage</button>
+					<button type="button" class="btn">🖼️ Slideshow</button>
+					<button type="button" class="btn">🌑 Standby</button>
 				</div>
 			</section>
 
@@ -502,5 +631,21 @@
 	}
 	.btn:hover {
 		background: var(--glass-bg-hover);
+	}
+	.admin-actions-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+	.mode-push-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+	.active-mode {
+		background: var(--accent-cyan-bg);
+		border-color: var(--accent-cyan);
+		color: var(--accent-cyan);
+		font-weight: 600;
 	}
 </style>

@@ -1,53 +1,104 @@
 <script lang="ts">
 	/**
 	 * Terrain — the shape of the ground: a Terrarium-encoded DEM read from one
-	 * local PMTiles archive, driving both the 3D mesh and the hillshade.
-	 *
-	 * The MapLibre mesh primitive is imported as `TerrainMesh` so this component
-	 * can own the name `Terrain`.
-	 *
-	 * Hillshade is free structure — it comes off the DEM already fetched for the
-	 * mesh, and it closed the perceived-sharpness gap that far more imagery
-	 * resolution was supposed to be needed for.
+	 * local PMTiles archive, driving the 3D elevation mesh, solar hillshading, and optional
+	 * hypsometric color relief tinting.
 	 */
-	import { HillshadeLayer, RasterDEMTileSource, Terrain as TerrainMesh } from 'svelte-maplibre-gl';
-	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
-
 	import {
-		HILLSHADE_SHADOW_COLOR,
-		TERRAIN_EXAGGERATION,
-		TERRAIN_PMTILES,
-		TILE_SIZE
-	} from '#lib/settings/tiles.js';
+		HillshadeLayer,
+		RasterDEMTileSource,
+		Terrain as TerrainMesh,
+		ColorReliefLayer
+	} from 'svelte-maplibre-gl';
+	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
+	import type { ExpressionSpecification } from 'maplibre-gl';
+
+	import { HILLSHADE_SHADOW_COLOR, TERRAIN_PMTILES, TILE_SIZE } from '#lib/settings/tiles.js';
 	import { useDisplay } from '../display.svelte.js';
 
 	const display = useDisplay();
 
-	/** Bearing held while the sun is down; the terrain is unlit then anyway. */
-	const SUNSET_HOLD_BEARING = 315;
+	// Hypsometric elevation color ramps (geographical, LINZ, etc.)
+	const COLOR_RAMPS: Record<string, ExpressionSpecification> = {
+		geographical: [
+			'interpolate',
+			['linear'],
+			['elevation'],
+			0,
+			'rgb(112, 209, 255)',
+			1,
+			'rgb(112, 209, 255)',
+			2,
+			'rgb(112, 173, 92)',
+			176,
+			'rgb(131, 174, 94)',
+			529,
+			'rgb(166, 176, 97)',
+			882,
+			'rgb(195, 177, 101)',
+			1411,
+			'rgb(228, 182, 108)',
+			1941,
+			'rgb(231, 197, 129)',
+			2470,
+			'rgb(229, 212, 177)',
+			3000,
+			'rgb(226, 226, 226)'
+		],
+		LINZ: [
+			'interpolate',
+			['linear'],
+			['elevation'],
+			0,
+			'#c0e0ffff',
+			3,
+			'#548359ff',
+			255,
+			'#32482dff',
+			1000,
+			'#32482dff',
+			1700,
+			'#bfbfb8ff',
+			3000,
+			'#ffffffff'
+		]
+	};
 
-	/**
-	 * Terrain is lit from wherever the sun actually is, not a fixed north-west.
-	 * `illumination-anchor: 'map'` makes the angle a compass bearing, which is
-	 * exactly what `sunPosition` returns, so this is a direct hand-off.
-	 */
+	const SUNSET_HOLD_BEARING = 315;
 	const sunBearing = $derived(
 		display.sun.elevationDeg > 0 ? display.sun.azimuthDeg : SUNSET_HOLD_BEARING
 	);
+	const sunAltitude = $derived(Math.max(5, Math.min(85, display.sun.elevationDeg)));
+	const exaggeration = $derived(display.config.exaggeration ?? 2.5);
 </script>
 
 <!-- Registers the pmtiles:// scheme. Must come BEFORE any source that uses it. -->
 <PMTilesProtocol />
 
 <RasterDEMTileSource id="dem" url={TERRAIN_PMTILES} encoding="terrarium" tileSize={TILE_SIZE}>
-	<TerrainMesh exaggeration={TERRAIN_EXAGGERATION} />
+	<!-- 3D Elevation Mesh -->
+	<TerrainMesh {exaggeration} />
+
+	<!-- Optional Hypsometric Color Relief Elevation Tint -->
+	{#if display.config.colorRelief}
+		<ColorReliefLayer
+			paint={{
+				'color-relief-opacity': 0.75,
+				'color-relief-color': COLOR_RAMPS[display.config.reliefRamp ?? 'geographical']
+			}}
+		/>
+	{/if}
+
+	<!-- Solar-Synchronized Hillshading with Real Sun Compass Bearing and Elevation -->
 	<HillshadeLayer
 		paint={{
+			'hillshade-method': 'igor',
 			'hillshade-exaggeration': display.config.shade,
 			'hillshade-shadow-color': HILLSHADE_SHADOW_COLOR,
 			'hillshade-highlight-color': '#ffffff',
 			'hillshade-illumination-anchor': 'map',
-			'hillshade-illumination-direction': sunBearing
+			'hillshade-illumination-direction': sunBearing,
+			'hillshade-illumination-altitude': sunAltitude
 		}}
 	/>
 </RasterDEMTileSource>

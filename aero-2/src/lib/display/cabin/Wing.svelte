@@ -23,9 +23,9 @@
 
 	const isVisible = $derived(visible && display.config.wing);
 	const mode = $derived(display.config.wingMode ?? '3d');
-	const scale = $derived(display.config.wingScale ?? 1.0);
-	const offsetX = $derived(display.config.wingOffsetX ?? 0);
-	const offsetY = $derived(display.config.wingOffsetY ?? 0);
+	const scale = $derived(display.config.wingScale ?? 0.65);
+	const offsetX = $derived(display.config.wingOffsetX ?? -405);
+	const offsetY = $derived(display.config.wingOffsetY ?? -20);
 	const pitchOffset = $derived(display.config.wingPitchDeg ?? 0);
 	const rollFactor = $derived(display.config.wingRollFactor ?? 1.0);
 
@@ -52,11 +52,12 @@
 		renderer.toneMappingExposure = 1.15;
 
 		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera(45, c.clientWidth / c.clientHeight, 0.1, 100);
-		camera.position.set(0, 0, 5);
+		// Expanded frustum and depth bounds: zero edge clipping across all aspect ratios
+		const camera = new THREE.PerspectiveCamera(52, c.clientWidth / c.clientHeight, 0.001, 1000);
+		camera.position.set(0, 0, 6.2);
 
 		// Dynamic Solar Lighting
-		const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+		const ambient = new THREE.AmbientLight(0xffffff, 0.9);
 		scene.add(ambient);
 
 		const sunKey = new THREE.DirectionalLight(0xffeedd, 2.2);
@@ -64,17 +65,17 @@
 		scene.add(sunKey);
 
 		const wingHolder = new THREE.Group();
-		// Base positioning: Root in lower right, wing sweeping up and into camera depth
-		wingHolder.position.set(1.3, -1.3, 0);
+		// Base positioning: Root in lower right, wing sweeping into camera depth
+		wingHolder.position.set(1.1, -1.1, 0);
 		scene.add(wingHolder);
 
 		// Wingtip Strobe & Nav Light in 3D
 		const strobeLight = new THREE.PointLight(0xffffff, 0, 15);
-		strobeLight.position.set(-2.8, 0.9, -1.8);
+		strobeLight.position.set(-2.6, 0.85, -1.6);
 		wingHolder.add(strobeLight);
 
-		const navLight = new THREE.PointLight(0x22c55e, 1.5, 3); // Green starboard nav light
-		navLight.position.set(-2.8, 0.9, -1.8);
+		const navLight = new THREE.PointLight(0x22c55e, 1.5, 4); // Green starboard nav light
+		navLight.position.set(-2.6, 0.85, -1.6);
 		wingHolder.add(navLight);
 
 		let wingMesh: THREE.Object3D | null = null;
@@ -84,9 +85,14 @@
 			'/models/wing.glb',
 			(gltf) => {
 				wingMesh = gltf.scene;
-				// Inclined dihedral angle + natural sweepback
-				wingMesh.rotation.set(-0.04, 1.58, 0.26);
-				wingMesh.scale.set(1.18, 1.18, -1.18);
+				// Canonical forward flight orientation & aerodynamic chord facing motion
+				wingMesh.rotation.set(0.02, 1.68, 0.18);
+				wingMesh.scale.set(1.11, 1.11, -1.11);
+				wingMesh.traverse((child) => {
+					if (child instanceof THREE.Mesh && child.material) {
+						child.material.side = THREE.DoubleSide;
+					}
+				});
 				wingHolder.add(wingMesh);
 				modelLoaded = true;
 			},
@@ -98,7 +104,6 @@
 		);
 
 		let raf: number;
-		let lastStrobeTime = performance.now();
 
 		const renderLoop = (now: number) => {
 			if (
@@ -124,10 +129,12 @@
 
 			if (wingHolder) {
 				const bank = display.view.bankDeg ?? 0;
+				const dir = display.config.direction ?? 1;
 				const currentRollRad = ((bank * 0.55 * rollFactor + pitchOffset) * Math.PI) / 180;
 				wingHolder.rotation.z = -currentRollRad;
-				wingHolder.scale.setScalar(scale);
-				wingHolder.position.set(1.3 + offsetX * 0.005, -1.3 - offsetY * 0.005, 0);
+				wingHolder.scale.set(scale * dir, scale, scale);
+				// Unclipped 3D translation inside WebGL coordinates with direction awareness
+				wingHolder.position.set(1.1 * dir + offsetX * 0.005, -1.1 - offsetY * 0.005, 0);
 			}
 
 			renderer.render(scene, camera);
@@ -145,24 +152,20 @@
 </script>
 
 {#if isVisible}
+	{@const dir = display.config.direction ?? 1}
 	{#if mode === '3d'}
-		<!-- 3D WebGL Canvas Layer (Real Boeing 737 GLB Model with Dihedral Incline & Lights) -->
-		<canvas
-			bind:this={canvas}
-			class="cabin-wing-canvas"
-			style:scale
-			style:translate="{offsetX}px {offsetY}px"
-			aria-hidden="true"
-		></canvas>
+		<!-- 3D WebGL Canvas Layer (Unclipped 100% Viewport Bounds) -->
+		<canvas bind:this={canvas} class="cabin-wing-canvas" aria-hidden="true"></canvas>
 	{/if}
 
 	{#if mode === '2d' || (mode === '3d' && !modelLoaded)}
-		<!-- 2D Vector Silhouette Fallback Layer (Inclined Profile & Dual Lights) -->
+		<!-- 2D Vector Silhouette Fallback Layer -->
 		<div
 			class="cabin-wing-2d"
 			style:rotate="{svgRoll}deg"
-			style:scale
-			style:translate="{offsetX}px {offsetY}px"
+			style:scale="{scale * dir}
+			{scale}"
+			style:translate="{offsetX * dir}px {offsetY}px"
 			aria-hidden="true"
 		>
 			<svg class="wing-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
@@ -207,7 +210,6 @@
 		height: 100%;
 		pointer-events: none;
 		z-index: 5;
-		transition: scale 0.1s ease-out;
 	}
 
 	.cabin-wing-2d {

@@ -13,6 +13,12 @@ const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 export class AeroDisplay {
 	readonly config: PaneSettings;
 	view = $state<CameraView>({} as CameraView);
+	fps = $state<number>(60);
+	frameTimeMs = $state<number>(16.6);
+
+	#lastTickTime = typeof performance !== 'undefined' ? performance.now() : 0;
+	#frameCount = 0;
+	#lastFpsUpdate = typeof performance !== 'undefined' ? performance.now() : 0;
 
 	constructor(configOrParams?: PaneSettings | (() => PaneSettings)) {
 		if (typeof configOrParams === 'function') {
@@ -40,6 +46,20 @@ export class AeroDisplay {
 	}
 
 	advanceTo(wallSec: number = Date.now() / 1000): CameraView {
+		if (typeof performance !== 'undefined') {
+			const now = performance.now();
+			const delta = now - this.#lastTickTime;
+			this.#lastTickTime = now;
+			this.#frameCount++;
+
+			if (now - this.#lastFpsUpdate >= 500) {
+				this.fps = Math.round((this.#frameCount * 1000) / (now - this.#lastFpsUpdate));
+				this.frameTimeMs = Number(delta.toFixed(1));
+				this.#frameCount = 0;
+				this.#lastFpsUpdate = now;
+			}
+		}
+
 		const next = calculateCameraView(wallSec, this.config);
 		this.view = next;
 		return next;

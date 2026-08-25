@@ -16,6 +16,8 @@ export interface CameraParams {
 	direction?: 1 | -1;
 	/** Radians of phase offset, from `daySeed`. */
 	phase?: number;
+	/** Simulation flight speed multiplier (e.g. 2.5x). */
+	speed?: number;
 }
 
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
@@ -88,7 +90,26 @@ export class FlightCamera {
 				: bearingTo(plane.lat, plane.lon, centerLat, centerLon);
 
 		const cameraBearingDeg = normalizeHeading(inwardDeg + this.azimuthDeg);
-		const depressionDeg = Math.max(1, Math.min(89, -this.pitchDeg));
+
+		/**
+		 * Roll the sightline with the airframe, so a turn actually reads as one.
+		 *
+		 * From a window seat the bank IS the turn: the wing drops and the ground
+		 * swings up into the glass, or it lifts and you get nothing but sky. The
+		 * gain was 0.12, which against ORBIT.maxBankDeg of 14 moved the aim by
+		 * 1.7 degrees — true to the airframe and invisible on the wall.
+		 *
+		 * At 0.57 a full-bank turn moves the aim ~8 degrees, so against the
+		 * default 18-degree depression the view swings between roughly 10 and 26
+		 * degrees down: horizon-and-sky through one side of the turn, ground
+		 * through the other. Tuning, deliberately over-honest, for the same
+		 * reason bankAt scales its magnitude — the true angles are too small to
+		 * see.
+		 */
+		const BANK_VIEW_GAIN = 0.57;
+		const bankOffset = (plane.bankDeg ?? 0) * BANK_VIEW_GAIN;
+		const effectivePitch = this.pitchDeg + bankOffset;
+		const depressionDeg = Math.max(0.5, Math.min(89.5, -effectivePitch));
 		const depressionRad = depressionDeg * DEG2RAD;
 
 		const groundDistM = plane.aglM / Math.tan(depressionRad);
@@ -151,7 +172,8 @@ export function calculateCameraView(wallSec: number, params: CameraParams): Came
 		params.direction ?? 1,
 		params.phase ?? 0
 	);
-	const plane = track.poseAt(wallSec);
+	const effectiveSec = wallSec * (params.speed ?? 1.0);
+	const plane = track.poseAt(effectiveSec);
 	const camera = new FlightCamera(params.azimuthDeg, params.pitchDeg);
 
 	return camera.project(plane, params.place.utcOffset, wallSec, params.place.lat, params.place.lon);
