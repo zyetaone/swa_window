@@ -4,8 +4,8 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
+		"dev": "bun run sync-cesium && vite dev",
+		"build": "bun run sync-cesium && vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -13,13 +13,14 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "prettier --check .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"sync-cesium": "node scripts/sync-cesium.mjs"
 	},
 	"dependencies": {
 		"cesium": "^1.143.0"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-node": "^5.5.7",
+		"@sveltejs/adapter-node": "next",
 		"@sveltejs/kit": "next",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"happy-dom": "^20.11.1",
@@ -29,7 +30,6 @@
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
-		"vite-plugin-static-copy": "^3.4.0",
 		"vitest": "^4.1.10"
 	},
 	"imports": {

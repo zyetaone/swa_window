@@ -1,11 +1,9 @@
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
-import { normalizePath } from 'vite';
-import path from 'node:path';
-
-const cesiumSource = 'node_modules/cesium/Build/Cesium';
+// Cesium's runtime assets are copied into static/ by scripts/sync-cesium.mjs
+// (wired into the dev and build scripts), NOT by a Vite plugin — see that
+// file for why the plugin route was abandoned.
 const cesiumBaseUrl = 'cesiumStatic';
 
 // Under `vitest`, resolve Svelte's BROWSER entry so components can actually be
@@ -19,14 +17,6 @@ const IS_TEST = process.env.VITEST !== undefined;
 export default defineConfig({
 	...(IS_TEST ? { resolve: { conditions: ['browser'] } } : {}),
 	plugins: [
-		viteStaticCopy({
-			targets: [
-				{ src: normalizePath(path.join(cesiumSource, 'ThirdParty')), dest: cesiumBaseUrl },
-				{ src: normalizePath(path.join(cesiumSource, 'Workers')), dest: cesiumBaseUrl },
-				{ src: normalizePath(path.join(cesiumSource, 'Assets')), dest: cesiumBaseUrl },
-				{ src: normalizePath(path.join(cesiumSource, 'Widgets')), dest: cesiumBaseUrl },
-			],
-		}),
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be
