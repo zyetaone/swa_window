@@ -82,7 +82,6 @@ function parseArgs(): Args {
 
 Tile sources:
   eox-sentinel2     Sentinel-2 cloudless imagery (free, no auth)
-  esri-world-imagery  ESRI basemap (free, fallback)
   viirs-night-lights  NASA VIIRS night lights (free, unused in app)
   cesium-terrain    Ion quantized-mesh terrain (requires CESIUM_ION_TOKEN env)
 

@@ -59,7 +59,7 @@ async function main() {
 
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const sources = ['esri'];
+  const sources = ['sentinel2'];
   const entries: ManifestEntry[] = [];
   const force = process.argv.includes('--force');
 

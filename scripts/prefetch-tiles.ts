@@ -4,11 +4,22 @@ import { LOCATIONS } from '../src/lib/locations';
 import type { LocationId } from '../src/lib/types';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname, relative } from 'path';
+import { EOX_SENTINEL2 } from '../src/lib/upstream';
 
+// One source, because only one of the three that used to be here actually
+// answers. ESRI World Imagery was removed on licence grounds: proprietary
+// (Maxar/Airbus via Esri), and the free endpoint does not cover a commercial
+// kiosk, still less caching it to disk — which is exactly what this script
+// does. Do not add it back. The other two were already dead and had been for
+// long enough that nobody noticed: roda.sentinel2.live does not resolve, and
+// landsat2.storage.googleapis.com answers 404 for every tile. Both were
+// selectable, so choosing either silently produced an empty cache.
+//
+// Licence note: EOX s2cloudless is CC BY-NC-SA — NON-commercial. It is already
+// this app's only imagery source, so this adds no new exposure, but it is an
+// open question, not a settled one. See $lib/upstream.
 const TILE_SOURCES = {
-	esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-	sentinel2: 'https://roda.sentinel2.live/tiles/{z}/{x}/{y}/L2A/{date}.jpg',
-	landsat8: 'https://landsat2.storage.googleapis.com/tiles/{z}/{x}/{y}.jpg',
+	sentinel2: EOX_SENTINEL2.url,
 } as const;
 
 type SourceId = keyof typeof TILE_SOURCES;
@@ -17,7 +28,6 @@ const DEFAULT_ZOOMS = [12, 13, 14, 15, 16];
 const DEFAULT_RADIUS = 0.3;
 const DELAY_MS = 50;
 
-const SENTINEL2_DATE = '2024-01-15';
 
 interface TileCoord {
 	z: number;
@@ -87,22 +97,13 @@ function getTileBounds(lat: number, lon: number, radiusDegrees: number, z: numbe
 
 function getTileUrl(source: SourceId, tile: TileCoord): string {
 	switch (source) {
-		case 'esri':
-			return TILE_SOURCES.esri
+		case 'sentinel2':
+			// EOX is WMTS: {z}/{y}/{x}, y BEFORE x. Getting this backwards
+			// returns other places' tiles rather than an error.
+			return TILE_SOURCES.sentinel2
 				.replace('{z}', String(tile.z))
 				.replace('{y}', String(tile.y))
 				.replace('{x}', String(tile.x));
-		case 'sentinel2':
-			return TILE_SOURCES.sentinel2
-				.replace('{z}', String(tile.z))
-				.replace('{x}', String(tile.x))
-				.replace('{y}', String(tile.y))
-				.replace('{date}', SENTINEL2_DATE);
-		case 'landsat8':
-			return TILE_SOURCES.landsat8
-				.replace('{z}', String(tile.z))
-				.replace('{x}', String(tile.x))
-				.replace('{y}', String(tile.y));
 	}
 	throw new Error(`Unknown source: ${source}`);
 }
@@ -158,7 +159,7 @@ async function prefetchLocation(
 
 	for (const z of zooms) {
 		const tiles = getTileBounds(location.lat, location.lon, radius, z);
-		const source: SourceId = 'esri';
+		const source: SourceId = 'sentinel2';
 		const sourceDir = join(tilesDir, source, locationId);
 
 		let downloaded = 0;
@@ -207,7 +208,7 @@ async function prefetchLocation(
 }
 
 function countExistingTiles(tilesDir: string, locationId: LocationId, z: number): number {
-	const sourceDir = join(tilesDir, 'esri', locationId, String(z));
+	const sourceDir = join(tilesDir, 'sentinel2', locationId, String(z));
 	let count = 0;
 
 	if (existsSync(sourceDir)) {
@@ -229,7 +230,7 @@ function countExistingTiles(tilesDir: string, locationId: LocationId, z: number)
 function generateManifest(tilesDir: string): Manifest {
 	const manifest: Manifest = {
 		generated: new Date().toISOString(),
-		sources: ['esri'],
+		sources: ['sentinel2'],
 		locations: {} as Manifest['locations'],
 		totalTiles: 0,
 	};
@@ -241,7 +242,7 @@ function generateManifest(tilesDir: string): Manifest {
 		for (const z of DEFAULT_ZOOMS) {
 			const count = countExistingTiles(tilesDir, location.id, z);
 			if (count > 0) {
-				zoomLevels[z] = { tileCount: count, source: 'esri' };
+				zoomLevels[z] = { tileCount: count, source: 'sentinel2' };
 				totalTiles += count;
 			}
 		}

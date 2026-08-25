@@ -10,6 +10,7 @@
  */
 
 import type { TileSource, TileSpec } from './rules';
+import { EOX_SENTINEL2, OVERPASS_MIRRORS, VIIRS_GIBS_BASE } from '../../../src/lib/upstream.ts';
 
 // ─── Standard XYZ tile sources ──────────────────────────────────────────────
 
@@ -30,14 +31,12 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 	'eox-sentinel2': {
 		source: 'eox-sentinel2',
 		storagePath: 'eox-sentinel2/{z}/{y}/{x}.jpg',
-		urlForTile: (t) => `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/${t.z}/${t.y}/${t.x}.jpg`,
+		urlForTile: (t) =>
+			EOX_SENTINEL2.url
+				.replace('{z}', String(t.z))
+				.replace('{y}', String(t.y))
+				.replace('{x}', String(t.x)),
 		zoomRange: [4, 12], // EOX caps at z14; we stop at z12 to keep storage sane
-	},
-	'esri-world-imagery': {
-		source: 'esri-world-imagery',
-		storagePath: 'esri-world-imagery/{z}/{y}/{x}.jpg',
-		urlForTile: (t) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${t.z}/${t.y}/${t.x}`,
-		zoomRange: [4, 14],
 	},
 	'viirs-night-lights': {
 		source: 'viirs-night-lights',
@@ -47,8 +46,9 @@ export const SOURCES: Record<TileSource, SourceConfig> = {
 		// a cache miss silently changes what the city looks like. See that file
 		// for why Black Marble was dropped (colorized, lifted navy background
 		// that cleared the "truly dark" floor over ocean and desert).
-		urlForTile: (t) =>
-			`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance/default/2026-07-15/GoogleMapsCompatible_Level8/${t.z}/${t.y}/${t.x}.png`,
+		// Layer + date come from $lib/upstream, so the packaged tiles and the
+		// runtime fallback cannot drift. They used to be re-typed here.
+		urlForTile: (t) => `${VIIRS_GIBS_BASE}/${t.z}/${t.y}/${t.x}.png`,
 		zoomRange: [3, 8], // every GIBS night layer is capped at z8
 		// Boost halved (5.0 → 2.5). The old ×5 existed because Black Marble read
 		// ~15/255 over Indian cities; this radiance product reads a median 77/255
@@ -160,9 +160,7 @@ export const BUILDINGS_CONFIG: BuildingsConfig = {
 		`out geom tags;`,
 	defaultRadiusMeters: 3_500, // ~7 km square — comfortably covers cruise-altitude visible cone
 	endpoints: [
-		'https://overpass-api.de/api/interpreter',
-		'https://overpass.kumi.systems/api/interpreter',
-		'https://overpass.private.coffee/api/interpreter',
+		...OVERPASS_MIRRORS,
 	] as const,
 };
 

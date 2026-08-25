@@ -24,6 +24,7 @@
 
 import type * as CesiumType from 'cesium';
 import type { QualityMode } from '$lib/types';
+import { EOX_SENTINEL2, MAPBOX_SATELLITE_URL } from '$lib/upstream';
 
 type C = typeof CesiumType;
 
@@ -43,8 +44,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || null;
  *     `tilingScheme: new Cesium.WebMercatorTilingScheme()`
  *   - URL uses {z}/{y}/{x} order (y before x) — natural for WMTS
  */
-const SENTINEL2_EOX_URL =
-	'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg';
+const SENTINEL2_EOX_URL = EOX_SENTINEL2.url;
 
 /** Build-time token — only present when VITE_CESIUM_ION_TOKEN was set at
  *  `vite build`. That's the dev path; a CI-built artifact deliberately has
@@ -167,11 +167,15 @@ interface ImageryConfig {
 
 /**
  * Get primary satellite imagery configuration.
- * Priority: Local tile server → Mapbox → EOX Sentinel-2 Cloudless → ESRI World Imagery
+ * Priority: Local tile server → Mapbox → EOX Sentinel-2 Cloudless
  *
  * EOX Sentinel-2 is the default (no Mapbox token needed) — natural cloudless
- * composite, gorgeous at cruise altitude. ESRI is the last-resort fallback
- * if you explicitly disable Sentinel-2 via VITE_SENTINEL2=false.
+ * composite, gorgeous at cruise altitude.
+ *
+ * ESRI World Imagery was the last-resort fallback and has been REMOVED: it is
+ * proprietary (Maxar/Airbus via Esri) and the free endpoint does not cover a
+ * commercial kiosk, let alone bulk-caching it to disk. See $lib/upstream, which
+ * records every origin and its licence — including the ones we removed.
  */
 export function getSatelliteImagery(localAvailable = true): ImageryConfig {
 	// `localAvailable` is the checkLocalTileServer() verdict. Unlike terrain —
@@ -194,23 +198,15 @@ export function getSatelliteImagery(localAvailable = true): ImageryConfig {
 	}
 	if (MAPBOX_TOKEN) {
 		return {
-			url: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`,
+			url: `${MAPBOX_SATELLITE_URL}${MAPBOX_TOKEN}`,
 			maxZoom: 19,
 			webMercator: true,
 			label: 'mapbox-satellite',
 		};
 	}
-	// Default: EOX Sentinel-2 Cloudless. Set VITE_SENTINEL2=false to opt out.
-	const useSentinel = import.meta.env.VITE_SENTINEL2 !== 'false';
-	if (useSentinel) {
-		return { url: SENTINEL2_EOX_URL, maxZoom: 14, webMercator: true, label: 'eox-sentinel2' };
-	}
-	return {
-		url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-		maxZoom: 19,
-		webMercator: false,
-		label: 'esri-world-imagery',
-	};
+	// EOX Sentinel-2 Cloudless. The VITE_SENTINEL2=false opt-out went with the
+	// ESRI branch it selected — there is nothing else to fall back to.
+	return { url: SENTINEL2_EOX_URL, maxZoom: 14, webMercator: true, label: 'eox-sentinel2' };
 }
 
 /**

@@ -36,24 +36,17 @@
  */
 
 
-const VIIRS_GIBS_LAYER =
-	'VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance';
-
-/**
- * Pinned acquisition date — this layer is daily (2018-01-05 onward).
- *
- * A floating date breaks invariant #4: three Pis booting either side of
- * midnight UTC would fetch different rasters, and their bokeh, neon and
- * window density would disagree across the panorama seam. Pinning also keeps
- * the packaged tiles and the remote fallback byte-identical.
- *
- * To re-pin: choose a date, then verify coverage across the location catalog
- * before shipping — a single day can be gap-filled unevenly by region. Keep
- * it in step with tools/tile-packager/src/sources.ts.
+/*
+ * Layer, date and base URL live in `$lib/upstream` — the one registry of every
+ * origin this product fetches. They used to be defined here AND re-typed in
+ * tools/tile-packager/src/sources.ts, kept in step only by a test, because the
+ * sole shared home was this module and a packager script cannot import canvas
+ * code. `upstream.ts` is dependency-free, so that objection is gone and there
+ * is now one definition instead of two.
  */
-const VIIRS_GIBS_DATE = '2026-07-15';
+import { VIIRS_GIBS_BASE } from '$lib/upstream';
 
-export const VIIRS_GIBS_BASE = `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_GIBS_LAYER}/default/${VIIRS_GIBS_DATE}/GoogleMapsCompatible_Level8`;
+export { VIIRS_GIBS_BASE };
 
 const TILE_Z = 7;
 const VIIRS_TILE = (z: number, y: number, x: number) =>
