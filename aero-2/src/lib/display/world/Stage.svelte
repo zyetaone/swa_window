@@ -42,14 +42,37 @@
 		let raf: number;
 		const loop = () => {
 			const v = display.advanceTo(Date.now() / 1000);
-			m.jumpTo(
-				m.calculateCameraOptionsFromTo(
-					new LngLat(v.lon, v.lat),
-					v.aglM + display.config.place.groundElevationM,
-					new LngLat(v.targetLon, v.targetLat),
-					display.config.place.groundElevationM
-				)
+			const planeAt = new LngLat(v.lon, v.lat);
+			const targetAt = new LngLat(v.targetLon, v.targetLat);
+
+			/**
+			 * Ask the TERRAIN how high the ground is, do not assume the mean.
+			 *
+			 * `place.groundElevationM` is one number for a whole city, but the
+			 * terrain under the aircraft is a 3D mesh AND it is drawn with
+			 * `exaggeration`, so what is rendered is the real elevation times that
+			 * factor. Adding AGL to the mean therefore puts the camera INSIDE high
+			 * ground: at the climb floor, Hyderabad sat at 900 m against Deccan
+			 * highs rendered at 1,750 m, and Denver at 4,600 m against a Front
+			 * Range rendered at 10,875 m. The window filled with hillside.
+			 *
+			 * `queryTerrainElevation` returns the drawn height, exaggeration
+			 * included, which is exactly the surface we must stay above. It
+			 * returns null before the DEM tile covering that point has loaded, so
+			 * the mean remains the fallback — and the floor either way, so a
+			 * not-yet-loaded tile can never drop the camera.
+			 */
+			const meanGroundM = display.config.place.groundElevationM;
+			const groundAtPlaneM = Math.max(meanGroundM, m.queryTerrainElevation(planeAt) ?? 0);
+			const groundAtTargetM = Math.max(meanGroundM, m.queryTerrainElevation(targetAt) ?? 0);
+
+			const cam = m.calculateCameraOptionsFromTo(
+				planeAt,
+				v.aglM + groundAtPlaneM,
+				targetAt,
+				groundAtTargetM
 			);
+			m.jumpTo(cam);
 			raf = requestAnimationFrame(loop);
 		};
 
@@ -73,8 +96,9 @@
 		style={BLANK_STYLE}
 		center={[display.config.place.lon, display.config.place.lat]}
 		zoom={9}
+		maxPitch={88}
 		anisotropicFilterPitch={20}
-		attributionControl={{ compact: true }}
+		attributionControl={false}
 	>
 		<!-- 3D Spherical Earth Globe Projection & Solar Lighting -->
 		<Projection type="globe" />
