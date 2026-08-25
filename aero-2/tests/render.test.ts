@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CameraPose, FlightFrame } from '#lib/flight/pose.js';
-import { resolveAtmosphere } from '#lib/atmosphere/rules.js';
-import { selectImagery } from '#lib/imagery/rules.js';
+import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
+import { selectImagery } from '#lib/world/imagery/rules.js';
 import { GlobeRuntime, RenderFrame } from '#lib/cesium/types.js';
 import { tileCache } from '#lib/cesium/tiles.svelte.js';
 import { scene } from '#lib/window/scene.svelte.js';
 import { configureScene, globe } from '#lib/cesium/attach.svelte.js';
-import { AtmosphereSync } from '#lib/atmosphere/sync.js';
+import { AtmosphereSync } from '#lib/world/atmosphere/sync.js';
 import { CameraSync } from '#lib/flight/sync.js';
-import { ImagerySync } from '#lib/imagery/sync.svelte.js';
-import { LightingSync } from '#lib/lighting/sync.js';
-import { LodSync, TerrainSync } from '#lib/terrain/sync.js';
-import { screenSpaceErrorFor } from '#lib/terrain/rules.js';
+import { ImagerySync } from '#lib/world/imagery/sync.svelte.js';
+import { LightingSync } from '#lib/world/lighting/sync.js';
+import { LodSync, TerrainSync } from '#lib/world/terrain/sync.js';
+import { screenSpaceErrorFor } from '#lib/world/terrain/rules.js';
 
 function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): FlightFrame {
 	const altitudeM = overrides.altitudeM ?? 1000;

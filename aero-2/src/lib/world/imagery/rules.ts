@@ -6,7 +6,7 @@ import {
 	DAY_IMAGERY_IDS,
 	IMAGERY_SOURCES,
 	type ImagerySource,
-} from '#lib/imagery/data.js';
+} from '#lib/world/imagery/data.js';
 
 const NIGHT_SWAP_HYSTERESIS = 0.08;
 const DETAIL_STEP_HYSTERESIS = 0.35;

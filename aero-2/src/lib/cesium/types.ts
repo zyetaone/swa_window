@@ -4,8 +4,8 @@
  * Scene would make that a cycle.
  */
 import type { CameraPose } from '#lib/flight/pose.js';
-import type { AtmosphereState } from '#lib/atmosphere/rules.js';
-import type { ImagerySelection } from '#lib/imagery/rules.js';
+import type { AtmosphereState } from '#lib/world/atmosphere/rules.js';
+import type { ImagerySelection } from '#lib/world/imagery/rules.js';
 
 export type CesiumModule = typeof import('cesium');
 export type Viewer = import('cesium').Viewer;

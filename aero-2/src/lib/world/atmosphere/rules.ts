@@ -6,7 +6,7 @@ import {
 	TRANSITION_HALF_WIDTH_M,
 	type AtmosphereBand,
 	type Rgb,
-} from '#lib/atmosphere/data.js';
+} from '#lib/world/atmosphere/data.js';
 
 export interface AtmosphereState {
 	readonly bandId: string;

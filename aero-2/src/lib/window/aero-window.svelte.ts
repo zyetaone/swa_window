@@ -1,7 +1,7 @@
 /**
  * Root of the simulation: config + location + the flight engine that moves it.
  */
-import { Location } from '#lib/flight/locations.js';
+import { Location } from '#lib/world/locations.js';
 import { ConfigTree } from '#lib/window/config.js';
 import { FlightEngine } from '#lib/flight/engine.svelte.js';
 import type { FlightFrame } from '#lib/flight/pose.js';

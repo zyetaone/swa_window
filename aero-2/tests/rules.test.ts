@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { resolveAtmosphere } from '#lib/atmosphere/rules.js';
+import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
 import { altitudeAt } from '#lib/flight/rules.js';
-import { gateImagerySelection, selectDetailLevel, selectImagery, type ImagerySelection } from '#lib/imagery/rules.js';
-import { NightLighting } from '#lib/lighting/rules.js';
+import { gateImagerySelection, selectDetailLevel, selectImagery, type ImagerySelection } from '#lib/world/imagery/rules.js';
+import { NightLighting } from '#lib/world/lighting/rules.js';
 import { orbitPose } from '#lib/flight/rules.js';
-import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/atmosphere/data.js';
+import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/data.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/data.js';
-import { IMAGERY_SOURCES } from '#lib/imagery/data.js';
+import { IMAGERY_SOURCES } from '#lib/world/imagery/data.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {

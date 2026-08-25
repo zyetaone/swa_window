@@ -4,7 +4,7 @@
  */
 import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/cesium/types.js';
 import { EpsilonGate } from '#lib/cesium/gate.js';
-import { screenSpaceErrorFor } from '#lib/terrain/rules.js';
+import { screenSpaceErrorFor } from '#lib/world/terrain/rules.js';
 import { tileCache, tileServerBase } from '#lib/cesium/tiles.svelte.js';
 
 const SSE_HYSTERESIS = 2;
