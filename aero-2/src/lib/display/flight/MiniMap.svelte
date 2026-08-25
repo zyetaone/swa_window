@@ -212,7 +212,12 @@
 	.minimap {
 		position: absolute;
 		right: 1.25rem;
-		bottom: 1.25rem;
+		/* Clear the HUD ribbon, which is pinned to bottom: 0.
+		   Measured overlapping it by 43px, hiding the HDG readout. The ribbon is
+		   36px on one row but wraps to ~63px at narrow widths, so this clears the
+		   WRAPPED height — an offset that only clears the single-row case breaks
+		   again on the first viewport that wraps. */
+		bottom: 4.75rem;
 		width: 190px;
 		height: 190px;
 		border-radius: 50%;
