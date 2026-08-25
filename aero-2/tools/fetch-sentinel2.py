@@ -42,6 +42,7 @@ import sys
 import time
 import urllib.request
 from collections import defaultdict
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -123,14 +124,34 @@ def post(body: dict, attempts: int = 4) -> dict:
 # scene on offer, every time, and the mosaic comes out as black wedges.
 MAX_NODATA_PCT = 5.0
 
+# How far apart the scenes in one mosaic may be acquired.
+#
+# Requiring a single EXACT date is the obvious rule and it is too strict. The
+# odds every tile is clear on one day fall off a cliff with tile count: in the
+# survey, locations needing 4-5 scenes found ~0% cloud, while Hyderabad (11
+# scenes, because 78E is the UTM 43/44 boundary and its box straddles both
+# zones) and Dallas (9) bottomed out at 15-19%. Coverage was being sacrificed
+# to a constraint that was never about dates.
+#
+# What actually matters is that the scenes MATCH — same sun angle, same
+# vegetation, same atmosphere. Sentinel-2 L2A is atmospherically corrected
+# surface reflectance, and the constellation revisits every ~5 days, so a
+# fortnight either side offers several passes per tile while staying well
+# inside one season. Months apart is what produces colour steps at the seams;
+# a fortnight is not.
+WINDOW_DAYS = 15
+
 
 def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
-    """The clearest single date that covers every MGRS tile over the bbox.
+    """The clearest set of scenes covering every MGRS tile, within one window.
 
-    Each (date, MGRS tile) usually has TWO acquisitions from adjacent orbits.
-    Rank them by nodata first and cloud second, never cloud alone.
+    Returns the anchor date, the worst per-tile cloud, the tiles, and the chosen
+    scene per tile. Each (date, tile) usually has TWO acquisitions from adjacent
+    orbits; rank by nodata FIRST and cloud second, never cloud alone — see
+    MAX_NODATA_PCT.
     """
-    by_date: dict[str, dict[str, tuple[float, float, str]]] = defaultdict(dict)
+    # mgrs -> list of (date_ordinal, nodata, cloud, href, date_str)
+    per_tile: dict[str, list[tuple[int, float, float, str, str]]] = defaultdict(list)
     for page in range(1, 8):
         r = post({
             "collections": ["sentinel-2-l2a"],
@@ -142,33 +163,83 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
         })
         feats = r.get("features", [])
         for f in feats:
-            mgrs = f["id"].split("_")[1]
-            day = f["properties"]["datetime"][:10]
-            cloud = f["properties"]["eo:cloud_cover"]
             nodata = f["properties"].get("s2:nodata_pixel_percentage", 0.0)
             if nodata > MAX_NODATA_PCT:
                 continue
-            prev = by_date[day].get(mgrs)
-            if prev is None or (nodata, cloud) < (prev[0], prev[1]):
-                by_date[day][mgrs] = (nodata, cloud, f["assets"]["visual"]["href"])
+            day = f["properties"]["datetime"][:10]
+            per_tile[f["id"].split("_")[1]].append((
+                date.fromisoformat(day).toordinal(),
+                nodata,
+                f["properties"]["eo:cloud_cover"],
+                f["assets"]["visual"]["href"],
+                day,
+            ))
         if len(feats) < 50:
             break
 
-    grids = {m for v in by_date.values() for m in v}
+    grids = sorted(per_tile)
     if not grids:
         sys.exit("No Sentinel-2 scenes at all for that bbox and window.")
 
-    complete = [(max(c for _, c, _ in v.values()), d, v)
-                for d, v in by_date.items() if set(v) == grids]
-    if not complete:
-        print(f"MGRS tiles needed: {sorted(grids)}", file=sys.stderr)
+    anchors = sorted({o for v in per_tile.values() for o, *_ in v})
+    best = None
+    for anchor in anchors:
+        chosen: dict[str, tuple[float, float, str]] = {}
+        for mgrs, scenes in per_tile.items():
+            near = [x for x in scenes if abs(x[0] - anchor) <= WINDOW_DAYS]
+            if not near:
+                break
+            # nodata, then cloud, then closest to the anchor for tightest match
+            o, nd, cl, href, _ = min(near, key=lambda x: (x[1], x[2], abs(x[0] - anchor)))
+            chosen[mgrs] = (nd, cl, href)
+        if len(chosen) != len(grids):
+            continue
+        worst = max(c for _, c, _ in chosen.values())
+        spread = max(abs(x[0] - anchor) for m, scenes in per_tile.items()
+                     for x in scenes if (x[1], x[2], x[3]) == chosen[m])
+        if best is None or worst < best[0]:
+            best = (worst, anchor, chosen, spread)
+
+    if best is None:
+        print(f"MGRS tiles needed: {grids}", file=sys.stderr)
         sys.exit(
-            "No single date covers every tile under this cloud threshold.\n"
-            "Widen --max-cloud or the date window. Do NOT mosaic per-tile best\n"
-            "dates: different seasons meet as visible colour steps at the seams."
+            f"No {WINDOW_DAYS}-day window covers every tile under this cloud\n"
+            "threshold. Widen --max-cloud or --start/--end."
         )
-    worst, day, tiles = sorted(complete)[0]
-    return day, worst, sorted(grids), tiles
+    worst, anchor, chosen, spread = best
+    return date.fromordinal(anchor).isoformat(), worst, grids, chosen
+
+
+# A mosaic with holes is the failure this pipeline is most prone to, and it is
+# invisible until someone looks at a tile. Measure it instead: rasterise a small
+# proof of the mosaic and count black. Anything above this is a coverage bug,
+# not an artefact of the rim.
+MAX_GAP_PCT = 1.0
+
+
+def inspect_mosaic(vrt: Path, work: Path) -> tuple[float, float] | None:
+    """(% empty, % white) over the visible area. None if Pillow is unavailable.
+
+    The second number is the one STAC cannot give us. `eo:cloud_cover` is a
+    cloud mask — it says nothing about SNOW, so a January scene over Denver or
+    Chicago can be 0% cloud and still be a white sheet. Both read the same way
+    on a window: bright and desaturated. So measure the picture, not the
+    metadata. Reported, not enforced: snow on the Front Range is a legitimate
+    view, an all-white one is not, and that is a judgement call.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    proof = work / "coverage-proof.png"
+    subprocess.run(["gdal_translate", "-q", "-of", "PNG", "-outsize", "600", "0",
+                    str(vrt), str(proof)], check=True)
+    px = list(Image.open(proof).convert("RGB").getdata())
+    n = len(px)
+    black = sum(1 for r, g, b in px if r + g + b < 12)
+    white = sum(1 for r, g, b in px
+                if r + g + b >= 12 and (r + g + b) / 3 > 140 and max(r, g, b) - min(r, g, b) < 30)
+    return 100.0 * black / n, 100.0 * white / n
 
 
 def run(cmd: list[str]) -> None:
@@ -247,12 +318,38 @@ def main() -> None:
         warped = list(pool.map(warp, enumerate(sorted(tiles.items()), 1)))
 
     vrt = work / "mosaic.vrt"
-    # NO -addalpha. An alpha band forces gdal2tiles to emit PNG, which for a
-    # photographic basemap is several times the bytes of JPEG for no visible
-    # gain, and breaks the .jpg convention /api/tiles already serves. The 12
-    # MGRS scenes tile the bbox contiguously, so there is no interior nodata
-    # for alpha to protect — only the outer rim, which the camera never reaches.
-    run(["gdalbuildvrt", "-q", str(vrt), *warped])
+    # The crop lives HERE, not on the warps. Warping full scenes is what makes
+    # that stage fast, but the union of ~11 MGRS scenes is far larger than the
+    # area the camera can see, and tiling that union would multiply the output
+    # for ground nobody ever looks at. -te bounds the mosaic to the visible box.
+    #
+    # NO -addalpha. An alpha band forces gdal2tiles to emit PNG, several times
+    # the bytes of JPEG for a photographic basemap and against the .jpg
+    # convention /api/tiles already serves. Warped scenes carry nodata=0, which
+    # gdalbuildvrt already honours: later sources fill earlier ones' gaps.
+    x0, y0 = mercator(bbox[0], bbox[1])
+    x1, y1 = mercator(bbox[2], bbox[3])
+    run(["gdalbuildvrt", "-q", "-te", str(x0), str(y0), str(x1), str(y1),
+         str(vrt), *warped])
+
+    report = inspect_mosaic(vrt, work)
+    if report is None:
+        print("! coverage unverified (needs Pillow); check the tiles by eye.")
+        holes = 0.0
+    else:
+        holes, white = report
+        if white > 25:
+            print(f"! {white:.1f}% of this mosaic is bright and desaturated — snow or "
+                  f"haze, which STAC's cloud mask does not report. Look at "
+                  f"{work}/coverage-proof.png before shipping it.")
+    if report is not None and holes > MAX_GAP_PCT:
+        sys.exit(
+            f"mosaic is {holes:.1f}% empty over the visible area — refusing to tile.\n"
+            "Black wedges mean the chosen scenes do not cover the box. Re-run with\n"
+            "a wider --start/--end so a better date is available."
+        )
+    else:
+        print(f"coverage OK: {100 - holes:.2f}% of the visible area has pixels")
 
     # One flat layer dir for every place, NOT sentinel2/<place>/. Two reasons:
     # `pack-pmtiles.ts <layer>` and /api/tiles both expect layer/{z}/{x}/{y},
