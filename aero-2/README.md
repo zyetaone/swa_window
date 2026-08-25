@@ -1,42 +1,29 @@
-# sv
+# Aero 2
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Minimal rewrite of [Aero Dynamic Window](../) — one slice at a time.
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
+**Stack:** SvelteKit · Svelte 5 runes · Cesium · adapter-node (Pi kiosk).
 
 ```sh
-# create a new project
-npx sv create my-app
+bun install
+bun run dev      # http://0.0.0.0:5173
+bun run check && bun run test
 ```
 
-To recreate this project with the same configuration:
+Layout and invariants: `docs/ARCHITECTURE.md`.
 
-```sh
-# recreate this project
-bun x sv@0.17.0 create --template minimal --types ts --add prettier tailwindcss="plugins:none" sveltekit-adapter="adapter:auto" ai-tools="ide:claude-code,other+delivery:plugin" experimental="versions:kit+features:async,remoteFunctions,explicitEnvironmentVariables,handleRenderingErrors" --install bun ./
-```
+## Offline imagery
 
-## Developing
+1. Populate `data/tiles/` (or symlink to parent repo `../data/tiles`).
+2. Optional `TILE_DIR=data/tiles` in `.env`.
+3. `bun run build && node build/index.js`
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+The globe probes `GET /api/tiles/health` at boot. Day imagery prefers `eox-sentinel2`, then `esri-world-imagery`. Night swap to `cartodb-dark` only when that pack exists locally.
 
-```sh
-npm run dev
+### Dev with a sparse cache
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+`bun run dev` enables **remote tile fallback** when `NODE_ENV=development` (Vite sets this): missing local tiles are proxied from EOX / Esri / Carto. On the Pi — unset `NODE_ENV`, no fallback unless `AERO_TILE_REMOTE_FALLBACK=1`.
 
-## Building
+## Dev without local tiles
 
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Empty `data/tiles/` → ellipsoid terrain. Optional `VITE_CESIUM_ION_TOKEN` enables Ion imagery fallback when the health probe reports no layers.

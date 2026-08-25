@@ -33,7 +33,6 @@
 		"vitest": "^4.1.10"
 	},
 	"imports": {
-		"#lib/*": "./src/lib/*",
-		"#content/*": "./content/*"
+		"#lib/*": "./src/lib/*"
 	}
 }

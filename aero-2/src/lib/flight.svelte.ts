@@ -1,15 +1,21 @@
-import { orbitPose } from '#lib/flight/orbit.js';
-import { resolveLocalHours } from '#lib/model/local-time.js';
-import type { ConfigTree } from '#lib/model/config.svelte.js';
-import type { Location } from '#lib/location.js';
-import { resolveAtmosphere } from '#lib/world/atmosphere.js';
-import { CameraPose, GlobeSyncSlice } from '#lib/types.js';
+/**
+ * Flight simulation engine — updates orbit pose and time of day.
+ */
+import { altitudeAt, orbitPose } from '#lib/rules.js';
+import { ALTITUDE_FLOOR_M } from '#lib/assets/data.js';
+import {
+	CameraPose,
+	GlobeSyncSlice,
+	resolveLocalHours,
+	type ConfigTree,
+	type Location,
+} from '#lib/model.svelte.js';
 
-/** Orbit pose + local time — owns reactive flight fields. */
 export class FlightEngine {
 	lat = $state(0);
 	lon = $state(0);
 	headingDeg = $state(20);
+	altitudeM = $state(ALTITUDE_FLOOR_M);
 	timeOfDay = $state(12);
 
 	#orbitAngle = 0.5;
@@ -25,7 +31,8 @@ export class FlightEngine {
 		this.lon = location.lon;
 	}
 
-	tick(_dt: number): void {
+	/** Wall-clock, never accumulated dt — the three Pis must agree. */
+	tick(): void {
 		const wallT = Date.now() / 1000;
 		const { orbit, flightSpeed } = this.config.camera;
 
@@ -53,6 +60,7 @@ export class FlightEngine {
 		this.lat = pose.lat;
 		this.lon = pose.lon;
 		this.headingDeg = pose.headingDeg;
+		this.altitudeM = altitudeAt(wallT);
 
 		const { daylight } = this.config.director;
 		const nowMs = Date.now();
@@ -68,13 +76,10 @@ export class FlightEngine {
 
 	cameraPose(): CameraPose {
 		const { view } = this.config.camera;
-		return new CameraPose(this.lat, this.lon, view.altitudeM, this.headingDeg, view.pitchDeg);
+		return new CameraPose(this.lat, this.lon, this.altitudeM, this.headingDeg, view.pitchDeg);
 	}
 
 	frame(): GlobeSyncSlice {
-		return new GlobeSyncSlice(
-			this.cameraPose(),
-			resolveAtmosphere(this.config.camera.view.altitudeM),
-		);
+		return new GlobeSyncSlice(this.cameraPose(), this.timeOfDay);
 	}
 }

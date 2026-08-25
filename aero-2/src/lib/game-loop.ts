@@ -1,14 +1,13 @@
 /**
- * Single RAF source for the kiosk. Class wrapper over the subscriber pattern.
+ * Single RAF source for the kiosk.
  */
 
-type Callback = (dt: number) => void;
+type Callback = () => void;
 
 export class GameLoop {
 	#subscribers = new Set<Callback>();
 	#errorCounts = new WeakMap<Callback, number>();
 	#rafId: number | null = null;
-	#lastTime = 0;
 
 	subscribe(fn: Callback): () => void {
 		this.#subscribers.add(fn);
@@ -22,19 +21,15 @@ export class GameLoop {
 		};
 	}
 
-	#loop = (now: number): void => {
+	#loop = (): void => {
 		if (document.visibilityState === 'hidden') {
 			this.#rafId = requestAnimationFrame(this.#loop);
-			this.#lastTime = now;
 			return;
 		}
 
-		const dt = Math.min((now - this.#lastTime) / 1000, 0.1);
-		this.#lastTime = now;
-
 		for (const fn of this.#subscribers) {
 			try {
-				fn(dt);
+				fn();
 				if (this.#errorCounts.get(fn)) this.#errorCounts.set(fn, 0);
 			} catch {
 				const count = (this.#errorCounts.get(fn) ?? 0) + 1;
@@ -52,7 +47,6 @@ export class GameLoop {
 
 	#start(): void {
 		if (this.#rafId !== null) return;
-		this.#lastTime = performance.now();
 		this.#rafId = requestAnimationFrame(this.#loop);
 	}
 
@@ -64,5 +58,4 @@ export class GameLoop {
 	}
 }
 
-/** Process singleton — one RAF for the kiosk page. */
 export const gameLoop = new GameLoop();

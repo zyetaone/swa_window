@@ -1,61 +1,47 @@
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
+
 // Cesium's runtime assets are copied into static/ by scripts/sync-cesium.mjs
-// (wired into the dev and build scripts), NOT by a Vite plugin — see that
-// file for why the plugin route was abandoned.
 const cesiumBaseUrl = 'cesiumStatic';
 
-// Under `vitest`, resolve Svelte's BROWSER entry so components can actually be
-// MOUNTED in tests. With the default (SSR) condition, `mount()` throws
-// lifecycle_function_unavailable, so component behaviour could only be reasoned
-// about, never executed — which is how a blank-page bug once reached production
-// with a fully green suite. Scoped to the test run so the kiosk build is
-// untouched.
+// Under `vitest`, resolve Svelte's BROWSER entry so components can be mounted in tests.
 const IS_TEST = process.env.VITEST !== undefined;
 
 export default defineConfig({
 	...(IS_TEST ? { resolve: { conditions: ['browser'] } } : {}),
 	plugins: [
 		sveltekit({
-			compilerOptions: {
-				// Force runes mode for the project, except for libraries. Can be
-				// removed in svelte 6.
-				runes: ({ filename }) =>
-					filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
-				// `await` at component top level, in $derived, and in markup.
-				// Used for the pending-state boundaries around imagery/tile loads.
-				experimental: { async: true },
-			},
-
-			// adapter-node, NOT adapter-auto: the Pi kiosk serves its own routes —
-			// the SSE fleet bus, mDNS peer discovery, and the tile/bundle endpoints
-			// all need a long-lived Node server. `bun run serve` is the literal
-			// ExecStart of aero-app.service.
 			adapter: adapter(),
-
-			// Subpath imports (#lib/*) — explicit .js extensions required.
 			csp: {
 				directives: {
 					'default-src': ['self'],
-					'script-src': ['self', 'unsafe-eval'], // Cesium protobufjs needs eval
+					'script-src': ['self', 'unsafe-eval'],
 					'style-src': ['self', 'unsafe-inline'],
 					'img-src': [
-						'self', 'data:', 'blob:',
-						'https://*.arcgis.com', 'https://*.arcgisonline.com',
-						'https://*.cesium.com', 'https://assets.ion.cesium.com',
+						'self',
+						'data:',
+						'blob:',
+						'https://*.arcgis.com',
+						'https://*.arcgisonline.com',
+						'https://*.cesium.com',
+						'https://assets.ion.cesium.com',
 						'https://*.bing.com',
 					],
 					'connect-src': [
 						'self',
-						// ws:/wss: are NOT dev-only here — this csp block is not
-						// dev-conditional, and Vite HMR needs them. Do not remove.
-						'ws:', 'wss:', 'http:', 'https:',
-						'https://*.arcgis.com', 'https://*.arcgisonline.com',
-						'https://*.cesium.com', 'https://api.cesium.com', 'https://assets.ion.cesium.com',
+						'ws:',
+						'wss:',
+						'http:',
+						'https:',
+						'https://*.arcgis.com',
+						'https://*.arcgisonline.com',
+						'https://*.cesium.com',
+						'https://api.cesium.com',
+						'https://assets.ion.cesium.com',
 						'https://*.bing.com',
 					],
-					'worker-src': ['self', 'blob:'], // Cesium web workers
+					'worker-src': ['self', 'blob:'],
 					'child-src': ['blob:'],
 					'font-src': ['self'],
 				},
