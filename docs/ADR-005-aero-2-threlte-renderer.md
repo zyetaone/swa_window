@@ -22,15 +22,15 @@ is infrastructure we pay for and never use.
 
 ### What aero-2 actually uses Cesium for
 
-| Cesium capability | aero-2 |
-|---|---|
-| `skyBox`, `skyAtmosphere` | disabled |
-| `showGroundAtmosphere` | disabled |
-| camera controller | bypassed — `setView` every frame |
-| fog | driven by hand from our own bands |
-| all 10 widgets | off |
-| tile pyramid | one fixed region, never global |
-| terrain streaming | 96 lines of ours (terrarium → `HeightmapTerrainData`) |
+| Cesium capability         | aero-2                                                |
+| ------------------------- | ----------------------------------------------------- |
+| `skyBox`, `skyAtmosphere` | disabled                                              |
+| `showGroundAtmosphere`    | disabled                                              |
+| camera controller         | bypassed — `setView` every frame                      |
+| fog                       | driven by hand from our own bands                     |
+| all 10 widgets            | off                                                   |
+| tile pyramid              | one fixed region, never global                        |
+| terrain streaming         | 96 lines of ours (terrarium → `HeightmapTerrainData`) |
 
 What remains in use is roughly a textured-sphere rasteriser with imagery
 reprojection. Every visual decision the product makes, we make against Cesium
@@ -41,8 +41,8 @@ rather than with it.
 The atmosphere layer cake, aerial perspective, distance-blended detail texture,
 and night emissive are all fragment-shader problems. In Cesium they are
 `PostProcessStage` workarounds. ADR-001 identified exactly this when rejecting
-MapLibre: *"the color grading shader and cloud post-process are Cesium
-PostProcessStage — MapLibre has no equivalent compositing pipeline."* Three's
+MapLibre: _"the color grading shader and cloud post-process are Cesium
+PostProcessStage — MapLibre has no equivalent compositing pipeline."_ Three's
 native idiom is materials and passes.
 
 ### Licence constraint (2026-08-25: "no licences, all free")
@@ -50,14 +50,14 @@ native idiom is materials and passes.
 Neither renderer is the problem — CesiumJS is Apache-2.0, Three is MIT. The
 **data** is:
 
-| layer | status |
-|---|---|
-| esri-world-imagery (160 MB, primary day texture) | ArcGIS terms — **not open** |
-| eox-sentinel2 (`s2cloudless-2024`) | needs EOX Commercial Attribution-RestrictedUse |
-| cartodb-dark | CARTO terms — v1 already removed this once; aero-2 reintroduced it |
-| viirs-night-lights (NASA GIBS) | public domain ✓ |
-| terrarium elevation (AWS Open Data) | open ✓ verified live |
-| OSM roads/buildings (8 cities, extracted) | ODbL + attribution ✓ |
+| layer                                            | status                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| esri-world-imagery (160 MB, primary day texture) | ArcGIS terms — **not open**                                        |
+| eox-sentinel2 (`s2cloudless-2024`)               | needs EOX Commercial Attribution-RestrictedUse                     |
+| cartodb-dark                                     | CARTO terms — v1 already removed this once; aero-2 reintroduced it |
+| viirs-night-lights (NASA GIBS)                   | public domain ✓                                                    |
+| terrarium elevation (AWS Open Data)              | open ✓ verified live                                               |
+| OSM roads/buildings (8 cities, extracted)        | ODbL + attribution ✓                                               |
 
 Dropping the first three removes **188 MB of the 190 MB tile cache** and leaves
 aero-2 with no day imagery until NASA GIBS true-colour (public domain,
@@ -69,11 +69,11 @@ not Cesium's.
 
 Terrain relief, measured from terrarium source data rather than assumed:
 
-| place | z8 tile ≈ | low → high | relief |
-|---|---|---|---|
-| denver | 120 km | 1 479 → 4 257 m | **2 778 m** |
-| hyderabad | 149 km | 157 → 724 m | 567 m |
-| dubai | 142 km | −53 → 1 614 m | 1 667 m (142 m near the city) |
+| place     | z8 tile ≈ | low → high      | relief                        |
+| --------- | --------- | --------------- | ----------------------------- |
+| denver    | 120 km    | 1 479 → 4 257 m | **2 778 m**                   |
+| hyderabad | 149 km    | 157 → 724 m     | 567 m                         |
+| dubai     | 142 km    | −53 → 1 614 m   | 1 667 m (142 m near the city) |
 
 Terrain is a **per-place property**, not a global feature. Denver earns a
 heightmap; Hyderabad is a flat sheet from 10 km and is carried by texture and
@@ -114,13 +114,15 @@ adaptive LOD buys nothing.
 ## Consequences
 
 **Gained**
+
 - ~3.5 MB cold bundle → ~500 KB; 200–400 MB RAM → a fraction (ADR-001 figures)
-- Full shader control over the thing that *is* the product
+- Full shader control over the thing that _is_ the product
 - Composition becomes readable markup rather than a maintained array
 - No tile server at runtime; PMTiles or plain files
 - Threlte 8 / three 0.183 are already dependencies of v1 and already on the Pis
 
 **Lost**
+
 - Cesium's geodetic camera, tile reprojection, and imagery/terrain registration
 - Four ADRs of operational knowledge that assume the Cesium pipeline
 - The ability to fly anywhere without preparing assets first
@@ -144,8 +146,8 @@ detail layer on three Pis needs KTX2/Basis compression. Unmeasured.
 landed in 96 lines. Rejected because we use ~5% of it, fight the rest, and
 cannot express the layer API. Remains the fallback if the spike fails.
 
-**MapLibre.** Rejected in ADR-001 because *"the visual identity of Aero Window
-IS Cesium"* — atmosphere scattering, sun/moon, ocean, bloom. **That reason is
+**MapLibre.** Rejected in ADR-001 because _"the visual identity of Aero Window
+IS Cesium"_ — atmosphere scattering, sun/moon, ocean, bloom. **That reason is
 void for aero-2: we have disabled every one of those.** The reason that still
 holds is narrower than ADR-001 put it, and worth stating accurately:
 
@@ -240,3 +242,37 @@ sources. That argument is weaker if the look can be carried by open data plus
 shading, which the same rules drive under either renderer.
 
 Phase 1 (the Pi 5 side-by-side) remains the real gate and is unchanged.
+
+---
+
+## Promoted to `/` — 2026-08-25
+
+Explicit instruction, after looking at the probe: move it to the main route.
+Done — `/` now serves MapLibre. A `/lab/cesium` reference route was created
+and then, on a further explicit instruction, removed. Cesium's code
+(`cesium/`, `window/scene.svelte.ts`, `window/aero-window.svelte.ts`,
+`experience/CabinWindow.svelte`) still exists and still passes its tests; it
+is simply unreferenced by any route.
+
+**This is not the outcome the "Consequence" section above argued for.** That
+section said the renderer decision had become _less_ urgent, precisely because
+Phase 1 — the only measured, on-hardware answer — hadn't run. The promotion
+happened anyway, on the strength of one look at a Mac, because "I like it" is
+also a legitimate answer for a display whose entire job is being liked. Naming
+the gap rather than smoothing over it:
+
+- **No Pi 5 measurement exists for the MapLibre path**, in either direction. Not
+  slower, not faster, not measured. The ADR-004 P8 gate this was meant to
+  discharge is still open — it is now open for a _different_ renderer than the
+  one it was opened for.
+- **Reversal is cheap, but no longer zero-effort.** With no live fallback
+  route, reversing means re-adding a route file, not swapping which of two
+  already exists. Still small — `model.ts`/`rules.ts` back the Cesium wiring
+  unchanged, so nothing downstream of routing needs to move — but it is a
+  step this ADR previously described as already done, and now isn't.
+- The five Phase 0 questions (orbit speed, climb profile, floor altitude,
+  terrain relevance, window azimuth) are **still open**. Promotion answered "is
+  the ground texture good enough," not "is the flight right."
+
+Phase 1 remains the real gate. It now additionally needs to answer whether
+demoting Cesium was correct, not only whether promoting MapLibre was.

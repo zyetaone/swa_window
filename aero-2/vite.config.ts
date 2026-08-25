@@ -22,11 +22,17 @@ export default defineConfig({
 						'self',
 						'data:',
 						'blob:',
+						// aero-2's own window: GIBS + USGS colour, terrarium elevation.
+						'https://gibs.earthdata.nasa.gov',
+						'https://basemap.nationalmap.gov',
+						'https://s3.amazonaws.com',
+						// cesium/ is unreferenced by any route as of 2026-08-25, not deleted.
+						// Left allowed so it isn't a second edit if it gets reconnected.
 						'https://*.arcgis.com',
 						'https://*.arcgisonline.com',
 						'https://*.cesium.com',
 						'https://assets.ion.cesium.com',
-						'https://*.bing.com',
+						'https://*.bing.com'
 					],
 					'connect-src': [
 						'self',
@@ -39,21 +45,21 @@ export default defineConfig({
 						'https://*.cesium.com',
 						'https://api.cesium.com',
 						'https://assets.ion.cesium.com',
-						'https://*.bing.com',
+						'https://*.bing.com'
 					],
 					'worker-src': ['self', 'blob:'],
 					'child-src': ['blob:'],
-					'font-src': ['self'],
-				},
-			},
-		}),
+					'font-src': ['self']
+				}
+			}
+		})
 	],
 	server: {
 		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
-		host: true,
+		host: true
 	},
 	define: {
-		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
+		CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`)
 	},
 	build: {
 		chunkSizeWarningLimit: 5000,
@@ -64,13 +70,13 @@ export default defineConfig({
 						return 'cesium';
 					}
 					return undefined;
-				},
-			},
-		},
+				}
+			}
+		}
 	},
 	test: {
 		environment: 'happy-dom',
 		include: ['tests/**/*.{test,spec}.{ts,svelte.ts}'],
-		globals: false,
-	},
+		globals: false
+	}
 });
