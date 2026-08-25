@@ -147,9 +147,26 @@ cannot express the layer API. Remains the fallback if the spike fails.
 **MapLibre.** Rejected in ADR-001 because *"the visual identity of Aero Window
 IS Cesium"* — atmosphere scattering, sun/moon, ocean, bloom. **That reason is
 void for aero-2: we have disabled every one of those.** The reason that still
-holds is the absence of a compositing pipeline; we would bolt Three on for the
-passes anyway. Worth stealing regardless: PMTiles, and its ~40 MB RAM figure as
-a target.
+holds is narrower than ADR-001 put it, and worth stating accurately:
+
+MapLibre covers more of the band system natively than expected — `sky-color`,
+`horizon-color`, `fog-color` and the blend factors map onto `skyTop`,
+`skyHorizon` and `fogDensity`; a raster crossfade covers `groundDetail`. Four
+of six. What it cannot do is `deckOpacity` (no volumetric or mesh layer) and
+the night emissive blend, because MapLibre **drapes raster layers over**
+terrain rather than giving the terrain mesh a material. There is no fragment
+shader sampling base + detail + emissive and blending by distance. The escape
+hatch is a custom WebGL layer — raw GL against someone else's context, which is
+strictly worse than using Three directly.
+
+Camera correction, since it was asserted wrongly during evaluation:
+**MapLibre has no `FreeCameraOptions`** — that is Mapbox GL JS. Its equivalent
+is `calculateCameraOptionsFromTo(from, altitudeFrom, to, altitudeTo)`, which
+derives centre/zoom/bearing/pitch from a real eye altitude and a look-at point.
+Altitude genuinely positions the camera; it is not faked through zoom. This is
+a better API for a flight view than it was given credit for.
+
+Worth stealing regardless: PMTiles, and its ~40 MB RAM figure as a target.
 
 **Pre-rendered video.** Rejected in ADR-004 and not revisited.
 
@@ -171,3 +188,55 @@ side with the Cesium build on a Pi 5.
 
 This also discharges ADR-004's P8 gate, which has been open since June while the
 fleet ships `useThreeOverlay: true` unmeasured.
+
+---
+
+## Phase 0 result — 2026-08-25
+
+**The probe was looked at, and it looks good.** First time anything in this
+line of work has been seen rather than reasoned about.
+
+Configuration viewed was the bare `/lab/maplibre` URL, which is the hardest
+case and the one that matters: **Hyderabad, 400 m AGL floor, no NAIP detail
+layer (India is outside coverage), NASA GIBS z9 at ~306 m/px, hillshade 0.35.**
+
+### What this settles
+
+The blur complaint was resolved **without any high-resolution imagery**. The
+fix was hillshade derived from the terrarium DEM already being fetched for the
+terrain mesh — high-frequency luminance structure, not pixel count.
+
+That kills the expensive branch. Before this, the reasoning ran: home location
+needs ~0.78 m/px at its 400 m floor → no licence-clean source on Earth provides
+it → therefore bake Sentinel-2, or build WorldCover-driven splat terrain. Both
+were multi-day. Neither is needed if 306 m/px plus shading is enough, and it
+appears to be.
+
+**The licence squeeze is therefore not blocking.** Every rejected source
+(Esri, EOX s2cloudless, CARTO) was rejected for imagery resolution we now have
+evidence we do not need. GIBS + terrarium + OSM are all public-domain or open,
+and that stack is sufficient.
+
+### What this does NOT settle
+
+Deliberately listed, because one look is one look:
+
+- Seen on a Mac display at desk distance, in one landscape window. The product
+  is three portrait panels seen from across an office. Different angular size,
+  different viewing distance, different bezels.
+- Not seen on a Pi 5. Says nothing about frame rate, thermals, or the P8 gate.
+- Not held for twenty minutes. "Calm" is a property of duration; blur is not.
+  A view can be pleasant for ten seconds and irritating for an hour.
+- Orbit speed and the 400 m → 13 000 m climb were not separately judged. They
+  remain the open Phase 0 questions.
+- Hillshade at 0.35 over flat Deccan terrain does little. Denver is the case
+  where it does the most, and where it might read as too much.
+
+### Consequence for this ADR
+
+The renderer decision is now **less** urgent, not more. The argument for
+leaving Cesium was partly that its imagery path forced licence-encumbered
+sources. That argument is weaker if the look can be carried by open data plus
+shading, which the same rules drive under either renderer.
+
+Phase 1 (the Pi 5 side-by-side) remains the real gate and is unchanged.
