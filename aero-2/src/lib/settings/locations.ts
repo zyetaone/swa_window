@@ -26,10 +26,22 @@ function offsetHoursFor(timeZone: string, atMs: number): number {
 	return (m[1] === '-' ? -1 : 1) * (Number(m[2]) + Number(m[3] ?? 0) / 60);
 }
 
-export class Location {
-	/** Hours ahead of UTC right now, DST included. Derived, never typed in. */
-	readonly utcOffset: number;
+/** (zone, hour-bucket) -> offset. Intl.DateTimeFormat is slow; the answer
+ *  cannot change inside one hour, and this is read every frame. */
+const offsetCache = new Map<string, number>();
 
+function offsetHoursNow(timeZone: string, atMs: number = Date.now()): number {
+	const hourBucket = Math.floor(atMs / 3_600_000);
+	const key = `${timeZone}@${hourBucket}`;
+	const hit = offsetCache.get(key);
+	if (hit !== undefined) return hit;
+	const value = offsetHoursFor(timeZone, atMs);
+	if (offsetCache.size > 64) offsetCache.clear();
+	offsetCache.set(key, value);
+	return value;
+}
+
+export class Location {
 	constructor(
 		readonly id: string,
 		readonly name: string,
@@ -40,10 +52,24 @@ export class Location {
 		readonly groundElevationM: number,
 		/** Climb envelope, metres ABOVE GROUND. Floor must clear local peaks. */
 		readonly climbFloorM: number,
-		readonly climbCeilingM: number,
-		atMs: number = Date.now()
-	) {
-		this.utcOffset = offsetHoursFor(timeZone, atMs);
+		readonly climbCeilingM: number
+	) {}
+
+	/**
+	 * Hours ahead of UTC right NOW, DST included. Derived, never typed in.
+	 *
+	 * A getter, not a field set in the constructor. CATALOG is a static built
+	 * once at module load, so a cached offset freezes whatever DST state the
+	 * process started in: a kiosk booted in January would still claim -07:00 for
+	 * Denver in July, putting the sun an hour out until someone restarted it.
+	 * Six of the eleven locations shift across DST.
+	 *
+	 * Cheap enough to call per frame — it feeds `sunPosition` and time-of-day —
+	 * but memoised per (zone, hour) because `Intl.DateTimeFormat` is not free
+	 * and the answer cannot change within an hour.
+	 */
+	get utcOffset(): number {
+		return offsetHoursNow(this.timeZone);
 	}
 
 	/**
@@ -69,17 +95,71 @@ export class Location {
 	 */
 	static readonly CATALOG: readonly Location[] = [
 		//         id                name                     lat        lon        IANA zone              ground  floor  ceiling
-		new Location('hyderabad',     'Hyderabad, India',      17.4435,   78.3772,   'Asia/Kolkata',           500,   400,  12_500),
-		new Location('mumbai',        'Mumbai, India',         19.076,    72.8777,   'Asia/Kolkata',            10,   500,  12_000),
-		new Location('dubai',         'Dubai, UAE',            25.2048,   55.2708,   'Asia/Dubai',               5,   600,  13_000),
-		new Location('dallas',        'Dallas, Texas',         32.7767,  -96.797,    'America/Chicago',        150,   700,  12_000),
-		new Location('phoenix',       'Phoenix, Arizona',      33.4352, -112.0101,   'America/Phoenix',        340,   800,  12_500),
-		new Location('las_vegas',     'Las Vegas, Nevada',     36.1699, -115.1398,   'America/Los_Angeles',    620,   900,  12_800),
-		new Location('denver',        'Denver, Colorado',      39.8561, -104.6737,   'America/Denver',       1_600, 3_000,  13_000),
-		new Location('chicago_midway','Chicago Midway',        41.7868,  -87.7522,   'America/Chicago',        190,   650,  11_500),
-		new Location('himalayas',     'The Himalayas',         27.9881,   86.925,    'Asia/Kathmandu',       5_000, 3_500,  13_000),
-		new Location('ocean',         'Pacific Ocean',         21.3069, -157.8583,   'Pacific/Honolulu',         0,   300,  11_000),
-		new Location('desert',        'Sahara Desert',         23.4241,   25.6628,   'Africa/Cairo',           500,   700,  12_500)
+		new Location(
+			'hyderabad',
+			'Hyderabad, India',
+			17.4435,
+			78.3772,
+			'Asia/Kolkata',
+			500,
+			400,
+			12_500
+		),
+		new Location('mumbai', 'Mumbai, India', 19.076, 72.8777, 'Asia/Kolkata', 10, 500, 12_000),
+		new Location('dubai', 'Dubai, UAE', 25.2048, 55.2708, 'Asia/Dubai', 5, 600, 13_000),
+		new Location('dallas', 'Dallas, Texas', 32.7767, -96.797, 'America/Chicago', 150, 700, 12_000),
+		new Location(
+			'phoenix',
+			'Phoenix, Arizona',
+			33.4352,
+			-112.0101,
+			'America/Phoenix',
+			340,
+			800,
+			12_500
+		),
+		new Location(
+			'las_vegas',
+			'Las Vegas, Nevada',
+			36.1699,
+			-115.1398,
+			'America/Los_Angeles',
+			620,
+			900,
+			12_800
+		),
+		new Location(
+			'denver',
+			'Denver, Colorado',
+			39.8561,
+			-104.6737,
+			'America/Denver',
+			1_600,
+			3_000,
+			13_000
+		),
+		new Location(
+			'chicago_midway',
+			'Chicago Midway',
+			41.7868,
+			-87.7522,
+			'America/Chicago',
+			190,
+			650,
+			11_500
+		),
+		new Location(
+			'himalayas',
+			'The Himalayas',
+			27.9881,
+			86.925,
+			'Asia/Kathmandu',
+			5_000,
+			3_500,
+			13_000
+		),
+		new Location('ocean', 'Pacific Ocean', 21.3069, -157.8583, 'Pacific/Honolulu', 0, 300, 11_000),
+		new Location('desert', 'Sahara Desert', 23.4241, 25.6628, 'Africa/Cairo', 500, 700, 12_500)
 	];
 
 	/** The fielded kiosk home, and the fallback for anything unrecognised. */

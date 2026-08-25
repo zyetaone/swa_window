@@ -168,3 +168,26 @@ describe('settings write gate', () => {
 		expect(offenders, 'controls must call config.set(), not bind: into config').toEqual([]);
 	});
 });
+
+describe('privileged code stays unreachable until it is gated', () => {
+	/**
+	 * `server/update.ts` schedules `sudo -n systemctl start aero-updater.service`.
+	 * aero-2 has no auth layer yet — no `$lib/http/auth`, no AERO_ADMIN_TOKEN
+	 * handling — so an /api/update route would be a LAN-wide remote restart.
+	 * v1's equivalent route calls `requireAdminToken(request)` first.
+	 *
+	 * This fails the moment a route imports it without an auth check, which is
+	 * exactly the commit where someone would otherwise not think about it.
+	 */
+	it('no route imports the privileged updater without an auth gate', () => {
+		const routes = allSources().filter((f) => f.includes('routes'));
+		for (const file of routes) {
+			const src = readFileSync(file, 'utf8');
+			if (!/server\/update/.test(src)) continue;
+			expect(
+				/requireAdminToken|AERO_ADMIN_TOKEN/.test(src),
+				`${file} runs privileged commands without an auth gate`
+			).toBe(true);
+		}
+	});
+});

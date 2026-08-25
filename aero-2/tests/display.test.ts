@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	altitudeAt,
 	orbitPose,
@@ -553,5 +553,52 @@ describe('MiniMap track', () => {
 
 		expect(worstGapM(flown, flown.groundTrack())).toBeLessThan(500);
 		expect(worstGapM(flown, new FlightTrack(...args).groundTrack())).toBeGreaterThan(2_000);
+	});
+});
+
+describe('timezone offsets follow DST', () => {
+	/**
+	 * `utcOffset` was a field assigned in the constructor, and CATALOG is a
+	 * static built once at module load — so the offset froze in whatever DST
+	 * state the process started in. A kiosk booted in January would still report
+	 * -07:00 for Denver in July, putting the sun an hour out until someone
+	 * restarted it. Six of the eleven locations shift across DST.
+	 */
+	it('reports the offset for now, not for process start', () => {
+		const denver = Location.byId('denver');
+		const july = Date.UTC(2026, 6, 1);
+		const january = Date.UTC(2026, 0, 15);
+
+		const spy = vi.spyOn(Date, 'now');
+
+		spy.mockReturnValue(july);
+		const summer = denver.utcOffset;
+
+		spy.mockReturnValue(january);
+		const winter = denver.utcOffset;
+
+		spy.mockRestore();
+
+		expect(summer).toBe(-6); // MDT
+		expect(winter).toBe(-7); // MST
+	});
+
+	it('leaves zones without DST alone', () => {
+		const hyd = Location.byId('hyderabad');
+		const spy = vi.spyOn(Date, 'now');
+		spy.mockReturnValue(Date.UTC(2026, 6, 1));
+		const summer = hyd.utcOffset;
+		spy.mockReturnValue(Date.UTC(2026, 0, 15));
+		const winter = hyd.utcOffset;
+		spy.mockRestore();
+		expect(summer).toBe(5.5);
+		expect(winter).toBe(5.5);
+	});
+
+	it('derives every catalog offset from its IANA zone', () => {
+		for (const place of Location.all()) {
+			expect(Number.isFinite(place.utcOffset), place.id).toBe(true);
+			expect(Math.abs(place.utcOffset), place.id).toBeLessThanOrEqual(14);
+		}
 	});
 });
