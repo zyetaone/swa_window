@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import math
 import subprocess
 import sys
@@ -291,12 +292,36 @@ def main() -> None:
     #
     # Run in parallel: each warp is network-bound on a remote COG, so they
     # overlap almost perfectly. Sequentially this stage took ~5 min per scene.
+    def has_pixels(path):
+        """Did the warp actually write imagery, or a correctly-shaped void?
+
+        gdalwarp streaming a remote COG can exhaust its HTTP retries, write an
+        all-zero raster of the right dimensions, and STILL exit 0. It happened
+        to 2 of 11 Hyderabad tiles under six concurrent 700 MB streams: valid
+        GeoTIFFs, right size, 509 KB of compressed nothing. Exit status does
+        not answer the question, so ask the pixels.
+
+        GDAL reports no STATISTICS_MEAN for a band with no valid data, so its
+        absence -- or a mean of zero -- is the tell.
+        """
+        r = subprocess.run(["gdalinfo", "-stats", str(path)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            return False
+        means = re.findall(r"STATISTICS_MEAN=([0-9.]+)", r.stdout)
+        return bool(means) and max(float(m) for m in means) > 1.0
+
     def warp(item):
         i, (mgrs, (nodata, cloud, href)) = item
         dst = work / f"{mgrs}.tif"
+        # `exists()` is not `usable()`. Caching on existence alone meant a void
+        # tile was reused by every subsequent run, so the gap never healed.
         if dst.exists():
-            print(f"[{i}/{len(tiles)}] {mgrs} cached", flush=True)
-            return str(dst)
+            if has_pixels(dst):
+                print(f"[{i}/{len(tiles)}] {mgrs} cached", flush=True)
+                return str(dst)
+            print(f"[{i}/{len(tiles)}] {mgrs} cached but EMPTY - rewarping", flush=True)
+            dst.unlink()
         print(f"[{i}/{len(tiles)}] {mgrs} cloud {cloud:.2f}% ...", flush=True)
         subprocess.run([
             "gdalwarp", "-q",
@@ -307,10 +332,18 @@ def main() -> None:
             "-wo", "NUM_THREADS=2",
             "--config", "GDAL_CACHEMAX", "512",
             "--config", "AWS_NO_SIGN_REQUEST", "YES",
-            "--config", "GDAL_HTTP_MAX_RETRY", "5",
-            "--config", "GDAL_HTTP_RETRY_DELAY", "2",
+            # 20 not 5: the failures above were retry exhaustion under load.
+            "--config", "GDAL_HTTP_MAX_RETRY", "20",
+            "--config", "GDAL_HTTP_RETRY_DELAY", "5",
             f"/vsicurl/{href}", str(dst),
         ], check=True)
+        if not has_pixels(dst):
+            dst.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"{mgrs}: gdalwarp exited 0 but wrote an empty raster "
+                f"(scene {href.rsplit('/', 2)[-2]}). Retry exhaustion under "
+                f"load is the usual cause -- lower MAX_WORKERS and rerun."
+            )
         print(f"[{i}/{len(tiles)}] {mgrs} done", flush=True)
         return str(dst)
 
