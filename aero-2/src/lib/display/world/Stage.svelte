@@ -3,7 +3,7 @@
 	 * Stage — the MapLibre viewport and the flight loop that drives it.
 	 *
 	 * Everything visible inside it is a child component: Ground (colour),
-	 * Relief (shape), Air (sky and haze), LookControls (aiming). This file owns
+	 * Terrain (shape), Sky (air and haze), LookControls (aiming). This file owns
 	 * exactly one thing — where the camera is, every frame.
 	 */
 	import { MapLibre } from 'svelte-maplibre-gl';
@@ -12,8 +12,8 @@
 
 	import { useDisplay } from '../display.svelte.js';
 	import Ground from './Ground.svelte';
-	import Relief from './Relief.svelte';
-	import Air from './Air.svelte';
+	import Terrain from './Terrain.svelte';
+	import Sky from './Sky.svelte';
 	import LookControls from '../flight/LookControls.svelte';
 
 	const display = useDisplay();
@@ -65,8 +65,8 @@
 		attributionControl={{ compact: true }}
 	>
 		<Ground />
-		<Relief />
-		<Air />
+		<Terrain />
+		<Sky />
 		<LookControls />
 	</MapLibre>
 </div>

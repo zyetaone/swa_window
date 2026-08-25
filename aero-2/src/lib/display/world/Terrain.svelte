@@ -1,13 +1,16 @@
 <script lang="ts">
 	/**
-	 * Relief — the shape of the ground: a Terrarium-encoded DEM read from one
-	 * local PMTiles archive, driving both the 3D terrain mesh and the hillshade.
+	 * Terrain — the shape of the ground: a Terrarium-encoded DEM read from one
+	 * local PMTiles archive, driving both the 3D mesh and the hillshade.
+	 *
+	 * The MapLibre mesh primitive is imported as `TerrainMesh` so this component
+	 * can own the name `Terrain`.
 	 *
 	 * Hillshade is free structure — it comes off the DEM already fetched for the
 	 * mesh, and it closed the perceived-sharpness gap that far more imagery
 	 * resolution was supposed to be needed for.
 	 */
-	import { HillshadeLayer, RasterDEMTileSource, Terrain } from 'svelte-maplibre-gl';
+	import { HillshadeLayer, RasterDEMTileSource, Terrain as TerrainMesh } from 'svelte-maplibre-gl';
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 
 	import {
@@ -37,7 +40,7 @@
 <PMTilesProtocol />
 
 <RasterDEMTileSource id="dem" url={TERRAIN_PMTILES} encoding="terrarium" tileSize={TILE_SIZE}>
-	<Terrain exaggeration={TERRAIN_EXAGGERATION} />
+	<TerrainMesh exaggeration={TERRAIN_EXAGGERATION} />
 	<HillshadeLayer
 		paint={{
 			'hillshade-exaggeration': display.config.shade,

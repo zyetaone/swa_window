@@ -1,13 +1,14 @@
 <script lang="ts">
 	/**
-	 * Air — the sky dome and the haze between the window and the ground.
+	 * Sky — the sky dome and the haze between the window and the ground.
 	 *
 	 * Colours come from the altitude band the aircraft is in, so the view
-	 * thickens and blues as it climbs. Named `Air` rather than `Sky` because
-	 * `<Sky>` is the MapLibre component it renders — two things called Sky in
-	 * one file is how the last naming collision started.
+	 * thickens and blues as it climbs.
+	 *
+	 * The MapLibre primitive is imported as `SkyDome` so this component can own
+	 * the name `Sky` — the file is the sky, the import is the one piece it uses.
 	 */
-	import { Sky } from 'svelte-maplibre-gl';
+	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
 
 	const display = useDisplay();
@@ -18,7 +19,7 @@
 	const groundBlend = $derived(Math.min(0.9, display.atmosphere.fogDensity * 2200));
 </script>
 
-<Sky
+<SkyDome
 	sky-color={rgb(display.atmosphere.skyTop)}
 	horizon-color={rgb(display.atmosphere.skyHorizon)}
 	fog-color={rgb(display.atmosphere.skyHorizon)}
