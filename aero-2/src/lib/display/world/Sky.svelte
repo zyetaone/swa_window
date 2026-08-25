@@ -104,6 +104,33 @@
 		((sunAzimuth - (display.view.cameraBearingDeg ?? 0) + 540) % 360) - 180
 	);
 	const sunScreenX = $derived(50 + (sunHeadingDelta / 180) * 50);
+
+	/**
+	 * Where the horizon sits down the glass, as a percentage from the top.
+	 *
+	 * The starfield is an absolutely-positioned overlay ABOVE the map canvas,
+	 * so without this it paints stars over the terrain, the sea and the cloud
+	 * deck -- night sky in the foreground. Reordering cannot fix that: put the
+	 * overlay behind an opaque map canvas and the stars vanish entirely. The
+	 * fix is to mask it to the region above the horizon.
+	 *
+	 * Linear in pitch rather than a projection: the window looks down between
+	 * roughly -5 and -35 degrees, and across that band an analytic pinhole
+	 * horizon and a straight line differ by less than the softness of the
+	 * fade. `HORIZON_AT_LEVEL` and `PER_DEGREE` are tuned against real frames,
+	 * not derived -- an earlier pinhole model put the horizon above the top of
+	 * frame, which the screenshots plainly contradicted.
+	 *
+	 * Measured off clouds-off frames at pitch -5/-20/-35: 38%, 56%, 52%. The
+	 * scatter is bank, not error -- BANK_VIEW_GAIN swings the effective pitch
+	 * by +/-8 degrees and the captures were not taken at matched bank. The 12%
+	 * fade band below is wider than that scatter on purpose.
+	 */
+	const HORIZON_AT_LEVEL = 36;
+	const PER_DEGREE = 0.9;
+	const horizonPct = $derived(
+		Math.max(0, Math.min(100, HORIZON_AT_LEVEL + Math.max(0, -pitch) * PER_DEGREE))
+	);
 </script>
 
 <!-- MapLibre 3D Sky Dome, Rayleigh Haze & Horizon Mist -->
@@ -133,7 +160,7 @@
 	{/if}
 
 	<!-- Deep Space Milky Way & Starfield (Fades in at night) -->
-	<div class="starfield" style:opacity={night}>
+	<div class="starfield" style:opacity={night} style:--horizon="{horizonPct}%">
 		<div class="milky-way"></div>
 		{#each STARS as star}
 			<div
@@ -184,6 +211,17 @@
 		position: absolute;
 		inset: 0;
 		transition: opacity 0.6s ease;
+		/* Sky only. Below the horizon there is ground, sea or cloud, and a star
+		   drawn there reads as a dead pixel. Faded rather than cut, so the
+		   boundary does not draw a hard line across the haze. It inherits the
+		   parent's bank rotation for free, which is what we want -- the horizon
+		   tilts with the airframe. */
+		mask-image: linear-gradient(
+			to bottom,
+			#000 0,
+			#000 calc(var(--horizon) - 12%),
+			transparent var(--horizon)
+		);
 	}
 
 	.milky-way {

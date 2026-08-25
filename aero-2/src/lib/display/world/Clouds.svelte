@@ -138,7 +138,18 @@
 			const rnd = mulberry32(Math.floor(display.config.phase * 1_000_003) + 1);
 
 			// ── 1. Distant Horizon Cloud Banks (50 km - 130 km) ──────────────────────
-			const horizonBanks = Math.round(10 + density * 18);
+			/**
+			 * Enough banks to close the ring, and no more.
+			 *
+			 * The ring at ~100 km is 628 km around and each bank is 45-83 km
+			 * wide, so 23 of them laid 1,470 km of sprite over it -- roughly
+			 * 2.3 layers deep, each at 0.35-0.6 alpha. Compounded, that is a
+			 * ~78% opaque wall, which is exactly what the window showed: no
+			 * horizon, no sky, brown-grey mud edge to edge. Fourteen covers the
+			 * ring about 1.4x, which still reads unbroken but lets light
+			 * through.
+			 */
+			const horizonBanks = Math.round(6 + density * 10);
 			const horizonRadius = 85_000;
 
 			for (let i = 0; i < horizonBanks; i++) {
@@ -178,21 +189,33 @@
 			}
 
 			// ── 2. Local Mid-Deck Cumulus Puffs (3 km - 40 km) ───────────────────────
-			const clusterCount = Math.round(12 + density * 24);
+			/**
+			 * 60 puffs, none nearer than 12 km.
+			 *
+			 * Was 30 clusters of 10 -- 300 sprites, the nearest at 3 km with the
+			 * camera 15 km back, so a single 7 km puff subtended ~45 degrees and
+			 * a dozen of them filled the glass. It was also 300 transparent
+			 * quads per frame on a Pi 5.
+			 */
+			const clusterCount = Math.round(6 + density * 8);
+			const nearestM = 12_000;
 			const radius = 38_000;
 
 			for (let i = 0; i < clusterCount; i++) {
 				const angle = (i / clusterCount) * Math.PI * 2 + Math.sin(i * 99) * 0.5;
-				const dist = 3000 + Math.sqrt((i + 1) / clusterCount) * radius;
+				const dist = nearestM + Math.sqrt((i + 1) / clusterCount) * radius;
 				const cx = Math.cos(angle) * dist;
 				const cz = Math.sin(angle) * dist;
 				const cy = Math.sin(i * 33) * 600;
 
-				const puffsInCluster = 5 + Math.floor(density * 7);
+				const puffsInCluster = 3 + Math.floor(density * 3);
 				const clusterScale = 3000 + rnd() * 4000;
 
 				for (let j = 0; j < puffsInCluster; j++) {
-					const tex = textures[j % textures.length];
+					// Weighted to the bright plate. An even cycle across
+					// cloud/cloud-dark/cloud-smoke put a third of the deck in
+					// smoke, and smoke stacked on smoke is the brown.
+					const tex = textures[rnd() < 0.65 ? 0 : 1 + Math.floor(rnd() * (textures.length - 1))];
 					const baseOpacity = 0.25 + rnd() * 0.35;
 
 					const mat = new THREE.SpriteMaterial({
@@ -284,8 +307,17 @@
 
 			// Synchronize relative camera altitude to cloud deck
 			const planeAgl = display.view.aglM ?? 4000;
+			/**
+			 * The camera sits exactly as far above -- or below -- the deck as the
+			 * aircraft does. `1000 + delta * 1.5` put it half again too high and,
+			 * because of the +1000, never let the aircraft get underneath the
+			 * deck at all: there was no such thing as a cloud ceiling overhead.
+			 * The 300 m guard keeps it off the deck plane, where the sprites
+			 * collapse edge-on into an aliased line.
+			 */
 			const deltaAltM = planeAgl - cloudAltM;
-			camera.position.y = 1000 + deltaAltM * 1.5;
+			camera.position.y =
+				Math.abs(deltaAltM) < 300 ? Math.sign(deltaAltM || 1) * 300 : deltaAltM;
 			camera.position.z = 12000;
 			camera.lookAt(0, 0, 0);
 
