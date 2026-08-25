@@ -16,6 +16,7 @@
 		Terrain,
 		RasterTileSource,
 		RasterLayer,
+		HillshadeLayer,
 		Sky
 	} from 'svelte-maplibre-gl';
 	import { LngLat } from 'maplibre-gl';
@@ -41,6 +42,15 @@
 	const inNaipCoverage =
 		place.lat > 24 && place.lat < 50 && place.lon > -125 && place.lon < -66;
 	const detail = Number(q.get('detail') ?? (inNaipCoverage ? 1 : 0));
+
+	// The climb envelope is THE open Phase 0 question, so make it a knob rather
+	// than a commit. Hyderabad's floor is 400 m AGL, where a screen pixel covers
+	// ~0.78 m - finer than any licence-clean imagery on Earth. Try ?floor=2500.
+	const floorM = Number(q.get('floor') ?? place.climbFloorM);
+	const ceilingM = Number(q.get('ceiling') ?? place.climbCeilingM);
+	// ?shade=0 to compare. Hillshade is free structure: it comes off the DEM we
+	// already fetch, and the eye reads ridgelines as "sharp" far more than pixels.
+	const shade = Number(q.get('shade') ?? 0.35);
 
 	// Elevation: AWS terrarium. Open data, and MapLibre decodes it natively —
 	// which is the whole reason this probe costs hours instead of days.
@@ -99,7 +109,7 @@
 			lat = pose.lat;
 			lon = pose.lon;
 			trackDeg = pose.headingDeg;
-			aglM = altitudeAt(wallT, place.climbFloorM, place.climbCeilingM);
+			aglM = altitudeAt(wallT, floorM, ceilingM);
 			timeOfDay = resolveLocalHours({ timeZone: place.timeZone, utcOffset: place.utcOffset });
 
 			const look = normalizeHeading(trackDeg + azimuthDeg);
@@ -132,16 +142,6 @@
 		zoom={11}
 		attributionControl={{ compact: true }}
 	>
-		<RasterDEMTileSource
-			id="dem"
-			tiles={TERRARIUM}
-			encoding="terrarium"
-			tileSize={256}
-			maxzoom={13}
-		>
-			<Terrain exaggeration={1} />
-		</RasterDEMTileSource>
-
 		<RasterTileSource
 			id="gibs"
 			tiles={GIBS}
@@ -158,6 +158,21 @@
 		<RasterTileSource id="usgs" tiles={USGS} tileSize={256} maxzoom={16}>
 			<RasterLayer paint={{ 'raster-opacity': detail }} />
 		</RasterTileSource>
+
+		<RasterDEMTileSource
+			id="dem"
+			tiles={TERRARIUM}
+			encoding="terrarium"
+			tileSize={256}
+			maxzoom={13}
+		>
+			<Terrain exaggeration={1} />
+			<!-- Declared after the imagery so it draws over it. Same source as the
+			     terrain mesh - one fetch, two uses. -->
+			<HillshadeLayer
+				paint={{ 'hillshade-exaggeration': shade, 'hillshade-shadow-color': '#1a2436' }}
+			/>
+		</RasterDEMTileSource>
 
 		<Sky
 			sky-color={rgb(atmosphere.skyTop)}
