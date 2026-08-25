@@ -1,8 +1,7 @@
 import type { Attachment } from 'svelte/attachments';
 import type { GlobeSyncSlice } from '#lib/types.js';
-import { globeRuntime } from '#lib/world/runtime.js';
+import { worldRuntime } from '#lib/world/runtime.js';
 import { setupLod } from '#lib/world/sync-lod.js';
-import { globeSync } from '#lib/world/sync.js';
 
 declare const CESIUM_BASE_URL: string;
 
@@ -13,7 +12,7 @@ function ensureCesiumBaseUrl(): void {
 
 /** Push a flat slice into the live viewer — no-op until globe attachment is ready. */
 export function syncGlobe(slice: GlobeSyncSlice): void {
-	globeRuntime.with((rt) => globeSync.sync(rt, slice));
+	worldRuntime.sync(slice);
 }
 
 const KIOSK_WIDGETS_OFF = {
@@ -46,18 +45,20 @@ export function globe(token?: string): Attachment<HTMLElement> {
 
 			if (token) Cesium.Ion.defaultAccessToken = token;
 
-			viewer = new Cesium.Viewer(element, { ...KIOSK_WIDGETS_OFF });
+			viewer = new Cesium.Viewer(element, {
+				...KIOSK_WIDGETS_OFF,
+				baseLayer: false,
+				terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+			});
 			viewer.cesiumWidget.creditContainer.remove();
 
 			setupLod(viewer.scene);
-			globeRuntime.set(Cesium, viewer);
-			globeSync.init(Cesium);
+			await worldRuntime.open(Cesium, viewer);
 		})();
 
 		return () => {
 			cancelled = true;
-			globeSync.destroy();
-			globeRuntime.clear();
+			worldRuntime.close();
 			viewer?.destroy();
 			viewer = null;
 		};
