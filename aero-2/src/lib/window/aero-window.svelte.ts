@@ -36,6 +36,6 @@ export function aeroWindowFromUrl(search: string): AeroWindow {
 	const azimuth = Number(q.get('azimuth'));
 	return new AeroWindow(
 		Location.byId(q.get('place')),
-		Number.isFinite(azimuth) && q.has('azimuth') ? azimuth : undefined,
+		Number.isFinite(azimuth) && q.has('azimuth') ? azimuth : undefined
 	);
 }

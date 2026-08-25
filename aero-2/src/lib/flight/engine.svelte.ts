@@ -77,7 +77,7 @@ export class FlightEngine {
 			this.lon,
 			this.altitudeM,
 			normalizeHeading(this.headingDeg + view.windowAzimuthDeg),
-			view.pitchDeg,
+			view.pitchDeg
 		);
 	}
 

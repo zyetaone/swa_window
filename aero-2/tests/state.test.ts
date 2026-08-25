@@ -39,7 +39,7 @@ describe('window azimuth', () => {
 		model.tick();
 		const track = model.flight.headingDeg;
 		const looking = model.frame().camera.headingDeg;
-		const delta = (((looking - track) % 360) + 540) % 360 - 180;
+		const delta = ((((looking - track) % 360) + 540) % 360) - 180;
 		expect(delta).toBeCloseTo(-90, 6);
 	});
 
