@@ -10,7 +10,14 @@
 	 * It drives MapLibre with our OWN pure rules — orbitPose, altitudeAt — so
 	 * what is on screen is the real motion model, not a stand-in.
 	 */
-	import { MapLibre, RasterDEMTileSource, Terrain, RasterTileSource, RasterLayer, Sky } from 'svelte-maplibre-gl';
+	import {
+		MapLibre,
+		RasterDEMTileSource,
+		Terrain,
+		RasterTileSource,
+		RasterLayer,
+		Sky
+	} from 'svelte-maplibre-gl';
 	import { LngLat } from 'maplibre-gl';
 	import type { Map as MlMap } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
@@ -27,16 +34,28 @@
 	const place = Location.byId(q.get('place') ?? 'denver');
 	const azimuthDeg = Number(q.get('azimuth') ?? -90);
 	const pitchDeg = Number(q.get('pitch') ?? -18);
+	// ?detail=0 to see the GIBS-only floor, i.e. what every non-US location gets.
+	const detail = Number(q.get('detail') ?? 1);
 
 	// Elevation: AWS terrarium. Open data, and MapLibre decodes it natively —
 	// which is the whole reason this probe costs hours instead of days.
 	const TERRARIUM = ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'];
 
-	// Base colour: NASA GIBS, public domain. ~250 m/px, which is the resolution
-	// a 500 km bake would use anyway. GIBS serves {z}/{row}/{col}.
+	// Base colour: NASA GIBS, public domain. Its Level9 grid tops out at z9 =
+	// ~306 m/px. That is the ENTIRE reason the ground looked blurry: at 3 000 m
+	// AGL and -18 deg, a screen pixel covers ~5.6 m, so z9 is a ~55x upsample.
+	// It stays as the floor layer because it never has a hole in it, anywhere.
 	const GIBS_DATE = '2026-08-20';
 	const GIBS = [
-		`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+		`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+	];
+
+	// Detail colour: USGS NAIP via The National Map. Public domain (a US federal
+	// work), no key, no attribution obligation, z16 = ~2.4 m/px. It is US-ONLY,
+	// which is the honest shape of the "all free" constraint: there is no global
+	// equivalent. Over Hyderabad this layer is simply absent and GIBS shows through.
+	const USGS = [
+		'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}'
 	];
 
 	let map = $state<MlMap | undefined>();
@@ -70,7 +89,7 @@
 				majorMax: 0.25,
 				breathePeriod: 180,
 				driftRate: 3.42e-4,
-				flightSpeed: 6,
+				flightSpeed: 6
 			});
 			lat = pose.lat;
 			lon = pose.lon;
@@ -90,8 +109,8 @@
 					new LngLat(lon, lat),
 					mslM,
 					new LngLat(target.lon, target.lat),
-					place.groundElevationM,
-				),
+					place.groundElevationM
+				)
 			);
 		});
 	});
@@ -108,7 +127,13 @@
 		zoom={11}
 		attributionControl={{ compact: true }}
 	>
-		<RasterDEMTileSource id="dem" tiles={TERRARIUM} encoding="terrarium" tileSize={256} maxzoom={13}>
+		<RasterDEMTileSource
+			id="dem"
+			tiles={TERRARIUM}
+			encoding="terrarium"
+			tileSize={256}
+			maxzoom={13}
+		>
 			<Terrain exaggeration={1} />
 		</RasterDEMTileSource>
 
@@ -117,9 +142,16 @@
 			tiles={GIBS}
 			tileSize={256}
 			maxzoom={9}
-			attribution="Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data"
+			attribution="Imagery: NASA EOSDIS GIBS, USGS The National Map · Elevation: Mapzen / AWS Open Data"
 		>
 			<RasterLayer paint={{ 'raster-opacity': 1 }} />
+		</RasterTileSource>
+
+		<!-- ponytail: two raster layers IS the detail system. No splat map, no
+		     PBR blending - MapLibre already fades between zoom levels and skips
+		     tiles it cannot fetch. Reach for a shader when this stops working. -->
+		<RasterTileSource id="usgs" tiles={USGS} tileSize={256} maxzoom={16}>
+			<RasterLayer paint={{ 'raster-opacity': detail }} />
 		</RasterTileSource>
 
 		<Sky
@@ -133,19 +165,33 @@
 	</MapLibre>
 
 	<p class="readout">
-		{place.id} · band {atmosphere.bandId} · AGL {Math.round(aglM)} m · MSL {Math.round(mslM)} m ·
-		track {Math.round(trackDeg)}° · window {Math.round(normalizeHeading(trackDeg + azimuthDeg))}° ·
-		local {timeOfDay.toFixed(2)} h · night {nightFactor.toFixed(2)}
+		{place.id} · band {atmosphere.bandId} · AGL {Math.round(aglM)} m · MSL {Math.round(mslM)} m · track
+		{Math.round(trackDeg)}° · window {Math.round(normalizeHeading(trackDeg + azimuthDeg))}° · local {timeOfDay.toFixed(
+			2
+		)} h · night {nightFactor.toFixed(2)}
 	</p>
 </div>
 
 <style>
-	.probe { position: fixed; inset: 0; background: #000; }
-	:global(.fill) { position: absolute; inset: 0; }
+	.probe {
+		position: fixed;
+		inset: 0;
+		background: #000;
+	}
+	:global(.fill) {
+		position: absolute;
+		inset: 0;
+	}
 	.readout {
-		position: fixed; left: 0; right: 0; bottom: 0; margin: 0;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		margin: 0;
 		padding: 0.4rem 0.7rem;
-		font: 11px/1.5 ui-monospace, monospace;
+		font:
+			11px/1.5 ui-monospace,
+			monospace;
 		color: rgb(255 255 255 / 0.75);
 		background: rgb(0 0 0 / 0.55);
 		pointer-events: none;
