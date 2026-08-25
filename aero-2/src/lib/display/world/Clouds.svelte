@@ -27,6 +27,28 @@
 
 	const display = useDisplay();
 
+	/**
+	 * Deterministic PRNG (mulberry32), seeded from the day.
+	 *
+	 * This deck used twelve `rnd()` calls, so every Pi built a different
+	 * sky. Three Pis form ONE window and never exchange state — orbit.ts spells
+	 * this out for the flight path, and the same rule binds here: unseeded
+	 * randomness splits the wall into three unrelated views, and clouds are the
+	 * most visible thing to get wrong across a seam.
+	 *
+	 * Positions were already deterministic (`Math.sin(i * 47)` and friends); it
+	 * was the sizes, opacities and rotations that were not.
+	 */
+	function mulberry32(seed: number): () => number {
+		let a = seed >>> 0;
+		return () => {
+			a = (a + 0x6d2b79f5) >>> 0;
+			let t = Math.imul(a ^ (a >>> 15), 1 | a);
+			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+		};
+	}
+
 	const isVisible = $derived(visible && display.config.clouds);
 	const density = $derived(display.config.cloudDensity ?? 0.75);
 	const driftSpeed = $derived(display.config.cloudSpeed ?? 1.0);
@@ -90,6 +112,8 @@
 
 		const sprites: THREE.Sprite[] = [];
 		const rotSpeeds: number[] = [];
+		/** Each sprite's rotation at wallSec 0, so the loop can set an ABSOLUTE angle. */
+		const baseRotations: number[] = [];
 		const materials: THREE.SpriteMaterial[] = [];
 
 		function buildCloudDeck() {
@@ -101,8 +125,13 @@
 			materials.length = 0;
 			sprites.length = 0;
 			rotSpeeds.length = 0;
+			baseRotations.length = 0;
 
 			if (textures.length === 0) return;
+
+			// Seeded from `phase`, which carries daySeed: the sky is the same on
+			// all three panes, and different tomorrow.
+			const rnd = mulberry32(Math.floor(display.config.phase * 1_000_003) + 1);
 
 			// ── 1. Distant Horizon Cloud Banks (50 km - 130 km) ──────────────────────
 			const horizonBanks = Math.round(10 + density * 18);
@@ -119,21 +148,31 @@
 				const mat = new THREE.SpriteMaterial({
 					map: tex,
 					transparent: true,
-					opacity: (0.35 + Math.random() * 0.25) * opacityScale,
+					opacity: (0.35 + rnd() * 0.25) * opacityScale,
 					depthWrite: false,
-					rotation: (Math.random() - 0.5) * 0.1 // Subtle horizontal stratification
+					rotation: (rnd() - 0.5) * 0.1 // Subtle horizontal stratification
 				});
 				materials.push(mat);
 
 				const sprite = new THREE.Sprite(mat);
 				sprite.position.set(cx, cy, cz);
-				const horizScale = 14_000 + Math.random() * 12_000;
-				// Stretched horizontally to form seamless atmospheric horizon bands
-				sprite.scale.set(horizScale * 3.2, horizScale * 0.9, 1);
+				const horizScale = 14_000 + rnd() * 12_000;
+				/**
+				 * Wide, but only because a distant bank IS wide — and paired with a
+				 * near-zero rotation above.
+				 *
+				 * A Sprite's scale is applied in its own local axes, so stretching
+				 * and then rotating shears the texture: at 3.2 x 0.9 a bank rotated
+				 * 45 deg renders square and one at 90 deg renders TALL, which is
+				 * why some clouds looked squashed. These keep +-0.05 rad of roll,
+				 * so the stretch stays horizontal, as a horizon band should.
+				 */
+				sprite.scale.set(horizScale * CLOUD.bankStretch, horizScale * 0.9, 1);
 
 				cloudGroup.add(sprite);
 				sprites.push(sprite);
-				rotSpeeds.push((Math.random() - 0.5) * 0.005);
+				baseRotations.push(mat.rotation);
+				rotSpeeds.push((rnd() - 0.5) * 0.005);
 			}
 
 			// ── 2. Local Mid-Deck Cumulus Puffs (3 km - 40 km) ───────────────────────
@@ -148,33 +187,49 @@
 				const cy = Math.sin(i * 33) * 600;
 
 				const puffsInCluster = 5 + Math.floor(density * 7);
-				const clusterScale = 3000 + Math.random() * 4000;
+				const clusterScale = 3000 + rnd() * 4000;
 
 				for (let j = 0; j < puffsInCluster; j++) {
 					const tex = textures[j % textures.length];
-					const baseOpacity = 0.25 + Math.random() * 0.35;
+					const baseOpacity = 0.25 + rnd() * 0.35;
 
 					const mat = new THREE.SpriteMaterial({
 						map: tex,
 						transparent: true,
 						opacity: baseOpacity * opacityScale,
 						depthWrite: false,
-						rotation: Math.random() * Math.PI * 2
+						// Free rotation is fine ONLY because these sprites are square
+						// (see the scale below). Rotating a stretched sprite shears it.
+						rotation: rnd() * Math.PI * 2
 					});
 					materials.push(mat);
 
 					const sprite = new THREE.Sprite(mat);
-					const ox = cx + (Math.random() - 0.5) * clusterScale;
-					const oz = cz + (Math.random() - 0.5) * clusterScale;
-					const oy = cy + (Math.random() - 0.5) * (clusterScale * 0.25);
+					const ox = cx + (rnd() - 0.5) * clusterScale;
+					const oz = cz + (rnd() - 0.5) * clusterScale;
+					const oy = cy + (rnd() - 0.5) * (clusterScale * 0.25);
 
 					sprite.position.set(ox, oy, oz);
-					const sprScale = clusterScale * (0.8 + Math.random() * 0.8);
-					sprite.scale.set(sprScale * 1.3, sprScale, 1);
+					/**
+					 * SQUARE, deliberately.
+					 *
+					 * This was 1.3 x 1.0 while the material took a random full-circle
+					 * rotation. Because sprite scale is local, that made the apparent
+					 * aspect swing with the roll — 1.30 at 0 deg, 1.00 at 45, and
+					 * 0.77 at 90. The same cloud texture rendered wide, round or
+					 * squished depending purely on its random angle.
+					 *
+					 * Cloud shape comes from the texture and from overlapping
+					 * billboards in a cluster, not from stretching one quad. Width
+					 * variety now comes from `sprScale` alone, which is uniform.
+					 */
+					const sprScale = clusterScale * (0.8 + rnd() * 0.8);
+					sprite.scale.set(sprScale, sprScale, 1);
 
 					cloudGroup.add(sprite);
 					sprites.push(sprite);
-					rotSpeeds.push((Math.random() - 0.5) * 0.03);
+					baseRotations.push(mat.rotation);
+					rotSpeeds.push((rnd() - 0.5) * 0.03);
 				}
 			}
 		}
@@ -199,12 +254,20 @@
 				}
 			}
 
-			// Wind drift and subtle sprite puff rotation
-			const driftDelta = dt * driftSpeed * 0.04;
-			cloudGroup.rotation.y += driftDelta;
+			/**
+			 * Wind drift, derived from WALL CLOCK rather than accumulated.
+			 *
+			 * `+=` off a `performance.now()` delta makes the wind offset a
+			 * function of each Pi's uptime, so even a perfectly seeded deck drifts
+			 * apart across the wall as soon as one pane reboots. Assigning an
+			 * absolute angle from `wallSec` is self-healing: a pane that restarts
+			 * rejoins the other two mid-gust.
+			 */
+			const wallSec = display.view.wallSec ?? 0;
+			cloudGroup.rotation.y = wallSec * driftSpeed * 0.04;
 
 			for (let i = 0; i < sprites.length; i++) {
-				sprites[i].material.rotation += rotSpeeds[i] * dt;
+				sprites[i].material.rotation = (baseRotations[i] ?? 0) + rotSpeeds[i] * wallSec;
 			}
 
 			// Synchronize relative camera altitude to cloud deck
