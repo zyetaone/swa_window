@@ -28,3 +28,15 @@ export const ORBIT = {
 	breathePeriod: 180,
 	flightSpeed: 6.0
 } as const;
+
+/**
+ * Hillshade strength. Free structure — it comes off the DEM already fetched for
+ * the terrain mesh, and it closed the perceived-sharpness gap that ~55x more
+ * imagery resolution was supposed to be needed for. See ADR-005.
+ */
+export const HILLSHADE_DEFAULT = 0.35;
+
+export const HILLSHADE_SHADOW_COLOR = '#1a2436';
+
+/** Terrain displacement multiplier. 1 = true to life. */
+export const TERRAIN_EXAGGERATION = 1;

@@ -25,22 +25,28 @@ four words mean the same four things in every folder.
 
 ```
 src/lib/
-  world/                  what you see out of the window
-    locations.ts            the worlds we fly over
+  world/                    what you see out of the window
+    locations.ts              the worlds we fly over
     atmosphere/  model.ts  rules.ts
-    lighting/              rules.ts
-  flight/                 where the window looks, and when
-    model.ts  rules.ts  clock.ts
-  window/                 composition
-    config.ts  game-loop.ts  tile-server.ts
-  experience/             what a person actually sees
-    probe-camera.ts
+    imagery/     tiles.ts     tile templates + NAIP coverage
+    lighting/    rules.ts
+  flight/                   where the window is, and when
+    model.ts  rules.ts  clock.ts  look-target.ts
+    view.ts                   the whole aircraft state for one instant
+  window/                   knobs and the frame source
+    config.ts  params.ts  game-loop.ts  tile-server.ts
+  components/               what a person actually sees
+    GroundLayers.svelte  AtmosphereSky.svelte  DebugReadout.svelte
   server/  assets/
 
 src/routes/
-  +page.svelte                    the window (MapLibre)
+  +page.ts                        `load` resolves the URL knobs; ssr = false
+  +page.svelte                    the window — map handle + frame loop only
   api/tiles/[...path]/+server.ts  offline tile cache, path-guarded
 ```
+
+`#lib` (not `$lib`) is the alias: SvelteKit 3 removed `$lib` in favour of a
+Node subpath import declared in `package.json`. It is not a local convention.
 
 There is no `actions.ts` layer any more. Actions existed to push state into an
 imperative globe each frame; MapLibre takes state as component props, so the
@@ -52,15 +58,29 @@ natively via `encoding="terrarium"`, so our hand-rolled
 The surviving `model.ts`/`rules.ts` files are exactly the parts that never knew
 what a renderer was, which is why swapping the engine cost them nothing.
 
-`experience/probe-camera.ts` converts an eye position + azimuth + depression
-into a ground look-target. Pure trig, no renderer — which is why `/` can share
-the real motion model instead of approximating it.
+Three files carry the weight, and each is pure:
+
+- **`window/params.ts`** turns a `URL` into `WindowParams`. Every knob is
+  finite-checked, because `Number('abc')` is `NaN`, a `NaN` azimuth aims the
+  camera at a `NaN` target, and that is a black screen with nothing in the
+  console. Called from `+page.ts`'s `load`, so the component never reads
+  `location` and a test never needs a browser.
+- **`flight/look-target.ts`** converts eye position + azimuth + depression into
+  a ground point. Pure trig, no renderer.
+- **`flight/view.ts`** composes the two into `windowView(wallT, params)` — the
+  entire aircraft state for one instant. The page's frame callback holds no
+  maths at all: it calls this, then hands the result to `map.jumpTo`.
+
+`view.ts` is also what makes the fleet claim checkable. `tests/state.test.ts`
+calls the same function the page calls, so "three Pis agree at the same
+instant" is asserted against the live path rather than against a copy of the
+maths that can quietly drift.
 
 | role           | file          | contract                                                          |
 | -------------- | ------------- | ----------------------------------------------------------------- |
 | **M**odel      | `model.ts`    | shapes + their canonical values. **Imports nothing.**             |
 | **R**ules      | `rules.ts`    | pure functions over the model. **Never a renderer, never runes.** |
-| e**X**perience | `experience/` | the maths and components a person looks at                        |
+| e**X**perience | `components/` | the components a person looks at                                  |
 
 **A**ctions is currently empty by design (see above): MapLibre's props absorbed
 that role. Reintroduce it only if something needs per-frame imperative pushes.
@@ -75,20 +95,28 @@ key. Add the entity dimension when props arrive (wing, clouds, sun), not before.
 
 ## Composition
 
-`/` does not go through a `Scene`. MapLibre's declarative sources/layers
-(`RasterTileSource`, `Terrain`, `HillshadeLayer`, `Sky`) are the composition,
-written directly in `+page.svelte`: `resolveAtmosphere`/`nightLighting` are
-called and their output handed straight to component props. That works
-because MapLibre's own reactive prop layer does the job a `Scene` exists to do
-for an imperative API. If this route grows past a handful of layers, that is
-the signal to give it its own composition point.
+`/` does not go through a `Scene`. MapLibre's declarative sources and layers
+ARE the composition, and they are grouped by what they draw:
+
+```
++page.svelte            map handle, frame loop, nothing else
+  GroundLayers.svelte     GIBS base + NAIP detail + DEM (terrain & hillshade)
+  AtmosphereSky.svelte    Sky, driven by the current atmosphere band
+  DebugReadout.svelte     DEV only
+```
+
+That works because MapLibre's reactive prop layer does the job a `Scene` exists
+to do for an imperative API. The split is by **concern**, not by file size: the
+page owns the imperative handle, and each component owns one visual subsystem
+and the constants that belong to it.
 
 ## Data flow
 
 ```
++page.ts  load(url) → WindowParams          knobs, resolved once, finite-checked
 window/game-loop  RAF
-  → orbitPose(wallT) / altitudeAt(wallT)   primaries, computed directly
-  → resolveAtmosphere / nightLighting      derived with $derived
+  → windowView(wallT, params) → WindowView  primaries: pose, altitude, target
+  → resolveAtmosphere / nightLighting       derived with $derived
   → map.jumpTo(...) + reactive layer props
 ```
 
@@ -147,16 +175,20 @@ Reachability is asked of the tile server via `/health`, never of
 ## Invariants
 
 1. Single Map — `/` holds a single `maplibregl.Map`, captured once via `bind:map`.
-2. Renderer isolation — `+page.svelte` is the ONLY file that imports MapLibre.
-   `model.ts`/`rules.ts` import no renderer at all, which is what made replacing
-   the engine a route-level change rather than a rewrite. Keep it that way.
-3. Runes live in `.svelte.ts`; `model.ts` and `rules.ts` never hold them.
-4. Offline tiles — `/api/tiles` first, **imagery and elevation alike**; remote proxy only when
+2. Renderer isolation — only `+page.svelte` and `lib/components/*.svelte` import
+   MapLibre. Everything under `flight/`, `world/` and `window/` imports no
+   renderer at all, which is what made replacing the engine a route-level change
+   rather than a rewrite. Keep it that way.
+3. No renderer maths in components — a frame callback calls `windowView()` and
+   applies the result. If maths appears in a `.svelte` file, it cannot be tested
+   without a WebGL context, and the fleet-determinism claim stops being checkable.
+4. Runes live in `.svelte.ts`; `model.ts` and `rules.ts` never hold them.
+5. Offline tiles — `/api/tiles` first, **imagery and elevation alike**; remote proxy only when
    `NODE_ENV=development` or `AERO_TILE_REMOTE_FALLBACK=1` (fails closed on unset, so the Pi never
    silently reaches the internet); a blank tile / flat ellipsoid otherwise — there is no Ion
    fallback any more, Cesium is gone. Every reachable remote origin is listed in `remoteTileUrl()`
    and nowhere else.
-5. Fleet determinism — every pose is an absolute function of wall-clock time.
+6. Fleet determinism — every pose is an absolute function of wall-clock time.
    No per-process epoch, no accumulated `dt`, no `Math.random()` in the hot path.
 
 ## Verified mechanically each pass
@@ -164,3 +196,4 @@ Reachability is asked of the tile server via `/health`, never of
 - no import cycles
 - no upward imports across the layering
 - `model.ts` imports nothing; `rules.ts` names no renderer
+- every tile template resolves to `/api/tiles`, never an upstream host

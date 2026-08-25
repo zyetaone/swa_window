@@ -1,9 +1,14 @@
 /**
- * Camera maths for the ADR-005 Phase 0 probe.
+ * Where the camera aims.
  *
- * MapLibre's free camera is positioned, then aimed at a ground point. To get a
- * fixed depression angle we put that point along the window azimuth at a
- * distance derived from the height: D = h / tan(depression).
+ * MapLibre has no free camera (that is Mapbox). The equivalent is to position
+ * the eye at an altitude and aim it at a GROUND POINT, letting MapLibre derive
+ * centre/zoom/bearing/pitch. To hold a fixed depression angle, that point sits
+ * along the window azimuth at a distance derived from the height:
+ * `D = h / tan(depression)`.
+ *
+ * Pure trig, no renderer — which is why the motion model can be tested without
+ * a WebGL context.
  */
 
 const M_PER_DEG_LAT = 111_320;
