@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
-	 * Hud — Real-time telemetry, live FPS counter, flight instruments, and attribution status band.
-	 * Positioned along the bottom bezel with glassmorphic styling.
+	 * Hud — Real-time telemetry, live FPS monitor, flight instruments, and attribution status band.
+	 * Rendered as a single sleek, continuous glassmorphism ribbon across the bottom edge.
 	 */
 	import { useDisplay } from '../display.svelte.js';
 	import { TILE_ATTRIBUTION } from '#lib/settings/tiles.js';
@@ -50,6 +50,16 @@
 		return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 	}
 
+	/** 17.4435, 78.3772 -> "17.44N 78.38E". Signed degrees read as data; a
+	 *  hemisphere letter reads as a position, which is what a window shows. */
+	function formatCoord(lat: number, lon: number): string {
+		const ns = lat >= 0 ? 'N' : 'S';
+		const ew = lon >= 0 ? 'E' : 'W';
+		return `${Math.abs(lat).toFixed(2)}${ns} ${Math.abs(lon).toFixed(2)}${ew}`;
+	}
+
+	const placeName = $derived(display.config.place.name);
+	const coords = $derived(formatCoord(display.view.lat ?? 0, display.view.lon ?? 0));
 	const aglM = $derived(Math.round(display.view.aglM ?? 0));
 	const aglFt = $derived(Math.round(aglM * 3.28084));
 	const heading = $derived(Math.round(display.view.planeHeadingDeg ?? 0));
@@ -61,135 +71,196 @@
 </script>
 
 {#if visible}
-	<aside class="hud-status-band" aria-label="Flight Telemetry and Attribution">
-		<!-- Left: Performance & Flight Instrument Gauges -->
-		<div class="hud-group left">
+	<aside class="hud-ribbon-bar" aria-label="Flight Telemetry Ribbon">
+		<!-- Telemetry Sections -->
+		<div class="ribbon-content">
 			{#if showFps}
-				<div class="hud-pill fps-pill" class:smooth={fps >= 55} class:drop={fps < 45}>
-					<span class="dot"></span>
-					<strong>{fps} FPS</strong>
-					<span class="subtext">{frameTimeMs}ms</span>
+				<div class="hud-segment fps-segment" class:drop={fps < 45}>
+					<span class="status-dot"></span>
+					<span class="fps-val">{fps} FPS</span>
+					<span class="ms-val">{frameTimeMs}ms</span>
 				</div>
+				<div class="divider"></div>
 			{/if}
 
-			<div class="hud-pill telemetry-pill">
-				<span class="label">ALT</span>
-				<strong>{aglM} m</strong>
-				<span class="subtext">({aglFt.toLocaleString()} ft)</span>
+			<div class="hud-segment">
+				<span class="seg-label">LOC</span>
+				<strong class="seg-val">{placeName}</strong>
+				<span class="seg-sub">{coords}</span>
 			</div>
 
-			<div class="hud-pill telemetry-pill">
-				<span class="label">HDG</span>
-				<strong>{heading}°</strong>
+			<div class="divider"></div>
+
+			<div class="hud-segment">
+				<span class="seg-label">ALT</span>
+				<strong class="seg-val">{aglM} m</strong>
+				<span class="seg-sub">({aglFt.toLocaleString()} ft)</span>
 			</div>
 
-			<div class="hud-pill telemetry-pill">
-				<span class="label">BANK</span>
-				<strong>{bank}°</strong>
+			<div class="divider"></div>
+
+			<div class="hud-segment">
+				<span class="seg-label">HDG</span>
+				<strong class="seg-val">{heading}°</strong>
 			</div>
 
-			<div class="hud-pill telemetry-pill">
-				<span class="label">TIME</span>
-				<strong>{localTime}</strong>
+			<div class="divider"></div>
+
+			<div class="hud-segment">
+				<span class="seg-label">BANK</span>
+				<strong class="seg-val">{bank}°</strong>
 			</div>
 
-			<div class="hud-pill telemetry-pill">
-				<span class="label">BAND</span>
-				<strong>{band}</strong>
+			<div class="divider"></div>
+
+			<div class="hud-segment">
+				<span class="seg-label">TIME</span>
+				<strong class="seg-val">{localTime}</strong>
+			</div>
+
+			<div class="divider"></div>
+
+			<div class="hud-segment">
+				<span class="seg-label">BAND</span>
+				<strong class="seg-val band-val">{band}</strong>
 			</div>
 		</div>
 
-		<!-- Right: Data Attribution -->
-		<div class="hud-group right">
-			<div class="hud-pill attribution-pill" title={TILE_ATTRIBUTION}>
-				<span class="attr-text">NASA GIBS · USGS 3DEP / NAIP · AWS Terrarium</span>
-			</div>
+		<!-- Single Attribution Segment -->
+		<div class="attribution-section" title={TILE_ATTRIBUTION}>
+			<!-- The one attribution string. This was a hand-typed second copy that
+			     already disagreed with TILE_ATTRIBUTION, and every added source
+			     would have had to be remembered in two files. -->
+			<span class="attr-text">{TILE_ATTRIBUTION}</span>
 		</div>
 	</aside>
 {/if}
 
 <style>
-	.hud-status-band {
+	.hud-ribbon-bar {
 		position: absolute;
-		bottom: 12px;
-		left: 16px;
-		right: 16px;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 36px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		pointer-events: none;
+		padding: 0 16px;
+		background: rgba(15, 23, 42, 0.75);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border-top: 1px solid rgba(255, 255, 255, 0.12);
+		z-index: 20;
 		user-select: none;
-		z-index: 15;
 		font-family: var(--font-sans);
-		gap: 12px;
+		font-size: 0.72rem;
+		box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
 	}
 
-	.hud-group {
+	.ribbon-content {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
+		gap: 10px;
+		height: 100%;
 	}
 
-	.hud-pill {
+	.hud-segment {
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 4px 10px;
-		background: var(--glass-bg);
-		backdrop-filter: blur(var(--glass-blur));
-		-webkit-backdrop-filter: blur(var(--glass-blur));
-		border: 1px solid var(--glass-border);
-		border-radius: 9999px;
+		gap: 5px;
 		color: var(--text-primary);
-		font-size: 0.75rem;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-		pointer-events: auto;
+		white-space: nowrap;
 	}
 
-	.fps-pill strong {
-		color: #4ade80;
-		font-variant-numeric: tabular-nums;
+	.divider {
+		width: 1px;
+		height: 14px;
+		background: rgba(255, 255, 255, 0.15);
 	}
-	.fps-pill.drop strong {
-		color: #f87171;
-	}
-	.dot {
+
+	.status-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
 		background: #4ade80;
-	}
-	.fps-pill.drop .dot {
-		background: #f87171;
+		box-shadow: 0 0 6px #4ade80;
 	}
 
-	.label {
-		color: var(--accent-cyan);
+	.fps-segment.drop .status-dot {
+		background: #f87171;
+		box-shadow: 0 0 6px #f87171;
+	}
+
+	.fps-val {
+		color: #4ade80;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.fps-segment.drop .fps-val {
+		color: #f87171;
+	}
+
+	.ms-val {
+		color: var(--text-muted);
 		font-size: 0.65rem;
+	}
+
+	.seg-label {
+		color: var(--accent-cyan);
+		font-size: 0.62rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
 	}
 
-	.subtext {
-		color: var(--text-muted);
-		font-size: 0.68rem;
+	.seg-val {
+		color: #f8fafc;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
-	.attribution-pill {
+	.band-val {
+		color: #38bdf8;
+		text-transform: uppercase;
 		font-size: 0.68rem;
-		color: var(--text-muted);
-		border-color: var(--glass-border-subtle);
-		background: rgba(15, 23, 42, 0.6);
+		letter-spacing: 0.03em;
 	}
 
-	@media (max-width: 768px) {
-		.hud-status-band {
+	.seg-sub {
+		color: var(--text-muted);
+		font-size: 0.65rem;
+	}
+
+	.attribution-section {
+		display: flex;
+		align-items: center;
+		color: var(--text-muted);
+		font-size: 0.65rem;
+		letter-spacing: 0.02em;
+		opacity: 0.85;
+		white-space: nowrap;
+	}
+
+	.attribution-section:hover {
+		opacity: 1;
+		color: var(--text-primary);
+	}
+
+	@media (max-width: 900px) {
+		.hud-ribbon-bar {
+			height: auto;
+			padding: 6px 12px;
 			flex-direction: column;
+			gap: 4px;
 			align-items: flex-start;
-			bottom: 8px;
-			left: 8px;
-			right: 8px;
+		}
+		.ribbon-content {
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+		.divider {
+			display: none;
 		}
 	}
 </style>
