@@ -7,10 +7,10 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
-
-	interface ImportMetaEnv {
-		readonly VITE_TILE_SERVER_URL?: string;
-	}
 }
+
+// Environment variables are declared in `src/env.ts` and typed automatically by
+// `svelte-kit sync` — SvelteKit 3 replaced the hand-written `ImportMetaEnv`
+// interface that used to live here.
 
 export {};

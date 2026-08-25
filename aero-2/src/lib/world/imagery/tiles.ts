@@ -9,7 +9,7 @@
  * ever consulted, and a kiosk with no route out failed instead of falling back.
  */
 
-import { tileServerBase } from '#lib/window/tile-server.js';
+import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 import type { Location } from '#lib/world/locations.js';
 
 export interface TileTemplates {
@@ -23,7 +23,9 @@ export interface TileTemplates {
 }
 
 export function tileTemplates(): TileTemplates {
-	const base = tileServerBase();
+	// Default and trailing-slash trim live in the schema (src/env.ts), so there
+	// is no second place to get them wrong.
+	const base = PUBLIC_TILE_SERVER_URL;
 	return {
 		terrarium: [`${base}/xyz/terrarium/{z}/{x}/{y}.png`],
 		gibs: [`${base}/xyz/gibs/{z}/{x}/{y}.jpg`],

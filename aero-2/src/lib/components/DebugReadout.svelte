@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
 	 * Dev-only telemetry strip. Not shipped to the kiosk — `+page.svelte` gates
-	 * this on `import.meta.env.DEV`, so it costs a fielded Pi nothing.
+	 * this on `dev` from `$app/env`, which is statically replaced at build time
+	 * and so costs a fielded Pi nothing.
 	 */
 	import type { WindowView } from '#lib/flight/view.js';
 	import type { AtmosphereState } from '#lib/world/atmosphere/rules.js';

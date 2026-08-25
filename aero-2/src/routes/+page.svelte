@@ -10,6 +10,7 @@
 	 * Phase 1 (the Pi 5 side-by-side) has NOT run — this is a bet on look and
 	 * licence, not a measured performance verdict.
 	 */
+	import { dev } from '$app/env';
 	import { untrack } from 'svelte';
 	import { MapLibre } from 'svelte-maplibre-gl';
 	import { LngLat } from 'maplibre-gl';
@@ -77,7 +78,7 @@
 		<AtmosphereSky {atmosphere} />
 	</MapLibre>
 
-	{#if import.meta.env.DEV}
+	{#if dev}
 		<DebugReadout placeId={params.place.id} {view} {atmosphere} {nightFactor} />
 	{/if}
 </div>

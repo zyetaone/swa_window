@@ -37,6 +37,7 @@ export default defineConfig({
 	test: {
 		environment: 'happy-dom',
 		include: ['tests/**/*.{test,spec}.{ts,svelte.ts}'],
+		setupFiles: ['tests/setup.ts'],
 		globals: false
 	}
 });

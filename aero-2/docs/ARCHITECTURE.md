@@ -34,19 +34,43 @@ src/lib/
     model.ts  rules.ts  clock.ts  look-target.ts
     view.ts                   the whole aircraft state for one instant
   window/                   knobs and the frame source
-    config.ts  params.ts  game-loop.ts  tile-server.ts
+    config.ts  params.ts  game-loop.ts
   components/               what a person actually sees
     GroundLayers.svelte  AtmosphereSky.svelte  DebugReadout.svelte
   server/  assets/
 
+src/env.ts                        declared environment variables (SvelteKit 3)
+
 src/routes/
-  +page.ts                        `load` resolves the URL knobs; ssr = false
+  +layout.ts                      `ssr = false` — cascades to every route
+  +page.ts                        `load` resolves the URL knobs
   +page.svelte                    the window — map handle + frame loop only
   api/tiles/[...path]/+server.ts  offline tile cache, path-guarded
 ```
 
-`#lib` (not `$lib`) is the alias: SvelteKit 3 removed `$lib` in favour of a
-Node subpath import declared in `package.json`. It is not a local convention.
+### SvelteKit 3 conventions used here
+
+This app targets SvelteKit 3, which moved several things. None of the following
+is a local invention, and none of it should be "corrected" back:
+
+| Convention                         | Why it looks unusual                                                                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#lib/foo.js`, not `$lib/foo`      | `$lib` was removed. `#lib` is a Node subpath import declared in `package.json`, resolved natively by Vite and TypeScript. Extensions are **required** — subpath imports must be unambiguous.                            |
+| No `svelte.config.js`              | Config moved into the `sveltekit()` plugin in `vite.config.ts`.                                                                                                                                                         |
+| `tsconfig` extends `$app/tsconfig` | Generated into `node_modules/$app`. It supplies the recommended compiler options, so ours holds almost nothing — and no `paths` entry for `#lib`.                                                                       |
+| `dev` from `$app/env`              | `$app/environment` is deprecated. `dev` is statically replaced, so the debug readout is eliminated from the kiosk bundle rather than merely hidden.                                                                     |
+| `src/env.ts` + `$app/env/public`   | Environment variables are declared with a schema instead of a hand-written `ImportMetaEnv`. `PUBLIC_TILE_SERVER_URL` is `static`, so its value is **inlined at build time** — verified in the built chunk, not assumed. |
+
+`src/env.ts` deliberately declares only the PUBLIC variable. The server-side
+ones (`TILE_DIR`, `AERO_TILE_REMOTE_FALLBACK`) stay as injected parameters on
+`lib/server/tiles.ts`, because that is what lets the tests assert the
+fail-closed behaviour directly — including the `NODE_ENV` fallback, which no
+declarative schema can express.
+
+One cost worth knowing: `$app/env/public` is a virtual module that reads
+`globalThis.__sveltekit_dev` in dev, so importing it outside a running Kit app
+throws. `tests/setup.ts` stands in for that global; without it, any test that
+transitively imports the tile templates fails at import time.
 
 There is no `actions.ts` layer any more. Actions existed to push state into an
 imperative globe each frame; MapLibre takes state as component props, so the
@@ -113,6 +137,7 @@ and the constants that belong to it.
 ## Data flow
 
 ```
+src/env.ts → $app/env/public                PUBLIC_TILE_SERVER_URL, inlined
 +page.ts  load(url) → WindowParams          knobs, resolved once, finite-checked
 window/game-loop  RAF
   → windowView(wallT, params) → WindowView  primaries: pose, altitude, target
