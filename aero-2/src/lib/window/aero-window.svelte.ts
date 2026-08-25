@@ -1,10 +1,10 @@
 /**
  * Root of the simulation: config + location + the flight engine that moves it.
  */
-import { Location } from '#lib/assets/data/locations.js';
-import { ConfigTree } from '#lib/state/config.js';
-import { FlightEngine } from '#lib/state/engine.svelte.js';
-import type { FlightFrame } from '#lib/state/pose.js';
+import { Location } from '#lib/flight/locations.js';
+import { ConfigTree } from '#lib/window/config.js';
+import { FlightEngine } from '#lib/flight/engine.svelte.js';
+import type { FlightFrame } from '#lib/flight/pose.js';
 
 export class AeroWindow {
 	readonly config = new ConfigTree();

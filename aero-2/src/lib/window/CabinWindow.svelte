@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { globe } from '#lib/render/attach.svelte.js';
-	import { worldRuntime } from '#lib/render/runtime.svelte.js';
-	import { tileCache } from '#lib/render/tiles.svelte.js';
-	import { gameLoop } from '#lib/state/game-loop.js';
-	import { createAeroWindow } from '#lib/state/aero-window.svelte.js';
+	import { globe, type GlobeHooks } from '#lib/cesium/attach.svelte.js';
+	import { scene } from '#lib/window/scene.svelte.js';
+	import { tileCache } from '#lib/cesium/tiles.svelte.js';
+	import { gameLoop } from '#lib/window/game-loop.js';
+	import { createAeroWindow } from '#lib/window/aero-window.svelte.js';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
 
 	const model = createAeroWindow();
@@ -13,27 +13,33 @@
 	const statusLabel = $derived.by(() => {
 		if (!globeReady) return 'loading';
 		if (tileCache.probing) return 'tiles…';
-		if (worldRuntime.imageryMode === 'local') return 'offline';
-		if (worldRuntime.imageryMode === 'ion') return 'ion';
+		if (scene.imageryMode === 'local') return 'offline';
+		if (scene.imageryMode === 'ion') return 'ion';
 		return 'no imagery';
 	});
 
-	function onGlobeReady(): void {
-		globeReady = true;
-		worldRuntime.sync(model.frame());
-	}
+	/** The one place the engine adapter is wired to the scene. */
+	const hooks = {
+		token: import.meta.env.VITE_CESIUM_ION_TOKEN,
+		open: (Cesium, viewer, token) => scene.open(Cesium, viewer, token),
+		close: () => scene.close(),
+		onReady: () => {
+			globeReady = true;
+			scene.sync(model.frame());
+		},
+	} satisfies GlobeHooks;
 
 	$effect(() => {
-		if (!worldRuntime.opened) return;
+		if (!scene.opened) return;
 		return gameLoop.subscribe(() => {
 			model.tick();
-			worldRuntime.sync(model.frame());
+			scene.sync(model.frame());
 		});
 	});
 </script>
 
 <svelte:boundary>
-	<div class="world" {@attach globe(import.meta.env.VITE_CESIUM_ION_TOKEN, onGlobeReady)}></div>
+	<div class="world" {@attach globe(hooks)}></div>
 
 	{#if import.meta.env.DEV}
 		<p class="status" aria-live="polite">{statusLabel}</p>

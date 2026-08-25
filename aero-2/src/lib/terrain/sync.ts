@@ -1,8 +1,27 @@
 /**
- * Real heightmaps when the pack ships quantized-mesh, ellipsoid otherwise.
+ * Terrain detail, applied to Cesium: the mesh provider, and how finely the
+ * globe is tessellated.
  */
-import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
-import { tileCache, tileServerBase } from '#lib/render/tiles.svelte.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/cesium/types.js';
+import { EpsilonGate } from '#lib/cesium/gate.js';
+import { screenSpaceErrorFor } from '#lib/terrain/rules.js';
+import { tileCache, tileServerBase } from '#lib/cesium/tiles.svelte.js';
+
+const SSE_HYSTERESIS = 2;
+
+export class LodSync implements Subsystem {
+	readonly #gate = new EpsilonGate(SSE_HYSTERESIS);
+
+	sync(rt: GlobeRuntime, frame: RenderFrame): void {
+		const target = screenSpaceErrorFor(frame.atmosphere.groundDetail);
+		if (!this.#gate.changed(target)) return;
+		rt.viewer.scene.globe.maximumScreenSpaceError = target;
+	}
+
+	reset(): void {
+		this.#gate.reset();
+	}
+}
 
 export class TerrainSync implements Subsystem {
 	/** Plain field: nothing subscribes to this, only #apply and one test read it. */

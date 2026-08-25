@@ -1,8 +1,8 @@
 /**
  * Globe lighting follows the night factor.
  */
-import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
-import { EpsilonGate } from '#lib/render/gate.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/cesium/types.js';
+import { EpsilonGate } from '#lib/cesium/gate.js';
 
 export class LightingSync implements Subsystem {
 	readonly #gate = new EpsilonGate(0.005);

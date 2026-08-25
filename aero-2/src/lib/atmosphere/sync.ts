@@ -1,8 +1,8 @@
 /**
  * Paints the band the aircraft is in.
  */
-import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/render/types.js';
-import { EpsilonGate } from '#lib/render/gate.js';
+import type { GlobeRuntime, Subsystem, RenderFrame } from '#lib/cesium/types.js';
+import { EpsilonGate } from '#lib/cesium/gate.js';
 
 /**
  * Paints the band the aircraft is currently in: fog thickens with altitude and

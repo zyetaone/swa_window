@@ -1,13 +1,13 @@
 /**
  * Flight simulation engine — updates orbit pose and time of day.
  */
-import { altitudeAt } from '#lib/rules/climb.js';
-import { orbitPose } from '#lib/rules/orbit.js';
-import { ALTITUDE_FLOOR_M } from '#lib/assets/data/climb.js';
-import type { Location } from '#lib/assets/data/locations.js';
-import type { ConfigTree } from '#lib/state/config.js';
-import { CameraPose, FlightFrame } from '#lib/state/pose.js';
-import { resolveLocalHours } from '#lib/state/clock.js';
+import { altitudeAt } from '#lib/flight/rules.js';
+import { orbitPose } from '#lib/flight/rules.js';
+import { ALTITUDE_FLOOR_M } from '#lib/flight/data.js';
+import type { Location } from '#lib/flight/locations.js';
+import type { ConfigTree } from '#lib/window/config.js';
+import { CameraPose, FlightFrame } from '#lib/flight/pose.js';
+import { resolveLocalHours } from '#lib/flight/clock.js';
 
 export class FlightEngine {
 	lat = $state(0);

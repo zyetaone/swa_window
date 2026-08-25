@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CameraPose, FlightFrame } from '#lib/state/pose.js';
-import { resolveAtmosphere } from '#lib/rules/atmosphere.js';
-import { selectImagery } from '#lib/rules/imagery.js';
-import { GlobeRuntime, RenderFrame } from '#lib/render/types.js';
-import { tileCache } from '#lib/render/tiles.svelte.js';
-import { worldRuntime } from '#lib/render/runtime.svelte.js';
-import { configureScene, globe } from '#lib/render/attach.svelte.js';
-import { AtmosphereSync } from '#lib/render/sync/atmosphere.js';
-import { CameraSync } from '#lib/render/sync/camera.js';
-import { ImagerySync } from '#lib/render/sync/imagery.svelte.js';
-import { LightingSync } from '#lib/render/sync/lighting.js';
-import { LodSync, screenSpaceErrorFor } from '#lib/render/sync/lod.js';
-import { TerrainSync } from '#lib/render/sync/terrain.js';
+import { CameraPose, FlightFrame } from '#lib/flight/pose.js';
+import { resolveAtmosphere } from '#lib/atmosphere/rules.js';
+import { selectImagery } from '#lib/imagery/rules.js';
+import { GlobeRuntime, RenderFrame } from '#lib/cesium/types.js';
+import { tileCache } from '#lib/cesium/tiles.svelte.js';
+import { scene } from '#lib/window/scene.svelte.js';
+import { configureScene, globe } from '#lib/cesium/attach.svelte.js';
+import { AtmosphereSync } from '#lib/atmosphere/sync.js';
+import { CameraSync } from '#lib/flight/sync.js';
+import { ImagerySync } from '#lib/imagery/sync.svelte.js';
+import { LightingSync } from '#lib/lighting/sync.js';
+import { LodSync, TerrainSync } from '#lib/terrain/sync.js';
+import { screenSpaceErrorFor } from '#lib/terrain/rules.js';
 
 function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): FlightFrame {
 	const altitudeM = overrides.altitudeM ?? 1000;
@@ -63,11 +63,11 @@ function mockImageryRuntime(addImageryProvider: ReturnType<typeof vi.fn>) {
 
 describe('globe', () => {
 	it('returns a Svelte attachment function', () => {
-		expect(typeof globe()).toBe('function');
+		expect(typeof globe({ open: async () => {}, close: () => {} })).toBe('function');
 	});
 
-	it('worldRuntime.sync is safe before mount', () => {
-		expect(() => worldRuntime.sync(testSlice())).not.toThrow();
+	it('scene.sync is safe before mount', () => {
+		expect(() => scene.sync(testSlice())).not.toThrow();
 	});
 });
 

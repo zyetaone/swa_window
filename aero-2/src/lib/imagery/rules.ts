@@ -6,8 +6,7 @@ import {
 	DAY_IMAGERY_IDS,
 	IMAGERY_SOURCES,
 	type ImagerySource,
-} from '#lib/assets/data/imagery.js';
-import { exceedsDeadband } from '#lib/rules/math.js';
+} from '#lib/imagery/data.js';
 
 const NIGHT_SWAP_HYSTERESIS = 0.08;
 const DETAIL_STEP_HYSTERESIS = 0.35;
@@ -22,6 +21,11 @@ export interface ImageryInput {
 	readonly groundDetail: number;
 	readonly nightFactor: number;
 	readonly current: ImagerySelection | null;
+}
+
+/** True when `target` has drifted far enough from `held` to swap. */
+function exceedsDeadband(held: number | null, target: number, threshold: number): boolean {
+	return held === null || Math.abs(target - held) >= threshold;
 }
 
 function clamp01(n: number): number {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { AeroWindow } from '#lib/state/aero-window.svelte.js';
-import { resolveLocalHours } from '#lib/state/clock.js';
+import { AeroWindow } from '#lib/window/aero-window.svelte.js';
+import { resolveLocalHours } from '#lib/flight/clock.js';
 
 describe('AeroWindow', () => {
 	it('frame() carries the primaries the world derives from', () => {

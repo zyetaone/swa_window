@@ -1,16 +1,16 @@
 /**
  * Shapes both halves of render/ agree on. Leaf module by design: the sync
  * modules import it and the runtime imports them, so putting these next to
- * WorldRuntime would make that a cycle.
+ * Scene would make that a cycle.
  */
-import type { CameraPose } from '#lib/state/pose.js';
-import type { AtmosphereState } from '#lib/rules/atmosphere.js';
-import type { ImagerySelection } from '#lib/rules/imagery.js';
+import type { CameraPose } from '#lib/flight/pose.js';
+import type { AtmosphereState } from '#lib/atmosphere/rules.js';
+import type { ImagerySelection } from '#lib/imagery/rules.js';
 
 export type CesiumModule = typeof import('cesium');
 export type Viewer = import('cesium').Viewer;
 export type ImageryLayer = import('cesium').ImageryLayer;
-export type Scene = import('cesium').Scene;
+export type CesiumScene = import('cesium').Scene;
 export type ImageryMode = 'local' | 'ion' | 'none';
 
 export class GlobeRuntime {
@@ -39,7 +39,7 @@ export class RenderFrame {
 /**
  * One shape for everything the runtime drives per frame.
  *
- * Uniform on purpose: WorldRuntime holds these in a list and walks it, so
+ * Uniform on purpose: Scene holds these in a list and walks it, so
  * adding a subsystem is one array entry rather than four edits (a field, a
  * setup call, a sync call, a reset call) that can each be forgotten
  * independently. Each subsystem takes the whole slice and reads the part it

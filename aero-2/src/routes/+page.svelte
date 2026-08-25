@@ -1,5 +1,5 @@
 <script lang="ts">
-	import CabinWindow from '#lib/components/CabinWindow.svelte';
+	import CabinWindow from '#lib/window/CabinWindow.svelte';
 </script>
 
 <CabinWindow />

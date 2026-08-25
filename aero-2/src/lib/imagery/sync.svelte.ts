@@ -2,10 +2,10 @@
  * Swaps the base texture and its zoom cap. Stateful: holds the layer it
  * last applied so an unchanged pick costs nothing.
  */
-import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, RenderFrame } from '#lib/render/types.js';
-import { IMAGERY_SOURCES } from '#lib/assets/data/imagery.js';
-import { gateImagerySelection, type ImagerySelection } from '#lib/rules/imagery.js';
-import { tileCache, tileServerBase } from '#lib/render/tiles.svelte.js';
+import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, RenderFrame } from '#lib/cesium/types.js';
+import { IMAGERY_SOURCES } from '#lib/imagery/data.js';
+import { gateImagerySelection, type ImagerySelection } from '#lib/imagery/rules.js';
+import { tileCache, tileServerBase } from '#lib/cesium/tiles.svelte.js';
 
 export class ImagerySync implements Subsystem {
 	mode = $state<ImageryMode>('none');

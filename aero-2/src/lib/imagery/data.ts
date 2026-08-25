@@ -33,5 +33,3 @@ export const IMAGERY_SOURCES: readonly ImagerySource[] = [
 
 /** Day layers in preference order (matches v1 local cache). */
 export const DAY_IMAGERY_IDS = ['eox-sentinel2', 'esri-world-imagery'] as const;
-export const SSE_GROUND = 2;
-export const SSE_CRUISE = 24;

@@ -1,17 +1,17 @@
 /**
- * Mounts Cesium into a DOM element and tears it down again — the Svelte edge of
- * the world layer.
+ * Mounts Cesium into a DOM element and tears it down again.
+ *
+ * Knows nothing about what will be drawn: the caller is handed the viewer and
+ * decides. That is what keeps this folder a pure adapter — swap the engine and
+ * only this folder changes.
  */
 import type { Attachment } from 'svelte/attachments';
-import type { Scene, Viewer } from '#lib/render/types.js';
-import { SSE_GROUND } from '#lib/assets/data/imagery.js';
-import { worldRuntime } from '#lib/render/runtime.svelte.js';
+import type { CesiumModule, CesiumScene, Viewer } from '#lib/cesium/types.js';
 
 declare const CESIUM_BASE_URL: string;
 
-/** One-time scene defaults. AtmosphereSync drives fog and sky colour per frame. */
-export function configureScene(scene: Scene): void {
-	scene.globe.maximumScreenSpaceError = SSE_GROUND;
+/** One-time defaults. Per-frame appearance belongs to the subsystems. */
+export function configureScene(scene: CesiumScene): void {
 	scene.globe.showGroundAtmosphere = false;
 	scene.fog.enabled = true;
 	if (scene.skyAtmosphere) scene.skyAtmosphere.show = false;
@@ -35,7 +35,16 @@ const KIOSK_WIDGETS_OFF = {
 	timeline: false,
 } as const;
 
-export function globe(token?: string, onReady?: () => void): Attachment<HTMLElement> {
+export interface GlobeHooks {
+	token?: string;
+	/** Called once the viewer exists. Whatever this returns is awaited. */
+	open(Cesium: CesiumModule, viewer: Viewer, token?: string): Promise<void>;
+	close(): void;
+	onReady?(): void;
+}
+
+export function globe(hooks: GlobeHooks): Attachment<HTMLElement> {
+	const { token } = hooks;
 	return (element) => {
 		ensureCesiumBaseUrl();
 
@@ -58,13 +67,13 @@ export function globe(token?: string, onReady?: () => void): Attachment<HTMLElem
 			viewer.cesiumWidget.creditContainer.remove();
 
 			configureScene(viewer.scene);
-			await worldRuntime.open(Cesium, viewer, token);
-			onReady?.();
+			await hooks.open(Cesium, viewer, token);
+			hooks.onReady?.();
 		})();
 
 		return () => {
 			cancelled = true;
-			worldRuntime.close();
+			hooks.close();
 			viewer?.destroy();
 			viewer = null;
 		};
