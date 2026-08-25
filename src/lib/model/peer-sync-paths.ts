@@ -72,10 +72,29 @@ type AmbientPathSpec =
  * clamped, not rejected, matching persistence.ts's safeNum style. Booleans
  * and enums are dropped when invalid. `satisfies` ties the spec keys to
  * PEER_SYNC_PATHS so a new path fails to compile without a spec.
+ *
+ * ─── ⚠ THESE BOUNDS ARE RESTATED, NOT IMPORTED, AND THAT IS ON PURPOSE ──────
+ * The obvious dedupe — read cfg.director.ambient.cloudSpeedMin etc. straight
+ * from the config tree — is not available here: this module must stay pure
+ * data so persistence.ts can validate without pulling in a rune module (see
+ * the file header). So the numbers live in two places by necessity.
+ *
+ * They had already drifted. A bound WIDER than its slider is not a harmless
+ * slack: validateAmbientValue accepts a restored or peer-synced value up to
+ * the spec bound, so the wall can boot into a state no operator could dial in
+ * and none of them can see is wrong. `moonlightIntensity` allowed 1.0 against
+ * a 0.3 slider — a moon over 3x brighter than maximum — and `clouds.speed`
+ * allowed 3.0 against a 1.5 slider. Same shape as the cruise maxSpeed bug:
+ * two numbers that must agree, compared only at runtime, in one direction.
+ *
+ * tests/lib/model/peer-sync-paths asserts these against the config tree, which
+ * a test CAN import. Change a slider bound and that test tells you to change
+ * the spec too.
  */
 export const AMBIENT_PATH_SPECS = {
 	'atmosphere.clouds.density': { kind: 'number', min: 0, max: 1 },
-	'atmosphere.clouds.speed': { kind: 'number', min: 0.1, max: 3 },
+	// director.ambient.cloudSpeedMin / cloudSpeedMax
+	'atmosphere.clouds.speed': { kind: 'number', min: 0.2, max: 1.5 },
 	'atmosphere.haze.amount': { kind: 'number', min: 0, max: 0.15 },
 	'audio.enabled': { kind: 'boolean' },
 	'audio.engineVolume': { kind: 'number', min: 0, max: 1 },
@@ -93,7 +112,10 @@ export const AMBIENT_PATH_SPECS = {
 	'world.additiveStrength': { kind: 'number', min: 0, max: 15 },
 	'world.bloomSigma': { kind: 'number', min: 1, max: 6 },
 	'world.buildingsEnabled': { kind: 'boolean' },
-	'world.moonlightIntensity': { kind: 'number', min: 0, max: 1 },
+	// LightingControls slider max. Floor stays 0 rather than the slider's
+	// 0.035: a stored 0 means 'moon off', which is a reachable, harmless
+	// state — the failure mode here is only ever too BRIGHT.
+	'world.moonlightIntensity': { kind: 'number', min: 0, max: 0.3 },
 	'world.nightExposure': { kind: 'number', min: 0.4, max: 1.5 },
 	'world.nightLightIntensity': { kind: 'number', min: 0, max: 5 },
 	'world.nightMaskGamma': { kind: 'number', min: 1, max: 3.5 },
