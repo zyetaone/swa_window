@@ -55,22 +55,31 @@ export class Location {
 	 *
 	 * `climbFloorM` is metres ABOVE GROUND and has to clear the local high
 	 * ground, because the camera flies at floor + terrain. Denver needs 3,000 m
-	 * for the Front Range and the Himalayas need it for obvious reasons; a
+	 * for the Front Range and the Himalayas 3,500 for the obvious reason; a
 	 * coastal city does not.
+	 *
+	 * The envelopes are deliberately NOT uniform. Identical 400..13,000 for
+	 * every place made every location fly the same profile and read as the same
+	 * flight over different wallpaper. Ocean sits low and stays low, Denver and
+	 * the Himalayas start high because they must, and the rest are spread
+	 * between — so the altitude band, and with it the atmosphere the window
+	 * sees, differs by where you are.
+	 *
+	 * Tokyo ("Above Clouds" in v1) is deliberately absent.
 	 */
 	static readonly CATALOG: readonly Location[] = [
-		new Location('hyderabad', 'Hyderabad, India', 17.4435, 78.3772, 'Asia/Kolkata', 500, 400, 13_000),
-		new Location('mumbai', 'Mumbai, India', 19.076, 72.8777, 'Asia/Kolkata', 10, 400, 13_000),
-		new Location('dubai', 'Dubai, UAE', 25.2048, 55.2708, 'Asia/Dubai', 5, 400, 13_000),
-		new Location('dallas', 'Dallas, Texas', 32.7767, -96.797, 'America/Chicago', 150, 600, 13_000),
-		new Location('phoenix', 'Phoenix, Arizona', 33.4352, -112.0101, 'America/Phoenix', 340, 700, 13_000),
-		new Location('las_vegas', 'Las Vegas, Nevada', 36.1699, -115.1398, 'America/Los_Angeles', 620, 900, 13_000),
-		new Location('denver', 'Denver, Colorado', 39.8561, -104.6737, 'America/Denver', 1_600, 3_000, 13_000),
-		new Location('chicago_midway', 'Chicago Midway', 41.7868, -87.7522, 'America/Chicago', 190, 600, 13_000),
-		new Location('himalayas', 'The Himalayas', 27.9881, 86.925, 'Asia/Kathmandu', 5_000, 3_000, 13_000),
-		new Location('ocean', 'Pacific Ocean', 21.3069, -157.8583, 'Pacific/Honolulu', 0, 400, 13_000),
-		new Location('desert', 'Sahara Desert', 23.4241, 25.6628, 'Africa/Cairo', 500, 500, 13_000),
-		new Location('clouds', 'Above Tokyo', 35.6762, 139.6503, 'Asia/Tokyo', 40, 1_000, 13_000)
+		//         id                name                     lat        lon        IANA zone              ground  floor  ceiling
+		new Location('hyderabad',     'Hyderabad, India',      17.4435,   78.3772,   'Asia/Kolkata',           500,   400,  12_500),
+		new Location('mumbai',        'Mumbai, India',         19.076,    72.8777,   'Asia/Kolkata',            10,   500,  12_000),
+		new Location('dubai',         'Dubai, UAE',            25.2048,   55.2708,   'Asia/Dubai',               5,   600,  13_000),
+		new Location('dallas',        'Dallas, Texas',         32.7767,  -96.797,    'America/Chicago',        150,   700,  12_000),
+		new Location('phoenix',       'Phoenix, Arizona',      33.4352, -112.0101,   'America/Phoenix',        340,   800,  12_500),
+		new Location('las_vegas',     'Las Vegas, Nevada',     36.1699, -115.1398,   'America/Los_Angeles',    620,   900,  12_800),
+		new Location('denver',        'Denver, Colorado',      39.8561, -104.6737,   'America/Denver',       1_600, 3_000,  13_000),
+		new Location('chicago_midway','Chicago Midway',        41.7868,  -87.7522,   'America/Chicago',        190,   650,  11_500),
+		new Location('himalayas',     'The Himalayas',         27.9881,   86.925,    'Asia/Kathmandu',       5_000, 3_500,  13_000),
+		new Location('ocean',         'Pacific Ocean',         21.3069, -157.8583,   'Pacific/Honolulu',         0,   300,  11_000),
+		new Location('desert',        'Sahara Desert',         23.4241,   25.6628,   'Africa/Cairo',           500,   700,  12_500)
 	];
 
 	/** The fielded kiosk home, and the fallback for anything unrecognised. */
