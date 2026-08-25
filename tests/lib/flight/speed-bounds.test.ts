@@ -17,8 +17,16 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_FLIGHT_SPEED } from '$lib/flight/flight.svelte';
 import { AeroWindow } from '$lib/model/aero-window.svelte';
+import { CRUISE_SPEED_DEFAULTS, camera } from '$lib/model/config-tree.svelte';
 
 describe('cruise speed bounds', () => {
+	it('shares one literal source between config-tree, flight engine, and admin', () => {
+		expect(DEFAULT_FLIGHT_SPEED).toBe(CRUISE_SPEED_DEFAULTS.defaultSpeed);
+		expect(camera.cruise.defaultSpeed).toBe(CRUISE_SPEED_DEFAULTS.defaultSpeed);
+		expect(camera.cruise.minSpeed).toBe(CRUISE_SPEED_DEFAULTS.minSpeed);
+		expect(camera.cruise.maxSpeed).toBe(CRUISE_SPEED_DEFAULTS.maxSpeed);
+	});
+
 	it('can actually hold its own default', () => {
 		const model = new AeroWindow();
 		const { minSpeed, maxSpeed } = model.config.camera.cruise;

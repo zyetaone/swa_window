@@ -2,7 +2,7 @@
  * Scenario playback pacing.
  *
  * Waypoint `duration` values are authored as SECONDS. The engine used to
- * multiply the raw `flightSpeed` knob (default 4.0) into the progress rate, so
+ * multiply the raw `flightSpeed` knob (default 6.0) into the progress rate, so
  * every authored leg ran 4x fast: dubai-approach's 225 s circuit finished in
  * 56 s and bled 28,000 -> 6,000 ft in about 25 s — roughly 53,000 ft/min,
  * against ~2,000 ft/min for a real airliner. The waypoints were plausible;

@@ -130,7 +130,7 @@
 		weather: 'clear' as WeatherType,
 		altitude: 35000,
 		timeOfDay: 12,
-		flightSpeed: 1.0,
+		flightSpeed: CRUISE_SPEED_DEFAULTS.defaultSpeed,
 		syncToRealTime: true,
 	});
 
@@ -678,7 +678,14 @@
 						<span>Flight Speed</span>
 						<span class="slider-value">{speedLabel}</span>
 					</div>
-					<input type="range" min="0.1" max="8" step="0.1" bind:value={scene.flightSpeed} class="range" />
+					<input
+						type="range"
+						min={CRUISE_SPEED_DEFAULTS.minSpeed}
+						max={CRUISE_SPEED_DEFAULTS.maxSpeed}
+						step="0.1"
+						bind:value={scene.flightSpeed}
+						class="range"
+					/>
 				</label>
 				<label class="toggle-label">
 					<input type="checkbox" bind:checked={scene.syncToRealTime} />

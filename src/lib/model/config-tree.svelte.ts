@@ -23,12 +23,16 @@ import { setByPath, readByPath } from '$lib/utils';
  * and admin scene slider bounds. One place so maxSpeed cannot drift below
  * defaultSpeed (which silently slows authored scenario legs on first clamp).
  */
-export const CRUISE_SPEED_DEFAULTS = {
+export const CRUISE_SPEED_DEFAULTS: {
+	minSpeed: number;
+	defaultSpeed: number;
+	maxSpeed: number;
+} = {
 	minSpeed: 0.1,
 	/** Scenario waypoint durations are authored at this speed. */
 	defaultSpeed: 6.0,
 	maxSpeed: 8.0,
-} as const;
+};
 
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
 

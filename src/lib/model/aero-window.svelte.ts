@@ -399,10 +399,8 @@ export class AeroWindow {
 	setFlightSpeed(n: number): void {
 		// Honor the cruise bounds defined in the config tree (admin-tunable
 		// SSOT). Earlier this hard-coded (0.1, 5) which contradicted the
-		// admin UI's slider max of 3.0 — fleet PATCHes could land speeds
-		// above the slider ceiling. The warp transient in
-		// flight.svelte.ts:#tickDeparture still bypasses this clamp
-		// (sets ~100x during the 2 s departure burst), which is intentional.
+		// slider ceiling — fleet PATCHes could land speeds above what the
+		// operator could set. Warp departure bypasses this clamp intentionally.
 		const { minSpeed, maxSpeed } = this.config.camera.cruise;
 		this.flight.flightSpeed = clamp(n, minSpeed, maxSpeed);
 	}
