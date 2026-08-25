@@ -1,6 +1,6 @@
 /**
  * The layer cake — what the sky looks like at each height.
- * Authored tuning only: no logic, no imports.
+ * Model: shapes and their canonical values. No logic, no imports.
  */
 
 /** Linear RGB, 0..1. */

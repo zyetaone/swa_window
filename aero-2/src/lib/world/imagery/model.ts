@@ -1,6 +1,6 @@
 /**
  * Base textures, and how much detail to spend on them.
- * Authored tuning only: no logic, no imports.
+ * Model: shapes and their canonical values. No logic, no imports.
  */
 
 export interface ImagerySource {

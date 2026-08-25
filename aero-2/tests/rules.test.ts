@@ -4,9 +4,9 @@ import { altitudeAt } from '#lib/flight/rules.js';
 import { gateImagerySelection, selectDetailLevel, selectImagery, type ImagerySelection } from '#lib/world/imagery/rules.js';
 import { NightLighting } from '#lib/world/lighting/rules.js';
 import { orbitPose } from '#lib/flight/rules.js';
-import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/data.js';
-import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/data.js';
-import { IMAGERY_SOURCES } from '#lib/world/imagery/data.js';
+import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/model.js';
+import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/model.js';
+import { IMAGERY_SOURCES } from '#lib/world/imagery/model.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {

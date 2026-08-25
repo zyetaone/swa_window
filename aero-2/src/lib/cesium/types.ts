@@ -3,7 +3,7 @@
  * modules import it and the runtime imports them, so putting these next to
  * Scene would make that a cycle.
  */
-import type { CameraPose } from '#lib/flight/pose.js';
+import type { CameraPose } from '#lib/flight/model.js';
 import type { AtmosphereState } from '#lib/world/atmosphere/rules.js';
 import type { ImagerySelection } from '#lib/world/imagery/rules.js';
 

@@ -1,9 +1,13 @@
 /**
- * The model → world boundary. Leaf module: imports nothing.
+ * The climb profile — what moves the aircraft through the bands.
  *
- * Keeping these here rather than beside AeroWindow is what breaks the cycle —
- * the engine needs the DTOs, the AeroWindow root needs the engine.
+ * Floor sits inside `ground` and the ceiling inside `stratosphere`, so a full
+ * cycle visits every band rather than parking in one.
  */
+
+export const ALTITUDE_FLOOR_M = 400;
+export const ALTITUDE_CEILING_M = 13_000;
+export const CLIMB_PERIOD_SEC = 900;
 
 export class CameraPose {
 	constructor(

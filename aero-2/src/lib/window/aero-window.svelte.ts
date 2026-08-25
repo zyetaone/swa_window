@@ -4,7 +4,7 @@
 import { Location } from '#lib/world/locations.js';
 import { ConfigTree } from '#lib/window/config.js';
 import { FlightEngine } from '#lib/flight/engine.svelte.js';
-import type { FlightFrame } from '#lib/flight/pose.js';
+import type { FlightFrame } from '#lib/flight/model.js';
 
 export class AeroWindow {
 	readonly config = new ConfigTree();

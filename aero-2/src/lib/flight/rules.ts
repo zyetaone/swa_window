@@ -5,7 +5,7 @@ import {
 	ALTITUDE_CEILING_M,
 	ALTITUDE_FLOOR_M,
 	CLIMB_PERIOD_SEC,
-} from '#lib/flight/data.js';
+} from '#lib/flight/model.js';
 
 function normalizeHeading(deg: number): number {
 	return ((deg % 360) + 360) % 360;

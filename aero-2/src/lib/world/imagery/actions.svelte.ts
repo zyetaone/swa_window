@@ -3,7 +3,7 @@
  * last applied so an unchanged pick costs nothing.
  */
 import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, RenderFrame } from '#lib/cesium/types.js';
-import { IMAGERY_SOURCES } from '#lib/world/imagery/data.js';
+import { IMAGERY_SOURCES } from '#lib/world/imagery/model.js';
 import { gateImagerySelection, type ImagerySelection } from '#lib/world/imagery/rules.js';
 import { tileCache, tileServerBase } from '#lib/cesium/tiles.svelte.js';
 

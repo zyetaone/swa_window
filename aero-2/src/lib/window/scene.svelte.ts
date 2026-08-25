@@ -8,17 +8,17 @@
  */
 import type { CesiumModule, ImageryMode, Viewer } from '#lib/cesium/types.js';
 import { GlobeRuntime, RenderFrame, type Subsystem } from '#lib/cesium/types.js';
-import type { FlightFrame } from '#lib/flight/pose.js';
+import type { FlightFrame } from '#lib/flight/model.js';
 import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
 import { selectImagery, type ImagerySelection } from '#lib/world/imagery/rules.js';
 import { nightLighting } from '#lib/world/lighting/rules.js';
 import { tileCache } from '#lib/cesium/tiles.svelte.js';
-import { AtmosphereSync } from '#lib/world/atmosphere/sync.js';
-import { CameraSync } from '#lib/flight/sync.js';
-import { ImagerySync } from '#lib/world/imagery/sync.svelte.js';
-import { LightingSync } from '#lib/world/lighting/sync.js';
-import { LodSync } from '#lib/world/terrain/sync.js';
-import { TerrainSync } from '#lib/world/terrain/sync.js';
+import { AtmosphereSync } from '#lib/world/atmosphere/actions.js';
+import { CameraSync } from '#lib/flight/actions.js';
+import { ImagerySync } from '#lib/world/imagery/actions.svelte.js';
+import { LightingSync } from '#lib/world/lighting/actions.js';
+import { LodSync } from '#lib/world/terrain/actions.js';
+import { TerrainSync } from '#lib/world/terrain/actions.js';
 
 export class Scene {
 	opened = $state(false);
