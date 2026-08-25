@@ -1,7 +1,8 @@
 <script lang="ts">
 	/**
 	 * WorldStage — WebGL MapLibre viewport rendering terrain, NASA GIBS imagery,
-	 * USGS NAIP detail tiles, AWS DEM elevation hillshading, and dynamic atmosphere sky.
+	 * USGS NAIP detail tiles, AWS DEM elevation hillshading, dynamic atmosphere sky,
+	 * and inlined camera look/pan controls.
 	 */
 	import {
 		CustomControl,
@@ -26,7 +27,7 @@
 		TILE_MAXZOOM,
 		TILE_SIZE,
 		tileTemplates
-	} from '#lib/config.js';
+	} from '#lib/config.svelte.js';
 	import { useDisplay } from './display.svelte.js';
 
 	const display = useDisplay();
@@ -155,6 +156,7 @@
 		font-size: 1rem;
 		line-height: 1;
 		cursor: pointer;
+		transition: background 0.15s ease;
 	}
 	:global(.look-controls) button:hover {
 		background: rgba(0, 0, 0, 0.65);

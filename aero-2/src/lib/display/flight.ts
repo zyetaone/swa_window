@@ -12,7 +12,7 @@ import {
 	type AtmosphereState,
 	type PaneParams,
 	type Rgb
-} from '#lib/config.js';
+} from '#lib/config.svelte.js';
 
 const TWO_PI = Math.PI * 2;
 const M_PER_DEG_LAT = 111_320;

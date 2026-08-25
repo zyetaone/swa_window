@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { tileTemplates } from '#lib/config.js';
+import { tileTemplates } from '#lib/config.svelte.js';
 
 /**
  * Guards for bugs that have already shipped once and were re-broken by later

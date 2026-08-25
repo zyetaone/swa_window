@@ -4,18 +4,29 @@
  */
 import { getContext, setContext, untrack } from 'svelte';
 import { windowView, resolveAtmosphere, nightFactor, type WindowView } from './flight.js';
-import { type AtmosphereState, type PaneParams } from '#lib/config.js';
+import { PaneConfig, createPaneConfig, type AtmosphereState, type PaneParams } from '#lib/config.svelte.js';
 
 const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 
 export class AeroDisplay {
-	readonly config: PaneParams;
-	/** The ONLY reactive thing here: one struct, replaced whole each tick. */
+	readonly config: PaneConfig;
 	view = $state<WindowView>({} as WindowView);
 
-	constructor(config: PaneParams) {
-		this.config = config;
-		this.view = untrack(() => windowView(Date.now() / 1000, config));
+	constructor(configOrParams?: PaneConfig | PaneParams | (() => PaneParams)) {
+		if (typeof configOrParams === 'function') {
+			const initial = configOrParams();
+			this.config = initial instanceof PaneConfig ? initial : createPaneConfig(initial);
+		} else if (configOrParams instanceof PaneConfig) {
+			this.config = configOrParams;
+		} else {
+			this.config = createPaneConfig(configOrParams);
+		}
+
+		this.view = untrack(() => windowView(Date.now() / 1000, this.config));
+	}
+
+	get params(): PaneParams {
+		return this.config;
 	}
 
 	get atmosphere(): AtmosphereState {
@@ -33,8 +44,8 @@ export class AeroDisplay {
 	}
 }
 
-export function createDisplay(config: PaneParams): AeroDisplay {
-	const display = new AeroDisplay(config);
+export function createDisplay(configOrParams?: PaneConfig | PaneParams | (() => PaneParams)): AeroDisplay {
+	const display = new AeroDisplay(configOrParams);
 	setContext(DISPLAY_KEY, display);
 	return display;
 }

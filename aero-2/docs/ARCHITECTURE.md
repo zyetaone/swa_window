@@ -34,11 +34,8 @@ src/
   │   ├── config.svelte.ts          # ⚙️ SSOT & Reactive Config: $state PaneConfig, locations, bands, tile templates
   │   │
   │   ├── display/                  # 🖥️ Hardware/Kiosk Display product slice
-  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite & sky
-  │   │   ├── CabinFrame.svelte     # 🪟 Inside Cabin: Frame shell container with {@render children?.()}
-  │   │   ├── GlassVignette.svelte  # 🕶️ Layer: Lens radial vignette
-  │   │   ├── GlassReflection.svelte# ✨ Layer: Glossy glass reflection streak
-  │   │   ├── WindowBezel.svelte    # 🖼️ Layer: Oval window bezel & inner depth shadow
+  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite, sky & inlined look controls
+  │   │   ├── CabinFrame.svelte     # 🪟 Inside Cabin: Integrated oval bezel, depth shadow, glass reflection & vignette
   │   │   ├── display.svelte.ts     # Unified AeroDisplay reactive model & Context DI ($state)
   │   │   └── flight.ts             # Pure simulation math: orbit, altitude, atmosphere, night curves
   │   │
