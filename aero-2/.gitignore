@@ -29,3 +29,7 @@ static/cesiumStatic/
 # Tile packs — hundreds of MB, rebuilt by tools/download-tiles.ts + pack-pmtiles.ts.
 # Never commit these; the Pi gets them out of band, not through git.
 /data
+
+# Python bytecode — a survey script imported tools/*.py and this got swept in.
+__pycache__/
+*.pyc
