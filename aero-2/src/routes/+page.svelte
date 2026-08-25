@@ -1,6 +1,17 @@
 <script lang="ts">
-	import { globe } from '#lib/world/globe.js';
+	import { globe, syncGlobe } from '#lib/world/globe.js';
+	import { gameLoop } from '#lib/game-loop.js';
+	import { createAeroWindow } from '#lib/model/aero-window.js';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
+
+	const model = createAeroWindow();
+
+	$effect(() =>
+		gameLoop.subscribe((dt) => {
+			model.tick(dt);
+			syncGlobe(model.frame());
+		}),
+	);
 </script>
 
 <svelte:boundary>
@@ -11,8 +22,6 @@
 	{/snippet}
 
 	{#snippet failed()}
-		<!-- Never break the fiction: a failure renders an overcast window,
-		     never an error surface the audience can read. -->
 		<div class="world placeholder"></div>
 	{/snippet}
 </svelte:boundary>
