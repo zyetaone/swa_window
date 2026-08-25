@@ -18,6 +18,20 @@ import { PaneSettings, KNOB_RANGE } from '#lib/settings/settings.svelte.js';
  * real regression check into an ENOENT. A guard that a refactor can switch off
  * by accident is not a guard.
  */
+/** Every .svelte/.ts file under src/, for tree-wide invariants. */
+function allSources(): string[] {
+	const out: string[] = [];
+	const walk = (dir: string) => {
+		for (const entry of readdirSync(dir)) {
+			const full = join(dir, entry);
+			if (statSync(full).isDirectory()) walk(full);
+			else if (/\.(svelte|ts)$/.test(entry)) out.push(full);
+		}
+	};
+	walk('src');
+	return out;
+}
+
 function findSource(fileName: string): string {
 	const walk = (dir: string): string | null => {
 		for (const entry of readdirSync(dir)) {
@@ -141,11 +155,16 @@ describe('settings write gate', () => {
 		expect(Number.isFinite(s.shade)).toBe(true);
 	});
 
-	it('has no operator control writing config directly', () => {
-		// bind:value skips the gate: no clamping now, and no fleet broadcast later.
-		const src = findSource('Settings.svelte');
-		expect(src, 'sliders must call config.set(), not bind: into config').not.toMatch(
-			/bind:value=\{config\./
-		);
+	it('has no control anywhere binding straight into config', () => {
+		// `bind:` skips the gate: no clamping now, and no validate/merge/broadcast
+		// when fleet sync lands, so three panes desync silently. Scans the WHOLE
+		// tree rather than one file — the previous version only checked
+		// Settings.svelte, so a second panel could reintroduce it unnoticed.
+		const offenders: string[] = [];
+		for (const file of allSources()) {
+			const src = readFileSync(file, 'utf8');
+			if (/bind:(value|checked|group)=\{(display\.)?config\./.test(src)) offenders.push(file);
+		}
+		expect(offenders, 'controls must call config.set(), not bind: into config').toEqual([]);
 	});
 });
