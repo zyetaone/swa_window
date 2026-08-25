@@ -1,10 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
-import { altitudeAt } from '#lib/flight/rules.js';
-import { NightLighting } from '#lib/world/lighting/rules.js';
-import { orbitPose } from '#lib/flight/rules.js';
-import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/model.js';
-import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/model.js';
+import {
+	ATMOSPHERE_BANDS,
+	resolveAtmosphere,
+	TRANSITION_HALF_WIDTH_M
+} from '#lib/stage/atmosphere.js';
+import {
+	ALTITUDE_CEILING_M,
+	ALTITUDE_FLOOR_M,
+	altitudeAt,
+	CLIMB_PERIOD_SEC,
+	orbitPose
+} from '#lib/flight/rules.js';
+import { nightFactor } from '#lib/stage/lighting.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {
@@ -115,7 +122,6 @@ describe('orbitPose', () => {
 	};
 
 	it('is deterministic — wall-clock time is the only input', () => {
-		// Three independent calls at the same instant must agree exactly.
 		const now = 1_787_650_000;
 		const a = orbitPose({ ...base, wallT: now });
 		const b = orbitPose({ ...base, wallT: now });
@@ -140,7 +146,6 @@ describe('altitudeAt', () => {
 	it('is absolute in wall time — three panes fly at one height', () => {
 		const now = 1_787_650_000;
 		expect(altitudeAt(now)).toBe(altitudeAt(now));
-		// Continuous: a frame apart is centimetres apart, never a jump.
 		expect(Math.abs(altitudeAt(now + 1 / 60) - altitudeAt(now))).toBeLessThan(1);
 	});
 
@@ -163,18 +168,16 @@ describe('altitudeAt', () => {
 });
 
 describe('NightLighting', () => {
-	const lighting = new NightLighting();
-
 	it('returns 0 at midday', () => {
-		expect(lighting.factor(12)).toBe(0);
+		expect(nightFactor(12)).toBe(0);
 	});
 
 	it('returns 1 deep in the night', () => {
-		expect(lighting.factor(23)).toBe(1);
+		expect(nightFactor(23)).toBe(1);
 	});
 
 	it('ramps through dusk with a sqrt curve', () => {
-		const midDusk = lighting.factor(19.5);
+		const midDusk = nightFactor(19.5);
 		expect(midDusk).toBeGreaterThan(0.3);
 		expect(midDusk).toBeLessThan(0.8);
 	});

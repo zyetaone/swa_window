@@ -1,18 +1,12 @@
 /**
  * The whole aircraft state for one instant, in one pure call.
- *
- * This exists so the component's frame callback has no maths in it: the page
- * asks "where am I and where am I looking at time t", gets a struct back, and
- * hands it to MapLibre. That also means the motion model is testable without a
- * WebGL context, which is the only way the three-pane determinism claim can be
- * checked at all.
  */
 
-import { resolveLocalHours } from '#lib/flight/clock.js';
-import { altitudeAt, normalizeHeading, orbitPose } from '#lib/flight/rules.js';
-import { lookTarget } from '#lib/flight/look-target.js';
-import { ORBIT } from '#lib/window/config.js';
-import type { WindowParams } from '#lib/window/params.js';
+import { resolveLocalHours } from './clock.js';
+import { altitudeAt, normalizeHeading, orbitPose } from './rules.js';
+import { lookTarget } from './look-target.js';
+import { ORBIT } from '#lib/sim/config.js';
+import type { WindowParams } from '#lib/sim/params.js';
 
 export interface WindowView {
 	/** Eye position. */
@@ -33,11 +27,6 @@ export interface WindowView {
 	readonly timeOfDay: number;
 }
 
-/**
- * `wallT` is seconds since the epoch, NOT a per-process clock. Every pose is an
- * absolute function of it, so three Pis booted minutes apart compute the same
- * aircraft for the same instant.
- */
 export function windowView(wallT: number, params: WindowParams, now?: Date): WindowView {
 	const { place } = params;
 

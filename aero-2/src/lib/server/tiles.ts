@@ -43,13 +43,24 @@ export function resolveTileDir(
 
 // ── Path guard ─────────────────────────────────────────────────────────────────
 
-export interface SafeResolveResult {
+export interface ResolvedTile {
 	filePath: string;
 	notFound: boolean;
 	forbidden: boolean;
 }
 
-export function safeResolveWithin(root: string, subPath: string): SafeResolveResult {
+/** WMTS on-disk layout: `{layer}/{z}/{y}/{x}.ext` */
+const WMTS_TILE_PATH =
+	/^(?<layer>[a-z0-9-]+)\/(?<z>\d+)\/(?<y>\d+)\/(?<x>\d+)\.(?<ext>jpg|jpeg|png)$/;
+
+/**
+ * Resolve a request path to a file INSIDE `root`, or refuse.
+ *
+ * The `startsWith` check stops `../` traversal, and the `realpath` check stops
+ * a symlink inside the tile pack pointing out of it. Both matter: this maps a
+ * URL straight onto the filesystem of a device on someone's office wall.
+ */
+export function resolveLocalTile(root: string, subPath: string): ResolvedTile {
 	const rootDir = root.replace(/\/+$/, '') + '/';
 	const filePath = resolve(rootDir, subPath);
 	if (!filePath.startsWith(rootDir)) return { filePath, notFound: false, forbidden: true };
@@ -64,14 +75,6 @@ export function safeResolveWithin(root: string, subPath: string): SafeResolveRes
 		return { filePath, notFound: true, forbidden: false };
 	}
 	return { filePath, notFound: false, forbidden: false };
-}
-
-/** WMTS on-disk layout: `{layer}/{z}/{y}/{x}.ext` */
-const WMTS_TILE_PATH =
-	/^(?<layer>[a-z0-9-]+)\/(?<z>\d+)\/(?<y>\d+)\/(?<x>\d+)\.(?<ext>jpg|jpeg|png)$/;
-
-export function resolveLocalTile(root: string, subPath: string): SafeResolveResult {
-	return safeResolveWithin(root, subPath);
 }
 
 /**
@@ -121,6 +124,11 @@ export function remoteTileUrl(subPath: string): string | null {
 
 const LAN_ORIGIN = /^https?:\/\/([a-zA-Z0-9-]+\.local|localhost)(:[0-9]{1,5})?$/;
 
+/**
+ * CORS for the panorama: the other Pis on the wall are separate origins
+ * (`aero-display-01.local`), so they need this to share one tile server. Any
+ * origin off the LAN gets nothing back, which is the point of the allowlist.
+ */
 export function lanCorsHeaders(requestOrigin: string | null | undefined): Record<string, string> {
 	if (!requestOrigin || !LAN_ORIGIN.test(requestOrigin)) {
 		return {};
@@ -131,23 +139,17 @@ export function lanCorsHeaders(requestOrigin: string | null | undefined): Record
 	};
 }
 
-export function lanCorsHeadersFull(
-	requestOrigin: string | null | undefined,
-	methods = 'GET, POST, OPTIONS'
-): Record<string, string> {
-	const base = lanCorsHeaders(requestOrigin);
-	if (Object.keys(base).length === 0) return {};
-	return {
-		...base,
-		'Access-Control-Allow-Methods': methods,
-		'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-	};
-}
-
+/**
+ * Preflight responder. `Headers.get` is case-insensitive per the Fetch spec, so
+ * 'origin' here and 'Origin' at the call site are the same lookup.
+ */
 export function corsPreflight(methods: string): (event: { request: Request }) => Response {
-	return ({ request }) =>
-		new Response(null, {
+	return ({ request }) => {
+		const cors = lanCorsHeaders(request.headers.get('origin'));
+		return new Response(null, {
 			status: 204,
-			headers: lanCorsHeadersFull(request.headers.get('origin'), methods)
+			headers:
+				Object.keys(cors).length === 0 ? {} : { ...cors, 'Access-Control-Allow-Methods': methods }
 		});
+	};
 }

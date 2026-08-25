@@ -1,15 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { windowView } from '#lib/flight/view.js';
-import { readWindowParams } from '#lib/window/params.js';
+import { readWindowParams } from '#lib/sim/params.js';
 import { resolveLocalHours } from '#lib/flight/clock.js';
-import { Location } from '#lib/world/locations.js';
+import { Location } from '#lib/flight/locations.js';
 
-/**
- * These call `windowView` — the SAME function routes/+page.svelte calls once a
- * frame — rather than re-deriving the composition here. The previous version of
- * this file duplicated the frame maths and claimed to "mirror" the page, which
- * meant it could stay green while the page drifted away from it.
- */
 const paramsFor = (search = '') => readWindowParams(new URL(`http://kiosk.local/${search}`));
 
 describe('windowView', () => {
@@ -51,10 +45,6 @@ describe('window azimuth', () => {
 	});
 
 	it('a pane offset is the only per-screen difference', () => {
-		// Three panes, one aircraft: SAME INSTANT, three azimuths. The time has to
-		// be pinned — pose is a pure function of wall-clock time, so ticking three
-		// windows across a millisecond boundary legitimately yields three
-		// positions. That is the invariant working, not breaking.
 		const wallT = new Date('2026-08-25T09:30:00Z').getTime() / 1000;
 		const panes = [-105, -90, -75].map((az) => windowView(wallT, paramsFor(`?azimuth=${az}`)));
 		expect(panes[1].lat).toBe(panes[0].lat);
@@ -63,8 +53,6 @@ describe('window azimuth', () => {
 	});
 
 	it('same wall-clock instant, independent calls, identical pose', () => {
-		// The fleet invariant itself: three Pis are three processes that share
-		// nothing but the clock. Call order must not leak into the pose.
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date('2026-08-25T17:45:12.345Z'));
 		try {

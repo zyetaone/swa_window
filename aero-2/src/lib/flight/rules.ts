@@ -1,36 +1,63 @@
 /**
- * Where and how high the aircraft is. Both pure functions of wall-clock time.
+ * Pure flight rules — orbit trajectory and altitude curve.
  */
-import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/model.js';
+
+export const ALTITUDE_FLOOR_M = 400;
+export const ALTITUDE_CEILING_M = 13_000;
+export const CLIMB_PERIOD_SEC = 900;
+
+const TWO_PI = Math.PI * 2;
 
 export function normalizeHeading(deg: number): number {
 	return ((deg % 360) + 360) % 360;
 }
 
-/** Mean semi-axis over the breathe cycle — `minor` sweeps 0.35..0.50 of `major`. */
-const MEAN_MINOR_RATIO = 0.425;
+export function orbitRadiusAt(
+	t: number,
+	majorMin: number,
+	majorMax: number,
+	periodSec: number
+): {
+	a: number;
+	b: number;
+} {
+	const p = Math.max(1, periodSec);
+	const phase = (TWO_PI * (t % p)) / p;
+	const s = (Math.sin(phase) + 1) / 2;
+	const a = majorMin + (majorMax - majorMin) * s;
+	return { a, b: a * 0.4 };
+}
 
-/**
- * Constant angular rate, sized so a bigger orbit is flown proportionally
- * slower — i.e. roughly constant ground speed across the breathe cycle.
- */
-function orbitRate(opts: {
+export function orbitRate(a: number, b: number, driftRate: number, flightSpeed: number): number {
+	const mean = Math.max((a + b) / 2, 1e-4);
+	return (driftRate * flightSpeed) / mean;
+}
+
+export function orbitAngleAt(opts: {
+	wallT: number;
+	orbitAngle0: number;
+	orbitBearingRad: number;
+	direction: number;
 	majorMin: number;
 	majorMax: number;
+	breathePeriod: number;
 	driftRate: number;
 	flightSpeed: number;
 }): number {
-	const meanMajor = (opts.majorMin + opts.majorMax) / 2;
-	const meanRadius = (meanMajor * (1 + MEAN_MINOR_RATIO)) / 2;
-	return (opts.driftRate * opts.flightSpeed) / Math.max(meanRadius, 1e-6);
+	const { a, b } = orbitRadiusAt(opts.wallT, opts.majorMin, opts.majorMax, opts.breathePeriod);
+	const rate = orbitRate(a, b, opts.driftRate, opts.flightSpeed);
+	const dir = opts.direction >= 0 ? 1 : -1;
+	return opts.orbitAngle0 + dir * rate * opts.wallT;
 }
 
-function wrapAngle(a: number): number {
-	const twoPi = Math.PI * 2;
-	let x = a % twoPi;
-	if (x < 0) x += twoPi;
-	return x;
+export interface OrbitPose {
+	lat: number;
+	lon: number;
+	headingDeg: number;
+	orbitAngle: number;
 }
+
+const M_PER_DEG_LAT = 111_320;
 
 export function orbitPose(opts: {
 	wallT: number;
@@ -44,57 +71,44 @@ export function orbitPose(opts: {
 	breathePeriod: number;
 	driftRate: number;
 	flightSpeed: number;
-}): { lat: number; lon: number; headingDeg: number; orbitAngle: number } {
-	const breathePhase = (opts.wallT / opts.breathePeriod) * Math.PI * 2;
-	const breathe = (Math.sin(breathePhase) + 1) * 0.5;
-	const major = opts.majorMin + breathe * (opts.majorMax - opts.majorMin);
-	const minor = major * (0.35 + breathe * 0.15);
+}): OrbitPose {
+	const { a, b } = orbitRadiusAt(opts.wallT, opts.majorMin, opts.majorMax, opts.breathePeriod);
+	const rawAngle = orbitAngleAt(opts);
+	const angle = ((rawAngle % TWO_PI) + TWO_PI) % TWO_PI;
 
-	// Pure function of wall-clock time: every Pi computes the same angle for the
-	// same instant. The previous form integrated from each process's OWN first
-	// tick, so three machines booted seconds apart flew three different orbits
-	// forever — invisible on one screen, a torn window on three.
-	const rate = orbitRate(opts);
-	const orbitAngle = wrapAngle(opts.orbitAngle0 + opts.direction * rate * opts.wallT);
+	const xLocal = a * Math.cos(angle);
+	const yLocal = b * Math.sin(angle);
 
-	const tx = major * Math.cos(orbitAngle);
-	const ty = -minor * Math.sin(orbitAngle);
-	const ex = major * Math.sin(orbitAngle);
-	const ey = minor * Math.cos(orbitAngle);
-	const cb = Math.cos(opts.orbitBearingRad);
-	const sb = Math.sin(opts.orbitBearingRad);
-	const cosLat = Math.cos((opts.centerLat * Math.PI) / 180);
+	const cosB = Math.cos(opts.orbitBearingRad);
+	const sinB = Math.sin(opts.orbitBearingRad);
+	const northDeg = (xLocal * cosB - yLocal * sinB) * (1000 / M_PER_DEG_LAT);
+	const eastDeg = (xLocal * sinB + yLocal * cosB) * (1000 / M_PER_DEG_LAT);
 
-	const lat = opts.centerLat + (ex * cb - ey * sb);
-	const lon = opts.centerLon + (ex * sb + ey * cb) / Math.max(cosLat, 0.1);
+	const lat = opts.centerLat + northDeg;
+	const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+	const lon = opts.centerLon + eastDeg / cosLat;
 
-	const vtx = tx * opts.direction;
-	const vty = ty * opts.direction;
-	const baseHeading = (Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI;
-	const wander =
-		Math.sin(opts.wallT * 0.05) * 0.25 +
-		Math.sin(opts.wallT * 0.031) * 0.15 +
-		Math.sin(opts.wallT * 0.017) * 0.1;
+	const dxLocal = -a * Math.sin(angle);
+	const dyLocal = b * Math.cos(angle);
+	const dNorth = dxLocal * cosB - dyLocal * sinB;
+	const dEast = dxLocal * sinB + dyLocal * cosB;
 
-	return {
-		lat,
-		lon,
-		headingDeg: normalizeHeading(baseHeading + wander),
-		orbitAngle
-	};
+	const dir = opts.direction >= 0 ? 1 : -1;
+	const headingRad = Math.atan2(dir * dEast, dir * dNorth);
+	const headingDeg = normalizeHeading((headingRad * 180) / Math.PI);
+
+	return { lat, lon, headingDeg, orbitAngle: angle };
 }
 
-/**
- * Altitude at an instant — one slow climb-and-descend, absolute in wall-clock
- * time so every Pi is at the same height at the same moment.
- */
 export function altitudeAt(
 	wallT: number,
 	floorM: number = ALTITUDE_FLOOR_M,
-	ceilingM: number = ALTITUDE_CEILING_M
+	ceilingM: number = ALTITUDE_CEILING_M,
+	periodSec: number = CLIMB_PERIOD_SEC
 ): number {
 	if (!Number.isFinite(wallT)) return floorM;
-	const phase = (wallT / CLIMB_PERIOD_SEC) * Math.PI * 2;
-	const t = (Math.sin(phase) + 1) * 0.5;
-	return floorM + (ceilingM - floorM) * t;
+	const p = Math.max(1, periodSec);
+	const phase = (TWO_PI * (wallT % p)) / p;
+	const s = (Math.sin(phase) + 1) / 2;
+	return floorM + (ceilingM - floorM) * s;
 }
