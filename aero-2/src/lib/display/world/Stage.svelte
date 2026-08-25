@@ -5,12 +5,12 @@
 	 * Everything visible inside it is a child component: Ground (colour),
 	 * Terrain (shape), Sky (air and haze), LookControls (aiming). This file owns
 	 * exactly one thing — where the camera is, every frame.
-	 *
-	 * Uses 3D spherical Earth projection ({ type: 'globe' }) to render authentic
-	 * horizon curvature and background space sky at cruising altitude.
 	 */
-	import { MapLibre } from 'svelte-maplibre-gl';
+	import { MapLibre, Projection, Light } from 'svelte-maplibre-gl';
 	import { LngLat, type Map as MlMap } from 'maplibre-gl';
+	// Bundled locally. svelte-maplibre-gl otherwise injects a <link> to unpkg,
+	// which CSP blocks — and which a fielded Pi has no internet to fetch. Hence
+	// `autoloadGlobalCss={false}` on every MapLibre below.
 	import 'maplibre-gl/dist/maplibre-gl.css';
 
 	import { useDisplay } from '../display.svelte.js';
@@ -19,33 +19,25 @@
 	import Sky from './Sky.svelte';
 	import LookControls from '../flight/LookControls.svelte';
 
-	const BLANK_STYLE = {
-		version: 8 as const,
-		projection: { type: 'globe' as const },
-		sources: {},
-		layers: []
-	};
+	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
 
 	const display = useDisplay();
 
 	let map = $state<MlMap | undefined>();
+	$effect(() => {
+		if (map) (globalThis as unknown as { __stage?: MlMap }).__stage = map;
+	});
 
 	/**
-	 * Fly the plane & initialize 3D spherical globe projection.
+	 * Fly the plane.
+	 *
+	 * The camera is positioned by real ALTITUDE and aimed at a real ground
+	 * point, via `calculateCameraOptionsFromTo`, rather than faked with a zoom
+	 * level.
 	 */
 	$effect(() => {
 		const m = map;
 		if (!m) return;
-
-		// Configure 3D Globe Projection if supported by MapLibre
-		if (
-			typeof (m as unknown as { setProjection?: (p: { type: string }) => void }).setProjection ===
-			'function'
-		) {
-			(m as unknown as { setProjection: (p: { type: string }) => void }).setProjection({
-				type: 'globe'
-			});
-		}
 
 		let raf: number;
 		const loop = () => {
@@ -64,11 +56,19 @@
 		raf = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(raf);
 	});
+
+	// Dynamic spherical solar light vector [r, azimuth, polarAngle]
+	const sunPos = $derived.by<[number, number, number]>(() => [
+		100,
+		display.sun.azimuthDeg,
+		Math.max(0, 90 - display.sun.elevationDeg)
+	]);
 </script>
 
 <div class="world-stage">
 	<MapLibre
 		bind:map
+		autoloadGlobalCss={false}
 		class="fill"
 		style={BLANK_STYLE}
 		center={[display.config.place.lon, display.config.place.lat]}
@@ -76,6 +76,10 @@
 		anisotropicFilterPitch={20}
 		attributionControl={{ compact: true }}
 	>
+		<!-- 3D Spherical Earth Globe Projection & Solar Lighting -->
+		<Projection type="globe" />
+		<Light anchor="map" position={sunPos} />
+
 		<Ground />
 		<Terrain />
 		<Sky />

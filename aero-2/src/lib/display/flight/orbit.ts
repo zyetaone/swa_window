@@ -126,7 +126,16 @@ export class FlightTrack {
 	 */
 	poseAt(wallSec: number): OrbitPose {
 		const breathePhase = (wallSec % BREATHE_PERIOD_SEC) / BREATHE_PERIOD_SEC;
-		const breathe = (1 - Math.cos(breathePhase * TWO_PI)) * 0.5;
+		const orbitPhase = (wallSec % ORBIT_PERIOD_SEC) / ORBIT_PERIOD_SEC;
+
+		// Harmonic dynamic motion noise (rich multi-frequency organic waves)
+		const harmonic =
+			Math.sin(orbitPhase * TWO_PI * 4) * 0.08 + Math.cos(orbitPhase * TWO_PI * 8) * 0.04;
+		const breathe = Math.max(
+			0,
+			Math.min(1, (1 - Math.cos(breathePhase * TWO_PI)) * 0.5 + harmonic)
+		);
+
 		const a = ORBIT.majorMin + (ORBIT.majorMax - ORBIT.majorMin) * breathe;
 		const b = a * ORBIT.aspect;
 

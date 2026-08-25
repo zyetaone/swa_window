@@ -19,7 +19,7 @@ export interface CameraParams {
 }
 
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
-export const DEFAULT_PITCH_DEG = -18;
+export const DEFAULT_PITCH_DEG = -10;
 
 const DEG2RAD = Math.PI / 180;
 const M_PER_DEG_LAT = 111_320;

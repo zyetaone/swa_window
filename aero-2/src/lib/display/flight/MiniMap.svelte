@@ -136,6 +136,7 @@
 <div class="minimap" aria-label="Flight Orbit Minimap">
 	<MapLibre
 		bind:map
+		autoloadGlobalCss={false}
 		class="fill"
 		style={BLANK_STYLE}
 		center={[place.lon, place.lat]}

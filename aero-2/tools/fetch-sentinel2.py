@@ -47,12 +47,29 @@ from pathlib import Path
 
 STAC = "https://earth-search.aws.element84.com/v1/search"
 
-# Mirrors src/lib/settings/locations.ts. Kept as plain numbers rather than
-# parsed out of the TypeScript: this is an offline build step, and a parser for
-# one class is more code than the two entries it would read.
+# Shortcuts only — --lat/--lon works for anywhere and is the general path.
+#
+# The first two mirror aero-2's src/lib/settings/locations.ts; the rest are v1's
+# content/locations/catalog.ts, which is the catalog that actually ships. Kept
+# as plain numbers rather than parsed out of either TypeScript file: this is an
+# offline build step run by hand, and a parser for two differently-shaped
+# catalogs is more code than the entries it would read.
+#
+# `ocean` (Pacific) is deliberately absent: Sentinel-2 does not produce scenes
+# over open water, so no date covers it at any cloud threshold. Open water also
+# has no 10 m texture to gain. Leave that show on the MODIS basemap.
 PLACES = {
-    "hyderabad": (17.385, 78.4867),
-    "denver": (39.7392, -104.9903),
+    "hyderabad": (17.4435, 78.3772),
+    "denver": (39.8561, -104.6737),
+    "dubai": (25.2048, 55.2708),
+    "mumbai": (19.076, 72.8777),
+    "dallas": (32.7767, -96.797),
+    "phoenix": (33.4352, -112.0101),
+    "las_vegas": (36.1699, -115.1398),
+    "chicago_midway": (41.7868, -87.7522),
+    "himalayas": (27.9881, 86.925),
+    "desert": (23.4241, 25.6628),
+    "clouds": (35.6762, 139.6503),
 }
 
 # From ORBIT in src/lib/display/flight/orbit.ts: majorMax 0.25 deg of latitude,
@@ -98,9 +115,22 @@ def post(body: dict, attempts: int = 4) -> dict:
     raise AssertionError("unreachable")
 
 
+# A scene at the edge of the satellite swath fills only a sliver of its MGRS
+# tile; the rest is nodata. Such a scene must never be chosen, and it is
+# actively attractive to a naive picker: eo:cloud_cover is measured over VALID
+# pixels only, so a tile that is 98.79% empty reports ~0% cloud and looks like
+# the clearest thing available. Ranking on cloud alone selects the emptiest
+# scene on offer, every time, and the mosaic comes out as black wedges.
+MAX_NODATA_PCT = 5.0
+
+
 def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
-    """The clearest single date that covers every MGRS tile over the bbox."""
-    by_date: dict[str, dict[str, tuple[float, str]]] = defaultdict(dict)
+    """The clearest single date that covers every MGRS tile over the bbox.
+
+    Each (date, MGRS tile) usually has TWO acquisitions from adjacent orbits.
+    Rank them by nodata first and cloud second, never cloud alone.
+    """
+    by_date: dict[str, dict[str, tuple[float, float, str]]] = defaultdict(dict)
     for page in range(1, 8):
         r = post({
             "collections": ["sentinel-2-l2a"],
@@ -115,9 +145,12 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
             mgrs = f["id"].split("_")[1]
             day = f["properties"]["datetime"][:10]
             cloud = f["properties"]["eo:cloud_cover"]
+            nodata = f["properties"].get("s2:nodata_pixel_percentage", 0.0)
+            if nodata > MAX_NODATA_PCT:
+                continue
             prev = by_date[day].get(mgrs)
-            if prev is None or cloud < prev[0]:
-                by_date[day][mgrs] = (cloud, f["assets"]["visual"]["href"])
+            if prev is None or (nodata, cloud) < (prev[0], prev[1]):
+                by_date[day][mgrs] = (nodata, cloud, f["assets"]["visual"]["href"])
         if len(feats) < 50:
             break
 
@@ -125,7 +158,7 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
     if not grids:
         sys.exit("No Sentinel-2 scenes at all for that bbox and window.")
 
-    complete = [(max(c for c, _ in v.values()), d, v)
+    complete = [(max(c for _, c, _ in v.values()), d, v)
                 for d, v in by_date.items() if set(v) == grids]
     if not complete:
         print(f"MGRS tiles needed: {sorted(grids)}", file=sys.stderr)
@@ -145,7 +178,9 @@ def run(cmd: list[str]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("place", choices=sorted(PLACES))
+    ap.add_argument("place", help="a name from PLACES, or any label when --lat/--lon are given")
+    ap.add_argument("--lat", type=float)
+    ap.add_argument("--lon", type=float)
     ap.add_argument("--start", default="2026-01-01")
     ap.add_argument("--end", default="2026-06-30")
     ap.add_argument("--max-cloud", type=float, default=5.0)
@@ -158,7 +193,13 @@ def main() -> None:
         print(f"! z{a.max_zoom} upscales: Sentinel-2 is 10 m and z14 is 9.55 m/px.",
               file=sys.stderr)
 
-    lat, lon = PLACES[a.place]
+    if a.lat is not None and a.lon is not None:
+        lat, lon = a.lat, a.lon
+    elif a.place in PLACES:
+        lat, lon = PLACES[a.place]
+    else:
+        sys.exit(f"unknown place {a.place!r}; pass --lat/--lon, or use one of: "
+                 + ", ".join(sorted(PLACES)))
     bbox = view_bbox(lat, lon)
     print(f"{a.place}: visible bbox {[round(v, 3) for v in bbox]}")
 
@@ -180,7 +221,7 @@ def main() -> None:
     # Run in parallel: each warp is network-bound on a remote COG, so they
     # overlap almost perfectly. Sequentially this stage took ~5 min per scene.
     def warp(item):
-        i, (mgrs, (cloud, href)) = item
+        i, (mgrs, (nodata, cloud, href)) = item
         dst = work / f"{mgrs}.tif"
         if dst.exists():
             print(f"[{i}/{len(tiles)}] {mgrs} cached", flush=True)
