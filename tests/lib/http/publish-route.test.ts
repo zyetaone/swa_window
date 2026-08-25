@@ -141,7 +141,8 @@ describe('what it publishes and what it answers', () => {
 
 	it('lets toEvent reject a bad payload without publishing', async () => {
 		const { error } = await import('@sveltejs/kit');
-		const handler = publishRoute(() => { error(400, 'bad path'); });
+		// error() returns never, so no braces — a braced body infers void.
+		const handler = publishRoute(() => error(400, 'bad path'));
 		const req = new Request('http://x.local/api/command', {
 			method: 'POST', headers: auth(), body: '{"path":"__proto__"}',
 		});
