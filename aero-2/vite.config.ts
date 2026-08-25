@@ -27,6 +27,18 @@ export default defineConfig({
 			}
 		})
 	],
+	// `svelte-maplibre-gl/vite` is REQUIRED for MapLibre GL JS v6+ — it calls
+	// setWorkerUrl with `import 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'`.
+	// The file exists; what fails is the dep optimizer, which cannot resolve a
+	// query-suffixed subpath through maplibre-gl's `exports` map and dies with
+	// UNLOADABLE_DEPENDENCY. Excluding the package leaves that import to Vite's
+	// own worker handling, which understands `?worker&url`.
+	//
+	// Without this the dev server either refuses to boot or, worse, boots and
+	// silently renders a map that builds a canvas and never fetches a tile.
+	optimizeDeps: {
+		exclude: ['svelte-maplibre-gl', 'maplibre-gl']
+	},
 	server: {
 		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
 		host: true

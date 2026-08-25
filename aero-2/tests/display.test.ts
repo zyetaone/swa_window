@@ -63,6 +63,29 @@ describe('readSettings', () => {
 		expect(paramsFor('?place=denver').detail).toBe(1);
 		expect(paramsFor('?place=hyderabad').detail).toBe(0);
 	});
+
+	/**
+	 * Changing place must carry everything the place DEFINES with it.
+	 *
+	 * `detail` is the one with teeth: it gates the US-only USGS layer, so a
+	 * stale `1` after moving to Hyderabad mounts a layer with no coverage and
+	 * streams 404s at the tile server for as long as the kiosk runs. Observed
+	 * live. This has regressed four times, every time because a caller set
+	 * place and forgot a sibling field — hence one gate, and this test on it.
+	 */
+	it('carries detail, floor and ceiling across a place change', () => {
+		const s = paramsFor('?place=denver');
+		expect(s.detail).toBe(1);
+
+		s.setPlace(Location.hyderabad());
+		expect(s.detail).toBe(0);
+		expect(s.floorM).toBe(Location.hyderabad().climbFloorM);
+		expect(s.ceilingM).toBe(Location.hyderabad().climbCeilingM);
+
+		s.setPlace(Location.denver());
+		expect(s.detail).toBe(1);
+		expect(s.ceilingM).toBe(Location.denver().climbCeilingM);
+	});
 });
 
 // ── Flight Pose & Determinism ────────────────────────────────────────────────

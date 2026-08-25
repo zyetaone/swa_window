@@ -31,7 +31,7 @@ function parseNum(
  */
 export const KNOB_RANGE = {
 	azimuthDeg: [-180, 180],
-	pitchDeg: [-85, 0],
+	pitchDeg: [-89, 30],
 	detail: [0, 1],
 	floorM: [0, 20_000],
 	ceilingM: [0, 20_000],
@@ -50,7 +50,7 @@ function wrapSigned(deg: number): number {
 	return ((((deg + 180) % 360) + 360) % 360) - 180;
 }
 
-export const DEFAULT_WING_SCALE = 0.85;
+export const DEFAULT_WING_SCALE = 0.65;
 export const DEFAULT_WING_OFFSET_X = -405;
 export const DEFAULT_WING_OFFSET_Y = -20;
 
@@ -80,15 +80,35 @@ export class PaneSettings {
 		if (initial) Object.assign(this, initial);
 	}
 
-	applyUrl(url: SearchParamsSource): void {
-		const place = Location.byId(url.searchParams.get('place'));
+	/**
+	 * Move to a location, and bring everything the location DEFINES with it.
+	 *
+	 * `detail`, `floorM`, `ceilingM` and `phase` are not independent settings —
+	 * they are facts about the place. Setting `place` alone leaves them
+	 * describing the previous one, and `detail` is the expensive case: it gates
+	 * the US-only USGS layer, so carrying Denver's `1` across to Hyderabad
+	 * mounts a layer with no coverage there and streams 404s at the tile server
+	 * indefinitely. That exact failure has now regressed four times, each time
+	 * because a caller set some of these fields and not the rest.
+	 *
+	 * So there is one gate. Call this, never assign `place` directly.
+	 */
+	setPlace(place: Location): void {
 		this.place = place;
 		this.phase = daySeed(place) * Math.PI * 2;
+		this.detail = inNaipCoverage(place) ? 1 : 0;
+		this.floorM = place.climbFloorM;
+		this.ceilingM = place.climbCeilingM;
+	}
+
+	applyUrl(url: SearchParamsSource): void {
+		const place = Location.byId(url.searchParams.get('place'));
+		this.setPlace(place);
 		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
 		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG);
-		this.detail = parseNum(url.searchParams, 'detail', inNaipCoverage(place) ? 1 : 0);
-		this.floorM = parseNum(url.searchParams, 'floor', place.climbFloorM);
-		this.ceilingM = parseNum(url.searchParams, 'ceiling', place.climbCeilingM);
+		this.detail = parseNum(url.searchParams, 'detail', this.detail);
+		this.floorM = parseNum(url.searchParams, 'floor', this.floorM);
+		this.ceilingM = parseNum(url.searchParams, 'ceiling', this.ceilingM);
 		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT);
 		const mode = url.searchParams.get('wingMode');
 		if (mode === '2d' || mode === '3d') this.wingMode = mode;

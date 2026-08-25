@@ -18,11 +18,9 @@
 	const config = display.config;
 	const locations = Location.all();
 
-	function setPlace(place: Location) {
-		config.place = place;
-		config.set('floorM', place.climbFloorM);
-		config.set('ceilingM', place.climbCeilingM);
-	}
+	// Everything the location defines — detail, floor, ceiling, phase — moves
+	// with it. See PaneSettings.setPlace for why this is one call.
+	const setPlace = (place: Location) => config.setPlace(place);
 
 	function reload() {
 		if (typeof window !== 'undefined') window.location.reload();
@@ -48,8 +46,8 @@
 					<span>Pitch ({Math.round(config.pitchDeg)}°)</span>
 					<input
 						type="range"
-						min="-85"
-						max="0"
+						min="-89"
+						max="30"
 						step="1"
 						value={config.pitchDeg}
 						oninput={(e) => config.set('pitchDeg', e.currentTarget.valueAsNumber)}
