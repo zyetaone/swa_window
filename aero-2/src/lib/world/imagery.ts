@@ -14,12 +14,24 @@
  *
  * Pure: same inputs give the same selection, no clock, no randomness.
  */
-import {
-	IMAGERY_SOURCES,
-	NIGHT_SWAP_HYSTERESIS,
-	DETAIL_STEP_HYSTERESIS,
-	type ImagerySource,
-} from '#content/imagery/sources.js';
+import { IMAGERY_SOURCES, type ImagerySource } from '#content/imagery/sources.js';
+import { exceedsDeadband } from '#lib/utils.js';
+
+/**
+ * Margin the incumbent source keeps at the day/night crossover.
+ *
+ * Not a deadband: this is a two-candidate contest, so the challenger must be
+ * clearly nearer, not merely nearer. A base-layer swap is a full retile.
+ */
+const NIGHT_SWAP_HYSTERESIS = 0.08;
+
+/**
+ * Extra drift required before the zoom cap steps.
+ *
+ * Caps are integers, so a full level of change is inherent; this is the slack
+ * on top of it that stops a slow climb retiling the globe repeatedly.
+ */
+const DETAIL_STEP_HYSTERESIS = 0.35;
 
 export interface ImagerySelection {
 	readonly sourceId: string;
@@ -87,7 +99,7 @@ export function selectDetailLevel(
 	if (currentLevel === null) return Math.round(target);
 
 	const held = Math.min(max, Math.max(min, currentLevel));
-	return Math.abs(target - held) >= 1 + DETAIL_STEP_HYSTERESIS ? Math.round(target) : held;
+	return exceedsDeadband(held, target, 1 + DETAIL_STEP_HYSTERESIS) ? Math.round(target) : held;
 }
 
 /** The single entry point: atmosphere state and time of day in, texture out. */
@@ -103,5 +115,20 @@ export function selectImagery(input: ImageryInput): ImagerySelection {
 		sourceId: source.id,
 		urlTemplate: source.urlTemplate,
 		maximumLevel: selectDetailLevel(source, input.groundDetail, heldLevel),
+	};
+}
+
+/** Hold day imagery when a night pack is absent from the local cache. */
+export function gateImagerySelection(
+	selection: ImagerySelection,
+	layerAvailable: (id: string) => boolean,
+): ImagerySelection {
+	if (layerAvailable(selection.sourceId)) return selection;
+	const day = IMAGERY_SOURCES.find((s) => s.nightAnchor === 0);
+	if (!day || selection.sourceId === day.id) return selection;
+	return {
+		sourceId: day.id,
+		urlTemplate: day.urlTemplate,
+		maximumLevel: selection.maximumLevel,
 	};
 }

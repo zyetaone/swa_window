@@ -18,18 +18,15 @@
  * tile source and works against whatever imagery is attached.
  */
 import type { AtmosphereState } from '#lib/world/atmosphere.js';
-import type { GlobeRuntime } from '#lib/world/runtime.js';
+import { SSE_GROUND, SSE_CRUISE, FOG_SSE_FACTOR } from '#content/quality/lod.js';
+import { exceedsDeadband } from '#lib/utils.js';
+import type { GlobeRuntime } from '#lib/world/runtime.svelte.js';
 
 type Scene = import('cesium').Scene;
 
-/** Tile error in px when the ground is fully legible. The Pi ship-path value. */
-const SSE_GROUND = 8;
-/** Tile error when the ground is a smear — fewer, coarser tiles. */
-const SSE_CRUISE = 24;
 /** How far it must drift before stepping. Each change retiles the globe. */
 const SSE_HYSTERESIS = 2;
 
-const FOG_SSE_FACTOR = 16;
 
 export function setupLod(scene: Scene): void {
 	scene.globe.maximumScreenSpaceError = SSE_GROUND;
@@ -50,7 +47,7 @@ export class LodSync {
 
 	sync(rt: GlobeRuntime, atmosphere: AtmosphereState): void {
 		const target = screenSpaceErrorFor(atmosphere.groundDetail);
-		if (this.#applied !== null && Math.abs(target - this.#applied) < SSE_HYSTERESIS) return;
+		if (!exceedsDeadband(this.#applied, target, SSE_HYSTERESIS)) return;
 		this.#applied = target;
 		rt.viewer.scene.globe.maximumScreenSpaceError = target;
 	}

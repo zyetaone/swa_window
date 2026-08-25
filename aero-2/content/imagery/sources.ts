@@ -51,21 +51,3 @@ export const IMAGERY_SOURCES: readonly ImagerySource[] = [
 		nightAnchor: 1,
 	},
 ];
-
-/**
- * Deadband around the day/night crossover before the base texture swaps.
- *
- * A bare threshold flips back and forth while nightFactor hovers near it, and
- * a base-layer swap is a full tile reload — visible, expensive, and on three
- * panes it would not flip on the same frame.
- */
-export const NIGHT_SWAP_HYSTERESIS = 0.08;
-
-/**
- * How far the continuous detail target must move past the current zoom cap
- * before it actually steps.
- *
- * Zoom caps are integers, so without a deadband a slow climb sitting on a
- * boundary retiles the globe repeatedly for no visible gain.
- */
-export const DETAIL_STEP_HYSTERESIS = 0.35;
