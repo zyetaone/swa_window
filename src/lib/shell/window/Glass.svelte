@@ -15,6 +15,9 @@
 	 * pointer-events: none + decorative. Sits ABOVE the motion-transformed
 	 * .scene-content so it doesn't jitter with turbulence (glass is fixed
 	 * to the cabin, not the world).
+	 *
+	 * The rim blur (::before) is the one part that touches the LIVE scene
+	 * rather than painting over it — see the note on that rule below.
 	 */
 	interface Props {
 		glassVignetteOpacity: number;
@@ -60,5 +63,45 @@
 			inset 0 0 10px 4px rgba(0, 0, 0, 0.25),
 			inset 2px 2px 6px rgba(0, 0, 0, 0.15);
 		transition: --glass-vignette-opacity 2s;
+	}
+
+	/* Rim blur — the acrylic is thicker and doubly curved at the edge, so the
+	   view goes soft toward the rim while the centre stays sharp. A uniform
+	   blur over the whole pane would just read as an out-of-focus render.
+
+	   Masked to the outer ~third: the mask is what makes this a WINDOW effect
+	   instead of a filter, and it also bounds the cost, since only the
+	   unmasked band composites.
+
+	   ⚠ DELIBERATELY NOT GATED ON qualityMode. The fleet runs the
+	   'performance' preset, so anything behind a tier check is inert on the
+	   actual wall — that has been shipped twice by accident (CabinClock
+	   glass, night bloom). If this proves too expensive on a Pi 5, cut
+	   --glass-blur toward 0 rather than hiding it behind a tier that never
+	   evaluates true in the field.
+
+	   A pseudo-element rather than putting backdrop-filter on .glass itself:
+	   .glass carries the vignette gradients, and masking it would clip those
+	   to the rim too and change a falloff that is already tuned. */
+	.glass::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		pointer-events: none;
+		backdrop-filter: blur(var(--glass-blur, 2px));
+		-webkit-backdrop-filter: blur(var(--glass-blur, 2px));
+		-webkit-mask-image: radial-gradient(
+			ellipse 80% 74% at 50% 50%,
+			transparent 60%,
+			rgba(0, 0, 0, 0.55) 82%,
+			#000 100%
+		);
+		mask-image: radial-gradient(
+			ellipse 80% 74% at 50% 50%,
+			transparent 60%,
+			rgba(0, 0, 0, 0.55) 82%,
+			#000 100%
+		);
 	}
 </style>
