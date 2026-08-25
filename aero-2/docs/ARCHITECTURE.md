@@ -2,6 +2,11 @@
 
 Minimal rewrite of v1 (`../`). One slice per PR, wall-verified before the next.
 
+> **Renderer under review.** [ADR-005](../../docs/ADR-005-aero-2-threlte-renderer.md)
+> proposes replacing Cesium with Three + Threlte, gated on a Denver spike.
+> Everything below describes the Cesium path as it stands today; `model.ts` and
+> `rules.ts` are renderer-agnostic and survive either outcome.
+
 ## Shape
 
 Folders are **nouns from the product**. Files are **MRAX roles**, and the same
@@ -26,12 +31,12 @@ src/lib/
   server/  assets/
 ```
 
-| role | file | contract |
-|---|---|---|
-| **M**odel | `model.ts` | shapes + their canonical values. **Imports nothing.** |
-| **R**ules | `rules.ts` | pure functions over the model. **Never Cesium, never runes.** |
-| **A**ctions | `actions.ts` | applies state to the globe each frame. The **only** files allowed to touch Cesium. |
-| e**X**perience | `experience/` | the component a person looks at |
+| role           | file          | contract                                                                           |
+| -------------- | ------------- | ---------------------------------------------------------------------------------- |
+| **M**odel      | `model.ts`    | shapes + their canonical values. **Imports nothing.**                              |
+| **R**ules      | `rules.ts`    | pure functions over the model. **Never Cesium, never runes.**                      |
+| **A**ctions    | `actions.ts`  | applies state to the globe each frame. The **only** files allowed to touch Cesium. |
+| e**X**perience | `experience/` | the component a person looks at                                                    |
 
 `.svelte.ts` means the file holds runes. No `index.ts` barrels — every import
 names its exact module, which is what keeps the cycle check honest.
