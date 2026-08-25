@@ -238,8 +238,12 @@ const BUILDING_SHADER_GLSL = `
 		const float W = ${NIGHT_EMISSIVE_WHITE_POINT.toFixed(1)};
 		vec3 emission = hdrEmission * (1.0 + hdrEmission / (W * W)) / (1.0 + hdrEmission);
 
-		// Darken building surfaces at night so emissive reads cleanly.
-		material.diffuse *= mix(1.0, 0.06, u_nightFactor);
+		// Darken building surfaces at night so emissive reads cleanly — but
+		// the facade still has to read as SOLID. At 0.06 the mass all but
+		// vanished and the lit windows floated as holes, so the tower looked
+		// see-through against whatever was behind it. 0.18 keeps the emissive
+		// dominant while leaving enough facade to occlude.
+		material.diffuse *= mix(1.0, 0.18, u_nightFactor);
 		material.emissive = emission * u_nightFactor;
 	}
 `;

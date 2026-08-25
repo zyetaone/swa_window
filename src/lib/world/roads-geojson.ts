@@ -61,9 +61,20 @@ const ROAD_CLASS_SET = new Set<string>(ROAD_CLASSES);
  * desk at ground level.
  */
 const ROAD_STYLE: Record<RoadClass, { width: number; alpha: number; glowScale: number }> = {
-	motorway: { width: 4.5, alpha: 1.0, glowScale: 1.6 },
-	trunk: { width: 4.0, alpha: 0.95, glowScale: 1.5 },
-	primary: { width: 3.4, alpha: 0.85, glowScale: 1.3 },
+	// ⚠ ARTERY GLOW IS SPREAD, NOT BRIGHTNESS. glowScale multiplies
+	// PolylineGlow's glowPower, where HIGHER = wider, softer halo. At 1.6 the
+	// motorway halo (0.22 × 1.6 = 0.35) bled into its neighbours and the trunk
+	// network read as filled AREAS rather than lit lines. Tightened toward a
+	// brighter core; alpha eased in step so the arteries read as intense
+	// rather than as flood.
+	//
+	// alpha has a HARD FLOOR: roads-geojson.test asserts motorway stays above
+	// 0.2 through the whole night band, a number verified in real-GPU frames
+	// over Hyderabad at 30,000 ft. The shipped curve lands ~0.27, so there is
+	// only ~25% of headroom here — do not cut these further without re-flying it.
+	motorway: { width: 4.5, alpha: 0.88, glowScale: 1.25 },
+	trunk: { width: 4.0, alpha: 0.84, glowScale: 1.2 },
+	primary: { width: 3.4, alpha: 0.76, glowScale: 1.15 },
 	secondary: { width: 2.6, alpha: 0.62, glowScale: 1.1 },
 	tertiary: { width: 2.2, alpha: 0.45, glowScale: 1.0 },
 	// The bulk of the features and the moire risk. Additionally faded by

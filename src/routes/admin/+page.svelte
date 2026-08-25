@@ -34,6 +34,7 @@
 		MAX_SLIDESHOW_URLS,
 		DEFAULT_SLIDESHOW_INTERVAL_SEC,
 	} from '$lib/fleet/display-payload';
+	import { CRUISE_SPEED_DEFAULTS } from '$lib/model/config-tree.svelte';
 
 	// Admin reuses the same dual-tree panel controls as the kiosk SidePanel.
 	// They write through usePanelConfig → applyConfigPatch (no AeroWindow).
@@ -677,7 +678,7 @@
 						<span>Flight Speed</span>
 						<span class="slider-value">{speedLabel}</span>
 					</div>
-					<input type="range" min="0.1" max="5" step="0.1" bind:value={scene.flightSpeed} class="range" />
+					<input type="range" min="0.1" max="8" step="0.1" bind:value={scene.flightSpeed} class="range" />
 				</label>
 				<label class="toggle-label">
 					<input type="checkbox" bind:checked={scene.syncToRealTime} />

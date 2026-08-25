@@ -11,14 +11,15 @@ import type { LocationId, SkyState, SimulationContext, FlightMode, FlightPatch, 
 import { LOCATION_MAP } from '$content/locations';
 import { pickScenario } from '$lib/director/scenarios';
 import { createSeededRng, daySeed, hashString } from '$lib/world/prng';
+import { CRUISE_SPEED_DEFAULTS } from '$lib/model/config-tree.svelte';
 
 /**
  * Default position of the `flightSpeed` knob, and the reference the scenario
  * playback rate normalises against — authored waypoint `duration` values are
- * SECONDS at this speed. SSOT for both, so the two can never drift apart:
- * when they did, every authored approach played 4x fast.
+ * SECONDS at this speed. Re-exported from config-tree cruise literals so the
+ * two can never drift apart.
  */
-export const DEFAULT_FLIGHT_SPEED = 4.0;
+export const DEFAULT_FLIGHT_SPEED = CRUISE_SPEED_DEFAULTS.defaultSpeed;
 
 /**
  * Slow climb/descent offset in feet, to add to a location's preferred altitude.

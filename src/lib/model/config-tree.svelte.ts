@@ -18,6 +18,18 @@ import { type DeviceRole, type QualityMode, type WeatherType } from '$lib/types'
 import { CRDTStore, setCRDTDeviceId, getCRDTDeviceId } from './crdt-store';
 import { setByPath, readByPath } from '$lib/utils';
 
+/**
+ * Cruise speed literals — seed `camera.cruise`, flight speedNorm reference,
+ * and admin scene slider bounds. One place so maxSpeed cannot drift below
+ * defaultSpeed (which silently slows authored scenario legs on first clamp).
+ */
+export const CRUISE_SPEED_DEFAULTS = {
+	minSpeed: 0.1,
+	/** Scenario waypoint durations are authored at this speed. */
+	defaultSpeed: 6.0,
+	maxSpeed: 8.0,
+} as const;
+
 // ─── Atmosphere ───────────────────────────────────────────────────────────────
 
 export const atmosphere = $state({
@@ -60,6 +72,7 @@ interface CameraShape {
 		departureDurationSec: number;
 		transitDurationSec: number;
 		arrivalHoldMs: number;
+		defaultSpeed: number;
 		minSpeed: number;
 		maxSpeed: number;
 	};
@@ -111,8 +124,7 @@ const _camera: CameraShape = {
 		departureDurationSec: 2.0,
 		transitDurationSec: 2.0,
 		arrivalHoldMs: 8000,
-		minSpeed: 0.1,
-		maxSpeed: 3.0,
+		...CRUISE_SPEED_DEFAULTS,
 	},
 	motion: {
 				bankAngleMax: 16.0, // max horizon tilt on turns
