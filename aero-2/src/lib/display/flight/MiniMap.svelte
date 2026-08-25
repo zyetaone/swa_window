@@ -44,7 +44,14 @@
 			place.lon,
 			display.config.floorM,
 			display.config.ceilingM,
-			display.config.direction
+			display.config.direction,
+			// `phase` is NOT optional decoration. It is added to `theta`, while the
+			// ellipse's breathing radius is keyed to raw wallSec — so phase shifts
+			// where the three radius bumps land RELATIVE to the angle, changing the
+			// shape flown, not merely rotating it. Omitting it drew the phase-0
+			// shape under a marker following the real one: measured 3.89 km apart
+			// at worst for Hyderabad, 14% of the orbit radius.
+			display.config.phase
 		).groundTrack()
 	);
 

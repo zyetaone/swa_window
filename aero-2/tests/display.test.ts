@@ -490,3 +490,45 @@ describe('elevation strip normalisation', () => {
 		expect(Math.abs(stripY(wrong) - stripY(right))).toBeGreaterThan(1);
 	});
 });
+
+describe('MiniMap track', () => {
+	const place = Location.hyderabad();
+	const M_PER_DEG_LAT = 111_320;
+
+	/** Worst distance, in metres, from any pose on `flown` to the nearest point of `ring`. */
+	function worstGapM(flown: FlightTrack, ring: [number, number][]): number {
+		const cosLat = Math.cos((place.lat * Math.PI) / 180);
+		let worst = 0;
+		for (let i = 0; i < 180; i++) {
+			const pose = flown.poseAt((i / 180) * ORBIT_PERIOD_SEC);
+			let best = Infinity;
+			for (const [lon, lat] of ring) {
+				const dy = (lat - pose.lat) * M_PER_DEG_LAT;
+				const dx = (lon - pose.lon) * M_PER_DEG_LAT * cosLat;
+				best = Math.min(best, Math.hypot(dx, dy));
+			}
+			worst = Math.max(worst, best);
+		}
+		return worst;
+	}
+
+	/**
+	 * The minimap must draw the track it actually flies.
+	 *
+	 * `phase` is not decoration. It is added to `theta`, while the ellipse's
+	 * breathing radius is keyed to raw wallSec — so it shifts where the three
+	 * radius bumps land RELATIVE to the angle, changing the SHAPE flown rather
+	 * than merely rotating it. The minimap built its ring without phase while
+	 * the marker came from the real view, so the aircraft flew beside its own
+	 * drawn track. The second assertion is the bug: it must stay large, or the
+	 * first assertion proves nothing.
+	 */
+	it('needs the same phase as the flight, or the marker leaves the ring', () => {
+		const phase = daySeed(place) * Math.PI * 2;
+		const args = [place.lat, place.lon, place.climbFloorM, place.climbCeilingM, 1] as const;
+		const flown = new FlightTrack(...args, phase);
+
+		expect(worstGapM(flown, flown.groundTrack())).toBeLessThan(500);
+		expect(worstGapM(flown, new FlightTrack(...args).groundTrack())).toBeGreaterThan(2_000);
+	});
+});
