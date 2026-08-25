@@ -28,6 +28,15 @@
 	const display = useDisplay();
 
 	/**
+	 * Horizontal stretch for distant horizon banks only.
+	 *
+	 * Safe at 3.2 because those sprites keep a near-zero rotation. Any sprite
+	 * that rotates freely must stay square, or its apparent aspect swings with
+	 * the angle and identical clouds render wide or squashed at random.
+	 */
+	const CLOUD = { bankStretch: 3.2 } as const;
+
+	/**
 	 * Deterministic PRNG (mulberry32), seeded from the day.
 	 *
 	 * This deck used twelve `rnd()` calls, so every Pi built a different
@@ -111,9 +120,6 @@
 		});
 
 		const sprites: THREE.Sprite[] = [];
-		const rotSpeeds: number[] = [];
-		/** Each sprite's rotation at wallSec 0, so the loop can set an ABSOLUTE angle. */
-		const baseRotations: number[] = [];
 		const materials: THREE.SpriteMaterial[] = [];
 
 		function buildCloudDeck() {
@@ -124,8 +130,6 @@
 			materials.forEach((m) => m.dispose());
 			materials.length = 0;
 			sprites.length = 0;
-			rotSpeeds.length = 0;
-			baseRotations.length = 0;
 
 			if (textures.length === 0) return;
 
@@ -171,8 +175,6 @@
 
 				cloudGroup.add(sprite);
 				sprites.push(sprite);
-				baseRotations.push(mat.rotation);
-				rotSpeeds.push((rnd() - 0.5) * 0.005);
 			}
 
 			// ── 2. Local Mid-Deck Cumulus Puffs (3 km - 40 km) ───────────────────────
@@ -228,8 +230,6 @@
 
 					cloudGroup.add(sprite);
 					sprites.push(sprite);
-					baseRotations.push(mat.rotation);
-					rotSpeeds.push((rnd() - 0.5) * 0.03);
 				}
 			}
 		}
@@ -264,11 +264,23 @@
 			 * rejoins the other two mid-gust.
 			 */
 			const wallSec = display.view.wallSec ?? 0;
-			cloudGroup.rotation.y = wallSec * driftSpeed * 0.04;
 
-			for (let i = 0; i < sprites.length; i++) {
-				sprites[i].material.rotation = (baseRotations[i] ?? 0) + rotSpeeds[i] * wallSec;
-			}
+			/**
+			 * The deck is WORLD-locked, not viewer-locked.
+			 *
+			 * It used to spin on its own axis at 0.04 rad/s -- a full revolution
+			 * every 157 seconds -- which reads as a carousel, not as weather, and
+			 * is unrelated to where the aircraft is pointing. Cancelling the
+			 * camera bearing instead pins the deck to the ground: fly straight and
+			 * it holds still, roll into a turn and it sweeps past the window. The
+			 * turn is the motion; the wind is a garnish on top of it.
+			 */
+			const bearingRad = ((display.view.cameraBearingDeg ?? 0) * Math.PI) / 180;
+			// Sign: the camera sits at +Z looking down -Z, so a group rotation of
+			// +theta about +Y sweeps a straight-ahead sprite to screen LEFT --
+			// which is what the window shows when the aircraft banks RIGHT and the
+			// compass bearing increases. Hence +bearing, not -.
+			cloudGroup.rotation.y = bearingRad + wallSec * driftSpeed * 0.0008;
 
 			// Synchronize relative camera altitude to cloud deck
 			const planeAgl = display.view.aglM ?? 4000;

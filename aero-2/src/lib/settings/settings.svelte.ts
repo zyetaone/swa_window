@@ -36,6 +36,7 @@ export const KNOB_RANGE = {
 	detail: [0, 1],
 	floorM: [0, 20_000],
 	ceilingM: [0, 20_000],
+	clockOffsetH: [-12, 12],
 	shade: [0, 1],
 	exaggeration: [0.1, 6.0],
 	wingScale: [0.3, 3.0],
@@ -67,6 +68,18 @@ export class PaneSettings {
 	detail = $state<number>(0);
 	floorM = $state<number>(ALTITUDE_FLOOR_M);
 	ceilingM = $state<number>(ALTITUDE_CEILING_M);
+	/**
+	 * Hours added to the destination's UTC offset, for tuning the light.
+	 *
+	 * An OFFSET rather than a pinned hour, because that is the version with no
+	 * moving parts: sun, night factor and atmosphere all read the local hour
+	 * through `resolveLocalHours`, so shifting the offset shifts every one of
+	 * them together and the sky keeps advancing instead of freezing. The orbit
+	 * reads raw wall-clock, so the aircraft does not teleport.
+	 *
+	 * DESKS ONLY. A non-zero value desyncs this pane's sky from the other two.
+	 */
+	clockOffsetH = $state<number>(0);
 	shade = $state<number>(HILLSHADE_DEFAULT);
 	/** 3D Terrain elevation mesh exaggeration (default 2.5x). */
 	exaggeration = $state<number>(TERRAIN_EXAGGERATION);
@@ -129,6 +142,7 @@ export class PaneSettings {
 		this.detail = parseNum(url.searchParams, 'detail', this.detail);
 		this.floorM = parseNum(url.searchParams, 'floor', this.floorM);
 		this.ceilingM = parseNum(url.searchParams, 'ceiling', this.ceilingM);
+		this.clockOffsetH = parseNum(url.searchParams, 'clock', 0);
 		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT);
 		this.exaggeration = parseNum(url.searchParams, 'exaggeration', TERRAIN_EXAGGERATION);
 		const crParam = url.searchParams.get('colorRelief');

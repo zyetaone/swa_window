@@ -7,7 +7,13 @@ import { normalizeHeading, FlightTrack, type OrbitPose } from './orbit.js';
 import { resolveLocalHours } from '../world/sun.js';
 
 export interface CameraParams {
-	place: { lat: number; lon: number; utcOffset: number };
+	place: {
+		lat: number;
+		lon: number;
+		utcOffset: number;
+		/** Feature locations are crossed, not orbited — see the aim below. */
+		isFeature?: boolean;
+	};
 	azimuthDeg: number;
 	pitchDeg: number;
 	floorM: number;
@@ -18,6 +24,8 @@ export interface CameraParams {
 	phase?: number;
 	/** Simulation flight speed multiplier (e.g. 2.5x). */
 	speed?: number;
+	/** Hours added to the destination's UTC offset. Tuning only; 0 on the wall. */
+	clockOffsetH?: number;
 }
 
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
@@ -176,5 +184,19 @@ export function calculateCameraView(wallSec: number, params: CameraParams): Came
 	const plane = track.poseAt(effectiveSec);
 	const camera = new FlightCamera(params.azimuthDeg, params.pitchDeg);
 
-	return camera.project(plane, params.place.utcOffset, wallSec, params.place.lat, params.place.lon);
+	/**
+	 * Cities get an inward aim; features do not.
+	 *
+	 * Over a city the orbit centre is the skyline, so pointing at it keeps the
+	 * subject in frame for the whole loop. The Himalayas, open ocean and open
+	 * desert have no centre — aiming inward would stare at one arbitrary patch
+	 * of ground for 49 minutes. Passing no centre falls back to a
+	 * heading-relative aim, which reads as crossing the terrain rather than
+	 * circling a point on it.
+	 */
+	const utcOffset = params.place.utcOffset + (params.clockOffsetH ?? 0);
+
+	return params.place.isFeature
+		? camera.project(plane, utcOffset, wallSec)
+		: camera.project(plane, utcOffset, wallSec, params.place.lat, params.place.lon);
 }

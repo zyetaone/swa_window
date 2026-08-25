@@ -42,7 +42,11 @@ export class AeroDisplay {
 
 	/** Where the sun is right now, over the place being flown. */
 	get sun(): SunPosition {
-		return sunPosition(this.view.wallSec, this.config.place.lat, this.config.place.utcOffset);
+		return sunPosition(
+			this.view.wallSec,
+			this.config.place.lat,
+			this.config.place.utcOffset + this.config.clockOffsetH
+		);
 	}
 
 	advanceTo(wallSec: number = Date.now() / 1000): CameraView {

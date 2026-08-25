@@ -6,6 +6,7 @@
 	 */
 	import { useDisplay } from '../display/display.svelte.js';
 	import { Location } from './locations.js';
+	import { KNOB_RANGE } from './settings.svelte.js';
 
 	interface Props {
 		showSettings?: boolean;
@@ -16,11 +17,26 @@
 
 	const display = useDisplay();
 	const config = display.config;
-	const locations = Location.all();
+	// Split, because they are different things: a city is orbited and looked at,
+	// a feature is crossed. Showing them in one flat list implies the window
+	// behaves the same over both, and it does not.
+	const cities = Location.cities();
+	const features = Location.features();
 
 	// Everything the location defines — detail, floor, ceiling, phase — moves
 	// with it. See PaneSettings.setPlace for why this is one call.
 	const setPlace = (place: Location) => config.setPlace(place);
+
+	// The hour the window is actually lit for, not the raw offset -- the offset
+	// is the mechanism, the clock is what the operator is looking at.
+	const clockLabel = $derived.by(() => {
+		const h = display.view.timeOfDay ?? 0;
+		const hh = Math.floor(h);
+		const mm = Math.round((h - hh) * 60);
+		const stamp = `${String(hh % 24).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
+		const off = config.clockOffsetH;
+		return off === 0 ? `${stamp} local` : `${stamp} · ${off > 0 ? '+' : ''}${off}h`;
+	});
 
 	function reload() {
 		if (typeof window !== 'undefined') window.location.reload();
@@ -75,6 +91,60 @@
 						oninput={(e) => config.set('speed', e.currentTarget.valueAsNumber)}
 					/>
 				</label>
+			</section>
+
+			<section class="section">
+				<h4>Flight Envelope & Light</h4>
+				<label class="field">
+					<span
+						>Altitude Floor ({Math.round(config.floorM).toLocaleString()} m &middot; {Math.round(
+							config.floorM * 3.28084
+						).toLocaleString()} ft)</span
+					>
+					<input
+						type="range"
+						min={KNOB_RANGE.floorM[0]}
+						max={KNOB_RANGE.floorM[1]}
+						step="100"
+						value={config.floorM}
+						oninput={(e) => config.set('floorM', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<label class="field">
+					<span
+						>Altitude Ceiling ({Math.round(config.ceilingM).toLocaleString()} m &middot; {Math.round(
+							config.ceilingM * 3.28084
+						).toLocaleString()} ft)</span
+					>
+					<input
+						type="range"
+						min={KNOB_RANGE.ceilingM[0]}
+						max={KNOB_RANGE.ceilingM[1]}
+						step="100"
+						value={config.ceilingM}
+						oninput={(e) => config.set('ceilingM', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<p class="section-note">
+					Metres above ground. The floor must clear local high ground &mdash; the camera flies at
+					floor + terrain, so 400 m over the Front Range puts you inside it.
+				</p>
+
+				<label class="field">
+					<span>Time of Day ({clockLabel})</span>
+					<input
+						type="range"
+						min={KNOB_RANGE.clockOffsetH[0]}
+						max={KNOB_RANGE.clockOffsetH[1]}
+						step="0.25"
+						value={config.clockOffsetH}
+						oninput={(e) => config.set('clockOffsetH', e.currentTarget.valueAsNumber)}
+					/>
+				</label>
+				<p class="section-note">
+					Shifts the destination clock, so sun, night and haze all move together and keep
+					advancing. Anything but 0 desyncs this pane from the other two &mdash; desk tuning only.
+				</p>
 			</section>
 
 			<section class="section">
@@ -284,9 +354,28 @@
 
 		<div class="content">
 			<section class="section">
-				<h4>Location</h4>
+				<h4>Cities</h4>
 				<div class="location-grid">
-					{#each locations as loc}
+					{#each cities as loc}
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.place.id === loc.id}
+							onclick={() => setPlace(loc)}
+						>
+							{loc.name}
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<section class="section">
+				<h4>In Transit</h4>
+				<p class="section-note">
+					Terrain crossed rather than circled — the view looks along the track.
+				</p>
+				<div class="location-grid">
+					{#each features as loc}
 						<button
 							type="button"
 							class="loc-btn"
@@ -541,6 +630,13 @@
 		accent-color: var(--accent-cyan);
 		cursor: pointer;
 	}
+	.section-note {
+		margin: -0.15rem 0 0.45rem;
+		font-size: 0.62rem;
+		line-height: 1.35;
+		color: rgba(255, 255, 255, 0.45);
+	}
+
 	.location-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
