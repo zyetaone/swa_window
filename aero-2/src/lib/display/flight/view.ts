@@ -4,7 +4,7 @@
  */
 
 import { normalizeHeading, orbitPose, type OrbitPose } from './orbit.js';
-import { resolveLocalHours } from '../atmosphere/sun.js';
+import { resolveLocalHours } from '../world/sun.js';
 
 export interface CameraParams {
 	place: { lat: number; lon: number; utcOffset: number };
@@ -18,30 +18,24 @@ export const DEFAULT_WINDOW_AZIMUTH_DEG = -90;
 export const DEFAULT_PITCH_DEG = -18;
 
 const DEG2RAD = Math.PI / 180;
-const RAD2DEG = 180 / Math.PI;
 const M_PER_DEG_LAT = 111_320;
 
-export interface WindowView {
-	planeLat: number;
-	planeLon: number;
-	planeAglM: number;
+export interface CameraView {
 	lat: number;
 	lon: number;
 	aglM: number;
-	mslM: number;
 	planeHeadingDeg: number;
 	cameraBearingDeg: number;
-	headingDeg: number;
 	cameraPitchDeg: number;
-	centerLat: number;
-	centerLon: number;
 	targetLat: number;
 	targetLon: number;
 	distanceM: number;
 	timeOfDay: number;
+	/** The wall-clock second this view was derived from — the only input. */
+	wallSec: number;
 }
 
-export function viewOptions(
+function viewOptions(
 	plane: OrbitPose,
 	azimuthDeg: number = DEFAULT_WINDOW_AZIMUTH_DEG,
 	pitchDeg: number = DEFAULT_PITCH_DEG
@@ -77,7 +71,7 @@ export function viewOptions(
 	};
 }
 
-export function windowView(wallSec: number, params: CameraParams): WindowView {
+export function calculateCameraView(wallSec: number, params: CameraParams): CameraView {
 	const plane = orbitPose(
 		wallSec,
 		params.place.lat,
@@ -90,22 +84,16 @@ export function windowView(wallSec: number, params: CameraParams): WindowView {
 	const timeOfDay = resolveLocalHours(wallSec, params.place.utcOffset);
 
 	return {
-		planeLat: plane.lat,
-		planeLon: plane.lon,
-		planeAglM: plane.aglM,
 		lat: plane.lat,
 		lon: plane.lon,
 		aglM: plane.aglM,
-		mslM: plane.aglM,
 		planeHeadingDeg: plane.headingDeg,
 		cameraBearingDeg: cam.cameraBearingDeg,
-		headingDeg: cam.cameraBearingDeg,
 		cameraPitchDeg: cam.cameraPitchDeg,
-		centerLat: cam.targetLat,
-		centerLon: cam.targetLon,
 		targetLat: cam.targetLat,
 		targetLon: cam.targetLon,
 		distanceM: cam.distanceM,
-		timeOfDay
+		timeOfDay,
+		wallSec
 	};
 }

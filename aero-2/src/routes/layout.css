@@ -1,6 +1,64 @@
+/**
+ * Design tokens and global CSS for aero-2.
+ * Single source of truth for color palette, frosted glass tokens, and reset rules.
+ */
+
+:root {
+	--font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--bg-app: #000000;
+	--text-primary: #f8fafc;
+	--text-muted: #94a3b8;
+	--accent-cyan: #38bdf8;
+	--accent-cyan-bg: rgba(56, 189, 248, 0.2);
+
+	/* Frosted Glass Tokens */
+	--glass-bg: rgba(15, 23, 42, 0.8);
+	--glass-bg-subtle: rgba(255, 255, 255, 0.06);
+	--glass-bg-hover: rgba(255, 255, 255, 0.12);
+	--glass-border: rgba(255, 255, 255, 0.12);
+	--glass-border-subtle: rgba(255, 255, 255, 0.08);
+	--glass-blur: 16px;
+	--glass-shadow: 0 16px 32px rgba(0, 0, 0, 0.5);
+	--glass-radius: 12px;
+}
+
 :global(html, body) {
 	margin: 0;
 	height: 100%;
 	overflow: hidden;
-	background: #1a2332;
+	background: var(--bg-app);
+	color: var(--text-primary);
+	font-family: var(--font-sans);
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+/* Shared Glassmorphism Utilities */
+:global(.glass-panel) {
+	background: var(--glass-bg);
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
+	border: 1px solid var(--glass-border);
+	border-radius: var(--glass-radius);
+	box-shadow: var(--glass-shadow);
+	color: var(--text-primary);
+}
+
+:global(.glass-btn) {
+	padding: 6px 12px;
+	border-radius: 6px;
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-subtle);
+	color: var(--text-primary);
+	font-family: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		border-color 0.15s;
+}
+
+:global(.glass-btn:hover) {
+	background: var(--glass-bg-hover);
+	border-color: rgba(255, 255, 255, 0.25);
 }

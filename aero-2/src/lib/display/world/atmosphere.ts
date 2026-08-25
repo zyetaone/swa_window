@@ -85,7 +85,7 @@ function lerpRgb(a: Rgb, b: Rgb, t: number): Rgb {
 	return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 }
 
-export function blendAtmosphere(a: AtmosphereBand, b: AtmosphereBand, t: number): AtmosphereState {
+function blendAtmosphere(a: AtmosphereBand, b: AtmosphereBand, t: number): AtmosphereState {
 	const clamped = Math.max(0, Math.min(1, t));
 	const smooth = clamped * clamped * (3 - 2 * clamped);
 
@@ -101,6 +101,19 @@ export function blendAtmosphere(a: AtmosphereBand, b: AtmosphereBand, t: number)
 	};
 }
 
+function verbatimBand(cur: AtmosphereBand): AtmosphereState {
+	return {
+		bandId: cur.id,
+		nextBandId: null,
+		crossing: 0,
+		fogDensity: cur.fogDensity,
+		groundDetail: cur.groundDetail,
+		deckOpacity: cur.deckOpacity,
+		skyTop: cur.skyTop,
+		skyHorizon: cur.skyHorizon
+	};
+}
+
 export function resolveAtmosphere(aglM: number): AtmosphereState {
 	const h = Math.max(0, aglM);
 	const bands = ATMOSPHERE_BANDS;
@@ -109,35 +122,13 @@ export function resolveAtmosphere(aglM: number): AtmosphereState {
 		const cur = bands[i];
 		const next = bands[i + 1];
 
-		if (!next) {
-			return {
-				bandId: cur.id,
-				nextBandId: null,
-				crossing: 0,
-				fogDensity: cur.fogDensity,
-				groundDetail: cur.groundDetail,
-				deckOpacity: cur.deckOpacity,
-				skyTop: cur.skyTop,
-				skyHorizon: cur.skyHorizon
-			};
-		}
+		if (!next) return verbatimBand(cur);
 
 		const boundary = cur.topM;
 		const low = boundary - TRANSITION_HALF_WIDTH_M;
 		const high = boundary + TRANSITION_HALF_WIDTH_M;
 
-		if (h < low) {
-			return {
-				bandId: cur.id,
-				nextBandId: null,
-				crossing: 0,
-				fogDensity: cur.fogDensity,
-				groundDetail: cur.groundDetail,
-				deckOpacity: cur.deckOpacity,
-				skyTop: cur.skyTop,
-				skyHorizon: cur.skyHorizon
-			};
-		}
+		if (h < low) return verbatimBand(cur);
 
 		if (h <= high) {
 			const t = (h - low) / (high - low);
@@ -145,15 +136,5 @@ export function resolveAtmosphere(aglM: number): AtmosphereState {
 		}
 	}
 
-	const top = bands[bands.length - 1];
-	return {
-		bandId: top.id,
-		nextBandId: null,
-		crossing: 0,
-		fogDensity: top.fogDensity,
-		groundDetail: top.groundDetail,
-		deckOpacity: top.deckOpacity,
-		skyTop: top.skyTop,
-		skyHorizon: top.skyHorizon
-	};
+	return verbatimBand(bands[bands.length - 1]);
 }

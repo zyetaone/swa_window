@@ -27,6 +27,13 @@ export default defineConfig({
 			}
 		})
 	],
+	// maplibre-gl ships its worker as a separate chunk that the dep optimizer
+	// repeatedly loses ("maplibre-gl-worker.mjs does not exist"). Without the
+	// worker the map builds a canvas but never fetches a raster tile — a blank
+	// map with no error in the page. Prebundling it buys nothing here.
+	optimizeDeps: {
+		exclude: ['maplibre-gl']
+	},
 	server: {
 		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
 		host: true

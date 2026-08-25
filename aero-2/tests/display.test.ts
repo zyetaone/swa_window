@@ -1,20 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { altitudeAt, orbitPose } from '#lib/display/flight/orbit.js';
-import { windowView } from '#lib/display/flight/camera.js';
-import { resolveAtmosphere } from '#lib/display/atmosphere/bands.js';
-import { resolveLocalHours, nightFactor } from '#lib/display/atmosphere/sun.js';
+import { calculateCameraView } from '#lib/display/flight/view.js';
+import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
+import { resolveLocalHours, nightFactor, sunPosition } from '#lib/display/world/sun.js';
+import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/display/world/atmosphere.js';
 import {
-	ATMOSPHERE_BANDS,
-	TRANSITION_HALF_WIDTH_M,
-	Location,
-	inNaipCoverage,
-	readPaneConfig,
 	ALTITUDE_CEILING_M,
 	ALTITUDE_FLOOR_M,
 	CLIMB_PERIOD_SEC
-} from '#lib/config.svelte.js';
+} from '#lib/display/flight/orbit.js';
+import { Location, inNaipCoverage, readSettings } from '#lib/settings/settings.svelte.js';
 
-const paramsFor = (search = '') => readPaneConfig(new URL(`http://kiosk.local/${search}`));
+const paramsFor = (search = '') => readSettings(new URL(`http://kiosk.local/${search}`));
 
 /**
  * An altitude squarely inside band `index`, clear of the blend zone at either
@@ -38,7 +35,7 @@ function coreAltitude(index: number): number {
 
 // ── URL Knobs & Param Parsing ────────────────────────────────────────────────
 
-describe('readPaneConfig', () => {
+describe('readSettings', () => {
 	it('defaults to Hyderabad, the fielded kiosk home', () => {
 		expect(paramsFor().place.id).toBe('hyderabad');
 		expect(paramsFor('?place=denver').place.id).toBe('denver');
@@ -66,7 +63,7 @@ describe('readPaneConfig', () => {
 
 describe('Flight Pose', () => {
 	it('produces finite, in-range numbers', () => {
-		const v = windowView(1_787_650_000, paramsFor());
+		const v = calculateCameraView(1_787_650_000, paramsFor());
 		expect(Number.isFinite(v.lat)).toBe(true);
 		expect(Number.isFinite(v.lon)).toBe(true);
 		expect(Number.isFinite(v.aglM)).toBe(true);
@@ -77,29 +74,29 @@ describe('Flight Pose', () => {
 	it('is deterministic across repeat calls with identical wall-clock time', () => {
 		const t = 1_787_650_123.456;
 		const p = paramsFor();
-		const a = windowView(t, p);
-		const b = windowView(t, p);
+		const a = calculateCameraView(t, p);
+		const b = calculateCameraView(t, p);
 		expect(a).toEqual(b);
 	});
 
 	it('tiles into a continuous window across three pan yaw offsets', () => {
 		const t = 1_787_650_000;
-		const left = windowView(t, paramsFor('?azimuth=-120'));
-		const center = windowView(t, paramsFor('?azimuth=-90'));
-		const right = windowView(t, paramsFor('?azimuth=-60'));
+		const left = calculateCameraView(t, paramsFor('?azimuth=-120'));
+		const center = calculateCameraView(t, paramsFor('?azimuth=-90'));
+		const right = calculateCameraView(t, paramsFor('?azimuth=-60'));
 
 		expect(left.lat).toBe(center.lat);
 		expect(left.lon).toBe(center.lon);
 		expect(left.aglM).toBe(center.aglM);
-		expect(left.headingDeg).toBeCloseTo((center.headingDeg - 30 + 360) % 360, 5);
-		expect(right.headingDeg).toBeCloseTo((center.headingDeg + 30) % 360, 5);
+		expect(left.cameraBearingDeg).toBeCloseTo((center.cameraBearingDeg - 30 + 360) % 360, 5);
+		expect(right.cameraBearingDeg).toBeCloseTo((center.cameraBearingDeg + 30) % 360, 5);
 	});
 
 	it('visits all altitude bands during the climb cycle', () => {
 		const visitedBands = new Set<string>();
 		const p = paramsFor();
 		for (let s = 0; s < CLIMB_PERIOD_SEC; s += 10) {
-			const v = windowView(s, p);
+			const v = calculateCameraView(s, p);
 			const atmo = resolveAtmosphere(v.aglM);
 			visitedBands.add(atmo.bandId);
 		}
@@ -154,5 +151,42 @@ describe('nightFactor', () => {
 		const midDusk = nightFactor(19.5);
 		expect(midDusk).toBeGreaterThan(0.3);
 		expect(midDusk).toBeLessThan(0.8);
+	});
+});
+
+// ── Solar position ───────────────────────────────────────────────────────────
+
+describe('sunPosition', () => {
+	// Hyderabad, and a wall-clock second chosen to land on local noon there.
+	const HYD_LAT = 17.385;
+	const HYD_OFFSET = 5.5;
+	/** UTC seconds for a date at 12:00 local (06:30 UTC) in Hyderabad. */
+	const localNoon = (isoDate: string) => Date.parse(`${isoDate}T06:30:00Z`) / 1000;
+
+	it('puts the sun high and roughly south at local noon in June', () => {
+		// Northern-hemisphere summer: sun is north of the zenith at this latitude,
+		// so the bearing swings past 180. Elevation is what matters here.
+		const { elevationDeg } = sunPosition(localNoon('2026-06-21'), HYD_LAT, HYD_OFFSET);
+		expect(elevationDeg).toBeGreaterThan(80);
+	});
+
+	it('is below the horizon at local midnight', () => {
+		const midnight = Date.parse('2026-06-21T18:30:00Z') / 1000;
+		expect(sunPosition(midnight, HYD_LAT, HYD_OFFSET).elevationDeg).toBeLessThan(0);
+	});
+
+	it('rises in the east and sets in the west', () => {
+		const day = '2026-03-21';
+		const morning = Date.parse(`${day}T03:00:00Z`) / 1000; // 08:30 local
+		const evening = Date.parse(`${day}T11:30:00Z`) / 1000; // 17:00 local
+		expect(sunPosition(morning, HYD_LAT, HYD_OFFSET).azimuthDeg).toBeLessThan(180);
+		expect(sunPosition(evening, HYD_LAT, HYD_OFFSET).azimuthDeg).toBeGreaterThan(180);
+	});
+
+	it('is deterministic — the same second gives the same sun', () => {
+		// Three Pis derive the sun independently; if this drifts, the panorama
+		// seam shows two different shadow directions.
+		const t = localNoon('2026-01-15');
+		expect(sunPosition(t, HYD_LAT, HYD_OFFSET)).toEqual(sunPosition(t, HYD_LAT, HYD_OFFSET));
 	});
 });

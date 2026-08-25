@@ -31,22 +31,32 @@ Rather than scattering a ~13-file application across artificial horizontal folde
 ```text
 src/
   ├── lib/
-  │   ├── config.svelte.ts          # ⚙️ SSOT: Locations, tile templates, PaneConfig ($state)
+  │   ├── settings/                 # ⚙️ Settings Slice
+  │   │   ├── Settings.svelte       # 🎛️ Drawer UI (tuning & admin snippets, shared glass styles)
+  │   │   ├── settings.svelte.ts    # Reactive PaneSettings model ($state), locations, tiles & parser
+  │   │   ├── locations.ts          # Location catalog (Hyderabad, Denver)
+  │   │   └── tiles.ts              # Tile endpoints, NAIP coverage, hillshade defaults
   │   │
   │   ├── display/                  # 🖥️ Hardware/Kiosk Display product slice
+  │   │   ├── Display.svelte        # 🪟 Parent component for kiosk window (Stage + Wing + Frame)
   │   │   ├── display.svelte.ts     # 🎛️ Root AeroDisplay model & Context DI (createDisplay / useDisplay)
-  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite, sky & inlined controls
   │   │   │
-  │   │   ├── flight/               # ✈️ Aircraft Kinematics & Camera Projection
-  │   │   │   ├── orbit.ts          # Orbital trajectory, heading, climb/descent altitude curve
-  │   │   │   └── camera.ts         # Window camera geometry, azimuth, pitch & MapLibre view options
+  │   │   ├── world/                # 🌍 3D World & Atmosphere (Planet Earth outside)
+  │   │   │   ├── Stage.svelte      # WebGL MapLibre viewport & animation loop
+  │   │   │   ├── Ground.svelte     # Base satellite & USGS detail imagery
+  │   │   │   ├── Relief.svelte     # 3D DEM terrain & hillshading
+  │   │   │   ├── Air.svelte        # Dynamic sky, atmosphere & solar lighting blend
+  │   │   │   ├── atmosphere.ts     # Atmosphere bands & continuous altitude blending
+  │   │   │   └── sun.ts            # Solar clock & day/night lighting factor curve
   │   │   │
-  │   │   ├── atmosphere/           # 🌤️ Atmosphere, Fog & Solar Lighting
-  │   │   │   ├── bands.ts          # Atmosphere bands (ground, haze, midDeck, cirrus, stratosphere) & blending
-  │   │   │   └── sun.ts            # Local diurnal time-of-day clock, sun elevation & night factor curve
+  │   │   ├── flight/               # ✈️ Flight Dynamics & Camera Control
+  │   │   │   ├── orbit.ts          # Orbital trajectory track, heading & climb/descent curve
+  │   │   │   ├── view.ts           # Camera look-at ground target & MapLibre projection
+  │   │   │   └── LookControls.svelte # Interactive aiming arrow controls
   │   │   │
-  │   │   └── cabin/                # 🪟 Aircraft Cabin Chrome
-  │   │       └── CabinFrame.svelte # Oval window bezel, depth shadow, glass reflection & vignette
+  │   │   └── cabin/                # 🪟 Aircraft Cabin Experience
+  │   │       ├── Frame.svelte      # Oval window bezel, depth shadow, glass reflection & vignette
+  │   │       └── Wing.svelte       # Aircraft wing silhouette with strobe navigation light
   │   │
   │   ├── server/                   # 🌐 Server-only tile proxy (imports nothing)
   │   │   └── tiles.ts              # Path-guarded offline tile server

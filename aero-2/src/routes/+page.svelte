@@ -2,32 +2,34 @@
 	/**
 	 * The window display — declarative root composition.
 	 *
-	 * Layer composition:
-	 *   WorldStage    outside 3D WebGL world (terrain, satellite, sky & look controls)
-	 *   CabinFrame    inside cabin window frame (bezel, depth shadow, glass reflection & vignette)
+	 * Composes the two high-level feature slices:
+	 *   <Display>   Kiosk window display (Stage + Frame)
+	 *   <Settings>  Operator tuning & admin diagnostics drawers
 	 */
 	import { page } from '$app/state';
-	import { readPaneConfig } from '#lib/config.svelte.js';
+	import { readSettings } from '#lib/settings/settings.svelte.js';
+	import Settings from '#lib/settings/Settings.svelte';
 	import { createDisplay } from '#lib/display/display.svelte.js';
-	import WorldStage from '#lib/display/WorldStage.svelte';
-	import CabinFrame from '#lib/display/cabin/CabinFrame.svelte';
+	import Display from '#lib/display/Display.svelte';
 
-	createDisplay(readPaneConfig(page.url));
+	createDisplay(readSettings(page.url));
+
+	let showSettings = $state(false);
+	let showAdmin = $state(false);
+
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 's' || e.key === 'S') showSettings = !showSettings;
+		if (e.key === 'a' || e.key === 'A') showAdmin = !showAdmin;
+		if (e.key === 'Escape') {
+			showSettings = false;
+			showAdmin = false;
+		}
+	}
 </script>
 
+<svelte:window onkeydown={onKeydown} />
 <svelte:head><title>aero-2</title></svelte:head>
 
-<main class="aero-display">
-	<WorldStage />
-	<CabinFrame />
-</main>
-
-<style>
-	.aero-display {
-		position: fixed;
-		inset: 0;
-		background: #000;
-		overflow: hidden;
-		user-select: none;
-	}
-</style>
+<Display>
+	<Settings bind:showSettings bind:showAdmin />
+</Display>

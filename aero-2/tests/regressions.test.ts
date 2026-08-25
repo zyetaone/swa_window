@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { tileTemplates } from '#lib/config.svelte.js';
+import { tileTemplates } from '#lib/settings/tiles.js';
+import { PaneSettings, KNOB_RANGE } from '#lib/settings/settings.svelte.js';
 
 /**
  * Guards for bugs that have already shipped once and were re-broken by later
@@ -59,7 +60,7 @@ describe('GroundLayers', () => {
 		// `raster-opacity: 0` hides a raster layer but does NOT stop it fetching.
 		// Over Hyderabad (no NAIP coverage) that meant hundreds of 404s per second
 		// for a layer nobody could see. A layer that renders nothing must not exist.
-		const src = findSource('WorldStage.svelte');
+		const src = findSource('Ground.svelte');
 		const usgsIndex = src.indexOf('id="usgs"');
 		expect(usgsIndex, 'usgs source should exist').toBeGreaterThan(-1);
 
@@ -80,7 +81,7 @@ describe('the plane actually flies', () => {
 	 * screenshots five seconds apart could see it.
 	 */
 	it('drives the camera every frame from the flight pose', () => {
-		const src = findSource('WorldStage.svelte');
+		const src = findSource('Stage.svelte');
 
 		expect(src, 'something must schedule frames').toMatch(/requestAnimationFrame/);
 		expect(src, 'each frame must advance the simulation clock').toMatch(/advanceTo\s*\(/);
@@ -92,12 +93,59 @@ describe('the plane actually flies', () => {
 	});
 
 	it('does not let map controls fight the frame loop', () => {
-		const src = findSource('WorldStage.svelte');
+		const src = findSource('Stage.svelte');
 
 		// Both are overwritten by the very next frame, because the loop re-derives
 		// the whole camera from the pose. Controls must change the params the pose
 		// is computed FROM instead.
 		expect(src, 'panBy is undone next frame — nudge azimuth instead').not.toMatch(/\.panBy\s*\(/);
 		expect(src, 'bind:pitch fights the camera driver').not.toMatch(/bind:pitch/);
+	});
+});
+
+describe('settings write gate', () => {
+	/**
+	 * `nudge('azimuthDeg')` wrapped into 0..360 while `applyUrl` and the slider
+	 * both used -180..180. One press of "pan left" from the -90 default produced
+	 * 255: a legal number, off the end of its own slider, and a different bearing
+	 * convention from the one the URL uses. Two copies of a range disagreed.
+	 */
+	it('keeps azimuth in the same signed range the URL and slider use', () => {
+		const s = new PaneSettings();
+		s.azimuthDeg = -90;
+		s.nudge('azimuthDeg', -15);
+		expect(s.azimuthDeg).toBe(-105);
+
+		s.azimuthDeg = -175;
+		s.nudge('azimuthDeg', -20); // across the seam
+		expect(s.azimuthDeg).toBeGreaterThanOrEqual(-180);
+		expect(s.azimuthDeg).toBeLessThanOrEqual(180);
+	});
+
+	it('clamps every knob into its declared range', () => {
+		const s = new PaneSettings();
+		for (const key of Object.keys(KNOB_RANGE) as (keyof typeof KNOB_RANGE)[]) {
+			const [lo, hi] = KNOB_RANGE[key];
+			s.set(key, hi + 1000);
+			expect(s[key], `${key} above max`).toBeLessThanOrEqual(hi);
+			s.set(key, lo - 1000);
+			expect(s[key], `${key} below min`).toBeGreaterThanOrEqual(lo);
+		}
+	});
+
+	it('ignores NaN rather than poisoning the pose', () => {
+		// A NaN knob makes the camera target NaN, which is a black screen with no
+		// error — the same failure mode as the URL parser bug.
+		const s = new PaneSettings();
+		s.set('shade', Number.NaN);
+		expect(Number.isFinite(s.shade)).toBe(true);
+	});
+
+	it('has no operator control writing config directly', () => {
+		// bind:value skips the gate: no clamping now, and no fleet broadcast later.
+		const src = findSource('Settings.svelte');
+		expect(src, 'sliders must call config.set(), not bind: into config').not.toMatch(
+			/bind:value=\{config\./
+		);
 	});
 });
