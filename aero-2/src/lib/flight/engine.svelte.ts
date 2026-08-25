@@ -1,8 +1,7 @@
 /**
  * Flight simulation engine — updates orbit pose and time of day.
  */
-import { altitudeAt } from '#lib/flight/rules.js';
-import { orbitPose } from '#lib/flight/rules.js';
+import { altitudeAt, normalizeHeading, orbitPose } from '#lib/flight/rules.js';
 import type { Location } from '#lib/world/locations.js';
 import type { ConfigTree } from '#lib/window/config.js';
 import { ALTITUDE_FLOOR_M, CameraPose, FlightFrame } from '#lib/flight/model.js';
@@ -16,9 +15,8 @@ export class FlightEngine {
 	aglM = $state(ALTITUDE_FLOOR_M);
 	timeOfDay = $state(12);
 
-	#orbitAngle = 0.5;
-	#orbitEpochWallT: number | null = null;
-	#orbitEpochAngle = this.#orbitAngle;
+	/** Initial orbit angle — seed for the wall-clock-absolute computation. */
+	#orbitEpochAngle = 0.5;
 	#lastDaylightSyncMs = 0;
 
 	constructor(
@@ -34,17 +32,11 @@ export class FlightEngine {
 		const wallT = Date.now() / 1000;
 		const { orbit, flightSpeed } = this.config.camera;
 
-		if (this.#orbitEpochWallT === null) {
-			this.#orbitEpochWallT = wallT;
-			this.#orbitEpochAngle = this.#orbitAngle;
-		}
-
 		const pose = orbitPose({
 			wallT,
 			centerLat: this.location.lat,
 			centerLon: this.location.lon,
 			orbitAngle0: this.#orbitEpochAngle,
-			orbitEpochWallT: this.#orbitEpochWallT,
 			orbitBearingRad: 0,
 			direction: 1,
 			majorMin: orbit.majorMin,
@@ -54,7 +46,6 @@ export class FlightEngine {
 			flightSpeed
 		});
 
-		this.#orbitAngle = pose.orbitAngle;
 		this.lat = pose.lat;
 		this.lon = pose.lon;
 		this.headingDeg = pose.headingDeg;
@@ -78,7 +69,16 @@ export class FlightEngine {
 
 	cameraPose(): CameraPose {
 		const { view } = this.config.camera;
-		return new CameraPose(this.lat, this.lon, this.altitudeM, this.headingDeg, view.pitchDeg);
+		// headingDeg is the aircraft's TRACK. What the camera looks at is the track
+		// plus the window's azimuth — otherwise we render the windscreen, not a
+		// passenger window.
+		return new CameraPose(
+			this.lat,
+			this.lon,
+			this.altitudeM,
+			normalizeHeading(this.headingDeg + view.windowAzimuthDeg),
+			view.pitchDeg,
+		);
 	}
 
 	frame(): FlightFrame {

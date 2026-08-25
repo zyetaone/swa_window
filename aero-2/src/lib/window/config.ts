@@ -14,7 +14,19 @@ export interface OrbitConfig {
 
 export interface ViewConfig {
 	readonly pitchDeg: number;
+	/**
+	 * Where the window looks, relative to where the aircraft is going.
+	 *
+	 * 0 would be the windscreen. A passenger window is roughly perpendicular, so
+	 * the default is -90 — out of the left side. This is also the ONLY value that
+	 * differs between the three panes of the wall: one aircraft, one clock, one
+	 * atmosphere, three azimuths whose frusta tile into a single window.
+	 */
+	readonly windowAzimuthDeg: number;
 }
+
+/** Left-hand window. Panes 0/1/2 of the wall would be -105 / -90 / -75. */
+export const DEFAULT_WINDOW_AZIMUTH_DEG = -90;
 
 export interface DaylightConfig {
 	readonly syncIntervalMs: number;
@@ -22,6 +34,10 @@ export interface DaylightConfig {
 }
 
 export class CameraConfig {
+	constructor(windowAzimuthDeg: number = DEFAULT_WINDOW_AZIMUTH_DEG) {
+		this.view = { pitchDeg: -18, windowAzimuthDeg };
+	}
+
 	/** ~6 min per orbit. See orbitRate(): rate = driftRate * flightSpeed / meanRadius. */
 	readonly orbit: OrbitConfig = {
 		driftRate: 3.42e-4,
@@ -29,7 +45,7 @@ export class CameraConfig {
 		majorMax: 0.25,
 		breathePeriod: 180
 	};
-	readonly view: ViewConfig = { pitchDeg: -18 };
+	readonly view: ViewConfig;
 	readonly flightSpeed = 6.0;
 }
 
@@ -41,6 +57,10 @@ export class DirectorConfig {
 }
 
 export class ConfigTree {
-	readonly camera = new CameraConfig();
+	readonly camera: CameraConfig;
 	readonly director = new DirectorConfig();
+
+	constructor(windowAzimuthDeg?: number) {
+		this.camera = new CameraConfig(windowAzimuthDeg);
+	}
 }

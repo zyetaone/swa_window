@@ -35,5 +35,3 @@ export class FlightFrame {
 		readonly aglM: number
 	) {}
 }
-
-// ── Config ─────────────────────────────────────────────────────────────────────

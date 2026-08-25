@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AeroWindow } from '#lib/window/aero-window.svelte.js';
+import { Location } from '#lib/world/locations.js';
 import { resolveLocalHours } from '#lib/flight/clock.js';
 
 describe('AeroWindow', () => {
@@ -29,5 +30,36 @@ describe('resolveLocalHours', () => {
 			now: new Date('2026-01-15T12:00:00Z')
 		});
 		expect(h).toBeCloseTo(12, 1);
+	});
+});
+
+describe('window azimuth', () => {
+	it('looks out of the side, not down the track — this is a window, not a windscreen', () => {
+		const model = new AeroWindow(Location.hyderabad(), -90);
+		model.tick();
+		const track = model.flight.headingDeg;
+		const looking = model.frame().camera.headingDeg;
+		const delta = (((looking - track) % 360) + 540) % 360 - 180;
+		expect(delta).toBeCloseTo(-90, 6);
+	});
+
+	it('wraps rather than emitting a negative heading', () => {
+		const model = new AeroWindow(Location.hyderabad(), -270);
+		model.tick();
+		const h = model.frame().camera.headingDeg;
+		expect(h).toBeGreaterThanOrEqual(0);
+		expect(h).toBeLessThan(360);
+	});
+
+	it('a pane offset is the only per-screen difference', () => {
+		// Three panes, one aircraft: same position and time, three azimuths.
+		const panes = [-105, -90, -75].map((az) => {
+			const m = new AeroWindow(Location.hyderabad(), az);
+			m.tick();
+			return m.frame();
+		});
+		expect(panes[1].camera.lat).toBe(panes[0].camera.lat);
+		expect(panes[2].camera.altitudeM).toBe(panes[0].camera.altitudeM);
+		expect(panes[1].camera.headingDeg).not.toBe(panes[0].camera.headingDeg);
 	});
 });

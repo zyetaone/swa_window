@@ -7,11 +7,12 @@ import { FlightEngine } from '#lib/flight/engine.svelte.js';
 import type { FlightFrame } from '#lib/flight/model.js';
 
 export class AeroWindow {
-	readonly config = new ConfigTree();
+	readonly config: ConfigTree;
 	readonly location: Location;
 	readonly flight: FlightEngine;
 
-	constructor(location: Location = Location.hyderabad()) {
+	constructor(location: Location = Location.hyderabad(), windowAzimuthDeg?: number) {
+		this.config = new ConfigTree(windowAzimuthDeg);
 		this.location = location;
 		this.flight = new FlightEngine(this.config, location);
 	}
@@ -29,7 +30,12 @@ export function createAeroWindow(location?: Location): AeroWindow {
 	return new AeroWindow(location);
 }
 
-/** `?place=denver` — so a place can be looked at without a rebuild. */
+/** `?place=denver&azimuth=-75` — a place and a pane, without a rebuild. */
 export function aeroWindowFromUrl(search: string): AeroWindow {
-	return new AeroWindow(Location.byId(new URLSearchParams(search).get('place')));
+	const q = new URLSearchParams(search);
+	const azimuth = Number(q.get('azimuth'));
+	return new AeroWindow(
+		Location.byId(q.get('place')),
+		Number.isFinite(azimuth) && q.has('azimuth') ? azimuth : undefined,
+	);
 }

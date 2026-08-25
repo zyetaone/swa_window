@@ -233,20 +233,18 @@ describe('orbitPose', () => {
 		flightSpeed: 6
 	};
 
-	it('ignores when each Pi booted — the wall depends on it', () => {
-		// Three panes, three boot times, one instant. They must agree exactly.
+	it('is deterministic — wall-clock time is the only input', () => {
+		// Three independent calls at the same instant must agree exactly.
 		const now = 1_787_650_000;
-		const panes = [now - 5, now - 40, now - 3_600].map((bootT) =>
-			orbitPose({ ...base, wallT: now, orbitEpochWallT: bootT })
-		);
-		expect(panes[1]).toEqual(panes[0]);
-		expect(panes[2]).toEqual(panes[0]);
+		const a = orbitPose({ ...base, wallT: now });
+		const b = orbitPose({ ...base, wallT: now });
+		expect(b).toEqual(a);
 	});
 
 	it('stays finite and keeps moving an hour in', () => {
 		const t0 = 1_787_650_000;
-		const a = orbitPose({ ...base, wallT: t0, orbitEpochWallT: t0 });
-		const b = orbitPose({ ...base, wallT: t0 + 3_600, orbitEpochWallT: t0 });
+		const a = orbitPose({ ...base, wallT: t0 });
+		const b = orbitPose({ ...base, wallT: t0 + 3_600 });
 		for (const p of [a, b]) {
 			expect(Number.isFinite(p.lat)).toBe(true);
 			expect(Number.isFinite(p.lon)).toBe(true);
