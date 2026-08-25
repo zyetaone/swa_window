@@ -142,8 +142,8 @@
 					/>
 				</label>
 				<p class="section-note">
-					Shifts the destination clock, so sun, night and haze all move together and keep
-					advancing. Anything but 0 desyncs this pane from the other two &mdash; desk tuning only.
+					Shifts the destination clock, so sun, night and haze all move together and keep advancing.
+					Anything but 0 desyncs this pane from the other two &mdash; desk tuning only.
 				</p>
 			</section>
 

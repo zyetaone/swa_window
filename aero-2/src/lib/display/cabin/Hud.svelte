@@ -34,9 +34,18 @@
 	});
 
 	function formatTime(hours: number): string {
-		const h = Math.floor(hours) % 24;
-		const m = Math.floor((hours % 1) * 60);
+		const totalMinutes = Math.floor(hours * 60);
+		const h = Math.floor(totalMinutes / 60) % 24;
+		const m = totalMinutes % 60;
 		return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+	}
+
+	function formatUtcOffset(offset: number): string {
+		const sign = offset >= 0 ? '+' : '-';
+		const abs = Math.abs(offset);
+		const h = Math.floor(abs);
+		const m = Math.round((abs - h) * 60);
+		return m === 0 ? `UTC${sign}${h}` : `UTC${sign}${h}:${m.toString().padStart(2, '0')}`;
 	}
 
 	/** 17.4435, 78.3772 -> "17.44N 78.38E". Signed degrees read as data; a
@@ -56,6 +65,14 @@
 		display.view.bankDeg !== undefined ? display.view.bankDeg.toFixed(1) : '0.0'
 	);
 	const localTime = $derived(formatTime(display.view.timeOfDay ?? 12));
+	const utcLabel = $derived(formatUtcOffset(display.config.place.utcOffset));
+	const sunElev = $derived(display.sun.elevationDeg ?? 30);
+	const solarPhase = $derived.by(() => {
+		if (sunElev > 15) return '☀️ DAY';
+		if (sunElev > 0) return '🌅 DUSK';
+		if (sunElev > -12) return '🌌 TWILIGHT';
+		return '🌙 NIGHT';
+	});
 	const band = $derived(display.atmosphere.bandId);
 </script>
 
@@ -63,9 +80,7 @@
 	<!--
 		Publishes its own height as `--hud-height` on the document root, so
 		anything stacked above it (the minimap) clears the ACTUAL ribbon rather
-		than a hard-coded guess. The ribbon wraps to two or three rows as the
-		viewport narrows; a fixed offset that clears one row overlaps at the next
-		breakpoint, which is exactly what happened.
+		than a hard-coded guess.
 	-->
 	<aside
 		class="hud-ribbon-bar"
@@ -115,7 +130,8 @@
 
 			<div class="hud-segment">
 				<span class="seg-label">TIME</span>
-				<strong class="seg-val">{localTime}</strong>
+				<strong class="seg-val">{localTime} <span class="tz-chip">{utcLabel}</span></strong>
+				<span class="seg-sub">{solarPhase} ({sunElev > 0 ? '+' : ''}{sunElev.toFixed(0)}°)</span>
 			</div>
 
 			<div class="divider"></div>
@@ -128,9 +144,6 @@
 
 		<!-- Single Attribution Segment -->
 		<div class="attribution-section" title={TILE_ATTRIBUTION}>
-			<!-- The one attribution string. This was a hand-typed second copy that
-			     already disagreed with TILE_ATTRIBUTION, and every added source
-			     would have had to be remembered in two files. -->
 			<span class="attr-text">{TILE_ATTRIBUTION}</span>
 		</div>
 	</aside>
@@ -142,17 +155,14 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		/* min-height, not height: the contents wrap to a second and third row at
-		   narrow widths. A fixed 36px let them overflow the declared box, so
-		   anything positioned above the ribbon could not know its real height. */
 		min-height: 36px;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		padding: 0 16px;
-		background: rgba(15, 23, 42, 0.75);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
+		background: rgba(15, 23, 42, 0.82);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
 		border-top: 1px solid rgba(255, 255, 255, 0.12);
 		z-index: 20;
 		user-select: none;
@@ -164,14 +174,14 @@
 	.ribbon-content {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 12px;
 		height: 100%;
 	}
 
 	.hud-segment {
 		display: flex;
 		align-items: center;
-		gap: 5px;
+		gap: 6px;
 		color: var(--text-primary);
 		white-space: nowrap;
 	}
@@ -221,6 +231,17 @@
 		color: #f8fafc;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.tz-chip {
+		font-size: 0.58rem;
+		font-weight: 600;
+		padding: 1px 4px;
+		border-radius: 4px;
+		background: rgba(56, 189, 248, 0.15);
+		color: #38bdf8;
+		border: 1px solid rgba(56, 189, 248, 0.25);
+		margin-left: 2px;
 	}
 
 	.band-val {

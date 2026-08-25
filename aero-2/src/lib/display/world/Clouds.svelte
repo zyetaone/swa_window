@@ -316,8 +316,7 @@
 			 * collapse edge-on into an aliased line.
 			 */
 			const deltaAltM = planeAgl - cloudAltM;
-			camera.position.y =
-				Math.abs(deltaAltM) < 300 ? Math.sign(deltaAltM || 1) * 300 : deltaAltM;
+			camera.position.y = Math.abs(deltaAltM) < 300 ? Math.sign(deltaAltM || 1) * 300 : deltaAltM;
 			camera.position.z = 12000;
 			camera.lookAt(0, 0, 0);
 

@@ -65,11 +65,24 @@
 	};
 
 	const SUNSET_HOLD_BEARING = 315;
-	const sunBearing = $derived(
-		display.sun.elevationDeg > 0 ? display.sun.azimuthDeg : SUNSET_HOLD_BEARING
-	);
-	const sunAltitude = $derived(Math.max(5, Math.min(85, display.sun.elevationDeg)));
+	const night = $derived(display.night ?? 0);
+	const sunElev = $derived(display.sun.elevationDeg ?? 30);
+	const dayFactor = $derived(Math.max(0, 1 - night));
+
+	const sunBearing = $derived(sunElev > 0 ? display.sun.azimuthDeg : SUNSET_HOLD_BEARING);
+	const sunAltitude = $derived(Math.max(5, Math.min(85, sunElev)));
 	const exaggeration = $derived(display.config.exaggeration ?? 2.5);
+
+	// Circadian hillshade highlights: warm sunlight in day -> amber dusk -> deep starlight navy at night (never harsh #ffffff)
+	const hillshadeHighlightColor = $derived.by(() => {
+		if (night > 0.7) return '#0c1424';
+		if (sunElev <= 0) return '#1e293b';
+		if (sunElev < 12) return '#f59e0b';
+		return '#f8eedc';
+	});
+
+	// Soften relief highlights at night so nocturnal terrain stays dark and moody
+	const effectiveHillshade = $derived(display.config.shade * (0.2 + 0.8 * dayFactor));
 </script>
 
 <!-- Registers the pmtiles:// scheme. Must come BEFORE any source that uses it. -->
@@ -83,19 +96,19 @@
 	{#if display.config.colorRelief}
 		<ColorReliefLayer
 			paint={{
-				'color-relief-opacity': 0.75,
+				'color-relief-opacity': 0.75 * dayFactor,
 				'color-relief-color': COLOR_RAMPS[display.config.reliefRamp ?? 'geographical']
 			}}
 		/>
 	{/if}
 
-	<!-- Solar-Synchronized Hillshading with Real Sun Compass Bearing and Elevation -->
+	<!-- Solar-Synchronized Hillshading with Real Sun Compass Bearing, Elevation, and Circadian Highlights -->
 	<HillshadeLayer
 		paint={{
 			'hillshade-method': 'igor',
-			'hillshade-exaggeration': display.config.shade,
+			'hillshade-exaggeration': effectiveHillshade,
 			'hillshade-shadow-color': HILLSHADE_SHADOW_COLOR,
-			'hillshade-highlight-color': '#ffffff',
+			'hillshade-highlight-color': hillshadeHighlightColor,
 			'hillshade-illumination-anchor': 'map',
 			'hillshade-illumination-direction': sunBearing,
 			'hillshade-illumination-altitude': sunAltitude

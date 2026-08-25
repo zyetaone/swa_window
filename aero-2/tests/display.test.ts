@@ -602,3 +602,65 @@ describe('timezone offsets follow DST', () => {
 		}
 	});
 });
+
+describe('feature locations are crossed, not orbited', () => {
+	/**
+	 * The Himalayas, open ocean and open desert have no centre worth looking at.
+	 * Aiming inward — correct over a city, where the orbit centre is the skyline
+	 * — would stare at one arbitrary patch of ground for the whole 49-minute
+	 * loop. They aim along the track instead.
+	 */
+	const paramsFor = (place: Location) => ({
+		place,
+		azimuthDeg: 0,
+		pitchDeg: -18,
+		floorM: place.climbFloorM,
+		ceilingM: place.climbCeilingM
+	});
+
+	it('classifies terrain as feature and places as city', () => {
+		for (const id of ['himalayas', 'ocean', 'desert']) {
+			expect(Location.byId(id).isFeature, id).toBe(true);
+		}
+		for (const id of ['hyderabad', 'denver', 'mumbai', 'dubai']) {
+			expect(Location.byId(id).isFeature, id).toBe(false);
+		}
+	});
+
+	it('every catalog entry is one kind or the other', () => {
+		expect(Location.cities().length + Location.features().length).toBe(Location.all().length);
+		expect(Location.features().length).toBe(3);
+	});
+
+	it('a city keeps its centre in frame; a feature does not fixate', () => {
+		const city = Location.byId('denver');
+		const feature = Location.byId('ocean');
+
+		const spread = (place: Location) => {
+			const targets: [number, number][] = [];
+			for (let i = 0; i < 48; i++) {
+				const v = calculateCameraView((i / 48) * ORBIT_PERIOD_SEC, paramsFor(place));
+				targets.push([v.targetLon, v.targetLat]);
+			}
+			// How far the aim point wanders, relative to the place itself.
+			const cos = Math.cos(place.lat * (Math.PI / 180));
+			return Math.max(...targets.map(([x, y]) => Math.hypot((x - place.lon) * cos, y - place.lat)));
+		};
+
+		// The city's aim stays near its centre; the feature's sweeps much wider,
+		// because it follows the aircraft's heading around the loop.
+		expect(spread(feature)).toBeGreaterThan(spread(city));
+	});
+
+	it('a feature aims off the nose, a city aims across the orbit', () => {
+		const off = (place: Location) => {
+			const v = calculateCameraView(400, paramsFor(place));
+			const d = Math.abs(v.cameraBearingDeg - v.planeHeadingDeg);
+			return Math.min(d, 360 - d);
+		};
+		// Heading-relative aim is a fixed 90 deg off the nose by construction.
+		expect(off(Location.byId('ocean'))).toBeCloseTo(90, 0);
+		// Inward aim is not tied to the nose, so it differs.
+		expect(Math.abs(off(Location.byId('denver')) - 90)).toBeGreaterThan(1);
+	});
+});

@@ -41,6 +41,14 @@ function offsetHoursNow(timeZone: string, atMs: number = Date.now()): number {
 	return value;
 }
 
+/**
+ * A place you orbit and look at, versus terrain you cross.
+ *
+ * The difference is not cosmetic: `city` drives the inward-facing camera, which
+ * is meaningless over open ocean.
+ */
+export type LocationKind = 'city' | 'feature';
+
 export class Location {
 	constructor(
 		readonly id: string,
@@ -52,8 +60,25 @@ export class Location {
 		readonly groundElevationM: number,
 		/** Climb envelope, metres ABOVE GROUND. Floor must clear local peaks. */
 		readonly climbFloorM: number,
-		readonly climbCeilingM: number
+		readonly climbCeilingM: number,
+		/**
+		 * What kind of place this is, which changes how the window behaves.
+		 *
+		 * `city` has a centre worth looking AT — the orbit circles it and the
+		 * camera aims inward, so the skyline stays in frame for the whole loop.
+		 *
+		 * `feature` is terrain: the Himalayas, open ocean, open desert. There is
+		 * no centre to orbit and nothing to point at, so aiming inward just
+		 * stares at one arbitrary patch of ground for 49 minutes. These read as
+		 * mid-transit — you are crossing them, not visiting them — so the camera
+		 * looks along the track instead.
+		 */
+		readonly kind: LocationKind = 'city'
 	) {}
+
+	get isFeature(): boolean {
+		return this.kind === 'feature';
+	}
 
 	/**
 	 * Hours ahead of UTC right NOW, DST included. Derived, never typed in.
@@ -156,10 +181,31 @@ export class Location {
 			'Asia/Kathmandu',
 			5_000,
 			3_500,
-			13_000
+			13_000,
+			'feature'
 		),
-		new Location('ocean', 'Pacific Ocean', 21.3069, -157.8583, 'Pacific/Honolulu', 0, 300, 11_000),
-		new Location('desert', 'Sahara Desert', 23.4241, 25.6628, 'Africa/Cairo', 500, 700, 12_500)
+		new Location(
+			'ocean',
+			'Pacific Ocean',
+			21.3069,
+			-157.8583,
+			'Pacific/Honolulu',
+			0,
+			300,
+			11_000,
+			'feature'
+		),
+		new Location(
+			'desert',
+			'Sahara Desert',
+			23.4241,
+			25.6628,
+			'Africa/Cairo',
+			500,
+			700,
+			12_500,
+			'feature'
+		)
 	];
 
 	/** The fielded kiosk home, and the fallback for anything unrecognised. */
@@ -177,5 +223,15 @@ export class Location {
 
 	static all(): readonly Location[] {
 		return Location.CATALOG;
+	}
+
+	/** Places with a centre worth orbiting. */
+	static cities(): readonly Location[] {
+		return Location.CATALOG.filter((l) => l.kind === 'city');
+	}
+
+	/** Terrain you cross rather than visit. */
+	static features(): readonly Location[] {
+		return Location.CATALOG.filter((l) => l.kind === 'feature');
 	}
 }

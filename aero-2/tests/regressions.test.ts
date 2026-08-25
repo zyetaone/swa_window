@@ -191,3 +191,30 @@ describe('privileged code stays unreachable until it is gated', () => {
 		}
 	});
 });
+
+describe('cloud sprites', () => {
+	/**
+	 * A THREE.Sprite applies scale in its OWN local axes, so a non-square sprite
+	 * that also rotates gets sheared: at 1.3 x 1.0 the apparent aspect runs 1.30
+	 * at 0 deg, 1.00 at 45 and 0.77 at 90. The mid-level clouds took a random
+	 * full-circle rotation with a 1.3 stretch, so the same square texture
+	 * rendered wide, round or squashed purely by its random angle.
+	 *
+	 * The rule: free rotation OR a stretch, never both. Horizon banks may
+	 * stretch because they hold a near-zero roll.
+	 */
+	it('does not combine a full-circle rotation with a stretched scale', () => {
+		const src = findSource('Clouds.svelte');
+
+		// Any sprite scale where x and y differ, other than the horizon banks.
+		const stretched = [...src.matchAll(/sprite\.scale\.set\(([^)]*)\)/g)]
+			.map((m) => m[1].trim())
+			.filter((args) => !args.includes('bankStretch'))
+			.filter((args) => {
+				const [x, y] = args.split(',').map((a) => a.trim());
+				return x !== y;
+			});
+
+		expect(stretched, 'freely-rotating cloud sprites must be square').toEqual([]);
+	});
+});

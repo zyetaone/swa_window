@@ -94,14 +94,25 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
  * 3. Determinism. Three Pis booting either side of the GIBS daily update would
  *    fetch different rasters, and the panorama would disagree across the seam.
  *
- * Chosen by sweeping candidate days over BOTH locations and scoring cloud and
- * no-data fraction: 2026-04-15 is 0.0% cloud over Hyderabad, 0.2% over Denver,
- * with no gaps. Winter dates score badly for Denver on snow, not cloud.
+ * Chosen by sweeping candidate days over EVERY location in the catalog and
+ * checking each one actually returns a tile.
  *
- * To re-pin: re-run that sweep over every location in the catalog. A day that
- * is clear over one city is routinely cloud or gap over another.
+ * 2026-04-15 was picked when the catalog held only Hyderabad and Denver, and it
+ * is genuinely clear over both. It does NOT cover the eleven-location catalog:
+ * MODIS is a swath instrument, so a single day has gaps between passes, and on
+ * that date the Sahara tile 404s — as did the Pacific at the zoom the window
+ * flies. An ocean location with no tile renders as a black void under a lit
+ * sky, which is what surfaced this.
+ *
+ * 2026-08-23 returns a tile for all eleven. Verified per location, not assumed:
+ * 04-15 scored 10/11 (missing desert), 08-20 10/11 (missing mumbai),
+ * 08-22/23/24 all 11/11.
+ *
+ * To re-pin: sweep candidate days against every catalog entry at z9 and take
+ * one that is 11/11. A day that is clear over one city is routinely a gap over
+ * another, and adding a location can invalidate the pin.
  */
-export const GIBS_DATE = '2026-04-15';
+export const GIBS_DATE = '2026-08-23';
 
 /**
  * VIIRS day/night band — the city-lights raster, for night.
