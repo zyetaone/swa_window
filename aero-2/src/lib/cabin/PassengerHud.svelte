@@ -2,9 +2,9 @@
 	/**
 	 * PassengerHud — elegant passenger in-flight status display.
 	 */
-	import type { WindowView } from '#lib/flight/view.js';
-	import type { Location } from '#lib/flight/locations.js';
-	import { useAeroWindow } from '#lib/sim/context.js';
+	import type { WindowView } from '#lib/sim/flight.svelte.js';
+	import type { Location } from '#lib/config/locations.js';
+	import { useAeroWindow } from '#lib/sim/window.svelte.js';
 
 	interface Props {
 		place?: Location;

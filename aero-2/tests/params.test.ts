@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readWindowParams } from '#lib/sim/params.js';
-import { inNaipCoverage, tileTemplates } from '#lib/stage/imagery.js';
-import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG } from '#lib/sim/config.js';
+import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG } from '#lib/config/window.js';
+import { inNaipCoverage, tileTemplates } from '#lib/config/imagery.js';
 
 const params = (search = '') => readWindowParams(new URL(`http://kiosk.local/${search}`));
 

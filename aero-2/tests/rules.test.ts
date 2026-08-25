@@ -1,17 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
 	ATMOSPHERE_BANDS,
+	nightFactor,
 	resolveAtmosphere,
 	TRANSITION_HALF_WIDTH_M
-} from '#lib/stage/atmosphere.js';
-import {
-	ALTITUDE_CEILING_M,
-	ALTITUDE_FLOOR_M,
-	altitudeAt,
-	CLIMB_PERIOD_SEC,
-	orbitPose
-} from '#lib/flight/rules.js';
-import { nightFactor } from '#lib/stage/lighting.js';
+} from '#lib/config/atmosphere.js';
+import { altitudeAt, orbitPose } from '#lib/sim/flight.svelte.js';
+import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/config/window.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {

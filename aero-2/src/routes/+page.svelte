@@ -11,7 +11,7 @@
 	 *   DebugReadout  dev only                   z 50
 	 */
 	import { dev } from '$app/env';
-	import { createAeroWindow } from '#lib/sim/context.js';
+	import { createAeroWindow } from '#lib/sim/window.svelte.js';
 
 	import MapStage from '#lib/stage/MapStage.svelte';
 	import GroundLayers from '#lib/stage/GroundLayers.svelte';

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { windowView } from '#lib/flight/view.js';
+import { resolveLocalHours, windowView } from '#lib/sim/flight.svelte.js';
 import { readWindowParams } from '#lib/sim/params.js';
-import { resolveLocalHours } from '#lib/flight/clock.js';
-import { Location } from '#lib/flight/locations.js';
+import { Location } from '#lib/config/locations.js';
 
 const paramsFor = (search = '') => readWindowParams(new URL(`http://kiosk.local/${search}`));
 

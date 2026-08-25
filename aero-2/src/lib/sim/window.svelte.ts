@@ -1,10 +1,12 @@
 /**
- * AeroWindow — Svelte 5 root simulation state container.
+ * AeroWindow — Svelte 5 root simulation state container & Context DI.
  */
-import { FlightSim } from '#lib/flight/FlightSim.svelte.js';
-import { resolveAtmosphere } from '#lib/stage/atmosphere.js';
-import { nightFactor } from '#lib/stage/lighting.js';
-import type { WindowParams } from './params.js';
+import { getContext, setContext } from 'svelte';
+import { FlightSim } from './flight.svelte.js';
+import { nightFactor, resolveAtmosphere } from '#lib/config/atmosphere.js';
+import { BLIND_HUD_THRESHOLD, type WindowParams } from '#lib/config/window.js';
+
+const AERO_WINDOW_KEY = Symbol('AERO_WINDOW');
 
 export class AeroWindow {
 	readonly #getParams: () => WindowParams;
@@ -33,10 +35,24 @@ export class AeroWindow {
 	}
 
 	get hudVisible() {
-		return this.blindClosed < 0.5;
+		return this.blindClosed < BLIND_HUD_THRESHOLD;
 	}
 
 	tick(wallSec?: number) {
 		return this.flight.tick(wallSec);
 	}
+}
+
+export function createAeroWindow(params: WindowParams | (() => WindowParams)): AeroWindow {
+	const window = new AeroWindow(params);
+	setContext(AERO_WINDOW_KEY, window);
+	return window;
+}
+
+export function useAeroWindow(): AeroWindow {
+	const ctx = getContext<AeroWindow>(AERO_WINDOW_KEY);
+	if (!ctx) {
+		throw new Error('useAeroWindow() called outside of AeroWindow provider context');
+	}
+	return ctx;
 }

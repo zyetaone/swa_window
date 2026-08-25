@@ -1,20 +1,17 @@
 /**
- * The kiosk's URL knobs, parsed once.
+ * Kiosk tuning constants and URL parameter parser.
  */
 
-import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG, HILLSHADE_DEFAULT } from './config.js';
-import { Location } from '#lib/flight/locations.js';
-import { inNaipCoverage } from '#lib/stage/imagery.js';
+import { Location } from '#lib/config/locations.js';
+import { inNaipCoverage } from '#lib/config/imagery.js';
+import {
+	DEFAULT_WINDOW_AZIMUTH_DEG,
+	DEFAULT_PITCH_DEG,
+	HILLSHADE_DEFAULT,
+	type WindowParams
+} from '#lib/config/window.js';
 
-export interface WindowParams {
-	readonly place: Location;
-	readonly azimuthDeg: number;
-	readonly pitchDeg: number;
-	readonly detail: number;
-	readonly floorM: number;
-	readonly ceilingM: number;
-	readonly shade: number;
-}
+export type { WindowParams };
 
 function num(params: URLSearchParams, key: string, fallback: number): number {
 	const raw = params.get(key);

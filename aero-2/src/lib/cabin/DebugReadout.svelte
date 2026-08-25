@@ -2,9 +2,9 @@
 	/**
 	 * DebugReadout — dev-only telemetry strip.
 	 */
-	import type { WindowView } from '#lib/flight/view.js';
-	import type { AtmosphereState } from '#lib/stage/atmosphere.js';
-	import { useAeroWindow } from '#lib/sim/context.js';
+	import type { WindowView } from '#lib/sim/flight.svelte.js';
+	import type { AtmosphereState } from '#lib/config/atmosphere.js';
+	import { useAeroWindow } from '#lib/sim/window.svelte.js';
 
 	interface Props {
 		placeId?: string;

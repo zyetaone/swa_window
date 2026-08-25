@@ -3,8 +3,8 @@
 	 * AtmosphereSky — dynamic sky, horizon, and fog blend driven by altitude band.
 	 */
 	import { Sky } from 'svelte-maplibre-gl';
-	import { useAeroWindow } from '#lib/sim/context.js';
-	import type { AtmosphereState } from './atmosphere.js';
+	import { useAeroWindow } from '#lib/sim/window.svelte.js';
+	import type { AtmosphereState } from '#lib/config/atmosphere.js';
 
 	interface Props {
 		atmosphere?: AtmosphereState;
