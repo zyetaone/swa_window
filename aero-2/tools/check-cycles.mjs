@@ -39,6 +39,7 @@ function walk(dir) {
 function resolveImport(spec, fromFile) {
 	let base;
 	if (spec.startsWith('#lib/')) base = join(LIB, spec.slice('#lib/'.length));
+	else if (spec.startsWith('#routes/')) base = join(SRC, 'routes', spec.slice('#routes/'.length));
 	else if (spec.startsWith('./') || spec.startsWith('../')) base = resolve(dirname(fromFile), spec);
 	else return null; // node_modules, $app/*, $env/*, etc.
 

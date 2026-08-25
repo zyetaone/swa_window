@@ -5,118 +5,61 @@ Minimal, high-performance architecture for the Aero Dynamic Window.
 > **MapLibre is the only renderer as of 2026-08-25.** See
 > [ADR-005](../../docs/ADR-005-aero-2-threlte-renderer.md).
 
-## 1. Folders, and the one rule
+## 1. Product Co-location and Structure
 
-Folders name what things **are**, roughly outermost-in:
+Following the **Universal Svelte Architecture** principles (_Co-locate first. Extract when there is a reason. Abstract last._), all files that belong to the hardware/kiosk display experience live together inside `src/lib/display/`, while server-only concerns remain isolated in `src/lib/server/`:
 
 ```text
-cabin/    🪟 inside the cabin — bezel, glass, blind, HUD
-stage/    🌍 outside the window — MapLibre, tiles, terrain, sky
-flight/   🎛️ the invisible part — pose maths, state, the frame loop
-domain/   📐 simulation logic that knows no renderer — imports nothing
-config/   ⚙️ data: places, tile URLs, zoom caps
-server/   🌐 server-only tile proxy
+display/  🖥️ The complete hardware/kiosk display product slice — visual stage, cabin chrome, flight math, reactive models
+server/   🌐 Server-only offline tile proxy
 ```
 
 There is exactly one enforced rule: **no import cycles**.
 `node tools/check-cycles.mjs` runs in both `bun run check` and `bun run test`.
-It is not decoration — this repo once claimed "no import cycles" in prose while
-the simulation and `stage/` imported each other in **both** directions. A rule
-nothing enforces is a rule nothing keeps.
+Cycles are the real failure: they break tree-shaking and produce undefined-at-import-time bugs that only surface at runtime.
 
-### What this used to be, and why it shrank
+### Why Co-location
 
-This was a five-layer ranking (`domain → server → flight → stage → cabin`) with
-a checker that rejected any upward or sibling import. For a 23-file app with one
-route, that was more architecture than the code could earn: the ranking was
-maintained by hand and forbade many imports that would never have caused harm.
+Rather than scattering a ~13-file application across artificial horizontal folders (`domain`, `flight`, `stage`, `cabin`), vertical domain co-location groups things that change together in one place.
 
-The cycle detector keeps the part that was load-bearing. Cycles are a real
-failure — they break tree-shaking and cause undefined-at-import-time bugs that
-only surface at runtime. Layer rank was a proxy for that, and the proxy cost
-more than the thing it stood in for. If a genuine layering rule is needed again,
-it should arrive attached to a bug that proves it.
-
-### Why `domain/` exists
-
-`PaneParams` is the contract every layer reads. It used to live beside the
-simulation, which also reads everything else — so `flight → stage → flight` was
-a real cycle, in both directions. A shared contract cannot live in the layer
-that consumes the most.
-
-`domain/` is deliberately small: `pane.ts` (the contract and its tuning numbers)
-and `atmosphere.ts` (band blending and light curves). Both are pure, import
-nothing, and would still make sense if MapLibre were replaced tomorrow.
-
-`locations.ts` and `imagery.ts` were in `domain/` and are now `config/`. They are
-a list of places and a set of tile URLs — data someone edits, not logic that
-models the product. Calling that "domain" made the folder mean two things.
+- **Visual Components**: `WorldStage.svelte` (outside 3D world: WebGL MapLibre, DEM terrain, satellite & sky), `CabinFrame.svelte` (inside cabin window: oval bezel, depth shadow, glass reflection & vignette)
+- **Simulation & Models**: `display.svelte.ts` (reactive `AeroDisplay` state container & `createDisplay`/`useDisplay` Context DI), `flight.ts` (pure flight trajectory, orbit physics, altitude climb, atmosphere blending, night curve)
+- **Reactive Configuration SSOT**: `config.svelte.ts` (locations, atmosphere bands, tile templates, tuning constants, reactive `$state` `PaneConfig`, and `readPaneConfig()` URL parser)
 
 ## 2. Directory tree
 
 ```text
 src/
   ├── lib/
-  │   ├── domain/                   # 📐 Renderer-free simulation logic
-  │   │   ├── pane.ts               # PaneParams + every tuning number
-  │   │   └── atmosphere.ts         # Bands, altitude blend, night curve
+  │   ├── config.svelte.ts          # ⚙️ SSOT & Reactive Config: $state PaneConfig, locations, bands, tile templates
   │   │
-  │   ├── config/                   # ⚙️ Data someone edits
-  │   │   ├── locations.ts          # Location registry (Hyderabad, Denver)
-  │   │   └── imagery.ts            # Tile templates, NAIP bounds, zoom caps
+  │   ├── display/                  # 🖥️ Hardware/Kiosk Display product slice
+  │   │   ├── WorldStage.svelte     # 🌍 Outside World: WebGL MapLibre, DEM terrain, satellite & sky
+  │   │   ├── CabinFrame.svelte     # 🪟 Inside Cabin: Frame bezel, depth shadow, glass reflection & vignette
+  │   │   ├── display.svelte.ts     # Unified AeroDisplay reactive model & Context DI ($state)
+  │   │   └── flight.ts             # Pure simulation math: orbit, altitude, atmosphere, night curves
   │   │
-  │   ├── flight/                   # 🎛️ Simulation, physics & state
-  │   │   ├── pose.ts               # Pure: orbit, altitude, lookTarget, clock
-  │   │   ├── sim.svelte.ts         # The one reactive class holding the pose
-  │   │   ├── aero-window.svelte.ts # AeroWindow + createAeroWindow/useAeroWindow
-  │   │   ├── url-params.ts         # URL knobs → PaneParams
-  │   │   └── game-loop.ts          # requestAnimationFrame driver
-  │   │
-  │   ├── stage/                    # 🌍 The world outside
-  │   │   ├── MapStage.svelte       # MapLibre viewport & camera driver
-  │   │   ├── GroundLayers.svelte   # GIBS + USGS + DEM terrain & hillshade
-  │   │   └── AtmosphereSky.svelte  # Dynamic sky & atmosphere blend
-  │   │
-  │   ├── cabin/                    # 🪟 The cabin inside
-  │   │   ├── WindowFrame.svelte    # Oval bezel
-  │   │   ├── GlassLayer.svelte     # Reflections & vignette
-  │   │   ├── CabinBlind.svelte     # Draggable pull-down shade
-  │   │   ├── PassengerHud.svelte   # Destination card & telemetry
-  │   │   └── DebugReadout.svelte   # Dev-only overlay
-  │   │
-  │   ├── server/                   # 🌐 Server-only — imports nothing
+  │   ├── server/                   # 🌐 Server-only tile proxy (imports nothing)
   │   │   └── tiles.ts              # Path-guarded offline tile server
   │   │
-  │   └── assets/favicon.svg
+  │   └── assets/
+  │       └── favicon.svg
   │
-  ├── env.ts                        # SvelteKit 3 environment variables
+  ├── env.ts                        # SvelteKit environment variables
   │
   └── routes/
       ├── +layout.ts                # `ssr = false` — cascades to every route
       ├── +layout.svelte            # Root layout shell
-      ├── +page.ts                  # `load` resolves URL knobs
-      ├── +page.svelte              # Composition only
+      ├── +page.svelte              # Declarative root composition with $app/state page.url (<WorldStage />, <CabinFrame />)
       ├── layout.css                # Global CSS
       └── api/tiles/[...path]/      # Offline tile proxy endpoint
 ```
 
 ## 3. Naming rules
 
-Two that are easy to get wrong, and were:
-
-- **`.svelte.ts` means the file holds runes.** `pose.ts` is 220 lines of pure
-  trigonometry and is plain `.ts`; only `sim.svelte.ts` has `$state`.
-  Putting maths in a `.svelte.ts` advertises reactivity that isn't there, and
-  hides the one file that genuinely has it.
-- **Never name anything just `window`.** It already means the browser global,
-  the cabin window, the `AeroWindow` class and the three-pane wall. One pane is
-  a `pane`; the root state object is `aero-window`; the simulation is `flight/`.
-  There have been, at different points, two unrelated files called `window` and
-  a `window/` folder holding no window code at all.
-
-Files are named for what they hold, not their layer role: `url-params.ts`
-parses URLs, `pose.ts` answers where the aircraft is, `sim.svelte.ts` holds it. `tests/` mirrors
-`src/lib/` one-for-one.
+- **`.svelte.ts` means the file holds runes.** `config.svelte.ts` and `display.svelte.ts` contain Svelte 5 runes (`$state`); `flight.ts` is pure math and is plain `.ts`.
+- **Single Source of Truth (`config.svelte.ts`)**: All tuning constants, locations, atmosphere bands, tile definitions, and query param parsing live in `config.svelte.ts` with reactive properties bindable to operator panels.
+- **Files are named for what they hold.** `WorldStage.svelte` renders the outside world, `CabinFrame.svelte` renders the inside cabin, `flight.ts` computes flight physics, `display.svelte.ts` manages the simulation state. `tests/` mirrors the structure cleanly (`tests/display.test.ts`, `tests/tiles.test.ts`, `tests/regressions.test.ts`).
 
 ## 4. Composition and z-order
 
@@ -142,11 +85,11 @@ once; it only looked correct because `position: fixed` escaped the container.
 2. **Deterministic fleet pose** — wall-clock time is the only input to
    `windowView()`, so three Pis agree without any inter-device protocol. No
    accumulated `dt`, no per-process epoch, no `Math.random()` in the hot path.
-3. **Context DI** — `createAeroWindow()` at the root; descendants read
-   `useAeroWindow()`. No prop-drilling of simulation state.
-4. **Renderer isolation** — only `stage/` and `+page.svelte` import MapLibre.
-   `domain/`, `config/` and `flight/` name no renderer at all, which is what made replacing
-   Cesium a route-level change rather than a rewrite.
+3. **Context DI** — `createDisplay()` at the root; descendants read
+   `useDisplay()`. No prop-drilling of simulation state.
+4. **Renderer isolation** — only `display/WorldStage.svelte` imports MapLibre.
+   `config.svelte.ts` and `display/flight.ts` name no renderer at all, which is
+   what made replacing Cesium a route-level change rather than a rewrite.
 5. **Offline tiles** — everything goes through `/api/tiles`, path-guarded, with
    a local pack preferred. `server/tiles.ts` is the only file naming a real
    upstream origin. Remote proxying fails **closed**.

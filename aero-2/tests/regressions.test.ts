@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { tileTemplates } from '#lib/config/imagery.js';
+import { tileTemplates } from '#lib/config.svelte.js';
 
 /**
  * Guards for bugs that have already shipped once and were re-broken by later
@@ -19,7 +19,7 @@ describe('tile URL shape', () => {
 		}
 	});
 
-	it('never names an upstream host - only server/tiles.ts may do that', () => {
+	it('never names an upstream host - only api/tiles/+server.ts may do that', () => {
 		for (const tpl of Object.values(tileTemplates()).flat()) {
 			expect(tpl).not.toMatch(/amazonaws|earthdata|nationalmap/);
 		}
@@ -31,7 +31,7 @@ describe('GroundLayers', () => {
 		// `raster-opacity: 0` hides a raster layer but does NOT stop it fetching.
 		// Over Hyderabad (no NAIP coverage) that meant hundreds of 404s per second
 		// for a layer nobody could see. A layer that renders nothing must not exist.
-		const src = readFileSync('src/lib/stage/GroundLayers.svelte', 'utf8');
+		const src = readFileSync('src/lib/display/WorldStage.svelte', 'utf8');
 		const usgsIndex = src.indexOf('id="usgs"');
 		expect(usgsIndex, 'usgs source should exist').toBeGreaterThan(-1);
 
