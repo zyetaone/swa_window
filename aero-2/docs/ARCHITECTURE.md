@@ -113,13 +113,51 @@ reaching for a bigger texture. Esri, EOX s2cloudless and CARTO were all
 rejected on licence, and all three were solving a problem this stack does not
 have.
 
+### Heightmaps
+
+Elevation is a **heightmap**, not a mesh pack. `terrain/terrarium.ts` decodes
+terrarium PNGs to a `Float32Array` and hands them to Cesium's own
+`HeightmapTerrainData`, so Cesium owns the tiling scheme and all the meshing —
+there is nothing of ours in the geometry to get subtly wrong.
+
+`TerrainSync` picks one of three modes, best first, and never hard-fails:
+
+| mode        | when                               | source                   |
+| ----------- | ---------------------------------- | ------------------------ |
+| `mesh`      | a `cesium-terrain` pack is on disk | local quantized-mesh     |
+| `terrarium` | otherwise, if `navigator.onLine`   | AWS terrarium heightmaps |
+| `ellipsoid` | otherwise                          | smooth sphere            |
+
+The fiction survives a flat planet; it does not survive a stack trace.
+
+The probe reaches the same data by a different road: MapLibre decodes terrarium
+natively (`encoding="terrarium"`), so the same PNGs drive both the displaced
+mesh and the hillshade. One fetch, two uses.
+
+> **Known gap — elevation does not honour Invariant 4.** Imagery goes through
+> `/api/tiles`, which fails closed in production. Elevation does not:
+> `terrariumTileUrl()` hardcodes `s3.amazonaws.com`, so a kiosk with a working
+> LAN fetches heightmaps straight from the internet, pack or no pack. Two
+> further wrinkles: `remoteTileUrl()`'s allowlist contains only the three
+> sources we rejected on licence (`eox-sentinel2`, `esri-world-imagery`,
+> `cartodb-dark`) and neither terrarium nor GIBS; and `navigator.onLine` is
+> true on a LAN with no route out, which picks `terrarium` and then fails every
+> tile instead of falling back to `ellipsoid`.
+>
+> Routing terrarium through `/api/tiles/xyz/terrarium/…` closes all three, but
+> it is not a free fix: on a Pi with no local pack the honest result is a **flat
+> planet**, where today it quietly works by reaching the internet. That is a
+> product call — correctness of the offline promise versus visible terrain —
+> and it is open.
+
 ## Invariants
 
 1. Single Viewer — via the `globe()` attachment only.
 2. Cesium isolation — runtime `import('cesium')` in `cesium/` and `actions.ts` files only.
 3. Runes live in `.svelte.ts`; `model.ts` and `rules.ts` never hold them.
-4. Offline imagery — `/api/tiles` first; remote proxy only when `NODE_ENV=development`
+4. Offline **imagery** — `/api/tiles` first; remote proxy only when `NODE_ENV=development`
    (fails closed on unset, so the Pi never silently reaches the internet); Ion when the cache is empty.
+   **Elevation is currently exempt and should not be** — see the known gap above.
 5. Fleet determinism — every pose is an absolute function of wall-clock time.
    No per-process epoch, no accumulated `dt`, no `Math.random()` in the hot path.
 
