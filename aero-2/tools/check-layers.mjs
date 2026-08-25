@@ -14,10 +14,10 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Lower may not import higher. Index IS the rank. */
-const LAYERS = ['config', 'server', 'sim', 'stage', 'cabin'];
+const LAYERS = ['domain', 'server', 'sim', 'stage', 'cabin'];
 
 /** Layers that must import NOTHING from `#lib` — the base of the graph. */
-const LEAVES = new Set(['config', 'server']);
+const LEAVES = new Set(['domain', 'server']);
 
 const ROOT = new URL('../src/lib', import.meta.url).pathname;
 

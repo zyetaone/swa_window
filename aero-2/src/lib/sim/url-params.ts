@@ -1,17 +1,22 @@
 /**
- * Kiosk tuning constants and URL parameter parser.
+ * URL knobs → `PaneParams`.
+ *
+ * The ONLY thing that reads the query string. Pure: takes a `URL`, returns
+ * values, so `+page.ts` can call it in `load` and a test can call it without a
+ * browser. Named for what it parses rather than the vague "params", because the
+ * thing it produces is also called params.
  */
 
-import { Location } from '#lib/config/locations.js';
-import { inNaipCoverage } from '#lib/config/imagery.js';
+import { Location } from '#lib/domain/locations.js';
+import { inNaipCoverage } from '#lib/domain/imagery.js';
 import {
 	DEFAULT_WINDOW_AZIMUTH_DEG,
 	DEFAULT_PITCH_DEG,
 	HILLSHADE_DEFAULT,
-	type WindowParams
-} from '#lib/config/window.js';
+	type PaneParams
+} from '#lib/domain/pane.js';
 
-export type { WindowParams };
+export type { PaneParams };
 
 function num(params: URLSearchParams, key: string, fallback: number): number {
 	const raw = params.get(key);
@@ -20,7 +25,7 @@ function num(params: URLSearchParams, key: string, fallback: number): number {
 	return Number.isFinite(n) ? n : fallback;
 }
 
-export function readWindowParams(url: URL): WindowParams {
+export function readPaneParams(url: URL): PaneParams {
 	const q = url.searchParams;
 	const place = Location.byId(q.get('place'));
 

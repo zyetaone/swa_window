@@ -2,22 +2,9 @@
 	/**
 	 * PassengerHud — elegant passenger in-flight status display.
 	 */
-	import type { WindowView } from '#lib/sim/flight.svelte.js';
-	import type { Location } from '#lib/config/locations.js';
-	import { useAeroWindow } from '#lib/sim/window.svelte.js';
+	import { useAeroWindow } from '#lib/sim/aero-window.svelte.js';
 
-	interface Props {
-		place?: Location;
-		view?: WindowView;
-		visible?: boolean;
-	}
-
-	const { place, view, visible }: Props = $props();
 	const windowState = useAeroWindow();
-
-	const activePlace = $derived(place ?? windowState.params.place);
-	const activeView = $derived(view ?? windowState.view);
-	const isVisible = $derived(visible ?? windowState.hudVisible);
 
 	function formatTime(h: number): string {
 		const hours = Math.floor(h);
@@ -26,25 +13,23 @@
 	}
 </script>
 
-{#if isVisible}
+{#if windowState.hudVisible}
 	<header class="passenger-hud" aria-label="Flight status">
 		<div class="destination-card">
 			<span class="destination-prefix">APPROACHING</span>
-			<h1 class="destination-name">{activePlace.id.toUpperCase()}</h1>
+			<h1 class="destination-name">{windowState.params.place.id.toUpperCase()}</h1>
 		</div>
 
-		{#if activeView}
-			<div class="telemetry-badges">
-				<div class="badge">
-					<span class="badge-label">ALT</span>
-					<span class="badge-value">{Math.round(activeView.aglM)} m</span>
-				</div>
-				<div class="badge">
-					<span class="badge-label">TIME</span>
-					<span class="badge-value">{formatTime(activeView.timeOfDay)}</span>
-				</div>
+		<div class="telemetry-badges">
+			<div class="badge">
+				<span class="badge-label">ALT</span>
+				<span class="badge-value">{Math.round(windowState.view.aglM)} m</span>
 			</div>
-		{/if}
+			<div class="badge">
+				<span class="badge-label">TIME</span>
+				<span class="badge-value">{formatTime(windowState.view.timeOfDay)}</span>
+			</div>
+		</div>
 	</header>
 {/if}
 

@@ -1,18 +1,21 @@
 /**
- * The shared contract: what one pane of the window is showing, plus the tuning
- * numbers that answer it.
+ * What ONE PANE of the window is showing, plus every tuning number behind it.
+ *
+ * "Pane", not "window": on a three-Pi wall, three panes make one window, and
+ * `window` already means the browser global, the cabin window, and the
+ * `AeroWindow` state class. A name that means four things means nothing.
  *
  * This module is the BASE of the dependency graph and **imports nothing but
  * `locations.ts`**. That is the whole point of it existing.
  *
- * `WindowParams` used to live in `sim/`, which every other folder needs — so
- * `flight/` and `stage/` imported from `sim/` while `sim/` imported from them,
+ * `PaneParams` used to live in `sim/`, which every other folder needs — so
+ * `stage/` imported from `sim/` while `sim/` imported straight back,
  * a genuine cycle in both directions. A shared contract that everything reads
  * cannot live in a layer that reads everything. It lives here instead, at the
  * bottom, where nothing can point back down at.
  */
 
-import { Location } from '#lib/config/locations.js';
+import { Location } from '#lib/domain/locations.js';
 
 // ── The contract ──────────────────────────────────────────────────────────────
 
@@ -23,7 +26,7 @@ import { Location } from '#lib/config/locations.js';
  * one aircraft, one clock, one atmosphere, three view directions whose frusta
  * tile into a single continuous window.
  */
-export interface WindowParams {
+export interface PaneParams {
 	readonly place: Location;
 	/** Where this pane looks, relative to the aircraft's track. */
 	readonly azimuthDeg: number;

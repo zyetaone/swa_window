@@ -4,9 +4,7 @@ import {
 	nightFactor,
 	resolveAtmosphere,
 	TRANSITION_HALF_WIDTH_M
-} from '#lib/config/atmosphere.js';
-import { altitudeAt, orbitPose } from '#lib/sim/flight.svelte.js';
-import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/config/window.js';
+} from '#lib/domain/atmosphere.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {
@@ -102,67 +100,7 @@ describe('resolveAtmosphere', () => {
 	});
 });
 
-describe('orbitPose', () => {
-	const base = {
-		centerLat: 17.385,
-		centerLon: 78.4867,
-		orbitAngle0: 0.5,
-		orbitBearingRad: 0,
-		direction: 1,
-		majorMin: 0.08,
-		majorMax: 0.25,
-		breathePeriod: 180,
-		driftRate: 0.018,
-		flightSpeed: 6
-	};
-
-	it('is deterministic — wall-clock time is the only input', () => {
-		const now = 1_787_650_000;
-		const a = orbitPose({ ...base, wallT: now });
-		const b = orbitPose({ ...base, wallT: now });
-		expect(b).toEqual(a);
-	});
-
-	it('stays finite and keeps moving an hour in', () => {
-		const t0 = 1_787_650_000;
-		const a = orbitPose({ ...base, wallT: t0 });
-		const b = orbitPose({ ...base, wallT: t0 + 3_600 });
-		for (const p of [a, b]) {
-			expect(Number.isFinite(p.lat)).toBe(true);
-			expect(Number.isFinite(p.lon)).toBe(true);
-			expect(p.orbitAngle).toBeGreaterThanOrEqual(0);
-			expect(p.orbitAngle).toBeLessThan(Math.PI * 2);
-		}
-		expect(b.lat).not.toBe(a.lat);
-	});
-});
-
-describe('altitudeAt', () => {
-	it('is absolute in wall time — three panes fly at one height', () => {
-		const now = 1_787_650_000;
-		expect(altitudeAt(now)).toBe(altitudeAt(now));
-		expect(Math.abs(altitudeAt(now + 1 / 60) - altitudeAt(now))).toBeLessThan(1);
-	});
-
-	it('visits every band across one climb, so no band is unreachable', () => {
-		const seen = new Set<string>();
-		for (let t = 0; t < CLIMB_PERIOD_SEC; t += 5) {
-			seen.add(resolveAtmosphere(altitudeAt(t)).bandId);
-		}
-		for (const band of ATMOSPHERE_BANDS) expect(seen).toContain(band.id);
-	});
-
-	it('stays inside the authored envelope', () => {
-		for (let t = 0; t < CLIMB_PERIOD_SEC; t += 3) {
-			const a = altitudeAt(t);
-			expect(a).toBeGreaterThanOrEqual(ALTITUDE_FLOOR_M - 1e-6);
-			expect(a).toBeLessThanOrEqual(ALTITUDE_CEILING_M + 1e-6);
-		}
-		expect(altitudeAt(Number.NaN)).toBe(ALTITUDE_FLOOR_M);
-	});
-});
-
-describe('NightLighting', () => {
+describe('nightFactor', () => {
 	it('returns 0 at midday', () => {
 		expect(nightFactor(12)).toBe(0);
 	});

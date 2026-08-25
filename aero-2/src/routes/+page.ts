@@ -1,4 +1,4 @@
 import type { PageLoad } from './$types';
-import { readWindowParams } from '#lib/sim/params.js';
+import { readPaneParams } from '#lib/sim/url-params.js';
 
-export const load: PageLoad = ({ url }) => readWindowParams(url);
+export const load: PageLoad = ({ url }) => readPaneParams(url);

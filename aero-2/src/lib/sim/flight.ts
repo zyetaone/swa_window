@@ -1,14 +1,17 @@
 /**
- * Flight simulation — orbit trajectory, altitude curves, look targets, clock, and reactive FlightSim.
+ * Where the aircraft IS at a given instant. Pure functions, no runes, no
+ * renderer — orbit trajectory, altitude curve, ground look-target, local clock.
+ *
+ * Plain `.ts` on purpose. This was 217 lines of trigonometry inside a
+ * `.svelte.ts` file, which advertises "this module holds reactive state" to
+ * every reader and every tool. Only the `FlightSim` class next door actually
+ * does; it lives in `flight-sim.svelte.ts`.
+ *
+ * Being rune-free is what lets `windowView()` be tested without a browser,
+ * which is the only way the three-Pi determinism claim is checkable at all.
  */
-import { untrack } from 'svelte';
-import {
-	ORBIT,
-	ALTITUDE_FLOOR_M,
-	ALTITUDE_CEILING_M,
-	CLIMB_PERIOD_SEC
-} from '#lib/config/window.js';
-import type { WindowParams } from './params.js';
+import { ORBIT, ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, CLIMB_PERIOD_SEC } from '#lib/domain/pane.js';
+import type { PaneParams } from '#lib/domain/pane.js';
 
 const TWO_PI = Math.PI * 2;
 const M_PER_DEG_LAT = 111_320;
@@ -185,7 +188,7 @@ export interface WindowView {
 	readonly timeOfDay: number;
 }
 
-export function windowView(wallT: number, params: WindowParams, now?: Date): WindowView {
+export function windowView(wallT: number, params: PaneParams, now?: Date): WindowView {
 	const { place } = params;
 
 	const pose = orbitPose({
@@ -213,28 +216,4 @@ export function windowView(wallT: number, params: WindowParams, now?: Date): Win
 		targetLon: target.lon,
 		timeOfDay: resolveLocalHours({ timeZone: place.timeZone, utcOffset: place.utcOffset, now })
 	};
-}
-
-export class FlightSim {
-	readonly #getParams: () => WindowParams;
-	view = $state<WindowView>({} as WindowView);
-
-	constructor(params: WindowParams | (() => WindowParams)) {
-		this.#getParams = typeof params === 'function' ? params : () => params;
-		this.view = untrack(() => windowView(Date.now() / 1000, this.params));
-	}
-
-	get params(): WindowParams {
-		return this.#getParams();
-	}
-
-	tick(wallSec: number = Date.now() / 1000): WindowView {
-		const next = windowView(wallSec, this.params);
-		this.view = next;
-		return next;
-	}
-
-	// No per-field getters. `view` is already one immutable struct, so
-	// `flight.view.aglM` reads fine and seven forwarding getters were just seven
-	// more things to keep in sync with WindowView. All were unused.
 }

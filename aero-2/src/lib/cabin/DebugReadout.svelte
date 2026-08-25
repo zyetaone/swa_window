@@ -2,32 +2,19 @@
 	/**
 	 * DebugReadout — dev-only telemetry strip.
 	 */
-	import type { WindowView } from '#lib/sim/flight.svelte.js';
-	import type { AtmosphereState } from '#lib/config/atmosphere.js';
-	import { useAeroWindow } from '#lib/sim/window.svelte.js';
+	import { useAeroWindow } from '#lib/sim/aero-window.svelte.js';
 
-	interface Props {
-		placeId?: string;
-		view?: WindowView;
-		atmosphere?: AtmosphereState;
-		nightFactor?: number;
-	}
-
-	const { placeId, view, atmosphere, nightFactor }: Props = $props();
 	const windowState = useAeroWindow();
-
-	const activePlaceId = $derived(placeId ?? windowState.params.place.id);
-	const activeView = $derived(view ?? windowState.view);
-	const activeAtmosphere = $derived(atmosphere ?? windowState.atmosphere);
-	const activeNightFactor = $derived(nightFactor ?? windowState.night);
 </script>
 
 <p class="readout" aria-live="polite">
-	{activePlaceId} · band {activeAtmosphere.bandId} · AGL {Math.round(activeView.aglM)} m · MSL {Math.round(
-		activeView.mslM
-	)}
-	m · track {Math.round(activeView.trackDeg)}° · window {Math.round(activeView.headingDeg)}° · local
-	{activeView.timeOfDay.toFixed(2)} h · night {activeNightFactor.toFixed(2)}
+	{windowState.params.place.id} · band {windowState.atmosphere.bandId} · AGL {Math.round(
+		windowState.view.aglM
+	)} m · MSL {Math.round(windowState.view.mslM)}
+	m · track {Math.round(windowState.view.trackDeg)}° · window {Math.round(
+		windowState.view.headingDeg
+	)}° · local
+	{windowState.view.timeOfDay.toFixed(2)} h · night {windowState.night.toFixed(2)}
 </p>
 
 <style>

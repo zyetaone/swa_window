@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { readWindowParams } from '#lib/sim/params.js';
-import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG } from '#lib/config/window.js';
-import { inNaipCoverage, tileTemplates } from '#lib/config/imagery.js';
+import { readPaneParams } from '#lib/sim/url-params.js';
+import { DEFAULT_PITCH_DEG, DEFAULT_WINDOW_AZIMUTH_DEG } from '#lib/domain/pane.js';
+import { inNaipCoverage, tileTemplates } from '#lib/domain/imagery.js';
 
-const params = (search = '') => readWindowParams(new URL(`http://kiosk.local/${search}`));
+const params = (search = '') => readPaneParams(new URL(`http://kiosk.local/${search}`));
 
-describe('readWindowParams', () => {
+describe('readPaneParams', () => {
 	it('defaults to Hyderabad, the fielded kiosk home', () => {
 		expect(params().place.id).toBe('hyderabad');
 		expect(params('?place=denver').place.id).toBe('denver');
