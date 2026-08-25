@@ -39,8 +39,7 @@
 	// box, not a coverage API - ponytail: wrong for Alaska/Hawaii, and that is fine
 	// until a location lands there. ?detail=0 forces the GIBS-only floor, which is
 	// what Hyderabad gets and therefore what the real kiosk looks like today.
-	const inNaipCoverage =
-		place.lat > 24 && place.lat < 50 && place.lon > -125 && place.lon < -66;
+	const inNaipCoverage = place.lat > 24 && place.lat < 50 && place.lon > -125 && place.lon < -66;
 	const detail = Number(q.get('detail') ?? (inNaipCoverage ? 1 : 0));
 
 	// The climb envelope is THE open Phase 0 question, so make it a knob rather
