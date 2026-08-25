@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { resolveAtmosphere } from '#lib/world/atmosphere/rules.js';
 import { altitudeAt } from '#lib/flight/rules.js';
-import { gateImagerySelection, selectDetailLevel, selectImagery, type ImagerySelection } from '#lib/world/imagery/rules.js';
+import {
+	gateImagerySelection,
+	selectDetailLevel,
+	selectImagery,
+	type ImagerySelection
+} from '#lib/world/imagery/rules.js';
 import { NightLighting } from '#lib/world/lighting/rules.js';
 import { orbitPose } from '#lib/flight/rules.js';
 import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/world/atmosphere/model.js';
@@ -109,10 +114,10 @@ const day = IMAGERY_SOURCES.find((s) => s.nightAnchor === 0)!;
 describe('selectImagery', () => {
 	it('picks the day source by day and the night source by night', () => {
 		expect(selectImagery({ groundDetail: 1, nightFactor: DAY, current: null }).sourceId).toBe(
-			'eox-sentinel2',
+			'eox-sentinel2'
 		);
 		expect(selectImagery({ groundDetail: 1, nightFactor: NIGHT, current: null }).sourceId).toBe(
-			'cartodb-dark',
+			'cartodb-dark'
 		);
 	});
 
@@ -131,12 +136,12 @@ describe('selectImagery', () => {
 		const low = selectImagery({
 			groundDetail: resolveAtmosphere(300).groundDetail,
 			nightFactor: DAY,
-			current: null,
+			current: null
 		});
 		const cruise = selectImagery({
 			groundDetail: resolveAtmosphere(11_600).groundDetail,
 			nightFactor: DAY,
-			current: null,
+			current: null
 		});
 		expect(cruise.maximumLevel).toBeLessThan(low.maximumLevel);
 	});
@@ -145,7 +150,7 @@ describe('selectImagery', () => {
 		let current: ImagerySelection | null = selectImagery({
 			groundDetail: 1,
 			nightFactor: 0.45,
-			current: null,
+			current: null
 		});
 		const first = current.sourceId;
 		let swaps = 0;
@@ -153,7 +158,7 @@ describe('selectImagery', () => {
 			const next: ImagerySelection = selectImagery({
 				groundDetail: 1,
 				nightFactor: nf,
-				current,
+				current
 			});
 			if (next.sourceId !== current.sourceId) swaps++;
 			current = next;
@@ -225,14 +230,14 @@ describe('orbitPose', () => {
 		majorMax: 0.25,
 		breathePeriod: 180,
 		driftRate: 0.018,
-		flightSpeed: 6,
+		flightSpeed: 6
 	};
 
 	it('ignores when each Pi booted — the wall depends on it', () => {
 		// Three panes, three boot times, one instant. They must agree exactly.
 		const now = 1_787_650_000;
 		const panes = [now - 5, now - 40, now - 3_600].map((bootT) =>
-			orbitPose({ ...base, wallT: now, orbitEpochWallT: bootT }),
+			orbitPose({ ...base, wallT: now, orbitEpochWallT: bootT })
 		);
 		expect(panes[1]).toEqual(panes[0]);
 		expect(panes[2]).toEqual(panes[0]);

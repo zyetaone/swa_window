@@ -2,7 +2,7 @@ import {
 	remoteFallbackEnabled,
 	remoteTileUrl,
 	resolveLocalTile,
-	resolveTileDir,
+	resolveTileDir
 } from '#lib/server/tiles.js';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,19 +14,17 @@ const CWD = '/srv/aero';
 describe('resolveTileDir', () => {
 	it('returns an absolute TILE_DIR unchanged (fast path)', () => {
 		expect(resolveTileDir({ TILE_DIR: '/opt/custom/tiles' }, CWD, () => false)).toBe(
-			'/opt/custom/tiles',
+			'/opt/custom/tiles'
 		);
 	});
 
 	it('resolves a relative TILE_DIR against cwd', () => {
-		expect(resolveTileDir({ TILE_DIR: 'data/tiles' }, CWD, () => false)).toBe(
-			`${CWD}/data/tiles`,
-		);
+		expect(resolveTileDir({ TILE_DIR: 'data/tiles' }, CWD, () => false)).toBe(`${CWD}/data/tiles`);
 	});
 
 	it('prefers Pi path when it exists and TILE_DIR is unset', () => {
 		expect(resolveTileDir({}, CWD, (p: string) => p === '/opt/zyeta-aero/tiles')).toBe(
-			'/opt/zyeta-aero/tiles',
+			'/opt/zyeta-aero/tiles'
 		);
 	});
 
@@ -43,13 +41,13 @@ describe('resolveTileDir', () => {
 describe('remoteTileUrl', () => {
 	it('maps esri-world-imagery to ArcGIS', () => {
 		expect(remoteTileUrl('esri-world-imagery/4/7/11.jpg')).toBe(
-			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/7/11',
+			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/7/11'
 		);
 	});
 
 	it('maps cartodb-dark XYZ order in the remote URL', () => {
 		expect(remoteTileUrl('cartodb-dark/4/7/11.png')).toBe(
-			'https://a.basemaps.cartocdn.com/dark_all/4/11/7.png',
+			'https://a.basemaps.cartocdn.com/dark_all/4/11/7.png'
 		);
 	});
 });
@@ -58,14 +56,14 @@ describe('remoteFallbackEnabled', () => {
 	it('is off in production unless explicitly enabled', () => {
 		expect(remoteFallbackEnabled({ NODE_ENV: 'production' })).toBe(false);
 		expect(remoteFallbackEnabled({ NODE_ENV: 'production', AERO_TILE_REMOTE_FALLBACK: '1' })).toBe(
-			true,
+			true
 		);
 	});
 
 	it('is on in development unless explicitly disabled', () => {
 		expect(remoteFallbackEnabled({ NODE_ENV: 'development' })).toBe(true);
 		expect(remoteFallbackEnabled({ NODE_ENV: 'development', AERO_TILE_REMOTE_FALLBACK: '0' })).toBe(
-			false,
+			false
 		);
 	});
 
@@ -118,7 +116,7 @@ describe('GET /api/tiles/[...path]', () => {
 
 		const res = await GET({
 			params: { path: 'health' },
-			request: new Request('http://localhost/api/tiles/health'),
+			request: new Request('http://localhost/api/tiles/health')
 		});
 		const body = await res.json();
 
@@ -133,7 +131,7 @@ describe('GET /api/tiles/[...path]', () => {
 
 		const res = await GET({
 			params: { path: 'eox-sentinel2/4/7/11.jpg' },
-			request: new Request('http://localhost/api/tiles/eox-sentinel2/4/7/11.jpg'),
+			request: new Request('http://localhost/api/tiles/eox-sentinel2/4/7/11.jpg')
 		});
 
 		expect(res.status).toBe(200);
@@ -145,19 +143,19 @@ describe('GET /api/tiles/[...path]', () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
 			new Response(new Uint8Array([0xff, 0xd8]), {
 				status: 200,
-				headers: { 'content-type': 'image/jpeg' },
-			}),
+				headers: { 'content-type': 'image/jpeg' }
+			})
 		);
 
 		const res = await GET({
 			params: { path: 'esri-world-imagery/4/7/7.jpg' },
-			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg'),
+			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg')
 		});
 
 		expect(res.status).toBe(200);
 		expect(fetch).toHaveBeenCalledWith(
 			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/4/7/7',
-			expect.objectContaining({ signal: expect.any(AbortSignal) }),
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
 		);
 	});
 
@@ -169,7 +167,7 @@ describe('GET /api/tiles/[...path]', () => {
 
 		const res = await GET({
 			params: { path: 'esri-world-imagery/4/7/7.jpg' },
-			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg'),
+			request: new Request('http://localhost/api/tiles/esri-world-imagery/4/7/7.jpg')
 		});
 
 		expect(res.status).toBe(404);

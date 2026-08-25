@@ -3,10 +3,10 @@
 	import { scene } from '#lib/window/scene.svelte.js';
 	import { tileCache } from '#lib/cesium/tiles.svelte.js';
 	import { gameLoop } from '#lib/window/game-loop.js';
-	import { createAeroWindow } from '#lib/window/aero-window.svelte.js';
+	import { aeroWindowFromUrl } from '#lib/window/aero-window.svelte.js';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
 
-	const model = createAeroWindow();
+	const model = aeroWindowFromUrl(typeof location === 'undefined' ? '' : location.search);
 
 	let globeReady = $state(false);
 
@@ -26,7 +26,7 @@
 		onReady: () => {
 			globeReady = true;
 			scene.sync(model.frame());
-		},
+		}
 	} satisfies GlobeHooks;
 
 	$effect(() => {
@@ -68,7 +68,9 @@
 		bottom: 0.75rem;
 		margin: 0;
 		padding: 0.25rem 0.5rem;
-		font: 11px/1.4 ui-monospace, monospace;
+		font:
+			11px/1.4 ui-monospace,
+			monospace;
 		color: rgb(255 255 255 / 0.55);
 		pointer-events: none;
 	}

@@ -32,7 +32,7 @@ const KIOSK_WIDGETS_OFF = {
 	navigationHelpButton: false,
 	sceneModePicker: false,
 	selectionIndicator: false,
-	timeline: false,
+	timeline: false
 } as const;
 
 export interface GlobeHooks {
@@ -62,7 +62,7 @@ export function globe(hooks: GlobeHooks): Attachment<HTMLElement> {
 				baseLayer: false,
 				skyBox: false,
 				skyAtmosphere: false,
-				terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+				terrainProvider: new Cesium.EllipsoidTerrainProvider()
 			});
 			viewer.cesiumWidget.creditContainer.remove();
 

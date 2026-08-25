@@ -15,20 +15,20 @@ export const IMAGERY_SOURCES: readonly ImagerySource[] = [
 		id: 'eox-sentinel2',
 		urlTemplate: '/api/tiles/eox-sentinel2/{z}/{y}/{x}.jpg',
 		zoomRange: [4, 12],
-		nightAnchor: 0,
+		nightAnchor: 0
 	},
 	{
 		id: 'esri-world-imagery',
 		urlTemplate: '/api/tiles/esri-world-imagery/{z}/{y}/{x}.jpg',
 		zoomRange: [4, 14],
-		nightAnchor: 0.01,
+		nightAnchor: 0.01
 	},
 	{
 		id: 'cartodb-dark',
 		urlTemplate: '/api/tiles/cartodb-dark/{z}/{y}/{x}.png',
 		zoomRange: [4, 12],
-		nightAnchor: 1,
-	},
+		nightAnchor: 1
+	}
 ];
 
 /** Day layers in preference order (matches v1 local cache). */

@@ -13,6 +13,7 @@ export class FlightEngine {
 	lon = $state(0);
 	headingDeg = $state(20);
 	altitudeM = $state(ALTITUDE_FLOOR_M);
+	aglM = $state(ALTITUDE_FLOOR_M);
 	timeOfDay = $state(12);
 
 	#orbitAngle = 0.5;
@@ -22,7 +23,7 @@ export class FlightEngine {
 
 	constructor(
 		private readonly config: ConfigTree,
-		private readonly location: Location,
+		private readonly location: Location
 	) {
 		this.lat = location.lat;
 		this.lon = location.lon;
@@ -50,23 +51,27 @@ export class FlightEngine {
 			majorMax: orbit.majorMax,
 			breathePeriod: orbit.breathePeriod,
 			driftRate: orbit.driftRate,
-			flightSpeed,
+			flightSpeed
 		});
 
 		this.#orbitAngle = pose.orbitAngle;
 		this.lat = pose.lat;
 		this.lon = pose.lon;
 		this.headingDeg = pose.headingDeg;
-		this.altitudeM = altitudeAt(wallT);
+		this.aglM = altitudeAt(wallT, this.location.climbFloorM, this.location.climbCeilingM);
+		this.altitudeM = this.location.groundElevationM + this.aglM;
 
 		const { daylight } = this.config.director;
 		const nowMs = Date.now();
-		if (this.#lastDaylightSyncMs === 0 || nowMs - this.#lastDaylightSyncMs >= daylight.syncIntervalMs) {
+		if (
+			this.#lastDaylightSyncMs === 0 ||
+			nowMs - this.#lastDaylightSyncMs >= daylight.syncIntervalMs
+		) {
 			this.#lastDaylightSyncMs = nowMs;
 			this.timeOfDay = resolveLocalHours({
 				timeZone: this.location.timeZone,
 				utcOffset: this.location.utcOffset,
-				zoneOverride: daylight.timeZoneOverride,
+				zoneOverride: daylight.timeZoneOverride
 			});
 		}
 	}
@@ -77,6 +82,6 @@ export class FlightEngine {
 	}
 
 	frame(): FlightFrame {
-		return new FlightFrame(this.cameraPose(), this.timeOfDay);
+		return new FlightFrame(this.cameraPose(), this.timeOfDay, this.aglM);
 	}
 }

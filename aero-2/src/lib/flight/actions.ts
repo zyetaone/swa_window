@@ -16,15 +16,15 @@ export class CameraSync implements Subsystem {
 			camera.lat,
 			camera.altitudeM,
 			Cesium.Ellipsoid.WGS84,
-			this.#scratch,
+			this.#scratch
 		);
 		viewer.camera.setView({
 			destination: this.#scratch,
 			orientation: {
 				heading: Cesium.Math.toRadians(camera.headingDeg),
 				pitch: Cesium.Math.toRadians(camera.pitchDeg),
-				roll: 0,
-			},
+				roll: 0
+			}
 		});
 	}
 

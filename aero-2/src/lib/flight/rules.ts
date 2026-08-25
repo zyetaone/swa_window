@@ -1,11 +1,7 @@
 /**
  * Where and how high the aircraft is. Both pure functions of wall-clock time.
  */
-import {
-	ALTITUDE_CEILING_M,
-	ALTITUDE_FLOOR_M,
-	CLIMB_PERIOD_SEC,
-} from '#lib/flight/model.js';
+import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/flight/model.js';
 
 function normalizeHeading(deg: number): number {
 	return ((deg % 360) + 360) % 360;
@@ -41,8 +37,6 @@ export function orbitPose(opts: {
 	centerLat: number;
 	centerLon: number;
 	orbitAngle0: number;
-	/** @deprecated Unread — the pose is absolute in wall-clock time. Drop at the call sites. */
-	orbitEpochWallT: number;
 	orbitBearingRad: number;
 	direction: number;
 	majorMin: number;
@@ -76,18 +70,17 @@ export function orbitPose(opts: {
 
 	const vtx = tx * opts.direction;
 	const vty = ty * opts.direction;
-	const baseHeading =
-		(Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI;
+	const baseHeading = (Math.atan2(vtx * sb + vty * cb, vtx * cb - vty * sb) * 180) / Math.PI;
 	const wander =
-		Math.sin(opts.wallT * 0.05) * 0.25
-		+ Math.sin(opts.wallT * 0.031) * 0.15
-		+ Math.sin(opts.wallT * 0.017) * 0.1;
+		Math.sin(opts.wallT * 0.05) * 0.25 +
+		Math.sin(opts.wallT * 0.031) * 0.15 +
+		Math.sin(opts.wallT * 0.017) * 0.1;
 
 	return {
 		lat,
 		lon,
 		headingDeg: normalizeHeading(baseHeading + wander),
-		orbitAngle,
+		orbitAngle
 	};
 }
 
@@ -95,9 +88,13 @@ export function orbitPose(opts: {
  * Altitude at an instant — one slow climb-and-descend, absolute in wall-clock
  * time so every Pi is at the same height at the same moment.
  */
-export function altitudeAt(wallT: number): number {
-	if (!Number.isFinite(wallT)) return ALTITUDE_FLOOR_M;
+export function altitudeAt(
+	wallT: number,
+	floorM: number = ALTITUDE_FLOOR_M,
+	ceilingM: number = ALTITUDE_CEILING_M
+): number {
+	if (!Number.isFinite(wallT)) return floorM;
 	const phase = (wallT / CLIMB_PERIOD_SEC) * Math.PI * 2;
 	const t = (Math.sin(phase) + 1) * 0.5;
-	return ALTITUDE_FLOOR_M + (ALTITUDE_CEILING_M - ALTITUDE_FLOOR_M) * t;
+	return floorM + (ceilingM - floorM) * t;
 }

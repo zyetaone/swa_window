@@ -6,7 +6,7 @@ const TIME_THRESHOLDS = {
 	DAWN_START: 5,
 	DAY_START: 7,
 	DAY_END: 18,
-	DEEP_NIGHT: 21,
+	DEEP_NIGHT: 21
 } as const;
 
 export class NightLighting {

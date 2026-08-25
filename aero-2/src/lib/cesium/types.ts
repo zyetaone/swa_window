@@ -17,7 +17,7 @@ export class GlobeRuntime {
 	constructor(
 		readonly Cesium: CesiumModule,
 		readonly viewer: Viewer,
-		readonly ionToken?: string,
+		readonly ionToken?: string
 	) {}
 }
 
@@ -32,7 +32,7 @@ export class RenderFrame {
 		readonly camera: CameraPose,
 		readonly atmosphere: AtmosphereState,
 		readonly imagery: ImagerySelection,
-		readonly nightFactor: number,
+		readonly nightFactor: number
 	) {}
 }
 

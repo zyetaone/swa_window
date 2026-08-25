@@ -28,3 +28,8 @@ export class AeroWindow {
 export function createAeroWindow(location?: Location): AeroWindow {
 	return new AeroWindow(location);
 }
+
+/** `?place=denver` — so a place can be looked at without a rebuild. */
+export function aeroWindowFromUrl(search: string): AeroWindow {
+	return new AeroWindow(Location.byId(new URLSearchParams(search).get('place')));
+}

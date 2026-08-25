@@ -15,7 +15,11 @@ import { screenSpaceErrorFor } from '#lib/world/terrain/rules.js';
 
 function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): FlightFrame {
 	const altitudeM = overrides.altitudeM ?? 1000;
-	return new FlightFrame(new CameraPose(0, 0, altitudeM, 0, -10), overrides.timeOfDay ?? 12);
+	return new FlightFrame(
+		new CameraPose(0, 0, altitudeM, 0, -10),
+		overrides.timeOfDay ?? 12,
+		altitudeM
+	);
 }
 
 function testFrame(overrides: { altitudeM?: number; nightFactor?: number } = {}): RenderFrame {
@@ -26,18 +30,21 @@ function testFrame(overrides: { altitudeM?: number; nightFactor?: number } = {})
 		new CameraPose(0, 0, altitudeM, 0, -10),
 		atmosphere,
 		selectImagery({ groundDetail: atmosphere.groundDetail, nightFactor, current: null }),
-		nightFactor,
+		nightFactor
 	);
 }
 
 function fakeLodRuntime() {
 	const globeObj = { maximumScreenSpaceError: 0 };
-	return { rt: { viewer: { scene: { globe: globeObj } } } as unknown as GlobeRuntime, globe: globeObj };
+	return {
+		rt: { viewer: { scene: { globe: globeObj } } } as unknown as GlobeRuntime,
+		globe: globeObj
+	};
 }
 
 function mockHealth(layers: string[]) {
 	vi.mocked(fetch).mockResolvedValueOnce(
-		new Response(JSON.stringify({ hasTiles: layers.length > 0, layers })),
+		new Response(JSON.stringify({ hasTiles: layers.length > 0, layers }))
 	);
 }
 
@@ -49,15 +56,15 @@ function mockImageryRuntime(addImageryProvider: ReturnType<typeof vi.fn>) {
 			}),
 			WebMercatorTilingScheme: vi.fn(function (this: unknown) {
 				return {};
-			}),
+			})
 		},
 		viewer: {
 			imageryLayers: {
 				removeAll: vi.fn(),
 				remove: vi.fn(),
-				addImageryProvider,
-			},
-		},
+				addImageryProvider
+			}
+		}
 	} as unknown as GlobeRuntime;
 }
 
@@ -100,9 +107,9 @@ describe('AtmosphereSync', () => {
 			Cesium: {
 				Color: vi.fn(function (this: unknown, r: number, g: number, b: number, a: number) {
 					return { r, g, b, a };
-				}),
+				})
 			},
-			viewer: { scene },
+			viewer: { scene }
 		} as unknown as GlobeRuntime;
 
 		sync.sync(rt, testFrame({ altitudeM: 300 }));
@@ -119,9 +126,9 @@ describe('AtmosphereSync', () => {
 			Cesium: {
 				Color: vi.fn(function (this: unknown, r: number, g: number, b: number, a: number) {
 					return { r, g, b, a };
-				}),
+				})
 			},
-			viewer: { scene },
+			viewer: { scene }
 		} as unknown as GlobeRuntime;
 
 		sync.sync(rt, testFrame({ altitudeM: 500 }));
@@ -140,9 +147,9 @@ describe('AtmosphereSync', () => {
 			Cesium: {
 				Color: vi.fn(function (this: unknown, r: number, g: number, b: number, a: number) {
 					return { r, g, b, a };
-				}),
+				})
 			},
-			viewer: { scene },
+			viewer: { scene }
 		} as unknown as GlobeRuntime;
 
 		sync.sync(rt, testFrame({ altitudeM: 500 }));
@@ -220,8 +227,8 @@ describe('ImagerySync', () => {
 
 		expect(rt.Cesium.UrlTemplateImageryProvider).toHaveBeenCalledWith(
 			expect.objectContaining({
-				url: '/api/tiles/eox-sentinel2/{z}/{y}/{x}.jpg',
-			}),
+				url: '/api/tiles/eox-sentinel2/{z}/{y}/{x}.jpg'
+			})
 		);
 	});
 });
@@ -244,9 +251,9 @@ describe('TerrainSync', () => {
 			Cesium: {
 				EllipsoidTerrainProvider: vi.fn(function (this: unknown) {
 					return {};
-				}),
+				})
 			},
-			viewer: { terrainProvider: null },
+			viewer: { terrainProvider: null }
 		} as unknown as GlobeRuntime;
 
 		const sync = new TerrainSync();

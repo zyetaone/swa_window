@@ -15,7 +15,10 @@
 export class EpsilonGate {
 	#last: number;
 
-	constructor(private readonly eps: number = 0.001, initial: number = -Infinity) {
+	constructor(
+		private readonly eps: number = 0.001,
+		initial: number = -Infinity
+	) {
 		this.#last = initial;
 	}
 

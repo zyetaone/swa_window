@@ -30,7 +30,7 @@ export class Scene {
 
 	constructor(
 		readonly subsystems: readonly Subsystem[],
-		imagery: ImagerySync,
+		imagery: ImagerySync
 	) {
 		this.#imagery = imagery;
 	}
@@ -73,12 +73,12 @@ export class Scene {
 
 	/** Derive once per frame. Imagery is stateful — it holds its own last pick. */
 	#resolve(slice: FlightFrame): RenderFrame {
-		const atmosphere = resolveAtmosphere(slice.camera.altitudeM);
+		const atmosphere = resolveAtmosphere(slice.aglM);
 		const nightFactor = nightLighting.factor(slice.timeOfDay);
 		this.#imagerySelection = selectImagery({
 			groundDetail: atmosphere.groundDetail,
 			nightFactor,
-			current: this.#imagerySelection,
+			current: this.#imagerySelection
 		});
 		return new RenderFrame(slice.camera, atmosphere, this.#imagerySelection, nightFactor);
 	}
@@ -96,7 +96,7 @@ export const scene = new Scene(
 		new LodSync(),
 		imagery,
 		new TerrainSync(),
-		new LightingSync(),
+		new LightingSync()
 	],
-	imagery,
+	imagery
 );

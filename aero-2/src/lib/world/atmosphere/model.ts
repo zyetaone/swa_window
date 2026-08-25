@@ -24,7 +24,7 @@ export const ATMOSPHERE_BANDS: readonly AtmosphereBand[] = [
 		groundDetail: 1.0,
 		deckOpacity: 0.0,
 		skyTop: [0.35, 0.55, 0.85],
-		skyHorizon: [0.75, 0.82, 0.9],
+		skyHorizon: [0.75, 0.82, 0.9]
 	},
 	{
 		id: 'haze',
@@ -33,7 +33,7 @@ export const ATMOSPHERE_BANDS: readonly AtmosphereBand[] = [
 		groundDetail: 0.85,
 		deckOpacity: 0.15,
 		skyTop: [0.3, 0.5, 0.82],
-		skyHorizon: [0.7, 0.78, 0.88],
+		skyHorizon: [0.7, 0.78, 0.88]
 	},
 	{
 		id: 'midDeck',
@@ -42,7 +42,7 @@ export const ATMOSPHERE_BANDS: readonly AtmosphereBand[] = [
 		groundDetail: 0.55,
 		deckOpacity: 0.55,
 		skyTop: [0.22, 0.42, 0.78],
-		skyHorizon: [0.6, 0.72, 0.86],
+		skyHorizon: [0.6, 0.72, 0.86]
 	},
 	{
 		id: 'cirrus',
@@ -51,7 +51,7 @@ export const ATMOSPHERE_BANDS: readonly AtmosphereBand[] = [
 		groundDetail: 0.3,
 		deckOpacity: 0.8,
 		skyTop: [0.13, 0.3, 0.7],
-		skyHorizon: [0.45, 0.6, 0.8],
+		skyHorizon: [0.45, 0.6, 0.8]
 	},
 	{
 		id: 'stratosphere',
@@ -60,8 +60,8 @@ export const ATMOSPHERE_BANDS: readonly AtmosphereBand[] = [
 		groundDetail: 0.12,
 		deckOpacity: 0.95,
 		skyTop: [0.04, 0.12, 0.42],
-		skyHorizon: [0.22, 0.38, 0.66],
-	},
+		skyHorizon: [0.22, 0.38, 0.66]
+	}
 ];
 
 export const TRANSITION_HALF_WIDTH_M = 600;

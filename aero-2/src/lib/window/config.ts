@@ -27,7 +27,7 @@ export class CameraConfig {
 		driftRate: 3.42e-4,
 		majorMin: 0.08,
 		majorMax: 0.25,
-		breathePeriod: 180,
+		breathePeriod: 180
 	};
 	readonly view: ViewConfig = { pitchDeg: -18 };
 	readonly flightSpeed = 6.0;
@@ -36,7 +36,7 @@ export class CameraConfig {
 export class DirectorConfig {
 	readonly daylight: DaylightConfig = {
 		syncIntervalMs: 60_000,
-		timeZoneOverride: '',
+		timeZoneOverride: ''
 	};
 }
 

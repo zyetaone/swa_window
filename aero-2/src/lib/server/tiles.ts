@@ -26,7 +26,7 @@ export function resolveTileDir(
 	env: NodeJS.ProcessEnv = process.env,
 	cwd: string = process.cwd(),
 	piDirExists: (path: string) => boolean = existsSync,
-	dirHasContent: (path: string) => boolean = dirHasLayers,
+	dirHasContent: (path: string) => boolean = dirHasLayers
 ): string {
 	if (env.TILE_DIR) return resolve(cwd, env.TILE_DIR);
 	const piPath = '/opt/zyeta-aero/tiles';
@@ -101,9 +101,7 @@ export function remoteTileUrl(subPath: string): string | null {
 		case 'esri-world-imagery':
 			return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
 		case 'cartodb-dark':
-			return ext === 'png'
-				? `https://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`
-				: null;
+			return ext === 'png' ? `https://a.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png` : null;
 		default:
 			return null;
 	}
@@ -119,20 +117,20 @@ export function lanCorsHeaders(requestOrigin: string | null | undefined): Record
 	}
 	return {
 		'Access-Control-Allow-Origin': requestOrigin,
-		Vary: 'Origin',
+		Vary: 'Origin'
 	};
 }
 
 export function lanCorsHeadersFull(
 	requestOrigin: string | null | undefined,
-	methods = 'GET, POST, OPTIONS',
+	methods = 'GET, POST, OPTIONS'
 ): Record<string, string> {
 	const base = lanCorsHeaders(requestOrigin);
 	if (Object.keys(base).length === 0) return {};
 	return {
 		...base,
 		'Access-Control-Allow-Methods': methods,
-		'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+		'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 	};
 }
 
@@ -140,6 +138,6 @@ export function corsPreflight(methods: string): (event: { request: Request }) =>
 	return ({ request }) =>
 		new Response(null, {
 			status: 204,
-			headers: lanCorsHeadersFull(request.headers.get('origin'), methods),
+			headers: lanCorsHeadersFull(request.headers.get('origin'), methods)
 		});
 }

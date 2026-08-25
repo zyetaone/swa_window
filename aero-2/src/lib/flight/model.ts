@@ -15,7 +15,7 @@ export class CameraPose {
 		readonly lon: number,
 		readonly altitudeM: number,
 		readonly headingDeg: number,
-		readonly pitchDeg: number,
+		readonly pitchDeg: number
 	) {}
 }
 
@@ -31,6 +31,8 @@ export class FlightFrame {
 	constructor(
 		readonly camera: CameraPose,
 		readonly timeOfDay: number,
+		/** Height above local terrain. The bands are keyed on this, not on MSL. */
+		readonly aglM: number
 	) {}
 }
 

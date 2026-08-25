@@ -8,7 +8,14 @@
 
 import { createReadStream, statSync, readdirSync } from 'node:fs';
 import type { RequestHandler } from './$types';
-import { corsPreflight, lanCorsHeaders, remoteFallbackEnabled, remoteTileUrl, resolveLocalTile, resolveTileDir } from '#lib/server/tiles.js';
+import {
+	corsPreflight,
+	lanCorsHeaders,
+	remoteFallbackEnabled,
+	remoteTileUrl,
+	resolveLocalTile,
+	resolveTileDir
+} from '#lib/server/tiles.js';
 
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 
@@ -17,7 +24,7 @@ const MIME: Record<string, string> = {
 	'.jpeg': 'image/jpeg',
 	'.png': 'image/png',
 	'.terrain': 'application/vnd.quantized-mesh',
-	'.json': 'application/json',
+	'.json': 'application/json'
 };
 
 export const OPTIONS: RequestHandler = corsPreflight('GET, OPTIONS');
@@ -46,8 +53,8 @@ function serveBytes(body: BodyInit, contentType: string, cors: Record<string, st
 		headers: {
 			...cors,
 			'Content-Type': contentType,
-			'Cache-Control': 'public, max-age=31536000, immutable',
-		},
+			'Cache-Control': 'public, max-age=31536000, immutable'
+		}
 	});
 }
 
@@ -64,7 +71,7 @@ async function serveRemote(url: string, cors: Record<string, string>): Promise<R
 
 async function resolveTileResponse(
 	path: string,
-	cors: Record<string, string>,
+	cors: Record<string, string>
 ): Promise<Response | 'forbidden' | null> {
 	const local = resolveLocalTile(TILE_DIR, path);
 	if (local.forbidden) return 'forbidden';
@@ -91,8 +98,8 @@ function serveTile(filePath: string, cors: Record<string, string>): Response {
 			...cors,
 			'Content-Type': contentType,
 			'Content-Length': String(size),
-			'Cache-Control': 'public, max-age=31536000, immutable',
-		},
+			'Cache-Control': 'public, max-age=31536000, immutable'
+		}
 	});
 }
 
@@ -102,7 +109,7 @@ export const GET: RequestHandler = async ({ params, request }) => {
 
 	if (path === 'health') {
 		return new Response(JSON.stringify(tileHealth()), {
-			headers: { ...cors, 'Content-Type': 'application/json' },
+			headers: { ...cors, 'Content-Type': 'application/json' }
 		});
 	}
 

@@ -2,11 +2,7 @@
  * Which base texture, and how deep to zoom it. Hysteresis lives here so the
  * pick does not flicker at a boundary.
  */
-import {
-	DAY_IMAGERY_IDS,
-	IMAGERY_SOURCES,
-	type ImagerySource,
-} from '#lib/world/imagery/model.js';
+import { DAY_IMAGERY_IDS, IMAGERY_SOURCES, type ImagerySource } from '#lib/world/imagery/model.js';
 
 const NIGHT_SWAP_HYSTERESIS = 0.08;
 const DETAIL_STEP_HYSTERESIS = 0.35;
@@ -38,7 +34,7 @@ function sourceById(id: string): ImagerySource | undefined {
 
 function nearestSource(nightFactor: number): ImagerySource {
 	return IMAGERY_SOURCES.reduce((best, s) =>
-		Math.abs(s.nightAnchor - nightFactor) < Math.abs(best.nightAnchor - nightFactor) ? s : best,
+		Math.abs(s.nightAnchor - nightFactor) < Math.abs(best.nightAnchor - nightFactor) ? s : best
 	);
 }
 
@@ -57,7 +53,7 @@ function selectSource(nightFactor: number, current: ImagerySelection | null): Im
 export function selectDetailLevel(
 	source: ImagerySource,
 	groundDetail: number,
-	currentLevel: number | null,
+	currentLevel: number | null
 ): number {
 	const [min, max] = source.zoomRange;
 	const target = min + (max - min) * clamp01(groundDetail);
@@ -77,13 +73,13 @@ export function selectImagery(input: ImageryInput): ImagerySelection {
 	return {
 		sourceId: source.id,
 		urlTemplate: source.urlTemplate,
-		maximumLevel: selectDetailLevel(source, input.groundDetail, heldLevel),
+		maximumLevel: selectDetailLevel(source, input.groundDetail, heldLevel)
 	};
 }
 
 export function gateImagerySelection(
 	selection: ImagerySelection,
-	layerAvailable: (id: string) => boolean,
+	layerAvailable: (id: string) => boolean
 ): ImagerySelection {
 	if (layerAvailable(selection.sourceId)) return selection;
 
@@ -94,7 +90,7 @@ export function gateImagerySelection(
 		return {
 			sourceId: src.id,
 			urlTemplate: src.urlTemplate,
-			maximumLevel: selection.maximumLevel,
+			maximumLevel: selection.maximumLevel
 		};
 	}
 

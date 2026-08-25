@@ -5,7 +5,7 @@ import {
 	ATMOSPHERE_BANDS,
 	TRANSITION_HALF_WIDTH_M,
 	type AtmosphereBand,
-	type Rgb,
+	type Rgb
 } from '#lib/world/atmosphere/model.js';
 
 export interface AtmosphereState {
@@ -49,7 +49,7 @@ function stateFrom(
 	band: AtmosphereBand,
 	next: AtmosphereBand | null,
 	t: number,
-	crossing: number,
+	crossing: number
 ): AtmosphereState {
 	if (!next || t === 0) {
 		return {
@@ -60,7 +60,7 @@ function stateFrom(
 			groundDetail: band.groundDetail,
 			deckOpacity: band.deckOpacity,
 			skyTop: band.skyTop,
-			skyHorizon: band.skyHorizon,
+			skyHorizon: band.skyHorizon
 		};
 	}
 	return {
@@ -71,7 +71,7 @@ function stateFrom(
 		groundDetail: lerp(band.groundDetail, next.groundDetail, t),
 		deckOpacity: lerp(band.deckOpacity, next.deckOpacity, t),
 		skyTop: lerpRgb(band.skyTop, next.skyTop, t),
-		skyHorizon: lerpRgb(band.skyHorizon, next.skyHorizon, t),
+		skyHorizon: lerpRgb(band.skyHorizon, next.skyHorizon, t)
 	};
 }
 

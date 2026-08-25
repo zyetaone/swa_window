@@ -26,7 +26,7 @@ describe('resolveLocalHours', () => {
 	it('resolves a known IANA zone', () => {
 		const h = resolveLocalHours({
 			timeZone: 'UTC',
-			now: new Date('2026-01-15T12:00:00Z'),
+			now: new Date('2026-01-15T12:00:00Z')
 		});
 		expect(h).toBeCloseTo(12, 1);
 	});

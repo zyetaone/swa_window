@@ -14,7 +14,7 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat | null {
 			hour: 'numeric',
 			minute: 'numeric',
 			second: 'numeric',
-			hourCycle: 'h23',
+			hourCycle: 'h23'
 		});
 	} catch {
 		fmt = null;
@@ -36,7 +36,7 @@ function localHoursInTimeZone(timeZone: string, now: Date = new Date()): number 
 		const m = num('minute');
 		const s = num('second');
 		if (![h, m, s].every(Number.isFinite)) return null;
-		return ((h + m / 60 + s / 3600) % 24 + 24) % 24;
+		return (((h + m / 60 + s / 3600) % 24) + 24) % 24;
 	} catch {
 		return null;
 	}
@@ -44,7 +44,7 @@ function localHoursInTimeZone(timeZone: string, now: Date = new Date()): number 
 
 function localHoursFromUtcOffset(utcOffsetHours: number, now: Date = new Date()): number {
 	const utc = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
-	return ((utc + utcOffsetHours) % 24 + 24) % 24;
+	return (((utc + utcOffsetHours) % 24) + 24) % 24;
 }
 
 export function resolveLocalHours(opts: {

@@ -2,7 +2,13 @@
  * Swaps the base texture and its zoom cap. Stateful: holds the layer it
  * last applied so an unchanged pick costs nothing.
  */
-import type { GlobeRuntime, ImageryLayer, ImageryMode, Subsystem, RenderFrame } from '#lib/cesium/types.js';
+import type {
+	GlobeRuntime,
+	ImageryLayer,
+	ImageryMode,
+	Subsystem,
+	RenderFrame
+} from '#lib/cesium/types.js';
 import { IMAGERY_SOURCES } from '#lib/world/imagery/model.js';
 import { gateImagerySelection, type ImagerySelection } from '#lib/world/imagery/rules.js';
 import { tileCache, tileServerBase } from '#lib/cesium/tiles.svelte.js';
@@ -49,7 +55,7 @@ export class ImagerySync implements Subsystem {
 			url: this.#resolveUrl(gated.urlTemplate),
 			maximumLevel: gated.maximumLevel,
 			minimumLevel,
-			tilingScheme: new rt.Cesium.WebMercatorTilingScheme(),
+			tilingScheme: new rt.Cesium.WebMercatorTilingScheme()
 		});
 
 		this.#layer = rt.viewer.imageryLayers.addImageryProvider(provider);
