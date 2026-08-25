@@ -178,3 +178,40 @@ export function overpassToRoadGeoJson(
 	}
 	return { type: 'FeatureCollection', features };
 }
+
+const ROAD_GROUP_ATTEMPTS = 3;
+const ROAD_GROUP_RETRY_MS = 2_000;
+
+/**
+ * One Overpass radius-group query with endpoint failover and linear backoff.
+ * Returns null when every attempt fails — caller must not write partial output.
+ */
+export async function fetchRoadGroupFeatures(
+	lat: number,
+	lon: number,
+	radius: number,
+	classes: readonly RoadClass[],
+	seen: Set<number>,
+): Promise<RoadFeature[] | null> {
+	const query = ROADS_CONFIG.buildOverpassQuery(lat, lon, radius, classes);
+	for (let attempt = 1; attempt <= ROAD_GROUP_ATTEMPTS; attempt++) {
+		for (const endpoint of ROADS_CONFIG.endpoints) {
+			try {
+				const res = await fetch(endpoint, {
+					method: 'POST',
+					headers: OVERPASS_HEADERS,
+					body: `data=${encodeURIComponent(query)}`,
+				});
+				if (!res.ok) continue;
+				const json = (await res.json()) as Parameters<typeof overpassToRoadGeoJson>[0];
+				return overpassToRoadGeoJson(json, seen).features;
+			} catch {
+				// try next endpoint
+			}
+		}
+		if (attempt < ROAD_GROUP_ATTEMPTS) {
+			await new Promise((r) => setTimeout(r, ROAD_GROUP_RETRY_MS * attempt));
+		}
+	}
+	return null;
+}

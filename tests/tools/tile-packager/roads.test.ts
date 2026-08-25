@@ -10,7 +10,7 @@
  * per-class radius design, cross-query deduplication, and the slimming that
  * decides whether this rides `git pull` to the fleet or not.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
 	ROAD_CLASSES,
 	ROAD_RADIUS_M,
@@ -18,6 +18,7 @@ import {
 	radiusGroups,
 	normaliseClass,
 	overpassToRoadGeoJson,
+	fetchRoadGroupFeatures,
 } from '../../../tools/tile-packager/src/roads';
 
 const way = (id: number, highway: string, geometry: Array<[number, number]>) => ({
@@ -177,5 +178,40 @@ describe('overpass ways to slim GeoJSON', () => {
 
 	it('survives an empty Overpass response', () => {
 		expect(overpassToRoadGeoJson({ elements: [] }).features).toEqual([]);
+	});
+});
+
+describe('fetchRoadGroupFeatures', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
+
+	it('retries on HTTP failure and returns features on success', async () => {
+		vi.useFakeTimers();
+		const body = {
+			elements: [way(1, 'primary', [[78.4, 17.4], [78.41, 17.41]])],
+		};
+		let calls = 0;
+		vi.stubGlobal('fetch', vi.fn(async () => {
+			calls++;
+			if (calls < 2) return new Response('', { status: 503 });
+			return new Response(JSON.stringify(body), { status: 200 });
+		}));
+
+		const promise = fetchRoadGroupFeatures(17.4, 78.4, 12_000, ['primary'], new Set());
+		await vi.runAllTimersAsync();
+		const features = await promise;
+		expect(features).toHaveLength(1);
+		expect(calls).toBeGreaterThanOrEqual(2);
+	});
+
+	it('returns null when every endpoint and attempt fails', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+		const promise = fetchRoadGroupFeatures(17.4, 78.4, 12_000, ['primary'], new Set());
+		await vi.runAllTimersAsync();
+		const features = await promise;
+		expect(features).toBeNull();
 	});
 });

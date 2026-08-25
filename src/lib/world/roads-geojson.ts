@@ -287,7 +287,17 @@ export function roadFlicker(binPhase: number, timeOfDayHours: number): number {
 }
 
 /**
- * VIIRS luminance at a road's first vertex → lamp scale. Pure, fleet-safe.
+ * Lon/lat at the polyline midpoint — better VIIRS sample than an endpoint for
+ * long segments that cross dark → lit belts. Pure and fleet-safe.
+ */
+export function roadViirsSamplePoint(coords: number[]): { lat: number; lon: number } {
+	if (coords.length < 4) return { lon: coords[0] ?? 0, lat: coords[1] ?? 0 };
+	const mid = (Math.floor(coords.length / 4) * 2) | 0;
+	return { lon: coords[mid], lat: coords[mid + 1] };
+}
+
+/**
+ * VIIRS luminance at a road's midpoint → lamp scale. Pure, fleet-safe.
  *
  * Vector roads replace the baked `viirs-roads` raster: the same glow curve
  * (`viirs-glow.ts`) runs at load time via `viirs-field` sampling so lamps
@@ -303,8 +313,7 @@ export function roadViirsScaleForPolyline(
 		// Field still loading or failed — mid-scale fallback, not full bright.
 		return viirsGlowBucketCenter(Math.floor(viirsGlowBucketIndex(1, floor) / 2), floor);
 	}
-	const lat = coords[1];
-	const lon = coords[0];
+	const { lat, lon } = roadViirsSamplePoint(coords);
 	return viirsRoadGlowScale(field.sampleBilinear(lat, lon), floor);
 }
 
@@ -458,6 +467,7 @@ async function loadOfflineRoads(
 	if (existing) return existing;
 
 	const job = (async () => {
+		const t0 = performance.now();
 		try {
 			const res = await fetch(`/api/roads/${locationId}`);
 			if (!res.ok) return;
@@ -520,6 +530,10 @@ async function loadOfflineRoads(
 				_cityRoads.set(locationId, { bins, draped });
 				if (field) _cityViirsFallback.delete(locationId);
 				else _cityViirsFallback.add(locationId);
+				console.info(
+					`[Roads] ${locationId}: ${roads.length} segments, ${bins.size} bins, `
+						+ `${((performance.now() - t0) / 1000).toFixed(1)}s`,
+				);
 			}
 		} catch (e) {
 			// Never break the fiction — no audience-visible error, the night city

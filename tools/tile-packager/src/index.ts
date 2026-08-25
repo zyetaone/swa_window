@@ -21,7 +21,7 @@ import { LOCATIONS } from '../../../content/locations';
 import type { LocationId } from '../../../content/locations';
 import { enumerateTiles, estimateBytes, formatBytes, type TileSource } from './rules';
 import { SOURCES, tileFilePath, fetchIonLayerJson, BUILDINGS_CONFIG, overpassToGeoJson } from './sources';
-import { ROADS_CONFIG, radiusGroups, overpassToRoadGeoJson, OVERPASS_HEADERS } from './roads';
+import { ROADS_CONFIG, radiusGroups, fetchRoadGroupFeatures, OVERPASS_HEADERS } from './roads';
 import { STATIC_ASSETS, type AssetCategory } from './assets';
 
 // ─── CLI ────────────────────────────────────────────────────────────────────
@@ -329,27 +329,11 @@ async function main() {
 			const features: import('./roads').RoadFeature[] = [];
 			let failed = false;
 			for (const group of groups) {
-				const query = ROADS_CONFIG.buildOverpassQuery(
-					loc.lat, loc.lon, group.radius, group.classes,
+				const batch = await fetchRoadGroupFeatures(
+					loc.lat, loc.lon, group.radius, group.classes, seen,
 				);
-				let ok = false;
-				for (const endpoint of ROADS_CONFIG.endpoints) {
-					try {
-						const res = await fetch(endpoint, {
-							method: 'POST',
-							headers: OVERPASS_HEADERS,
-							body: `data=${encodeURIComponent(query)}`,
-						});
-						if (!res.ok) continue;
-						const json = (await res.json()) as Parameters<typeof overpassToRoadGeoJson>[0];
-						features.push(...overpassToRoadGeoJson(json, seen).features);
-						ok = true;
-						break;
-					} catch {
-						// try next endpoint
-					}
-				}
-				if (!ok) { failed = true; break; }
+				if (!batch) { failed = true; break; }
+				features.push(...batch);
 				await new Promise((r) => setTimeout(r, 1_000));
 			}
 			if (failed || features.length === 0) {

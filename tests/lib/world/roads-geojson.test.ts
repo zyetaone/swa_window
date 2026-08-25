@@ -18,6 +18,7 @@ import {
 	roadFlicker,
 	roadBinPhase,
 	roadViirsScaleForPolyline,
+	roadViirsSamplePoint,
 	ROAD_CLASSES,
 	ROAD_LAMPS,
 } from '$lib/world/roads-geojson';
@@ -316,6 +317,19 @@ describe('roadViirsScaleForPolyline — VIIRS gates lamp brightness', () => {
 		const fallback = roadViirsScaleForPolyline(coords, null);
 		expect(fallback).toBeGreaterThan(0.15);
 		expect(fallback).toBeLessThan(1);
+	});
+
+	it('samples VIIRS at the polyline midpoint, not an endpoint', () => {
+		// Dark at start, bright at end — midpoint should read bright.
+		const long = [78.48, 17.38, 78.49, 17.39, 78.50, 17.40];
+		expect(roadViirsSamplePoint(long)).toEqual({ lon: 78.49, lat: 17.39 });
+		const gradient = {
+			sample: () => 0,
+			sampleBilinear: (lat: number, lon: number) =>
+				lon === 78.48 && lat === 17.38 ? 0 : 1,
+		};
+		expect(roadViirsScaleForPolyline(long, gradient)).toBeGreaterThan(0.5);
+		expect(roadViirsScaleForPolyline([78.48, 17.38], gradient)).toBeLessThan(0.25);
 	});
 });
 
