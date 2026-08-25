@@ -15,7 +15,7 @@
  * bottom, where nothing can point back down at.
  */
 
-import { Location } from '#lib/domain/locations.js';
+import { Location } from '#lib/config/locations.js';
 
 // ── The contract ──────────────────────────────────────────────────────────────
 

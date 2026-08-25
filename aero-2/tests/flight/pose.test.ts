@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { altitudeAt, orbitPose, resolveLocalHours, windowView } from '#lib/flight/pose.js';
 import { readPaneParams } from '#lib/flight/url-params.js';
-import { Location } from '#lib/domain/locations.js';
+import { Location } from '#lib/config/locations.js';
 // This file's altitude tests assert the climb VISITS every atmosphere band —
 // a cross-module claim, so it legitimately needs the band table.
 import { ATMOSPHERE_BANDS, resolveAtmosphere } from '#lib/domain/atmosphere.js';

@@ -5,48 +5,64 @@ Minimal, high-performance architecture for the Aero Dynamic Window.
 > **MapLibre is the only renderer as of 2026-08-25.** See
 > [ADR-005](../../docs/ADR-005-aero-2-threlte-renderer.md).
 
-## 1. The layer stack
+## 1. Folders, and the one rule
 
-Four product layers, and imports may only point **downward**:
+Folders name what things **are**, roughly outermost-in:
 
 ```text
 cabin/    🪟 inside the cabin — bezel, glass, blind, HUD
 stage/    🌍 outside the window — MapLibre, tiles, terrain, sky
 flight/   🎛️ the invisible part — pose maths, state, the frame loop
-domain/   📐 the shared vocabulary — imports NOTHING
-server/   🌐 server-only tile proxy — imports NOTHING
+domain/   📐 simulation logic that knows no renderer — imports nothing
+config/   ⚙️ data: places, tile URLs, zoom caps
+server/   🌐 server-only tile proxy
 ```
 
-`node tools/check-layers.mjs` asserts this, and it runs as part of both
-`bun run check` and `bun run test`. It is not decoration: this repo previously
-claimed "no import cycles" in prose while the simulation and `stage/` imported
-each other in **both** directions. A rule nothing enforces is a rule nothing keeps.
+There is exactly one enforced rule: **no import cycles**.
+`node tools/check-cycles.mjs` runs in both `bun run check` and `bun run test`.
+It is not decoration — this repo once claimed "no import cycles" in prose while
+the simulation and `stage/` imported each other in **both** directions. A rule
+nothing enforces is a rule nothing keeps.
+
+### What this used to be, and why it shrank
+
+This was a five-layer ranking (`domain → server → flight → stage → cabin`) with
+a checker that rejected any upward or sibling import. For a 23-file app with one
+route, that was more architecture than the code could earn: the ranking was
+maintained by hand and forbade many imports that would never have caused harm.
+
+The cycle detector keeps the part that was load-bearing. Cycles are a real
+failure — they break tree-shaking and cause undefined-at-import-time bugs that
+only surface at runtime. Layer rank was a proxy for that, and the proxy cost
+more than the thing it stood in for. If a genuine layering rule is needed again,
+it should arrive attached to a bug that proves it.
 
 ### Why `domain/` exists
 
 `PaneParams` is the contract every layer reads. It used to live beside the
 simulation, which also reads everything else — so `flight → stage → flight` was
-a real cycle, in both directions. A shared contract cannot live in the layer that
-consumes the most; it belongs at the bottom, where nothing can point back down
-at it.
+a real cycle, in both directions. A shared contract cannot live in the layer
+that consumes the most.
 
-It is `domain/`, not `config/`, because atmosphere bands and tile templates are
-the product's vocabulary, not settings someone tweaks.
+`domain/` is deliberately small: `pane.ts` (the contract and its tuning numbers)
+and `atmosphere.ts` (band blending and light curves). Both are pure, import
+nothing, and would still make sense if MapLibre were replaced tomorrow.
 
-`atmosphere.ts` and `imagery.ts` moved there for the same reason. They are pure
-data and pure functions that import nothing, so filing them under `stage/`
-(which imports `flight/`) made every consumer of a band table transitively depend
-on the renderer.
+`locations.ts` and `imagery.ts` were in `domain/` and are now `config/`. They are
+a list of places and a set of tile URLs — data someone edits, not logic that
+models the product. Calling that "domain" made the folder mean two things.
 
 ## 2. Directory tree
 
 ```text
 src/
   ├── lib/
-  │   ├── domain/                   # 📐 Shared vocabulary — imports nothing
+  │   ├── domain/                   # 📐 Renderer-free simulation logic
   │   │   ├── pane.ts               # PaneParams + every tuning number
+  │   │   └── atmosphere.ts         # Bands, altitude blend, night curve
+  │   │
+  │   ├── config/                   # ⚙️ Data someone edits
   │   │   ├── locations.ts          # Location registry (Hyderabad, Denver)
-  │   │   ├── atmosphere.ts         # Bands, altitude blend, night curve
   │   │   └── imagery.ts            # Tile templates, NAIP bounds, zoom caps
   │   │
   │   ├── flight/                   # 🎛️ Simulation, physics & state
@@ -122,14 +138,14 @@ once; it only looked correct because `position: fixed` escaped the container.
 
 ## 5. Invariants
 
-1. **Layering** — imports point downward only, enforced by `tools/check-layers.mjs`.
+1. **No import cycles** — enforced by `tools/check-cycles.mjs` in `check` and `test`.
 2. **Deterministic fleet pose** — wall-clock time is the only input to
    `windowView()`, so three Pis agree without any inter-device protocol. No
    accumulated `dt`, no per-process epoch, no `Math.random()` in the hot path.
 3. **Context DI** — `createAeroWindow()` at the root; descendants read
    `useAeroWindow()`. No prop-drilling of simulation state.
 4. **Renderer isolation** — only `stage/` and `+page.svelte` import MapLibre.
-   `domain/` and `flight/` name no renderer at all, which is what made replacing
+   `domain/`, `config/` and `flight/` name no renderer at all, which is what made replacing
    Cesium a route-level change rather than a rewrite.
 5. **Offline tiles** — everything goes through `/api/tiles`, path-guarded, with
    a local pack preferred. `server/tiles.ts` is the only file naming a real

@@ -12,7 +12,7 @@
 
 	import { HILLSHADE_SHADOW_COLOR, TERRAIN_EXAGGERATION } from '#lib/domain/pane.js';
 	import { useAeroWindow } from '#lib/flight/aero-window.svelte.js';
-	import { TILE_ATTRIBUTION, TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/domain/imagery.js';
+	import { TILE_ATTRIBUTION, TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/config/imagery.js';
 
 	const windowState = useAeroWindow();
 	const tiles = tileTemplates();

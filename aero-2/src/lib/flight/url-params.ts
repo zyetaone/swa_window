@@ -7,8 +7,8 @@
  * thing it produces is also called params.
  */
 
-import { Location } from '#lib/domain/locations.js';
-import { inNaipCoverage } from '#lib/domain/imagery.js';
+import { Location } from '#lib/config/locations.js';
+import { inNaipCoverage } from '#lib/config/imagery.js';
 import {
 	DEFAULT_WINDOW_AZIMUTH_DEG,
 	DEFAULT_PITCH_DEG,

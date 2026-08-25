@@ -4,6 +4,12 @@
 
 export const TILE_SIZE = 256;
 
+// esri (World Imagery) was tried and reverted: it's proprietary commercial
+// imagery, not public domain — bulk-downloading it into an offline pack for a
+// fielded kiosk is outside what the free endpoint's terms allow. GIBS is US
+// government public domain, unambiguously fine to cache in bulk. It shows
+// real daily cloud cover (it's an actual satellite capture, not a cloud-free
+// composite); fixing that needs a baked Sentinel-2 composite, not a swap.
 export const TILE_MAXZOOM = {
 	gibs: 9,
 	usgs: 16,
@@ -12,6 +18,18 @@ export const TILE_MAXZOOM = {
 
 export const TILE_ATTRIBUTION =
 	'Imagery: NASA EOSDIS GIBS, USGS The National Map · Elevation: Mapzen / AWS Open Data';
+
+/**
+ * The elevation pack — ONE archive covering every location, not one per place.
+ *
+ * The fleet rotates through locations, so a Pi needs all of them anyway; a pack
+ * per place would put the same bytes on the same SD card and add a lookup to
+ * choose between them. One file, one URL, no selection logic.
+ *
+ * Served through `/api/tiles` (which answers Range requests) rather than from
+ * `static/`, so the archive is not copied into the build.
+ */
+export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
 
 export function inNaipCoverage(loc: { lat: number; lon: number }): boolean {
 	return loc.lat >= 24.5 && loc.lat <= 49.5 && loc.lon >= -125.0 && loc.lon <= -66.9;
