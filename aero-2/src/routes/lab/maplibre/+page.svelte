@@ -34,8 +34,13 @@
 	const place = Location.byId(q.get('place') ?? 'denver');
 	const azimuthDeg = Number(q.get('azimuth') ?? -90);
 	const pitchDeg = Number(q.get('pitch') ?? -18);
-	// ?detail=0 to see the GIBS-only floor, i.e. what every non-US location gets.
-	const detail = Number(q.get('detail') ?? 1);
+	// NAIP covers the US only, so anywhere else would just stream 404s. Bounding
+	// box, not a coverage API - ponytail: wrong for Alaska/Hawaii, and that is fine
+	// until a location lands there. ?detail=0 forces the GIBS-only floor, which is
+	// what Hyderabad gets and therefore what the real kiosk looks like today.
+	const inNaipCoverage =
+		place.lat > 24 && place.lat < 50 && place.lon > -125 && place.lon < -66;
+	const detail = Number(q.get('detail') ?? (inNaipCoverage ? 1 : 0));
 
 	// Elevation: AWS terrarium. Open data, and MapLibre decodes it natively —
 	// which is the whole reason this probe costs hours instead of days.
