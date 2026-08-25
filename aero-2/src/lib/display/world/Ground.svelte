@@ -47,6 +47,12 @@
 	const groundBrightnessMax = $derived(DAY_HIGHLIGHT_CEIL - night * 0.42);
 	const groundBrightnessMin = $derived(0.04 * (1 - night) ** 2);
 
+	/**
+	 * How strongly the city-lights raster shows. Ramped on night^1.5 so it stays
+	 * out of dusk — a linear fade puts lights on a sky that is still blue.
+	 */
+	const nightLightOpacity = $derived(Math.min(0.9, night ** 1.5));
+
 	/** Lift contrast into the night so the surviving highlights separate. */
 	const groundContrast = $derived(IMAGERY_GRADE.contrast + night * 0.34);
 
@@ -77,6 +83,35 @@
 		}}
 	/>
 </RasterTileSource>
+
+<!-- NIGHT LIGHTS. Sits ABOVE the base imagery and BELOW the detail layer —
+     MapLibre draws raster layers in mount order, so this file's order IS the
+     stack: ground colour, then the lights on top of it, then any local detail.
+
+     Mounted only while it can be seen, for the same reason the detail layer is:
+     a layer at `raster-opacity: 0` still fetches every tile it covers.
+
+     VIIRS is a black frame with bright cities, so at `raster-opacity: night`
+     over ground that the grade has already crushed toward black, the dark parts
+     of it change nothing and the lit parts read as towns. It only starts to
+     matter once the ground is dark, hence the ramp on night^1.5 rather than a
+     linear fade that would wash out dusk. -->
+{#if nightLightOpacity > 0.01}
+	<RasterTileSource
+		id="viirs"
+		tiles={tiles.viirs}
+		tileSize={TILE_SIZE}
+		maxzoom={TILE_MAXZOOM.viirs}
+	>
+		<RasterLayer
+			paint={{
+				'raster-opacity': nightLightOpacity,
+				'raster-fade-duration': IMAGERY_GRADE.fadeDuration,
+				'raster-resampling': IMAGERY_GRADE.resampling
+			}}
+		/>
+	</RasterTileSource>
+{/if}
 
 <!-- MOUNTED CONDITIONALLY, and that is load-bearing. `raster-opacity: 0` hides
      a layer but does NOT stop it fetching: over Hyderabad, where NAIP has no

@@ -103,6 +103,21 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
  */
 export const GIBS_DATE = '2026-04-15';
 
+/**
+ * VIIRS day/night band — the city-lights raster, for night.
+ *
+ * Pinned for the same reason GIBS_DATE is, and the layer and date must move
+ * together: this is a daily product, so three Pis booting either side of the
+ * update would light the cities differently across the panorama seam. The
+ * gap-filled BRDF-corrected variant is the one that is usable as a picture —
+ * the raw radiance band is speckled with orphan bright pixels.
+ *
+ * GoogleMapsCompatible_Level8 is the whole pyramid: there is no z9+. That is
+ * fine, because it is a glow laid under the horizon haze, not detail.
+ */
+export const VIIRS_LAYER = 'VIIRS_NOAA20_GapFilled_BRDF_Corrected_DayNightBand_Radiance';
+export const VIIRS_DATE = '2026-07-15';
+
 export function remoteTileUrl(subPath: string): string | null {
 	const m = subPath.match(WMTS_TILE_PATH);
 	if (!m?.groups) return null;
@@ -112,6 +127,8 @@ export function remoteTileUrl(subPath: string): string | null {
 			return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 		case 'gibs':
 			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
+		case 'viirs':
+			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_LAYER}/default/${VIIRS_DATE}/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
 		case 'usgs':
 			return `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
 		default:

@@ -6,6 +6,8 @@ export const TILE_SIZE = 256;
 
 export const TILE_MAXZOOM = {
 	gibs: 9,
+	/** VIIRS ships GoogleMapsCompatible_Level8 — there is no z9 to ask for. */
+	viirs: 8,
 	usgs: 16,
 	terrarium: 13
 } as const;
@@ -32,11 +34,13 @@ export function inNaipCoverage(loc: { lat: number; lon: number }): boolean {
 
 export function tileTemplates(prefix = '/api/tiles'): {
 	gibs: string[];
+	viirs: string[];
 	usgs: string[];
 	terrarium: string[];
 } {
 	return {
 		gibs: [`${prefix}/xyz/gibs/{z}/{x}/{y}.jpg`],
+		viirs: [`${prefix}/xyz/viirs/{z}/{x}/{y}.png`],
 		usgs: [`${prefix}/xyz/usgs/{z}/{x}/{y}.jpg`],
 		terrarium: [`${prefix}/xyz/terrarium/{z}/{x}/{y}.png`]
 	};
