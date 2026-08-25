@@ -2,7 +2,7 @@
 	/**
 	 * Display — Top-level parent feature component for the kiosk window display.
 	 * Composes the outside 3D world (Stage), aircraft wing silhouette (Wing),
-	 * and inside cabin chrome (Frame).
+	 * inside cabin chrome (Frame), minimap (MiniMap), and telemetry status band (Hud).
 	 *
 	 * Uses Svelte 5 <svelte:boundary> to isolate 3D WebGL runtime errors from taking
 	 * down the cabin frame or operator UI.
@@ -10,14 +10,18 @@
 	import Stage from './world/Stage.svelte';
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
+	import Hud from './cabin/Hud.svelte';
+	import MiniMap from './flight/MiniMap.svelte';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
 		wing?: boolean;
+		minimap?: boolean;
+		hud?: boolean;
 		children?: Snippet;
 	}
 
-	let { wing = true, children }: Props = $props();
+	let { wing = true, minimap = true, hud = true, children }: Props = $props();
 
 	function onStageError(error: unknown) {
 		console.error('[AeroDisplay] 3D World Stage error caught by boundary:', error);
@@ -44,6 +48,12 @@
 		<Wing />
 	{/if}
 	<Frame />
+	{#if minimap}
+		<MiniMap />
+	{/if}
+	{#if hud}
+		<Hud />
+	{/if}
 	{@render children?.()}
 </div>
 

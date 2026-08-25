@@ -5,7 +5,7 @@
 
 import { Location } from './locations.js';
 import { HILLSHADE_DEFAULT, inNaipCoverage } from './tiles.js';
-import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M } from '../display/flight/orbit.js';
+import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/orbit.js';
 import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG } from '../display/flight/view.js';
 
 export { Location } from './locations.js';
@@ -61,6 +61,13 @@ export class PaneSettings {
 	floorM = $state<number>(ALTITUDE_FLOOR_M);
 	ceilingM = $state<number>(ALTITUDE_CEILING_M);
 	shade = $state<number>(HILLSHADE_DEFAULT);
+	/** Which way round the orbit is flown. Not a numeric knob — it has two values. */
+	direction = $state<1 | -1>(1);
+	/**
+	 * Where on the loop the flight starts, in radians. Seeded from the day and
+	 * the place so the orbit shifts between days but never between panes.
+	 */
+	phase = $state<number>(0);
 
 	constructor(initial?: Partial<PaneSettings>) {
 		if (initial) Object.assign(this, initial);
@@ -69,6 +76,7 @@ export class PaneSettings {
 	applyUrl(url: SearchParamsSource): void {
 		const place = Location.byId(url.searchParams.get('place'));
 		this.place = place;
+		this.phase = daySeed(place) * Math.PI * 2;
 		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
 		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG);
 		this.detail = parseNum(url.searchParams, 'detail', inNaipCoverage(place) ? 1 : 0);
@@ -100,6 +108,11 @@ export class PaneSettings {
 		}
 		const [lo, hi] = KNOB_RANGE[key];
 		this[key] = Math.min(hi, Math.max(lo, value));
+	}
+
+	/** Fly the loop the other way round. */
+	reverse(): void {
+		this.direction = this.direction === 1 ? -1 : 1;
 	}
 
 	/** Nudge a knob by a delta, through the same gate. */

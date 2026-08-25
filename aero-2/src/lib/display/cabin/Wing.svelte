@@ -3,15 +3,33 @@
 	 * Wing — aircraft wing silhouette looking out the passenger window.
 	 * Positioned in lower quadrant with smooth lighting gradient and navigation light.
 	 */
+	import { useDisplay } from '../display.svelte.js';
+
 	interface Props {
 		visible?: boolean;
 	}
 
 	let { visible = true }: Props = $props();
+
+	const display = useDisplay();
+
+	/**
+	 * Roll the wing with the aircraft.
+	 *
+	 * A real aircraft banks INTO its turn, so the inside wing drops — whichever
+	 * way round the loop is flown. Seen from a window seat that reads as the wing
+	 * dipping toward the ground on the turn in, and rising toward the sky as the
+	 * turn unwinds.
+	 *
+	 * Damped to a fraction of the airframe's roll: the window frame is fixed to
+	 * the same fuselage, so a passenger sees far less relative movement than the
+	 * bank angle suggests. Full roll here would look like the wing was detached.
+	 */
+	const roll = $derived((display.view.bankDeg ?? 0) * 0.55);
 </script>
 
 {#if visible}
-	<div class="cabin-wing" aria-hidden="true">
+	<div class="cabin-wing" style:rotate="{roll}deg" aria-hidden="true">
 		<!-- Wing profile geometry -->
 		<svg class="wing-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
 			<defs>
@@ -51,6 +69,11 @@
 		pointer-events: none;
 		overflow: hidden;
 		z-index: 5;
+		/* Pivot at the wing root (off-screen right, where it meets the
+		   fuselage), not the middle of the layer — a centre pivot makes the
+		   wing tip swing the wrong way. */
+		transform-origin: 100% 65%;
+		will-change: rotate;
 	}
 
 	.wing-svg {
