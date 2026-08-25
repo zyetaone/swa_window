@@ -80,6 +80,29 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
 	return env.NODE_ENV === 'development';
 }
 
+/**
+ * The MODIS day the imagery is frozen to. NOT `default`, which means "today".
+ *
+ * Three reasons, in order of how badly each bit:
+ *
+ * 1. MODIS true colour is a same-day swath, so it shows the weather. Asking
+ *    for today over Hyderabad in August returns 99.5% cloud — the window goes
+ *    white. A pinned clear day is the only way this reads as a view.
+ * 2. Some days have no tile at all over a given city (2025-10-28 and
+ *    2026-05-06 both return nothing over Denver). `default` gambles on that
+ *    every midnight.
+ * 3. Determinism. Three Pis booting either side of the GIBS daily update would
+ *    fetch different rasters, and the panorama would disagree across the seam.
+ *
+ * Chosen by sweeping candidate days over BOTH locations and scoring cloud and
+ * no-data fraction: 2026-04-15 is 0.0% cloud over Hyderabad, 0.2% over Denver,
+ * with no gaps. Winter dates score badly for Denver on snow, not cloud.
+ *
+ * To re-pin: re-run that sweep over every location in the catalog. A day that
+ * is clear over one city is routinely cloud or gap over another.
+ */
+export const GIBS_DATE = '2026-04-15';
+
 export function remoteTileUrl(subPath: string): string | null {
 	const m = subPath.match(WMTS_TILE_PATH);
 	if (!m?.groups) return null;
@@ -88,7 +111,7 @@ export function remoteTileUrl(subPath: string): string | null {
 		case 'terrarium':
 			return `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 		case 'gibs':
-			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/default/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
+			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
 		case 'usgs':
 			return `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
 		default:

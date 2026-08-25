@@ -1,4 +1,5 @@
 import {
+	GIBS_DATE,
 	parseRange,
 	remoteFallbackEnabled,
 	remoteTileUrl,
@@ -134,8 +135,23 @@ describe('remoteTileUrl', () => {
 
 	it('maps gibs paths to NASA EOSDIS Level9 true color', () => {
 		expect(remoteTileUrl('gibs/5/10/20.jpg')).toBe(
-			'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/default/GoogleMapsCompatible_Level9/5/10/20.jpg'
+			`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/5/10/20.jpg`
 		);
+	});
+
+	/**
+	 * The date must be a real day, never `default`. `default` means "today", so
+	 * it shows live weather (99.5% cloud over Hyderabad in August), can return
+	 * no tile at all on some days, and makes three Pis disagree across the
+	 * panorama seam when they boot either side of the GIBS daily update.
+	 *
+	 * Asserted on the URL rather than the constant, so re-inlining the literal
+	 * cannot quietly bypass it.
+	 */
+	it('pins the gibs imagery to a fixed day, not `default`', () => {
+		const url = remoteTileUrl('gibs/5/10/20.jpg') ?? '';
+		expect(url).toMatch(/\/default\/\d{4}-\d{2}-\d{2}\//);
+		expect(url).not.toMatch(/\/default\/default\//);
 	});
 
 	it('maps usgs paths to USGS ImageryOnly MapServer', () => {
