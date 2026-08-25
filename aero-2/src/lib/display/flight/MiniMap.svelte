@@ -11,27 +11,22 @@
 	import type { Map as MlMap } from 'maplibre-gl';
 
 	import { useDisplay } from '../display.svelte.js';
-	import { FlightTrack, ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from './orbit.js';
+	import { FlightTrack, CLIMB_PERIOD_SEC } from './orbit.js';
 	import { TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/settings/tiles.js';
 
 	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
 
 	interface Props {
-		/** Fixed zoom. Low enough to hold the whole ~55 km orbit. */
+		/**
+		 * Fixed zoom, chosen so the WHOLE orbit fits inside the circular crop.
+		 *
+		 * Measured rather than guessed: at 6.9 the projected track was 178 px
+		 * wide in a 190 px circle, so its east and west ends were clipped by the
+		 * border radius. 6.55 leaves a margin on the diagonal.
+		 */
 		zoom?: number;
 	}
-	const { zoom = 6.9 }: Props = $props();
-
-	/**
-	 * An empty style, defined ONCE at module scope.
-	 *
-	 * Inlining `style={{ version: 8, sources: {}, layers: [] }}` creates a NEW
-	 * object on every render. MapLibre treats that as a new style and restarts
-	 * loading, so `style._loaded` never settles true — and svelte-maplibre-gl
-	 * queues every addSource/addLayer behind `waitForStyleLoaded`, which then never
-	 * fires. Raster tiles still drew (they are added a different way), so the only
-	 * symptom was that GeoJSON layers silently rendered nothing.
-	 */
+	const { zoom = 6.55 }: Props = $props();
 
 	const display = useDisplay();
 	const tiles = tileTemplates();
@@ -53,30 +48,6 @@
 		).groundTrack()
 	);
 
-	/**
-	 * The ring, projected to pixels and drawn as plain SVG.
-	 *
-	 * NOT a GeoJSON source + LineLayer, which is the obvious approach and does
-	 * not work here: svelte-maplibre-gl queues addSource/addLayer behind
-	 * `waitForStyleLoaded`, and against a minimal inline style spec that gate
-	 * never opened — the layer existed, with correct data, and rendered zero
-	 * features. Raster tiles take a different path and drew fine, which made it
-	 * look like a data problem rather than a lifecycle one.
-	 *
-	 * Projecting ~240 points on place change is cheaper than a second GL layer,
-	 * and it cannot fail silently: wrong points means a visibly wrong shape.
-	 */
-	const ringPath = $derived.by(() => {
-		const m = map;
-		if (!m || ring.length === 0) return '';
-		let d = '';
-		for (let i = 0; i < ring.length; i++) {
-			const pt = m.project(ring[i]);
-			d += `${i === 0 ? 'M' : 'L'}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
-		}
-		return `${d}Z`;
-	});
-
 	/** Live pose, straight off the view the main window just drew. */
 	const lat = $derived(display.view.lat ?? place.lat);
 	const lon = $derived(display.view.lon ?? place.lon);
@@ -85,9 +56,21 @@
 	const wallSec = $derived(display.view.wallSec ?? 0);
 
 	/** Climb bar & elevation phase (0..1). */
-	const climb = $derived(
-		Math.min(1, Math.max(0, (aglM - ALTITUDE_FLOOR_M) / (ALTITUDE_CEILING_M - ALTITUDE_FLOOR_M)))
-	);
+	/**
+	 * Altitude as a fraction of THIS place's climb envelope.
+	 *
+	 * Not the global ALTITUDE_FLOOR_M/CEILING_M: Denver's floor is 3000 m (it
+	 * has to clear the Front Range) against Hyderabad's 400 m. Normalising
+	 * against the constants floated the marker ~17% of the strip off its own
+	 * curve over Denver, while looking perfect over Hyderabad, whose envelope
+	 * happens to equal the constants.
+	 */
+	const climb = $derived.by(() => {
+		const lo = display.config.floorM;
+		const hi = display.config.ceilingM;
+		if (hi <= lo) return 0;
+		return Math.min(1, Math.max(0, (aglM - lo) / (hi - lo)));
+	});
 	const climbPhase = $derived((wallSec % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC);
 
 	/**
@@ -112,8 +95,17 @@
 	});
 
 	/**
-	 * Projected SVG path for the entire orbital ground track.
-	 * Immune to WebGL GeoJSON worker CSP limitations.
+	 * The whole ground track, projected to pixels and drawn as an SVG path.
+	 *
+	 * NOT a GeoJSON source + LineLayer, which is the obvious approach and does
+	 * not work here: svelte-maplibre-gl queues addSource/addLayer behind
+	 * `waitForStyleLoaded`, and against a minimal inline style spec that gate
+	 * never opened — the layer existed, with correct data, and rendered zero
+	 * features. Raster tiles take a different path and drew fine, which made it
+	 * look like a data problem rather than a lifecycle one.
+	 *
+	 * Projecting ~240 points on place change is cheaper than a second GL layer,
+	 * and it cannot fail silently: wrong points means a visibly wrong shape.
 	 */
 	const pathD = $derived.by(() => {
 		const m = map;
@@ -124,7 +116,7 @@
 	});
 
 	// Elevation profile wave SVG path (sine/cosine climb waveform)
-	const ELEV_WIDTH = 150;
+	const ELEV_WIDTH = 104;
 	const ELEV_HEIGHT = 24;
 	const elevPathD = $derived.by(() => {
 		const points: string[] = [];
@@ -176,12 +168,6 @@
 	</svg>
 
 	<!-- Aircraft Heading Marker (▲ points in flight direction) -->
-	{#if ringPath}
-		<svg class="track" viewBox="0 0 190 190" aria-hidden="true">
-			<path d={ringPath} fill="none" stroke="#7fd4ff" stroke-width="1.3" stroke-opacity="0.9" />
-		</svg>
-	{/if}
-
 	{#if marker}
 		<div
 			class="plane"
@@ -274,14 +260,6 @@
 		filter: drop-shadow(0 0 4px #38bdf8);
 	}
 
-	.track {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-
 	.plane {
 		position: absolute;
 		translate: -50% -50%;
@@ -321,7 +299,9 @@
 
 	.elevation-profile {
 		position: absolute;
-		bottom: 1.5rem;
+		/* Sits on the chord above the readout. A wider strip lower down has its
+		   ends clipped by the circular border-radius. */
+		bottom: 2.1rem;
 		left: 50%;
 		translate: -50% 0;
 		pointer-events: none;

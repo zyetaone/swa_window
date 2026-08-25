@@ -37,8 +37,8 @@ export const KNOB_RANGE = {
 	ceilingM: [0, 20_000],
 	shade: [0, 1],
 	wingScale: [0.3, 3.0],
-	wingOffsetX: [-500, 500],
-	wingOffsetY: [-500, 500],
+	wingOffsetX: [-800, 800],
+	wingOffsetY: [-800, 800],
 	wingPitchDeg: [-45, 45],
 	wingRollFactor: [0, 3.0]
 } as const satisfies Record<string, readonly [number, number]>;
@@ -49,6 +49,10 @@ export type NumericKnob = keyof typeof KNOB_RANGE;
 function wrapSigned(deg: number): number {
 	return ((((deg + 180) % 360) + 360) % 360) - 180;
 }
+
+export const DEFAULT_WING_SCALE = 0.85;
+export const DEFAULT_WING_OFFSET_X = -405;
+export const DEFAULT_WING_OFFSET_Y = -20;
 
 export class PaneSettings {
 	place = $state<Location>(Location.hyderabad());
@@ -63,11 +67,12 @@ export class PaneSettings {
 	/** Phase offset in radians from daySeed. */
 	phase = $state<number>(0);
 
-	/** Aircraft Wing silhouette alignment knobs (X, Y, Scale, Pitch, Roll) */
+	/** Aircraft Wing alignment knobs (Mode, X, Y, Scale, Pitch, Roll) */
 	wing = $state<boolean>(true);
-	wingScale = $state<number>(1.0);
-	wingOffsetX = $state<number>(0);
-	wingOffsetY = $state<number>(0);
+	wingMode = $state<'3d' | '2d'>('3d');
+	wingScale = $state<number>(DEFAULT_WING_SCALE);
+	wingOffsetX = $state<number>(DEFAULT_WING_OFFSET_X);
+	wingOffsetY = $state<number>(DEFAULT_WING_OFFSET_Y);
 	wingPitchDeg = $state<number>(0);
 	wingRollFactor = $state<number>(1.0);
 
@@ -85,9 +90,11 @@ export class PaneSettings {
 		this.floorM = parseNum(url.searchParams, 'floor', place.climbFloorM);
 		this.ceilingM = parseNum(url.searchParams, 'ceiling', place.climbCeilingM);
 		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT);
-		this.wingScale = parseNum(url.searchParams, 'wingScale', 1.0);
-		this.wingOffsetX = parseNum(url.searchParams, 'wingX', 0);
-		this.wingOffsetY = parseNum(url.searchParams, 'wingY', 0);
+		const mode = url.searchParams.get('wingMode');
+		if (mode === '2d' || mode === '3d') this.wingMode = mode;
+		this.wingScale = parseNum(url.searchParams, 'wingScale', DEFAULT_WING_SCALE);
+		this.wingOffsetX = parseNum(url.searchParams, 'wingX', DEFAULT_WING_OFFSET_X);
+		this.wingOffsetY = parseNum(url.searchParams, 'wingY', DEFAULT_WING_OFFSET_Y);
 		this.wingPitchDeg = parseNum(url.searchParams, 'wingPitch', 0);
 		this.wingRollFactor = parseNum(url.searchParams, 'wingRoll', 1.0);
 	}
@@ -96,9 +103,10 @@ export class PaneSettings {
 		this.azimuthDeg = DEFAULT_WINDOW_AZIMUTH_DEG;
 		this.pitchDeg = DEFAULT_PITCH_DEG;
 		this.shade = HILLSHADE_DEFAULT;
-		this.wingScale = 1.0;
-		this.wingOffsetX = 0;
-		this.wingOffsetY = 0;
+		this.wingMode = '3d';
+		this.wingScale = DEFAULT_WING_SCALE;
+		this.wingOffsetX = DEFAULT_WING_OFFSET_X;
+		this.wingOffsetY = DEFAULT_WING_OFFSET_Y;
 		this.wingPitchDeg = 0;
 		this.wingRollFactor = 1.0;
 	}

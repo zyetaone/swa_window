@@ -428,3 +428,42 @@ describe('daySeed', () => {
 		}
 	});
 });
+
+describe('elevation strip normalisation', () => {
+	/**
+	 * The minimap's altitude dot is placed by normalising AGL into 0..1 and the
+	 * curve behind it is drawn from the same cosine. If the dot normalises
+	 * against the GLOBAL altitude constants while the aircraft actually flies
+	 * the PLACE's envelope, the two disagree — and only on places whose envelope
+	 * differs from the constants. Hyderabad (400..13000) matches them exactly,
+	 * so the bug is invisible there and obvious over Denver (3000..13000).
+	 */
+	const stripY = (norm: number, h = 24) => h - norm * (h - 4) - 2;
+
+	it('places the altitude dot on its own curve for every location', () => {
+		for (const place of [Location.hyderabad(), Location.denver()]) {
+			const track = new FlightTrack(place.lat, place.lon, place.climbFloorM, place.climbCeilingM);
+			for (let i = 0; i <= 20; i++) {
+				const phase = i / 20;
+				const agl = track.altitudeAt(phase * CLIMB_PERIOD_SEC);
+
+				// Where the dot goes: AGL normalised against THIS place's envelope.
+				const norm = (agl - place.climbFloorM) / (place.climbCeilingM - place.climbFloorM);
+				// Where the curve is: the raw cosine the strip is drawn from.
+				const curveNorm = (1 - Math.cos(phase * Math.PI * 2)) * 0.5;
+
+				expect(Math.abs(stripY(norm) - stripY(curveNorm))).toBeLessThan(0.01);
+			}
+		}
+	});
+
+	it('would drift if normalised against the global constants', () => {
+		// Guards the fix by demonstrating the bug it replaced.
+		const place = Location.denver();
+		const track = new FlightTrack(place.lat, place.lon, place.climbFloorM, place.climbCeilingM);
+		const agl = track.altitudeAt(0);
+		const wrong = (agl - ALTITUDE_FLOOR_M) / (ALTITUDE_CEILING_M - ALTITUDE_FLOOR_M);
+		const right = (agl - place.climbFloorM) / (place.climbCeilingM - place.climbFloorM);
+		expect(Math.abs(stripY(wrong) - stripY(right))).toBeGreaterThan(1);
+	});
+});

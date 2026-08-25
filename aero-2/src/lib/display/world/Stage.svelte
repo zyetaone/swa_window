@@ -5,6 +5,9 @@
 	 * Everything visible inside it is a child component: Ground (colour),
 	 * Terrain (shape), Sky (air and haze), LookControls (aiming). This file owns
 	 * exactly one thing — where the camera is, every frame.
+	 *
+	 * Uses 3D spherical Earth projection ({ type: 'globe' }) to render authentic
+	 * horizon curvature and background space sky at cruising altitude.
 	 */
 	import { MapLibre } from 'svelte-maplibre-gl';
 	import { LngLat, type Map as MlMap } from 'maplibre-gl';
@@ -16,37 +19,33 @@
 	import Sky from './Sky.svelte';
 	import LookControls from '../flight/LookControls.svelte';
 
-	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
-
-	/**
-	 * An empty style, defined ONCE at module scope.
-	 *
-	 * Inlining `style={{ version: 8, sources: {}, layers: [] }}` creates a NEW
-	 * object on every render. MapLibre treats that as a new style and restarts
-	 * loading, so `style._loaded` never settles true — and svelte-maplibre-gl
-	 * queues every addSource/addLayer behind `waitForStyleLoaded`, which then never
-	 * fires. Raster tiles still drew (they are added a different way), so the only
-	 * symptom was that GeoJSON layers silently rendered nothing.
-	 */
+	const BLANK_STYLE = {
+		version: 8 as const,
+		projection: { type: 'globe' as const },
+		sources: {},
+		layers: []
+	};
 
 	const display = useDisplay();
 
 	let map = $state<MlMap | undefined>();
 
 	/**
-	 * Fly the plane.
-	 *
-	 * The camera is positioned by real ALTITUDE and aimed at a real ground
-	 * point, via `calculateCameraOptionsFromTo`, rather than faked with a zoom
-	 * level.
-	 *
-	 * Imperative on purpose: `jumpTo` is one call per frame, where driving
-	 * center/zoom/pitch/bearing as reactive props would re-diff four of them at
-	 * 60 fps for an identical picture. This is the Pi's hot path.
+	 * Fly the plane & initialize 3D spherical globe projection.
 	 */
 	$effect(() => {
 		const m = map;
 		if (!m) return;
+
+		// Configure 3D Globe Projection if supported by MapLibre
+		if (
+			typeof (m as unknown as { setProjection?: (p: { type: string }) => void }).setProjection ===
+			'function'
+		) {
+			(m as unknown as { setProjection: (p: { type: string }) => void }).setProjection({
+				type: 'globe'
+			});
+		}
 
 		let raf: number;
 		const loop = () => {

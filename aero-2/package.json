@@ -18,12 +18,14 @@
 	"dependencies": {
 		"@svelte-maplibre-gl/pmtiles": "^2.0.1",
 		"maplibre-gl": "^6.6.0",
-		"svelte-maplibre-gl": "^2.2.1"
+		"svelte-maplibre-gl": "^2.2.1",
+		"three": "^0.185.1"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-node": "next",
 		"@sveltejs/kit": "next",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@types/three": "^0.185.4",
 		"happy-dom": "^20.11.1",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",

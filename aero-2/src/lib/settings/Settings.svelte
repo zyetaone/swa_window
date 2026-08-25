@@ -76,8 +76,26 @@
 						checked={config.wing}
 						onchange={(e) => (config.wing = e.currentTarget.checked)}
 					/>
-					<span>Show Wing Silhouette</span>
+					<span>Show Wing</span>
 				</label>
+				<div class="mode-toggle">
+					<button
+						type="button"
+						class="mode-btn"
+						class:active={config.wingMode === '3d'}
+						onclick={() => (config.wingMode = '3d')}
+					>
+						3D Boeing 737
+					</button>
+					<button
+						type="button"
+						class="mode-btn"
+						class:active={config.wingMode === '2d'}
+						onclick={() => (config.wingMode = '2d')}
+					>
+						2D Vector
+					</button>
+				</div>
 				<label class="field">
 					<span>Wing Scale ({config.wingScale.toFixed(2)}x)</span>
 					<input
@@ -416,6 +434,32 @@
 		background: var(--glass-bg-hover);
 	}
 	.loc-btn.active {
+		background: var(--accent-cyan-bg);
+		border-color: var(--accent-cyan);
+		color: var(--accent-cyan);
+		font-weight: 600;
+	}
+	.mode-toggle {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 6px;
+		margin-bottom: 12px;
+	}
+	.mode-btn {
+		padding: 6px 8px;
+		border-radius: 6px;
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-subtle);
+		color: var(--text-primary);
+		font-size: 0.75rem;
+		cursor: pointer;
+		transition: all 0.15s;
+		text-align: center;
+	}
+	.mode-btn:hover {
+		background: var(--glass-bg-hover);
+	}
+	.mode-btn.active {
 		background: var(--accent-cyan-bg);
 		border-color: var(--accent-cyan);
 		color: var(--accent-cyan);
