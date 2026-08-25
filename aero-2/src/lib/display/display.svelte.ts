@@ -4,7 +4,7 @@
  */
 import { getContext, setContext, untrack } from 'svelte';
 import { windowView, resolveAtmosphere, nightFactor, type WindowView } from './flight.js';
-import { type AtmosphereState, type PaneParams } from '#lib/config.svelte.js';
+import { type AtmosphereState, type PaneParams } from '#lib/config.js';
 
 const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 

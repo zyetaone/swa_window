@@ -1,6 +1,10 @@
 /**
  * Aero 2 — Reactive configuration, locations, atmosphere bands, and tile definitions.
- * Single source of truth (SSOT) with Svelte 5 $state for live two-way binding.
+ * Single source of truth for places, tile sources, and every tuning number.
+ *
+ * Plain `.ts`, deliberately: it holds no runes, so it costs nothing to import
+ * from server code or a test. It was `.svelte.ts` while PaneParams was a
+ * reactive class — that class is gone, and the extension went with it.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────

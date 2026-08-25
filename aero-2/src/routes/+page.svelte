@@ -1,16 +1,22 @@
 <script lang="ts">
 	/**
-	 * The window display — declarative component architecture with Svelte 5 runes & Context DI.
+	 * Declarative Window Architecture — composed directly in the route.
 	 *
 	 * Layer composition:
-	 *   WorldStage    the outside world (WebGL canvas, DEM terrain, satellite imagery, sky)
-	 *   CabinFrame    the inside cabin window (oval bezel, depth shadow, glass reflection & vignette)
+	 *   WorldStage          outside 3D WebGL world (terrain, satellite, sky)
+	 *   CabinFrame          inside cabin window shell
+	 *     GlassVignette     lens radial vignette
+	 *     GlassReflection   glossy light reflection
+	 *     WindowBezel       oval window bezel & depth shadow
 	 */
 	import { page } from '$app/state';
-	import { readPaneConfig } from '#lib/config.svelte.js';
+	import { readPaneConfig } from '#lib/config.js';
 	import { createDisplay } from '#lib/display/display.svelte.js';
 	import WorldStage from '#lib/display/WorldStage.svelte';
 	import CabinFrame from '#lib/display/CabinFrame.svelte';
+	import GlassVignette from '#lib/display/GlassVignette.svelte';
+	import GlassReflection from '#lib/display/GlassReflection.svelte';
+	import WindowBezel from '#lib/display/WindowBezel.svelte';
 
 	createDisplay(readPaneConfig(page.url));
 </script>
@@ -19,7 +25,12 @@
 
 <main class="aero-display">
 	<WorldStage />
-	<CabinFrame />
+
+	<CabinFrame>
+		<GlassVignette />
+		<GlassReflection />
+		<WindowBezel />
+	</CabinFrame>
 </main>
 
 <style>

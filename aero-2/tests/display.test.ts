@@ -16,7 +16,7 @@ import {
 	ALTITUDE_CEILING_M,
 	ALTITUDE_FLOOR_M,
 	CLIMB_PERIOD_SEC
-} from '#lib/config.svelte.js';
+} from '#lib/config.js';
 
 const paramsFor = (search = '') => readPaneConfig(new URL(`http://kiosk.local/${search}`));
 

@@ -26,7 +26,7 @@
 		TILE_MAXZOOM,
 		TILE_SIZE,
 		tileTemplates
-	} from '#lib/config.svelte.js';
+	} from '#lib/config.js';
 	import { useDisplay } from './display.svelte.js';
 
 	const display = useDisplay();
