@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { globe, worldRuntime, tileCache } from '#lib/globe.svelte.js';
+	import { globe } from '#lib/world/attach.svelte.js';
+	import { worldRuntime } from '#lib/world/runtime.svelte.js';
+	import { tileCache } from '#lib/world/tiles.svelte.js';
 	import { gameLoop } from '#lib/game-loop.js';
-	import { createAeroWindow } from '#lib/model.svelte.js';
+	import { createAeroWindow } from '#lib/sim/window.svelte.js';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
 
 	const model = createAeroWindow();

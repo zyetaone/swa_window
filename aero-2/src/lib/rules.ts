@@ -4,15 +4,15 @@
 import {
 	ALTITUDE_CEILING_M,
 	ALTITUDE_FLOOR_M,
-	ATMOSPHERE_BANDS,
 	CLIMB_PERIOD_SEC,
-	DAY_IMAGERY_IDS,
-	IMAGERY_SOURCES,
+} from '#lib/content/flight.js';
+import {
+	ATMOSPHERE_BANDS,
 	TRANSITION_HALF_WIDTH_M,
 	type AtmosphereBand,
-	type ImagerySource,
 	type Rgb,
-} from '#lib/assets/data.js';
+} from '#lib/content/atmosphere.js';
+import { DAY_IMAGERY_IDS, IMAGERY_SOURCES, type ImagerySource } from '#lib/content/imagery.js';
 import { exceedsDeadband, normalizeHeading } from '#lib/utils.js';
 
 // ── Orbit ──────────────────────────────────────────────────────────────────────

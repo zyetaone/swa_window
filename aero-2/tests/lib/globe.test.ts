@@ -1,21 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CameraPose, GlobeSyncSlice } from '#lib/model.svelte.js';
+import { CameraPose, GlobeSyncSlice } from '#lib/sim/frame.js';
 import { resolveAtmosphere, selectImagery } from '#lib/rules.js';
-import {
-	AtmosphereSync,
-	CameraSync,
-	configureScene,
-	globe,
-	GlobeRuntime,
-	ImagerySync,
-	LightingSync,
-	LodSync,
-	screenSpaceErrorFor,
-	TerrainSync,
-	tileCache,
-	WorldFrame,
-	worldRuntime,
-} from '#lib/globe.svelte.js';
+import { GlobeRuntime, WorldFrame } from '#lib/world/contract.js';
+import { tileCache } from '#lib/world/tiles.svelte.js';
+import { worldRuntime } from '#lib/world/runtime.svelte.js';
+import { configureScene, globe } from '#lib/world/attach.svelte.js';
+import { AtmosphereSync } from '#lib/world/sync/atmosphere.js';
+import { CameraSync } from '#lib/world/sync/camera.js';
+import { ImagerySync } from '#lib/world/sync/imagery.svelte.js';
+import { LightingSync } from '#lib/world/sync/lighting.js';
+import { LodSync, screenSpaceErrorFor } from '#lib/world/sync/lod.js';
+import { TerrainSync } from '#lib/world/sync/terrain.js';
 
 function testSlice(overrides: { altitudeM?: number; timeOfDay?: number } = {}): GlobeSyncSlice {
 	const altitudeM = overrides.altitudeM ?? 1000;

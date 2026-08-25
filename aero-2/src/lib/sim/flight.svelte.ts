@@ -2,14 +2,11 @@
  * Flight simulation engine — updates orbit pose and time of day.
  */
 import { altitudeAt, orbitPose } from '#lib/rules.js';
-import { ALTITUDE_FLOOR_M } from '#lib/assets/data.js';
-import {
-	CameraPose,
-	GlobeSyncSlice,
-	resolveLocalHours,
-	type ConfigTree,
-	type Location,
-} from '#lib/model.svelte.js';
+import { ALTITUDE_FLOOR_M } from '#lib/content/flight.js';
+import type { Location } from '#lib/content/locations.js';
+import type { ConfigTree } from '#lib/sim/config.js';
+import { CameraPose, GlobeSyncSlice } from '#lib/sim/frame.js';
+import { resolveLocalHours } from '#lib/sim/local-time.js';
 
 export class FlightEngine {
 	lat = $state(0);

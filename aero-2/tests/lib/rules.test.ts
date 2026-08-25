@@ -9,14 +9,9 @@ import {
 	selectImagery,
 	type ImagerySelection,
 } from '#lib/rules.js';
-import {
-	ALTITUDE_CEILING_M,
-	ALTITUDE_FLOOR_M,
-	ATMOSPHERE_BANDS,
-	CLIMB_PERIOD_SEC,
-	IMAGERY_SOURCES,
-	TRANSITION_HALF_WIDTH_M,
-} from '#lib/assets/data.js';
+import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/content/atmosphere.js';
+import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M, CLIMB_PERIOD_SEC } from '#lib/content/flight.js';
+import { IMAGERY_SOURCES } from '#lib/content/imagery.js';
 
 /** Altitude comfortably inside a band's core, away from either boundary. */
 function coreAltitude(index: number): number {
