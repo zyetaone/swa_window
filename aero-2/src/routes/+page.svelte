@@ -33,25 +33,34 @@
 	import { gameLoop } from '#lib/window/game-loop.js';
 
 	const q = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+	// `Number('')` is 0 and `Number('abc')` is NaN, and a NaN azimuth silently
+	// parks the camera at a NaN target — a black screen with no error. Every
+	// knob below goes through here so a typo in a kiosk URL falls back instead.
+	const num = (key: string, fallback: number): number => {
+		const raw = q.get(key);
+		if (raw === null || raw.trim() === '') return fallback;
+		const n = Number(raw);
+		return Number.isFinite(n) ? n : fallback;
+	};
 	// Location.byId's own default is hyderabad — the fielded kiosk's home.
 	const place = Location.byId(q.get('place'));
-	const azimuthDeg = Number(q.get('azimuth') ?? -90);
-	const pitchDeg = Number(q.get('pitch') ?? -18);
+	const azimuthDeg = num('azimuth', -90);
+	const pitchDeg = num('pitch', -18);
 	// NAIP covers the US only, so anywhere else would just stream 404s. Bounding
 	// box, not a coverage API - ponytail: wrong for Alaska/Hawaii, and that is fine
 	// until a location lands there. ?detail=0 forces the GIBS-only floor, which is
 	// what Hyderabad gets and therefore what the real kiosk looks like today.
 	const inNaipCoverage = place.lat > 24 && place.lat < 50 && place.lon > -125 && place.lon < -66;
-	const detail = Number(q.get('detail') ?? (inNaipCoverage ? 1 : 0));
+	const detail = num('detail', inNaipCoverage ? 1 : 0);
 
 	// The climb envelope is THE open Phase 0 question, so make it a knob rather
 	// than a commit. Hyderabad's floor is 400 m AGL, where a screen pixel covers
 	// ~0.78 m - finer than any licence-clean imagery on Earth. Try ?floor=2500.
-	const floorM = Number(q.get('floor') ?? place.climbFloorM);
-	const ceilingM = Number(q.get('ceiling') ?? place.climbCeilingM);
+	const floorM = num('floor', place.climbFloorM);
+	const ceilingM = num('ceiling', place.climbCeilingM);
 	// ?shade=0 to compare. Hillshade is free structure: it comes off the DEM we
 	// already fetch, and the eye reads ridgelines as "sharp" far more than pixels.
-	const shade = Number(q.get('shade') ?? 0.35);
+	const shade = num('shade', 0.35);
 
 	// Elevation: AWS terrarium. Open data, and MapLibre decodes it natively —
 	// which is the whole reason this probe costs hours instead of days.
