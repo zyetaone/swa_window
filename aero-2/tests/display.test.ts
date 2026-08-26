@@ -23,6 +23,11 @@ import { ATMOSPHERE_BANDS } from '#lib/display/world/atmosphere.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/orbit.js';
 import { Location, inNaipCoverage, readSettings } from '#lib/settings/settings.svelte.js';
 
+/** Signed shortest difference between two bearings, -180..180. */
+function normalizeSigned(deg: number): number {
+	return ((((deg + 180) % 360) + 360) % 360) - 180;
+}
+
 const paramsFor = (search = '') => readSettings(new URL(`http://kiosk.local/${search}`));
 
 /**
@@ -420,14 +425,70 @@ describe('banking', () => {
 		}
 	});
 
-	it('rolls most where the ellipse is tightest', () => {
-		// The orbit is wider than tall, so the TIGHT turns are at theta = +-PI/2
-		// (the east and west ends of the long axis) and theta = 0 is the gentle
-		// side. Getting this backwards made every sample saturate at max roll.
+	/**
+	 * Heading must agree with where the aircraft actually goes next.
+	 *
+	 * The old analytic velocity divided the east component by cosLat and then
+	 * multiplied by metres-per-degree at the equator, applying the meridian
+	 * convergence twice, and treated the ellipse radii as constants when both
+	 * breathe with time and wobble with theta. Reported heading was out by a
+	 * mean of 6-8 degrees and a peak of 27 at Chicago -- so the window looked
+	 * sideways of the direction of travel, worse the further from the equator.
+	 *
+	 * Checked at three latitudes because the error scaled with cosLat and would
+	 * have been easy to miss at Hyderabad alone.
+	 */
+	it('reports the heading the ground track actually flies', () => {
+		for (const [name, lat, lon] of [
+			['hyderabad', 17.385, 78.4867],
+			['denver', 39.8561, -104.6737],
+			['chicago', 41.7868, -87.7522]
+		] as const) {
+			const t = new FlightTrack(lat, lon, 400, 13_000, 1);
+			const cosLat = Math.cos((lat * Math.PI) / 180);
+
+			for (let i = 0; i < 60; i++) {
+				const s = (i / 60) * ORBIT_PERIOD_SEC;
+				const before = t.positionAt(s - 5);
+				const after = t.positionAt(s + 5);
+				const truth =
+					(Math.atan2((after.lon - before.lon) * cosLat, after.lat - before.lat) * 180) / Math.PI;
+				const err = Math.abs(normalizeSigned(t.headingAt(s) - truth));
+				expect(err, `${name} heading off by ${err.toFixed(1)} deg at t=${s.toFixed(0)}`).toBeLessThan(
+					1
+				);
+			}
+		}
+	});
+
+	/**
+	 * This used to compare `bankAt(PI/2)` against `bankAt(0)` and assert the
+	 * first was larger, on a comment claiming the tight turns sit at +-PI/2.
+	 * They do not. `aspect` is 1.7 and multiplies the EAST radius, so east is
+	 * the major axis and its ends -- theta 0 and PI -- are the sharp ones. The
+	 * old closed form had `a` paired with sin in the curvature denominator,
+	 * which is the ellipse rotated ninety degrees, and the test was written to
+	 * agree with it. Both were wrong together, so the suite stayed green while
+	 * the wing dropped hardest on the straight sections.
+	 *
+	 * Comparing against the MEASURED heading rate cannot be wrong in the same
+	 * direction as the implementation, because it shares none of its reasoning
+	 * about which axis is which.
+	 */
+	it('rolls most where the heading is actually turning fastest', () => {
 		const t = track();
-		const a = ORBIT.majorMin;
-		const b = a * ORBIT.aspect;
-		expect(Math.abs(t.bankAt(Math.PI / 2, a, b))).toBeGreaterThan(Math.abs(t.bankAt(0, a, b)));
+		const turnRate = (s: number) =>
+			Math.abs(normalizeSigned(t.headingAt(s + 1) - t.headingAt(s - 1)));
+
+		let sharp = 0;
+		let gentle = 0;
+		for (let i = 0; i < 120; i++) {
+			const s = (i / 120) * ORBIT_PERIOD_SEC;
+			if (turnRate(s) > turnRate(sharp)) sharp = s;
+			if (turnRate(s) < turnRate(gentle)) gentle = s;
+		}
+
+		expect(Math.abs(t.bankAt(sharp))).toBeGreaterThan(Math.abs(t.bankAt(gentle)));
 	});
 
 	it('stays within a comfortable roll', () => {

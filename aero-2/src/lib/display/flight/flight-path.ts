@@ -59,6 +59,21 @@ export const ORBIT_PERIOD_SEC = 1 / ORBIT.driftRate;
  */
 export const BREATHE_PERIOD_SEC = ORBIT_PERIOD_SEC / ORBIT.petals;
 
+/**
+ * Turn rate that corresponds to full bank, degrees per second.
+ *
+ * The circuit is ~49 minutes, so the mean rate is 360/2924 = 0.123 deg/s and
+ * the sharp ends of a 1.7:1 ellipse run roughly twice that. Normalising here
+ * rather than against a closed form keeps the bank honest when the path is
+ * tuned — change `aspect` and the roll follows without a second edit.
+ */
+export const TURN_RATE_REF_DEG_PER_SEC = 0.25;
+
+/** Signed shortest difference between two bearings, -180..180. */
+function normalizeSigned(deg: number): number {
+	return ((((deg + 180) % 360) + 360) % 360) - 180;
+}
+
 export const ALTITUDE_FLOOR_M = 400;
 export const ALTITUDE_CEILING_M = 13_000;
 export const CLIMB_PERIOD_SEC = 900;
@@ -141,7 +156,15 @@ export class FlightTrack {
 	/**
 	 * Compute 3D aircraft flight path position, heading, and altitude at wall-clock second `wallSec`.
 	 */
-	poseAt(wallSec: number): OrbitPose {
+	/**
+	 * Where the aircraft is at `wallSec` — position only.
+	 *
+	 * Split out from `poseAt` so heading can be measured from the track itself
+	 * rather than hand-differentiated. `a` and `b` are functions of time via
+	 * `breathe` and of theta via `wobble`, so an analytic velocity that treats
+	 * them as constants is missing the radial term entirely.
+	 */
+	positionAt(wallSec: number): { lat: number; lon: number } {
 		const breathePhase = (wallSec % BREATHE_PERIOD_SEC) / BREATHE_PERIOD_SEC;
 		const orbitPhase = (wallSec % ORBIT_PERIOD_SEC) / ORBIT_PERIOD_SEC;
 
@@ -166,35 +189,74 @@ export class FlightTrack {
 		const b = a * ORBIT.aspect;
 		const cosLat = Math.cos((this.centerLat * Math.PI) / 180);
 
-		const dLat = a * Math.sin(theta);
-		const dLon = (b * Math.cos(theta)) / (cosLat || 1);
-
-		const vx = ((b * -Math.sin(theta)) / (cosLat || 1)) * 111_320 * this.direction;
-		const vy = a * Math.cos(theta) * M_PER_DEG_LAT * this.direction;
-		const headingDeg = normalizeHeading(90 - (Math.atan2(vy, vx) * 180) / Math.PI);
-
-		const aglM = this.altitudeAt(wallSec);
-
 		return {
-			lat: this.centerLat + dLat,
-			lon: this.centerLon + dLon,
-			headingDeg,
-			aglM,
-			bankDeg: this.bankAt(theta, a, b)
+			lat: this.centerLat + a * Math.sin(theta),
+			lon: this.centerLon + (b * Math.cos(theta)) / (cosLat || 1)
 		};
 	}
 
 	/**
-	 * Bank angle for the turn being flown at `theta`.
+	 * Compute 3D aircraft flight path position, heading, bank and altitude.
 	 */
-	bankAt(theta: number, a: number, b: number): number {
-		const sin = Math.sin(theta);
-		const cos = Math.cos(theta);
-		const denom = Math.pow(a * a * sin * sin + b * b * cos * cos, 1.5);
-		const curvature = denom === 0 ? 0 : (a * b) / denom;
-		const maxCurvature = Math.max(a, b) / Math.pow(Math.min(a, b), 2);
-		const norm = maxCurvature === 0 ? 0 : Math.min(1, curvature / maxCurvature);
-		return -this.direction * norm * ORBIT.maxBankDeg;
+	poseAt(wallSec: number): OrbitPose {
+		const here = this.positionAt(wallSec);
+		const headingDeg = this.headingAt(wallSec);
+
+		return {
+			lat: here.lat,
+			lon: here.lon,
+			headingDeg,
+			aglM: this.altitudeAt(wallSec),
+			bankDeg: this.bankAt(wallSec)
+		};
+	}
+
+	/**
+	 * Heading, measured from the track rather than derived from it.
+	 *
+	 * The hand-derived velocity was wrong twice over. It divided the east
+	 * component by cosLat AND multiplied by metres-per-degree-of-longitude at
+	 * the equator, double-counting the convergence of the meridians — so the
+	 * error grew with latitude. And it treated the ellipse radii as constants
+	 * when both breathe with time and wobble with theta, dropping the radial
+	 * velocity altogether. Measured against the actual ground track the
+	 * reported heading was out by up to 27 degrees at Chicago and 21 at
+	 * Hyderabad.
+	 *
+	 * A central difference over the real positions has neither problem, cannot
+	 * drift out of sync with `positionAt` when the path is tuned, and is three
+	 * lines instead of six. Two extra evaluations of a handful of trig calls,
+	 * once per frame.
+	 */
+	headingAt(wallSec: number, dt = 0.5): number {
+		const before = this.positionAt(wallSec - dt);
+		const after = this.positionAt(wallSec + dt);
+		const cosLat = Math.cos((this.centerLat * Math.PI) / 180) || 1;
+		const dNorth = (after.lat - before.lat) * M_PER_DEG_LAT;
+		const dEast = (after.lon - before.lon) * M_PER_DEG_LAT * cosLat;
+		return normalizeHeading((Math.atan2(dEast, dNorth) * 180) / Math.PI);
+	}
+
+	/**
+	 * Bank, from how fast the heading is actually changing.
+	 *
+	 * This used to evaluate the curvature of the ideal ellipse, and it had the
+	 * axes transposed: the denominator paired `a` with sin and `b` with cos,
+	 * which is the curvature of an ellipse rotated ninety degrees from the one
+	 * being flown. With `aspect` at 1.7 the long axis runs east, so the sharp
+	 * ends are at theta 0 and pi — and the aircraft rolled to its full 14
+	 * degrees at theta pi/2, where the measured turn rate is at its LOWEST. The
+	 * wing dropped hardest while flying straightest, and levelled through the
+	 * tightest part of the turn.
+	 *
+	 * Deriving it from the heading rate removes the question. It also picks up
+	 * the wobble and breathe terms for free, which the closed form ignored.
+	 */
+	bankAt(wallSec: number, dt = 1.0): number {
+		const rate =
+			normalizeSigned(this.headingAt(wallSec + dt) - this.headingAt(wallSec - dt)) / (2 * dt);
+		const norm = Math.max(-1, Math.min(1, rate / TURN_RATE_REF_DEG_PER_SEC));
+		return -norm * ORBIT.maxBankDeg;
 	}
 
 	/**
