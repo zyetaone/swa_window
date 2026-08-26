@@ -6,6 +6,7 @@ import {
 	resolveLocalTile,
 	resolveTileDir
 } from '#lib/server/tiles.js';
+import { groundDetailOpacity } from '#lib/settings/tiles.js';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -193,5 +194,35 @@ describe('parseRange (PMTiles Range Requests)', () => {
 
 	it('returns unsatisfiable when suffix <= 0', () => {
 		expect(parseRange('bytes=-0', SIZE)).toBe('unsatisfiable');
+	});
+});
+
+/**
+ * The detail layer is NAIP: a daylight aerial photograph, mounted above the
+ * VIIRS city lights because MapLibre stacks rasters in mount order and it
+ * mounted last. At `raster-opacity: 1` it hid the lights outright — every US
+ * location rendered local 02:00 as broad daylight. Verified in Chicago at
+ * 02:05 with the night curve at -31 degrees and not one light visible.
+ */
+describe('groundDetailOpacity', () => {
+	it('hides the daylight photograph once it is dark', () => {
+		expect(groundDetailOpacity(1, 1)).toBe(0);
+	});
+
+	it('shows it in full daylight where there is coverage', () => {
+		expect(groundDetailOpacity(1, 0)).toBe(1);
+	});
+
+	it('stays hidden where there is no coverage, at any hour', () => {
+		for (const night of [0, 0.25, 0.5, 0.75, 1]) expect(groundDetailOpacity(0, night)).toBe(0);
+	});
+
+	it('falls monotonically as night comes on, so there is no pop', () => {
+		let last = Infinity;
+		for (let night = 0; night <= 1; night += 0.1) {
+			const now = groundDetailOpacity(1, night);
+			expect(now).toBeLessThanOrEqual(last);
+			last = now;
+		}
 	});
 });

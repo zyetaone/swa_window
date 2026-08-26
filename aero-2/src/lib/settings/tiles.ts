@@ -38,6 +38,21 @@ export const HILLSHADE_SHADOW_COLOR = '#1a2436';
  */
 export const TERRAIN_EXAGGERATION = 1.0;
 
+/**
+ * How strongly the high-resolution detail imagery shows, 0-1.
+ *
+ * NAIP is a daylight aerial photograph. It was drawn at full opacity ABOVE the
+ * VIIRS city lights, so every US location rendered local 02:00 as broad
+ * daylight with no lights at all — MapLibre stacks raster layers in mount
+ * order, and that layer mounted last.
+ *
+ * Fading it on daylight is the physical answer and also removes the ordering
+ * dependency: once it is gone, the lights are the only layer above the base.
+ */
+export function groundDetailOpacity(detail: number, night: number): number {
+	return Math.max(0, Math.min(1, detail)) * (1 - Math.max(0, Math.min(1, night)));
+}
+
 export const IMAGERY_GRADE = {
 	saturation: -0.08,
 	contrast: 0.06,

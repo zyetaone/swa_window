@@ -13,6 +13,7 @@
 		TILE_ATTRIBUTION,
 		TILE_MAXZOOM,
 		TILE_SIZE,
+		groundDetailOpacity,
 		tileTemplates
 	} from '#lib/settings/tiles.js';
 	import { useDisplay } from '../display.svelte.js';
@@ -57,8 +58,62 @@
 	 * as murky brown rather than as darkness.
 	 */
 	const groundSaturation = $derived(IMAGERY_GRADE.saturation - night * 0.35);
+
+	/**
+	 * One grade, applied to every colour source.
+	 *
+	 * The detail layer used to carry no grade at all — raw NAIP at
+	 * `raster-opacity: 1` — while the base underneath it was being crushed
+	 * toward black. Two layers of the same photograph, lit differently.
+	 */
+	const grade = $derived({
+		'raster-saturation': groundSaturation,
+		'raster-contrast': groundContrast,
+		'raster-brightness-max': groundBrightnessMax,
+		'raster-brightness-min': groundBrightnessMin,
+		'raster-fade-duration': IMAGERY_GRADE.fadeDuration,
+		'raster-resampling': IMAGERY_GRADE.resampling
+	});
+
+	/**
+	 * NAIP is a daylight aerial photograph, so it has no business being visible
+	 * at night — and it was, at full opacity, ABOVE the city lights. Every US
+	 * location rendered 02:00 as broad daylight with no lights at all, because
+	 * MapLibre draws in mount order and this layer mounted last.
+	 *
+	 * Fading it on daylight fixes the picture and removes the ordering
+	 * dependency: at night the only colour left is the graded base, and the
+	 * lights are the top layer because they are the only other one. Below the
+	 * mount threshold it unmounts, so it also stops fetching z16 tiles for a
+	 * surface nobody can see.
+	 */
+	const detailOpacity = $derived(groundDetailOpacity(display.config.detail, night));
+
+	/**
+	 * Colour sources, coarse first. Order here IS draw order: MapLibre stacks
+	 * raster layers in the order they are added, and #each preserves it.
+	 */
+	const colourLayers = $derived(
+		[
+			{
+				id: 'gibs',
+				tiles: tiles.gibs,
+				maxzoom: TILE_MAXZOOM.gibs,
+				opacity: 1,
+				attribution: TILE_ATTRIBUTION
+			},
+			{
+				id: 'usgs',
+				tiles: tiles.usgs,
+				maxzoom: TILE_MAXZOOM.usgs,
+				opacity: detailOpacity,
+				attribution: undefined
+			}
+		].filter((l) => l.opacity > 0.01)
+	);
 </script>
 
+<!-- Base GIBS Satellite Imagery -->
 <RasterTileSource
 	id="gibs"
 	tiles={tiles.gibs}
@@ -66,38 +121,36 @@
 	maxzoom={TILE_MAXZOOM.gibs}
 	attribution={TILE_ATTRIBUTION}
 >
-	<RasterLayer
-		paint={{
-			'raster-opacity': 1,
-			'raster-saturation': groundSaturation,
-			'raster-contrast': groundContrast,
-			'raster-brightness-max': groundBrightnessMax,
-			'raster-brightness-min': groundBrightnessMin,
-			'raster-fade-duration': IMAGERY_GRADE.fadeDuration,
-			'raster-resampling': IMAGERY_GRADE.resampling
-		}}
-	/>
+	<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
 </RasterTileSource>
 
-<!-- NIGHT LIGHTS. Sits ABOVE the base imagery and BELOW the detail layer —
-     MapLibre draws raster layers in mount order, so this file's order IS the
-     stack: ground colour, then the lights on top of it, then any local detail.
+<!-- Higher-resolution USGS NAIP detail layer where coverage exists.
+     MOUNTING IS STRICTLY CONDITIONAL: `raster-opacity: 0` hides a layer but does NOT stop it fetching.
+     Over locations without NAIP coverage, an invisible layer would stream 404s at the tile server.
+     A layer that renders nothing must not exist. -->
+{#if detailOpacity > 0}
+	<RasterTileSource
+		id="usgs"
+		tiles={tiles.usgs}
+		tileSize={TILE_SIZE}
+		maxzoom={TILE_MAXZOOM.usgs}
+	>
+		<RasterLayer paint={{ ...grade, 'raster-opacity': detailOpacity }} />
+	</RasterTileSource>
+{/if}
 
-     Mounted only while it can be seen, for the same reason the detail layer is:
-     a layer at `raster-opacity: 0` still fetches every tile it covers.
+<!-- NIGHT LIGHTS, on top of all colour. Nothing else is mounted by the time
+     this matters — the detail layer fades out on the same curve — so being last
+     in this file is enough to be last in the stack.
 
      VIIRS is a black frame with bright cities, so at `raster-opacity: night`
-     over ground that the grade has already crushed toward black, the dark parts
-     of it change nothing and the lit parts read as towns. It only starts to
-     matter once the ground is dark, hence the ramp on night^1.5 rather than a
-     linear fade that would wash out dusk. -->
+     over ground the grade has already crushed toward black, the dark parts
+     change nothing and the lit parts read as towns. It only starts to matter
+     once the ground is dark, hence the ramp on night^1.5 rather than a linear
+     fade that would wash out dusk. It carries no grade of its own: it is
+     emitted light, not a photograph of a lit surface. -->
 {#if nightLightOpacity > 0.01}
-	<RasterTileSource
-		id="viirs"
-		tiles={tiles.viirs}
-		tileSize={TILE_SIZE}
-		maxzoom={TILE_MAXZOOM.viirs}
-	>
+	<RasterTileSource id="viirs" tiles={tiles.viirs} tileSize={TILE_SIZE} maxzoom={TILE_MAXZOOM.viirs}>
 		<RasterLayer
 			paint={{
 				'raster-opacity': nightLightOpacity,
@@ -105,15 +158,5 @@
 				'raster-resampling': IMAGERY_GRADE.resampling
 			}}
 		/>
-	</RasterTileSource>
-{/if}
-
-<!-- MOUNTED CONDITIONALLY, and that is load-bearing. `raster-opacity: 0` hides
-     a layer but does NOT stop it fetching: over Hyderabad, where NAIP has no
-     coverage, an invisible layer streamed 404s at the tile server by the
-     hundred. A layer that renders nothing must not exist. Has regressed 3x. -->
-{#if display.config.detail > 0}
-	<RasterTileSource id="usgs" tiles={tiles.usgs} tileSize={TILE_SIZE} maxzoom={TILE_MAXZOOM.usgs}>
-		<RasterLayer paint={{ 'raster-opacity': display.config.detail }} />
 	</RasterTileSource>
 {/if}
