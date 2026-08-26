@@ -1,54 +1,108 @@
 /**
- * director.svelte.ts — Autopilot Flight Director and City-to-City Cruise State Machine.
+ * director.svelte.ts — which destination the window is over, right now.
  *
- * Ticks continuously inside AeroDisplay.advanceTo() to autonomously advance
- * the kiosk between catalog destinations and modulate ambient weather.
+ * Three Pi 5s stand side by side and exchange nothing, so the destination has
+ * to be DERIVED rather than decided. This used to be a state machine: an
+ * accumulated `timer`, and an interval rolled from `Math.random()`. Both split
+ * the wall, for two independent reasons.
+ *
+ * The random one is obvious — each pane rolled its own 2-5 minute interval, so
+ * within one cycle the three windows sat over three different cities.
+ *
+ * The accumulator is the subtler one, and seeding the random would not have
+ * fixed it. `tick` was fed `Math.min(0.1, delta / 1000)`, so every frame longer
+ * than 100 ms silently dropped time. The timer therefore ran slower than the
+ * wall clock, by an amount that depends on each pane's frame drops, and reset
+ * to zero on reboot. Three panes, three different amounts of lost time.
+ *
+ * A slot index off the wall clock has neither problem. Every pane computes the
+ * same answer from the same second without being told, a pane that reboots
+ * rejoins mid-rotation instead of restarting the cycle, and there is no state
+ * to drift.
  */
 
 import { LOCATIONS, Location } from '../../settings/locations.js';
 import type { PaneSettings } from '../../settings/settings.svelte.js';
 
-export interface DirectorConfig {
-	enabled: boolean;
-	minIntervalSec: number;
-	maxIntervalSec: number;
-	weatherChangeChance: number;
+/**
+ * How long the window holds one destination.
+ *
+ * Content pacing, not mechanism: v1's director ran ~2:10 per location, tuned
+ * for passers-by rather than the desk-workers this installation actually sits
+ * in front of. Four minutes is a starting point for a calmer room, and it is
+ * one number to change.
+ */
+export const DWELL_SEC = 240;
+
+/**
+ * Which destination the whole wall is over at `wallSec`.
+ *
+ * Pure, total, and identical on every pane. `rotationSeed` shifts the starting
+ * point so the rotation is not the same order every day; it must be the SAME
+ * integer on all three panes, which is why it comes from the day rather than
+ * from the process.
+ */
+export function destinationAt(wallSec: number, rotationSeed = 0): Location {
+	const slot = Math.floor(Math.max(0, wallSec) / DWELL_SEC);
+	const index = (((slot + rotationSeed) % LOCATIONS.length) + LOCATIONS.length) % LOCATIONS.length;
+	return LOCATIONS[index];
+}
+
+/** Whole days since the epoch — the same integer on every pane, all day. */
+export function rotationSeedFor(wallSec: number): number {
+	return Math.floor(Math.max(0, wallSec) / 86_400);
 }
 
 export class FlightDirector {
-	private timer = 0;
-	private nextIntervalSec = 180; // 3 minutes default
 	private settings: PaneSettings;
 
 	enabled = $state(true);
-	isCruising = $state(false);
-	currentDestinationIndex = $state(0);
+	/**
+	 * Slots to skip, from an operator pressing "next" on this pane.
+	 *
+	 * Pane-local and deliberately temporary. A manual advance is one person at
+	 * one screen, so it cannot be anything but local — but it decays, because
+	 * the slot boundary re-derives the destination from the clock and the wall
+	 * comes back together on its own. Nothing to reset, nothing to sync.
+	 */
+	manualSkips = $state(0);
 
 	constructor(settings: PaneSettings) {
 		this.settings = settings;
-		this.nextIntervalSec = 120 + Math.random() * 120;
 	}
 
-	tick(dt: number, onDestinationChange?: (loc: Location) => void): void {
+	/** The destination this pane should be showing at `wallSec`. */
+	destinationFor(wallSec: number): Location {
+		return destinationAt(wallSec, rotationSeedFor(wallSec) + this.manualSkips);
+	}
+
+	/**
+	 * Move to the derived destination if it has changed.
+	 *
+	 * Takes wall-clock seconds, NOT a frame delta. Passing `dt` was the bug.
+	 */
+	tick(wallSec: number): void {
 		if (!this.enabled) return;
-
-		this.timer += dt;
-		if (this.timer >= this.nextIntervalSec) {
-			this.timer = 0;
-			this.nextIntervalSec = 120 + Math.random() * 180;
-			this.advanceDestination(onDestinationChange);
-		}
+		const next = this.destinationFor(wallSec);
+		if (next.id !== this.settings.place.id) this.settings.setPlace(next);
 	}
 
-	advanceDestination(callback?: (loc: Location) => void): void {
-		this.currentDestinationIndex = (this.currentDestinationIndex + 1) % LOCATIONS.length;
-		const nextLoc = LOCATIONS[this.currentDestinationIndex];
-		this.settings.place = nextLoc;
-		callback?.(nextLoc);
+	/**
+	 * Operator "next". Goes through setPlace like everything else.
+	 *
+	 * The previous version assigned `settings.place` directly, which moves the
+	 * place and leaves `phase`, `detail`, `floorM` and `ceilingM` describing
+	 * the location you just left — so Mumbai's 500 m floor followed you to
+	 * Denver and put the camera inside the Front Range.
+	 */
+	advanceDestination(wallSec: number = Date.now() / 1000): Location {
+		this.manualSkips += 1;
+		const next = this.destinationFor(wallSec);
+		this.settings.setPlace(next);
+		return next;
 	}
 
 	reset(): void {
-		this.timer = 0;
-		this.nextIntervalSec = 120 + Math.random() * 120;
+		this.manualSkips = 0;
 	}
 }

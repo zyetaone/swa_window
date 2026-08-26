@@ -136,22 +136,15 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 	 * noise is not visual at all, and rain droplets on the glass are foreground
 	 * cabin detail rather than shared world.
 	 *
-	 * KNOWN is debt, not permission. Empty it.
+	 * It briefly carried a KNOWN list too, for director.svelte.ts, which rolled
+	 * an unseeded 2-5 minute timer and advanced the DESTINATION on it. That debt
+	 * is paid — the destination is derived from the wall clock now — so the list
+	 * is gone rather than kept empty against future use.
 	 */
 	const ALLOWED = [
 		'display/media/ambient-audio.ts', // white-noise buffer; audio, not world
 		'display/cabin/RainGlass.svelte' // droplets on this pane's own glass
 	];
-	const KNOWN = [
-		// director.svelte.ts rolls an UNSEEDED 2-5 minute timer and advances the
-		// DESTINATION on it, so three panes sit over three different cities. It
-		// also accumulates `+= dt`, which drifts even once seeded and resets on
-		// reboot. The fix is not to seed it: it is to make the destination a
-		// pure function of wall clock, `LOCATIONS[floor(wallSec / DWELL) % n]`,
-		// which deletes the timer, the accumulator and the class.
-		'display/flight/director.svelte.ts'
-	];
-
 	function simSources(): string[] {
 		const out: string[] = [];
 		const walk = (dir: string) => {
@@ -166,11 +159,11 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 		return out;
 	}
 
-	it('has no unseeded randomness in the simulation path beyond the known debt', () => {
+	it('has no unseeded randomness in the simulation path', () => {
 		const offenders: string[] = [];
 		for (const file of simSources()) {
 			const rel = file.replace(/^src\/lib\//, '');
-			if (ALLOWED.some((a) => rel.endsWith(a)) || KNOWN.some((k) => rel.endsWith(k))) continue;
+			if (ALLOWED.some((a) => rel.endsWith(a))) continue;
 			const src = readFileSync(file, 'utf8');
 			// A comment naming the hazard is how this codebase documents it.
 			const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -179,15 +172,6 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 		expect(offenders, 'seed from daySeed, or add to ALLOWED with a reason').toEqual([]);
 	});
 
-	it('records the known determinism debt so it cannot be forgotten', () => {
-		// Fails once the debt is paid, which is the prompt to delete this test.
-		const unpaid = KNOWN.filter((k) => {
-			const path = join('src/lib', k);
-			if (!existsSync(path)) return false;
-			return /Math\.random\s*\(/.test(readFileSync(path, 'utf8'));
-		});
-		expect(unpaid, 'if this is empty, remove KNOWN and this test').toEqual(KNOWN);
-	});
 });
 
 // ── 2. The elevation pipeline ────────────────────────────────────────────────

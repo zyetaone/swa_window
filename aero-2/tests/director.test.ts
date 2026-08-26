@@ -1,38 +1,130 @@
 import { describe, it, expect } from 'vitest';
-import { FlightDirector } from '../src/lib/display/flight/director.svelte.js';
+import {
+	FlightDirector,
+	destinationAt,
+	rotationSeedFor,
+	DWELL_SEC
+} from '../src/lib/display/flight/director.svelte.js';
 import { createSettings } from '../src/lib/settings/settings.svelte.js';
 import { LOCATIONS } from '../src/lib/settings/locations.js';
 
-describe('FlightDirector', () => {
-	it('initializes with default enabled state and destination index 0', () => {
-		const settings = createSettings();
-		const director = new FlightDirector(settings);
-		expect(director.enabled).toBe(true);
-		expect(director.currentDestinationIndex).toBe(0);
+/**
+ * These replace tests that asserted `currentDestinationIndex` walked 0, 1, 2.
+ * That was true of the old state machine and told us nothing about the only
+ * property that matters here: three panes with no link between them must be
+ * over the SAME city at the same second.
+ */
+describe('the destination is derived, not decided', () => {
+	it('three independent panes agree at every second', () => {
+		const panes = [new FlightDirector(createSettings()), new FlightDirector(createSettings()), new FlightDirector(createSettings())];
+
+		// A full day, sampled off the slot grid so boundaries are crossed
+		// mid-stride rather than landed on exactly.
+		for (let t = 0; t < 86_400; t += 137) {
+			const [a, b, c] = panes.map((p) => p.destinationFor(t).id);
+			expect(b, `panes diverged at t=${t}`).toBe(a);
+			expect(c, `panes diverged at t=${t}`).toBe(a);
+		}
 	});
 
-	it('advances destination through catalog locations', () => {
-		const settings = createSettings();
-		const director = new FlightDirector(settings);
+	it('holds one destination for a whole dwell and then moves on', () => {
+		const seed = rotationSeedFor(0);
+		const first = destinationAt(0, seed).id;
 
-		director.advanceDestination();
-		expect(director.currentDestinationIndex).toBe(1);
-		expect(settings.place.id).toBe(LOCATIONS[1].id);
-
-		director.advanceDestination();
-		expect(director.currentDestinationIndex).toBe(2);
-		expect(settings.place.id).toBe(LOCATIONS[2].id);
+		for (let t = 0; t < DWELL_SEC; t += 11) {
+			expect(destinationAt(t, seed).id, `changed mid-dwell at t=${t}`).toBe(first);
+		}
+		expect(destinationAt(DWELL_SEC, seed).id).not.toBe(first);
 	});
 
-	it('triggers callback on destination change', () => {
+	it('visits every location in the catalog over a full rotation', () => {
+		const seed = rotationSeedFor(0);
+		const seen = new Set<string>();
+		for (let i = 0; i < LOCATIONS.length; i++) seen.add(destinationAt(i * DWELL_SEC, seed).id);
+		expect(seen.size).toBe(LOCATIONS.length);
+	});
+
+	/**
+	 * A pane that reboots must rejoin the rotation, not restart it. The old
+	 * accumulator reset `timer` to 0 on construction, so a restarted pane held
+	 * its city for a fresh full interval while the other two moved on.
+	 */
+	it('a pane constructed mid-rotation lands where the others already are', () => {
+		const running = new FlightDirector(createSettings());
+		const t = DWELL_SEC * 3.4;
+		const rebooted = new FlightDirector(createSettings());
+		expect(rebooted.destinationFor(t).id).toBe(running.destinationFor(t).id);
+	});
+
+	it('is stable across repeat evaluation of the same second', () => {
+		const d = new FlightDirector(createSettings());
+		const t = 12_345;
+		expect(d.destinationFor(t).id).toBe(d.destinationFor(t).id);
+	});
+});
+
+describe('the director moves the whole envelope, not just the place', () => {
+	/**
+	 * The old `advanceDestination` assigned `settings.place` directly. That
+	 * moves the place and leaves phase, detail, floorM and ceilingM describing
+	 * the location you just left — so Mumbai's 500 m floor could follow you to
+	 * Denver and put the camera inside the Front Range.
+	 */
+	it('carries the climb envelope with the destination', () => {
 		const settings = createSettings();
 		const director = new FlightDirector(settings);
-		let calledWith: string | null = null;
 
-		director.advanceDestination((loc) => {
-			calledWith = loc.id;
-		});
+		const target = director.destinationFor(DWELL_SEC * 6);
+		director.tick(DWELL_SEC * 6);
 
-		expect(calledWith).toBe(LOCATIONS[1].id);
+		expect(settings.place.id).toBe(target.id);
+		expect(settings.floorM).toBe(target.climbFloorM);
+		expect(settings.ceilingM).toBe(target.climbCeilingM);
+	});
+
+	it('does nothing when already over the derived destination', () => {
+		const settings = createSettings();
+		const director = new FlightDirector(settings);
+		director.tick(DWELL_SEC * 2);
+		const after = settings.place.id;
+		director.tick(DWELL_SEC * 2 + 5);
+		expect(settings.place.id).toBe(after);
+	});
+
+	it('respects the enabled flag', () => {
+		const settings = createSettings();
+		const director = new FlightDirector(settings);
+		const before = settings.place.id;
+		director.enabled = false;
+		director.tick(DWELL_SEC * 5);
+		expect(settings.place.id).toBe(before);
+	});
+});
+
+describe('a manual advance is local and temporary', () => {
+	it('moves this pane immediately', () => {
+		const settings = createSettings();
+		const director = new FlightDirector(settings);
+		const before = director.destinationFor(0).id;
+		const moved = director.advanceDestination(0);
+		expect(moved.id).not.toBe(before);
+		expect(settings.place.id).toBe(moved.id);
+	});
+
+	/**
+	 * The wall heals itself. An operator pressing "next" on one pane cannot be
+	 * anything but pane-local, so the design makes it decay instead of
+	 * persisting: reset drops the skip and the clock re-derives the answer.
+	 */
+	it('is dropped by reset, returning the pane to the derived rotation', () => {
+		const settings = createSettings();
+		const solo = new FlightDirector(settings);
+		const wall = new FlightDirector(createSettings());
+
+		solo.advanceDestination(0);
+		expect(solo.destinationFor(0).id).not.toBe(wall.destinationFor(0).id);
+
+		solo.reset();
+		expect(solo.destinationFor(0).id).toBe(wall.destinationFor(0).id);
 	});
 });

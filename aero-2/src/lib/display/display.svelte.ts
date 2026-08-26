@@ -53,18 +53,16 @@ export class AeroDisplay {
 	}
 
 	advanceLocation(): void {
-		this.director.advanceDestination();
+		this.director.advanceDestination(Date.now() / 1000);
 	}
 
 	advanceTo(wallSec: number = Date.now() / 1000): CameraView {
 		if (typeof performance !== 'undefined') {
 			const now = performance.now();
 			const delta = now - this.#lastTickTime;
-			const dt = Math.min(0.1, delta / 1000);
 			this.#lastTickTime = now;
 			this.#frameCount++;
 
-			this.director.tick(dt);
 
 			if (now - this.#lastFpsUpdate >= 500) {
 				this.fps = Math.round((this.#frameCount * 1000) / (now - this.#lastFpsUpdate));
@@ -73,6 +71,10 @@ export class AeroDisplay {
 				this.#lastFpsUpdate = now;
 			}
 		}
+
+		// Wall clock, not a frame delta: the destination is derived from the
+		// second, so every pane lands on the same place without being told.
+		this.director.tick(wallSec);
 
 		const next = calculateCameraView(wallSec, this.config);
 		this.view = next;
