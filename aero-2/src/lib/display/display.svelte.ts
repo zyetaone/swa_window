@@ -6,7 +6,7 @@ import { getContext, setContext, untrack } from 'svelte';
 import { calculateCameraView, type CameraView } from './flight/view.js';
 import { FlightDirector } from './flight/director.svelte.js';
 import { resolveAtmosphere, type AtmosphereState } from './world/atmosphere.js';
-import { nightFactor, sunPosition, type SunPosition } from './world/sun.js';
+import { nightAmount, sunPosition, type SunPosition } from './world/sun.js';
 import { createSettings, type PaneSettings } from '#lib/settings/settings.svelte.js';
 
 const DISPLAY_KEY = Symbol('AERO_DISPLAY');
@@ -39,8 +39,12 @@ export class AeroDisplay {
 		return resolveAtmosphere(this.view.aglM);
 	}
 
+	/**
+	 * Read by Ground, Terrain, Sky, Clouds, Buildings and CesiumStage. All six
+	 * used to inherit a clock-only curve that disagreed with `sun` below.
+	 */
 	get night(): number {
-		return nightFactor(this.view.timeOfDay);
+		return nightAmount(this.sun.elevationDeg);
 	}
 
 	/** Where the sun is right now, over the place being flown. */

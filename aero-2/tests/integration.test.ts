@@ -24,7 +24,7 @@ import {
 import { join } from 'node:path';
 import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
-import { sunPosition, nightFactor } from '#lib/display/world/sun.js';
+import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
 import { daySeed } from '#lib/display/flight/flight-path.js';
 import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
@@ -141,9 +141,9 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 	 * A tautology here would hide a constant.
 	 */
 	it('keeps the night and atmosphere curves the right way up', () => {
-		expect(nightFactor(0)).toBeCloseTo(1, 2);
-		expect(nightFactor(12)).toBeCloseTo(0, 2);
-		expect(nightFactor(0)).toBeGreaterThan(nightFactor(6));
+		expect(nightAmount(-30)).toBeCloseTo(1, 2); // sun well down
+		expect(nightAmount(60)).toBeCloseTo(0, 2); // sun high
+		expect(nightAmount(-30)).toBeGreaterThan(nightAmount(0));
 
 		const luma = (agl: number) => {
 			const [r, g, b] = resolveAtmosphere(agl).skyTop;

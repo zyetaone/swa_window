@@ -12,7 +12,7 @@ import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { slotNoise } from '#lib/display/flight/flight-path.js';
 import {
 	resolveLocalHours,
-	nightFactor,
+	nightAmount,
 	sunPosition,
 	duskHorizonMix,
 	duskVaultMix
@@ -234,16 +234,37 @@ describe('resolveAtmosphere', () => {
 	});
 });
 
-describe('nightFactor', () => {
-	it('returns 0 at midday and 1 deep in night', () => {
-		expect(nightFactor(12)).toBe(0);
-		expect(nightFactor(23)).toBe(1);
+/**
+ * These replace tests on `nightFactor(timeOfDay)`, which hardcoded the dusk
+ * ramp to 17:30-21:00 and knew nothing about latitude or season. The clock
+ * cannot tell you how dark it is: at Mumbai 19:41 that curve said 0.68 while
+ * the sun was 20 degrees below the horizon, and at Chicago in December it said
+ * 0 -- full daylight -- more than an hour after sunset.
+ */
+describe('nightAmount', () => {
+	it('is full day with the sun up and full night once it is well down', () => {
+		expect(nightAmount(60)).toBe(0);
+		expect(nightAmount(-30)).toBe(1);
 	});
 
-	it('ramps smoothly through dusk', () => {
-		const midDusk = nightFactor(19.5);
+	it('is dark when the sun is 20 degrees below the horizon, whatever the hour', () => {
+		// The case the clock-based curve got wrong: it returned 0.68 here.
+		expect(nightAmount(-20)).toBe(1);
+	});
+
+	it('ramps smoothly through twilight', () => {
+		const midDusk = nightAmount(-3);
 		expect(midDusk).toBeGreaterThan(0.3);
 		expect(midDusk).toBeLessThan(0.8);
+	});
+
+	it('never brightens as the sun drops', () => {
+		let prev = -Infinity;
+		for (let e = 60; e >= -30; e--) {
+			const v = nightAmount(e);
+			expect(v).toBeGreaterThanOrEqual(prev - 1e-9);
+			prev = v;
+		}
 	});
 });
 
@@ -861,13 +882,28 @@ describe('sky colour', () => {
 		expect(midSlope).toBeGreaterThan(endSlope);
 	});
 
-	it('is monotonic — the sky never brightens as the sun sets', () => {
-		let prev = duskHorizonMix(-12);
-		for (let e = -11; e <= 20; e++) {
+	/**
+	 * The version of this test that this replaces swept from -12 upward and
+	 * asserted the value never rises. That is only true of a curve with no
+	 * lower bound -- it was pinning the bug, not the behaviour. Past the peak
+	 * the glow must fall off in BOTH directions: a sunset band needs a sun
+	 * somewhere near the horizon to cast it.
+	 */
+	it('falls off monotonically above the peak, as the sun climbs', () => {
+		let prev = duskHorizonMix(-5);
+		for (let e = -4; e <= 20; e++) {
 			const v = duskHorizonMix(e);
 			expect(v).toBeLessThanOrEqual(prev + 1e-9);
 			prev = v;
 		}
+	});
+
+	it('leaves the horizon once the sun is far enough below it', () => {
+		// 1.0 at -18 and 1.0 at -56 put a warm sunset band under a field of
+		// stars at local midnight. Observed over the Sahara at 00:16.
+		expect(duskHorizonMix(-18)).toBe(0);
+		expect(duskHorizonMix(-56)).toBe(0);
+		expect(duskHorizonMix(-12)).toBeLessThan(duskHorizonMix(-6));
 	});
 });
 

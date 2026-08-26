@@ -69,21 +69,25 @@ export function sunPosition(wallSec: number, lat: number, utcOffset: number): Su
 }
 
 /**
- * Night factor: 0.0 at solar noon (pure day) -> 1.0 at midnight (deep night).
- * Dusk transition: 18:00 - 20:30.
- * Dawn transition: 05:30 - 07:30.
+ * How dark it is: 0 in full day, 1 once the sun is well below the horizon.
+ *
+ * Takes the sun's ACTUAL elevation, not the clock. The version this replaces
+ * was `nightFactor(timeOfDay)` with the hours hardcoded -- dark 21:00-05:00,
+ * dusk ramped 17:30-21:00 -- which knows nothing about latitude or season and
+ * is therefore only correct near the equator at an equinox. Everywhere else it
+ * disagreed with `sunPosition`, computed three lines above it from the same
+ * wall-clock second, and the disagreement was visible: at Mumbai 19:41 it
+ * returned 0.68 while the sun was 20 degrees below the horizon, so the ground
+ * graded to `brightness-max` 0.36 instead of 0.16 and lit the night with a pale
+ * sheet brighter than the sky over it. At Chicago's 41.9N the error runs the
+ * other way in December -- sunset near 16:20 while this still returned 0, full
+ * daylight ground under a dark sky -- and reverses again in June.
+ *
+ * -12 to +6 is the civil/nautical twilight band. Still pure and still a
+ * function of wall-clock and place alone, so three panes agree.
  */
-export function nightFactor(timeOfDay: number): number {
-	const h = ((timeOfDay % 24) + 24) % 24;
-
-	if (h >= 8 && h <= 17.5) return 0;
-	if (h >= 21 || h <= 5) return 1;
-
-	if (h > 17.5 && h < 21) {
-		return smoothstep(17.5, 21, h);
-	}
-
-	return 1 - smoothstep(5, 8, h);
+export function nightAmount(sunElevationDeg: number): number {
+	return 1 - smoothstep(-12, 6, sunElevationDeg);
 }
 
 /**
@@ -104,8 +108,20 @@ export function duskVaultMix(sunElevationDeg: number): number {
  * Was `(15 - elev) / 15`: not symmetric, and still 0.33 at 10 deg of elevation,
  * which is mid-morning. Blending a deep orange into a blue horizon at that
  * strength produces grey-pink mud rather than either colour. Gone by 8 deg.
+ *
+ * That replacement clamped at -4 and never came back down, so it returned a
+ * FULL sunset band for every sun below the horizon -- 1.0 at -18, and 1.0 at
+ * -56, which is local midnight in the Sahara with a warm orange glow banding
+ * the horizon under a field of stars. It was not a dusk curve, it was a
+ * not-daytime curve. `duskVaultMix` escapes the same bug only by accident,
+ * through its `Math.abs`.
+ *
+ * A glow needs a sun to cast it. This one lives in a band: it rises as the sun
+ * drops toward the horizon, holds through civil twilight, and is gone by -18
+ * where the sky has no sunlight left in it.
  */
 export function duskHorizonMix(sunElevationDeg: number): number {
-	const t = Math.max(0, Math.min(1, (sunElevationDeg - -4) / (8 - -4)));
-	return 1 - t * t * (3 - 2 * t);
+	const lit = smoothstep(-18, -6, sunElevationDeg);
+	const notYetDay = 1 - smoothstep(-4, 8, sunElevationDeg);
+	return Math.min(lit, notYetDay);
 }
