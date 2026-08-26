@@ -13,7 +13,13 @@
 	import { PMTilesProtocol } from '@svelte-maplibre-gl/pmtiles';
 	import type { ExpressionSpecification } from 'maplibre-gl';
 
-	import { HILLSHADE_SHADOW_COLOR, TERRAIN_PMTILES, TILE_SIZE } from '#lib/settings/tiles.js';
+	import {
+		HILLSHADE_SHADOW_COLOR,
+		TERRAIN_MINZOOM,
+		TERRAIN_PMTILES,
+		TILE_MAXZOOM,
+		TILE_SIZE
+	} from '#lib/settings/tiles.js';
 	import { useDisplay } from '../display.svelte.js';
 
 	const display = useDisplay();
@@ -88,7 +94,22 @@
 <!-- Registers the pmtiles:// scheme. Must come BEFORE any source that uses it. -->
 <PMTilesProtocol />
 
-<RasterDEMTileSource id="dem" url={TERRAIN_PMTILES} encoding="terrarium" tileSize={TILE_SIZE}>
+<!-- minzoom/maxzoom are NOT optional here, they are the whole thing.
+     Without them MapLibre assumed z0-22 for this source, requested DEM tiles
+     at z14-22 that the archive does not contain, and left all 24 covering
+     tiles in state "loading" forever. No tile ever decoded, so `sourceTile.dem`
+     was never set, so getElevationSampler returned null, so every
+     queryTerrainElevation fell through to its `: 0` branch -- which reads as
+     "sea level" and is indistinguishable from "no data". The raster sources in
+     Ground.svelte always declared their maxzoom; this one never did. -->
+<RasterDEMTileSource
+	id="dem"
+	url={TERRAIN_PMTILES}
+	encoding="terrarium"
+	tileSize={TILE_SIZE}
+	minzoom={TERRAIN_MINZOOM}
+	maxzoom={TILE_MAXZOOM.terrarium}
+>
 	<!-- 3D Elevation Mesh -->
 	<TerrainMesh {exaggeration} />
 

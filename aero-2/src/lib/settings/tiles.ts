@@ -17,6 +17,9 @@ export const TILE_ATTRIBUTION =
 
 export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
 
+/** Floor of the packed DEM pyramid. Must match what pack-pmtiles wrote. */
+export const TERRAIN_MINZOOM = 5;
+
 export const HILLSHADE_DEFAULT = 0.85;
 export const HILLSHADE_SHADOW_COLOR = '#1a2436';
 export const TERRAIN_EXAGGERATION = 2.5;
