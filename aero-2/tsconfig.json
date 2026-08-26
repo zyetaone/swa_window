@@ -8,6 +8,15 @@
 		// .js, so there is no coverage to lose here.
 		"checkJs": false
 	},
-	"include": ["src", "tests", "server.ts"],
+	// server.ts is deliberately NOT here. It does `await import('./build/index.js')`,
+	// which exists only AFTER a build — and `check` runs before `build`, both in
+	// CI and locally. Including it made a clean clone fail with "Cannot find
+	// module './build/index.js'" while passing on any machine that happened to
+	// have a stale build/ directory: green here, red for everyone else.
+	//
+	// The file is 40 lines, guards the import with existsSync, and is covered by
+	// the CI smoke step that actually boots it — which is a stronger check than
+	// typing an import that cannot resolve yet.
+	"include": ["src", "tests"],
 	"exclude": ["build", "node_modules"]
 }

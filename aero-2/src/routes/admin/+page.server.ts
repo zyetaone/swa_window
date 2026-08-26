@@ -16,6 +16,16 @@ import { error } from '@sveltejs/kit';
  * ponytail: a 404 in production is the whole guard. If an operator ever needs
  * this from a laptop on the install LAN, the fix is a real credential — a
  * "hidden" URL on a shared network is not a control.
+ *
+ * WHAT THIS LOOKS LIKE FROM OUTSIDE, because it is easy to mis-test: the whole
+ * app runs `ssr = false`, so GET /admin still returns 200 — that is the static
+ * shell, served before any load function runs. The guard fires on the DATA
+ * request: /admin/__data.json returns the 404 error node, and the browser
+ * renders "404 Not found" with no cockpit. Verified both ways.
+ *
+ * So `curl -o /dev/null -w '%{http_code}' /admin` is NOT a test of this. It
+ * reports 200 whether the guard works or not. Check __data.json, or load the
+ * page.
  */
 export function load() {
 	if (process.env.NODE_ENV === 'production') error(404, 'Not found');

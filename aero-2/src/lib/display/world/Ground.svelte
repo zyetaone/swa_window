@@ -129,12 +129,7 @@
      Over locations without NAIP coverage, an invisible layer would stream 404s at the tile server.
      A layer that renders nothing must not exist. -->
 {#if detailOpacity > 0}
-	<RasterTileSource
-		id="usgs"
-		tiles={tiles.usgs}
-		tileSize={TILE_SIZE}
-		maxzoom={TILE_MAXZOOM.usgs}
-	>
+	<RasterTileSource id="usgs" tiles={tiles.usgs} tileSize={TILE_SIZE} maxzoom={TILE_MAXZOOM.usgs}>
 		<RasterLayer paint={{ ...grade, 'raster-opacity': detailOpacity }} />
 	</RasterTileSource>
 {/if}
@@ -150,7 +145,12 @@
      fade that would wash out dusk. It carries no grade of its own: it is
      emitted light, not a photograph of a lit surface. -->
 {#if nightLightOpacity > 0.01}
-	<RasterTileSource id="viirs" tiles={tiles.viirs} tileSize={TILE_SIZE} maxzoom={TILE_MAXZOOM.viirs}>
+	<RasterTileSource
+		id="viirs"
+		tiles={tiles.viirs}
+		tileSize={TILE_SIZE}
+		maxzoom={TILE_MAXZOOM.viirs}
+	>
 		<RasterLayer
 			paint={{
 				'raster-opacity': nightLightOpacity,

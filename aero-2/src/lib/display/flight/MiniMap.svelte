@@ -137,17 +137,29 @@
 	const ELEV_WIDTH = 104;
 	const ELEV_HEIGHT = 24;
 
+	/**
+	 * Dynamic elevation climb profile evaluated at the active flight phase.
+	 * Evaluates track.altitudeAt across the active climb period window so the live
+	 * altitude marker rides exactly on top of the SVG elevation waveform.
+	 */
 	const elevPathD = $derived.by(() => {
 		const lo = display.config.floorM;
 		const hi = display.config.ceilingM;
 		const points: string[] = [];
-		for (let x = 0; x <= ELEV_WIDTH; x += 4) {
-			const agl = track.altitudeAt((x / ELEV_WIDTH) * CLIMB_PERIOD_SEC);
+		const periodStart = Math.floor(effectiveSec / CLIMB_PERIOD_SEC) * CLIMB_PERIOD_SEC;
+		for (let x = 0; x <= ELEV_WIDTH; x += 2) {
+			const t = periodStart + (x / ELEV_WIDTH) * CLIMB_PERIOD_SEC;
+			const agl = track.altitudeAt(t);
 			const normY = hi > lo ? Math.min(1, Math.max(0, (agl - lo) / (hi - lo))) : 0;
 			const y = ELEV_HEIGHT - normY * (ELEV_HEIGHT - 4) - 2;
 			points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
 		}
 		return `M ${points.join(' L ')}`;
+	});
+
+	const elevAreaD = $derived.by(() => {
+		if (!elevPathD) return '';
+		return `${elevPathD} L ${ELEV_WIDTH},${ELEV_HEIGHT} L 0,${ELEV_HEIGHT} Z`;
 	});
 
 	const elevDotX = $derived(climbPhase * ELEV_WIDTH);
@@ -224,7 +236,7 @@
 				<path
 					d={sightlineWedgeD}
 					class="sightline-wedge"
-					style:opacity="{0.15 + 0.35 * groundFrac}"
+					style:opacity={0.15 + 0.35 * groundFrac}
 				/>
 			{/if}
 			<line
@@ -233,7 +245,7 @@
 				x2={targetMarker.x}
 				y2={targetMarker.y}
 				class="sightline"
-				style:opacity="{0.4 + 0.6 * groundFrac}"
+				style:opacity={0.4 + 0.6 * groundFrac}
 			/>
 			<circle cx={targetMarker.x} cy={targetMarker.y} r="3" class="target-dot" />
 			<circle
@@ -241,7 +253,7 @@
 				cy={targetMarker.y}
 				r="6"
 				class="target-pulse"
-				style:opacity="{groundFrac}"
+				style:opacity={groundFrac}
 			/>
 		{/if}
 	</svg>
@@ -281,10 +293,23 @@
 	<!-- Altitude Elevation Waveform Inset (Side View) -->
 	<div class="elevation-profile" title="Altitude Profile (Climb & Descent)">
 		<svg width={ELEV_WIDTH} height={ELEV_HEIGHT} viewBox="0 0 {ELEV_WIDTH} {ELEV_HEIGHT}">
+			<defs>
+				<linearGradient id="elev-grad" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35" />
+					<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.02" />
+				</linearGradient>
+			</defs>
+			<!-- Filled Altitude Envelope Area -->
+			{#if elevAreaD}
+				<path d={elevAreaD} fill="url(#elev-grad)" />
+			{/if}
 			<!-- Base Wave Curve -->
-			<path d={elevPathD} class="elev-wave" />
-			<!-- Active Altitude Dot -->
-			<circle cx={elevDotX} cy={elevDotY} r="3" class="elev-dot" />
+			{#if elevPathD}
+				<path d={elevPathD} class="elev-wave" />
+			{/if}
+			<!-- Active Altitude Dot & Radar Pulse -->
+			<circle cx={elevDotX} cy={elevDotY} r="2.5" class="elev-dot" />
+			<circle cx={elevDotX} cy={elevDotY} r="5" class="elev-pulse" />
 		</svg>
 	</div>
 
@@ -441,6 +466,24 @@
 		stroke: #ffffff;
 		stroke-width: 1;
 		filter: drop-shadow(0 0 4px #38bdf8);
+	}
+
+	.elev-pulse {
+		fill: none;
+		stroke: rgba(56, 189, 248, 0.7);
+		stroke-width: 0.8;
+		animation: pulse-dot 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+	}
+
+	@keyframes pulse-dot {
+		0% {
+			r: 2.5;
+			opacity: 1;
+		}
+		100% {
+			r: 7;
+			opacity: 0;
+		}
 	}
 
 	.readout {

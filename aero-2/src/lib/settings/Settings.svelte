@@ -115,11 +115,7 @@
 					<h4>Scene Composition Presets</h4>
 					<div class="preset-grid">
 						{#each SCENE_PRESETS as preset}
-							<button
-								type="button"
-								class="preset-card"
-								onclick={() => config.applyPreset(preset)}
-							>
+							<button type="button" class="preset-card" onclick={() => config.applyPreset(preset)}>
 								<div class="preset-top">
 									<span class="preset-icon">{preset.icon}</span>
 									<span class="preset-badge">{preset.badge}</span>
@@ -255,6 +251,13 @@
 						{config}
 						key="wingPitchDeg"
 						label="Wing Pitch Offset"
+						step={0.5}
+						format={(v) => `${v.toFixed(1)}°`}
+					/>
+					<Knob
+						{config}
+						key="wingYawDeg"
+						label="Wing Sweep / Yaw (Y-Axis)"
 						step={0.5}
 						format={(v) => `${v.toFixed(1)}°`}
 					/>
@@ -495,10 +498,12 @@
 			<section class="section">
 				<h4>Kiosk Actions</h4>
 				<div class="action-buttons">
-					<button type="button" class="glass-btn primary" onclick={reload}>
-						🔄 Soft Reload
-					</button>
-					<a href="/admin" class="glass-btn secondary" style="text-align: center; text-decoration: none;">
+					<button type="button" class="glass-btn primary" onclick={reload}> 🔄 Soft Reload </button>
+					<a
+						href="/admin"
+						class="glass-btn secondary"
+						style="text-align: center; text-decoration: none;"
+					>
 						🖥️ Open Fleet Cockpit
 					</a>
 				</div>
@@ -506,6 +511,31 @@
 		</div>
 	</aside>
 {/snippet}
+
+<!-- Floating Operator Quick-Access Trigger Buttons (Top-Right) -->
+<div class="operator-triggers" aria-label="Operator Controls">
+	<button
+		type="button"
+		class="trigger-btn"
+		class:active={showSettings}
+		onclick={() => (showSettings = !showSettings)}
+		title="Open Operator Settings (Hotkey: S)"
+		aria-label="Toggle Operator Settings"
+	>
+		⚙️ <span class="trigger-label">Settings</span>
+	</button>
+
+	<button
+		type="button"
+		class="trigger-btn"
+		class:active={showAdmin}
+		onclick={() => (showAdmin = !showAdmin)}
+		title="Open Telemetry & Admin (Hotkey: A)"
+		aria-label="Toggle Telemetry Panel"
+	>
+		📊 <span class="trigger-label">Telemetry</span>
+	</button>
+</div>
 
 {#if showSettings}
 	{@render tuningDrawer()}
@@ -516,6 +546,55 @@
 {/if}
 
 <style>
+	.operator-triggers {
+		position: fixed;
+		top: 1rem;
+		right: 1.25rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		z-index: 90;
+		pointer-events: auto;
+	}
+
+	.trigger-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.45rem 0.85rem;
+		font-size: 0.82rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(11, 17, 30, 0.75);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 9999px;
+		cursor: pointer;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+		user-select: none;
+	}
+
+	.trigger-btn:hover {
+		background: rgba(56, 189, 248, 0.25);
+		border-color: rgba(56, 189, 248, 0.6);
+		color: #ffffff;
+		transform: translateY(-1px);
+		box-shadow: 0 6px 20px rgba(56, 189, 248, 0.25);
+	}
+
+	.trigger-btn.active {
+		background: rgba(56, 189, 248, 0.35);
+		border-color: #38bdf8;
+		color: #ffffff;
+	}
+
+	.trigger-label {
+		font-size: 0.78rem;
+		letter-spacing: 0.02em;
+	}
+
 	.glass-pane {
 		position: absolute;
 		top: 0;
@@ -683,7 +762,8 @@
 		outline: none;
 		border-color: var(--accent-cyan, #38bdf8);
 	}
-	.glass-select option, .glass-select optgroup {
+	.glass-select option,
+	.glass-select optgroup {
 		background: #0f172a;
 		color: #ffffff;
 	}

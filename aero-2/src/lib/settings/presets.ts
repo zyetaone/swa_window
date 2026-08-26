@@ -96,7 +96,8 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 	{
 		id: 'gulf-midnight',
 		name: 'Dubai Midnight',
-		description: 'The Gulf coast after dark — VIIRS night-light radiance seen through rain on the glass.',
+		description:
+			'The Gulf coast after dark — VIIRS night-light radiance seen through rain on the glass.',
 		icon: '🌃',
 		badge: 'Night & Rain',
 		config: {
@@ -121,7 +122,8 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 	{
 		id: 'pacific-glide',
 		name: 'Pacific Noon Glide',
-		description: 'Open Pacific under a direct midday sun. No coastline, no skyline — water and light.',
+		description:
+			'Open Pacific under a direct midday sun. No coastline, no skyline — water and light.',
 		icon: '🏝️',
 		badge: 'Vibrant',
 		config: {

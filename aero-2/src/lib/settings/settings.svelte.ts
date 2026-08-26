@@ -51,6 +51,7 @@ export const KNOB_RANGE = {
 	wingOffsetX: [-800, 800],
 	wingOffsetY: [-800, 800],
 	wingPitchDeg: [-45, 45],
+	wingYawDeg: [-45, 45],
 	wingRollFactor: [0, 3.0],
 	cloudDensity: [0, 1.0],
 	cloudSpeed: [0, 5.0],
@@ -103,12 +104,13 @@ export class PaneSettings {
 	/** Phase offset in radians from daySeed. */
 	phase = $state<number>(0);
 
-	/** Aircraft Wing alignment knobs (X, Y, Scale, Pitch, Roll) */
+	/** Aircraft Wing alignment knobs (X, Y, Scale, Pitch, Yaw/Sweep, Roll) */
 	wing = $state<boolean>(true);
 	wingScale = $state<number>(DEFAULT_WING_SCALE);
 	wingOffsetX = $state<number>(DEFAULT_WING_OFFSET_X);
 	wingOffsetY = $state<number>(DEFAULT_WING_OFFSET_Y);
 	wingPitchDeg = $state<number>(0);
+	wingYawDeg = $state<number>(0);
 	wingRollFactor = $state<number>(1.0);
 
 	/** Atmospheric Cloud deck layer knobs */
@@ -279,6 +281,7 @@ export class PaneSettings {
 		this.wingOffsetX = DEFAULT_WING_OFFSET_X;
 		this.wingOffsetY = DEFAULT_WING_OFFSET_Y;
 		this.wingPitchDeg = 0;
+		this.wingYawDeg = 0;
 		this.wingRollFactor = 1.0;
 		this.clouds = true;
 		this.cloudDensity = 0.75;

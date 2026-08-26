@@ -368,3 +368,46 @@ describe('routes render something', () => {
 		expect(invented, 'admin reads fields /api/status does not return').toEqual([]);
 	});
 });
+
+describe('/admin is not public in production', () => {
+	/**
+	 * /admin renders the kiosk hostname, LAN addresses, memory and uptime, and
+	 * links every pane role — a device fingerprint plus a remote control, with
+	 * no auth. It is gated to non-production by a server load.
+	 *
+	 * Easy to mis-test: `ssr = false` means GET /admin returns 200 regardless,
+	 * because that is the static shell served before any load runs. The guard
+	 * fires on the data request. Test the load function directly.
+	 */
+	it('throws 404 when NODE_ENV is production', async () => {
+		const { load } = await import('../src/routes/admin/+page.server.js');
+		const prev = process.env.NODE_ENV;
+		process.env.NODE_ENV = 'production';
+		try {
+			expect(() => load()).toThrow();
+		} finally {
+			process.env.NODE_ENV = prev;
+		}
+	});
+
+	it('renders normally outside production', async () => {
+		const { load } = await import('../src/routes/admin/+page.server.js');
+		const prev = process.env.NODE_ENV;
+		process.env.NODE_ENV = 'development';
+		try {
+			expect(() => load()).not.toThrow();
+		} finally {
+			process.env.NODE_ENV = prev;
+		}
+	});
+
+	it('does not leak every interface from /api/status', async () => {
+		// allIps included loopback and any internal/VPN interface. lanIps is the
+		// narrower set the admin page actually needs.
+		const { GET } = await import('../src/routes/api/status/+server.js');
+		const payload = await (await GET({} as never)).json();
+		for (const leaky of ['allIps', 'arch', 'platform', 'loadAvg']) {
+			expect(payload, `${leaky} is a fingerprint, not telemetry`).not.toHaveProperty(leaky);
+		}
+	});
+});

@@ -14,9 +14,10 @@
 
 	const isVisible = $derived(display.config.wing);
 	const scale = $derived(display.config.wingScale ?? 0.65);
-	const offsetX = $derived(display.config.wingOffsetX ?? -405);
-	const offsetY = $derived(display.config.wingOffsetY ?? -20);
+	const offsetX = $derived(display.config.wingOffsetX ?? 0);
+	const offsetY = $derived(display.config.wingOffsetY ?? 0);
 	const pitchOffset = $derived(display.config.wingPitchDeg ?? 0);
+	const yawOffset = $derived(display.config.wingYawDeg ?? 0);
 	const rollFactor = $derived(display.config.wingRollFactor ?? 1.0);
 
 	// ── 3D Canvas & Three.js Scene Lifecycle ──────────────────────────────────
@@ -111,15 +112,24 @@
 				strobeLight.intensity = 0.0;
 			}
 
+			if (wingMesh) {
+				const sweepRad = 1.68 + (yawOffset * Math.PI) / 180;
+				wingMesh.rotation.set(0.02, sweepRad, 0.18);
+			}
+
 			if (wingHolder) {
 				const bank = display.view.bankDeg ?? 0;
 				const screenSign = (display.config.direction ?? 1) < 0 ? -1 : 1;
-				const currentRollRad = ((bank * 0.55 * rollFactor + pitchOffset) * Math.PI) / 180;
+				// In airframe-relative cabin space, the wing is rigidly mounted to the fuselage outside the window.
+				// Aeroelastic wingtip flex: under banking lift loads, the wing flexes subtly (0.04 factor).
+				const aeroFlexDeg = bank * 0.04 * rollFactor;
+				const currentPitchRad = ((pitchOffset + aeroFlexDeg) * Math.PI) / 180;
 
-				// Relative screen-space roll parity derived directly from screenTravelSign
-				wingHolder.rotation.z = -currentRollRad * screenSign;
+				// Rigid cabin airframe lock with aeroelastic lift flex
+				wingHolder.rotation.z = -currentPitchRad * screenSign;
 				wingHolder.scale.set(scale * screenSign, scale, scale);
-				// Unclipped 3D translation inside WebGL coordinates with relative direction & turbulence flutter
+
+				// Locked 3D translation inside cabin reference frame with high-frequency aero-flutter
 				const flutter = (display.view.turbulence?.wingFlutterPx ?? 0) * 0.0015;
 				wingHolder.position.set(
 					1.1 * screenSign + offsetX * 0.005 * screenSign,
