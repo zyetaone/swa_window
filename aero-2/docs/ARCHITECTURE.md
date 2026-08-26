@@ -1,115 +1,108 @@
 # Aero 2 Architecture
 
-Minimal, high-performance architecture for the Aero Dynamic Window.
+Three Raspberry Pi 5s stand side by side behind one window. They exchange
+nothing. Everything below follows from that.
 
-> **MapLibre is the canonical renderer as of 2026-08-25.** See
+> MapLibre is the canonical renderer as of 2026-08-25. See
 > [ADR-005](../../docs/ADR-005-aero-2-threlte-renderer.md).
 
-## 1. Symmetrical Feature-Slice Architecture
+## 1. The shape
 
-Following the **Universal Svelte Architecture** principles (_Co-locate first. Encapsulate features. Abstract last._), the application is organized into two symmetrical feature slices inside `src/lib/`, with server-only tile streaming isolated in `src/lib/server/`:
-
-```text
-settings/ ⚙️ Settings, Config SSOT & Operator/Admin Drawers (<Settings />, settings.svelte.ts, locations.ts, tiles.ts)
-display/  🖥️ Kiosk Display Window (<Display />, <Stage />, <Wing />, <Frame />, display.svelte.ts, world/, flight/, cabin/)
-server/   🌐 Server-only offline tile proxy (tiles.ts)
-```
-
-There is exactly one enforced structural rule: **no import cycles**.
-`node tools/check-cycles.mjs` runs in both `bun run check` and `bun run test`. Cycles are the real failure: they break tree-shaking and produce undefined-at-import-time bugs.
-
----
-
-## 2. Directory Tree
+Two feature slices under `src/lib/`, plus server-only tile streaming:
 
 ```text
-src/
-  ├── lib/
-  │   ├── settings/                 # ⚙️ Settings Slice
-  │   │   ├── Settings.svelte       # 🎛️ Drawer UI (tuning & admin snippets, shared glass styles)
-  │   │   ├── settings.svelte.ts    # Reactive PaneSettings model ($state), locations, tiles & parser
-  │   │   ├── locations.ts          # Location catalog (Hyderabad, Denver)
-  │   │   └── tiles.ts              # Tile endpoints, NAIP coverage, hillshade defaults
-  │   │
-  │   ├── display/                  # 🖥️ Hardware/Kiosk Display product slice
-  │   │   ├── Display.svelte        # 🪟 Parent component for kiosk window (Stage + Wing + Frame + MiniMap + Hud)
-  │   │   ├── display.svelte.ts     # 🎛️ Root AeroDisplay model & Context DI (createDisplay / useDisplay)
-  │   │   │
-  │   │   ├── world/                # 🌍 3D World & Atmosphere (Planet Earth outside)
-  │   │   │   ├── Stage.svelte      # WebGL MapLibre viewport & animation loop (<svelte:boundary>)
-  │   │   │   ├── Ground.svelte     # Base satellite & USGS detail imagery
-  │   │   │   ├── Relief.svelte     # 3D DEM terrain & hillshading
-  │   │   │   ├── Air.svelte        # Dynamic sky, atmosphere & solar lighting blend
-  │   │   │   ├── atmosphere.ts     # Atmosphere bands & continuous altitude blending
-  │   │   │   └── sun.ts            # Solar clock & day/night lighting factor curve
-  │   │   │
-  │   │   ├── flight/               # ✈️ Flight Dynamics & Camera Control
-  │   │   │   ├── orbit.ts          # Orbital trajectory track, heading & climb/descent curve
-  │   │   │   ├── view.ts           # Camera look-at ground target & MapLibre projection
-  │   │   │   ├── MiniMap.svelte    # Top-down orbit minimap inset
-  │   │   │   └── LookControls.svelte # Interactive aiming arrow controls
-  │   │   │
-  │   │   └── cabin/                # 🪟 Aircraft Cabin Experience
-  │   │       ├── Frame.svelte      # Oval window bezel, depth shadow, glass reflection & vignette
-  │   │       ├── Wing.svelte       # Aircraft wing silhouette with strobe navigation light
-  │   │       └── Hud.svelte        # Live FPS, telemetry gauges (altitude, bank, time) & attribution band
-  │   │
-  │   ├── server/                   # 🌐 Server-only tile proxy (imports nothing)
-  │   │   └── tiles.ts              # Path-guarded offline tile server
-  │   │
-  │   └── assets/
-  │       └── favicon.svg
-  │
-  ├── env.ts                        # SvelteKit environment variables
-  │
-  └── routes/
-      ├── +layout.ts                # `ssr = false` — cascades to every route
-      ├── +layout.svelte            # Root layout shell
-      ├── +page.svelte              # Declarative root composition (<Display><Settings /></Display>)
-      ├── layout.css                # Global design tokens & frosted glass CSS variables
-      └── api/tiles/[...path]/
-          └── +server.ts            # Offline tile proxy endpoint (206 Partial Content)
+settings/   the config SSOT and the operator drawers
+display/    the kiosk window — world/, flight/, cabin/, media/
+server/     the offline tile proxy; imports nothing from the two above
 ```
 
----
+**There is deliberately no file listing here.** The previous version of this
+document enumerated the tree, and by the time anyone read it the tree had
+`Relief.svelte` and `Air.svelte` in it — files that were renamed a long time
+ago — while `Clouds`, `Blind`, `RainGlass`, the media stage, the director and
+the whole Cesium subtree were missing. A diagram that has to be hand-updated on
+every rename is a diagram that will be wrong, and a wrong map is worse than no
+map. `ls` is accurate; this file holds the rules `ls` cannot show you.
 
-## 3. Symmetrical Naming Rules
+Naming, so `ls` reads well:
 
-- **`.svelte.ts` means the file holds runes.** `settings.svelte.ts` and `display.svelte.ts` contain Svelte 5 runes (`$state`); pure math files in `flight/` and `world/` are plain `.ts`.
-- **Top-Level Feature Components:** Every feature slice provides a parent component (`Display.svelte`, `Settings.svelte`) that encapsulates its internal sub-components.
-- **Single Source of Truth (`settings.svelte.ts`)**: All live tuning knobs, locations, atmosphere bands, tile definitions, and query param parsing originate here.
-- **Canonical Nomenclature (No Folder Stuttering)**: `world/Stage.svelte` (not `WorldStage`), `cabin/Frame.svelte` (not `CabinFrame`).
+- **`.svelte.ts` means the file holds runes.** `settings.svelte.ts` and
+  `display.svelte.ts` do; the pure maths in `flight/` and `world/` does not.
+- **No folder stuttering.** `world/Stage.svelte`, not `WorldStage.svelte`.
+- **Each slice has one parent component** — `Display.svelte`, `Settings.svelte`
+  — that owns its internals.
 
----
+## 2. The invariants
 
-## 4. Layer Composition and Z-Order
+Seven rules. Five are enforced by something that fails; two are not, and are
+marked so, because an unenforced invariant is an aspiration.
 
-In `Display.svelte` and `+page.svelte`, layers are composed strictly in physical passenger perspective:
+| # | Invariant | Enforced by |
+|---|---|---|
+| 1 | No import cycles | `tools/check-cycles.mjs`, in `check` and `test` |
+| 2 | The world is a pure function of (wall clock, place, `daySeed`) | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt` |
+| 3 | Context DI: `createDisplay()` at the root, `useDisplay()` below | — |
+| 4 | The pure simulation modules import no renderer | `tests/integration.test.ts` |
+| 5 | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts` |
+| 6 | The 3D world runs inside `<svelte:boundary>` | — |
+| 7 | No barrel files (`index.ts`) | — |
+
+**#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded
+randomness anywhere the window can see. Both failure shapes have bitten:
+the director rolled an unseeded 2–5 minute interval AND integrated a clamped
+`dt`, so three panes sat over three different cities; the cloud deck integrated
+frame deltas in three places while its own docstring claimed determinism. The
+fix in both cases was the same — derive from the wall clock, remember nothing.
+Per-pane randomness is allowed only where it is genuinely per-pane and cosmetic
+(cabin audio, rain on this pane's own glass), and that list lives in the test.
+
+**#4 is narrower than it sounds, on purpose.** It does not say "only `world/`
+touches MapLibre" — `flight/MiniMap.svelte` renders a map and needs one. It
+says the *pure* modules stay pure: `flight-path`, `view`, `parallax`,
+`atmosphere`, `sun`, `settings`, `locations`. That layer is what a second
+renderer reuses unchanged, and what the suite can exercise without a GPU. One
+renderer import in any of them and a swappable engine quietly stops being
+swappable. `import type` is exempt — it is erased at build time, which is why
+the Cesium subsystem files can name Cesium types and still cost nothing.
+
+**#6 and #7 are unenforced.** Both were violated within a day of being written
+down: `Clouds` ran its own WebGL context outside the boundary until 2026-08-26,
+so a Three.js context loss took the page down while the identical MapLibre
+failure was caught and offered a retry. If either matters enough to keep, it is
+a three-line source scan alongside the two already in `integration.test.ts`.
+
+## 3. Engines
+
+`config.engine` picks MapLibre or Cesium; `Display.svelte` switches on it.
+Cesium is reached through a runtime `import('cesium')`, so the engine you are
+not running costs nothing to boot. `three` — the cloud deck and the wing — is a
+static import and is always in the main chunk. That asymmetry was not a
+decision; measure it on a Pi before treating it as one.
+
+## 4. Layers, outside in
 
 ```text
-Layer                  Role                                    Z-Index
-──────────────────────────────────────────────────────────────────────
-Stage (MapLibre)       Outside 3D world (terrain, sky, sun)    0 (inside <svelte:boundary>)
-Wing                   Aircraft wing silhouette & strobe light 5
-Frame                  Cabin oval bezel, glass & vignette      10
-Settings (Drawers)     Operator tuning & admin diagnostics    100 (injected via children slot)
+Stage / CesiumStage    the world              inside <svelte:boundary>
+Clouds                 the deck               inside <svelte:boundary>
+Wing                   the airframe           z 5
+RainGlass, Frame, Blind  the cabin            z 10
+MiniMap, Hud           instruments
+Settings               operator drawers       z 100 (a snippet, injected)
 ```
 
----
+Component visibility is gated in exactly one place: the config knob the
+component itself reads. `Display.svelte` briefly had five boolean props
+duplicating those knobs, of which its single caller passed one.
 
-## 5. Architectural Invariants
+## 5. Known-sharp edges
 
-1. **No import cycles** — enforced by `tools/check-cycles.mjs` in `check` and `test` across all 24 modules.
-2. **Deterministic fleet pose** — wall-clock time is the only input to `calculateCameraView()`, so multiple Pis agree without an inter-device protocol. No accumulated `dt`, no per-process epoch drift, no `Math.random()`.
-3. **Context DI** — `createDisplay()` at the root; descendants read `useDisplay()`. Zero prop-drilling.
-4. **Renderer isolation** — only `display/world/` imports MapLibre. `settings/` and `flight/` name no renderer at all.
-5. **Offline tiles** — everything flows through `/api/tiles`, path-guarded, with local PMTiles preferred. `server/tiles.ts` is the only file naming upstream origins.
-6. **Error resilience with `<svelte:boundary>`** — WebGL context loss or shader errors in `<Stage />` are caught by the error boundary, keeping the cabin frame and operator controls alive.
-7. **No barrel files (`index.ts`)** — direct, explicit, tree-shakeable imports across all slices.
-
----
-
-## 6. Known-Sharp Edges
-
-- **Tile URL shape is load-bearing.** Templates must be `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
-- **`raster-opacity: 0` still fetches.** Outside NAIP coverage, `Ground.svelte` **unmounts** the USGS source (`{#if config.detail > 0}`) rather than fading it, preventing hundreds of 404 tile requests.
+- **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
+- **`raster-opacity: 0` still fetches.** Outside NAIP coverage `Ground.svelte`
+  *unmounts* the USGS source rather than fading it, which is what stops several
+  hundred 404s per minute.
+- **A DEM source without `minzoom`/`maxzoom` reads as sea level.** MapLibre
+  assumes z0–22, requests tiles the archive does not hold, never decodes one,
+  and `queryTerrainElevation` returns a literal `0` — indistinguishable from
+  the ocean at the call site. Declare the range every time.
+- **Altitude is metres above ground, and terrain is drawn at `exaggeration`×.**
+  Mixing raw and drawn metres flies the camera through mountains.
