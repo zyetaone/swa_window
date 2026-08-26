@@ -80,12 +80,22 @@ function anchorOf(i: number): number {
 	return Number.isFinite(band.topM) ? (floor + band.topM) / 2 : STRATOSPHERE_ANCHOR_M;
 }
 
-function lerp(a: number, b: number, t: number): number {
+export function lerp(a: number, b: number, t: number): number {
 	return a + (b - a) * t;
 }
 
-function lerpRgb(a: Rgb, b: Rgb, t: number): Rgb {
+/**
+ * Blend two linear-RGB colours. Exported because Sky.svelte had a byte-identical
+ * copy: colour maths that drifts between the band table and the sky dome shows
+ * up as a seam, and a seam across a three-pane wall is the whole product failing.
+ */
+export function lerpRgb(a: Rgb, b: Rgb, t: number): Rgb {
 	return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+}
+
+/** Linear RGB (0..1) to a CSS `rgba()` string. */
+export function cssRgb(c: Rgb, alpha = 1): string {
+	return `rgba(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)}, ${alpha})`;
 }
 
 /** The band whose span contains this altitude — the HUD label, nothing more. */

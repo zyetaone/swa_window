@@ -15,18 +15,9 @@
 	 */
 	import { useDisplay } from '../display.svelte.js';
 	import * as THREE from 'three';
+	import { mulberry32 } from '../flight/flight-path.js';
 
 	const display = useDisplay();
-
-	function mulberry32(seed: number): () => number {
-		let a = seed >>> 0;
-		return () => {
-			a = (a + 0x6d2b79f5) >>> 0;
-			let t = Math.imul(a ^ (a >>> 15), 1 | a);
-			t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-			return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-		};
-	}
 
 	const isVisible = $derived(display.config.clouds);
 	const density = $derived(display.config.cloudDensity ?? 0.75);
@@ -120,13 +111,30 @@
 			// ── 1. Distant Horizon Cloud Systems (40 km - 260 km) ──────────────────
 			const distantCount = Math.round(8 + density * 16);
 			for (let c = 0; c < distantCount; c++) {
-				emitCluster(textures, 40_000, 220_000, 8_000, 16_000, 6, 8, 0.05, rng);
+				emitCluster(textures, 40_000, 220_000, 8_000, 16_000, 6, 8, 0.05, rng, 0);
 			}
 
 			// ── 2. Near & Mid-Deck Cumulus Puffs (2 km - 35 km) ─────────────────────
 			const nearCount = Math.round(5 + density * 10);
 			for (let c = 0; c < nearCount; c++) {
-				emitCluster(textures, 2_500, 32_000, 2_000, 4_500, 4, 6, 0.12, rng);
+				emitCluster(textures, 2_500, 32_000, 2_000, 4_500, 4, 6, 0.12, rng, 0);
+			}
+
+			// ── 3. High-Altitude Cirrus Veil Bands (40 km - 180 km, +3500m) ─────────
+			const cirrusCount = Math.round(4 + density * 6);
+			for (let c = 0; c < cirrusCount; c++) {
+				emitCluster(
+					[textures[2] || textures[0]],
+					40_000,
+					140_000,
+					12_000,
+					22_000,
+					3,
+					5,
+					0.2,
+					rng,
+					3500
+				);
 			}
 		}
 
@@ -139,13 +147,14 @@
 			spriteMin: number,
 			spriteSpan: number,
 			lonelyChance: number,
-			rand: () => number
+			rand: () => number,
+			altOffset: number = 0
 		) {
 			const angle = rand() * Math.PI * 2;
 			const dist = radiusMin + Math.sqrt(rand()) * radiusSpan;
 			const cx = Math.cos(angle) * dist;
 			const cz = Math.sin(angle) * dist;
-			const ch = (rand() - 0.5) * 800;
+			const ch = altOffset + (rand() - 0.5) * 800;
 
 			const isLonely = rand() < lonelyChance;
 			const spriteCount = isLonely ? 1 : spriteMin + Math.floor(rand() * spriteSpan);
@@ -273,8 +282,7 @@
 			 * between frames. Every pane computes the same value for the same
 			 * second, and a pane that reboots rejoins the weather mid-gust.
 			 */
-			const gustPhase =
-				wallSec + 3.6 * Math.sin(wallSec * 0.137) * Math.cos(wallSec * 0.273);
+			const gustPhase = wallSec + 3.6 * Math.sin(wallSec * 0.137) * Math.cos(wallSec * 0.273);
 			const driftPhase = gustPhase * driftSpeed * 0.008;
 			cloudGroup.rotation.y = bearingRad + wallSec * driftSpeed * 0.0006;
 

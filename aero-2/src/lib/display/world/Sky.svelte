@@ -12,23 +12,9 @@
 	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
 	import { duskHorizonMix, duskVaultMix } from './sun.js';
+	import { cssRgb, lerpRgb } from './atmosphere.js';
 
 	const display = useDisplay();
-
-	function lerp(a: number, b: number, t: number): number {
-		return a + (b - a) * t;
-	}
-
-	function lerpRgb(
-		a: readonly [number, number, number],
-		b: readonly [number, number, number],
-		t: number
-	): [number, number, number] {
-		return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-	}
-
-	const rgb = (c: readonly [number, number, number], a = 1) =>
-		`rgba(${Math.round(c[0] * 255)}, ${Math.round(c[1] * 255)}, ${Math.round(c[2] * 255)}, ${a})`;
 
 	const night = $derived(display.night ?? 0);
 	const sunElev = $derived(display.sun.elevationDeg ?? 30);
@@ -170,9 +156,9 @@
 
 <!-- MapLibre 3D Sky Dome, Rayleigh Haze & Horizon Mist -->
 <SkyDome
-	sky-color={rgb(skyTop)}
-	horizon-color={rgb(skyHorizon)}
-	fog-color={rgb(fogColor)}
+	sky-color={cssRgb(skyTop)}
+	horizon-color={cssRgb(skyHorizon)}
+	fog-color={cssRgb(fogColor)}
 	sky-horizon-blend={0.75}
 	horizon-fog-blend={0.82}
 	fog-ground-blend={groundBlend}

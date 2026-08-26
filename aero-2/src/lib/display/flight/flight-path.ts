@@ -312,3 +312,25 @@ export function slotNoise(slot: number, salt = 0): number {
 	h = Math.imul(h ^ (h >>> 13), 3266489909);
 	return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+
+/**
+ * Seeded PRNG (mulberry32) — a deterministic stream from one integer seed.
+ *
+ * Lives beside `daySeed` and `slotNoise` because it is the same primitive
+ * serving the same invariant: three Pi 5s draw one window and exchange nothing,
+ * so anything that looks random has to be a pure function of a shared seed.
+ *
+ * Was copied byte-for-byte into Clouds.svelte and RainGlass.svelte. Two copies
+ * of a PRNG is worse than two copies of most things — if one is ever "improved"
+ * the panes stop agreeing, and the symptom is a wall that looks subtly wrong
+ * rather than anything that throws.
+ */
+export function mulberry32(seed: number): () => number {
+	let a = seed >>> 0;
+	return () => {
+		a = (a + 0x6d2b79f5) >>> 0;
+		let t = Math.imul(a ^ (a >>> 15), 1 | a);
+		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
