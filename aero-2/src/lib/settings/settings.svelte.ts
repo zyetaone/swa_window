@@ -5,7 +5,7 @@
 
 import { Location } from './locations.js';
 import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION, inNaipCoverage } from './tiles.js';
-import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/orbit.js';
+import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
 import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG } from '../display/flight/view.js';
 
 export { Location } from './locations.js';

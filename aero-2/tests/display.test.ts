@@ -1,15 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-	altitudeAt,
-	orbitPose,
-	groundTrack,
 	ORBIT,
 	ORBIT_PERIOD_SEC,
 	BREATHE_PERIOD_SEC,
 	FlightTrack,
 	daySeed,
 	CLIMB_PERIOD_SEC
-} from '#lib/display/flight/orbit.js';
+} from '#lib/display/flight/flight-path.js';
 import { calculateCameraView, FlightCamera } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import {
@@ -20,7 +17,7 @@ import {
 	duskVaultMix
 } from '#lib/display/world/sun.js';
 import { ATMOSPHERE_BANDS } from '#lib/display/world/atmosphere.js';
-import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/orbit.js';
+import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/flight-path.js';
 import { Location, inNaipCoverage, readSettings } from '#lib/settings/settings.svelte.js';
 
 /** Signed shortest difference between two bearings, -180..180. */
@@ -257,7 +254,7 @@ describe('sunPosition', () => {
 
 describe('groundTrack', () => {
 	it('closes the ring so the drawn loop has no seam', () => {
-		const ring = groundTrack(17.385, 78.4867);
+		const ring = new FlightTrack(17.385, 78.4867).groundTrack();
 		expect(ring.length).toBeGreaterThan(3);
 		expect(ring[0]).toEqual(ring[ring.length - 1]);
 	});
@@ -268,25 +265,27 @@ describe('groundTrack', () => {
 		// majorMax 0.25 deg north-south; east-west is aspect x that, then
 		// widened again by 1/cos(lat).
 		const maxLon = (0.25 * ORBIT.aspect) / Math.cos((lat * Math.PI) / 180) + 0.02;
-		for (const [x, y] of groundTrack(lat, lon)) {
+		for (const [x, y] of new FlightTrack(lat, lon).groundTrack()) {
 			expect(Math.abs(y - lat)).toBeLessThan(0.27);
 			expect(Math.abs(x - lon)).toBeLessThan(maxLon);
 		}
 	});
 
 	it('traces the path actually flown, not a re-derived ellipse', () => {
-		// Each sample must equal orbitPose at the same instant, or the drawn loop
+		// Each sample must equal poseAt at the same instant, or the drawn loop
 		// and the flown loop can drift apart without anything failing.
-		const ring = groundTrack(17.385, 78.4867, 0, 8);
+		const hyd = new FlightTrack(17.385, 78.4867);
+		const ring = hyd.groundTrack(0, 8);
 		for (let i = 0; i < 8; i++) {
-			const p = orbitPose((i / 8) * ORBIT_PERIOD_SEC, 17.385, 78.4867);
+			const p = hyd.poseAt((i / 8) * ORBIT_PERIOD_SEC);
 			expect(ring[i][0]).toBeCloseTo(p.lon, 10);
 			expect(ring[i][1]).toBeCloseTo(p.lat, 10);
 		}
 	});
 
 	it('is deterministic, so three panes draw the same loop', () => {
-		expect(groundTrack(39.7392, -104.9903)).toEqual(groundTrack(39.7392, -104.9903));
+		const den = () => new FlightTrack(39.7392, -104.9903).groundTrack();
+		expect(den()).toEqual(den());
 	});
 });
 
@@ -299,8 +298,9 @@ describe('orbit shape', () => {
 	it('returns to its own start after one period', () => {
 		// The real seam test: not that we appended point 0, but that the maths
 		// actually comes back. A non-integer petal count fails this.
-		const a = orbitPose(0, 17.385, 78.4867);
-		const b = orbitPose(ORBIT_PERIOD_SEC, 17.385, 78.4867);
+		const hyd = new FlightTrack(17.385, 78.4867);
+		const a = hyd.poseAt(0);
+		const b = hyd.poseAt(ORBIT_PERIOD_SEC);
 		expect(b.lat).toBeCloseTo(a.lat, 9);
 		expect(b.lon).toBeCloseTo(a.lon, 9);
 	});

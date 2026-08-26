@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { sunPosition, nightFactor } from '#lib/display/world/sun.js';
-import { daySeed } from '#lib/display/flight/orbit.js';
+import { daySeed } from '#lib/display/flight/flight-path.js';
 import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
 import { remoteTileUrl } from '#lib/server/tiles.js';

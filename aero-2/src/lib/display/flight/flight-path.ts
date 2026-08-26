@@ -293,31 +293,3 @@ export class FlightTrack {
 		return ring;
 	}
 }
-
-export function orbitPose(
-	wallSec: number,
-	centerLat: number,
-	centerLon: number,
-	floorM: number = ALTITUDE_FLOOR_M,
-	ceilingM: number = ALTITUDE_CEILING_M,
-	direction: 1 | -1 = 1
-): OrbitPose {
-	return new FlightTrack(centerLat, centerLon, floorM, ceilingM).poseAt(wallSec);
-}
-
-export function altitudeAt(
-	wallSec: number,
-	floorM: number = ALTITUDE_FLOOR_M,
-	ceilingM: number = ALTITUDE_CEILING_M
-): number {
-	return new FlightTrack(0, 0, floorM, ceilingM).altitudeAt(wallSec);
-}
-
-export function groundTrack(
-	centerLat: number,
-	centerLon: number,
-	wallSec = 0,
-	samples = 240
-): [number, number][] {
-	return new FlightTrack(centerLat, centerLon).groundTrack(wallSec, samples);
-}
