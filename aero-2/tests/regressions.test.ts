@@ -218,3 +218,19 @@ describe('cloud sprites', () => {
 		expect(stretched, 'freely-rotating cloud sprites must be square').toEqual([]);
 	});
 });
+
+describe('fog mapping', () => {
+	/**
+	 * `fog-ground-blend` was `clamp(fogDensity * 2400, 0.65, 0.95)`. Four of the
+	 * five bands multiplied out below 0.65, so they were all pinned to the same
+	 * value and only the mid deck rose above it — near-constant haze at every
+	 * altitude. A high floor here silently erases the whole band model.
+	 */
+	it('does not floor the fog blend into permanent haze', () => {
+		const src = findSource('Sky.svelte');
+		const floors = [...src.matchAll(/Math\.max\(\s*([0-9.]+)\s*,/g)]
+			.map((m) => Number(m[1]))
+			.filter((n) => n > 0.4 && n < 1);
+		expect(floors, 'a fog floor above 0.4 hides the altitude bands').toEqual([]);
+	});
+});

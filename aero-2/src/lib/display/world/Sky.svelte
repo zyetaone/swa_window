@@ -69,9 +69,29 @@
 		return lerpRgb(blendedDay, nightFog, night);
 	});
 
-	const groundBlend = $derived(
-		Math.max(0.65, Math.min(0.95, display.atmosphere.fogDensity * 2400))
-	);
+	/**
+	 * Fog thickness, mapped from the band's own `fogDensity`.
+	 *
+	 * This was `clamp(fogDensity * 2400, 0.65, 0.95)`, and the floor was doing
+	 * almost all the work: four of the five bands multiplied out BELOW 0.65
+	 * (ground 0.24, haze 0.60, cirrus 0.48, stratosphere 0.19), so they were all
+	 * forced to the same 0.65 and only midDeck ever exceeded it. The window sat
+	 * in near-constant haze whatever the altitude, and the band model — the
+	 * thing that is supposed to make climbing feel like climbing — could not be
+	 * seen.
+	 *
+	 * Now the band's density is mapped across the full range with no floor, so
+	 * ground reads 0.22, midDeck still peaks at 0.86, and the stratosphere
+	 * clears to 0.18. midDeck stays the thickest band on purpose: that is where
+	 * the cloud deck lives.
+	 */
+	const FOG_MIN_DENSITY = 0.8e-4;
+	const FOG_MAX_DENSITY = 4.0e-4;
+	const groundBlend = $derived.by(() => {
+		const t =
+			(display.atmosphere.fogDensity - FOG_MIN_DENSITY) / (FOG_MAX_DENSITY - FOG_MIN_DENSITY);
+		return 0.18 + 0.68 * Math.max(0, Math.min(1, t));
+	});
 
 	// ── 2. Celestial Starfield & Solar Radiance ──────────────────────────────
 	interface Star {
@@ -151,7 +171,7 @@
 	style:--dusk={duskFactor}
 	style:--sun-x="{sunScreenX}%"
 	style:--view-pitch="{pitch}deg"
-	style:--view-bank="{bank * 0.4}deg"
+	style:--view-bank="{-bank}deg"
 	aria-hidden="true"
 >
 	<!-- Golden Hour Solar Flare Radiance -->

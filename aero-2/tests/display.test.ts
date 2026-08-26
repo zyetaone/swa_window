@@ -664,3 +664,47 @@ describe('feature locations are crossed, not orbited', () => {
 		expect(Math.abs(off(Location.byId('denver')) - 90)).toBeGreaterThan(1);
 	});
 });
+
+describe('atmosphere reads as altitude, not constant haze', () => {
+	/**
+	 * The Sky maps a band's `fogDensity` to MapLibre's `fog-ground-blend`. That
+	 * mapping was `clamp(density * 2400, 0.65, 0.95)`, and the FLOOR did almost
+	 * all the work: ground multiplied out to 0.24, haze 0.60, cirrus 0.48 and
+	 * stratosphere 0.19 — all below 0.65, so all pinned to the same value. Only
+	 * midDeck ever rose above it. The window sat in near-constant haze at every
+	 * altitude, which is exactly the symptom of a band model that cannot be seen.
+	 *
+	 * This asserts the SHAPE the Sky depends on, at the band level: the bands
+	 * must span a real range, and thin out above the deck.
+	 */
+	const byId = (id: string) => {
+		const band = ATMOSPHERE_BANDS.find((b) => b.id === id);
+		if (!band) throw new Error(`no band ${id}`);
+		return band;
+	};
+
+	it('is clearest at ground and in the stratosphere, thickest at the deck', () => {
+		const ground = byId('ground').fogDensity;
+		const deck = byId('midDeck').fogDensity;
+		const strato = byId('stratosphere').fogDensity;
+
+		expect(deck).toBeGreaterThan(ground);
+		expect(deck).toBeGreaterThan(strato);
+		// and the top of the sky is the clearest air of all
+		expect(strato).toBeLessThanOrEqual(ground);
+	});
+
+	it('spans enough range to be visible once mapped', () => {
+		const densities = ATMOSPHERE_BANDS.map((b) => b.fogDensity);
+		const min = Math.min(...densities);
+		const max = Math.max(...densities);
+		// A 5x spread. If this collapses, every altitude looks the same again.
+		expect(max / min).toBeGreaterThan(3);
+	});
+
+	it('thins out again above the cloud deck', () => {
+		// Climbing THROUGH the deck must clear, not keep thickening.
+		expect(byId('cirrus').fogDensity).toBeLessThan(byId('midDeck').fogDensity);
+		expect(byId('stratosphere').fogDensity).toBeLessThan(byId('cirrus').fogDensity);
+	});
+});
