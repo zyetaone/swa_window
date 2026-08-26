@@ -62,8 +62,8 @@
 					<span>Pitch ({Math.round(config.pitchDeg)}°)</span>
 					<input
 						type="range"
-						min="-89"
-						max="30"
+						min={KNOB_RANGE.pitchDeg[0]}
+						max={KNOB_RANGE.pitchDeg[1]}
 						step="1"
 						value={config.pitchDeg}
 						oninput={(e) => config.set('pitchDeg', e.currentTarget.valueAsNumber)}
@@ -73,8 +73,8 @@
 					<span>Azimuth ({Math.round(config.azimuthDeg)}°)</span>
 					<input
 						type="range"
-						min="-180"
-						max="180"
+						min={KNOB_RANGE.azimuthDeg[0]}
+						max={KNOB_RANGE.azimuthDeg[1]}
 						step="5"
 						value={config.azimuthDeg}
 						oninput={(e) => config.set('azimuthDeg', e.currentTarget.valueAsNumber)}
@@ -84,8 +84,8 @@
 					<span>Flight Speed Multiplier ({config.speed.toFixed(1)}x)</span>
 					<input
 						type="range"
-						min="0.2"
-						max="25.0"
+						min={KNOB_RANGE.speed[0]}
+						max={KNOB_RANGE.speed[1]}
 						step="0.1"
 						value={config.speed}
 						oninput={(e) => config.set('speed', e.currentTarget.valueAsNumber)}
@@ -179,8 +179,8 @@
 					<span>Wing Scale ({config.wingScale.toFixed(2)}x)</span>
 					<input
 						type="range"
-						min="0.3"
-						max="3.0"
+						min={KNOB_RANGE.wingScale[0]}
+						max={KNOB_RANGE.wingScale[1]}
 						step="0.05"
 						value={config.wingScale}
 						oninput={(e) => config.set('wingScale', e.currentTarget.valueAsNumber)}
@@ -190,8 +190,8 @@
 					<span>Horizontal Offset X ({Math.round(config.wingOffsetX)} px)</span>
 					<input
 						type="range"
-						min="-500"
-						max="500"
+						min={KNOB_RANGE.wingOffsetX[0]}
+						max={KNOB_RANGE.wingOffsetX[1]}
 						step="5"
 						value={config.wingOffsetX}
 						oninput={(e) => config.set('wingOffsetX', e.currentTarget.valueAsNumber)}
@@ -201,8 +201,8 @@
 					<span>Vertical Offset Y ({Math.round(config.wingOffsetY)} px)</span>
 					<input
 						type="range"
-						min="-500"
-						max="500"
+						min={KNOB_RANGE.wingOffsetY[0]}
+						max={KNOB_RANGE.wingOffsetY[1]}
 						step="5"
 						value={config.wingOffsetY}
 						oninput={(e) => config.set('wingOffsetY', e.currentTarget.valueAsNumber)}
@@ -212,8 +212,8 @@
 					<span>Wing Pitch Offset ({config.wingPitchDeg.toFixed(1)}°)</span>
 					<input
 						type="range"
-						min="-45"
-						max="45"
+						min={KNOB_RANGE.wingPitchDeg[0]}
+						max={KNOB_RANGE.wingPitchDeg[1]}
 						step="0.5"
 						value={config.wingPitchDeg}
 						oninput={(e) => config.set('wingPitchDeg', e.currentTarget.valueAsNumber)}
@@ -223,8 +223,8 @@
 					<span>Banking Roll Response ({config.wingRollFactor.toFixed(2)}x)</span>
 					<input
 						type="range"
-						min="0"
-						max="3.0"
+						min={KNOB_RANGE.wingRollFactor[0]}
+						max={KNOB_RANGE.wingRollFactor[1]}
 						step="0.1"
 						value={config.wingRollFactor}
 						oninput={(e) => config.set('wingRollFactor', e.currentTarget.valueAsNumber)}
@@ -238,8 +238,8 @@
 					<span>High-Res Detail ({Math.round(config.detail * 100)}%)</span>
 					<input
 						type="range"
-						min="0"
-						max="1"
+						min={KNOB_RANGE.detail[0]}
+						max={KNOB_RANGE.detail[1]}
 						step="0.05"
 						value={config.detail}
 						oninput={(e) => config.set('detail', e.currentTarget.valueAsNumber)}
@@ -249,8 +249,8 @@
 					<span>Hillshade ({Math.round(config.shade * 100)}%)</span>
 					<input
 						type="range"
-						min="0"
-						max="1"
+						min={KNOB_RANGE.shade[0]}
+						max={KNOB_RANGE.shade[1]}
 						step="0.05"
 						value={config.shade}
 						oninput={(e) => config.set('shade', e.currentTarget.valueAsNumber)}
@@ -260,8 +260,8 @@
 					<span>3D Terrain Exaggeration ({config.exaggeration.toFixed(2)}x)</span>
 					<input
 						type="range"
-						min="0.2"
-						max="6.0"
+						min={KNOB_RANGE.exaggeration[0]}
+						max={KNOB_RANGE.exaggeration[1]}
 						step="0.05"
 						value={config.exaggeration}
 						oninput={(e) => config.set('exaggeration', e.currentTarget.valueAsNumber)}
@@ -291,8 +291,8 @@
 					<span>Cloud Density ({Math.round(config.cloudDensity * 100)}%)</span>
 					<input
 						type="range"
-						min="0"
-						max="1"
+						min={KNOB_RANGE.cloudDensity[0]}
+						max={KNOB_RANGE.cloudDensity[1]}
 						step="0.05"
 						value={config.cloudDensity}
 						oninput={(e) => config.set('cloudDensity', e.currentTarget.valueAsNumber)}
@@ -302,8 +302,8 @@
 					<span>Drift Speed ({config.cloudSpeed.toFixed(1)}x)</span>
 					<input
 						type="range"
-						min="0"
-						max="5.0"
+						min={KNOB_RANGE.cloudSpeed[0]}
+						max={KNOB_RANGE.cloudSpeed[1]}
 						step="0.1"
 						value={config.cloudSpeed}
 						oninput={(e) => config.set('cloudSpeed', e.currentTarget.valueAsNumber)}
@@ -313,8 +313,8 @@
 					<span>Deck Altitude ({Math.round(config.cloudAltitudeM).toLocaleString()} m)</span>
 					<input
 						type="range"
-						min="500"
-						max="12000"
+						min={KNOB_RANGE.cloudAltitudeM[0]}
+						max={KNOB_RANGE.cloudAltitudeM[1]}
 						step="250"
 						value={config.cloudAltitudeM}
 						oninput={(e) => config.set('cloudAltitudeM', e.currentTarget.valueAsNumber)}
@@ -324,13 +324,106 @@
 					<span>Cloud Opacity ({Math.round(config.cloudOpacity * 100)}%)</span>
 					<input
 						type="range"
-						min="0.1"
-						max="1.0"
+						min={KNOB_RANGE.cloudOpacity[0]}
+						max={KNOB_RANGE.cloudOpacity[1]}
 						step="0.05"
 						value={config.cloudOpacity}
 						oninput={(e) => config.set('cloudOpacity', e.currentTarget.valueAsNumber)}
 					/>
 				</label>
+			</section>
+
+			<section class="section">
+				<h4>Weather & Environment</h4>
+				<div class="location-grid">
+					{#each ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const as w}
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.weather === w}
+							onclick={() => (config.weather = w)}
+						>
+							{w.toUpperCase()}
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<section class="section">
+				<h4>Cabin Chrome & Ambient Audio</h4>
+				<label class="checkbox-field">
+					<input
+						type="checkbox"
+						checked={config.blindOpen}
+						onchange={(e) => (config.blindOpen = e.currentTarget.checked)}
+					/>
+					<span>Window Blind Open</span>
+				</label>
+				<label class="checkbox-field">
+					<input
+						type="checkbox"
+						checked={config.audioEnabled}
+						onchange={(e) => (config.audioEnabled = e.currentTarget.checked)}
+					/>
+					<span>Cabin Engine Soundscape</span>
+				</label>
+				{#if config.audioEnabled}
+					<label class="field">
+						<span>Engine Volume ({Math.round(config.audioVolume * 100)}%)</span>
+						<input
+							type="range"
+							min="0"
+							max="1"
+							step="0.05"
+							value={config.audioVolume}
+							oninput={(e) => (config.audioVolume = e.currentTarget.valueAsNumber)}
+						/>
+					</label>
+				{/if}
+			</section>
+
+			<section class="section">
+				<h4>Multi-Pi Wall Role & Display Mode</h4>
+				<div class="location-grid">
+					{#each ['solo', 'left', 'center', 'right'] as const as role}
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.fleetRole === role}
+							onclick={() => (config.fleetRole = role)}
+						>
+							{role.toUpperCase()}
+						</button>
+					{/each}
+				</div>
+				<div class="location-grid" style="margin-top: 8px;">
+					{#each ['flight', 'video', 'screensaver', 'standby'] as const as mode}
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.displayMode === mode}
+							onclick={() => (config.displayMode = mode)}
+						>
+							{mode.toUpperCase()}
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<section class="section">
+				<h4>3D Geospatial Engine</h4>
+				<div class="location-grid">
+					{#each ['maplibre', 'cesium'] as const as eng}
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.engine === eng}
+							onclick={() => (config.engine = eng)}
+						>
+							{eng === 'maplibre' ? 'MAPLIBRE (LEAN)' : 'CESIUM (WGS84)'}
+						</button>
+					{/each}
+				</div>
 			</section>
 
 			<div class="actions">

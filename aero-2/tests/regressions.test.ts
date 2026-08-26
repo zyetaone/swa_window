@@ -234,3 +234,42 @@ describe('fog mapping', () => {
 		expect(floors, 'a fog floor above 0.4 hides the altitude bands').toEqual([]);
 	});
 });
+
+describe('engine decoupling', () => {
+	it('supports switching 3D engines in PaneSettings', () => {
+		const p = new PaneSettings();
+		expect(p.engine).toBe('maplibre');
+
+		p.engine = 'cesium';
+		expect(p.engine).toBe('cesium');
+
+		p.reset();
+		expect(p.engine).toBe('maplibre');
+	});
+});
+
+describe('the clamp table is the only range', () => {
+	/**
+	 * Four sliders carried hardcoded bounds that disagreed with KNOB_RANGE:
+	 * speed [0.2,25] vs [0.1,25], exaggeration [0.2,6] vs [0.1,6], and both
+	 * wing offsets [-500,500] vs [-800,800]. KNOB_RANGE is what `config.set`
+	 * clamps to, so the UI simply could not reach legal values -- a settings
+	 * table that is the SSOT for clamping but not for the control is only half
+	 * an SSOT.
+	 *
+	 * Scans for a literal min=/max= on any input whose oninput calls
+	 * config.set(), rather than checking the four known ones, so a fifth
+	 * cannot be added with hardcoded bounds.
+	 */
+	it('no slider hardcodes bounds for a knob KNOB_RANGE already defines', () => {
+		const src = readFileSync('src/lib/settings/Settings.svelte', 'utf8');
+		const offenders: string[] = [];
+		const inputs = src.match(/<input\b[\s\S]{0,500}?\/>/g) ?? [];
+		for (const input of inputs) {
+			const key = /config\.set\('(\w+)'/.exec(input)?.[1];
+			if (!key || !(key in KNOB_RANGE)) continue;
+			if (/min="[-\d.]+"/.test(input) || /max="[-\d.]+"/.test(input)) offenders.push(key);
+		}
+		expect(offenders, 'bind min/max to KNOB_RANGE instead of retyping them').toEqual([]);
+	});
+});
