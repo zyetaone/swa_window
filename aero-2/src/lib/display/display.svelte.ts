@@ -63,7 +63,6 @@ export class AeroDisplay {
 			this.#lastTickTime = now;
 			this.#frameCount++;
 
-
 			if (now - this.#lastFpsUpdate >= 500) {
 				this.fps = Math.round((this.#frameCount * 1000) / (now - this.#lastFpsUpdate));
 				this.frameTimeMs = Number(delta.toFixed(1));

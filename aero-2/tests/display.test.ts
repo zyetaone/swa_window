@@ -774,3 +774,43 @@ describe('sky colour', () => {
 		}
 	});
 });
+
+describe('mean ground elevation is not a terrain clearance', () => {
+	/**
+	 * `place.groundElevationM` is one number for a whole region. Measured against
+	 * the real terrarium DEM across each orbit (+-0.3 deg at z9), mean + floor
+	 * sits BELOW the local peak at five of the eleven locations — Las Vegas by
+	 * 2072 m, Dubai by 1119 m, Mumbai by 990 m.
+	 *
+	 * The MapLibre camera is safe because it asks the renderer for the ground
+	 * under the aircraft and uses the mean only as a floor. This test exists so
+	 * that if anyone reverts to `aglM + groundElevationM`, or writes a second
+	 * engine that does (the Cesium path currently does), the reason is on record
+	 * rather than rediscovered from a screenshot of a hillside.
+	 */
+	it('records the locations where mean + floor is below real terrain', () => {
+		// Peaks measured from the DEM, not looked up — see the commit for method.
+		const measuredPeakM: Record<string, number> = {
+			mumbai: 1500,
+			dubai: 1724,
+			las_vegas: 3592,
+			phoenix: 2373,
+			ocean: 1213
+		};
+
+		for (const [id, peak] of Object.entries(measuredPeakM)) {
+			const place = Location.byId(id);
+			const meanBased = place.groundElevationM + place.climbFloorM;
+			expect(meanBased, `${id}: mean+floor should be known-unsafe`).toBeLessThan(peak);
+		}
+	});
+
+	it('the places we call high-terrain do clear their own peaks', () => {
+		// Denver and the Himalayas carry floors chosen for exactly this.
+		const denver = Location.byId('denver');
+		expect(denver.groundElevationM + denver.climbFloorM).toBeGreaterThan(3284);
+
+		const him = Location.byId('himalayas');
+		expect(him.groundElevationM + him.climbFloorM).toBeGreaterThan(8704);
+	});
+});

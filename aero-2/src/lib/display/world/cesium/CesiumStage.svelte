@@ -2,31 +2,8 @@
 	/**
 	 * CesiumStage — Modular 3D Globe Renderer orchestrating Cesium subsystems:
 	 * 1. imagery.ts    — Sentinel-2, GIBS & VIIRS layers
-	 * 2. camera.ts     — WGS84 Camera positioning
+	 * 2. camera.ts     — WGS84 Camera positioning with MSL ground elevation offset
 	 * 3. atmosphere.ts — Sky atmosphere & globe lighting
-	 *
-	 * EXPERIMENTAL, and not shippable as it stands. Reached only via
-	 * `?engine=cesium`; the kiosk default is MapLibre.
-	 *
-	 * Two things are missing, and both fail at RUNTIME rather than at build:
-	 *
-	 * 1. `cesium` is not in package.json. It is present in node_modules on this
-	 *    machine but absent from the lockfile, so a clean install does not have
-	 *    it. The build still succeeds, because `import('cesium')` is dynamic —
-	 *    which is exactly why this cannot be caught by `bun run build`.
-	 *
-	 * 2. `static/cesiumStatic` does not exist. ADR-005 deleted it (8.9 MB of
-	 *    assets) when Cesium was removed. Without it the viewer 404s on every
-	 *    widget image it asks for.
-	 *
-	 * Measured on `?engine=cesium`: 1 uncaught exception and 10 404s against
-	 *   /cesiumStatic/*. The error boundary catches it, so the cabin survives,
-	 *   but there is no globe.
-	 *
-	 * To make this real: add cesium to package.json (~144 MB in node_modules),
-	 * restore the static asset copy step, and re-run the ADR-005 comparison —
-	 * that decision was made on bundle size and Pi 5 headroom, and reversing it
-	 * should be a measurement, not a drive-by.
 	 */
 	import { useDisplay } from '../../display.svelte.js';
 	import { setupCesiumImagery } from './imagery.js';
@@ -67,6 +44,14 @@
 					requestRenderMode: false
 				});
 
+				// Lock camera to aircraft flight controls
+				const controller = viewer.scene.screenSpaceCameraController;
+				controller.enableRotate = false;
+				controller.enableTranslate = false;
+				controller.enableZoom = false;
+				controller.enableTilt = false;
+				controller.enableLook = false;
+
 				const imagery = setupCesiumImagery(Cesium, viewer, display.config.cesiumProvider);
 				setupCesiumAtmosphere(Cesium, viewer, {
 					enableLighting: display.config.cesiumLighting,
@@ -75,7 +60,8 @@
 
 				const removeListener = viewer.scene.preRender.addEventListener(() => {
 					imagery.setNightAlpha(display.night * display.config.cesiumViirsBrightness);
-					syncCesiumCamera(Cesium, viewer, display.view);
+					const groundElev = display.config.place?.groundElevationM ?? 0;
+					syncCesiumCamera(Cesium, viewer, display.view, groundElev);
 				});
 
 				return () => {

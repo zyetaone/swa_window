@@ -16,7 +16,11 @@ import { LOCATIONS } from '../src/lib/settings/locations.js';
  */
 describe('the destination is derived, not decided', () => {
 	it('three independent panes agree at every second', () => {
-		const panes = [new FlightDirector(createSettings()), new FlightDirector(createSettings()), new FlightDirector(createSettings())];
+		const panes = [
+			new FlightDirector(createSettings()),
+			new FlightDirector(createSettings()),
+			new FlightDirector(createSettings())
+		];
 
 		// A full day, sampled off the slot grid so boundaries are crossed
 		// mid-stride rather than landed on exactly.

@@ -12,7 +12,15 @@
  * one is written against a failure that actually happened.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { existsSync, openSync, readSync, closeSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+	existsSync,
+	openSync,
+	readSync,
+	closeSync,
+	readFileSync,
+	readdirSync,
+	statSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
@@ -171,7 +179,6 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 		}
 		expect(offenders, 'seed from daySeed, or add to ALLOWED with a reason').toEqual([]);
 	});
-
 });
 
 // ── 2. The elevation pipeline ────────────────────────────────────────────────
@@ -186,7 +193,8 @@ function readPmtilesHeader(path: string) {
 	const buf = Buffer.alloc(127);
 	readSync(fd, buf, 0, 127, 0);
 	closeSync(fd);
-	if (buf.subarray(0, 7).toString() !== 'PMTiles') throw new Error(`${path} is not a PMTiles archive`);
+	if (buf.subarray(0, 7).toString() !== 'PMTiles')
+		throw new Error(`${path} is not a PMTiles archive`);
 	return {
 		version: buf.readUInt8(7),
 		minzoom: buf.readUInt8(100),

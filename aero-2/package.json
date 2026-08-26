@@ -29,6 +29,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@types/three": "^0.185.4",
 		"happy-dom": "^20.11.6",
+		"pngjs": "^7.0.0",
 		"prettier": "^3.9.6",
 		"prettier-plugin-svelte": "^4.1.1",
 		"svelte": "^5.56.10",
