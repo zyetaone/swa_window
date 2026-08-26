@@ -3,7 +3,13 @@ import type { RequestHandler } from './$types';
 import os from 'node:os';
 
 /**
- * GET /api/status — returns device telemetry, hostname, and all active local IPv4 LAN addresses.
+ * GET /api/status — kiosk telemetry for the /admin cockpit.
+ *
+ * Unauthenticated, and answers anything that can reach the port. It used to
+ * also return `arch`, `platform`, `loadAvg` and `allIps` — the last of which
+ * included loopback and any internal interface. Nothing rendered them; they
+ * were a device fingerprint handed to a client LAN for free. What is left is
+ * what /admin actually displays.
  */
 export const GET: RequestHandler = () => {
 	const interfaces = os.networkInterfaces();
@@ -28,15 +34,12 @@ export const GET: RequestHandler = () => {
 	return json({
 		online: true,
 		hostname: os.hostname(),
-		platform: os.platform(),
-		arch: os.arch(),
 		uptimeSec: os.uptime(),
-		loadAvg: os.loadavg(),
 		freeMemBytes: os.freemem(),
 		totalMemBytes: os.totalmem(),
 		lanIps,
-		allIps: ipAddresses,
 		primaryLanIp: lanIps[0]?.address ?? 'localhost',
-		port: 5173
+		// server.ts reads PORT; hardcoding 5173 here made the two disagree.
+		port: Number(process.env.PORT ?? 5173)
 	});
 };

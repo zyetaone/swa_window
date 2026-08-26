@@ -21,7 +21,6 @@
 	interface NetworkStatus {
 		online: boolean;
 		hostname: string;
-		platform: string;
 		uptimeSec: number;
 		freeMemBytes: number;
 		totalMemBytes: number;

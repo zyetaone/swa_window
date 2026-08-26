@@ -81,25 +81,25 @@
 					<tr>
 						<td><kbd>S</kbd></td>
 						<td>Settings Drawer</td>
-						<td>Opens the tuning drawer with Scene Presets and camera controls</td>
+						<td>Opens the tuning drawer with scene presets and camera controls</td>
 					</tr>
 					<tr>
 						<td><kbd>A</kbd></td>
-						<td>Admin Diagnostics</td>
-						<td>Displays local IPv4 network interfaces, system telemetry, and OTA status</td>
+						<td>Diagnostics Overlay</td>
+						<td>Shows the in-window telemetry overlay</td>
 					</tr>
 					<tr>
-						<td><kbd>Space</kbd></td>
+						<td><kbd>H</kbd></td>
+						<td>Flight HUD</td>
+						<td>Toggles the altitude, heading and destination readout</td>
+					</tr>
+					<tr>
+						<td><kbd>B</kbd></td>
 						<td>Blind Toggle</td>
-						<td>Pulls down or raises the circadian window blind</td>
+						<td>Pulls down or raises the window blind</td>
 					</tr>
 					<tr>
-						<td><kbd>N</kbd></td>
-						<td>Advance Destination</td>
-						<td>Smoothly advances the aircraft to the next catalog destination</td>
-					</tr>
-					<tr>
-						<td><kbd>R</kbd></td>
+						<td><kbd>R</kbd> / <kbd>Space</kbd></td>
 						<td>Reverse Orbit</td>
 						<td>Reverses flight direction and mirrors the 3D aircraft wing</td>
 					</tr>
