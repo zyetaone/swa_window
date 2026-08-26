@@ -290,7 +290,7 @@ function readPmtilesHeader(path: string) {
  * CI is legible and a skip on a workstation is a prompt to build the archive.
  */
 describe('the packed DEM covers every location that needs it', () => {
-	const ARCHIVE = 'data/tiles/terrain.pmtiles';
+	const ARCHIVE = 'static/tiles/terrain.pmtiles';
 	const present = existsSync(ARCHIVE);
 
 	it.skipIf(!present)('reaches every location in the catalog', () => {

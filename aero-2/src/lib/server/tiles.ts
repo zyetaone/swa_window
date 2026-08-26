@@ -32,10 +32,10 @@ export function resolveTileDir(
 	const piPath = '/opt/zyeta-aero/tiles';
 	if (piDirExists(piPath)) return piPath;
 
-	const local = resolve(cwd, 'data/tiles');
+	const local = resolve(cwd, 'static/tiles');
 	if (dirHasContent(local)) return local;
 
-	const parent = resolve(cwd, '../data/tiles');
+	const parent = resolve(cwd, '../static/tiles');
 	if (dirHasContent(parent)) return parent;
 
 	return local;

@@ -22,7 +22,7 @@ describe('resolveTileDir', () => {
 	});
 
 	it('resolves a relative TILE_DIR against cwd', () => {
-		expect(resolveTileDir({ TILE_DIR: 'data/tiles' }, CWD, () => false)).toBe(`${CWD}/data/tiles`);
+		expect(resolveTileDir({ TILE_DIR: 'static/tiles' }, CWD, () => false)).toBe(`${CWD}/static/tiles`);
 	});
 
 	it('picks the Pi install path when it exists', () => {
@@ -31,8 +31,8 @@ describe('resolveTileDir', () => {
 		);
 	});
 
-	it('falls back to local data/tiles when it has layer subdirectories', () => {
-		const local = `${CWD}/data/tiles`;
+	it('falls back to local static/tiles when it has layer subdirectories', () => {
+		const local = `${CWD}/static/tiles`;
 		expect(
 			resolveTileDir(
 				{},
@@ -43,8 +43,8 @@ describe('resolveTileDir', () => {
 		).toBe(local);
 	});
 
-	it('falls back to parent ../data/tiles when it has content and local does not', () => {
-		const parent = resolve(CWD, '../data/tiles');
+	it('falls back to parent ../static/tiles when it has content and local does not', () => {
+		const parent = resolve(CWD, '../static/tiles');
 		expect(
 			resolveTileDir(
 				{},
@@ -55,7 +55,7 @@ describe('resolveTileDir', () => {
 		).toBe(parent);
 	});
 
-	it('defaults to local data/tiles when nothing exists yet', () => {
+	it('defaults to local static/tiles when nothing exists yet', () => {
 		expect(
 			resolveTileDir(
 				{},
@@ -63,7 +63,7 @@ describe('resolveTileDir', () => {
 				() => false,
 				() => false
 			)
-		).toBe(`${CWD}/data/tiles`);
+		).toBe(`${CWD}/static/tiles`);
 	});
 });
 

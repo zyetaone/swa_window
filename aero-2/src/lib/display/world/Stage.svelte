@@ -79,7 +79,7 @@
 			 * mountain. Dubai survived only because a 5 m mean is still 12 m when
 			 * exaggerated.
 			 */
-			const exaggeration = display.config.exaggeration ?? 1;
+			const exaggeration = display.config.exaggeration;
 			const meanGroundM = display.config.place.groundElevationM * exaggeration;
 			const groundAtPlaneM = Math.max(meanGroundM, m.queryTerrainElevation(planeAt) ?? 0);
 			const groundAtTargetM = Math.max(meanGroundM, m.queryTerrainElevation(targetAt) ?? 0);

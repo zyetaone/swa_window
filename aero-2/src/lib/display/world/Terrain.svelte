@@ -77,7 +77,7 @@
 
 	const sunBearing = $derived(sunElev > 0 ? display.sun.azimuthDeg : SUNSET_HOLD_BEARING);
 	const sunAltitude = $derived(Math.max(5, Math.min(85, sunElev)));
-	const exaggeration = $derived(display.config.exaggeration ?? 2.5);
+	const exaggeration = $derived(display.config.exaggeration);
 
 	// Circadian hillshade highlights: warm sunlight in day -> amber dusk -> deep starlight navy at night (never harsh #ffffff)
 	const hillshadeHighlightColor = $derived.by(() => {

@@ -92,7 +92,7 @@ export class PaneSettings {
 	 */
 	clockOffsetH = $state<number>(0);
 	shade = $state<number>(HILLSHADE_DEFAULT);
-	/** 3D Terrain elevation mesh exaggeration (default 2.5x). */
+	/** 3D terrain mesh exaggeration. See TERRAIN_EXAGGERATION — 1.0 is the datum, not a default. */
 	exaggeration = $state<number>(TERRAIN_EXAGGERATION);
 	/** Optional hypsometric color relief tint layer. */
 	colorRelief = $state<boolean>(false);
