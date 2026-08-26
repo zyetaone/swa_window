@@ -6,7 +6,8 @@
 	 */
 	import { useDisplay } from '../display/display.svelte.js';
 	import { Location } from './locations.js';
-	import { KNOB_RANGE } from './settings.svelte.js';
+	import { KNOB_RANGE, SCENE_PRESETS } from './settings.svelte.js';
+	import Knob from './Knob.svelte';
 
 	interface Props {
 		showSettings?: boolean;
@@ -76,90 +77,70 @@
 
 		<div class="content">
 			<section class="section">
+				<h4>Scene Composition Presets</h4>
+				<div class="preset-grid">
+					{#each SCENE_PRESETS as preset}
+						<button type="button" class="preset-card" onclick={() => config.applyPreset(preset)}>
+							<div class="preset-top">
+								<span class="preset-icon">{preset.icon}</span>
+								<span class="preset-badge">{preset.badge}</span>
+							</div>
+							<div class="preset-title">{preset.name}</div>
+							<div class="preset-desc">{preset.description}</div>
+						</button>
+					{/each}
+				</div>
+			</section>
+
+			<section class="section">
 				<h4>Camera View</h4>
-				<label class="field">
-					<span>Pitch ({Math.round(config.pitchDeg)}°)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.pitchDeg[0]}
-						max={KNOB_RANGE.pitchDeg[1]}
-						step="1"
-						value={config.pitchDeg}
-						oninput={(e) => config.set('pitchDeg', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Azimuth ({Math.round(config.azimuthDeg)}°)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.azimuthDeg[0]}
-						max={KNOB_RANGE.azimuthDeg[1]}
-						step="5"
-						value={config.azimuthDeg}
-						oninput={(e) => config.set('azimuthDeg', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Flight Speed Multiplier ({config.speed.toFixed(1)}x)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.speed[0]}
-						max={KNOB_RANGE.speed[1]}
-						step="0.1"
-						value={config.speed}
-						oninput={(e) => config.set('speed', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob {config} key="pitchDeg" label="Pitch" step={1} format={(v) => `${Math.round(v)}°`} />
+				<Knob
+					{config}
+					key="azimuthDeg"
+					label="Azimuth"
+					step={5}
+					format={(v) => `${Math.round(v)}°`}
+				/>
+				<Knob
+					{config}
+					key="speed"
+					label="Flight Speed Multiplier"
+					step={0.1}
+					format={(v) => `${v.toFixed(1)}x`}
+				/>
 			</section>
 
 			<section class="section">
 				<h4>Flight Envelope & Light</h4>
-				<label class="field">
-					<span
-						>Altitude Floor ({Math.round(config.floorM).toLocaleString()} m &middot; {Math.round(
-							config.floorM * 3.28084
-						).toLocaleString()} ft)</span
-					>
-					<input
-						type="range"
-						min={KNOB_RANGE.floorM[0]}
-						max={KNOB_RANGE.floorM[1]}
-						step="100"
-						value={config.floorM}
-						oninput={(e) => config.set('floorM', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span
-						>Altitude Ceiling ({Math.round(config.ceilingM).toLocaleString()} m &middot; {Math.round(
-							config.ceilingM * 3.28084
-						).toLocaleString()} ft)</span
-					>
-					<input
-						type="range"
-						min={KNOB_RANGE.ceilingM[0]}
-						max={KNOB_RANGE.ceilingM[1]}
-						step="100"
-						value={config.ceilingM}
-						oninput={(e) => config.set('ceilingM', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob
+					{config}
+					key="floorM"
+					label="Altitude Floor"
+					step={100}
+					format={(v) =>
+						`${Math.round(v).toLocaleString()} m · ${Math.round(v * 3.28084).toLocaleString()} ft`}
+				/>
+				<Knob
+					{config}
+					key="ceilingM"
+					label="Altitude Ceiling"
+					step={100}
+					format={(v) =>
+						`${Math.round(v).toLocaleString()} m · ${Math.round(v * 3.28084).toLocaleString()} ft`}
+				/>
 				<p class="section-note">
 					Metres above ground. The floor must clear local high ground &mdash; the camera flies at
 					floor + terrain, so 400 m over the Front Range puts you inside it.
 				</p>
 
-				<label class="field">
-					<span>Time of Day ({clockLabel})</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.clockOffsetH[0]}
-						max={KNOB_RANGE.clockOffsetH[1]}
-						step="0.25"
-						value={config.clockOffsetH}
-						oninput={(e) => config.set('clockOffsetH', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob
+					{config}
+					key="clockOffsetH"
+					label="Time of Day"
+					step={0.25}
+					format={() => clockLabel}
+				/>
 				<p class="section-note">
 					Shifts the destination clock, so sun, night and haze all move together and keep advancing.
 					Anything but 0 desyncs this pane from the other two &mdash; desk tuning only.
@@ -176,98 +157,66 @@
 					/>
 					<span>Show 3D Wing</span>
 				</label>
-				<label class="field">
-					<span>Wing Scale ({config.wingScale.toFixed(2)}x)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.wingScale[0]}
-						max={KNOB_RANGE.wingScale[1]}
-						step="0.05"
-						value={config.wingScale}
-						oninput={(e) => config.set('wingScale', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Horizontal Offset X ({Math.round(config.wingOffsetX)} px)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.wingOffsetX[0]}
-						max={KNOB_RANGE.wingOffsetX[1]}
-						step="5"
-						value={config.wingOffsetX}
-						oninput={(e) => config.set('wingOffsetX', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Vertical Offset Y ({Math.round(config.wingOffsetY)} px)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.wingOffsetY[0]}
-						max={KNOB_RANGE.wingOffsetY[1]}
-						step="5"
-						value={config.wingOffsetY}
-						oninput={(e) => config.set('wingOffsetY', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Wing Pitch Offset ({config.wingPitchDeg.toFixed(1)}°)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.wingPitchDeg[0]}
-						max={KNOB_RANGE.wingPitchDeg[1]}
-						step="0.5"
-						value={config.wingPitchDeg}
-						oninput={(e) => config.set('wingPitchDeg', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Banking Roll Response ({config.wingRollFactor.toFixed(2)}x)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.wingRollFactor[0]}
-						max={KNOB_RANGE.wingRollFactor[1]}
-						step="0.1"
-						value={config.wingRollFactor}
-						oninput={(e) => config.set('wingRollFactor', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob
+					{config}
+					key="wingScale"
+					label="Wing Scale"
+					step={0.05}
+					format={(v) => `${v.toFixed(2)}x`}
+				/>
+				<Knob
+					{config}
+					key="wingOffsetX"
+					label="Horizontal Offset X"
+					step={5}
+					format={(v) => `${Math.round(v)} px`}
+				/>
+				<Knob
+					{config}
+					key="wingOffsetY"
+					label="Vertical Offset Y"
+					step={5}
+					format={(v) => `${Math.round(v)} px`}
+				/>
+				<Knob
+					{config}
+					key="wingPitchDeg"
+					label="Wing Pitch Offset"
+					step={0.5}
+					format={(v) => `${v.toFixed(1)}°`}
+				/>
+				<Knob
+					{config}
+					key="wingRollFactor"
+					label="Banking Roll Response"
+					step={0.1}
+					format={(v) => `${v.toFixed(2)}x`}
+				/>
 			</section>
 
 			<section class="section">
 				<h4>Terrain & Visuals</h4>
-				<label class="field">
-					<span>High-Res Detail ({Math.round(config.detail * 100)}%)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.detail[0]}
-						max={KNOB_RANGE.detail[1]}
-						step="0.05"
-						value={config.detail}
-						oninput={(e) => config.set('detail', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Hillshade ({Math.round(config.shade * 100)}%)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.shade[0]}
-						max={KNOB_RANGE.shade[1]}
-						step="0.05"
-						value={config.shade}
-						oninput={(e) => config.set('shade', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>3D Terrain Exaggeration ({config.exaggeration.toFixed(2)}x)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.exaggeration[0]}
-						max={KNOB_RANGE.exaggeration[1]}
-						step="0.05"
-						value={config.exaggeration}
-						oninput={(e) => config.set('exaggeration', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob
+					{config}
+					key="detail"
+					label="High-Res Detail"
+					step={0.05}
+					format={(v) => `${Math.round(v * 100)}%`}
+				/>
+				<Knob
+					{config}
+					key="shade"
+					label="Hillshade"
+					step={0.05}
+					format={(v) => `${Math.round(v * 100)}%`}
+				/>
+				<Knob
+					{config}
+					key="exaggeration"
+					label="3D Terrain Exaggeration"
+					step={0.05}
+					format={(v) => `${v.toFixed(2)}x`}
+				/>
 				<label class="checkbox-field">
 					<input
 						type="checkbox"
@@ -288,50 +237,34 @@
 					/>
 					<span>Show Cloud Deck</span>
 				</label>
-				<label class="field">
-					<span>Cloud Density ({Math.round(config.cloudDensity * 100)}%)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.cloudDensity[0]}
-						max={KNOB_RANGE.cloudDensity[1]}
-						step="0.05"
-						value={config.cloudDensity}
-						oninput={(e) => config.set('cloudDensity', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Drift Speed ({config.cloudSpeed.toFixed(1)}x)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.cloudSpeed[0]}
-						max={KNOB_RANGE.cloudSpeed[1]}
-						step="0.1"
-						value={config.cloudSpeed}
-						oninput={(e) => config.set('cloudSpeed', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Deck Altitude ({Math.round(config.cloudAltitudeM).toLocaleString()} m)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.cloudAltitudeM[0]}
-						max={KNOB_RANGE.cloudAltitudeM[1]}
-						step="250"
-						value={config.cloudAltitudeM}
-						oninput={(e) => config.set('cloudAltitudeM', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
-				<label class="field">
-					<span>Cloud Opacity ({Math.round(config.cloudOpacity * 100)}%)</span>
-					<input
-						type="range"
-						min={KNOB_RANGE.cloudOpacity[0]}
-						max={KNOB_RANGE.cloudOpacity[1]}
-						step="0.05"
-						value={config.cloudOpacity}
-						oninput={(e) => config.set('cloudOpacity', e.currentTarget.valueAsNumber)}
-					/>
-				</label>
+				<Knob
+					{config}
+					key="cloudDensity"
+					label="Cloud Density"
+					step={0.05}
+					format={(v) => `${Math.round(v * 100)}%`}
+				/>
+				<Knob
+					{config}
+					key="cloudSpeed"
+					label="Drift Speed"
+					step={0.1}
+					format={(v) => `${v.toFixed(1)}x`}
+				/>
+				<Knob
+					{config}
+					key="cloudAltitudeM"
+					label="Deck Altitude"
+					step={250}
+					format={(v) => `${Math.round(v).toLocaleString()} m`}
+				/>
+				<Knob
+					{config}
+					key="cloudOpacity"
+					label="Cloud Opacity"
+					step={0.05}
+					format={(v) => `${Math.round(v * 100)}%`}
+				/>
 			</section>
 
 			<section class="section">
@@ -410,17 +343,13 @@
 						</div>
 					{/if}
 
-					<label class="field">
-						<span>Volume ({Math.round(config.audioVolume * 100)}%)</span>
-						<input
-							type="range"
-							min="0"
-							max="1"
-							step="0.05"
-							value={config.audioVolume}
-							oninput={(e) => (config.audioVolume = e.currentTarget.valueAsNumber)}
-						/>
-					</label>
+					<Knob
+						{config}
+						key="audioVolume"
+						label="Volume"
+						step={0.05}
+						format={(v) => `${Math.round(v * 100)}%`}
+					/>
 				{/if}
 			</section>
 
@@ -453,28 +382,15 @@
 
 				{#if config.displayMode === 'video'}
 					<div
-						class="field"
-						style="display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px;"
+						style="margin-top: 8px; font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;"
 					>
-						<span style="font-size: 0.75rem; opacity: 0.8;"
-							>Video {config.videoIndex + 1} / {config.videoPlaylist.length}</span
-						>
-						<button
-							type="button"
-							class="glass-btn"
-							style="font-size: 0.7rem; padding: 2px 8px;"
-							onclick={() => {
-								config.videoIndex = (config.videoIndex + 1) % config.videoPlaylist.length;
-							}}
-						>
-							Next Video ⏭
-						</button>
+						<span>Video Source: {config.videoPlaylist[0] || 'Default Scenic'}</span>
 					</div>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h4>3D Geospatial Engine</h4>
+				<h4>3D Geographic Engine</h4>
 				<div class="location-grid">
 					{#each ['maplibre', 'cesium'] as const as eng}
 						<button
@@ -511,17 +427,13 @@
 							/>
 							<span>Sky Atmosphere</span>
 						</label>
-						<label class="field">
-							<span>VIIRS Night Lights ({Math.round(config.cesiumViirsBrightness * 100)}%)</span>
-							<input
-								type="range"
-								min="0"
-								max="1"
-								step="0.05"
-								value={config.cesiumViirsBrightness}
-								oninput={(e) => (config.cesiumViirsBrightness = e.currentTarget.valueAsNumber)}
-							/>
-						</label>
+						<Knob
+							{config}
+							key="cesiumViirsBrightness"
+							label="VIIRS Night Lights"
+							step={0.1}
+							format={(v) => `${v.toFixed(1)}x`}
+						/>
 					</div>
 				{/if}
 			</section>
@@ -836,17 +748,6 @@
 		letter-spacing: 0.05em;
 		color: var(--text-muted);
 	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		font-size: 0.85rem;
-		margin-bottom: 8px;
-	}
-	.field input[type='range'] {
-		accent-color: var(--accent-cyan);
-		cursor: pointer;
-	}
 	.checkbox-field {
 		display: flex;
 		align-items: center;
@@ -946,5 +847,57 @@
 		border-color: var(--accent-cyan);
 		color: var(--accent-cyan);
 		font-weight: 600;
+	}
+
+	.preset-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+	}
+	.preset-card {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 10px;
+		border-radius: 8px;
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-subtle);
+		color: var(--text-primary);
+		text-align: left;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+	.preset-card:hover {
+		background: var(--glass-bg-hover);
+		border-color: rgba(255, 255, 255, 0.3);
+		transform: translateY(-1px);
+	}
+	.preset-top {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.preset-icon {
+		font-size: 1.15rem;
+	}
+	.preset-badge {
+		font-size: 0.6rem;
+		padding: 2px 6px;
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.preset-title {
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+	.preset-desc {
+		font-size: 0.65rem;
+		line-height: 1.3;
+		color: var(--text-muted);
 	}
 </style>
