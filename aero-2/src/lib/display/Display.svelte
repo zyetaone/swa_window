@@ -7,7 +7,11 @@
 	 * Uses Svelte 5 <svelte:boundary> to isolate 3D WebGL runtime errors from taking
 	 * down the cabin frame or operator UI.
 	 */
-	import Stage from './world/maplibre/Stage.svelte';
+	// './world/Stage.svelte', NOT './world/maplibre/Stage.svelte'. The latter
+	// exists only in another session's uncommitted working tree, and an earlier
+	// commit here picked the line up mid-edit -- so main pointed at a directory
+	// git has never seen and a clean clone could not build.
+	import Stage from './world/Stage.svelte';
 	import CesiumStage from './world/cesium/CesiumStage.svelte';
 	import Clouds from './world/Clouds.svelte';
 	import Wing from './cabin/Wing.svelte';
