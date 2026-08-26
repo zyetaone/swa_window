@@ -1,16 +1,6 @@
 <script lang="ts">
 	/**
-	 * Knob — one labelled slider, bound to one entry in KNOB_RANGE.
-	 *
-	 * Exists because this markup appeared twenty times, and each copy repeated
-	 * the min, the max, the value, and the `config.set` call. Repetition that
-	 * long is not just noise: it is twenty chances to reach for `bind:value` and
-	 * skip the write gate, or to type a bound that disagrees with the clamp
-	 * table.
-	 *
-	 * Taking `key` rather than a value means the range comes FROM the same table
-	 * that does the clamping, so a slider cannot offer a value the gate will
-	 * reject.
+	 * Knob — Dual-input control (Slider Range + Direct Number Input), bound to KNOB_RANGE.
 	 */
 	import { KNOB_RANGE, type PaneSettings } from './settings.svelte.js';
 
@@ -19,7 +9,6 @@
 		key: keyof typeof KNOB_RANGE;
 		label: string;
 		step?: number;
-		/** How to render the live value. Defaults to a rounded integer. */
 		format?: (v: number) => string;
 	}
 
@@ -27,34 +16,93 @@
 
 	const range = $derived(KNOB_RANGE[key]);
 	const value = $derived(config[key] as number);
-	const shown = $derived(format ? format(value) : String(Math.round(value)));
+	const displayValue = $derived(format ? format(value) : String(value));
 </script>
 
-<label class="field">
-	<span>{label} ({shown})</span>
+<div class="field">
+	<div class="field-header">
+		<span class="field-label">{label}</span>
+		<div class="field-value-group">
+			{#if format}
+				<span class="field-formatted">{displayValue}</span>
+			{/if}
+			<input
+				type="number"
+				class="field-num"
+				min={range[0]}
+				max={range[1]}
+				{step}
+				{value}
+				onchange={(e) => {
+					const val = e.currentTarget.valueAsNumber;
+					if (!isNaN(val)) config.set(key, val);
+				}}
+				aria-label="{label} numeric value"
+			/>
+		</div>
+	</div>
 	<input
 		type="range"
+		class="field-range"
 		min={range[0]}
 		max={range[1]}
 		{step}
 		{value}
 		oninput={(e) => config.set(key, e.currentTarget.valueAsNumber)}
+		aria-label="{label} range slider"
 	/>
-</label>
+</div>
 
 <style>
-	/* Lives here, not in Settings.svelte: this component is the only thing that
-	   renders a .field, and a style that outlives its markup is how dead CSS
-	   accumulates. */
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 6px;
 		font-size: 0.85rem;
-		margin-bottom: 8px;
+		margin-bottom: 12px;
 	}
-	.field input[type='range'] {
-		accent-color: var(--accent-cyan);
+	.field-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+	.field-label {
+		color: #cbd5e1;
+		font-weight: 500;
+	}
+	.field-value-group {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.field-formatted {
+		font-size: 0.75rem;
+		color: var(--accent-cyan, #38bdf8);
+		font-family: monospace;
+	}
+	.field-num {
+		width: 64px;
+		padding: 2px 6px;
+		background: rgba(0, 0, 0, 0.35);
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 4px;
+		color: #f8fafc;
+		font-size: 0.78rem;
+		font-family: monospace;
+		text-align: right;
+	}
+	.field-num:focus {
+		outline: none;
+		border-color: var(--accent-cyan, #38bdf8);
+		box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+	}
+	.field-range {
+		accent-color: var(--accent-cyan, #38bdf8);
 		cursor: pointer;
+		width: 100%;
+		height: 5px;
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.15);
 	}
 </style>

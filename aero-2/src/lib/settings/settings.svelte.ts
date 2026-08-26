@@ -7,7 +7,7 @@ import { LOCATIONS, Location } from './locations.js';
 import { SCENE_PRESETS, type ScenePreset } from './presets.js';
 import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION, inNaipCoverage } from './tiles.js';
 import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
-import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG } from '../display/flight/view.js';
+import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG, WEATHERS, type Weather } from '../display/flight/view.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
@@ -116,7 +116,7 @@ export class PaneSettings {
 	blindOpen = $state<boolean>(true);
 
 	/** Weather conditions (clear, cloudy, rain, overcast, storm) */
-	weather = $state<'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm'>('clear');
+	weather = $state<Weather>('clear');
 	qualityMode = $state<'ultra' | 'balanced' | 'performance'>('balanced');
 
 	/** Display Modes (flight, video, screensaver, standby) */
@@ -213,14 +213,8 @@ export class PaneSettings {
 			this.blindOpen = blindParam !== 'closed' && blindParam !== '0' && blindParam !== 'false';
 
 		const weatherParam = url.searchParams.get('weather');
-		if (
-			weatherParam === 'clear' ||
-			weatherParam === 'cloudy' ||
-			weatherParam === 'rain' ||
-			weatherParam === 'overcast' ||
-			weatherParam === 'storm'
-		) {
-			this.weather = weatherParam;
+		if (weatherParam && (WEATHERS as readonly string[]).includes(weatherParam)) {
+			this.weather = weatherParam as Weather;
 		}
 
 		const qualityParam = url.searchParams.get('quality');

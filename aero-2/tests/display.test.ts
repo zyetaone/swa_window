@@ -111,6 +111,49 @@ describe('Flight Pose', () => {
 		expect(a).toEqual(b);
 	});
 
+	/**
+	 * Three panes render from three processes whose animation frames are not in
+	 * phase, so "deterministic off the wall clock" is only worth something if the
+	 * derivation is insensitive to a few milliseconds. Turbulence runs at ~3.5 Hz,
+	 * an order of magnitude faster than anything else here, and it feeds bankDeg —
+	 * which tilts the horizon across one continuous panorama.
+	 *
+	 * Before the fix, 8 ms of frame offset was 0.18 rad of phase at 22.3 rad/s and
+	 * the three panes disagreed outright. Negative control: drop the grid rounding
+	 * in atmosphericTurbulence and this fails at the storm intensity.
+	 */
+	it('gives three out-of-phase panes the same pose, storm included', () => {
+		const t = 1_787_650_000.0;
+		const p = paramsFor('?weather=storm');
+
+		// One RAF period spread across the three panes, worst case.
+		for (const skewSec of [0.008, 0.016]) {
+			const a = calculateCameraView(t, p);
+			const b = calculateCameraView(t + skewSec, p);
+			expect(Math.abs(b.bankDeg - a.bankDeg), `bank diverged at ${skewSec}s skew`).toBeLessThan(
+				0.05
+			);
+			expect(Math.abs(b.cameraPitchDeg - a.cameraPitchDeg)).toBeLessThan(0.05);
+			// The pose itself legitimately advances over 16 ms; the turbulence term
+			// is the part that must not, so assert on it directly.
+			expect(b.turbulence).toEqual(a.turbulence);
+		}
+	});
+
+	/**
+	 * The view layer may perturb the pose; it may not overrule the climb envelope.
+	 * A `Math.max(10, ...)` floor here would sit below every location's
+	 * climbFloorM — the lowest in the catalog is 300 m.
+	 */
+	it('keeps altitude inside the climb envelope under the worst turbulence', () => {
+		const p = paramsFor('?weather=storm');
+		for (let s = 0; s < CLIMB_PERIOD_SEC; s += 97) {
+			const v = calculateCameraView(s, p);
+			expect(v.aglM).toBeGreaterThan(ALTITUDE_FLOOR_M * 0.9);
+			expect(v.aglM).toBeLessThan(ALTITUDE_CEILING_M * 1.1);
+		}
+	});
+
 	it('tiles into a continuous window across three pan yaw offsets', () => {
 		const t = 1_787_650_000;
 		const left = calculateCameraView(t, paramsFor('?azimuth=-120'));

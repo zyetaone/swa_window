@@ -30,7 +30,7 @@ export interface CameraParams {
 	/** Multi-Pi Fleet Parallax Role */
 	fleetRole?: FleetRole;
 	/** Weather condition (drives procedural turbulence intensity) */
-	weather?: 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm';
+	weather?: Weather;
 }
 
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
@@ -39,34 +39,54 @@ export const DEFAULT_PITCH_DEG = -10;
 const DEG2RAD = Math.PI / 180;
 const M_PER_DEG_LAT = 111_320;
 
+/** Written out in five places before this existed. */
+export const WEATHERS = ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const;
+export type Weather = (typeof WEATHERS)[number];
+
 /**
- * Procedural atmospheric turbulence model.
- * Produces micro-shakes, low-frequency atmospheric bumps, and wing flutter.
- * Coupled directly to weather conditions (storm > overcast > rain > cloudy > clear).
+ * Procedural atmospheric turbulence — micro-shakes, low-frequency bumps, wing flutter.
+ *
+ * Deterministic off `wallSec`, but determinism alone is not enough here. Every
+ * other derived quantity in this codebase has a period measured in minutes, so
+ * "the same second" is a fine granularity for three panes to agree at. These
+ * terms run at ~2.3 and ~3.5 Hz, where a few milliseconds matters: `wallSec` is
+ * `Date.now() / 1000` sampled per animation frame, and three Pi 5s do not tick
+ * RAF in phase. Eight milliseconds of frame offset is 0.18 rad at 22.3 rad/s —
+ * a completely different jitter value on each pane, feeding `bankDeg`, tilting
+ * the horizon differently across one continuous panorama.
+ *
+ * Sampling on a fixed grid removes the frame phase entirely: every pane rounds
+ * to the same bucket and computes the same number. 20 Hz is above Nyquist for
+ * the fastest term, so the shake survives; panes whose clocks straddle a bucket
+ * edge differ by one 50 ms step of a smooth function, which is bounded and
+ * small — unlike the unbounded phase error it replaces.
  */
-export function atmosphericTurbulence(
-	wallSec: number,
-	weather: 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm' = 'clear'
-): {
+const TURBULENCE_GRID_HZ = 20;
+
+const TURBULENCE_INTENSITY = {
+	clear: 0.04,
+	cloudy: 0.16,
+	rain: 0.38,
+	overcast: 0.58,
+	storm: 1.0
+} as const satisfies Record<Weather, number>;
+
+export interface Turbulence {
 	pitchJitterDeg: number;
 	rollJitterDeg: number;
 	verticalBumpM: number;
 	wingFlutterPx: number;
 	intensity: number;
-} {
-	const intensityMap = {
-		clear: 0.04,
-		cloudy: 0.16,
-		rain: 0.38,
-		overcast: 0.58,
-		storm: 1.0
-	};
-	const intensity = intensityMap[weather] ?? 0.08;
+}
 
-	// Multi-octave harmonic noise (deterministic off wallSec)
-	const lowFreq = Math.sin(wallSec * 0.73) * Math.cos(wallSec * 0.37);
-	const midFreq = Math.sin(wallSec * 3.41 + 1.2) * 0.5 + Math.cos(wallSec * 5.13) * 0.3;
-	const highFreq = Math.sin(wallSec * 14.7) * Math.sin(wallSec * 22.3) * 0.2;
+export function atmosphericTurbulence(wallSec: number, weather: Weather = 'clear'): Turbulence {
+	const intensity = TURBULENCE_INTENSITY[weather];
+	const t = Math.round(wallSec * TURBULENCE_GRID_HZ) / TURBULENCE_GRID_HZ;
+
+	// Multi-octave harmonic noise.
+	const lowFreq = Math.sin(t * 0.73) * Math.cos(t * 0.37);
+	const midFreq = Math.sin(t * 3.41 + 1.2) * 0.5 + Math.cos(t * 5.13) * 0.3;
+	const highFreq = Math.sin(t * 14.7) * Math.sin(t * 22.3) * 0.2;
 
 	const composite = (lowFreq * 0.5 + midFreq * 0.35 + highFreq * 0.15) * intensity;
 
@@ -101,13 +121,7 @@ export interface CameraView {
 	distanceM: number;
 	timeOfDay: number;
 	/** Procedural atmospheric turbulence micro-vibration and wing flutter */
-	turbulence: {
-		pitchJitterDeg: number;
-		rollJitterDeg: number;
-		verticalBumpM: number;
-		wingFlutterPx: number;
-		intensity: number;
-	};
+	turbulence: Turbulence;
 	/** The wall-clock second this view was derived from — the only input. */
 	wallSec: number;
 }
@@ -196,7 +210,7 @@ export class FlightCamera {
 		wallSec = 0,
 		centerLat?: number,
 		centerLon?: number,
-		weather: 'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm' = 'clear'
+		weather: Weather = 'clear'
 	): CameraView {
 		const cam = this.viewOptions(plane, centerLat, centerLon);
 		const timeOfDay = resolveLocalHours(wallSec, utcOffset);
@@ -205,7 +219,7 @@ export class FlightCamera {
 		return {
 			lat: plane.lat,
 			lon: plane.lon,
-			aglM: Math.max(10, plane.aglM + turbulence.verticalBumpM),
+			aglM: plane.aglM + turbulence.verticalBumpM,
 			planeHeadingDeg: plane.headingDeg,
 			bankDeg: plane.bankDeg + turbulence.rollJitterDeg,
 			cameraBearingDeg: cam.cameraBearingDeg,
