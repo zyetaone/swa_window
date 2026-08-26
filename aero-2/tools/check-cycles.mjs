@@ -20,6 +20,7 @@
  */
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
 
 const LIB = new URL('../src/lib', import.meta.url).pathname;
@@ -112,6 +113,55 @@ for (const start of files) {
 	}
 }
 
+/**
+ * A tracked file may not import an untracked one.
+ *
+ * Three sessions write to this working tree at once. A commit staged with an
+ * explicit path still commits whatever that file says at commit time, and a
+ * file edited by someone else between your read and your write carries their
+ * line -- which is how `Display.svelte` came to import `world/maplibre/Stage`,
+ * a directory git has never seen. It resolved on disk, nothing complained, and
+ * a clean clone of main could not build the display at all.
+ *
+ * Only the tracked -> untracked direction is checked. A file you have just
+ * created is untracked and imports whatever it likes; the moment something
+ * committed depends on it, `git add` is no longer optional.
+ */
+let tracked;
+try {
+	// `git ls-files` prints paths relative to the CURRENT directory, not the
+	// repo root -- so `-C` fixes the base and the paths join back onto it. The
+	// first draft resolved against the repo root instead, every path missed,
+	// the tracked set matched nothing, and the check passed by comparing
+	// nothing at all. Which is the failure it was written to catch.
+	const root = resolve(SRC, '..');
+	tracked = new Set(
+		execFileSync('git', ['-C', root, 'ls-files', '-z', '--', 'src'], { encoding: 'utf8' })
+			.split('\0')
+			.filter(Boolean)
+			.map((p) => resolve(root, p))
+	);
+} catch {
+	tracked = null; // not a git checkout; nothing to compare against
+}
+
+const dangling = [];
+if (tracked?.size) {
+	for (const [file, deps] of graph) {
+		if (!tracked.has(file)) continue;
+		for (const dep of deps) {
+			if (!tracked.has(dep)) dangling.push(`${rel(file)}\n      → ${rel(dep)} (untracked)`);
+		}
+	}
+}
+
+if (dangling.length > 0) {
+	console.error('Tracked files importing untracked files:\n');
+	for (const d of dangling) console.error(`  ${d}\n`);
+	console.error(`${dangling.length} dangling import(s) — git add the target, or fix the path.`);
+	process.exit(1);
+}
+
 if (cycles.length > 0) {
 	console.error('Import cycles:\n');
 	for (const c of cycles) console.error(`  ${c}\n`);
@@ -119,4 +169,4 @@ if (cycles.length > 0) {
 	process.exit(1);
 }
 
-console.log(`No import cycles — ${files.length} files checked.`);
+console.log(`No import cycles, no untracked imports — ${files.length} files checked.`);
