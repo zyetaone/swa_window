@@ -16,12 +16,6 @@
 	import { useDisplay } from '../display.svelte.js';
 	import * as THREE from 'three';
 
-	interface Props {
-		visible?: boolean;
-	}
-
-	let { visible = true }: Props = $props();
-
 	const display = useDisplay();
 
 	function mulberry32(seed: number): () => number {
@@ -34,7 +28,7 @@
 		};
 	}
 
-	const isVisible = $derived(visible && display.config.clouds);
+	const isVisible = $derived(display.config.clouds);
 	const density = $derived(display.config.cloudDensity ?? 0.75);
 	const driftSpeed = $derived(display.config.cloudSpeed ?? 1.0);
 	const cloudAltM = $derived(display.config.cloudAltitudeM ?? 3500);
@@ -98,6 +92,12 @@
 		const materials: THREE.SpriteMaterial[] = [];
 		const rotSpeeds: number[] = [];
 		const shearFactors: number[] = [];
+		/**
+		 * Where each sprite starts, so the loop can SET its pose from the wall
+		 * clock instead of nudging it every frame. See `gustPhase` below.
+		 */
+		const baseRot: number[] = [];
+		const basePos: number[] = [];
 
 		function buildCloudDeck() {
 			while (cloudGroup.children.length > 0) {
@@ -108,6 +108,8 @@
 			sprites.length = 0;
 			rotSpeeds.length = 0;
 			shearFactors.length = 0;
+			baseRot.length = 0;
+			basePos.length = 0;
 
 			if (textures.length === 0) return;
 
@@ -207,18 +209,14 @@
 				sprites.push(sprite);
 				rotSpeeds.push((rand() - 0.5) * 0.05);
 				shearFactors.push(clusterShear);
+				baseRot.push(mat.rotation);
+				basePos.push(ox, oz);
 			}
 		}
 
 		let raf: number;
-		let lastT = performance.now();
-		let windT = 0;
 
-		const renderLoop = (now: number) => {
-			const dt = Math.min(0.1, (now - lastT) / 1000);
-			lastT = now;
-			windT += dt;
-
+		const renderLoop = () => {
 			if (
 				c.clientWidth !== renderer.domElement.width ||
 				c.clientHeight !== renderer.domElement.height
@@ -253,9 +251,32 @@
 
 			// World-locked compass orientation + continuous wind drift & gust modulation
 			const bearingRad = ((display.view.cameraBearingDeg ?? 0) * Math.PI) / 180;
-			const gust = 1 + 0.5 * Math.sin(windT * 0.137) * Math.cos(windT * 0.273);
-			const driftDelta = dt * driftSpeed * 0.008 * gust;
-			cloudGroup.rotation.y = bearingRad + (display.view.wallSec ?? 0) * driftSpeed * 0.0006;
+			const wallSec = display.view.wallSec ?? 0;
+
+			/**
+			 * Gusting wind, as a POSITION on the clock rather than a speed to
+			 * accumulate.
+			 *
+			 * The deck used to integrate: `windT += dt` off `performance.now()`,
+			 * a gust factor computed from `windT`, and then `+=` again onto every
+			 * sprite's spin and position. Three per-pane accumulators, in a deck
+			 * whose own docstring claims 3-Pi determinism. Each pane dropped
+			 * frames its own way and `Math.min(0.1, dt)` discarded the overflow,
+			 * so the wind phase drifted apart with uptime -- the same shape that
+			 * split the director before it moved to a wall-clock slot, and a
+			 * blocker on the wall in v1. Panes agree at a glance and disagree
+			 * after an hour.
+			 *
+			 * This is the same gust, expressed as an absolute phase: it advances
+			 * at roughly 1 per second and breathes about that, so `d/dt` looks
+			 * like the old `gust` factor without anything being remembered
+			 * between frames. Every pane computes the same value for the same
+			 * second, and a pane that reboots rejoins the weather mid-gust.
+			 */
+			const gustPhase =
+				wallSec + 3.6 * Math.sin(wallSec * 0.137) * Math.cos(wallSec * 0.273);
+			const driftPhase = gustPhase * driftSpeed * 0.008;
+			cloudGroup.rotation.y = bearingRad + wallSec * driftSpeed * 0.0006;
 
 			// ── Per-Sprite 3D Solar Lighting & Mie Forward-Scatter ─────────────────
 			const sunElev = display.sun.elevationDeg ?? 30;
@@ -287,15 +308,15 @@
 				const baseB = (mat.userData.baseBrightness ?? 0.75) as number;
 				const baseO = (mat.userData.baseOpacity ?? 0.3) as number;
 
-				// Spin & shear
-				mat.rotation += rotSpeeds[i] * dt * gust;
+				// Spin & shear, both SET from the clock rather than nudged.
+				mat.rotation = (baseRot[i] ?? 0) + rotSpeeds[i] * gustPhase;
 				const shear = shearFactors[i] ?? 0;
 				if (shear !== 0) {
-					const localDelta = driftDelta * shear;
-					const cs = Math.cos(localDelta);
-					const sn = Math.sin(localDelta);
-					const px = s.position.x;
-					const pz = s.position.z;
+					const angle = driftPhase * shear;
+					const cs = Math.cos(angle);
+					const sn = Math.sin(angle);
+					const px = basePos[i * 2];
+					const pz = basePos[i * 2 + 1];
 					s.position.x = px * cs - pz * sn;
 					s.position.z = px * sn + pz * cs;
 				}

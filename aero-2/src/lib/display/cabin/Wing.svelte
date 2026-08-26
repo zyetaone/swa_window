@@ -10,15 +10,9 @@
 	import * as THREE from 'three';
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-	interface Props {
-		visible?: boolean;
-	}
-
-	let { visible = true }: Props = $props();
-
 	const display = useDisplay();
 
-	const isVisible = $derived(visible && display.config.wing);
+	const isVisible = $derived(display.config.wing);
 	const scale = $derived(display.config.wingScale ?? 0.65);
 	const offsetX = $derived(display.config.wingOffsetX ?? -405);
 	const offsetY = $derived(display.config.wingOffsetY ?? -20);
@@ -121,10 +115,11 @@
 				const bank = display.view.bankDeg ?? 0;
 				const dir = display.config.direction ?? 1;
 				const currentRollRad = ((bank * 0.55 * rollFactor + pitchOffset) * Math.PI) / 180;
-				wingHolder.rotation.z = -currentRollRad;
+				// Maintain screen-space roll parity across X-reflection
+				wingHolder.rotation.z = -currentRollRad * dir;
 				wingHolder.scale.set(scale * dir, scale, scale);
 				// Unclipped 3D translation inside WebGL coordinates with direction awareness
-				wingHolder.position.set(1.1 * dir + offsetX * 0.005 * dir, -1.1 - offsetY * 0.005, 0);
+				wingHolder.position.set(1.1 * dir + (offsetX * 0.005) * dir, -1.1 - offsetY * 0.005, 0);
 
 				// Aviation Standard: Green for Starboard (Right), Red for Port (Left)
 				navLight.color.setHex(dir === 1 ? 0x22c55e : 0xef4444);

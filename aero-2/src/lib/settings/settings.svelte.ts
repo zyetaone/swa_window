@@ -57,9 +57,9 @@ function wrapSigned(deg: number): number {
 	return ((((deg + 180) % 360) + 360) % 360) - 180;
 }
 
-export const DEFAULT_WING_SCALE = 0.65;
-export const DEFAULT_WING_OFFSET_X = -405;
-export const DEFAULT_WING_OFFSET_Y = -20;
+const DEFAULT_WING_SCALE = 0.65;
+const DEFAULT_WING_OFFSET_X = -405;
+const DEFAULT_WING_OFFSET_Y = -20;
 
 export class PaneSettings {
 	place = $state<Location>(Location.hyderabad());
@@ -110,7 +110,6 @@ export class PaneSettings {
 
 	/** Cabin Window Blind & Touch controls */
 	blindOpen = $state<boolean>(true);
-	touchEnabled = $state<boolean>(true);
 
 	/** Weather conditions (clear, cloudy, rain, overcast, storm) */
 	weather = $state<'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm'>('clear');

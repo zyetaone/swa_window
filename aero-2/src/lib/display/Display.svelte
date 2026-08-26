@@ -7,8 +7,8 @@
 	 * Uses Svelte 5 <svelte:boundary> to isolate 3D WebGL runtime errors from taking
 	 * down the cabin frame or operator UI.
 	 */
-	import Stage from './world/Stage.svelte';
-	import CesiumStage from './world/CesiumStage.svelte';
+	import Stage from './world/maplibre/Stage.svelte';
+	import CesiumStage from './world/cesium/CesiumStage.svelte';
 	import Clouds from './world/Clouds.svelte';
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
@@ -21,23 +21,21 @@
 	import { useDisplay } from './display.svelte.js';
 	import type { Snippet } from 'svelte';
 
+	/**
+	 * `hud` is the only switch here, because it is the only one with a caller.
+	 *
+	 * There used to be five -- clouds, wing, minimap, blind -- and +page.svelte
+	 * passed exactly one of them. Three of the other four duplicated a config
+	 * knob the child already reads (`Clouds` gates on `config.clouds`, `Wing` on
+	 * `config.wing`, `Blind` on `config.blindOpen`), so the same light had two
+	 * switches and only one of them was wired to anything.
+	 */
 	interface Props {
-		clouds?: boolean;
-		wing?: boolean;
-		minimap?: boolean;
 		hud?: boolean;
-		blind?: boolean;
 		children?: Snippet;
 	}
 
-	let {
-		clouds = true,
-		wing = true,
-		minimap = true,
-		hud = true,
-		blind = true,
-		children
-	}: Props = $props();
+	let { hud = true, children }: Props = $props();
 
 	const display = useDisplay();
 
@@ -55,6 +53,12 @@
 			<Stage />
 		{/if}
 
+		<!-- Inside the boundary, like the rest of the 3D world: Clouds runs its
+		     own WebGL context and can lose it exactly the way Stage can. It sat
+		     outside, so a Three.js context loss took down the whole page while
+		     the identical failure in MapLibre was caught and offered a retry. -->
+		<Clouds />
+
 		{#snippet failed(error, reset)}
 			<div class="stage-error-fallback">
 				<div class="glass-panel error-card">
@@ -66,23 +70,15 @@
 		{/snippet}
 	</svelte:boundary>
 
-	{#if clouds}
-		<Clouds />
-	{/if}
-	{#if wing}
-		<Wing />
-	{/if}
+	<Wing />
 	<RainGlass />
 	<Frame />
-	{#if blind}
-		<Blind />
-	{/if}
-	{#if minimap}
-		<MiniMap />
-	{/if}
-	{#if hud}
-		<Hud />
-	{/if}
+	<Blind />
+	<MiniMap />
+	<!-- `visible`, not `{#if}`: Hud owns the `--hud-height` CSS variable the
+	     rest of the cabin lays out against, and unmounting it left that variable
+	     stale at the ribbon height with no ribbon under it. -->
+	<Hud visible={hud} />
 	<MediaStage />
 	<AudioHost />
 	{@render children?.()}

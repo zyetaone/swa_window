@@ -8,10 +8,9 @@
 
 	interface Props {
 		visible?: boolean;
-		showFps?: boolean;
 	}
 
-	let { visible = true, showFps = true }: Props = $props();
+	let { visible = true }: Props = $props();
 
 	const display = useDisplay();
 
@@ -89,14 +88,12 @@
 	>
 		<!-- Telemetry Sections -->
 		<div class="ribbon-content">
-			{#if showFps}
-				<div class="hud-segment fps-segment" class:drop={fps < 45}>
-					<span class="status-dot"></span>
-					<span class="fps-val">{fps} FPS</span>
-					<span class="ms-val">{frameTimeMs}ms</span>
-				</div>
-				<div class="divider"></div>
-			{/if}
+			<div class="hud-segment fps-segment" class:drop={fps < 45}>
+				<span class="status-dot"></span>
+				<span class="fps-val">{fps} FPS</span>
+				<span class="ms-val">{frameTimeMs}ms</span>
+			</div>
+			<div class="divider"></div>
 
 			<div class="hud-segment">
 				<span class="seg-label">LOC</span>
