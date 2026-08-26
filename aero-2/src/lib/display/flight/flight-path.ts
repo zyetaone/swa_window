@@ -25,11 +25,10 @@ export const ORBIT = {
 	 */
 	aspect: 1.7,
 	/**
-	 * Peak roll in degrees at the tightest part of the turn. The physically
-	 * correct value here is ~3.5 deg, which nobody would notice; this is a
-	 * readable exaggeration, not a simulation.
+	 * Peak roll in degrees at the tightest part of the turn.
+	 * Tuned for a graceful, readable banking curve that opens up sky and ground during turns.
 	 */
-	maxBankDeg: 14,
+	maxBankDeg: 18,
 
 	/**
 	 * How far the altitude wanders off the clean climb curve, as a fraction of

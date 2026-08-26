@@ -32,6 +32,30 @@
 	const tiles = tileTemplates();
 
 	let map = $state<MlMap | undefined>();
+	let renderTick = $state(0);
+
+	$effect(() => {
+		const m = map;
+		if (!m) return;
+		const onFrame = () => {
+			renderTick++;
+		};
+		if (m.loaded()) {
+			renderTick++;
+		}
+		m.on('load', onFrame);
+		m.on('idle', onFrame);
+		m.on('render', onFrame);
+		m.on('move', onFrame);
+		m.on('resize', onFrame);
+		return () => {
+			m.off('load', onFrame);
+			m.off('idle', onFrame);
+			m.off('render', onFrame);
+			m.off('move', onFrame);
+			m.off('resize', onFrame);
+		};
+	});
 
 	const place = $derived(display.config.place);
 
@@ -45,20 +69,12 @@
 			display.config.floorM,
 			display.config.ceilingM,
 			display.config.direction,
-			// `phase` is NOT optional decoration. It is added to `theta`, while the
-			// ellipse's breathing radius is keyed to raw wallSec — so phase shifts
-			// where the three radius bumps land RELATIVE to the angle, changing the
-			// shape flown, not merely rotating it. Omitting it drew the phase-0
-			// shape under a marker following the real one: measured 3.89 km apart
-			// at worst for Hyderabad, 14% of the orbit radius.
 			display.config.phase
 		)
 	);
 
 	/**
-	 * ONE track drives both the ring and the elevation strip. They are two views
-	 * of the same flight, and deriving either of them separately is how they
-	 * drift apart.
+	 * ONE track drives both the ring and the elevation strip.
 	 */
 	const ring = $derived(track.groundTrack());
 
@@ -70,29 +86,13 @@
 	const wallSec = $derived(display.view.wallSec ?? 0);
 
 	/** Climb bar & elevation phase (0..1). */
-	/**
-	 * Altitude as a fraction of THIS place's climb envelope.
-	 *
-	 * Not the global ALTITUDE_FLOOR_M/CEILING_M: Denver's floor is 3000 m (it
-	 * has to clear the Front Range) against Hyderabad's 400 m. Normalising
-	 * against the constants floated the marker ~17% of the strip off its own
-	 * curve over Denver, while looking perfect over Hyderabad, whose envelope
-	 * happens to equal the constants.
-	 */
 	const climb = $derived.by(() => {
 		const lo = display.config.floorM;
 		const hi = display.config.ceilingM;
 		if (hi <= lo) return 0;
 		return Math.min(1, Math.max(0, (aglM - lo) / (hi - lo)));
 	});
-	/**
-	 * The dot's X must run on the SAME clock as its Y.
-	 *
-	 * `aglM` comes from the view, which advances `wallSec * speed` before
-	 * sampling the climb (`view.ts`). Using raw `wallSec` here moved the dot
-	 * along the strip at 1x while its height moved at `speed` — and `speed`
-	 * defaults to 4, so the dot was always off its own curve.
-	 */
+
 	const effectiveSec = $derived(wallSec * display.config.speed);
 	const climbPhase = $derived(
 		(((effectiveSec % CLIMB_PERIOD_SEC) + CLIMB_PERIOD_SEC) % CLIMB_PERIOD_SEC) / CLIMB_PERIOD_SEC
@@ -102,6 +102,7 @@
 	 * Project the aircraft marker to pixels within the circular inset.
 	 */
 	const marker = $derived.by(() => {
+		const _ = renderTick;
 		const m = map;
 		if (!m) return null;
 		const p = m.project([lon, lat]);
@@ -112,6 +113,7 @@
 	 * Project the camera's ground look-at target.
 	 */
 	const targetMarker = $derived.by(() => {
+		const _ = renderTick;
 		const m = map;
 		if (!m || display.view.targetLon === undefined || display.view.targetLat === undefined)
 			return null;
@@ -121,18 +123,9 @@
 
 	/**
 	 * The whole ground track, projected to pixels and drawn as an SVG path.
-	 *
-	 * NOT a GeoJSON source + LineLayer, which is the obvious approach and does
-	 * not work here: svelte-maplibre-gl queues addSource/addLayer behind
-	 * `waitForStyleLoaded`, and against a minimal inline style spec that gate
-	 * never opened — the layer existed, with correct data, and rendered zero
-	 * features. Raster tiles take a different path and drew fine, which made it
-	 * look like a data problem rather than a lifecycle one.
-	 *
-	 * Projecting ~240 points on place change is cheaper than a second GL layer,
-	 * and it cannot fail silently: wrong points means a visibly wrong shape.
 	 */
 	const pathD = $derived.by(() => {
+		const _ = renderTick;
 		const m = map;
 		if (!m || !ring.length) return '';
 		const pts = ring.map(([rLon, rLat]) => m.project([rLon, rLat]));

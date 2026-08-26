@@ -7,6 +7,7 @@
 	 * Responds dynamically to airframe banking, solar lighting transitions, and operator alignment knobs.
 	 */
 	import { useDisplay } from '../display.svelte.js';
+	import { screenTravelSign } from '../flight/screen-conventions.js';
 	import * as THREE from 'three';
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -113,16 +114,23 @@
 
 			if (wingHolder) {
 				const bank = display.view.bankDeg ?? 0;
-				const dir = display.config.direction ?? 1;
+				const travelDir = display.config.direction ?? 1;
+				const screenSign = screenTravelSign(travelDir);
 				const currentRollRad = ((bank * 0.55 * rollFactor + pitchOffset) * Math.PI) / 180;
-				// Maintain screen-space roll parity across X-reflection
-				wingHolder.rotation.z = -currentRollRad * dir;
-				wingHolder.scale.set(scale * dir, scale, scale);
-				// Unclipped 3D translation inside WebGL coordinates with direction awareness
-				wingHolder.position.set(1.1 * dir + (offsetX * 0.005) * dir, -1.1 - offsetY * 0.005, 0);
 
-				// Aviation Standard: Green for Starboard (Right), Red for Port (Left)
-				navLight.color.setHex(dir === 1 ? 0x22c55e : 0xef4444);
+				// Relative screen-space roll parity derived directly from screenTravelSign
+				wingHolder.rotation.z = -currentRollRad * screenSign;
+				wingHolder.scale.set(scale * screenSign, scale, scale);
+				// Unclipped 3D translation inside WebGL coordinates with relative direction & turbulence flutter
+				const flutter = (display.view.turbulence?.wingFlutterPx ?? 0) * 0.0015;
+				wingHolder.position.set(
+					1.1 * screenSign + offsetX * 0.005 * screenSign,
+					-1.1 - offsetY * 0.005 + flutter,
+					0
+				);
+
+				// Aviation Standard: Green for Starboard (Right, screenSign > 0), Red for Port (Left, screenSign < 0)
+				navLight.color.setHex(screenSign > 0 ? 0x22c55e : 0xef4444);
 			}
 
 			renderer.render(scene, camera);

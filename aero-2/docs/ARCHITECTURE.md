@@ -37,15 +37,15 @@ Naming, so `ls` reads well:
 Seven rules. Five are enforced by something that fails; two are not, and are
 marked so, because an unenforced invariant is an aspiration.
 
-| # | Invariant | Enforced by |
-|---|---|---|
-| 1 | No import cycles | `tools/check-cycles.mjs`, in `check` and `test` |
-| 2 | The world is a pure function of (wall clock, place, `daySeed`) | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt` |
-| 3 | Context DI: `createDisplay()` at the root, `useDisplay()` below | — |
-| 4 | The pure simulation modules import no renderer | `tests/integration.test.ts` |
-| 5 | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts` |
-| 6 | The 3D world runs inside `<svelte:boundary>` | — |
-| 7 | No barrel files (`index.ts`) | — |
+| #   | Invariant                                                                                  | Enforced by                                                           |
+| --- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| 1   | No import cycles                                                                           | `tools/check-cycles.mjs`, in `check` and `test`                       |
+| 2   | The world is a pure function of (wall clock, place, `daySeed`)                             | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt` |
+| 3   | Context DI: `createDisplay()` at the root, `useDisplay()` below                            | —                                                                     |
+| 4   | The pure simulation modules import no renderer                                             | `tests/integration.test.ts`                                           |
+| 5   | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts`                    |
+| 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                     |
+| 7   | No barrel files (`index.ts`)                                                               | —                                                                     |
 
 **#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded
 randomness anywhere the window can see. Both failure shapes have bitten:
@@ -58,7 +58,7 @@ Per-pane randomness is allowed only where it is genuinely per-pane and cosmetic
 
 **#4 is narrower than it sounds, on purpose.** It does not say "only `world/`
 touches MapLibre" — `flight/MiniMap.svelte` renders a map and needs one. It
-says the *pure* modules stay pure: `flight-path`, `view`, `parallax`,
+says the _pure_ modules stay pure: `flight-path`, `view`, `parallax`,
 `atmosphere`, `sun`, `settings`, `locations`. That layer is what a second
 renderer reuses unchanged, and what the suite can exercise without a GPU. One
 renderer import in any of them and a swappable engine quietly stops being
@@ -98,7 +98,7 @@ duplicating those knobs, of which its single caller passed one.
 
 - **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
 - **`raster-opacity: 0` still fetches.** Outside NAIP coverage `Ground.svelte`
-  *unmounts* the USGS source rather than fading it, which is what stops several
+  _unmounts_ the USGS source rather than fading it, which is what stops several
   hundred 404s per minute.
 - **A DEM source without `minzoom`/`maxzoom` reads as sea level.** MapLibre
   assumes z0–22, requests tiles the archive does not hold, never decodes one,

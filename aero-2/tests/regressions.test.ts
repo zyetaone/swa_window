@@ -32,14 +32,14 @@ function allSources(): string[] {
 	return out;
 }
 
-function findSource(fileName: string): string {
+function findSource(fileName: string, mustContain = ''): string {
 	const walk = (dir: string): string | null => {
 		for (const entry of readdirSync(dir)) {
 			const p = join(dir, entry);
 			if (statSync(p).isDirectory()) {
 				const hit = walk(p);
 				if (hit) return hit;
-			} else if (entry === fileName) {
+			} else if (entry === fileName && p.includes(mustContain)) {
 				return p;
 			}
 		}
@@ -333,5 +333,38 @@ describe('three panes stay in step', () => {
 			if (/Math\.random\s*\(/.test(code)) offenders.push(file);
 		}
 		expect(offenders, 'use slotNoise/daySeed — a random draw desyncs the wall').toEqual([]);
+	});
+});
+
+describe('routes render something', () => {
+	/**
+	 * /admin once shipped as a completely blank page. `bun run check` was green,
+	 * every unit test passed, and the kiosk route looked perfect — because a
+	 * single throw during component init produces an empty <body>, and with SSR
+	 * off the server still answers 200. Nothing but loading the page can see it.
+	 *
+	 * It happened AGAIN here: the page declared a /api/status shape the endpoint
+	 * does not send, so `status?.memory.heapUsedMb` optional-chained the wrong
+	 * link and threw once the fetch resolved. 200 OK, 19 characters of text.
+	 *
+	 * This is the cheap half of the smoke test — it cannot catch a runtime
+	 * throw, but it does catch the cause of this one: a page reading fields the
+	 * API never returns.
+	 */
+	it('admin only reads fields /api/status actually sends', async () => {
+		const { GET } = await import('../src/routes/api/status/+server.js');
+		const res = await GET({} as never);
+		const payload = await res.json();
+		const known = new Set(Object.keys(payload));
+
+		// Comments explain the bug this guards, so they name the very field that
+		// must not appear. Strip them before matching, or the fix trips its own test.
+		const src = findSource('+page.svelte', 'admin')
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.replace(/\/\/.*$/gm, '');
+		const read = [...src.matchAll(/status[?]?\.([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]);
+
+		const invented = [...new Set(read)].filter((k) => !known.has(k));
+		expect(invented, 'admin reads fields /api/status does not return').toEqual([]);
 	});
 });

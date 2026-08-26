@@ -3,12 +3,14 @@
  * Single source of truth for all live simulation knobs.
  */
 
-import { Location } from './locations.js';
+import { LOCATIONS, Location } from './locations.js';
+import { SCENE_PRESETS, type ScenePreset } from './presets.js';
 import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION, inNaipCoverage } from './tiles.js';
 import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
 import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG } from '../display/flight/view.js';
 
 export { Location } from './locations.js';
+export { SCENE_PRESETS, type ScenePreset } from './presets.js';
 export { inNaipCoverage, tileTemplates } from './tiles.js';
 
 export interface SearchParamsSource {
@@ -47,7 +49,9 @@ export const KNOB_RANGE = {
 	cloudDensity: [0, 1.0],
 	cloudSpeed: [0, 5.0],
 	cloudAltitudeM: [500, 12_000],
-	cloudOpacity: [0.1, 1.0]
+	cloudOpacity: [0.1, 1.0],
+	audioVolume: [0, 1.0],
+	cesiumViirsBrightness: [0, 5.0]
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type NumericKnob = keyof typeof KNOB_RANGE;
@@ -58,8 +62,8 @@ function wrapSigned(deg: number): number {
 }
 
 const DEFAULT_WING_SCALE = 0.65;
-const DEFAULT_WING_OFFSET_X = -405;
-const DEFAULT_WING_OFFSET_Y = -20;
+const DEFAULT_WING_OFFSET_X = 0;
+const DEFAULT_WING_OFFSET_Y = 0;
 
 export class PaneSettings {
 	place = $state<Location>(Location.hyderabad());
@@ -286,6 +290,36 @@ export class PaneSettings {
 
 	reverse(): void {
 		this.direction = this.direction === 1 ? -1 : 1;
+	}
+
+	applyPreset(presetOrId: ScenePreset | string): void {
+		const preset =
+			typeof presetOrId === 'string' ? SCENE_PRESETS.find((p) => p.id === presetOrId) : presetOrId;
+		if (!preset) return;
+
+		const c = preset.config;
+		if (c.placeId) {
+			const loc = LOCATIONS.find((l) => l.id === c.placeId);
+			if (loc) this.setPlace(loc);
+		}
+		if (c.engine !== undefined) this.engine = c.engine;
+		if (c.clockOffsetH !== undefined) this.clockOffsetH = c.clockOffsetH;
+		if (c.cloudDensity !== undefined) this.cloudDensity = c.cloudDensity;
+		if (c.cloudOpacity !== undefined) this.cloudOpacity = c.cloudOpacity;
+		if (c.cloudSpeed !== undefined) this.cloudSpeed = c.cloudSpeed;
+		if (c.cloudAltitudeM !== undefined) this.cloudAltitudeM = c.cloudAltitudeM;
+		if (c.exaggeration !== undefined) this.exaggeration = c.exaggeration;
+		if (c.shade !== undefined) this.shade = c.shade;
+		if (c.rain !== undefined) this.weather = c.rain ? 'rain' : 'clear';
+		if (c.cesiumLighting !== undefined) this.cesiumLighting = c.cesiumLighting;
+		if (c.cesiumAtmosphere !== undefined) this.cesiumAtmosphere = c.cesiumAtmosphere;
+		if (c.cesiumViirsBrightness !== undefined) this.cesiumViirsBrightness = c.cesiumViirsBrightness;
+		if (c.audioEnabled !== undefined) this.audioEnabled = c.audioEnabled;
+		if (c.audioVolume !== undefined) this.audioVolume = c.audioVolume;
+		if (c.pitchDeg !== undefined) this.pitchDeg = c.pitchDeg;
+		if (c.azimuthDeg !== undefined) this.azimuthDeg = c.azimuthDeg;
+		if (c.speed !== undefined) this.speed = c.speed;
+		if (c.wingVisible !== undefined) this.wing = c.wingVisible;
 	}
 
 	nudge(key: NumericKnob, delta: number): void {

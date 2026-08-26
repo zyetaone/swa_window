@@ -230,6 +230,10 @@ export class Location {
 		return Location.CATALOG.find((l) => l.id === id) ?? Location.hyderabad();
 	}
 
+	static isValid(id: string | null | undefined): boolean {
+		return Location.CATALOG.some((l) => l.id === id);
+	}
+
 	static all(): readonly Location[] {
 		return Location.CATALOG;
 	}
