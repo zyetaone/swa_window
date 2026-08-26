@@ -2,7 +2,12 @@
 	"extends": "$app/tsconfig",
 	"compilerOptions": {
 		"strict": true,
-		"sourceMap": true
+		"sourceMap": true,
+		// server.ts imports ./build/index.js, so TS follows it into the adapter's
+		// emitted bundle no matter what `exclude` says. Nothing in src or tests is
+		// .js, so there is no coverage to lose here.
+		"checkJs": false
 	},
-	"include": ["src", "tests"]
+	"include": ["src", "tests", "server.ts"],
+	"exclude": ["build", "node_modules"]
 }

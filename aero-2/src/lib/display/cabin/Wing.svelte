@@ -7,7 +7,6 @@
 	 * Responds dynamically to airframe banking, solar lighting transitions, and operator alignment knobs.
 	 */
 	import { useDisplay } from '../display.svelte.js';
-	import { screenTravelSign } from '../flight/screen-conventions.js';
 	import * as THREE from 'three';
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -114,8 +113,7 @@
 
 			if (wingHolder) {
 				const bank = display.view.bankDeg ?? 0;
-				const travelDir = display.config.direction ?? 1;
-				const screenSign = screenTravelSign(travelDir);
+				const screenSign = (display.config.direction ?? 1) < 0 ? -1 : 1;
 				const currentRollRad = ((bank * 0.55 * rollFactor + pitchOffset) * Math.PI) / 180;
 
 				// Relative screen-space roll parity derived directly from screenTravelSign

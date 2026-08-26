@@ -20,20 +20,20 @@ process.on('uncaughtException', (err) => {
 
 const BUILD_ENTRY = new URL('./build/index.js', import.meta.url);
 
-if (existsSync(BUILD_ENTRY)) {
-	await import('./build/index.js');
-	console.log(`[server] Aero Window listening on http://localhost:${PORT}`);
-} else {
-	console.warn('[server] No build/ found — run `bun run build` first, or use `bun run dev`.');
-	Bun.serve({
-		port: PORT,
-		fetch: () =>
-			new Response(
-				'Aero Window server: no production build found. Run `bun run build` followed by `bun run start`.',
-				{ status: 503, headers: { 'Content-Type': 'text/plain' } }
-			)
-	});
-	console.log(
-		`[server] Aero Window listening (degraded 503, no build) on http://localhost:${PORT}`
-	);
+/**
+ * No build, no server.
+ *
+ * This used to fall back to a Bun.serve that answered every request with a 503
+ * explaining that there was no build. On a Pi under systemd that is the worst
+ * of both: the unit stays green, the port answers, the kiosk shows an error
+ * page, and nothing restarts because nothing failed. Exiting non-zero makes
+ * systemd say so — and it was the only Bun global in the file, which is why
+ * tsconfig had to stop covering server.ts in order to stay green.
+ */
+if (!existsSync(BUILD_ENTRY)) {
+	console.error('[server] FATAL no build/ found — run `bun run build` first, or `bun run dev`.');
+	process.exit(1);
 }
+
+await import('./build/index.js');
+console.log(`[server] Aero Window listening on http://localhost:${PORT}`);
