@@ -74,6 +74,50 @@ jobs:
           curl -fsS --max-time 5 -o /dev/null http://localhost:3000/api/devices
           kill "$SERVER_PID"
 
+  # ── aero-2 ───────────────────────────────────────────────────────────────
+  # The rewrite in aero-2/ had no CI of any kind. Everything above runs at the
+  # repo root, which is v1, so aero-2 could be — and on 1a6c77e was — committed
+  # in a state that cannot build from a clean clone: Settings.svelte imported
+  # SCENE_PRESETS and applyPreset from a module that had not been committed yet.
+  # It typechecked on the author's machine because the file was sitting
+  # uncommitted in the working tree.
+  #
+  # tools/check-cycles.mjs cannot catch that class: the missing thing is an
+  # EXPORT, not a file, so both ends of the edge are tracked. A typecheck on a
+  # clean checkout is what catches it.
+  #
+  # Deliberately NOT a dependency of `promote`. aero-2 is pre-ship; the fleet
+  # still runs v1, and a red rewrite must not hold back a green v1 deploy.
+  aero-2:
+    name: aero-2 — Type-check & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aero-2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # `check` is svelte-check plus tools/check-cycles.mjs (no import cycles,
+      # no tracked file importing an untracked one).
+      - name: Type check
+        run: bun run check
+
+      # data/ is gitignored, so the tests that would read the 3.5 GB DEM archive
+      # skip themselves here rather than failing. That is deliberate — see the
+      # note on `the packed DEM covers every location that needs it`.
+      - name: Test
+        run: bun run test
+
   # ── Release promotion ────────────────────────────────────────────────────
   # The Pi fleet's daily updater tracks the `release` branch, NOT main.
   # This job is the deploy gate: only a green main run moves `release`.
