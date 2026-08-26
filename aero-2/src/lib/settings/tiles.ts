@@ -22,7 +22,21 @@ export const TERRAIN_MINZOOM = 5;
 
 export const HILLSHADE_DEFAULT = 0.85;
 export const HILLSHADE_SHADOW_COLOR = '#1a2436';
-export const TERRAIN_EXAGGERATION = 2.5;
+/**
+ * Terrain at its real height. 1.0 is not a tuning choice, it is the datum.
+ *
+ * 2.5x was compensating for something else: GIBS at z9 is ~250 m/px, so relief
+ * was invisible in the imagery and the mesh was pushed to make it legible. That
+ * traded a texture problem for a geometry lie -- Everest was drawn at 22,122 m,
+ * three times higher than any airliner flies, and every camera altitude had to
+ * be scaled to match or the window filled with hillside.
+ *
+ * The honest fix for flat-looking ground is sharper ground (Sentinel-2 at z14
+ * is ~9.5 m/px) and hillshade, not a taller planet. At 1.0 the drawn surface
+ * and the flight envelope finally use the same units, which is what makes an
+ * altitude in the HUD mean anything.
+ */
+export const TERRAIN_EXAGGERATION = 1.0;
 
 export const IMAGERY_GRADE = {
 	saturation: -0.08,

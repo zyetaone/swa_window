@@ -173,6 +173,15 @@ export class Location {
 			650,
 			11_500
 		),
+		/**
+		 * The floor clears Everest, because the camera flies at floor + ground.
+		 *
+		 * 3,500 AGL over a 5,000 m mean put the camera at 8,500 m -- 349 m BELOW
+		 * the 8,849 m summit -- so at the bottom of the climb the window filled
+		 * with rock. Nothing caught it while the DEM stopped at 79.9E and there
+		 * was no Himalayan terrain to hit. 4,600 puts it at 9,600 m, which is
+		 * both above the summit and where aircraft actually cross the range.
+		 */
 		new Location(
 			'himalayas',
 			'The Himalayas',
@@ -180,7 +189,7 @@ export class Location {
 			86.925,
 			'Asia/Kathmandu',
 			5_000,
-			3_500,
+			4_600,
 			13_000,
 			'feature'
 		),
