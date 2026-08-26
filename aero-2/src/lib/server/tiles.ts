@@ -140,8 +140,6 @@ export function remoteTileUrl(subPath: string): string | null {
 			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
 		case 'viirs':
 			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_LAYER}/default/${VIIRS_DATE}/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
-		case 'usgs':
-			return `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
 		default:
 			return null;
 	}

@@ -91,7 +91,7 @@ export class FlightDirector {
 	 * Operator "next". Goes through setPlace like everything else.
 	 *
 	 * The previous version assigned `settings.place` directly, which moves the
-	 * place and leaves `phase`, `detail`, `floorM` and `ceilingM` describing
+	 * place and leaves `phase`, `floorM` and `ceilingM` describing
 	 * the location you just left — so Mumbai's 500 m floor followed you to
 	 * Denver and put the camera inside the Front Range.
 	 */

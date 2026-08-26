@@ -328,13 +328,6 @@
 					<h4>3D Terrain & Satellite Imagery</h4>
 					<Knob
 						{config}
-						key="detail"
-						label="Satellite High-Res Detail"
-						step={0.05}
-						format={(v) => `${Math.round(v * 100)}%`}
-					/>
-					<Knob
-						{config}
 						key="shade"
 						label="Topological Hillshade"
 						step={0.05}

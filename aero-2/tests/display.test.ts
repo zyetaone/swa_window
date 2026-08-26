@@ -19,7 +19,7 @@ import {
 } from '#lib/display/world/sun.js';
 import { ATMOSPHERE_BANDS } from '#lib/display/world/atmosphere.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/flight-path.js';
-import { Location, inNaipCoverage, readSettings } from '#lib/settings/settings.svelte.js';
+import { Location, readSettings } from '#lib/settings/settings.svelte.js';
 
 /** Signed shortest difference between two bearings, -180..180. */
 function normalizeSigned(deg: number): number {
@@ -60,33 +60,23 @@ describe('readSettings', () => {
 		expect(p.pitchDeg).toBe(-30);
 	});
 
-	it('auto-enables detail over US locations in NAIP coverage', () => {
-		expect(inNaipCoverage(Location.denver())).toBe(true);
-		expect(inNaipCoverage(Location.hyderabad())).toBe(false);
-		expect(paramsFor('?place=denver').detail).toBe(1);
-		expect(paramsFor('?place=hyderabad').detail).toBe(0);
-	});
-
 	/**
 	 * Changing place must carry everything the place DEFINES with it.
 	 *
-	 * `detail` is the one with teeth: it gates the US-only USGS layer, so a
-	 * stale `1` after moving to Hyderabad mounts a layer with no coverage and
-	 * streams 404s at the tile server for as long as the kiosk runs. Observed
-	 * live. This has regressed four times, every time because a caller set
-	 * place and forgot a sibling field — hence one gate, and this test on it.
+	 * The climb envelope is the case with teeth: Mumbai's 500 m floor following
+	 * you to Denver puts the camera inside the Front Range. This has regressed
+	 * four times, every time because a caller set place and forgot a sibling
+	 * field — hence one gate, and this test on it.
 	 */
-	it('carries detail, floor and ceiling across a place change', () => {
+	it('carries floor and ceiling across a place change', () => {
 		const s = paramsFor('?place=denver');
-		expect(s.detail).toBe(1);
 
 		s.setPlace(Location.hyderabad());
-		expect(s.detail).toBe(0);
 		expect(s.floorM).toBe(Location.hyderabad().climbFloorM);
 		expect(s.ceilingM).toBe(Location.hyderabad().climbCeilingM);
 
 		s.setPlace(Location.denver());
-		expect(s.detail).toBe(1);
+		expect(s.floorM).toBe(Location.denver().climbFloorM);
 		expect(s.ceilingM).toBe(Location.denver().climbCeilingM);
 	});
 });

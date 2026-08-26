@@ -70,7 +70,7 @@ describe('the destination is derived, not decided', () => {
 describe('the director moves the whole envelope, not just the place', () => {
 	/**
 	 * The old `advanceDestination` assigned `settings.place` directly. That
-	 * moves the place and leaves phase, detail, floorM and ceilingM describing
+	 * moves the place and leaves phase, floorM and ceilingM describing
 	 * the location you just left — so Mumbai's 500 m floor could follow you to
 	 * Denver and put the camera inside the Front Range.
 	 */

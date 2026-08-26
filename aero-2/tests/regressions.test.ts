@@ -7,7 +7,8 @@ import { PaneSettings, KNOB_RANGE } from '#lib/settings/settings.svelte.js';
 /**
  * Guards for bugs that have already shipped once and were re-broken by later
  * refactors. Each one cost a real debugging session, and comments alone did not
- * hold — the NAIP guard was removed three separate times.
+ * hold — the NAIP guard was removed three separate
+ * times before the layer it guarded was itself deleted.
  */
 
 /**
@@ -70,19 +71,18 @@ describe('tile URL shape', () => {
 });
 
 describe('GroundLayers', () => {
-	it('unmounts the USGS source rather than fading it to zero', () => {
-		// `raster-opacity: 0` hides a raster layer but does NOT stop it fetching.
-		// Over Hyderabad (no NAIP coverage) that meant hundreds of 404s per second
-		// for a layer nobody could see. A layer that renders nothing must not exist.
+	/**
+	 * The guard this replaces asserted the USGS source sat inside an `{#if}` so
+	 * it could not fetch while invisible. Refactors removed it three separate
+	 * times, which is why it existed at all. The layer itself is now deleted --
+	 * one colour photograph of the ground, everywhere, at every latitude -- so
+	 * the invariant that remains is simply that it does not come back.
+	 */
+	it('mounts exactly one colour photograph of the ground', () => {
 		const src = findSource('Ground.svelte');
-		const usgsIndex = src.indexOf('id="usgs"');
-		expect(usgsIndex, 'usgs source should exist').toBeGreaterThan(-1);
-
-		const before = src.slice(0, usgsIndex);
-		expect(
-			before,
-			'the usgs RasterTileSource must sit inside an {#if} on the detail opacity'
-		).toMatch(/\{#if[^}]*etail[^}]*>\s*0\s*\}[\s\S]*$/);
+		expect(src).not.toContain('usgs');
+		// gibs + viirs. A third would be a second photograph of the same ground.
+		expect(src.match(/<RasterTileSource/g) ?? []).toHaveLength(2);
 	});
 });
 

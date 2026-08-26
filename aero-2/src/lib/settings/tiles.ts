@@ -8,12 +8,11 @@ export const TILE_MAXZOOM = {
 	gibs: 9,
 	/** VIIRS ships GoogleMapsCompatible_Level8 — there is no z9 to ask for. */
 	viirs: 8,
-	usgs: 16,
 	terrarium: 13
 } as const;
 
 export const TILE_ATTRIBUTION =
-	'Imagery: NASA EOSDIS GIBS, USGS The National Map · Elevation: Mapzen / AWS Open Data';
+	'Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
 
 export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
 
@@ -38,21 +37,6 @@ export const HILLSHADE_SHADOW_COLOR = '#1a2436';
  */
 export const TERRAIN_EXAGGERATION = 1.0;
 
-/**
- * How strongly the high-resolution detail imagery shows, 0-1.
- *
- * NAIP is a daylight aerial photograph. It was drawn at full opacity ABOVE the
- * VIIRS city lights, so every US location rendered local 02:00 as broad
- * daylight with no lights at all — MapLibre stacks raster layers in mount
- * order, and that layer mounted last.
- *
- * Fading it on daylight is the physical answer and also removes the ordering
- * dependency: once it is gone, the lights are the only layer above the base.
- */
-export function groundDetailOpacity(detail: number, night: number): number {
-	return Math.max(0, Math.min(1, detail)) * (1 - Math.max(0, Math.min(1, night)));
-}
-
 export const IMAGERY_GRADE = {
 	saturation: -0.08,
 	contrast: 0.06,
@@ -60,20 +44,14 @@ export const IMAGERY_GRADE = {
 	fadeDuration: 0
 };
 
-export function inNaipCoverage(loc: { lat: number; lon: number }): boolean {
-	return loc.lat >= 24.5 && loc.lat <= 49.5 && loc.lon >= -125.0 && loc.lon <= -66.9;
-}
-
 export function tileTemplates(prefix = '/api/tiles'): {
 	gibs: string[];
 	viirs: string[];
-	usgs: string[];
 	terrarium: string[];
 } {
 	return {
 		gibs: [`${prefix}/xyz/gibs/{z}/{x}/{y}.jpg`],
 		viirs: [`${prefix}/xyz/viirs/{z}/{x}/{y}.png`],
-		usgs: [`${prefix}/xyz/usgs/{z}/{x}/{y}.jpg`],
 		terrarium: [`${prefix}/xyz/terrarium/{z}/{x}/{y}.png`]
 	};
 }

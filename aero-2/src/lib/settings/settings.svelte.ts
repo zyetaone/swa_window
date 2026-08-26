@@ -5,7 +5,7 @@
 
 import { LOCATIONS, Location } from './locations.js';
 import { SCENE_PRESETS, type ScenePreset } from './presets.js';
-import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION, inNaipCoverage } from './tiles.js';
+import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION } from './tiles.js';
 import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
 import {
 	DEFAULT_WINDOW_AZIMUTH_DEG,
@@ -17,7 +17,7 @@ import { resolveLocalHours } from '../display/world/sun.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
-export { inNaipCoverage, tileTemplates } from './tiles.js';
+export { tileTemplates } from './tiles.js';
 
 export interface SearchParamsSource {
 	searchParams: { get(key: string): string | null };
@@ -41,7 +41,6 @@ export const KNOB_RANGE = {
 	azimuthDeg: [-180, 180],
 	pitchDeg: [-89, 30],
 	speed: [0.1, 25.0],
-	detail: [0, 1],
 	floorM: [0, 20_000],
 	ceilingM: [0, 20_000],
 	clockOffsetH: [-12, 12],
@@ -76,7 +75,6 @@ export class PaneSettings {
 	place = $state<Location>(Location.hyderabad());
 	azimuthDeg = $state<number>(DEFAULT_WINDOW_AZIMUTH_DEG);
 	pitchDeg = $state<number>(DEFAULT_PITCH_DEG);
-	detail = $state<number>(0);
 	floorM = $state<number>(ALTITUDE_FLOOR_M);
 	ceilingM = $state<number>(ALTITUDE_CEILING_M);
 	/**
@@ -170,20 +168,17 @@ export class PaneSettings {
 	/**
 	 * Move to a location, and bring everything the location DEFINES with it.
 	 *
-	 * `detail`, `floorM`, `ceilingM` and `phase` are not independent settings —
-	 * they are facts about the place. Setting `place` alone leaves them
-	 * describing the previous one, and `detail` is the expensive case: it gates
-	 * the US-only USGS layer, so carrying Denver's `1` across to Hyderabad
-	 * mounts a layer with no coverage there and streams 404s at the tile server
-	 * indefinitely. That exact failure has now regressed four times, each time
-	 * because a caller set some of these fields and not the rest.
+	 * `floorM`, `ceilingM` and `phase` are not independent settings — they are
+	 * facts about the place. Setting `place` alone leaves them describing the
+	 * previous one, so Mumbai's 500 m floor follows you to Denver and puts the
+	 * camera inside the Front Range. That has now regressed four times, each
+	 * time because a caller set some of these fields and not the rest.
 	 *
 	 * So there is one gate. Call this, never assign `place` directly.
 	 */
 	setPlace(place: Location): void {
 		this.place = place;
 		this.phase = daySeed(place) * Math.PI * 2;
-		this.detail = inNaipCoverage(place) ? 1 : 0;
 		this.floorM = place.climbFloorM;
 		this.ceilingM = place.climbCeilingM;
 	}
@@ -193,7 +188,6 @@ export class PaneSettings {
 		this.setPlace(place);
 		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
 		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG);
-		this.detail = parseNum(url.searchParams, 'detail', this.detail);
 		this.floorM = parseNum(url.searchParams, 'floor', this.floorM);
 		this.ceilingM = parseNum(url.searchParams, 'ceiling', this.ceilingM);
 		this.clockOffsetH = parseNum(url.searchParams, 'clock', 0);
