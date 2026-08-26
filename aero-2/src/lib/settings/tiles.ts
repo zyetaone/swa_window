@@ -11,8 +11,7 @@ export const TILE_MAXZOOM = {
 	terrarium: 13
 } as const;
 
-export const TILE_ATTRIBUTION =
-	'Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
+export const TILE_ATTRIBUTION = 'Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
 
 export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
 

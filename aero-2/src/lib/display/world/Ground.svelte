@@ -66,7 +66,6 @@
 		'raster-fade-duration': IMAGERY_GRADE.fadeDuration,
 		'raster-resampling': IMAGERY_GRADE.resampling
 	});
-
 </script>
 
 <!-- GIBS satellite imagery. The only colour photograph of the ground.

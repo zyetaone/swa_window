@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tileTemplates } from '#lib/settings/tiles.js';
-import { PaneSettings, KNOB_RANGE } from '#lib/settings/settings.svelte.js';
+import { PaneSettings, KNOB_RANGE, readSettings } from '#lib/settings/settings.svelte.js';
 
 /**
  * Guards for bugs that have already shipped once and were re-broken by later
@@ -409,5 +409,27 @@ describe('/admin is not public in production', () => {
 		for (const leaky of ['allIps', 'arch', 'platform', 'loadAvg']) {
 			expect(payload, `${leaky} is a fingerprint, not telemetry`).not.toHaveProperty(leaky);
 		}
+	});
+});
+
+describe('an explicit ?place= is not overridden by the rotation', () => {
+	/**
+	 * `?place=hyderabad` loaded Hyderabad and then the director's clock-derived
+	 * slot moved the window elsewhere a second later, so the URL looked like it
+	 * did nothing. That is worse than a cosmetic bug: every place-specific check
+	 * — terrain clearance, tile coverage, a screenshot taken to verify a fix —
+	 * silently tests whichever location the rotation happened to pick.
+	 *
+	 * Caught by asking for Hyderabad and screenshotting the Himalayas.
+	 */
+	it('pins the destination when the URL names one', () => {
+		const pinned = readSettings(new URL('http://kiosk.local/?place=denver'));
+		expect(pinned.place.id).toBe('denver');
+		expect(pinned.rotate, 'a named place must stop the rotation').toBe(false);
+	});
+
+	it('still rotates when the URL names no place', () => {
+		const free = readSettings(new URL('http://kiosk.local/'));
+		expect(free.rotate).toBe(true);
 	});
 });

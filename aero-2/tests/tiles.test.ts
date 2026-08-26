@@ -21,7 +21,9 @@ describe('resolveTileDir', () => {
 	});
 
 	it('resolves a relative TILE_DIR against cwd', () => {
-		expect(resolveTileDir({ TILE_DIR: 'static/tiles' }, CWD, () => false)).toBe(`${CWD}/static/tiles`);
+		expect(resolveTileDir({ TILE_DIR: 'static/tiles' }, CWD, () => false)).toBe(
+			`${CWD}/static/tiles`
+		);
 	});
 
 	it('picks the Pi install path when it exists', () => {

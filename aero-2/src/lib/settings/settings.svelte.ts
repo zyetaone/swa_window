@@ -99,6 +99,14 @@ export class PaneSettings {
 	speed = $state<number>(4.0);
 	/** Which way round the orbit is flown. */
 	direction = $state<1 | -1>(1);
+
+	/**
+	 * Whether the director advances the destination on the wall clock.
+	 *
+	 * False when the URL names a place: an explicit ?place= should not be
+	 * overwritten by the rotation a second later.
+	 */
+	rotate = $state<boolean>(true);
 	/** Phase offset in radians from daySeed. */
 	phase = $state<number>(0);
 
@@ -184,8 +192,22 @@ export class PaneSettings {
 	}
 
 	applyUrl(url: SearchParamsSource): void {
-		const place = Location.byId(url.searchParams.get('place'));
-		this.setPlace(place);
+		/**
+		 * An explicit ?place= PINS the destination.
+		 *
+		 * Without this the director's rotation overrode it within one slot
+		 * boundary: `?place=hyderabad` loaded Hyderabad, then a second later the
+		 * clock-derived slot moved the window to wherever the rotation said, so
+		 * the URL looked like it did nothing. That makes every place-specific
+		 * check — the terrain clearances, the tile coverage, this session's own
+		 * screenshots — silently test the wrong location.
+		 *
+		 * Rotation stays on by default, because the fielded wall wants it; asking
+		 * for one place is the thing that turns it off.
+		 */
+		const placeParam = url.searchParams.get('place');
+		this.rotate = placeParam === null;
+		this.setPlace(Location.byId(placeParam));
 		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
 		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG);
 		this.floorM = parseNum(url.searchParams, 'floor', this.floorM);

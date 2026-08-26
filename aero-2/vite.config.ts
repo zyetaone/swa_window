@@ -12,9 +12,9 @@ export default defineConfig({
 			adapter: adapter(),
 			csp: {
 				directives: {
-					// GIBS, USGS and terrarium are all fetched server-side, through
-					// /api/tiles — the browser never talks to any of those hosts
-					// directly, so img-src/connect-src need nothing beyond self.
+					// GIBS and terrarium are fetched server-side, through /api/tiles —
+					// the browser never talks to those hosts directly, so img-src and
+					// connect-src need nothing beyond self.
 					'default-src': ['self'],
 					'script-src': ['self', 'unsafe-eval'],
 					'style-src': ['self', 'unsafe-inline'],
