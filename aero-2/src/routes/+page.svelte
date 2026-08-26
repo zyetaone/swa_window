@@ -12,19 +12,27 @@
 	import { createDisplay } from '#lib/display/display.svelte.js';
 	import Display from '#lib/display/Display.svelte';
 
-	createDisplay(readSettings(page.url));
+	const display = createDisplay(readSettings(page.url));
 
 	let showSettings = $state(false);
 	let showAdmin = $state(false);
 	let showHud = $state(true);
 
 	function onKeydown(e: KeyboardEvent) {
+		// Ignore shortcuts when typing inside form inputs
+		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
 		if (e.key === 's' || e.key === 'S') showSettings = !showSettings;
 		if (e.key === 'a' || e.key === 'A') showAdmin = !showAdmin;
 		if (e.key === 'h' || e.key === 'H') showHud = !showHud;
+		if (e.key === 'b' || e.key === 'B') display.config.blindOpen = !display.config.blindOpen;
+		if (e.key === ' ' || e.key === 'r' || e.key === 'R') display.config.reverse();
 		if (e.key === 'Escape') {
 			showSettings = false;
 			showAdmin = false;
+			if (display.config.displayMode !== 'flight') {
+				display.config.displayMode = 'flight';
+			}
 		}
 	}
 </script>

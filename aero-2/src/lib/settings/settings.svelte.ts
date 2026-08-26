@@ -93,9 +93,8 @@ export class PaneSettings {
 	/** Phase offset in radians from daySeed. */
 	phase = $state<number>(0);
 
-	/** Aircraft Wing alignment knobs (Mode, X, Y, Scale, Pitch, Roll) */
+	/** Aircraft Wing alignment knobs (X, Y, Scale, Pitch, Roll) */
 	wing = $state<boolean>(true);
-	wingMode = $state<'3d' | '2d'>('3d');
 	wingScale = $state<number>(DEFAULT_WING_SCALE);
 	wingOffsetX = $state<number>(DEFAULT_WING_OFFSET_X);
 	wingOffsetY = $state<number>(DEFAULT_WING_OFFSET_Y);
@@ -108,6 +107,50 @@ export class PaneSettings {
 	cloudSpeed = $state<number>(1.0);
 	cloudAltitudeM = $state<number>(3500);
 	cloudOpacity = $state<number>(0.85);
+
+	/** Cabin Window Blind & Touch controls */
+	blindOpen = $state<boolean>(true);
+	touchEnabled = $state<boolean>(true);
+
+	/** Weather conditions (clear, cloudy, rain, overcast, storm) */
+	weather = $state<'clear' | 'cloudy' | 'rain' | 'overcast' | 'storm'>('clear');
+	qualityMode = $state<'ultra' | 'balanced' | 'performance'>('balanced');
+
+	/** Display Modes (flight, video, screensaver, standby) */
+	displayMode = $state<'flight' | 'video' | 'screensaver' | 'standby'>('flight');
+	videoUrl = $state<string>(
+		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+	);
+	videoPlaylist = $state<string[]>([
+		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+	]);
+	videoIndex = $state<number>(0);
+	screensaverUrls = $state<string[]>([
+		'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80',
+		'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80',
+		'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80'
+	]);
+
+	/** Multi-Pi Fleet Parallax Role */
+	fleetRole = $state<'solo' | 'center' | 'left' | 'right'>('solo');
+
+	/** 3D Geospatial Engine (maplibre | cesium) */
+	engine = $state<'maplibre' | 'cesium'>('maplibre');
+	cesiumProvider = $state<'sentinel' | 'gibs' | 'osm'>('sentinel');
+	cesiumLighting = $state<boolean>(false);
+	cesiumAtmosphere = $state<boolean>(true);
+	cesiumViirsBrightness = $state<number>(0.85);
+
+	/** Cabin Ambient Soundscape & Audio Playlist */
+	audioEnabled = $state<boolean>(false);
+	audioVolume = $state<number>(0.5);
+	audioMode = $state<'synth' | 'playlist'>('synth');
+	audioPlaylist = $state<string[]>([
+		'https://actions.google.com/sounds/v1/weather/rain_heavy.ogg',
+		'https://actions.google.com/sounds/v1/weather/wind_breeze.ogg'
+	]);
+	audioTrackIndex = $state<number>(0);
 
 	constructor(initial?: Partial<PaneSettings>) {
 		if (initial) Object.assign(this, initial);
@@ -150,8 +193,6 @@ export class PaneSettings {
 		const rampParam = url.searchParams.get('ramp');
 		if (rampParam === 'LINZ' || rampParam === 'geographical') this.reliefRamp = rampParam;
 		this.speed = parseNum(url.searchParams, 'speed', 4.0);
-		const mode = url.searchParams.get('wingMode');
-		if (mode === '2d' || mode === '3d') this.wingMode = mode;
 		this.wingScale = parseNum(url.searchParams, 'wingScale', DEFAULT_WING_SCALE);
 		this.wingOffsetX = parseNum(url.searchParams, 'wingX', DEFAULT_WING_OFFSET_X);
 		this.wingOffsetY = parseNum(url.searchParams, 'wingY', DEFAULT_WING_OFFSET_Y);
@@ -163,6 +204,51 @@ export class PaneSettings {
 		this.cloudSpeed = parseNum(url.searchParams, 'cloudSpeed', 1.0);
 		this.cloudAltitudeM = parseNum(url.searchParams, 'cloudAlt', 3500);
 		this.cloudOpacity = parseNum(url.searchParams, 'cloudOpacity', 0.85);
+
+		const blindParam = url.searchParams.get('blind');
+		if (blindParam !== null)
+			this.blindOpen = blindParam !== 'closed' && blindParam !== '0' && blindParam !== 'false';
+
+		const weatherParam = url.searchParams.get('weather');
+		if (
+			weatherParam === 'clear' ||
+			weatherParam === 'cloudy' ||
+			weatherParam === 'rain' ||
+			weatherParam === 'overcast' ||
+			weatherParam === 'storm'
+		) {
+			this.weather = weatherParam;
+		}
+
+		const qualityParam = url.searchParams.get('quality');
+		if (qualityParam === 'ultra' || qualityParam === 'balanced' || qualityParam === 'performance') {
+			this.qualityMode = qualityParam;
+		}
+
+		const modeParam = url.searchParams.get('mode');
+		if (
+			modeParam === 'flight' ||
+			modeParam === 'video' ||
+			modeParam === 'screensaver' ||
+			modeParam === 'standby'
+		) {
+			this.displayMode = modeParam;
+		}
+
+		const roleParam = url.searchParams.get('role');
+		if (
+			roleParam === 'solo' ||
+			roleParam === 'center' ||
+			roleParam === 'left' ||
+			roleParam === 'right'
+		) {
+			this.fleetRole = roleParam;
+		}
+
+		const engineParam = url.searchParams.get('engine');
+		if (engineParam === 'maplibre' || engineParam === 'cesium') {
+			this.engine = engineParam;
+		}
 	}
 
 	reset(): void {
@@ -173,7 +259,6 @@ export class PaneSettings {
 		this.colorRelief = false;
 		this.reliefRamp = 'geographical';
 		this.speed = 4.0;
-		this.wingMode = '3d';
 		this.wingScale = DEFAULT_WING_SCALE;
 		this.wingOffsetX = DEFAULT_WING_OFFSET_X;
 		this.wingOffsetY = DEFAULT_WING_OFFSET_Y;
@@ -184,6 +269,10 @@ export class PaneSettings {
 		this.cloudSpeed = 1.0;
 		this.cloudAltitudeM = 3500;
 		this.cloudOpacity = 0.85;
+		this.blindOpen = true;
+		this.weather = 'clear';
+		this.displayMode = 'flight';
+		this.engine = 'maplibre';
 	}
 
 	set(key: NumericKnob, value: number): void {

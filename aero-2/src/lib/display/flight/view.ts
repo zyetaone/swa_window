@@ -3,7 +3,8 @@
  * Pure deterministic mathematics — rune-free and renderer-free.
  */
 
-import { normalizeHeading, FlightTrack, type OrbitPose } from './orbit.js';
+import { normalizeHeading, FlightTrack, type OrbitPose } from './flight-path.js';
+import { roleYawOffsetDeg, type FleetRole } from './parallax.js';
 import { resolveLocalHours } from '../world/sun.js';
 
 export interface CameraParams {
@@ -26,6 +27,8 @@ export interface CameraParams {
 	speed?: number;
 	/** Hours added to the destination's UTC offset. Tuning only; 0 on the wall. */
 	clockOffsetH?: number;
+	/** Multi-Pi Fleet Parallax Role */
+	fleetRole?: FleetRole;
 }
 
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
@@ -182,7 +185,8 @@ export function calculateCameraView(wallSec: number, params: CameraParams): Came
 	);
 	const effectiveSec = wallSec * (params.speed ?? 1.0);
 	const plane = track.poseAt(effectiveSec);
-	const camera = new FlightCamera(params.azimuthDeg, params.pitchDeg);
+	const roleOffset = roleYawOffsetDeg(params.fleetRole ?? 'solo');
+	const camera = new FlightCamera(params.azimuthDeg + roleOffset, params.pitchDeg);
 
 	/**
 	 * Cities get an inward aim; features do not.

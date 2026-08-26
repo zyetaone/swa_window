@@ -1,12 +1,9 @@
 <script lang="ts">
 	/**
-	 * Wing — aircraft wing rendered in the passenger window.
+	 * Wing — High-Fidelity 3D Boeing 737 aircraft wing rendered in the passenger window.
 	 *
-	 * Supports BOTH:
-	 * 1. 3D Real Boeing 737 Model (wing.glb) with upward dihedral inclination,
-	 *    wingtip navigation lights, and strobe beacon on a lightweight Three.js <canvas bind:this={canvas}>.
-	 * 2. 2D Vector Silhouette SVG with inclined profile and navigation lighting.
-	 *
+	 * Uses Three.js WebGL with upward dihedral sweep, wingtip navigation light (starboard green),
+	 * double-pulse strobe beacon, and dynamic specular lighting reflecting solar time.
 	 * Responds dynamically to airframe banking, solar lighting transitions, and operator alignment knobs.
 	 */
 	import { useDisplay } from '../display.svelte.js';
@@ -22,22 +19,17 @@
 	const display = useDisplay();
 
 	const isVisible = $derived(visible && display.config.wing);
-	const mode = $derived(display.config.wingMode ?? '3d');
 	const scale = $derived(display.config.wingScale ?? 0.65);
 	const offsetX = $derived(display.config.wingOffsetX ?? -405);
 	const offsetY = $derived(display.config.wingOffsetY ?? -20);
 	const pitchOffset = $derived(display.config.wingPitchDeg ?? 0);
 	const rollFactor = $derived(display.config.wingRollFactor ?? 1.0);
 
-	/** 2D SVG Roll calculation */
-	const svgRoll = $derived((display.view.bankDeg ?? 0) * 0.55 * rollFactor + pitchOffset);
-
 	// ── 3D Canvas & Three.js Scene Lifecycle ──────────────────────────────────
 	let canvas = $state<HTMLCanvasElement | undefined>();
-	let modelLoaded = $state(false);
 
 	$effect(() => {
-		if (!canvas || mode !== '3d' || !isVisible) return;
+		if (!canvas || !isVisible) return;
 
 		const c = canvas;
 		const renderer = new THREE.WebGLRenderer({
@@ -94,12 +86,10 @@
 					}
 				});
 				wingHolder.add(wingMesh);
-				modelLoaded = true;
 			},
 			undefined,
 			(err) => {
-				console.warn('[Wing] 3D wing.glb failed to load, falling back to 2D:', err);
-				modelLoaded = false;
+				console.warn('[Wing] 3D wing.glb load warning:', err);
 			}
 		);
 
@@ -152,54 +142,8 @@
 </script>
 
 {#if isVisible}
-	{@const dir = display.config.direction ?? 1}
-	{#if mode === '3d'}
-		<!-- 3D WebGL Canvas Layer (Unclipped 100% Viewport Bounds) -->
-		<canvas bind:this={canvas} class="cabin-wing-canvas" aria-hidden="true"></canvas>
-	{/if}
-
-	{#if mode === '2d' || (mode === '3d' && !modelLoaded)}
-		<!-- 2D Vector Silhouette Fallback Layer -->
-		<div
-			class="cabin-wing-2d"
-			style:rotate="{svgRoll}deg"
-			style:scale="{scale * dir}
-			{scale}"
-			style:translate="{offsetX * dir}px {offsetY}px"
-			aria-hidden="true"
-		>
-			<svg class="wing-svg" viewBox="0 0 1000 600" preserveAspectRatio="none">
-				<defs>
-					<linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-						<stop offset="0%" stop-color="#334155" stop-opacity="0.95" />
-						<stop offset="55%" stop-color="#1e293b" stop-opacity="0.98" />
-						<stop offset="100%" stop-color="#0f172a" stop-opacity="1" />
-					</linearGradient>
-					<linearGradient id="edgeHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
-						<stop offset="0%" stop-color="#ffffff" stop-opacity="0.35" />
-						<stop offset="100%" stop-color="#ffffff" stop-opacity="0.05" />
-					</linearGradient>
-				</defs>
-
-				<!-- Inclined wing body -->
-				<path
-					d="M 1000,500 L 260,330 Q 210,310 180,260 L 160,280 L 1000,600 Z"
-					fill="url(#wingGrad)"
-				/>
-				<!-- Leading edge highlight -->
-				<path
-					d="M 1000,500 L 260,330 Q 210,310 180,260"
-					fill="none"
-					stroke="url(#edgeHighlight)"
-					stroke-width="3.5"
-				/>
-				<!-- Green Navigation Light -->
-				<circle cx="185" cy="265" r="3.5" fill="#22c55e" class="nav-light" />
-				<!-- White Wingtip Strobe Light -->
-				<circle cx="175" cy="275" r="4.5" fill="#ffffff" class="strobe" />
-			</svg>
-		</div>
-	{/if}
+	<!-- Pure 3D WebGL Canvas Layer (Unclipped 100% Viewport Bounds) -->
+	<canvas bind:this={canvas} class="cabin-wing-canvas" aria-hidden="true"></canvas>
 {/if}
 
 <style>
@@ -210,58 +154,5 @@
 		height: 100%;
 		pointer-events: none;
 		z-index: 5;
-	}
-
-	.cabin-wing-2d {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		overflow: hidden;
-		z-index: 5;
-		transform-origin: 100% 65%;
-		will-change: rotate, transform;
-		transition: scale 0.1s ease-out;
-	}
-
-	.wing-svg {
-		position: absolute;
-		bottom: 0;
-		right: 0;
-		width: 68%;
-		height: 52%;
-	}
-
-	.nav-light {
-		filter: drop-shadow(0 0 6px #22c55e);
-	}
-
-	.strobe {
-		animation: strobe-pulse 1.8s infinite ease-in-out;
-		filter: drop-shadow(0 0 8px #ffffff);
-	}
-
-	@keyframes strobe-pulse {
-		0%,
-		88%,
-		100% {
-			opacity: 0.15;
-			transform-origin: 175px 275px;
-			transform: scale(1);
-		}
-		91% {
-			opacity: 1;
-			transform-origin: 175px 275px;
-			transform: scale(2);
-		}
-		94% {
-			opacity: 0.2;
-			transform-origin: 175px 275px;
-			transform: scale(1);
-		}
-		97% {
-			opacity: 1;
-			transform-origin: 175px 275px;
-			transform: scale(2);
-		}
 	}
 </style>

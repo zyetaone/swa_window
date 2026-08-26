@@ -33,3 +33,6 @@ static/cesiumStatic/
 # Python bytecode — a survey script imported tools/*.py and this got swept in.
 __pycache__/
 *.pyc
+
+# Cesium runtime assets, copied from node_modules by tools/sync-cesium.mjs
+static/cesiumStatic/

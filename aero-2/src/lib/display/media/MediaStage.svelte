@@ -1,0 +1,151 @@
+<script lang="ts">
+	/**
+	 * MediaStage — Fullscreen video player or photo slideshow for non-flight kiosk modes.
+	 * Supports single video loops, video playlists, and image slideshows.
+	 */
+	import { useDisplay } from '../display.svelte.js';
+
+	const display = useDisplay();
+
+	let slideIndex = $state(0);
+	let failedUrls = $state<string[]>([]);
+	let mediaError = $state(false);
+
+	const mode = $derived(display.config.displayMode);
+
+	// Video playlist calculation
+	const videoList = $derived(
+		display.config.videoPlaylist.length > 0
+			? display.config.videoPlaylist
+			: display.config.videoUrl
+				? [display.config.videoUrl]
+				: []
+	);
+	const activeVideoUrl = $derived(
+		videoList.length > 0 ? videoList[display.config.videoIndex % videoList.length] : ''
+	);
+
+	// Image slideshow calculation
+	const urls = $derived(display.config.screensaverUrls);
+	const playableImages = $derived(urls.filter((u) => !failedUrls.includes(u)));
+	const currentImageUrl = $derived(
+		playableImages.length > 0 ? playableImages[slideIndex % playableImages.length] : ''
+	);
+
+	function markFailed(url: string) {
+		if (!url || failedUrls.includes(url)) return;
+		failedUrls = [...failedUrls, url];
+		if (mode === 'video' || urls.filter((u) => !failedUrls.includes(u)).length === 0) {
+			mediaError = true;
+		}
+	}
+
+	function onVideoEnded() {
+		if (videoList.length > 1) {
+			display.config.videoIndex = (display.config.videoIndex + 1) % videoList.length;
+		}
+	}
+
+	$effect(() => {
+		if (mode !== 'screensaver' || playableImages.length <= 1) return;
+		const interval = setInterval(() => {
+			slideIndex = (slideIndex + 1) % playableImages.length;
+		}, 10000);
+		return () => clearInterval(interval);
+	});
+</script>
+
+{#if mode !== 'flight'}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		class="media-stage"
+		role="img"
+		aria-label="Media Stage"
+		onclick={() => {
+			display.config.displayMode = 'flight';
+		}}
+	>
+		{#if mode === 'standby'}
+			<div class="standby-screen">
+				<span class="standby-hint">Touch screen or press Escape to wake</span>
+			</div>
+		{:else if mediaError}
+			<div class="empty">
+				Media failed to load
+				<span class="hint">Click or press Escape to return to flight</span>
+			</div>
+		{:else if mode === 'video' && activeVideoUrl}
+			<video
+				class="media"
+				src={activeVideoUrl}
+				autoplay
+				muted
+				loop={videoList.length <= 1}
+				playsinline
+				onended={onVideoEnded}
+				onerror={() => markFailed(activeVideoUrl)}
+			></video>
+		{:else if mode === 'screensaver' && currentImageUrl}
+			{#key currentImageUrl}
+				<img
+					class="media"
+					src={currentImageUrl}
+					alt=""
+					onerror={() => markFailed(currentImageUrl)}
+				/>
+			{/key}
+		{:else}
+			<div class="empty">
+				No media specified
+				<span class="hint">Click to return to flight</span>
+			</div>
+		{/if}
+	</div>
+{/if}
+
+<style>
+	.media-stage {
+		position: absolute;
+		inset: 0;
+		background: #000;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		z-index: 25;
+		cursor: pointer;
+	}
+	.media {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+		pointer-events: none;
+	}
+	img.media {
+		animation: fade-in 0.6s ease;
+	}
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	.empty,
+	.standby-screen {
+		color: rgba(255, 255, 255, 0.55);
+		font-size: 0.85rem;
+		text-align: center;
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.hint,
+	.standby-hint {
+		font-size: 0.7rem;
+		opacity: 0.65;
+	}
+</style>

@@ -11,7 +11,7 @@
 	import type { Map as MlMap } from 'maplibre-gl';
 
 	import { useDisplay } from '../display.svelte.js';
-	import { FlightTrack, CLIMB_PERIOD_SEC } from './orbit.js';
+	import { FlightTrack, CLIMB_PERIOD_SEC } from './flight-path.js';
 	import { TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/settings/tiles.js';
 
 	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };

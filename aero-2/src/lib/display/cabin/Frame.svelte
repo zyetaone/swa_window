@@ -44,23 +44,44 @@
 		inset: 0;
 		background: radial-gradient(
 			ellipse at 50% 50%,
-			transparent 60%,
-			rgba(10, 16, 26, 0.3) 85%,
-			rgba(5, 8, 14, 0.6) 100%
+			transparent 55%,
+			rgba(10, 16, 26, 0.25) 80%,
+			rgba(5, 8, 14, 0.65) 100%
+		);
+	}
+
+	/* Acrylic rim blur — mimics double-curved edge acrylic refraction */
+	.glass-vignette::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		backdrop-filter: blur(2px);
+		-webkit-backdrop-filter: blur(2px);
+		-webkit-mask-image: radial-gradient(
+			ellipse 84% 78% at 50% 50%,
+			transparent 65%,
+			rgba(0, 0, 0, 0.6) 85%,
+			#000 100%
+		);
+		mask-image: radial-gradient(
+			ellipse 84% 78% at 50% 50%,
+			transparent 65%,
+			rgba(0, 0, 0, 0.6) 85%,
+			#000 100%
 		);
 	}
 
 	.glass-reflection {
 		position: absolute;
-		top: -20%;
-		right: -10%;
-		width: 60%;
-		height: 140%;
+		top: -25%;
+		right: -15%;
+		width: 70%;
+		height: 150%;
 		background: linear-gradient(
 			135deg,
-			rgba(255, 255, 255, 0.03) 0%,
-			rgba(255, 255, 255, 0.01) 40%,
-			transparent 60%
+			rgba(255, 255, 255, 0.04) 0%,
+			rgba(255, 255, 255, 0.015) 30%,
+			transparent 55%
 		);
 		transform: rotate(-15deg);
 	}
@@ -68,7 +89,9 @@
 	.window-bezel {
 		position: absolute;
 		inset: 0;
-		box-shadow: inset 0 0 80px 40px rgba(0, 0, 0, 0.85);
+		box-shadow:
+			inset 0 0 80px 40px rgba(0, 0, 0, 0.85),
+			inset 0 0 12px 2px rgba(255, 255, 255, 0.05);
 	}
 
 	.bezel-inner {

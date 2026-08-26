@@ -235,3 +235,5 @@ export class Location {
 		return Location.CATALOG.filter((l) => l.kind === 'feature');
 	}
 }
+
+export const LOCATIONS = Location.all();

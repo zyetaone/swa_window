@@ -38,6 +38,25 @@
 		return off === 0 ? `${stamp} local` : `${stamp} · ${off > 0 ? '+' : ''}${off}h`;
 	});
 
+	interface NetworkStatus {
+		hostname: string;
+		primaryLanIp: string;
+		lanIps: { name: string; address: string }[];
+		port: number;
+	}
+	let networkStatus = $state<NetworkStatus | null>(null);
+
+	$effect(() => {
+		if (showAdmin) {
+			fetch('/api/status')
+				.then((res) => res.json())
+				.then((data) => {
+					networkStatus = data;
+				})
+				.catch(() => {});
+		}
+	});
+
 	function reload() {
 		if (typeof window !== 'undefined') window.location.reload();
 	}
@@ -148,33 +167,15 @@
 			</section>
 
 			<section class="section">
-				<h4>Aircraft Wing Alignment</h4>
+				<h4>Aircraft Wing Alignment (3D Boeing 737)</h4>
 				<label class="checkbox-field">
 					<input
 						type="checkbox"
 						checked={config.wing}
 						onchange={(e) => (config.wing = e.currentTarget.checked)}
 					/>
-					<span>Show Wing</span>
+					<span>Show 3D Wing</span>
 				</label>
-				<div class="mode-toggle">
-					<button
-						type="button"
-						class="mode-btn"
-						class:active={config.wingMode === '3d'}
-						onclick={() => (config.wingMode = '3d')}
-					>
-						3D Boeing 737
-					</button>
-					<button
-						type="button"
-						class="mode-btn"
-						class:active={config.wingMode === '2d'}
-						onclick={() => (config.wingMode = '2d')}
-					>
-						2D Vector
-					</button>
-				</div>
 				<label class="field">
 					<span>Wing Scale ({config.wingScale.toFixed(2)}x)</span>
 					<input
@@ -365,11 +366,52 @@
 						checked={config.audioEnabled}
 						onchange={(e) => (config.audioEnabled = e.currentTarget.checked)}
 					/>
-					<span>Cabin Engine Soundscape</span>
+					<span>Cabin Soundscape Active</span>
 				</label>
 				{#if config.audioEnabled}
+					<div class="location-grid" style="margin: 6px 0;">
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.audioMode === 'synth'}
+							onclick={() => (config.audioMode = 'synth')}
+						>
+							SYNTH ENGINE
+						</button>
+						<button
+							type="button"
+							class="loc-btn"
+							class:active={config.audioMode === 'playlist'}
+							onclick={() => (config.audioMode = 'playlist')}
+						>
+							AUDIO PLAYLIST
+						</button>
+					</div>
+
+					{#if config.audioMode === 'playlist'}
+						<div
+							class="field"
+							style="display: flex; gap: 8px; align-items: center; justify-content: space-between;"
+						>
+							<span style="font-size: 0.75rem; opacity: 0.8;"
+								>Track {config.audioTrackIndex + 1} / {config.audioPlaylist.length}</span
+							>
+							<button
+								type="button"
+								class="glass-btn"
+								style="font-size: 0.7rem; padding: 2px 8px;"
+								onclick={() => {
+									config.audioTrackIndex =
+										(config.audioTrackIndex + 1) % config.audioPlaylist.length;
+								}}
+							>
+								Next Track ⏭
+							</button>
+						</div>
+					{/if}
+
 					<label class="field">
-						<span>Engine Volume ({Math.round(config.audioVolume * 100)}%)</span>
+						<span>Volume ({Math.round(config.audioVolume * 100)}%)</span>
 						<input
 							type="range"
 							min="0"
@@ -408,6 +450,27 @@
 						</button>
 					{/each}
 				</div>
+
+				{#if config.displayMode === 'video'}
+					<div
+						class="field"
+						style="display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 8px;"
+					>
+						<span style="font-size: 0.75rem; opacity: 0.8;"
+							>Video {config.videoIndex + 1} / {config.videoPlaylist.length}</span
+						>
+						<button
+							type="button"
+							class="glass-btn"
+							style="font-size: 0.7rem; padding: 2px 8px;"
+							onclick={() => {
+								config.videoIndex = (config.videoIndex + 1) % config.videoPlaylist.length;
+							}}
+						>
+							Next Video ⏭
+						</button>
+					</div>
+				{/if}
 			</section>
 
 			<section class="section">
@@ -424,6 +487,43 @@
 						</button>
 					{/each}
 				</div>
+
+				{#if config.engine === 'cesium'}
+					<div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+						<span style="font-size: 0.75rem; opacity: 0.8;">Satellite Provider</span>
+						<div class="location-grid">
+							{#each ['sentinel', 'gibs', 'osm'] as const as prov}
+								<button
+									type="button"
+									class="loc-btn"
+									class:active={config.cesiumProvider === prov}
+									onclick={() => (config.cesiumProvider = prov)}
+								>
+									{prov === 'sentinel' ? 'SENTINEL-2' : prov === 'gibs' ? 'NASA GIBS' : 'OSM'}
+								</button>
+							{/each}
+						</div>
+						<label class="checkbox-field">
+							<input
+								type="checkbox"
+								checked={config.cesiumAtmosphere}
+								onchange={(e) => (config.cesiumAtmosphere = e.currentTarget.checked)}
+							/>
+							<span>Sky Atmosphere</span>
+						</label>
+						<label class="field">
+							<span>VIIRS Night Lights ({Math.round(config.cesiumViirsBrightness * 100)}%)</span>
+							<input
+								type="range"
+								min="0"
+								max="1"
+								step="0.05"
+								value={config.cesiumViirsBrightness}
+								oninput={(e) => (config.cesiumViirsBrightness = e.currentTarget.valueAsNumber)}
+							/>
+						</label>
+					</div>
+				{/if}
 			</section>
 
 			<div class="actions">
@@ -518,6 +618,42 @@
 						<strong>{display.atmosphere.bandId}</strong>
 					</div>
 				</div>
+			</section>
+
+			<section class="section">
+				<h4>Local Network & IP Access</h4>
+				{#if networkStatus}
+					<div class="telemetry-table" style="margin-bottom: 8px;">
+						<div class="row">
+							<span>Hostname</span>
+							<strong>{networkStatus.hostname}</strong>
+						</div>
+						<div class="row">
+							<span>Primary LAN</span>
+							<strong style="color: #60a5fa;"
+								>http://{networkStatus.primaryLanIp}:{networkStatus.port || 5173}</strong
+							>
+						</div>
+					</div>
+					{#if networkStatus.lanIps && networkStatus.lanIps.length > 0}
+						<div class="location-grid">
+							{#each networkStatus.lanIps as iface}
+								<button
+									type="button"
+									class="loc-btn"
+									onclick={() => {
+										const url = `http://${iface.address}:${networkStatus?.port || 5173}/`;
+										navigator.clipboard?.writeText(url);
+									}}
+								>
+									{iface.name}: {iface.address} (📋 Copy)
+								</button>
+							{/each}
+						</div>
+					{/if}
+				{:else}
+					<p style="font-size: 0.8rem; opacity: 0.6;">Detecting local LAN network interfaces...</p>
+				{/if}
 			</section>
 
 			<section class="section">
@@ -750,32 +886,6 @@
 		background: var(--glass-bg-hover);
 	}
 	.loc-btn.active {
-		background: var(--accent-cyan-bg);
-		border-color: var(--accent-cyan);
-		color: var(--accent-cyan);
-		font-weight: 600;
-	}
-	.mode-toggle {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 6px;
-		margin-bottom: 12px;
-	}
-	.mode-btn {
-		padding: 6px 8px;
-		border-radius: 6px;
-		border: 1px solid var(--glass-border);
-		background: var(--glass-bg-subtle);
-		color: var(--text-primary);
-		font-size: 0.75rem;
-		cursor: pointer;
-		transition: all 0.15s;
-		text-align: center;
-	}
-	.mode-btn:hover {
-		background: var(--glass-bg-hover);
-	}
-	.mode-btn.active {
 		background: var(--accent-cyan-bg);
 		border-color: var(--accent-cyan);
 		color: var(--accent-cyan);

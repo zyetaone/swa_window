@@ -1,18 +1,24 @@
 <script lang="ts">
 	/**
 	 * Display — Top-level parent feature component for the kiosk window display.
-	 * Composes the outside 3D world (Stage), aircraft wing silhouette (Wing),
+	 * Composes the outside 3D world (Stage / CesiumStage), aircraft wing silhouette (Wing),
 	 * inside cabin chrome (Frame), minimap (MiniMap), and telemetry status band (Hud).
 	 *
 	 * Uses Svelte 5 <svelte:boundary> to isolate 3D WebGL runtime errors from taking
 	 * down the cabin frame or operator UI.
 	 */
 	import Stage from './world/Stage.svelte';
+	import CesiumStage from './world/CesiumStage.svelte';
 	import Clouds from './world/Clouds.svelte';
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
+	import Blind from './cabin/Blind.svelte';
+	import RainGlass from './cabin/RainGlass.svelte';
 	import Hud from './cabin/Hud.svelte';
 	import MiniMap from './flight/MiniMap.svelte';
+	import MediaStage from './media/MediaStage.svelte';
+	import AudioHost from './media/AudioHost.svelte';
+	import { useDisplay } from './display.svelte.js';
 	import type { Snippet } from 'svelte';
 
 	interface Props {
@@ -20,10 +26,20 @@
 		wing?: boolean;
 		minimap?: boolean;
 		hud?: boolean;
+		blind?: boolean;
 		children?: Snippet;
 	}
 
-	let { clouds = true, wing = true, minimap = true, hud = true, children }: Props = $props();
+	let {
+		clouds = true,
+		wing = true,
+		minimap = true,
+		hud = true,
+		blind = true,
+		children
+	}: Props = $props();
+
+	const display = useDisplay();
 
 	function onStageError(error: unknown) {
 		console.error('[AeroDisplay] 3D World Stage error caught by boundary:', error);
@@ -33,7 +49,11 @@
 <div class="aero-display">
 	<!-- 3D World protected by Svelte 5 Error Boundary -->
 	<svelte:boundary onerror={onStageError}>
-		<Stage />
+		{#if display.config.engine === 'cesium'}
+			<CesiumStage />
+		{:else}
+			<Stage />
+		{/if}
 
 		{#snippet failed(error, reset)}
 			<div class="stage-error-fallback">
@@ -52,13 +72,19 @@
 	{#if wing}
 		<Wing />
 	{/if}
+	<RainGlass />
 	<Frame />
+	{#if blind}
+		<Blind />
+	{/if}
 	{#if minimap}
 		<MiniMap />
 	{/if}
 	{#if hud}
 		<Hud />
 	{/if}
+	<MediaStage />
+	<AudioHost />
 	{@render children?.()}
 </div>
 

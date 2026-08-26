@@ -273,3 +273,41 @@ describe('the clamp table is the only range', () => {
 		expect(offenders, 'bind min/max to KNOB_RANGE instead of retyping them').toEqual([]);
 	});
 });
+
+describe('runtime imports are declared dependencies', () => {
+	/**
+	 * `import('cesium')` shipped while `cesium` was absent from package.json.
+	 * The build still succeeded — a dynamic import is resolved at RUNTIME, so
+	 * neither `bun run build` nor `svelte-check` can see the gap, and it only
+	 * fails on a machine that does not happen to have the package lying around
+	 * in node_modules. Measured on ?engine=cesium: 1 uncaught exception.
+	 *
+	 * Any bare-specifier dynamic import must therefore be a declared dependency.
+	 */
+	it('every dynamically imported package is in package.json', () => {
+		const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+		const declared = new Set([
+			...Object.keys(pkg.dependencies ?? {}),
+			...Object.keys(pkg.devDependencies ?? {})
+		]);
+
+		const undeclared = new Set<string>();
+		for (const file of allSources()) {
+			const src = readFileSync(file, 'utf8');
+			for (const m of src.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+				const spec = m[1];
+				// Relative paths and subpath aliases resolve locally.
+				if (spec.startsWith('.') || spec.startsWith('#') || spec.startsWith('$')) continue;
+				const pkgName = spec.startsWith('@')
+					? spec.split('/').slice(0, 2).join('/')
+					: spec.split('/')[0];
+				if (!declared.has(pkgName)) undeclared.add(`${pkgName} (${file})`);
+			}
+		}
+
+		expect(
+			[...undeclared],
+			'a dynamic import of an undeclared package builds fine and fails on a clean install'
+		).toEqual([]);
+	});
+});

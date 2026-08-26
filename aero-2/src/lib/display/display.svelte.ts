@@ -4,6 +4,7 @@
  */
 import { getContext, setContext, untrack } from 'svelte';
 import { calculateCameraView, type CameraView } from './flight/view.js';
+import { FlightDirector } from './flight/director.svelte.js';
 import { resolveAtmosphere, type AtmosphereState } from './world/atmosphere.js';
 import { nightFactor, sunPosition, type SunPosition } from './world/sun.js';
 import { createSettings, type PaneSettings } from '#lib/settings/settings.svelte.js';
@@ -12,6 +13,7 @@ const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 
 export class AeroDisplay {
 	readonly config: PaneSettings;
+	readonly director: FlightDirector;
 	view = $state<CameraView>({} as CameraView);
 	fps = $state<number>(60);
 	frameTimeMs = $state<number>(16.6);
@@ -29,6 +31,7 @@ export class AeroDisplay {
 			this.config = createSettings();
 		}
 
+		this.director = new FlightDirector(this.config);
 		this.view = untrack(() => calculateCameraView(Date.now() / 1000, this.config));
 	}
 
@@ -49,12 +52,19 @@ export class AeroDisplay {
 		);
 	}
 
+	advanceLocation(): void {
+		this.director.advanceDestination();
+	}
+
 	advanceTo(wallSec: number = Date.now() / 1000): CameraView {
 		if (typeof performance !== 'undefined') {
 			const now = performance.now();
 			const delta = now - this.#lastTickTime;
+			const dt = Math.min(0.1, delta / 1000);
 			this.#lastTickTime = now;
 			this.#frameCount++;
+
+			this.director.tick(dt);
 
 			if (now - this.#lastFpsUpdate >= 500) {
 				this.fps = Math.round((this.#frameCount * 1000) / (now - this.#lastFpsUpdate));
