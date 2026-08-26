@@ -9,6 +9,7 @@ import {
 } from '#lib/display/flight/flight-path.js';
 import { calculateCameraView, FlightCamera } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
+import { slotNoise } from '#lib/display/flight/flight-path.js';
 import {
 	resolveLocalHours,
 	nightFactor,
@@ -454,9 +455,10 @@ describe('banking', () => {
 				const truth =
 					(Math.atan2((after.lon - before.lon) * cosLat, after.lat - before.lat) * 180) / Math.PI;
 				const err = Math.abs(normalizeSigned(t.headingAt(s) - truth));
-				expect(err, `${name} heading off by ${err.toFixed(1)} deg at t=${s.toFixed(0)}`).toBeLessThan(
-					1
-				);
+				expect(
+					err,
+					`${name} heading off by ${err.toFixed(1)} deg at t=${s.toFixed(0)}`
+				).toBeLessThan(1);
 			}
 		}
 	});
@@ -873,5 +875,48 @@ describe('mean ground elevation is not a terrain clearance', () => {
 
 		const him = Location.byId('himalayas');
 		expect(him.groundElevationM + him.climbFloorM).toBeGreaterThan(8704);
+	});
+});
+
+describe('slotNoise keeps three panes in step', () => {
+	/**
+	 * Lightning used to schedule itself with `4000 + Math.random() * 9000`, so
+	 * each pane rolled its own delay and the three windows flashed at three
+	 * different moments. On one continuous window that reads as a fault rather
+	 * than as weather — the same failure the director had before it moved to a
+	 * wall-clock slot index.
+	 */
+	it('gives the same value for the same slot, every time', () => {
+		for (const slot of [0, 1, 42, 999_999]) {
+			expect(slotNoise(slot)).toBe(slotNoise(slot));
+		}
+	});
+
+	it('differs between slots, so it does not look periodic', () => {
+		const vals = new Set(Array.from({ length: 200 }, (_, i) => slotNoise(i)));
+		expect(vals.size).toBeGreaterThan(190);
+	});
+
+	it('is a unit interval', () => {
+		for (let i = 0; i < 500; i++) {
+			const v = slotNoise(i);
+			expect(v).toBeGreaterThanOrEqual(0);
+			expect(v).toBeLessThan(1);
+		}
+	});
+
+	it('salts independently, so two effects do not fire together', () => {
+		const a = Array.from({ length: 50 }, (_, i) => slotNoise(i, 0));
+		const b = Array.from({ length: 50 }, (_, i) => slotNoise(i, 1));
+		expect(a).not.toEqual(b);
+	});
+
+	it('spreads roughly evenly, so strikes are not clustered', () => {
+		const buckets = new Array(10).fill(0);
+		for (let i = 0; i < 10_000; i++) buckets[Math.floor(slotNoise(i) * 10)]++;
+		for (const b of buckets) {
+			expect(b).toBeGreaterThan(700); // uniform would be 1000
+			expect(b).toBeLessThan(1300);
+		}
 	});
 });

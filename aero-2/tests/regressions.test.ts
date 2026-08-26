@@ -311,3 +311,27 @@ describe('runtime imports are declared dependencies', () => {
 		).toEqual([]);
 	});
 });
+
+describe('three panes stay in step', () => {
+	/**
+	 * Three Pi 5s form ONE window and exchange nothing about what they draw, so
+	 * every visible effect has to be a pure function of the wall clock. A single
+	 * `Math.random()` in a render path splits the wall: the director rolled its
+	 * own rotation interval and put three cities on three panes, and the storm
+	 * lightning rolled its own delay and flashed at three different moments.
+	 *
+	 * Audio is exempt — it is one speaker, not three panes — and comments are
+	 * not code.
+	 */
+	it('has no Math.random in anything that draws', () => {
+		const offenders: string[] = [];
+		for (const file of allSources()) {
+			if (file.includes('/media/')) continue; // audio noise buffer, not visual
+			const src = readFileSync(file, 'utf8');
+			// strip block and line comments before looking
+			const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+			if (/Math\.random\s*\(/.test(code)) offenders.push(file);
+		}
+		expect(offenders, 'use slotNoise/daySeed — a random draw desyncs the wall').toEqual([]);
+	});
+});

@@ -293,3 +293,22 @@ export class FlightTrack {
 		return ring;
 	}
 }
+
+/**
+ * A deterministic pseudo-random value in [0,1) for a given integer slot.
+ *
+ * For effects that need to look random but must be IDENTICAL on all three
+ * panes: lightning, gusts, anything scheduled. `Math.random()` gives each pane
+ * its own answer, and on one continuous window that reads as a fault rather
+ * than as weather — three panes flashing at three different moments.
+ *
+ * Keyed off a slot index derived from the wall clock, so every pane computes
+ * the same value for the same instant without exchanging anything, and a pane
+ * that reboots rejoins mid-sequence instead of restarting it.
+ */
+export function slotNoise(slot: number, salt = 0): number {
+	let h = Math.imul(slot ^ 0x9e3779b9, 2246822507) ^ Math.imul(salt + 1, 3266489909);
+	h = Math.imul(h ^ (h >>> 15), 2246822507);
+	h = Math.imul(h ^ (h >>> 13), 3266489909);
+	return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}

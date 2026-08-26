@@ -4,6 +4,7 @@
 	 * condensation frost, and storm lightning flash.
 	 */
 	import { useDisplay } from '../display.svelte.js';
+	import { slotNoise } from '../flight/flight-path.js';
 
 	const display = useDisplay();
 
@@ -50,23 +51,36 @@
 
 	const beads = $derived(allBeads.slice(0, beadCount));
 
-	// Storm lightning flash generator
+	/**
+	 * Storm lightning, scheduled off the WALL CLOCK rather than Math.random().
+	 *
+	 * Each pane used to roll its own 4-13 s delay, so on a three-Pi wall the
+	 * three windows flashed at three different moments. Lightning that does not
+	 * agree across a continuous window reads as a fault, not as weather — the
+	 * same reason the director stopped rolling its own rotation interval.
+	 *
+	 * Now every pane derives the same flash from the same second: the strike
+	 * lands in a fixed 13 s slot, at an offset that is a pure function of the
+	 * slot index. No shared state, no message, and a pane that reboots rejoins
+	 * the same sequence.
+	 */
+	const FLASH_PERIOD_SEC = 13;
 	let lightning = $state(false);
 	$effect(() => {
 		if (display.config.weather !== 'storm') return;
-		let timeout: ReturnType<typeof setTimeout>;
-		const scheduleFlash = () => {
-			const delay = 4000 + Math.random() * 9000;
-			timeout = setTimeout(() => {
-				lightning = true;
-				setTimeout(() => {
-					lightning = false;
-					scheduleFlash();
-				}, 120);
-			}, delay);
+
+		let raf = 0;
+		const check = () => {
+			const now = Date.now() / 1000;
+			const slot = Math.floor(now / FLASH_PERIOD_SEC);
+			// Strike somewhere in the first 9 s of the slot, deterministically.
+			const strikeAt = slot * FLASH_PERIOD_SEC + slotNoise(slot) * 9;
+			const since = now - strikeAt;
+			lightning = since >= 0 && since < 0.12;
+			raf = requestAnimationFrame(check);
 		};
-		scheduleFlash();
-		return () => clearTimeout(timeout);
+		raf = requestAnimationFrame(check);
+		return () => cancelAnimationFrame(raf);
 	});
 </script>
 

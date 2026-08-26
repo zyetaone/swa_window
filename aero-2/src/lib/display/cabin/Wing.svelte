@@ -124,7 +124,10 @@
 				wingHolder.rotation.z = -currentRollRad;
 				wingHolder.scale.set(scale * dir, scale, scale);
 				// Unclipped 3D translation inside WebGL coordinates with direction awareness
-				wingHolder.position.set(1.1 * dir + offsetX * 0.005, -1.1 - offsetY * 0.005, 0);
+				wingHolder.position.set(1.1 * dir + offsetX * 0.005 * dir, -1.1 - offsetY * 0.005, 0);
+
+				// Aviation Standard: Green for Starboard (Right), Red for Port (Left)
+				navLight.color.setHex(dir === 1 ? 0x22c55e : 0xef4444);
 			}
 
 			renderer.render(scene, camera);
