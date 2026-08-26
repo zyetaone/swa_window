@@ -7,7 +7,13 @@ import { LOCATIONS, Location } from './locations.js';
 import { SCENE_PRESETS, type ScenePreset } from './presets.js';
 import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION, inNaipCoverage } from './tiles.js';
 import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
-import { DEFAULT_WINDOW_AZIMUTH_DEG, DEFAULT_PITCH_DEG, WEATHERS, type Weather } from '../display/flight/view.js';
+import {
+	DEFAULT_WINDOW_AZIMUTH_DEG,
+	DEFAULT_PITCH_DEG,
+	WEATHERS,
+	type Weather
+} from '../display/flight/view.js';
+import { resolveLocalHours } from '../display/world/sun.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
@@ -246,6 +252,19 @@ export class PaneSettings {
 		if (engineParam === 'maplibre' || engineParam === 'cesium') {
 			this.engine = engineParam;
 		}
+
+		/**
+		 * Last, because every assignment above is unconditional — `clockOffsetH`
+		 * falls back to 0, `speed` to 4.0 — so a preset applied first would be
+		 * overwritten by the defaults of params nobody passed.
+		 *
+		 * ponytail: the cost is that an explicit param LOSES to a preset in the
+		 * same URL (`?preset=storm-transit&place=denver` stays over Chicago). If
+		 * that combination is ever wanted, the fix is to make the block above
+		 * fall back to the current value rather than to a constant.
+		 */
+		const presetParam = url.searchParams.get('preset');
+		if (presetParam) this.applyPreset(presetParam);
 	}
 
 	reset(): void {
@@ -286,34 +305,44 @@ export class PaneSettings {
 		this.direction = this.direction === 1 ? -1 : 1;
 	}
 
-	applyPreset(presetOrId: ScenePreset | string): void {
+	/**
+	 * Compose the scene from a preset.
+	 *
+	 * `localHour` is resolved here rather than stored, because the camera takes
+	 * an OFFSET from real local time, not an absolute hour — see the note on
+	 * ScenePreset.config.localHour for what that cost the six authored presets.
+	 *
+	 * The offset lands on a 15-minute grid so a fleet URL stays a fleet URL:
+	 * three panes opening `?preset=golden-hour` within a few minutes of each
+	 * other derive the SAME offset and therefore the same sun. Panes started
+	 * more than ~7 minutes apart can still land a bucket apart — this is an
+	 * operator action on a pane, not a derived quantity, so that ceiling is
+	 * accepted rather than engineered away.
+	 */
+	applyPreset(presetOrId: ScenePreset | string, wallSec: number = Date.now() / 1000): void {
 		const preset =
 			typeof presetOrId === 'string' ? SCENE_PRESETS.find((p) => p.id === presetOrId) : presetOrId;
 		if (!preset) return;
 
-		const c = preset.config;
-		if (c.placeId) {
-			const loc = LOCATIONS.find((l) => l.id === c.placeId);
+		const { localHour, placeId, wingVisible, ...rest } = preset.config;
+
+		if (placeId) {
+			const loc = LOCATIONS.find((l) => l.id === placeId);
 			if (loc) this.setPlace(loc);
 		}
-		if (c.engine !== undefined) this.engine = c.engine;
-		if (c.clockOffsetH !== undefined) this.clockOffsetH = c.clockOffsetH;
-		if (c.cloudDensity !== undefined) this.cloudDensity = c.cloudDensity;
-		if (c.cloudOpacity !== undefined) this.cloudOpacity = c.cloudOpacity;
-		if (c.cloudSpeed !== undefined) this.cloudSpeed = c.cloudSpeed;
-		if (c.cloudAltitudeM !== undefined) this.cloudAltitudeM = c.cloudAltitudeM;
-		if (c.exaggeration !== undefined) this.exaggeration = c.exaggeration;
-		if (c.shade !== undefined) this.shade = c.shade;
-		if (c.rain !== undefined) this.weather = c.rain ? 'rain' : 'clear';
-		if (c.cesiumLighting !== undefined) this.cesiumLighting = c.cesiumLighting;
-		if (c.cesiumAtmosphere !== undefined) this.cesiumAtmosphere = c.cesiumAtmosphere;
-		if (c.cesiumViirsBrightness !== undefined) this.cesiumViirsBrightness = c.cesiumViirsBrightness;
-		if (c.audioEnabled !== undefined) this.audioEnabled = c.audioEnabled;
-		if (c.audioVolume !== undefined) this.audioVolume = c.audioVolume;
-		if (c.pitchDeg !== undefined) this.pitchDeg = c.pitchDeg;
-		if (c.azimuthDeg !== undefined) this.azimuthDeg = c.azimuthDeg;
-		if (c.speed !== undefined) this.speed = c.speed;
-		if (c.wingVisible !== undefined) this.wing = c.wingVisible;
+
+		// setPlace first: the offset is relative to the DESTINATION's local time.
+		if (localHour !== undefined) {
+			const nowH = resolveLocalHours(wallSec, this.place.utcOffset);
+			// Wrap to shortest signed offset in [-12, 12] on a 15-minute grid
+			const rawDelta = ((((localHour - nowH) % 24) + 36) % 24) - 12;
+			this.clockOffsetH = Math.round(rawDelta * 4) / 4;
+		}
+
+		for (const [key, value] of Object.entries(rest)) {
+			if (value !== undefined) (this as Record<string, unknown>)[key] = value;
+		}
+		if (wingVisible !== undefined) this.wing = wingVisible;
 	}
 
 	nudge(key: NumericKnob, delta: number): void {

@@ -136,13 +136,7 @@
 	// Elevation profile wave SVG path (sine/cosine climb waveform)
 	const ELEV_WIDTH = 104;
 	const ELEV_HEIGHT = 24;
-	/**
-	 * Drawn from the altitude the aircraft ACTUALLY flies, not a re-derived
-	 * cosine. The climb carries a seeded wander (see ORBIT.altitudeWanderFrac),
-	 * so a hand-drawn cosine is no longer the profile being flown, and the dot
-	 * would sit beside its own curve. Same defect as drawing the orbit ring from
-	 * different parameters than the flight — one source, two views.
-	 */
+
 	const elevPathD = $derived.by(() => {
 		const lo = display.config.floorM;
 		const hi = display.config.ceilingM;
@@ -158,6 +152,42 @@
 
 	const elevDotX = $derived(climbPhase * ELEV_WIDTH);
 	const elevDotY = $derived(ELEV_HEIGHT - climb * (ELEV_HEIGHT - 4) - 2);
+
+	/**
+	 * Percentage of ground visible in the window vs horizon/sky,
+	 * derived from the camera's effective depression angle and airframe bank.
+	 */
+	const depressionDeg = $derived.by(() => {
+		const pitch = display.view.cameraPitchDeg;
+		return pitch !== undefined ? Math.max(1, Math.min(89, 90 - pitch)) : 18;
+	});
+
+	const groundFrac = $derived(Math.max(0.15, Math.min(1.0, depressionDeg / 40)));
+
+	/**
+	 * Dynamic FOV Ground Viewing Wedge / Frustum polygon.
+	 */
+	const sightlineWedgeD = $derived.by(() => {
+		if (!marker || !targetMarker) return '';
+		const dx = targetMarker.x - marker.x;
+		const dy = targetMarker.y - marker.y;
+		const dist = Math.sqrt(dx * dx + dy * dy);
+		if (dist < 2) return '';
+
+		const normX = dx / dist;
+		const normY = dy / dist;
+		const perpX = -normY;
+		const perpY = normX;
+
+		// Spread width responds to how much ground is framed
+		const spread = Math.max(6, Math.min(26, dist * 0.3 * groundFrac));
+		const p1X = (targetMarker.x + perpX * spread).toFixed(1);
+		const p1Y = (targetMarker.y + perpY * spread).toFixed(1);
+		const p2X = (targetMarker.x - perpX * spread).toFixed(1);
+		const p2Y = (targetMarker.y - perpY * spread).toFixed(1);
+
+		return `M ${marker.x.toFixed(1)},${marker.y.toFixed(1)} L ${p1X},${p1Y} L ${p2X},${p2Y} Z`;
+	});
 </script>
 
 <div class="minimap" aria-label="Flight Orbit Minimap">
@@ -188,23 +218,52 @@
 			<path d={pathD} class="track-path" />
 		{/if}
 
-		<!-- Sideways Passenger Window Sightline -->
+		<!-- Sideways Passenger Window Sightline & Dynamic FOV Wedge -->
 		{#if marker && targetMarker}
-			<line x1={marker.x} y1={marker.y} x2={targetMarker.x} y2={targetMarker.y} class="sightline" />
-			<circle cx={targetMarker.x} cy={targetMarker.y} r="2.5" class="target-dot" />
+			{#if sightlineWedgeD}
+				<path
+					d={sightlineWedgeD}
+					class="sightline-wedge"
+					style:opacity="{0.15 + 0.35 * groundFrac}"
+				/>
+			{/if}
+			<line
+				x1={marker.x}
+				y1={marker.y}
+				x2={targetMarker.x}
+				y2={targetMarker.y}
+				class="sightline"
+				style:opacity="{0.4 + 0.6 * groundFrac}"
+			/>
+			<circle cx={targetMarker.x} cy={targetMarker.y} r="3" class="target-dot" />
+			<circle
+				cx={targetMarker.x}
+				cy={targetMarker.y}
+				r="6"
+				class="target-pulse"
+				style:opacity="{groundFrac}"
+			/>
 		{/if}
 	</svg>
 
-	<!-- Aircraft Heading Marker (▲ points in flight direction) -->
+	<!-- Aircraft Heading Marker (Aviation SVG Jet Icon) -->
 	{#if marker}
 		<div
-			class="plane"
+			class="plane-marker"
 			style:left="{marker.x}px"
 			style:top="{marker.y}px"
 			style:rotate="{heading}deg"
 			aria-hidden="true"
 		>
-			▲
+			<svg viewBox="0 0 24 24" width="20" height="20" class="plane-svg">
+				<path
+					d="M12 2 L14 9 L22 13 L22 15 L14 13 L14 19 L17 21 L17 22 L12 21 L7 22 L7 21 L10 19 L10 13 L2 15 L2 13 L10 9 Z"
+					fill="#38bdf8"
+					stroke="#0b111e"
+					stroke-width="1"
+				/>
+				<circle cx="12" cy="4" r="1.5" fill="#ffffff" />
+			</svg>
 		</div>
 	{/if}
 
@@ -283,9 +342,16 @@
 	}
 
 	.sightline {
-		stroke: rgba(56, 189, 248, 0.7);
+		stroke: rgba(56, 189, 248, 0.85);
 		stroke-width: 1.2;
 		stroke-dasharray: 2 3;
+	}
+
+	.sightline-wedge {
+		fill: rgba(56, 189, 248, 0.22);
+		stroke: rgba(56, 189, 248, 0.35);
+		stroke-width: 0.8;
+		transition: opacity 0.2s ease;
 	}
 
 	.target-dot {
@@ -293,16 +359,37 @@
 		filter: drop-shadow(0 0 4px #38bdf8);
 	}
 
-	.plane {
+	.target-pulse {
+		fill: none;
+		stroke: rgba(56, 189, 248, 0.7);
+		stroke-width: 1;
+		animation: pulse-ring 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+	}
+
+	@keyframes pulse-ring {
+		0% {
+			r: 3;
+			opacity: 0.9;
+		}
+		100% {
+			r: 11;
+			opacity: 0;
+		}
+	}
+
+	.plane-marker {
 		position: absolute;
 		translate: -50% -50%;
-		font-size: 13px;
-		line-height: 1;
-		color: #ffffff;
-		text-shadow:
-			0 0 6px rgba(0, 0, 0, 1),
-			0 0 10px #38bdf8;
+		width: 20px;
+		height: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		pointer-events: none;
+		filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 8px rgba(56, 189, 248, 0.8));
+	}
+	.plane-svg {
+		display: block;
 	}
 
 	.reverse {
