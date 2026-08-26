@@ -11,6 +11,7 @@
 	 */
 	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
+	import { duskHorizonMix, duskVaultMix } from './sun.js';
 
 	const display = useDisplay();
 
@@ -38,20 +39,34 @@
 	// ── 1. Circadian & Solar-Graded Sky Vault Colors ──────────────────────────
 	const skyTop = $derived.by(() => {
 		const base = display.atmosphere.skyTop;
-		const elev = sunElev;
-		const dusk = Math.max(0, Math.min(1, (12 - Math.abs(elev)) / 12));
+
+		// Fades out by 14 deg of sun elevation. `Math.abs` so it applies equally
+		// either side of the horizon — the vault dims at dawn as it does at dusk.
+		const dusk = duskVaultMix(sunElev);
 
 		const duskSky: readonly [number, number, number] = [0.22, 0.12, 0.32];
 		const nightSky: readonly [number, number, number] = [0.01, 0.02, 0.06];
 
-		const duskBlended = lerpRgb(base, duskSky, dusk * 0.65);
+		const duskBlended = lerpRgb(base, duskSky, dusk * 0.55);
 		return lerpRgb(duskBlended, nightSky, night);
 	});
 
 	const skyHorizon = $derived.by(() => {
 		const base = display.atmosphere.skyHorizon;
-		const elev = sunElev;
-		const dusk = Math.max(0, Math.min(1, (15 - elev) / 15));
+
+		/**
+		 * Sunset orange, confined to when the sun is actually near the horizon.
+		 *
+		 * This was `(15 - elev) / 15`, which is not symmetric about the horizon
+		 * and does not reach zero until the sun is 15 deg up — well into
+		 * mid-morning. At 10 deg it still mixed 33% of a deep sunset orange into
+		 * a blue sky, and blending #d96b2e into #99b8db gives #ae9ea2: a muddy
+		 * grey-pink, which is what a clear morning was rendering as.
+		 *
+		 * Now gone by 8 deg and eased, so the colour belongs to the twenty
+		 * minutes either side of sunrise and sunset that actually own it.
+		 */
+		const dusk = duskHorizonMix(sunElev);
 
 		const duskHorizon: readonly [number, number, number] = [0.85, 0.42, 0.18];
 		const nightHorizon: readonly [number, number, number] = [0.03, 0.06, 0.14];

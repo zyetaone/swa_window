@@ -85,3 +85,27 @@ export function nightFactor(timeOfDay: number): number {
 
 	return 1 - smoothstep(5, 8, h);
 }
+
+/**
+ * How much sunset colour the sky vault takes, 0..1.
+ *
+ * Symmetric about the horizon via `Math.abs`, so dawn dims like dusk, and eased
+ * rather than linear — a linear ramp changes colour at a constant rate, which
+ * reads as a wipe instead of a sunset.
+ */
+export function duskVaultMix(sunElevationDeg: number): number {
+	const t = Math.max(0, Math.min(1, (Math.abs(sunElevationDeg) - -6) / (14 - -6)));
+	return 1 - t * t * (3 - 2 * t);
+}
+
+/**
+ * How much sunset orange the HORIZON takes, 0..1.
+ *
+ * Was `(15 - elev) / 15`: not symmetric, and still 0.33 at 10 deg of elevation,
+ * which is mid-morning. Blending a deep orange into a blue horizon at that
+ * strength produces grey-pink mud rather than either colour. Gone by 8 deg.
+ */
+export function duskHorizonMix(sunElevationDeg: number): number {
+	const t = Math.max(0, Math.min(1, (sunElevationDeg - -4) / (8 - -4)));
+	return 1 - t * t * (3 - 2 * t);
+}

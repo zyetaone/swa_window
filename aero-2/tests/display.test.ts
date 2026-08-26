@@ -12,31 +12,31 @@ import {
 } from '#lib/display/flight/orbit.js';
 import { calculateCameraView, FlightCamera } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
-import { resolveLocalHours, nightFactor, sunPosition } from '#lib/display/world/sun.js';
-import { ATMOSPHERE_BANDS, TRANSITION_HALF_WIDTH_M } from '#lib/display/world/atmosphere.js';
+import {
+	resolveLocalHours,
+	nightFactor,
+	sunPosition,
+	duskHorizonMix,
+	duskVaultMix
+} from '#lib/display/world/sun.js';
+import { ATMOSPHERE_BANDS } from '#lib/display/world/atmosphere.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/orbit.js';
 import { Location, inNaipCoverage, readSettings } from '#lib/settings/settings.svelte.js';
 
 const paramsFor = (search = '') => readSettings(new URL(`http://kiosk.local/${search}`));
 
 /**
- * An altitude squarely inside band `index`, clear of the blend zone at either
- * edge.
+ * The altitude at which band `index` applies exactly — the middle of its span.
  *
- * The midpoint is NOT good enough: the ground band spans 0–1000 m, so its
- * midpoint is 500 m, but blending starts at `topM - TRANSITION_HALF_WIDTH_M`
- * = 400 m. The midpoint therefore sits inside the transition and legitimately
- * reports a `nextBandId`. Step in from the top edge instead, and fall back to
- * the midpoint only when the band is too narrow for that to be inside it.
+ * This used to hunt for a spot clear of a 200 m blend zone, because the
+ * resolver held each band flat and blended only at the edges. It no longer
+ * does: the curve is interpolated between band anchors across the whole
+ * climb, and the anchor IS the midpoint.
  */
 function coreAltitude(index: number): number {
 	const floor = index === 0 ? 0 : ATMOSPHERE_BANDS[index - 1].topM;
 	const ceil = ATMOSPHERE_BANDS[index].topM;
-	if (!Number.isFinite(ceil)) return floor + TRANSITION_HALF_WIDTH_M * 4;
-
-	// Just below where the blend into the next band begins.
-	const belowBlend = ceil - TRANSITION_HALF_WIDTH_M * 1.5;
-	return belowBlend > floor ? belowBlend : (floor + ceil) / 2;
+	return Number.isFinite(ceil) ? (floor + ceil) / 2 : 13_000;
 }
 
 // ── URL Knobs & Param Parsing ────────────────────────────────────────────────
@@ -136,15 +136,11 @@ describe('Flight Pose', () => {
 // ── Atmosphere & Night Curves ────────────────────────────────────────────────
 
 describe('resolveAtmosphere', () => {
-	it('returns each band verbatim in its core, with no blending', () => {
+	it('hits each band exactly at its anchor', () => {
 		ATMOSPHERE_BANDS.forEach((band, i) => {
 			const s = resolveAtmosphere(coreAltitude(i));
 			expect(s.bandId).toBe(band.id);
-			expect(s.nextBandId).toBeNull();
-			expect(s.crossing).toBe(0);
-			expect(s.fogDensity).toBe(band.fogDensity);
-			expect(s.groundDetail).toBe(band.groundDetail);
-			expect(s.deckOpacity).toBe(band.deckOpacity);
+			expect(s.fogDensity).toBeCloseTo(band.fogDensity, 12);
 		});
 	});
 
@@ -153,11 +149,43 @@ describe('resolveAtmosphere', () => {
 		let prev = resolveAtmosphere(0);
 		for (let alt = STEP; alt <= 15_000; alt += STEP) {
 			const s = resolveAtmosphere(alt);
-			expect(Math.abs(s.groundDetail - prev.groundDetail)).toBeLessThan(0.01);
-			expect(Math.abs(s.deckOpacity - prev.deckOpacity)).toBeLessThan(0.01);
 			expect(Math.abs(s.fogDensity - prev.fogDensity)).toBeLessThan(1e-5);
 			prev = s;
 		}
+	});
+
+	/**
+	 * The bug this replaced: values were held FLAT across each band and blended
+	 * only over a 200 m boundary, so across a 0-13,000 m climb the atmosphere
+	 * was constant for 11,400 m and changed over 1,600 m. 88% plateau, four
+	 * cliffs, and that is what read as banding out of the window.
+	 *
+	 * Guarding the SHAPE, not a value: most of the climb must actually move the
+	 * sky, and no single 200 m step may carry a large share of the total change.
+	 */
+	it('changes across most of the climb, in no single step', () => {
+		const STEP = 200;
+		const TOP = 13_000;
+		let moving = 0;
+		let steps = 0;
+		let biggest = 0;
+		let total = 0;
+		let prev = resolveAtmosphere(0);
+
+		for (let alt = STEP; alt <= TOP; alt += STEP) {
+			const s = resolveAtmosphere(alt);
+			const d = Math.abs(s.fogDensity - prev.fogDensity);
+			if (d > 1e-9) moving++;
+			biggest = Math.max(biggest, d);
+			total += d;
+			steps++;
+			prev = s;
+		}
+
+		// Was 12% before; a continuous curve moves on essentially every step.
+		expect(moving / steps).toBeGreaterThan(0.9);
+		// Was ~23% of all change in one 200 m step.
+		expect(biggest / total).toBeLessThan(0.1);
 	});
 
 	it('darkens sky monotonically with altitude', () => {
@@ -706,5 +734,43 @@ describe('atmosphere reads as altitude, not constant haze', () => {
 		// Climbing THROUGH the deck must clear, not keep thickening.
 		expect(byId('cirrus').fogDensity).toBeLessThan(byId('midDeck').fogDensity);
 		expect(byId('stratosphere').fogDensity).toBeLessThan(byId('cirrus').fogDensity);
+	});
+});
+
+describe('sky colour', () => {
+	/**
+	 * The horizon's sunset mix was `(15 - elev) / 15`. That is not symmetric
+	 * about the horizon and does not reach zero until the sun is 15 deg up —
+	 * mid-morning. At 10 deg it still mixed 33% of a deep orange into a blue
+	 * horizon, and #d96b2e over #99b8db gives #ae9ea2: grey-pink mud where a
+	 * clear morning sky belongs.
+	 */
+	it('keeps sunset colour near the horizon, not into mid-morning', () => {
+		expect(duskHorizonMix(-6)).toBeCloseTo(1, 2); // below the horizon: full
+		expect(duskHorizonMix(0)).toBeGreaterThan(0.6); // at sunrise: strong
+		expect(duskHorizonMix(10)).toBe(0); // mid-morning: none
+		expect(duskHorizonMix(60)).toBe(0); // noon: none
+	});
+
+	it('dims the vault symmetrically at dawn and dusk', () => {
+		// The sun 6 deg below the horizon looks the same going up or down.
+		expect(duskVaultMix(-6)).toBeCloseTo(duskVaultMix(6), 6);
+		expect(duskVaultMix(60)).toBe(0);
+	});
+
+	it('eases rather than ramping linearly', () => {
+		// A linear ramp has a constant slope; an eased one is slowest at the ends.
+		const midSlope = duskHorizonMix(1) - duskHorizonMix(3);
+		const endSlope = duskHorizonMix(6) - duskHorizonMix(8);
+		expect(midSlope).toBeGreaterThan(endSlope);
+	});
+
+	it('is monotonic — the sky never brightens as the sun sets', () => {
+		let prev = duskHorizonMix(-12);
+		for (let e = -11; e <= 20; e++) {
+			const v = duskHorizonMix(e);
+			expect(v).toBeLessThanOrEqual(prev + 1e-9);
+			prev = v;
+		}
 	});
 });
