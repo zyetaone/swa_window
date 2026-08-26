@@ -30,6 +30,25 @@ import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
 import { remoteTileUrl } from '#lib/server/tiles.js';
 
+/** Comments name these hazards to explain them; only real code counts. */
+function stripComments(src: string): string {
+	return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+function simSources(): string[] {
+	const out: string[] = [];
+	const walk = (dir: string) => {
+		for (const entry of readdirSync(dir)) {
+			const full = join(dir, entry);
+			if (statSync(full).isDirectory()) walk(full);
+			else if (/\.(ts|svelte)$/.test(entry) && !/\.d\.ts$/.test(entry)) out.push(full);
+		}
+	};
+	walk('src/lib/display');
+	walk('src/lib/settings');
+	return out;
+}
+
 // ── 1. The product invariant ─────────────────────────────────────────────────
 
 /**
@@ -153,19 +172,6 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 		'display/media/ambient-audio.ts', // white-noise buffer; audio, not world
 		'display/cabin/RainGlass.svelte' // droplets on this pane's own glass
 	];
-	function simSources(): string[] {
-		const out: string[] = [];
-		const walk = (dir: string) => {
-			for (const entry of readdirSync(dir)) {
-				const full = join(dir, entry);
-				if (statSync(full).isDirectory()) walk(full);
-				else if (/\.(ts|svelte)$/.test(entry) && !/\.d\.ts$/.test(entry)) out.push(full);
-			}
-		};
-		walk('src/lib/display');
-		walk('src/lib/settings');
-		return out;
-	}
 
 	it('has no unseeded randomness in the simulation path', () => {
 		const offenders: string[] = [];
@@ -178,6 +184,77 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 			if (/Math\.random\s*\(/.test(code)) offenders.push(rel);
 		}
 		expect(offenders, 'seed from daySeed, or add to ALLOWED with a reason').toEqual([]);
+	});
+});
+
+/**
+ * Two invariants ARCHITECTURE.md states and nothing enforced.
+ *
+ * Both were violated in the tree the day this was written, and neither showed
+ * up in a unit test, because both are properties of where code lives rather
+ * than of what any function returns. The source scan above already proved the
+ * technique works for `Math.random`.
+ */
+describe('the architecture invariants are actually held', () => {
+	/**
+	 * Invariant 2: wall-clock time is the only input to the world, so three
+	 * panes agree without a protocol.
+	 *
+	 * `Math.random` is the obvious half and is covered above. The other half is
+	 * an accumulator: `x += dt` integrates each pane's own frame drops, and a
+	 * clamp like `Math.min(0.1, dt)` silently discards the overflow, so the
+	 * value runs slower than the clock by an amount that differs per pane and
+	 * resets on reboot. That is how the director split the wall, and the cloud
+	 * deck was doing it in three places while its own docstring claimed
+	 * determinism. Derive from `view.wallSec` instead.
+	 */
+	it('integrates no frame deltas in the simulation path', () => {
+		const offenders: string[] = [];
+		for (const file of simSources()) {
+			const rel = file.replace(/^src\/lib\//, '');
+			const code = stripComments(readFileSync(file, 'utf8'));
+			// `foo += dt`, `foo += delta * n`, `foo += elapsed`, and friends.
+			const m = /(\w+)\s*\+=\s*[^;\n]*\b(dt|delta|deltaMs|elapsed|frameTime)\b/.exec(code);
+			if (m) offenders.push(`${rel} (${m[0].trim()})`);
+		}
+		expect(offenders, 'derive from view.wallSec, not from an accumulator').toEqual([]);
+	});
+
+	/**
+	 * Invariant 4, in the form that is actually true and worth enforcing.
+	 *
+	 * The doc claimed "only display/world/ imports MapLibre", which was never
+	 * so -- MiniMap renders a map and needs one, and LookControls mounts a
+	 * MapLibre control. Contorting those buys nothing.
+	 *
+	 * What does matter is that the PURE modules stay pure: the flight model,
+	 * the camera, the atmosphere and the sun are the layer a second renderer
+	 * has to reuse unchanged, and they are the layer the tests can exercise
+	 * without a GPU. One renderer import in any of them and both properties are
+	 * gone, which is how a "swappable engine" quietly stops being swappable.
+	 */
+	const PURE_MODULES = [
+		'src/lib/display/flight/flight-path.ts',
+		'src/lib/display/flight/view.ts',
+		'src/lib/display/flight/parallax.ts',
+		'src/lib/display/world/atmosphere.ts',
+		'src/lib/display/world/sun.ts',
+		'src/lib/settings/settings.svelte.ts',
+		'src/lib/settings/locations.ts'
+	];
+
+	it('keeps the pure simulation modules free of any renderer', () => {
+		const offenders: string[] = [];
+		for (const file of PURE_MODULES) {
+			const code = stripComments(readFileSync(file, 'utf8'));
+			// `import type` is erased at build time and costs nothing at runtime.
+			for (const line of code.split('\n')) {
+				if (!/^\s*import\s/.test(line) || /^\s*import\s+type\s/.test(line)) continue;
+				if (/'(maplibre-gl|svelte-maplibre-gl|cesium|three)/.test(line))
+					offenders.push(`${file}: ${line.trim()}`);
+			}
+		}
+		expect(offenders, 'the pure layer is what a second renderer reuses').toEqual([]);
 	});
 });
 
