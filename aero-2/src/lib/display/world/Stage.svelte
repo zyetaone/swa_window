@@ -62,7 +62,24 @@
 			 * the mean remains the fallback — and the floor either way, so a
 			 * not-yet-loaded tile can never drop the camera.
 			 */
-			const meanGroundM = display.config.place.groundElevationM;
+			/**
+			 * The FALLBACK must be exaggerated too, or it is not the same quantity.
+			 *
+			 * `queryTerrainElevation` returns the DRAWN height, exaggeration
+			 * included -- that is the whole reason it is asked. The flat mean it
+			 * falls back to was raw metres MSL, so the two branches returned
+			 * values in different units and the fallback was `exaggeration` times
+			 * too low. Nothing showed this while the DEM stopped at 79.9E, because
+			 * the fallback only bites where the query returns nothing.
+			 *
+			 * The moment the Himalayas were packed in, it bit hard: mean 5,000 m
+			 * drawn at 2.5x is ~12,500 m, the camera was placed at 5,000 + 3,500
+			 * AGL = 8,500 m, and the window went black -- 4 km inside the
+			 * mountain. Dubai survived only because a 5 m mean is still 12 m when
+			 * exaggerated.
+			 */
+			const exaggeration = display.config.exaggeration ?? 1;
+			const meanGroundM = display.config.place.groundElevationM * exaggeration;
 			const groundAtPlaneM = Math.max(meanGroundM, m.queryTerrainElevation(planeAt) ?? 0);
 			const groundAtTargetM = Math.max(meanGroundM, m.queryTerrainElevation(targetAt) ?? 0);
 
