@@ -108,6 +108,64 @@ describe('cache headers match what the artifact actually is', () => {
 	});
 });
 
+describe('Sky', () => {
+	/**
+	 * The starfield is an overlay above the map canvas, masked to the region
+	 * above the horizon -- below it there is ground, sea or cloud, and a star
+	 * drawn there is a dead pixel.
+	 *
+	 * The mask read `config.pitchDeg`, the static SETTING, while the frame is
+	 * drawn at `view.cameraPitchDeg`, which folds in the bank at BANK_VIEW_GAIN
+	 * plus turbulence. The gap was answered by widening the fade band to 12%,
+	 * which held only by accident: 0.85 gain against maxBankDeg 14 moves the
+	 * horizon +/-10.7% of screen height. Raising maxBankDeg to 18 took it to
+	 * +/-13.8% and stars appeared over the ground on every turn -- a tuning
+	 * change in one file silently breaking a tolerance in another.
+	 */
+	it('masks the starfield against the pitch actually rendered', () => {
+		const src = findSource('Sky.svelte');
+		expect(src, 'the horizon must track the drawn camera, not the setting')
+			.toContain('display.view.cameraPitchDeg');
+		const code = src.replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(code, 'config.pitchDeg does not contain the bank').not.toMatch(
+			/horizonPct[\s\S]{0,200}config\.pitchDeg/
+		);
+	});
+
+	/**
+	 * The sky must be identical on three panes, so it is generated from a fixed
+	 * seed. It must ALSO look random, and for a long time it did not: each star
+	 * re-seeded from its own index as `(i * 9301 + 49297) % 233280`, which with
+	 * 9301 coprime to the modulus is an arithmetic progression. 114 of the 139
+	 * gaps in x were the same 0.324%, and y/size/opacity were all derived from
+	 * that same seed -- an evenly spaced comb whose brightness varied with
+	 * position.
+	 */
+	it('iterates the star generator instead of re-seeding it per star', () => {
+		// Comments stripped: this file DESCRIBES the old lattice, and a guard
+		// that trips on the explanation of a bug is a guard on prose.
+		const code = findSource('Sky.svelte').replace(/\/\*[\s\S]*?\*\//g, '');
+		expect(code, 're-seeding from the loop index produces a lattice').not.toMatch(
+			/i \* 9301/
+		);
+		expect(code, 'the generator must carry state between stars').toMatch(
+			/seed = \(seed \*/
+		);
+	});
+
+	/**
+	 * Bank reaches the world as a PITCH offset. It never reaches the map as
+	 * roll -- calculateCameraOptionsFromTo derives bearing and pitch from
+	 * geometry and nothing sets roll -- so an overlay that rotates with bank is
+	 * answering the same input differently from the world behind it.
+	 */
+	it('does not roll the celestial overlay against a world that stays level', () => {
+		const src = findSource('Sky.svelte');
+		const css = src.slice(src.indexOf('<style>'));
+		expect(css).not.toMatch(/transform:\s*rotate\(var\(--view-bank\)\)/);
+	});
+});
+
 describe('the plane actually flies', () => {
 	/**
 	 * A restructure once deleted the frame loop and left `advanceTo()` with no

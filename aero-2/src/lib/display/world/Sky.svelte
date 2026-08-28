@@ -20,7 +20,17 @@
 	const sunElev = $derived(display.sun.elevationDeg ?? 30);
 	const sunAzimuth = $derived(display.sun.azimuthDeg ?? 180);
 	const bank = $derived(display.view.bankDeg ?? 0);
-	const pitch = $derived(display.config.pitchDeg ?? -10);
+
+	/**
+	 * How far the window is looking DOWN, degrees, as actually rendered.
+	 *
+	 * `config.pitchDeg` is the static setting and was what this used. The
+	 * camera does not fly at that number: `viewOptions` folds the bank into it
+	 * at BANK_VIEW_GAIN and turbulence adds a jitter on top, so the setting is
+	 * only the pitch when the wings are level and the air is still.
+	 * `view.cameraPitchDeg` is the value the frame was drawn with.
+	 */
+	const depressionDeg = $derived(Math.max(0, 90 - (display.view.cameraPitchDeg ?? 80)));
 
 	// ── 1. Circadian & Solar-Graded Sky Vault Colors ──────────────────────────
 	const skyTop = $derived.by(() => {
@@ -104,21 +114,42 @@
 		twinkleDelay: number;
 	}
 
-	const STARS: Star[] = Array.from({ length: 140 }, (_, i) => {
-		const seed = (i * 9301 + 49297) % 233280;
-		const rand1 = seed / 233280;
-		const rand2 = ((seed * 9301 + 49297) % 233280) / 233280;
-		const rand3 = ((seed * 1337 + 7919) % 233280) / 233280;
-
-		return {
-			x: rand1 * 100,
-			y: rand2 * 75,
-			size: rand3 > 0.85 ? 2.2 : rand3 > 0.5 ? 1.5 : 0.9,
-			opacity: 0.35 + rand3 * 0.65,
-			twinkleDuration: 2.0 + rand1 * 3.0,
-			twinkleDelay: rand2 * 4.0
+	/**
+	 * A fixed sky, drawn once. Deterministic on purpose -- three panes must
+	 * agree -- but it has to be deterministic AND look random, and it was only
+	 * the first.
+	 *
+	 * Each star re-seeded the generator from its own index: `(i * 9301 + 49297)
+	 * % 233280`. 9301 is coprime with 233280, so that is not a sample, it is an
+	 * arithmetic progression: across the 140 stars, 114 of the 139 gaps in x
+	 * were the same 0.324%, the rest being where the sequence wraps. The other
+	 * two values were then derived from that same seed, so y, size and opacity
+	 * were all functions of x. An evenly-spaced comb of stars whose brightness
+	 * varies with position -- the one thing a night sky must never look like.
+	 *
+	 * Iterating the state is the whole fix. Same seed, same sky, every pane.
+	 */
+	const STARS: Star[] = (() => {
+		let seed = 20260828;
+		const next = () => {
+			seed = (seed * 1103515245 + 12345) % 2147483648;
+			return seed / 2147483648;
 		};
-	});
+		return Array.from({ length: 140 }, () => {
+			const x = next();
+			const y = next();
+			const bright = next();
+			const twinkle = next();
+			return {
+				x: x * 100,
+				y: y * 75,
+				size: bright > 0.85 ? 2.2 : bright > 0.5 ? 1.5 : 0.9,
+				opacity: 0.35 + bright * 0.65,
+				twinkleDuration: 2.0 + twinkle * 3.0,
+				twinkleDelay: next() * 4.0
+			};
+		});
+	})();
 
 	const duskFactor = $derived(Math.max(0, Math.min(1, (12 - Math.abs(sunElev)) / 12)));
 	const sunHeadingDelta = $derived(
@@ -143,14 +174,20 @@
 	 * frame, which the screenshots plainly contradicted.
 	 *
 	 * Measured off clouds-off frames at pitch -5/-20/-35: 38%, 56%, 52%. The
-	 * scatter is bank, not error -- BANK_VIEW_GAIN swings the effective pitch
-	 * by +/-8 degrees and the captures were not taken at matched bank. The 12%
-	 * fade band below is wider than that scatter on purpose.
+	 * scatter was read as "bank, not error" and answered by widening the fade
+	 * band to 12%, which held only by accident: BANK_VIEW_GAIN (0.85) against
+	 * the then-current maxBankDeg of 14 moves the horizon +/-10.7% of screen
+	 * height, just inside 12%. Raising maxBankDeg to 18 moved it to +/-13.8%
+	 * and stars began drawing over the ground on every turn.
+	 *
+	 * The band was never the fix. `view.cameraPitchDeg` already contains the
+	 * bank, so the mask now tracks the horizon instead of trying to out-run it,
+	 * and the fade band is back to being a soft edge rather than a tolerance.
 	 */
 	const HORIZON_AT_LEVEL = 36;
 	const PER_DEGREE = 0.9;
 	const horizonPct = $derived(
-		Math.max(0, Math.min(100, HORIZON_AT_LEVEL + Math.max(0, -pitch) * PER_DEGREE))
+		Math.max(0, Math.min(100, HORIZON_AT_LEVEL + depressionDeg * PER_DEGREE))
 	);
 </script>
 
@@ -171,8 +208,6 @@
 	style:--night={night}
 	style:--dusk={duskFactor}
 	style:--sun-x="{sunScreenX}%"
-	style:--view-pitch="{pitch}deg"
-	style:--view-bank="{-bank}deg"
 	aria-hidden="true"
 >
 	<!-- Golden Hour Solar Flare Radiance -->
@@ -199,15 +234,25 @@
 </div>
 
 <style>
+	/* This used to `rotate(var(--view-bank))`, on the stated grounds that the
+	   horizon tilts with the airframe. It does not. Bank never reaches the map
+	   as roll -- `calculateCameraOptionsFromTo` derives bearing and pitch from
+	   geometry and has nothing to derive roll from, and nothing else sets it --
+	   so bank reaches the WORLD as a pitch offset (BANK_VIEW_GAIN) and reached
+	   this OVERLAY as a rotation. One input, two different visual answers: the
+	   stars banked against a horizon that had stayed level, which made the mask
+	   error above worse rather than cancelling it.
+
+	   Rolling the map instead is the other way to make these agree, and is
+	   probably the better-looking one -- MapLibre takes `roll` in CameraOptions
+	   -- but bank is already spent on pitch, so it needs that double-count
+	   resolved first. That is a camera design decision, not a bug fix. */
 	.sky-celestial-overlay {
 		position: absolute;
 		inset: 0;
 		overflow: hidden;
 		pointer-events: none;
 		z-index: 1;
-		transform: rotate(var(--view-bank));
-		transform-origin: center center;
-		transition: transform 0.1s ease-out;
 	}
 
 	.dusk-radiance {
@@ -231,7 +276,9 @@
 	.starfield {
 		position: absolute;
 		inset: 0;
-		transition: opacity 0.6s ease;
+		/* No `transition` here. `night` is derived from the sun and already
+		   moves smoothly; a CSS transition on it would make the fade a function
+		   of each pane's frame timing rather than of the wall clock. */
 		/* Sky only. Below the horizon there is ground, sea or cloud, and a star
 		   drawn there reads as a dead pixel. Faded rather than cut, so the
 		   boundary does not draw a hard line across the haze. It inherits the
