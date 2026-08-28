@@ -9,6 +9,7 @@ import {
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { GET as TILES_GET } from '../src/routes/api/tiles/[...path]/+server.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const CWD = '/srv/aero';
@@ -191,5 +192,55 @@ describe('parseRange (PMTiles Range Requests)', () => {
 
 	it('returns unsatisfiable when suffix <= 0', () => {
 		expect(parseRange('bytes=-0', SIZE)).toBe('unsatisfiable');
+	});
+});
+
+describe('cache headers', () => {
+	const req = (path: string, headers: Record<string, string> = {}) =>
+		TILES_GET({
+			params: { path },
+			request: new Request('http://x/' + path, { headers })
+		} as never);
+
+	/**
+	 * A raster tile at z/x/y IS its own address: re-packing changes the tiles, not
+	 * what a URL means, so a year of `immutable` is right for those.
+	 *
+	 * A PMTiles archive is the opposite — one URL, 3.7 GB behind it, re-packed
+	 * whenever the DEM is rebuilt, and read through hundreds of byte ranges. A
+	 * stale copy is not a stale picture, it is a stale DIRECTORY pointing at
+	 * offsets that no longer mean what they meant. `immutable` told every fielded
+	 * Pi to keep that for a year, so a re-packed DEM could not reach the wall
+	 * without someone clearing a browser cache by hand.
+	 */
+
+	it('raster tiles are immutable', async () => {
+		const r = await req('xyz/terrarium/9/361/226.png');
+		expect(r.status).toBe(200);
+		expect(r.headers.get('cache-control')).toContain('immutable');
+		expect(r.headers.get('etag')).toBeNull();
+	});
+
+	it('pmtiles archives revalidate and carry an etag', async () => {
+		const r = await req('terrain.pmtiles', { Range: 'bytes=0-127' });
+		expect(r.status).toBe(206);
+		expect(r.headers.get('cache-control')).toBe('public, no-cache');
+		expect(r.headers.get('etag')).toMatch(/^W\//);
+	});
+
+	it('a matching etag on the whole file gives 304', async () => {
+		const first = await req('terrain.pmtiles');
+		const etag = first.headers.get('etag')!;
+		await first.body?.cancel();
+		const second = await req('terrain.pmtiles', { 'If-None-Match': etag });
+		expect(second.status).toBe(304);
+	});
+
+	it('a range request is never answered with 304', async () => {
+		const first = await req('terrain.pmtiles');
+		const etag = first.headers.get('etag')!;
+		await first.body?.cancel();
+		const ranged = await req('terrain.pmtiles', { 'If-None-Match': etag, Range: 'bytes=0-127' });
+		expect(ranged.status).toBe(206);
 	});
 });
