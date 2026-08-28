@@ -14,14 +14,14 @@ import type { CameraView } from '../../flight/view.js';
  *   dubai      mean+floor  605 m   real peak 1724 m   -> 1119 m INSIDE
  *   mumbai     mean+floor  510 m   real peak 1500 m   ->  990 m INSIDE
  *
- * The MapLibre path solved this by asking the renderer what the ground actually
- * is beneath the aircraft (`map.queryTerrainElevation`) and using the mean only
- * as a floor. Cesium has the equivalent — `globe.getHeight(cartographic)` — and
- * this should use it before `?engine=cesium` is more than an experiment.
+ * So it asks the globe, exactly as `Stage.svelte` asks the map: the mean is the
+ * FLOOR, the sampled terrain height wins when it is higher, and `getHeight`
+ * returning undefined (tile not loaded yet) falls back to the mean rather than
+ * to zero -- a not-yet-loaded tile must never be able to drop the camera.
  *
- * Until then the two engines disagree about where the ground is, which is worse
- * than either being wrong on its own: the same location flies clean on MapLibre
- * and through a mountain on Cesium.
+ * Both engines now derive clearance the same way, which is the point. The same
+ * location flying clean on MapLibre and through a mountain on Cesium was worse
+ * than either being wrong on its own.
  */
 export function syncCesiumCamera(
 	Cesium: typeof CesiumType,
@@ -31,8 +31,15 @@ export function syncCesiumCamera(
 ) {
 	if (!v.lat || !v.lon) return;
 
-	// Real MSL aircraft altitude ensures camera is always above mountain heights
-	const mslAltitudeM = Math.max(1000, (groundElevationM || 0) + (v.aglM || 4000));
+	const meanGroundM = groundElevationM || 0;
+	const sampled = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(v.lon, v.lat));
+	// `getHeight` is undefined until the terrain tile under this point loads.
+	const groundM = Math.max(
+		meanGroundM,
+		Number.isFinite(sampled as number) ? (sampled as number) : meanGroundM
+	);
+
+	const mslAltitudeM = Math.max(1000, groundM + (v.aglM || 4000));
 	const destination = Cesium.Cartesian3.fromDegrees(v.lon, v.lat, mslAltitudeM);
 	const heading = Cesium.Math.toRadians(v.cameraBearingDeg);
 	const pitch = Cesium.Math.toRadians(Math.max(-85, Math.min(-5, v.cameraPitchDeg)));

@@ -86,6 +86,28 @@ describe('GroundLayers', () => {
 	});
 });
 
+describe('cache headers match what the artifact actually is', () => {
+	/**
+	 * A raster tile at z/x/y IS its own address, so a year of `immutable` is
+	 * right for it. A PMTiles archive is one URL over 3.7 GB that gets re-packed,
+	 * and it is read through hundreds of byte-range requests -- so a stale copy
+	 * is not a stale picture, it is a stale DIRECTORY pointing at offsets that
+	 * no longer mean what they meant. It carried `immutable` for a year, which
+	 * meant a re-packed DEM could not reach a fielded Pi without someone
+	 * clearing a browser cache by hand. Flagged in three separate reviews before
+	 * it was taken, which is why it is pinned here rather than in a comment.
+	 */
+	it('never sends immutable for a .pmtiles archive', () => {
+		const src = findSource('+server.ts', 'api/tiles');
+		const immutableAt = src.indexOf('IMMUTABLE_CACHE =');
+		expect(immutableAt, 'the immutable constant should still exist for raster tiles')
+			.toBeGreaterThan(-1);
+		expect(src, 'pmtiles must be recognised as mutable').toMatch(/MUTABLE_ARCHIVE\s*=\s*\/\\\.pmtiles/);
+		expect(src, 'a mutable archive must revalidate').toContain("REVALIDATE_CACHE = 'public, no-cache'");
+		expect(src, 'and must carry a validator to revalidate against').toContain('fileEtag');
+	});
+});
+
 describe('the plane actually flies', () => {
 	/**
 	 * A restructure once deleted the frame loop and left `advanceTo()` with no
