@@ -188,6 +188,19 @@ describe('the plane actually flies', () => {
 		expect(src, 'the loop must be cancelled on teardown').toMatch(/cancelAnimationFrame/);
 	});
 
+	/**
+	 * The guard above reads one stage. `engine === 'cesium'` mounts the other
+	 * one INSTEAD, so the loop above is not running at all -- and Cesium renders
+	 * continuously whether or not anyone advances the pose, which is how it sat
+	 * frozen at its constructor view while looking perfectly alive.
+	 */
+	it('advances the same clock on the alternate engine', () => {
+		const src = findSource('CesiumStage.svelte');
+		expect(src, 'the Cesium frame hook must advance the simulation clock').toMatch(
+			/advanceTo\s*\(/
+		);
+	});
+
 	it('does not let map controls fight the frame loop', () => {
 		const src = findSource('Stage.svelte');
 

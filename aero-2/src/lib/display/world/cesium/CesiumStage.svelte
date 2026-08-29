@@ -59,6 +59,12 @@
 				});
 
 				const removeListener = viewer.scene.preRender.addEventListener(() => {
+					// Cesium drives its own frame loop, so THIS is the engine's RAF and
+					// it has to advance the clock the way Stage.svelte's does. Without
+					// it nothing calls `advanceTo` while `engine === 'cesium'` -- the
+					// pose stays at the one computed in the constructor and the window
+					// is a still photograph that renders at 60fps.
+					display.advanceTo();
 					imagery.setNightAlpha(display.night * display.config.cesiumViirsBrightness);
 					const groundElev = display.config.place?.groundElevationM ?? 0;
 					syncCesiumCamera(Cesium, viewer, display.view, groundElev, (ok) =>
