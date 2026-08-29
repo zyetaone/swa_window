@@ -43,13 +43,30 @@
 		const camera = new THREE.PerspectiveCamera(52, c.clientWidth / c.clientHeight, 0.001, 1000);
 		camera.position.set(0, 0, 6.2);
 
-		// Dynamic Solar Lighting
+		/**
+		 * Solar lighting, actually solar.
+		 *
+		 * These two intensities were constants -- 0.9 and 2.2 -- while this
+		 * file's own docstring promised "dynamic specular lighting reflecting
+		 * solar time". At `?preset=gulf-midnight` the result was a wing lit like
+		 * noon, pasted on a starfield over a black Persian Gulf: the single most
+		 * obviously wrong thing in the night window.
+		 *
+		 * Set once here, driven per frame in the render loop below off
+		 * `display.night`, which is the same 0..1 the ground grade and the
+		 * starfield already ramp on, so the wing goes out with the sky rather
+		 * than on a schedule of its own.
+		 */
 		const ambient = new THREE.AmbientLight(0xffffff, 0.9);
 		scene.add(ambient);
 
 		const sunKey = new THREE.DirectionalLight(0xffeedd, 2.2);
 		sunKey.position.set(6, 9, 5);
 		scene.add(sunKey);
+
+		/** Warm noon key vs. cold moonlight, and the ambient that survives dusk. */
+		const SUN_COLOR = new THREE.Color(0xffeedd);
+		const MOON_COLOR = new THREE.Color(0x9fb6da);
 
 		const wingHolder = new THREE.Group();
 		// Base positioning: Root in lower right, wing sweeping into camera depth
@@ -103,6 +120,20 @@
 					camera.updateProjectionMatrix();
 				}
 			}
+
+			/**
+			 * Take the sun off the wing as the sky loses it.
+			 *
+			 * The key light does not fade to nothing: a wing at cruise altitude
+			 * still catches moon and skyglow, and a truly black wing reads as a
+			 * missing object rather than a dark one. It fades to a tenth, and
+			 * turns cold on the way -- the colour shift is what sells night more
+			 * than the level does.
+			 */
+			const night = display.night;
+			ambient.intensity = 0.9 - night * 0.74;
+			sunKey.intensity = 2.2 * (1 - night * 0.9);
+			sunKey.color.copy(SUN_COLOR).lerp(MOON_COLOR, night);
 
 			// Strobe flash double-pulse pattern (every 1.8 seconds)
 			const strobeCycle = (now % 1800) / 1800;
