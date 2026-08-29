@@ -17,17 +17,18 @@
 
 	const BLANK_STYLE = { version: 8 as const, sources: {}, layers: [] };
 
-	interface Props {
-		/**
-		 * Fixed zoom, chosen so the WHOLE orbit fits inside the circular crop.
-		 *
-		 * Measured rather than guessed: at 6.9 the projected track was 178 px
-		 * wide in a 190 px circle, so its east and west ends were clipped by the
-		 * border radius. 6.55 leaves a margin on the diagonal.
-		 */
-		zoom?: number;
-	}
-	const { zoom = 6.55 }: Props = $props();
+	/**
+	 * Fixed zoom, chosen so the WHOLE orbit fits inside the circular crop.
+	 *
+	 * Measured rather than guessed: at 6.9 the projected track was 178 px wide
+	 * in a 190 px circle, so its east and west ends were clipped by the border
+	 * radius. 6.55 leaves a margin on the diagonal.
+	 *
+	 * A const, not a prop: the one caller never passed it, and a measured
+	 * constant offered as configuration invites someone to change it away from
+	 * the measurement.
+	 */
+	const zoom = 6.55;
 
 	const display = useDisplay();
 	// PUBLIC_TILE_SERVER_URL, so a pane can read tiles from a peer on the wall.

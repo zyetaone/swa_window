@@ -2,34 +2,47 @@
 	/**
 	 * CabinFrame — oval airplane cabin window frame with integrated glass
 	 * reflections, lens vignette, and inner depth shadows.
+	 *
+	 * It had four boolean props — visible, vignette, reflection, bezel — and its
+	 * one caller passed none of them, so all four were speculative config for a
+	 * value that never changed. The repo's rule is that a component's visibility
+	 * is gated by the config knob it reads itself; there is no frame knob, so
+	 * there is nothing to read and nothing to switch.
 	 */
-	interface Props {
-		visible?: boolean;
-		vignette?: boolean;
-		reflection?: boolean;
-		bezel?: boolean;
-	}
+	import { useDisplay } from '../display.svelte.js';
 
-	const { visible = true, vignette = true, reflection = true, bezel = true }: Props = $props();
+	const display = useDisplay();
+
+	/**
+	 * The rim darkens as the light goes.
+	 *
+	 * Real cabin glass does not have a fixed vignette: at altitude in daylight
+	 * the rim is barely there, and after dusk the curved acrylic edge goes to
+	 * near black. Held as a registered custom property (see `@property` below)
+	 * rather than an inline opacity so the CSS transition can interpolate it —
+	 * an unregistered variable is a string to the cascade, and the rim would
+	 * step between sky states instead of fading.
+	 */
+	const vignetteStrength = $derived(0.55 + display.night * 0.45);
 </script>
 
-{#if visible}
-	<div class="cabin-frame" aria-hidden="true">
-		{#if vignette}
-			<div class="glass-vignette"></div>
-		{/if}
-		{#if reflection}
-			<div class="glass-reflection"></div>
-		{/if}
-		{#if bezel}
-			<div class="window-bezel">
-				<div class="bezel-inner"></div>
-			</div>
-		{/if}
+<div class="cabin-frame" style:--vignette-strength={vignetteStrength} aria-hidden="true">
+	<div class="glass-vignette"></div>
+	<div class="glass-reflection"></div>
+	<div class="window-bezel">
+		<div class="bezel-inner"></div>
 	</div>
-{/if}
+</div>
 
 <style>
+	/* Registered, so `transition` can interpolate it. Without this the browser
+	   treats the value as an opaque string and the rim snaps between states. */
+	@property --vignette-strength {
+		syntax: '<number>';
+		initial-value: 1;
+		inherits: true;
+	}
+
 	.cabin-frame {
 		position: fixed;
 		inset: 0;
@@ -45,9 +58,12 @@
 		background: radial-gradient(
 			ellipse at 50% 50%,
 			transparent 55%,
-			rgba(10, 16, 26, 0.25) 80%,
-			rgba(5, 8, 14, 0.65) 100%
+			rgba(10, 16, 26, calc(0.25 * var(--vignette-strength))) 80%,
+			rgba(5, 8, 14, calc(0.65 * var(--vignette-strength))) 100%
 		);
+		/* Slow on purpose: dusk takes minutes, and a rim that visibly chases the
+		   sun reads as a bug rather than as glass. */
+		transition: --vignette-strength 1.2s linear;
 	}
 
 	/* Acrylic rim blur — mimics double-curved edge acrylic refraction */
