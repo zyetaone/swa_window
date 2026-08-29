@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import os from 'node:os';
+import type { KioskStatus } from '#lib/status.js';
 
 /**
  * GET /api/status — kiosk telemetry for the /admin cockpit.
@@ -41,5 +42,5 @@ export const GET: RequestHandler = () => {
 		primaryLanIp: lanIps[0]?.address ?? 'localhost',
 		// server.ts reads PORT; hardcoding 5173 here made the two disagree.
 		port: Number(process.env.PORT ?? 5173)
-	});
+	} satisfies KioskStatus);
 };

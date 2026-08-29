@@ -6,6 +6,8 @@
 	import { useDisplay } from '../display/display.svelte.js';
 	import { Location, LOCATIONS } from './locations.js';
 	import { SCENE_PRESETS } from './presets.js';
+	import { WEATHERS, ENGINES, FLEET_ROLES } from './settings.svelte.js';
+	import { fetchStatus, type KioskStatus } from '#lib/status.js';
 	import Knob from './Knob.svelte';
 	import Toggle from './Toggle.svelte';
 
@@ -33,13 +35,7 @@
 		return off === 0 ? `${stamp} local` : `${stamp} · ${off > 0 ? '+' : ''}${off}h`;
 	});
 
-	interface NetworkStatus {
-		hostname: string;
-		primaryLanIp: string;
-		lanIps: { name: string; address: string }[];
-		port: number;
-	}
-	let networkStatus = $state<NetworkStatus | null>(null);
+	let networkStatus = $state<KioskStatus | null>(null);
 	let networkError = $state<string | null>(null);
 
 	/**
@@ -51,11 +47,7 @@
 	$effect(() => {
 		if (!showAdmin) return;
 		const ctrl = new AbortController();
-		fetch('/api/status', { signal: ctrl.signal })
-			.then((res) => {
-				if (!res.ok) throw new Error(`/api/status returned ${res.status}`);
-				return res.json();
-			})
+		fetchStatus(ctrl.signal)
 			.then((data) => {
 				networkStatus = data;
 				networkError = null;
@@ -289,7 +281,7 @@
 				<section class="section">
 					<h4>Weather Condition</h4>
 					<div class="location-grid">
-						{#each ['clear', 'cloudy', 'rain', 'overcast', 'storm'] as const as w}
+						{#each WEATHERS as w}
 							<button
 								type="button"
 								class="loc-btn"
@@ -367,7 +359,7 @@
 				<section class="section">
 					<h4>Rendering Engine</h4>
 					<div class="location-grid">
-						{#each ['maplibre', 'cesium'] as const as eng}
+						{#each ENGINES as eng}
 							<button
 								type="button"
 								class="loc-btn"
@@ -428,7 +420,7 @@
 				<section class="section">
 					<h4>Multi-Pi Fleet Parallax Role</h4>
 					<div class="location-grid">
-						{#each ['solo', 'left', 'center', 'right'] as const as role}
+						{#each FLEET_ROLES as role}
 							<button
 								type="button"
 								class="loc-btn"

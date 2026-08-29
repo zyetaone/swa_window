@@ -5,6 +5,8 @@
 
 import type { Weather } from '../display/flight/view.js';
 
+import type { Engine } from '../display/world/engines.js';
+
 export interface ScenePreset {
 	readonly id: string;
 	readonly name: string;
@@ -13,7 +15,7 @@ export interface ScenePreset {
 	readonly badge: string;
 	readonly config: {
 		placeId?: string;
-		engine?: 'cesium' | 'maplibre';
+		engine?: Engine;
 		/**
 		 * Local hour to compose the scene at, 0-24.
 		 *

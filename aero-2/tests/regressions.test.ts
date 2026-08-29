@@ -479,9 +479,11 @@ describe('routes render something', () => {
 	 * does not send, so `status?.memory.heapUsedMb` optional-chained the wrong
 	 * link and threw once the fetch resolved. 200 OK, 19 characters of text.
 	 *
-	 * This is the cheap half of the smoke test — it cannot catch a runtime
-	 * throw, but it does catch the cause of this one: a page reading fields the
-	 * API never returns.
+	 * This is now a BACKSTOP rather than the primary guard. The response shape
+	 * lives in one place (`lib/status.ts`), the endpoint writes `satisfies
+	 * KioskStatus` and both readers import the type, so the drift that caused
+	 * the blank page is a failed type-check first. This still runs the endpoint
+	 * and compares real keys, which a type cannot do.
 	 */
 	it('admin only reads fields /api/status actually sends', async () => {
 		const { GET } = await import('../src/routes/api/status/+server.js');
@@ -493,7 +495,10 @@ describe('routes render something', () => {
 		// must not appear. Strip them before matching, or the fix trips its own test.
 		const src = findSource('+page.svelte', 'admin')
 			.replace(/\/\*[\s\S]*?\*\//g, '')
-			.replace(/\/\/.*$/gm, '');
+			.replace(/\/\/.*$/gm, '')
+			// ...and imports, or the module path `#lib/status.js` reads as a field
+			// access on `status` and the guard fails on its own fix.
+			.replace(/^\s*import .*$/gm, '');
 		const read = [...src.matchAll(/status[?]?\.([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]);
 
 		const invented = [...new Set(read)].filter((k) => !known.has(k));

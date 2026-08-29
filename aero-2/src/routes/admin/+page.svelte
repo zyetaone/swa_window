@@ -6,30 +6,11 @@
 	import { PRODUCT_NAME, PRODUCT_OWNER, ENGINEERED_BY, PRODUCT_STAGE } from '#lib/credits.js';
 	import { LOCATIONS } from '#lib/settings/locations.js';
 	import { SCENE_PRESETS } from '#lib/settings/presets.js';
+	import { fetchStatus, type KioskStatus } from '#lib/status.js';
 
-	/**
-	 * Mirrors what /api/status ACTUALLY returns.
-	 *
-	 * The previous shape was invented — it declared `version`, `memory` and
-	 * `network`, none of which the endpoint sends. That is not a harmless
-	 * mismatch: `status?.memory.heapUsedMb` optional-chains the wrong link, so
-	 * once the fetch resolved, `.memory` was undefined and reading
-	 * `.heapUsedMb` threw during render. A throw in component init leaves an
-	 * EMPTY BODY, so /admin returned 200 with 19 characters of text and no
-	 * error anywhere except the browser console.
-	 */
-	interface NetworkStatus {
-		online: boolean;
-		hostname: string;
-		uptimeSec: number;
-		freeMemBytes: number;
-		totalMemBytes: number;
-		lanIps: { name: string; address: string; family: string }[];
-		primaryLanIp: string | null;
-		port: number;
-	}
 
-	let status = $state<NetworkStatus | null>(null);
+	let status = $state<KioskStatus | null>(null);
+	let statusError = $state<string | null>(null);
 	let activeRole = $state('center');
 	let activeMode = $state('flight');
 	let activePreset = $state('');
@@ -40,12 +21,17 @@
 	);
 
 	onMount(() => {
-		fetch('/api/status')
-			.then((res) => res.json())
+		// The empty `.catch(() => {})` this replaces turned an unreachable Pi into
+		// a reachable one with blank fields. Say so instead.
+		fetchStatus()
 			.then((data) => {
 				status = data;
+				statusError = null;
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				status = null;
+				statusError = err instanceof Error ? err.message : 'unreachable';
+			});
 	});
 
 	function copyToClipboard(text: string, label: string) {
@@ -182,8 +168,10 @@
 				<span class="label">System Status</span>
 				<!-- Reflects the probe, not a constant: a dashboard that always says
 				     HEALTHY is decoration, not telemetry. -->
-				<span class="val" class:green={status?.online} class:warn={!status?.online}>
-					{status ? (status.online ? 'HEALTHY' : 'DEGRADED') : 'CONNECTING…'}
+				<span class="val" class:green={status?.online} class:warn={!status || !status.online}>
+					{#if statusError}UNREACHABLE — {statusError}{:else if status}{status.online
+							? 'HEALTHY'
+							: 'DEGRADED'}{:else}CONNECTING…{/if}
 				</span>
 			</div>
 			<div class="telem-item">

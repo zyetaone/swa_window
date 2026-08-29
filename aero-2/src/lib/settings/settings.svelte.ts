@@ -13,11 +13,16 @@ import {
 	WEATHERS,
 	type Weather
 } from '../display/flight/view.js';
+import { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
+import { ENGINES, type Engine } from '../display/world/engines.js';
 import { resolveLocalHours } from '../display/world/sun.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
 export { tileTemplates } from './tiles.js';
+export { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
+export { WEATHERS, type Weather } from '../display/flight/view.js';
+export { ENGINES, type Engine } from '../display/world/engines.js';
 
 export interface SearchParamsSource {
 	searchParams: { get(key: string): string | null };
@@ -150,10 +155,10 @@ export class PaneSettings {
 	]);
 
 	/** Multi-Pi Fleet Parallax Role */
-	fleetRole = $state<'solo' | 'center' | 'left' | 'right'>('solo');
+	fleetRole = $state<FleetRole>('solo');
 
 	/** 3D Geospatial Engine (maplibre | cesium) */
-	engine = $state<'maplibre' | 'cesium'>('maplibre');
+	engine = $state<Engine>('maplibre');
 	cesiumProvider = $state<'sentinel' | 'gibs' | 'osm'>('sentinel');
 	cesiumLighting = $state<boolean>(false);
 	cesiumAtmosphere = $state<boolean>(true);
@@ -257,18 +262,13 @@ export class PaneSettings {
 		}
 
 		const roleParam = url.searchParams.get('role');
-		if (
-			roleParam === 'solo' ||
-			roleParam === 'center' ||
-			roleParam === 'left' ||
-			roleParam === 'right'
-		) {
-			this.fleetRole = roleParam;
+		if (roleParam && (FLEET_ROLES as readonly string[]).includes(roleParam)) {
+			this.fleetRole = roleParam as FleetRole;
 		}
 
 		const engineParam = url.searchParams.get('engine');
-		if (engineParam === 'maplibre' || engineParam === 'cesium') {
-			this.engine = engineParam;
+		if (engineParam && (ENGINES as readonly string[]).includes(engineParam)) {
+			this.engine = engineParam as Engine;
 		}
 
 		/**
