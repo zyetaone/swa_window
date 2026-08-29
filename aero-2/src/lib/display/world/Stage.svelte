@@ -12,6 +12,8 @@
 	// which CSP blocks — and which a fielded Pi has no internet to fetch. Hence
 	// `autoloadGlobalCss={false}` on every MapLibre below.
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	// Calls setWorkerUrl(). MapLibre v6 has no worker without it.
+	import 'svelte-maplibre-gl/vite';
 
 	import { useDisplay } from '../display.svelte.js';
 	import Ground from './Ground.svelte';
