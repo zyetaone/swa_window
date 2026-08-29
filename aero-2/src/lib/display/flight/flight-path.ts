@@ -26,7 +26,26 @@ export const ORBIT = {
 	aspect: 1.7,
 	/**
 	 * Peak roll in degrees at the tightest part of the turn.
-	 * Tuned for a graceful, readable banking curve that opens up sky and ground during turns.
+	 *
+	 * CONTENT TUNING, and deliberately not physical. At this orbit radius and
+	 * speed the correct bank angle is about 3.5 degrees, which is invisible.
+	 * This is a readable exaggeration, not a simulation -- that is the whole
+	 * justification for the number, and it was once written down here before
+	 * being replaced with adjectives. Restored, because the value has
+	 * consequences that are not local to this file:
+	 *
+	 *   - `viewOptions` folds bank into PITCH at BANK_VIEW_GAIN (0.85), so this
+	 *     swings the effective depression by +/-15.3 deg. At the default
+	 *     pitchDeg of -10 that saturates the 0.5 deg depression clamp on one
+	 *     side of every turn, pinning the sightline near-horizontal.
+	 *   - Sky.svelte masks the starfield to the horizon and derives that from
+	 *     the same pitch. Going 14 -> 18 moved the horizon +/-13.8% of screen
+	 *     height, past the 12% fade band that was covering it, and put stars
+	 *     over the ground. Fixed there by tracking the real pitch, but the
+	 *     coupling is real and this is where it originates.
+	 *
+	 * 14 was the previous value. Anything raised here should be checked against
+	 * both of the above, not just against how the turn looks.
 	 */
 	maxBankDeg: 18,
 
