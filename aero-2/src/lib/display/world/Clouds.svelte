@@ -249,7 +249,7 @@
 			);
 
 			const pitchDeg = display.config.pitchDeg ?? -10;
-			const bankDeg = display.view.bankDeg ?? 0;
+			const bankDeg = display.view.bankDeg;
 			const effectivePitchRad = ((pitchDeg + bankDeg * 0.12) * Math.PI) / 180;
 			const bankRad = (bankDeg * Math.PI) / 180;
 
@@ -259,8 +259,8 @@
 			camera.rotation.z = -bankRad;
 
 			// World-locked compass orientation + continuous wind drift & gust modulation
-			const bearingRad = ((display.view.cameraBearingDeg ?? 0) * Math.PI) / 180;
-			const wallSec = display.view.wallSec ?? 0;
+			const bearingRad = (display.view.cameraBearingDeg * Math.PI) / 180;
+			const wallSec = display.view.wallSec;
 
 			/**
 			 * Gusting wind, as a POSITION on the clock rather than a speed to
@@ -289,7 +289,7 @@
 			// ── Per-Sprite 3D Solar Lighting & Mie Forward-Scatter ─────────────────
 			const sunElev = display.sun.elevationDeg ?? 30;
 			const sunAzimuth = display.sun.azimuthDeg ?? 180;
-			const night = display.night ?? 0;
+			const night = display.night;
 			const dayFactor = Math.max(0, 1 - night);
 
 			// Spherical sun direction vector in Three.js coordinates

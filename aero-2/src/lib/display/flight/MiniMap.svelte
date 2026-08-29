@@ -10,6 +10,7 @@
 	import { MapLibre, RasterTileSource, RasterLayer } from 'svelte-maplibre-gl';
 	import type { Map as MlMap } from 'maplibre-gl';
 
+	import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 	import { useDisplay } from '../display.svelte.js';
 	import { FlightTrack, CLIMB_PERIOD_SEC } from './flight-path.js';
 	import { TILE_MAXZOOM, TILE_SIZE, tileTemplates } from '#lib/settings/tiles.js';
@@ -29,7 +30,8 @@
 	const { zoom = 6.55 }: Props = $props();
 
 	const display = useDisplay();
-	const tiles = tileTemplates();
+	// PUBLIC_TILE_SERVER_URL, so a pane can read tiles from a peer on the wall.
+	const tiles = tileTemplates(PUBLIC_TILE_SERVER_URL);
 
 	let map = $state<MlMap | undefined>();
 	let renderTick = $state(0);
@@ -81,9 +83,9 @@
 	/** Live pose, straight off the view the main window just drew. */
 	const lat = $derived(display.view.lat ?? place.lat);
 	const lon = $derived(display.view.lon ?? place.lon);
-	const heading = $derived(display.view.planeHeadingDeg ?? 0);
-	const aglM = $derived(display.view.aglM ?? 0);
-	const wallSec = $derived(display.view.wallSec ?? 0);
+	const heading = $derived(display.view.planeHeadingDeg);
+	const aglM = $derived(display.view.aglM);
+	const wallSec = $derived(display.view.wallSec);
 
 	/** Climb bar & elevation phase (0..1). */
 	const climb = $derived.by(() => {

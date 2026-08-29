@@ -16,10 +16,10 @@
 
 	const display = useDisplay();
 
-	const night = $derived(display.night ?? 0);
-	const sunElev = $derived(display.sun.elevationDeg ?? 30);
-	const sunAzimuth = $derived(display.sun.azimuthDeg ?? 180);
-	const bank = $derived(display.view.bankDeg ?? 0);
+	const night = $derived(display.night);
+	const sunElev = $derived(display.sun.elevationDeg);
+	const sunAzimuth = $derived(display.sun.azimuthDeg);
+	const bank = $derived(display.view.bankDeg);
 
 	/**
 	 * How far the window is looking DOWN, degrees, as actually rendered.
@@ -30,7 +30,7 @@
 	 * only the pitch when the wings are level and the air is still.
 	 * `view.cameraPitchDeg` is the value the frame was drawn with.
 	 */
-	const depressionDeg = $derived(Math.max(0, 90 - (display.view.cameraPitchDeg ?? 80)));
+	const depressionDeg = $derived(Math.max(0, 90 - display.view.cameraPitchDeg));
 
 	// ── 1. Circadian & Solar-Graded Sky Vault Colors ──────────────────────────
 	const skyTop = $derived.by(() => {
@@ -153,7 +153,7 @@
 
 	const duskFactor = $derived(Math.max(0, Math.min(1, (12 - Math.abs(sunElev)) / 12)));
 	const sunHeadingDelta = $derived(
-		((sunAzimuth - (display.view.cameraBearingDeg ?? 0) + 540) % 360) - 180
+		((sunAzimuth - display.view.cameraBearingDeg + 540) % 360) - 180
 	);
 	const sunScreenX = $derived(50 + (sunHeadingDelta / 180) * 50);
 

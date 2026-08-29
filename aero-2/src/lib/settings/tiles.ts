@@ -13,7 +13,18 @@ export const TILE_MAXZOOM = {
 
 export const TILE_ATTRIBUTION = 'Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
 
-export const TERRAIN_PMTILES = 'pmtiles:///api/tiles/terrain.pmtiles';
+/**
+ * The DEM archive URL, under whatever tile origin this pane is configured for.
+ *
+ * Was a hardcoded `/api/tiles/...` constant, which meant PUBLIC_TILE_SERVER_URL
+ * could not move it even once the raster layers honoured it -- so a shared
+ * tile-server deployment would have fetched imagery from one host and elevation
+ * from another. The prefix is a PARAMETER rather than an env read because this
+ * module is pure and unit-tested; `$app/env/public` resolves in components.
+ */
+export function terrainPmtilesUrl(prefix = '/api/tiles'): string {
+	return `pmtiles://${prefix}/terrain.pmtiles`;
+}
 
 /** Floor of the packed DEM pyramid. Must match what pack-pmtiles wrote. */
 export const TERRAIN_MINZOOM = 5;

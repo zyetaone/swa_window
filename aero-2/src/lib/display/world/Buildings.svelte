@@ -12,7 +12,7 @@
 
 	const place = $derived(display.config.place);
 	const night = $derived(display.night);
-	const aglM = $derived(display.view.aglM ?? 3000);
+	const aglM = $derived(display.view.aglM);
 
 	// Fade out buildings when climbing into the upper stratosphere (> 7,500m)
 	const altitudeFade = $derived(Math.max(0, Math.min(1, (8000 - aglM) / 2500)));

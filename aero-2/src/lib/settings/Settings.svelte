@@ -25,7 +25,7 @@
 	let activeTab = $state<TabId>('presets');
 
 	const clockLabel = $derived.by(() => {
-		const h = display.view.timeOfDay ?? 0;
+		const h = display.view.timeOfDay;
 		const hh = Math.floor(h);
 		const mm = Math.round((h - hh) * 60);
 		const stamp = `${String(hh % 24).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
@@ -40,16 +40,32 @@
 		port: number;
 	}
 	let networkStatus = $state<NetworkStatus | null>(null);
+	let networkError = $state<string | null>(null);
 
+	/**
+	 * The panel used to swallow this failure and render `127.0.0.1` from a `||`
+	 * fallback further down -- a plausible address, presented as measured, when
+	 * in fact nothing had been reached. Aborted on teardown so toggling the
+	 * panel cannot race two responses into the same field.
+	 */
 	$effect(() => {
-		if (showAdmin) {
-			fetch('/api/status')
-				.then((res) => res.json())
-				.then((data) => {
-					networkStatus = data;
-				})
-				.catch(() => {});
-		}
+		if (!showAdmin) return;
+		const ctrl = new AbortController();
+		fetch('/api/status', { signal: ctrl.signal })
+			.then((res) => {
+				if (!res.ok) throw new Error(`/api/status returned ${res.status}`);
+				return res.json();
+			})
+			.then((data) => {
+				networkStatus = data;
+				networkError = null;
+			})
+			.catch((err: unknown) => {
+				if (err instanceof Error && err.name === 'AbortError') return;
+				networkStatus = null;
+				networkError = err instanceof Error ? err.message : 'unreachable';
+			});
+		return () => ctrl.abort();
 	});
 
 	function reload() {
@@ -459,11 +475,11 @@
 					</div>
 					<div class="diag-item">
 						<span class="diag-label">Altitude:</span>
-						<span class="diag-value">{(display.view.aglM ?? 0).toLocaleString()} m AGL</span>
+						<span class="diag-value">{display.view.aglM.toLocaleString()} m AGL</span>
 					</div>
 					<div class="diag-item">
 						<span class="diag-label">Flight Heading:</span>
-						<span class="diag-value">{Math.round(display.view.planeHeadingDeg ?? 0)}°</span>
+						<span class="diag-value">{Math.round(display.view.planeHeadingDeg)}°</span>
 					</div>
 				</div>
 			</section>
@@ -478,7 +494,7 @@
 						</div>
 						<div class="diag-item">
 							<span class="diag-label">Primary IP:</span>
-							<span class="diag-value">{networkStatus.primaryLanIp || '127.0.0.1'}</span>
+							<span class="diag-value">{networkStatus?.primaryLanIp ?? (networkError ? `unreachable — ${networkError}` : '…')}</span>
 						</div>
 						<div class="diag-item">
 							<span class="diag-label">Port:</span>

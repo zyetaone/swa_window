@@ -16,10 +16,11 @@
 	import {
 		HILLSHADE_SHADOW_COLOR,
 		TERRAIN_MINZOOM,
-		TERRAIN_PMTILES,
+		terrainPmtilesUrl,
 		TILE_MAXZOOM,
 		TILE_SIZE
 	} from '#lib/settings/tiles.js';
+	import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 	import { useDisplay } from '../display.svelte.js';
 
 	const display = useDisplay();
@@ -71,8 +72,8 @@
 	};
 
 	const SUNSET_HOLD_BEARING = 315;
-	const night = $derived(display.night ?? 0);
-	const sunElev = $derived(display.sun.elevationDeg ?? 30);
+	const night = $derived(display.night);
+	const sunElev = $derived(display.sun.elevationDeg);
 	const dayFactor = $derived(Math.max(0, 1 - night));
 
 	const sunBearing = $derived(sunElev > 0 ? display.sun.azimuthDeg : SUNSET_HOLD_BEARING);
@@ -104,7 +105,7 @@
      Ground.svelte always declared their maxzoom; this one never did. -->
 <RasterDEMTileSource
 	id="dem"
-	url={TERRAIN_PMTILES}
+	url={terrainPmtilesUrl(PUBLIC_TILE_SERVER_URL)}
 	encoding="terrarium"
 	tileSize={TILE_SIZE}
 	minzoom={TERRAIN_MINZOOM}

@@ -14,10 +14,12 @@
 		TILE_SIZE,
 		tileTemplates
 	} from '#lib/settings/tiles.js';
+	import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 	import { useDisplay } from '../display.svelte.js';
 
 	const display = useDisplay();
-	const tiles = tileTemplates();
+	// PUBLIC_TILE_SERVER_URL, so a pane can read tiles from a peer on the wall.
+	const tiles = tileTemplates(PUBLIC_TILE_SERVER_URL);
 
 	const night = $derived(display.night);
 

@@ -14,6 +14,16 @@ const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 export class AeroDisplay {
 	readonly config: PaneSettings;
 	readonly director: FlightDirector;
+	/**
+	 * Overwritten in the constructor before anything can read it.
+	 *
+	 * The placeholder is a lie for exactly the length of the constructor body,
+	 * and it used to leak: consumers defended against it with `?? 0` on every
+	 * field, which is unreachable today AND converts any future genuine absence
+	 * into a plausible zero -- a heading of 0 deg, an altitude of 0 m. Those
+	 * defaults are gone; if this is ever read before assignment, it must throw
+	 * rather than render north at sea level.
+	 */
 	view = $state<CameraView>({} as CameraView);
 	fps = $state<number>(60);
 	frameTimeMs = $state<number>(16.6);
