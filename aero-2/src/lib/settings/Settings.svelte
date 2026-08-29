@@ -344,7 +344,7 @@
 				</section>
 
 				<Segmented
-					label="3D Geospatial Engine"
+					label="Rendering Engine"
 					options={ENGINES}
 					isActive={(eng) => config.engine === eng}
 					onselect={(eng) => (config.engine = eng)}
