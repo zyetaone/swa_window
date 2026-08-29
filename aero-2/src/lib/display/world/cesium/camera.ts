@@ -1,6 +1,6 @@
 import type * as CesiumType from 'cesium';
 import type { CameraView } from '../../flight/view.js';
-import { resolveClearance, type Clearance } from '../clearance.js';
+import { resolveClearance } from '../clearance.js';
 
 /**
  * Synchronize Cesium's WGS84 camera with the live CameraView pose.
@@ -18,6 +18,18 @@ import { resolveClearance, type Clearance } from '../clearance.js';
  * So it asks the globe, and both engines now run the same policy through
  * `resolveClearance`: the mean is the FLOOR, a real sample wins when higher,
  * and a tile that has not loaded falls back to the mean rather than to zero.
+ *
+ * CAVEAT, and it is the whole caveat: nothing in this repo ever configures a
+ * terrain provider for Cesium, so the viewer runs the default
+ * `EllipsoidTerrainProvider` -- a smooth ellipsoid with no mountains in it.
+ * The numbers above therefore describe a mitigation this engine does NOT have.
+ * `getHeight` still answers on an ellipsoid, with a perfectly finite 0, which
+ * would have made the diagnostics counter read a confident 100% sampled while
+ * measuring nothing at all. That is the exact failure this file's counter
+ * exists to catch, so the ellipsoid is reported as UNSAMPLED and the regional
+ * mean carries the camera, which is the honest description of what happens.
+ * Give Cesium a real terrain provider and this becomes a live measurement
+ * with no other change.
  *
  * NOTE the frames differ and that is correct, not drift. Cesium configures no
  * vertical exaggeration, so `globe.getHeight` is real metres MSL and the mean
@@ -37,9 +49,13 @@ export function syncCesiumCamera(
 	if (!v.lat || !v.lon) return;
 
 	// Real metres MSL on both sides: Cesium applies no vertical exaggeration.
-	const clearance: Clearance = resolveClearance(
+	// An ellipsoid globe answers 0 everywhere; that is a default, not a reading.
+	const hasTerrain = !(viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider);
+	const clearance = resolveClearance(
 		groundElevationM || 0,
-		viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(v.lon, v.lat))
+		hasTerrain
+			? viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(v.lon, v.lat))
+			: undefined
 	);
 	onClearance?.(clearance.sampled);
 
