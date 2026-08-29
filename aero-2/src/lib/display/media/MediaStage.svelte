@@ -7,7 +7,6 @@
 
 	const display = useDisplay();
 
-	let slideIndex = $state(0);
 	let failedUrls = $state<string[]>([]);
 	let mediaError = $state(false);
 
@@ -28,8 +27,29 @@
 	// Image slideshow calculation
 	const urls = $derived(display.config.screensaverUrls);
 	const playableImages = $derived(urls.filter((u) => !failedUrls.includes(u)));
+	/**
+	 * Which slide, derived from the wall clock rather than counted.
+	 *
+	 * `(slideIndex + 1) % n` on a private 10 s interval is a per-process
+	 * sequence: three Pis boot seconds apart, so three panes of one screensaver
+	 * sat on three different photographs and stayed that way. The index is a
+	 * pure function of the second instead -- same rule the director already
+	 * follows for the destination, and a pane that reboots rejoins mid-show
+	 * instead of restarting the sequence.
+	 *
+	 * `display.view.wallSec` keeps ticking here: Display.svelte mounts the world
+	 * unconditionally and MediaStage draws over it, so the frame loop is live
+	 * even when nothing of the flight is visible.
+	 */
+	const SLIDE_SEC = 10;
+	const slideIndex = $derived(
+		playableImages.length === 0
+			? 0
+			: Math.floor(display.view.wallSec / SLIDE_SEC) % playableImages.length
+	);
+
 	const currentImageUrl = $derived(
-		playableImages.length > 0 ? playableImages[slideIndex % playableImages.length] : ''
+		playableImages.length > 0 ? playableImages[slideIndex] : ''
 	);
 
 	function markFailed(url: string) {
@@ -46,13 +66,6 @@
 		}
 	}
 
-	$effect(() => {
-		if (mode !== 'screensaver' || playableImages.length <= 1) return;
-		const interval = setInterval(() => {
-			slideIndex = (slideIndex + 1) % playableImages.length;
-		}, 10000);
-		return () => clearInterval(interval);
-	});
 </script>
 
 {#if mode !== 'flight'}

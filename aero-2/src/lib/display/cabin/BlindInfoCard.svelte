@@ -7,13 +7,14 @@
 
 	const display = useDisplay();
 
-	let now = $state(new Date());
-	$effect(() => {
-		const interval = setInterval(() => {
-			now = new Date();
-		}, 1000);
-		return () => clearInterval(interval);
-	});
+	/**
+	 * The frame loop is the only clock. This card wants the passenger's own
+	 * local time -- the Pi is in the room with them, so `toLocaleTimeString`
+	 * stays -- but it does not need a second `setInterval` to learn what second
+	 * it is: `display.view.wallSec` is the timestamp the current frame was
+	 * derived from, and it advances every frame whether the blind is up or down.
+	 */
+	const now = $derived(new Date(display.view.wallSec * 1000));
 
 	const timeStr = $derived(
 		now.toLocaleTimeString('en-US', {
