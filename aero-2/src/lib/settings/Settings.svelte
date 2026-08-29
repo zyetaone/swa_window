@@ -6,10 +6,11 @@
 	import { useDisplay } from '../display/display.svelte.js';
 	import { Location, LOCATIONS } from './locations.js';
 	import { SCENE_PRESETS } from './presets.js';
-	import { WEATHERS, ENGINES, FLEET_ROLES } from './settings.svelte.js';
+	import { WEATHERS, ENGINES, FLEET_ROLES, AUDIO_MODES } from './settings.svelte.js';
 	import { fetchStatus, type KioskStatus } from '#lib/status.js';
 	import Knob from './Knob.svelte';
 	import Toggle from './Toggle.svelte';
+	import Segmented from './Segmented.svelte';
 
 	interface Props {
 		showSettings?: boolean;
@@ -160,18 +161,13 @@
 						</select>
 					</div>
 
-					<div class="location-grid" style="margin-top: 8px;">
-						{#each LOCATIONS as loc}
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.place.id === loc.id}
-								onclick={() => config.setPlace(loc)}
-							>
-								{loc.name}
-							</button>
-						{/each}
-					</div>
+					<Segmented
+						label="Jump To"
+						options={LOCATIONS}
+						isActive={(loc) => config.place.id === loc.id}
+						onselect={(loc) => config.setPlace(loc)}
+						format={(loc) => loc.name}
+					/>
 				</section>
 			{:else if activeTab === 'camera'}
 				<section class="section">
@@ -278,21 +274,12 @@
 					/>
 				</section>
 			{:else if activeTab === 'atmosphere'}
-				<section class="section">
-					<h4>Weather Condition</h4>
-					<div class="location-grid">
-						{#each WEATHERS as w}
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.weather === w}
-								onclick={() => (config.weather = w)}
-							>
-								{w.toUpperCase()}
-							</button>
-						{/each}
-					</div>
-				</section>
+				<Segmented
+					label="Weather Condition"
+					options={WEATHERS}
+					isActive={(w) => config.weather === w}
+					onselect={(w) => (config.weather = w)}
+				/>
 
 				<section class="section">
 					<h4>Atmospheric Cloud Deck</h4>
@@ -356,21 +343,12 @@
 					/>
 				</section>
 
-				<section class="section">
-					<h4>Rendering Engine</h4>
-					<div class="location-grid">
-						{#each ENGINES as eng}
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.engine === eng}
-								onclick={() => (config.engine = eng)}
-							>
-								{eng.toUpperCase()}
-							</button>
-						{/each}
-					</div>
-				</section>
+				<Segmented
+					label="3D Geospatial Engine"
+					options={ENGINES}
+					isActive={(eng) => config.engine === eng}
+					onselect={(eng) => (config.engine = eng)}
+				/>
 			{:else if activeTab === 'cabin'}
 				<section class="section">
 					<h4>Cabin Chrome & Soundscape</h4>
@@ -388,24 +366,13 @@
 					/>
 
 					{#if config.audioEnabled}
-						<div class="location-grid" style="margin: 8px 0;">
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.audioMode === 'synth'}
-								onclick={() => (config.audioMode = 'synth')}
-							>
-								SYNTH ENGINE
-							</button>
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.audioMode === 'playlist'}
-								onclick={() => (config.audioMode = 'playlist')}
-							>
-								AUDIO PLAYLIST
-							</button>
-						</div>
+						<Segmented
+							label="Audio Source"
+							options={AUDIO_MODES}
+							isActive={(m) => config.audioMode === m}
+							onselect={(m) => (config.audioMode = m)}
+							format={(m) => (m === 'synth' ? 'SYNTH ENGINE' : 'AUDIO PLAYLIST')}
+						/>
 
 						<Knob
 							{config}
@@ -417,21 +384,12 @@
 					{/if}
 				</section>
 
-				<section class="section">
-					<h4>Multi-Pi Fleet Parallax Role</h4>
-					<div class="location-grid">
-						{#each FLEET_ROLES as role}
-							<button
-								type="button"
-								class="loc-btn"
-								class:active={config.fleetRole === role}
-								onclick={() => (config.fleetRole = role)}
-							>
-								{role.toUpperCase()}
-							</button>
-						{/each}
-					</div>
-				</section>
+				<Segmented
+					label="Multi-Pi Fleet Parallax Role"
+					options={FLEET_ROLES}
+					isActive={(role) => config.fleetRole === role}
+					onselect={(role) => (config.fleetRole = role)}
+				/>
 			{/if}
 		</div>
 	</aside>
@@ -503,7 +461,10 @@
 						</div>
 						<div class="diag-item">
 							<span class="diag-label">Primary IP:</span>
-							<span class="diag-value">{networkStatus?.primaryLanIp ?? (networkError ? `unreachable — ${networkError}` : '…')}</span>
+							<span class="diag-value"
+								>{networkStatus?.primaryLanIp ??
+									(networkError ? `unreachable — ${networkError}` : '…')}</span
+							>
 						</div>
 						<div class="diag-item">
 							<span class="diag-label">Port:</span>
@@ -784,36 +745,6 @@
 	.glass-select optgroup {
 		background: #0f172a;
 		color: #ffffff;
-	}
-
-	.location-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 6px;
-	}
-	.loc-btn {
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 4px;
-		padding: 6px 4px;
-		color: #cbd5e1;
-		font-size: 0.72rem;
-		cursor: pointer;
-		text-align: center;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transition: all 0.15s ease;
-	}
-	.loc-btn:hover {
-		background: rgba(255, 255, 255, 0.1);
-		color: #ffffff;
-	}
-	.loc-btn.active {
-		background: var(--accent-cyan, #38bdf8);
-		color: #0b111e;
-		font-weight: 600;
-		border-color: var(--accent-cyan, #38bdf8);
 	}
 
 	.diag-list {

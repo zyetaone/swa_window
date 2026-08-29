@@ -24,6 +24,13 @@ export { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
 export { WEATHERS, type Weather } from '../display/flight/view.js';
 export { ENGINES, type Engine } from '../display/world/engines.js';
 
+/**
+ * Where cabin sound comes from. Declared here rather than in a leaf because,
+ * unlike ENGINES, nothing outside this module and its own picker reads it.
+ */
+export const AUDIO_MODES = ['synth', 'playlist'] as const;
+export type AudioMode = (typeof AUDIO_MODES)[number];
+
 export interface SearchParamsSource {
 	searchParams: { get(key: string): string | null };
 }
@@ -167,7 +174,7 @@ export class PaneSettings {
 	/** Cabin Ambient Soundscape & Audio Playlist */
 	audioEnabled = $state<boolean>(false);
 	audioVolume = $state<number>(0.5);
-	audioMode = $state<'synth' | 'playlist'>('synth');
+	audioMode = $state<AudioMode>('synth');
 	audioPlaylist = $state<string[]>([
 		'https://actions.google.com/sounds/v1/weather/rain_heavy.ogg',
 		'https://actions.google.com/sounds/v1/weather/wind_breeze.ogg'
