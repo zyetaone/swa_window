@@ -28,6 +28,21 @@ export class AeroDisplay {
 	fps = $state<number>(60);
 	frameTimeMs = $state<number>(16.6);
 
+	/**
+	 * How often the terrain actually answered, versus falling back to the mean.
+	 *
+	 * This exists because the DEM can fail in a way that emits no error at all.
+	 * The archive serves 206s, the bytes arrive, the tiles sit in state
+	 * `loading` forever, and `queryTerrainElevation` returns nothing -- so the
+	 * regional mean wins every frame, the camera flies a sensible altitude, and
+	 * the ground is drawn at sea level underneath it. MapLibre raises nothing;
+	 * there is no error event to listen for. The failure is success-shaped.
+	 *
+	 * A percentage on the diagnostics panel is the smallest thing that makes it
+	 * visible: `0% sampled` says the elevation you are looking at is not real.
+	 */
+	terrain = $state({ sampled: 0, fallback: 0 });
+
 	#lastTickTime = typeof performance !== 'undefined' ? performance.now() : 0;
 	#frameCount = 0;
 	#lastFpsUpdate = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -55,6 +70,33 @@ export class AeroDisplay {
 	 */
 	get night(): number {
 		return nightAmount(this.sun.elevationDeg);
+	}
+
+	/**
+	 * Share of recent frames where real terrain was measured, 0-100.
+	 *
+	 * Reads 0 when no DEM tile has decoded, which is the whole point.
+	 */
+	get terrainSampledPct(): number {
+		const n = this.terrain.sampled + this.terrain.fallback;
+		return n === 0 ? 0 : (100 * this.terrain.sampled) / n;
+	}
+
+	/**
+	 * Record one clearance resolution. Called from the frame loop.
+	 *
+	 * Halved rather than reset once the window is large enough, so the figure
+	 * tracks the last few thousand frames instead of averaging over uptime -- a
+	 * DEM that starts working after ten minutes should show up promptly, not be
+	 * buried under the hours that preceded it.
+	 */
+	noteClearance(sampled: boolean): void {
+		if (sampled) this.terrain.sampled++;
+		else this.terrain.fallback++;
+		if (this.terrain.sampled + this.terrain.fallback > 4000) {
+			this.terrain.sampled = Math.round(this.terrain.sampled / 2);
+			this.terrain.fallback = Math.round(this.terrain.fallback / 2);
+		}
 	}
 
 	/** Where the sun is right now, over the place being flown. */

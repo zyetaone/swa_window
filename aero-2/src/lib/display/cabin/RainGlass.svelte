@@ -55,22 +55,20 @@
 	 * the same sequence.
 	 */
 	const FLASH_PERIOD_SEC = 13;
-	let lightning = $state(false);
-	$effect(() => {
-		if (display.config.weather !== 'storm') return;
-
-		let raf = 0;
-		const check = () => {
-			const now = Date.now() / 1000;
-			const slot = Math.floor(now / FLASH_PERIOD_SEC);
-			// Strike somewhere in the first 9 s of the slot, deterministically.
-			const strikeAt = slot * FLASH_PERIOD_SEC + slotNoise(slot) * 9;
-			const since = now - strikeAt;
-			lightning = since >= 0 && since < 0.12;
-			raf = requestAnimationFrame(check);
-		};
-		raf = requestAnimationFrame(check);
-		return () => cancelAnimationFrame(raf);
+	/**
+	 * Read the clock the rest of the window is drawn from, rather than a second
+	 * one. `display.view.wallSec` is the timestamp the current frame's pose was
+	 * derived at, so the flash lands on exactly the frame it belongs to; a
+	 * private `Date.now()` in a private RAF is a second clock that can sample
+	 * either side of the 0.12 s strike window the pose used.
+	 */
+	const lightning = $derived.by(() => {
+		if (display.config.weather !== 'storm') return false;
+		const now = display.view.wallSec;
+		const slot = Math.floor(now / FLASH_PERIOD_SEC);
+		// Strike somewhere in the first 9 s of the slot, deterministically.
+		const since = now - (slot * FLASH_PERIOD_SEC + slotNoise(slot) * 9);
+		return since >= 0 && since < 0.12;
 	});
 </script>
 

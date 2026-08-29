@@ -3,6 +3,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tileTemplates } from '#lib/settings/tiles.js';
 import { PaneSettings, KNOB_RANGE, readSettings } from '#lib/settings/settings.svelte.js';
+import { AeroDisplay } from '#lib/display/display.svelte.js';
+import { resolveClearance } from '#lib/display/world/clearance.js';
 
 /**
  * Guards for bugs that have already shipped once and were re-broken by later
@@ -413,6 +415,43 @@ describe('three panes stay in step', () => {
 			if (/Math\.random\s*\(/.test(code)) offenders.push(file);
 		}
 		expect(offenders, 'use slotNoise/daySeed — a random draw desyncs the wall').toEqual([]);
+	});
+
+	/**
+	 * The rule above only bans the obvious desync source. This one asserts the
+	 * property it exists to protect: the same wall second, place and role must
+	 * produce the same pose, twice, on a cold model. Any accumulator — a
+	 * `+= dt`, a cached previous frame, a value seeded at construction — passes
+	 * the Math.random scan and fails here, because the second model has no
+	 * history to accumulate from and the first one does.
+	 */
+	it('derives the same pose from the same second, with no history', () => {
+		const at = 1_767_000_000; // any fixed wall second
+		const pose = (d: AeroDisplay) => {
+			d.advanceTo(at - 30); // give the first model a past the second lacks
+			d.advanceTo(at - 1);
+			return d.advanceTo(at);
+		};
+
+		const a = pose(new AeroDisplay(readSettings(new URL('http://kiosk.local/?place=denver'))));
+		const b = new AeroDisplay(
+			readSettings(new URL('http://kiosk.local/?place=denver'))
+		).advanceTo(at);
+
+		expect(b).toEqual(a);
+	});
+
+	/**
+	 * A DEM tile that has not decoded must not be able to lower the camera. The
+	 * old expression `Math.max(mean, sample ?? 0)` agrees on land but routes
+	 * "unknown" through literal sea level, and reports nothing.
+	 */
+	it('falls back to the regional mean when terrain does not answer, and says so', () => {
+		expect(resolveClearance(1600, undefined)).toEqual({ groundM: 1600, sampled: false });
+		expect(resolveClearance(1600, NaN)).toEqual({ groundM: 1600, sampled: false });
+		expect(resolveClearance(1600, 4200)).toEqual({ groundM: 4200, sampled: true });
+		// A real sample below the regional mean is still a measurement.
+		expect(resolveClearance(1600, 900)).toEqual({ groundM: 1600, sampled: true });
 	});
 });
 

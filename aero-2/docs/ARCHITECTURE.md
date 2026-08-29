@@ -34,7 +34,7 @@ Naming, so `ls` reads well:
 
 ## 2. The invariants
 
-Seven rules. Five are enforced by something that fails; two are not, and are
+Eight rules. Six are enforced by something that fails; two are not, and are
 marked so, because an unenforced invariant is an aspiration.
 
 | #   | Invariant                                                                                  | Enforced by                                                           |
@@ -46,6 +46,7 @@ marked so, because an unenforced invariant is an aspiration.
 | 5   | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts`                    |
 | 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                     |
 | 7   | No barrel files (`index.ts`)                                                               | —                                                                     |
+| 8   | A renderer projects the pose; it never sources it                                          | `tests/regressions.test.ts` — same second ⇒ same pose, on a cold model |
 
 **#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded
 randomness anywhere the window can see. Both failure shapes have bitten:
@@ -64,6 +65,21 @@ renderer reuses unchanged, and what the suite can exercise without a GPU. One
 renderer import in any of them and a swappable engine quietly stops being
 swappable. `import type` is exempt — it is erased at build time, which is why
 the Cesium subsystem files can name Cesium types and still cost nothing.
+
+**#8 is what makes #2 hold at the edges.** `AeroDisplay.advanceTo(wallSec)` is
+the only place a pose comes from. Everything downstream — both stages, the
+clouds, the wing, the rain, the HUD — reads `display.view` and draws it. The
+moment a component reaches for `Date.now()` itself it has become a second
+clock, and two clocks on one pane cannot be made to agree by making each of
+them deterministic: the storm's lightning ran its own RAF sampling its own
+`Date.now()`, so the flash landed on a millisecond the drawn frame was never
+derived from. Determinism is a property of the graph, not of each node.
+
+The one thing a renderer is allowed to source is terrain, because only it has
+the DEM — and that is exactly why the clearance policy lives in
+`world/clearance.ts` and reports whether the sample was real. See the
+diagnostics readout in the admin drawer; a `0% sampled` reading means the
+window is flying over a mean, not over ground.
 
 **#6 and #7 are unenforced.** Both were violated within a day of being written
 down: `Clouds` ran its own WebGL context outside the boundary until 2026-08-26,

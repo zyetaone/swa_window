@@ -16,6 +16,7 @@
 	import 'svelte-maplibre-gl/vite';
 
 	import { useDisplay } from '../display.svelte.js';
+	import { resolveClearance } from './clearance.js';
 	import Ground from './Ground.svelte';
 	import Terrain from './Terrain.svelte';
 	import Buildings from './Buildings.svelte';
@@ -81,16 +82,19 @@
 			 * mountain. Dubai survived only because a 5 m mean is still 12 m when
 			 * exaggerated.
 			 */
+			// Both sides in MapLibre's frame: `queryTerrainElevation` returns the
+			// DRAWN height, so the mean is exaggerated to match before comparing.
 			const exaggeration = display.config.exaggeration;
 			const meanGroundM = display.config.place.groundElevationM * exaggeration;
-			const groundAtPlaneM = Math.max(meanGroundM, m.queryTerrainElevation(planeAt) ?? 0);
-			const groundAtTargetM = Math.max(meanGroundM, m.queryTerrainElevation(targetAt) ?? 0);
+			const atPlane = resolveClearance(meanGroundM, m.queryTerrainElevation(planeAt));
+			const atTarget = resolveClearance(meanGroundM, m.queryTerrainElevation(targetAt));
+			display.noteClearance(atPlane.sampled);
 
 			const cam = m.calculateCameraOptionsFromTo(
 				planeAt,
-				v.aglM + groundAtPlaneM,
+				v.aglM + atPlane.groundM,
 				targetAt,
-				groundAtTargetM
+				atTarget.groundM
 			);
 			m.jumpTo(cam);
 			raf = requestAnimationFrame(loop);

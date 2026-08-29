@@ -470,6 +470,23 @@
 						<span class="diag-value">{display.frameTimeMs.toFixed(1)} ms</span>
 					</div>
 					<div class="diag-item">
+						<!--
+							Terrain clearance is the codebase's classic silent failure: when no
+							DEM tile decodes, the query returns nothing, the regional mean wins,
+							and the camera flies a plausible altitude over flat ground. Nothing
+							throws. This line is the only place that absence is visible.
+						-->
+						<span class="diag-label">Terrain sampled:</span>
+						<span
+							class="diag-value"
+							class:warn={display.terrain.sampled + display.terrain.fallback > 60 &&
+								display.terrainSampledPct < 50}
+						>
+							{display.terrainSampledPct.toFixed(0)}% ({display.terrain.sampled}/{display.terrain
+								.sampled + display.terrain.fallback})
+						</span>
+					</div>
+					<div class="diag-item">
 						<span class="diag-label">Engine:</span>
 						<span class="diag-value">{config.engine.toUpperCase()}</span>
 					</div>
@@ -824,6 +841,10 @@
 	.diag-label {
 		color: #94a3b8;
 	}
+	.diag-value.warn {
+		color: #ffb454;
+	}
+
 	.diag-value {
 		color: #f8fafc;
 		font-family: monospace;

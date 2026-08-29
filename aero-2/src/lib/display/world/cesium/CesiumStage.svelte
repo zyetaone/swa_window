@@ -61,7 +61,9 @@
 				const removeListener = viewer.scene.preRender.addEventListener(() => {
 					imagery.setNightAlpha(display.night * display.config.cesiumViirsBrightness);
 					const groundElev = display.config.place?.groundElevationM ?? 0;
-					syncCesiumCamera(Cesium, viewer, display.view, groundElev);
+					syncCesiumCamera(Cesium, viewer, display.view, groundElev, (ok) =>
+						display.noteClearance(ok)
+					);
 				});
 
 				return () => {
