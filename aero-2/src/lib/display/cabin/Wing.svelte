@@ -13,12 +13,12 @@
 	const display = useDisplay();
 
 	const isVisible = $derived(display.config.wing);
-	const scale = $derived(display.config.wingScale ?? 0.65);
-	const offsetX = $derived(display.config.wingOffsetX ?? 0);
-	const offsetY = $derived(display.config.wingOffsetY ?? 0);
-	const pitchOffset = $derived(display.config.wingPitchDeg ?? 0);
-	const yawOffset = $derived(display.config.wingYawDeg ?? 0);
-	const rollFactor = $derived(display.config.wingRollFactor ?? 1.0);
+	const scale = $derived(display.config.wingScale);
+	const offsetX = $derived(display.config.wingOffsetX);
+	const offsetY = $derived(display.config.wingOffsetY);
+	const pitchOffset = $derived(display.config.wingPitchDeg);
+	const yawOffset = $derived(display.config.wingYawDeg);
+	const rollFactor = $derived(display.config.wingRollFactor);
 
 	/**
 	 * The scene's whole life, attached to the canvas that owns it.
@@ -159,8 +159,8 @@
 			}
 
 			if (wingHolder) {
-				const bank = display.view.bankDeg ?? 0;
-				const screenSign = (display.config.direction ?? 1) < 0 ? -1 : 1;
+				const bank = display.view.bankDeg;
+				const screenSign = display.config.direction < 0 ? -1 : 1;
 				// In airframe-relative cabin space, the wing is rigidly mounted to the fuselage outside the window.
 				// Aeroelastic wingtip flex: under banking lift loads, the wing flexes subtly (0.04 factor).
 				const aeroFlexDeg = bank * 0.04 * rollFactor;
@@ -171,7 +171,7 @@
 				wingHolder.scale.set(scale * screenSign, scale, scale);
 
 				// Locked 3D translation inside cabin reference frame with high-frequency aero-flutter
-				const flutter = (display.view.turbulence?.wingFlutterPx ?? 0) * 0.0015;
+				const flutter = display.view.turbulence.wingFlutterPx * 0.0015;
 				wingHolder.position.set(
 					1.1 * screenSign + offsetX * 0.005 * screenSign,
 					-1.1 - offsetY * 0.005 + flutter,

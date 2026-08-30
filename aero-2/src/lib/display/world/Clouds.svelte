@@ -20,10 +20,10 @@
 	const display = useDisplay();
 
 	const isVisible = $derived(display.config.clouds);
-	const density = $derived(display.config.cloudDensity ?? 0.75);
-	const driftSpeed = $derived(display.config.cloudSpeed ?? 1.0);
-	const cloudAltM = $derived(display.config.cloudAltitudeM ?? 3500);
-	const opacityScale = $derived(display.config.cloudOpacity ?? 0.85);
+	const density = $derived(display.config.cloudDensity);
+	const driftSpeed = $derived(display.config.cloudSpeed);
+	const cloudAltM = $derived(display.config.cloudAltitudeM);
+	const opacityScale = $derived(display.config.cloudOpacity);
 
 
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
@@ -242,7 +242,7 @@
 			}
 
 			// Synchronize relative camera altitude, pitch and banking tilt
-			const planeAgl = display.view.aglM ?? 4000;
+			const planeAgl = display.view.aglM;
 			const deltaAltM = planeAgl - cloudAltM;
 			camera.position.set(
 				0,
@@ -289,8 +289,8 @@
 			cloudGroup.rotation.y = bearingRad + wallSec * driftSpeed * 0.0006;
 
 			// ── Per-Sprite 3D Solar Lighting & Mie Forward-Scatter ─────────────────
-			const sunElev = display.sun.elevationDeg ?? 30;
-			const sunAzimuth = display.sun.azimuthDeg ?? 180;
+			const sunElev = display.sun.elevationDeg;
+			const sunAzimuth = display.sun.azimuthDeg;
 			const night = display.night;
 			const dayFactor = Math.max(0, 1 - night);
 

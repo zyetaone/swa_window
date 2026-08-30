@@ -46,7 +46,17 @@ export function syncCesiumCamera(
 	/** Reports whether terrain answered, for the diagnostics counter. */
 	onClearance?: (sampled: boolean) => void
 ) {
-	if (!v.lat || !v.lon) return;
+	/**
+	 * Guarding the constructor placeholder, not the value.
+	 *
+	 * `AeroDisplay.view` starts as `{} as CameraView`, so this has to survive
+	 * being handed undefined once. It was written `!v.lat || !v.lon`, which also
+	 * rejects a real 0 -- the prime meridian and the equator are coordinates,
+	 * and a location on either would have frozen this camera at whatever it last
+	 * rendered, with nothing thrown. None of the eleven places sit there, so it
+	 * was latent rather than broken; it is still the wrong question to ask.
+	 */
+	if (!Number.isFinite(v.lat) || !Number.isFinite(v.lon)) return;
 
 	// Real metres MSL on both sides: Cesium applies no vertical exaggeration.
 	// An ellipsoid globe answers 0 everywhere; that is a default, not a reading.

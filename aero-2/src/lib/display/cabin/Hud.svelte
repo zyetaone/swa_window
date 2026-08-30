@@ -56,16 +56,16 @@
 	}
 
 	const placeName = $derived(display.config.place.name);
-	const coords = $derived(formatCoord(display.view.lat ?? 0, display.view.lon ?? 0));
-	const aglM = $derived(Math.round(display.view.aglM ?? 0));
+	const coords = $derived(formatCoord(display.view.lat, display.view.lon));
+	const aglM = $derived(Math.round(display.view.aglM));
 	const aglFt = $derived(Math.round(aglM * 3.28084));
-	const heading = $derived(Math.round(display.view.planeHeadingDeg ?? 0));
+	const heading = $derived(Math.round(display.view.planeHeadingDeg));
 	const bank = $derived(
-		display.view.bankDeg !== undefined ? display.view.bankDeg.toFixed(1) : '0.0'
+		display.view.bankDeg.toFixed(1)
 	);
 	const localTime = $derived(formatTime(display.view.timeOfDay ?? 12));
 	const utcLabel = $derived(formatUtcOffset(display.config.place.utcOffset));
-	const sunElev = $derived(display.sun.elevationDeg ?? 30);
+	const sunElev = $derived(display.sun.elevationDeg);
 	const solarPhase = $derived.by(() => {
 		if (sunElev > 15) return '☀️ DAY';
 		if (sunElev > 0) return '🌅 DUSK';
