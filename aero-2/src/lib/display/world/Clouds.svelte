@@ -25,7 +25,6 @@
 	const cloudAltM = $derived(display.config.cloudAltitudeM);
 	const opacityScale = $derived(display.config.cloudOpacity);
 
-
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 
 	// Scratch math vectors
@@ -61,7 +60,20 @@
 
 		const textureLoader = new THREE.TextureLoader();
 		const textures: THREE.Texture[] = [];
-		let loadedCount = 0;
+		let settled = 0;
+
+		/** Build once every load has finished, with whatever survived. */
+		function done() {
+			if (++settled < TEXTURE_URLS.length) return;
+			const loaded = textures.filter(Boolean);
+			if (loaded.length === 0) {
+				console.warn('[Clouds] No cloud textures loaded — the deck stays empty.');
+				return;
+			}
+			textures.length = 0;
+			textures.push(...loaded);
+			buildCloudDeck();
+		}
 
 		TEXTURE_URLS.forEach((url, i) => {
 			textureLoader.load(
@@ -69,14 +81,16 @@
 				(tex) => {
 					tex.colorSpace = THREE.SRGBColorSpace;
 					textures[i] = tex;
-					loadedCount++;
-					if (loadedCount === TEXTURE_URLS.length) {
-						buildCloudDeck();
-					}
+					done();
 				},
 				undefined,
 				(err) => {
-					console.warn('[Clouds] Texture load fallback:', err);
+					// Counted, not just logged. The build fired on `loadedCount ===
+					// TEXTURE_URLS.length` and only successes incremented it, so a
+					// single 404 among the three meant NO cloud deck at all, for
+					// the life of the process, announced by one console.warn.
+					console.warn('[Clouds] Texture load failed:', err);
+					done();
 				}
 			);
 		});
@@ -178,7 +192,19 @@
 				}
 
 				const sprScale = baseScale * (i === 0 ? 1.25 : 0.85 + rand() * 0.55);
-				const texIdx = rand() < 0.7 ? 0 : 1 + Math.floor(rand() * (texList.length - 1));
+				/**
+				 * Bounded, which it was not.
+				 *
+				 * `1 + floor(rand() * (len - 1))` is index 1 whenever the list has
+				 * ONE texture -- and the cirrus pass calls this with exactly one,
+				 * `[textures[2] || textures[0]]`. So roughly three in ten cirrus
+				 * sprites were built with `map: undefined`, which Three warns
+				 * about once per material and then draws as a flat untextured
+				 * card: the translucent grey quadrilateral sitting in the sky at
+				 * `?preset=golden-hour`.
+				 */
+				const texIdx =
+					texList.length < 2 ? 0 : rand() < 0.7 ? 0 : 1 + Math.floor(rand() * (texList.length - 1));
 				const tex = texList[texIdx];
 
 				// Vertical underside gradient shading
@@ -371,7 +397,7 @@
 			renderer.dispose();
 			scene.clear();
 		};
-		}
+	}
 </script>
 
 {#if isVisible}
