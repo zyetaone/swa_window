@@ -60,17 +60,15 @@ export class AeroDisplay {
 		this.view = untrack(() => calculateCameraView(Date.now() / 1000, this.config));
 	}
 
-	get atmosphere(): AtmosphereState {
-		return resolveAtmosphere(this.view.aglM);
-	}
+	/** Cached for the same reason as `sun`: five readers, four of them in Sky. */
+	atmosphere: AtmosphereState = $derived.by(() => resolveAtmosphere(this.view.aglM));
 
 	/**
-	 * Read by Ground, Terrain, Sky, Clouds, Buildings and CesiumStage. All six
-	 * used to inherit a clock-only curve that disagreed with `sun` below.
+	 * Read by Ground, Terrain, Sky, Clouds, Buildings, Frame, Wing and
+	 * CesiumStage. All of them used to inherit a clock-only curve that
+	 * disagreed with `sun` below.
 	 */
-	get night(): number {
-		return nightAmount(this.sun.elevationDeg);
-	}
+	night: number = $derived.by(() => nightAmount(this.sun.elevationDeg));
 
 	/**
 	 * Share of recent frames where real terrain was measured, 0-100.
@@ -99,14 +97,25 @@ export class AeroDisplay {
 		}
 	}
 
-	/** Where the sun is right now, over the place being flown. */
-	get sun(): SunPosition {
-		return sunPosition(
+	/**
+	 * Where the sun is right now, over the place being flown.
+	 *
+	 * `$derived`, not a getter, because this is read a dozen-plus times per
+	 * frame -- Sky takes three of them, Terrain three, Clouds three inside its
+	 * render loop, and Ground, Buildings, Hud, Frame, Wing, Stage and
+	 * CesiumStage one each. As a plain getter every one of those recomputed the
+	 * solar position, and `dayOfYear` allocates a `Date` and calls `Date.UTC`
+	 * twice, so a value that changes once a day was being rebuilt roughly a
+	 * thousand times a second. Cached, it recomputes when the pose does: once
+	 * per frame, for every reader.
+	 */
+	sun: SunPosition = $derived.by(() =>
+		sunPosition(
 			this.view.wallSec,
 			this.config.place.lat,
 			this.config.place.utcOffset + this.config.clockOffsetH
-		);
-	}
+		)
+	);
 
 	advanceLocation(): void {
 		this.director.advanceDestination(Date.now() / 1000);
