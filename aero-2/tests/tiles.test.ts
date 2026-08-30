@@ -195,6 +195,18 @@ describe('parseRange (PMTiles Range Requests)', () => {
 	it('returns unsatisfiable when suffix <= 0', () => {
 		expect(parseRange('bytes=-0', SIZE)).toBe('unsatisfiable');
 	});
+
+	/**
+	 * A zero-length file satisfies no range. The suffix branch returned early,
+	 * before the `end < start` check, so `bytes=-100` against an empty file came
+	 * back as `{ start: 0, end: -1 }` — which the route serves as
+	 * `Content-Range: bytes 0--1/0` with a read stream ending before it starts.
+	 */
+	it('returns unsatisfiable for any range against a zero-length file', () => {
+		expect(parseRange('bytes=-100', 0)).toBe('unsatisfiable');
+		expect(parseRange('bytes=0-', 0)).toBe('unsatisfiable');
+		expect(parseRange('bytes=0-99', 0)).toBe('unsatisfiable');
+	});
 });
 
 describe('cache headers', () => {

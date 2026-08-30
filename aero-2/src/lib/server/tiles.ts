@@ -162,6 +162,12 @@ export function parseRange(
 	const [, rawStart, rawEnd] = m;
 	if (rawStart === '' && rawEnd === '') return null;
 
+	// A zero-length file satisfies no range at all. Without this, `bytes=-100`
+	// against an empty file returned `{ start: 0, end: -1 }` -- which the route
+	// turns into `Content-Range: bytes 0--1/0` and a read stream with a negative
+	// end. The suffix branch never reached the `end < start` check below.
+	if (size === 0) return 'unsatisfiable';
+
 	if (rawStart === '') {
 		const suffix = Number(rawEnd);
 		if (suffix <= 0) return 'unsatisfiable';
