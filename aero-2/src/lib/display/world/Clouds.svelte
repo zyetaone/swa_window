@@ -107,7 +107,7 @@
 			if (textures.length === 0) return;
 
 			// Seeded RNG from daySeed for 3-Pi multi-screen determinism
-			const seed = Math.floor(display.config.phase * 1_000_003) + 1;
+			const seed = Math.floor(display.phase * 1_000_003) + 1;
 			const rng = mulberry32(seed);
 
 			// ── 1. Distant Horizon Cloud Systems (40 km - 260 km) ──────────────────

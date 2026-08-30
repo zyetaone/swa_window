@@ -3,7 +3,7 @@
  * Pure deterministic mathematics — rune-free and renderer-free.
  */
 
-import { normalizeHeading, FlightTrack, type OrbitPose } from './flight-path.js';
+import { normalizeHeading, phaseFor, FlightTrack, type OrbitPose } from './flight-path.js';
 import { roleYawOffsetDeg, type FleetRole } from './parallax.js';
 import { resolveLocalHours } from '../world/sun.js';
 
@@ -21,8 +21,6 @@ export interface CameraParams {
 	ceilingM: number;
 	/** +1 or -1: which way round the loop is flown. */
 	direction?: 1 | -1;
-	/** Radians of phase offset, from `daySeed`. */
-	phase?: number;
 	/** Simulation flight speed multiplier (e.g. 2.5x). */
 	speed?: number;
 	/** Hours added to the destination's UTC offset. Tuning only; 0 on the wall. */
@@ -241,7 +239,8 @@ export function calculateCameraView(wallSec: number, params: CameraParams): Came
 		params.floorM,
 		params.ceilingM,
 		params.direction ?? 1,
-		params.phase ?? 0
+		// Derived here, from the same second as the pose. See `phaseFor`.
+		phaseFor(params.place, wallSec)
 	);
 	const effectiveSec = wallSec * (params.speed ?? 1.0);
 	const plane = track.poseAt(effectiveSec);

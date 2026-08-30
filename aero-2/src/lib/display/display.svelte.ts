@@ -4,6 +4,7 @@
  */
 import { getContext, setContext, untrack } from 'svelte';
 import { calculateCameraView, type CameraView } from './flight/view.js';
+import { phaseFor } from './flight/flight-path.js';
 import { FlightDirector } from './flight/director.svelte.js';
 import { resolveAtmosphere, type AtmosphereState } from './world/atmosphere.js';
 import { nightAmount, sunPosition, type SunPosition } from './world/sun.js';
@@ -59,6 +60,17 @@ export class AeroDisplay {
 		this.director = new FlightDirector(this.config);
 		this.view = untrack(() => calculateCameraView(Date.now() / 1000, this.config));
 	}
+
+	/**
+	 * Today's orbit phase for the place being flown.
+	 *
+	 * Clouds seeds its sprite RNG from this and MiniMap builds its ring with it,
+	 * and both MUST match what the camera flew or the marker leaves the ring and
+	 * the three panes get different weather. They used to read `config.phase`, a
+	 * stored field; this is the same number derived from the frame's own second,
+	 * so there is one phase and nothing to keep in step.
+	 */
+	phase: number = $derived.by(() => phaseFor(this.config.place, this.view.wallSec));
 
 	/** Cached for the same reason as `sun`: five readers, four of them in Sky. */
 	atmosphere: AtmosphereState = $derived.by(() => resolveAtmosphere(this.view.aglM));

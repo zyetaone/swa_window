@@ -6,7 +6,7 @@
 import { LOCATIONS, Location } from './locations.js';
 import { SCENE_PRESETS, type ScenePreset } from './presets.js';
 import { HILLSHADE_DEFAULT, TERRAIN_EXAGGERATION } from './tiles.js';
-import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M, daySeed } from '../display/flight/flight-path.js';
+import { ALTITUDE_FLOOR_M, ALTITUDE_CEILING_M } from '../display/flight/flight-path.js';
 import {
 	DEFAULT_WINDOW_AZIMUTH_DEG,
 	DEFAULT_PITCH_DEG,
@@ -130,8 +130,6 @@ export class PaneSettings {
 	 * overwritten by the rotation a second later.
 	 */
 	rotate = $state<boolean>(true);
-	/** Phase offset in radians from daySeed. */
-	phase = $state<number>(0);
 
 	/** Aircraft Wing alignment knobs (X, Y, Scale, Pitch, Yaw/Sweep, Roll) */
 	wing = $state<boolean>(true);
@@ -200,17 +198,20 @@ export class PaneSettings {
 	/**
 	 * Move to a location, and bring everything the location DEFINES with it.
 	 *
-	 * `floorM`, `ceilingM` and `phase` are not independent settings — they are
-	 * facts about the place. Setting `place` alone leaves them describing the
-	 * previous one, so Mumbai's 500 m floor follows you to Denver and puts the
-	 * camera inside the Front Range. That has now regressed four times, each
-	 * time because a caller set some of these fields and not the rest.
+	 * `floorM` and `ceilingM` are not independent settings — they are facts
+	 * about the place. Setting `place` alone leaves them describing the previous
+	 * one, so Mumbai's 500 m floor follows you to Denver and puts the camera
+	 * inside the Front Range. That has now regressed four times, each time
+	 * because a caller set some of these fields and not the rest.
+	 *
+	 * `phase` used to be assigned here too, from a bare `Date.now()`. It is now
+	 * derived from the wall second by `phaseFor`, because a value three panes
+	 * must agree on cannot come from whenever each of them last changed place.
 	 *
 	 * So there is one gate. Call this, never assign `place` directly.
 	 */
 	setPlace(place: Location): void {
 		this.place = place;
-		this.phase = daySeed(place) * Math.PI * 2;
 		this.floorM = place.climbFloorM;
 		this.ceilingM = place.climbCeilingM;
 	}

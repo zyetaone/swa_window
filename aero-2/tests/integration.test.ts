@@ -25,7 +25,6 @@ import { join } from 'node:path';
 import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
-import { daySeed } from '#lib/display/flight/flight-path.js';
 import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
 import { remoteTileUrl } from '#lib/server/tiles.js';
@@ -77,7 +76,6 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 		floorM: place.climbFloorM,
 		ceilingM: place.climbCeilingM,
 		direction: 1 as const,
-		phase: daySeed(place) * Math.PI * 2,
 		speed: 4.0
 	});
 

@@ -129,7 +129,7 @@ export type FlightPose = OrbitPose;
  * place — `Math.random()` would give each pane a different flight path and split the
  * wall into three unrelated views.
  */
-export function daySeed(place: { lat: number; lon: number }, nowMs = Date.now()): number {
+export function daySeed(place: { lat: number; lon: number }, nowMs: number): number {
 	const day = Math.floor(nowMs / 86_400_000);
 	let h =
 		(day * 2654435761) ^
@@ -138,6 +138,26 @@ export function daySeed(place: { lat: number; lon: number }, nowMs = Date.now())
 	h = Math.imul(h ^ (h >>> 15), 2246822507);
 	h = Math.imul(h ^ (h >>> 13), 3266489909);
 	return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/**
+ * The orbit's starting angle for a place, on the day `wallSec` falls in.
+ *
+ * Derived on read, never stored. It used to be a `$state` field on
+ * PaneSettings, assigned in `setPlace` from a bare `Date.now()` -- so the one
+ * quantity that has to be identical on three panes was a clock reading taken at
+ * whatever instant each pane happened to change location. `daySeed` buckets by
+ * UTC day, which hides it for all but a few milliseconds a day: at UTC midnight
+ * -- 05:30 in Hyderabad, with the wall running -- two panes calling `setPlace`
+ * either side of the boundary got different phases and flew different paths
+ * until the next rotation.
+ *
+ * Taking `wallSec` closes it. Every pane derives the phase from the same second
+ * it derives the pose from, so they cannot disagree about which day it is
+ * without already disagreeing about the time.
+ */
+export function phaseFor(place: { lat: number; lon: number }, wallSec: number): number {
+	return daySeed(place, wallSec * 1000) * TWO_PI;
 }
 
 /**

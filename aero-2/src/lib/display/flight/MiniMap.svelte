@@ -72,7 +72,7 @@
 			display.config.floorM,
 			display.config.ceilingM,
 			display.config.direction,
-			display.config.phase
+			display.phase
 		)
 	);
 

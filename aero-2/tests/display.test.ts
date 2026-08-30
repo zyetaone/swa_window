@@ -9,7 +9,7 @@ import {
 } from '#lib/display/flight/flight-path.js';
 import { calculateCameraView, FlightCamera } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
-import { slotNoise } from '#lib/display/flight/flight-path.js';
+import { slotNoise, phaseFor } from '#lib/display/flight/flight-path.js';
 import {
 	resolveLocalHours,
 	nightAmount,
@@ -691,8 +691,24 @@ describe('MiniMap track', () => {
 	 * drawn track. The second assertion is the bug: it must stay large, or the
 	 * first assertion proves nothing.
 	 */
+	/**
+	 * The phase is a function of the SECOND, not of when a pane last changed
+	 * place. It used to be assigned in `setPlace` from a bare `Date.now()`, so
+	 * two panes that rotated either side of UTC midnight -- 05:30 in Hyderabad,
+	 * with the wall running -- picked different days, and therefore different
+	 * orbits, until the next rotation. `daySeed` also lost its `Date.now()`
+	 * default, so no caller can silently reintroduce process time.
+	 */
+	it('derives the phase from the wall second, not from when the place was set', () => {
+		const midnight = 1_767_225_600; // a UTC day boundary
+		expect(phaseFor(place, midnight - 0.001)).toBe(phaseFor(place, midnight - 0.001));
+		expect(phaseFor(place, midnight + 0.001)).not.toBe(phaseFor(place, midnight - 0.001));
+		// ...and the whole day either side of it is one value.
+		expect(phaseFor(place, midnight + 3600)).toBe(phaseFor(place, midnight + 40_000));
+	});
+
 	it('needs the same phase as the flight, or the marker leaves the ring', () => {
-		const phase = daySeed(place) * Math.PI * 2;
+		const phase = phaseFor(place, 1_767_000_000);
 		const args = [place.lat, place.lon, place.climbFloorM, place.climbCeilingM, 1] as const;
 		const flown = new FlightTrack(...args, phase);
 
