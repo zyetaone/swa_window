@@ -565,6 +565,12 @@ describe('an explicit ?place= is not overridden by the rotation', () => {
 		expect(pinned.rotate, 'a named place must stop the rotation').toBe(false);
 	});
 
+	it('pins the destination when the URL names a preset that has one', () => {
+		const pinned = readSettings(new URL('http://kiosk.local/?preset=gulf-midnight'));
+		expect(pinned.place.id, 'the preset names Dubai').toBe('dubai');
+		expect(pinned.rotate, "a preset's clock offset is measured against ITS place").toBe(false);
+	});
+
 	it('still rotates when the URL names no place', () => {
 		const free = readSettings(new URL('http://kiosk.local/'));
 		expect(free.rotate).toBe(true);

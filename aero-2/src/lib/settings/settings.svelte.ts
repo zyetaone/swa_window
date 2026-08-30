@@ -289,7 +289,21 @@ export class PaneSettings {
 		 * fall back to the current value rather than to a constant.
 		 */
 		const presetParam = url.searchParams.get('preset');
-		if (presetParam) this.applyPreset(presetParam);
+		if (presetParam) {
+			this.applyPreset(presetParam);
+			/**
+			 * A preset that names a place pins the rotation, exactly as `?place=`
+			 * does, and for a sharper version of the same reason.
+			 *
+			 * `?place=hyderabad` drifting away was merely confusing. A preset also
+			 * carries a `localHour`, and `applyPreset` converts that to a
+			 * clockOffsetH measured against THAT place's UTC offset -- so when the
+			 * director moved the window on, the offset stayed and was reapplied to
+			 * somewhere else. `?preset=gulf-midnight` was observed rendering
+			 * Chicago Midway in daylight: wrong place, and the wrong time for it.
+			 */
+			if (SCENE_PRESETS.find((p) => p.id === presetParam)?.config.placeId) this.rotate = false;
+		}
 	}
 
 	reset(): void {
