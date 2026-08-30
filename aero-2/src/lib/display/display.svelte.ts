@@ -133,7 +133,23 @@ export class AeroDisplay {
 		this.director.advanceDestination(Date.now() / 1000);
 	}
 
+	/**
+	 * Has the frame loop ever driven a frame?
+	 *
+	 * Plain, NOT `$state`, and that is the point: the watchdog polls on its own
+	 * timer, so it needs a value to read rather than a signal to react to.
+	 * Making it reactive would invalidate a derived sixty times a second to
+	 * carry a boolean that flips once.
+	 *
+	 * It exists because `view` is populated in the constructor, so `wallSec` is
+	 * fresh at mount whether or not a loop ever starts. Without this the
+	 * watchdog cannot tell "not started yet" from "stopped" -- and a cold start
+	 * on a Pi is slow enough to look exactly like a stall.
+	 */
+	hasAdvanced = false;
+
 	advanceTo(wallSec: number = Date.now() / 1000): CameraView {
+		this.hasAdvanced = true;
 		if (typeof performance !== 'undefined') {
 			const now = performance.now();
 			const delta = now - this.#lastTickTime;
