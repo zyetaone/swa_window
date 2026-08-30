@@ -11,13 +11,27 @@
 	import { setupCesiumAtmosphere } from './atmosphere.js';
 
 	const display = useDisplay();
-	let container = $state<HTMLDivElement | undefined>();
 
-	$effect(() => {
-		if (!container) return;
-
+	/**
+	 * The viewer's whole life, attached to the element it draws into.
+	 *
+	 * Replaces `bind:this` into a nullable `$state` plus an `$effect` that
+	 * guarded on it. The element is not state: it exists for exactly as long as
+	 * this component does, which is exactly as long as the viewer should.
+	 */
+	function cesiumViewer(container: HTMLDivElement) {
 		let viewer: any = null;
 		let destroyed = false;
+		/**
+		 * Hoisted out of the `.then` on purpose.
+		 *
+		 * The cleanup below used to be RETURNED FROM THE PROMISE CALLBACK, where
+		 * nothing calls it -- a `return () => removeListener()` that reads like
+		 * teardown and is really just a value handed to a resolved promise. The
+		 * frame listener therefore outlived every teardown that did not also
+		 * destroy the viewer.
+		 */
+		let removeListener: (() => void) | null = null;
 
 		// Dynamic import keeps Cesium chunk code-split
 		import('cesium')
@@ -58,7 +72,7 @@
 					showAtmosphere: display.config.cesiumAtmosphere
 				});
 
-				const removeListener = viewer.scene.preRender.addEventListener(() => {
+				removeListener = viewer.scene.preRender.addEventListener(() => {
 					// Cesium drives its own frame loop, so THIS is the engine's RAF and
 					// it has to advance the clock the way Stage.svelte's does. Without
 					// it nothing calls `advanceTo` while `engine === 'cesium'` -- the
@@ -72,9 +86,6 @@
 					);
 				});
 
-				return () => {
-					removeListener();
-				};
 			})
 			.catch((err) => {
 				console.warn('[CesiumStage] Dynamic Cesium load error:', err);
@@ -82,14 +93,15 @@
 
 		return () => {
 			destroyed = true;
+			removeListener?.();
 			if (viewer && !viewer.isDestroyed()) {
 				viewer.destroy();
 			}
 		};
-	});
+	}
 </script>
 
-<div bind:this={container} class="cesium-stage-container" aria-hidden="true"></div>
+<div {@attach cesiumViewer} class="cesium-stage-container" aria-hidden="true"></div>
 
 <style>
 	.cesium-stage-container {

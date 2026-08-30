@@ -25,7 +25,6 @@
 	const cloudAltM = $derived(display.config.cloudAltitudeM ?? 3500);
 	const opacityScale = $derived(display.config.cloudOpacity ?? 0.85);
 
-	let canvas = $state<HTMLCanvasElement | undefined>();
 
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 
@@ -34,10 +33,13 @@
 	const _viewVec = new THREE.Vector3();
 	const _sunDir = new THREE.Vector3();
 
-	$effect(() => {
-		if (!canvas || !isVisible) return;
-
-		const c = canvas;
+	/**
+	 * The deck's whole life, attached to the canvas that owns it. Same shape as
+	 * `Wing.svelte`, and argument-free for the same reason: `{@attach f(x)}`
+	 * re-runs on any change to `x`, and this one loads textures and emits
+	 * hundreds of sprites.
+	 */
+	function cloudScene(c: HTMLCanvasElement) {
 		const renderer = new THREE.WebGLRenderer({
 			canvas: c,
 			alpha: true,
@@ -369,11 +371,11 @@
 			renderer.dispose();
 			scene.clear();
 		};
-	});
+		}
 </script>
 
 {#if isVisible}
-	<canvas bind:this={canvas} class="cabin-clouds-canvas" aria-hidden="true"></canvas>
+	<canvas {@attach cloudScene} class="cabin-clouds-canvas" aria-hidden="true"></canvas>
 {/if}
 
 <style>

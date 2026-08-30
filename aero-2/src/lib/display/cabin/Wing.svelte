@@ -20,13 +20,23 @@
 	const yawOffset = $derived(display.config.wingYawDeg ?? 0);
 	const rollFactor = $derived(display.config.wingRollFactor ?? 1.0);
 
-	// ── 3D Canvas & Three.js Scene Lifecycle ──────────────────────────────────
-	let canvas = $state<HTMLCanvasElement | undefined>();
-
-	$effect(() => {
-		if (!canvas || !isVisible) return;
-
-		const c = canvas;
+	/**
+	 * The scene's whole life, attached to the canvas that owns it.
+	 *
+	 * This was `bind:this` into a nullable `$state`, plus an `$effect` that
+	 * re-checked both the element and `isVisible` before doing anything. The
+	 * element is not really state -- it exists exactly as long as the `{#if}`
+	 * below says it does, which is the same lifetime as the renderer. An
+	 * attachment says that directly: it runs when the canvas mounts, and its
+	 * return value runs when the canvas goes away.
+	 *
+	 * It takes NO arguments on purpose. `{@attach f(x)}` re-runs whenever `x`
+	 * changes, and rebuilding a WebGL context and re-parsing the GLTF every
+	 * time an operator nudges a slider would be a serious regression. Every
+	 * knob is read inside the render loop below, where reads are untracked and
+	 * cost nothing.
+	 */
+	function wingScene(c: HTMLCanvasElement) {
 		const renderer = new THREE.WebGLRenderer({
 			canvas: c,
 			alpha: true,
@@ -183,12 +193,12 @@
 			renderer.dispose();
 			scene.clear();
 		};
-	});
+	}
 </script>
 
 {#if isVisible}
 	<!-- Pure 3D WebGL Canvas Layer (Unclipped 100% Viewport Bounds) -->
-	<canvas bind:this={canvas} class="cabin-wing-canvas" aria-hidden="true"></canvas>
+	<canvas {@attach wingScene} class="cabin-wing-canvas" aria-hidden="true"></canvas>
 {/if}
 
 <style>
