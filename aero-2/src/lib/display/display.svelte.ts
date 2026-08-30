@@ -138,7 +138,7 @@ export class AeroDisplay {
 
 		// Wall clock, not a frame delta: the destination is derived from the
 		// second, so every pane lands on the same place without being told.
-		if (this.config.rotate) this.director.tick(wallSec);
+		this.director.tick(wallSec);
 
 		const next = calculateCameraView(wallSec, this.config);
 		this.view = next;

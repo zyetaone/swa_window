@@ -28,7 +28,6 @@ export function useBlind(display: AeroDisplay) {
 	let containerHeight = 0;
 	let dragStartY = 0;
 	let dragStartPointerY = 0;
-	let dragStartPointerX = 0;
 
 	const attach: Attachment<HTMLDivElement> = (node) => {
 		clipEl = node;
@@ -55,7 +54,6 @@ export function useBlind(display: AeroDisplay) {
 		isDragging = true;
 		dragStartY = dragY;
 		dragStartPointerY = e.clientY;
-		dragStartPointerX = e.clientX;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 	}
 
@@ -74,7 +72,9 @@ export function useBlind(display: AeroDisplay) {
 		const now = Date.now();
 		if (now - lastFlightAtMs < FLIGHT_COOLDOWN_MS) return;
 		lastFlightAtMs = now;
-		display.advanceLocation?.();
+		// Not `?.()`. The method is always there, and an optional call on a name
+		// that cannot be missing turns a future rename into silence.
+		display.advanceLocation();
 	}
 
 	function onPointerUp() {

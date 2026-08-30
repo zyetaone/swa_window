@@ -84,7 +84,18 @@ const DEFAULT_WING_OFFSET_X = 0;
 const DEFAULT_WING_OFFSET_Y = 0;
 
 export class PaneSettings {
-	place = $state<Location>(Location.hyderabad());
+	/**
+	 * `$state.raw`, because a `Location` is replaced, never edited.
+	 *
+	 * Every field on the class is `readonly` and `setPlace` swaps the whole
+	 * object, so the deep proxy `$state` builds could only ever cost: this is
+	 * read several times per frame -- `place.lat`, `place.lon`,
+	 * `place.utcOffset` and `place.groundElevationM` all feed the pose and the
+	 * sun -- and each read went through a proxy trap to reach a value nothing
+	 * is allowed to change. Raw still triggers on assignment, which is the only
+	 * way it ever changes.
+	 */
+	place = $state.raw<Location>(Location.hyderabad());
 	azimuthDeg = $state<number>(DEFAULT_WINDOW_AZIMUTH_DEG);
 	pitchDeg = $state<number>(DEFAULT_PITCH_DEG);
 	floorM = $state<number>(ALTITUDE_FLOOR_M);
@@ -150,12 +161,13 @@ export class PaneSettings {
 	videoUrl = $state<string>(
 		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
 	);
-	videoPlaylist = $state<string[]>([
+	/** Raw for the same reason as `place`: assigned wholesale, never spliced. */
+	videoPlaylist = $state.raw<string[]>([
 		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
 		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
 	]);
 	videoIndex = $state<number>(0);
-	screensaverUrls = $state<string[]>([
+	screensaverUrls = $state.raw<string[]>([
 		'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80',
 		'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80',
 		'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80'
@@ -175,7 +187,7 @@ export class PaneSettings {
 	audioEnabled = $state<boolean>(false);
 	audioVolume = $state<number>(0.5);
 	audioMode = $state<AudioMode>('synth');
-	audioPlaylist = $state<string[]>([
+	audioPlaylist = $state.raw<string[]>([
 		'https://actions.google.com/sounds/v1/weather/rain_heavy.ogg',
 		'https://actions.google.com/sounds/v1/weather/wind_breeze.ogg'
 	]);

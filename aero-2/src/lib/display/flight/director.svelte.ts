@@ -42,8 +42,13 @@ export const DWELL_SEC = 240;
  * integer on all three panes, which is why it comes from the day rather than
  * from the process.
  */
+/** Which rotation slot a wall-clock second falls in. */
+function slotOf(wallSec: number): number {
+	return Math.floor(Math.max(0, wallSec) / DWELL_SEC);
+}
+
 export function destinationAt(wallSec: number, rotationSeed = 0): Location {
-	const slot = Math.floor(Math.max(0, wallSec) / DWELL_SEC);
+	const slot = slotOf(wallSec);
 	const index = (((slot + rotationSeed) % LOCATIONS.length) + LOCATIONS.length) % LOCATIONS.length;
 	return LOCATIONS[index];
 }
@@ -56,24 +61,38 @@ export function rotationSeedFor(wallSec: number): number {
 export class FlightDirector {
 	private settings: PaneSettings;
 
-	enabled = $state(true);
 	/**
 	 * Slots to skip, from an operator pressing "next" on this pane.
 	 *
 	 * Pane-local and deliberately temporary. A manual advance is one person at
-	 * one screen, so it cannot be anything but local — but it decays, because
-	 * the slot boundary re-derives the destination from the clock and the wall
-	 * comes back together on its own. Nothing to reset, nothing to sync.
+	 * one screen, so it cannot be anything but local — but it expires at the
+	 * next slot boundary, and the wall comes back together on its own.
+	 *
+	 * That last part was a claim, not a behaviour. `manualSkips` only ever went
+	 * up, and it is added to the seed on every derivation, so one press of
+	 * "next" left this pane permanently one city ahead of the other two — for
+	 * the rest of the process's life, on a panorama whose whole premise is that
+	 * the three panes show one continuous view. The paragraph describing the
+	 * self-healing was written directly above the field that prevented it.
+	 *
+	 * `skipSlot` is what makes it true: the skips belong to the slot they were
+	 * made in, and stop counting when the clock leaves it.
 	 */
 	manualSkips = $state(0);
+	private skipSlot = -1;
 
 	constructor(settings: PaneSettings) {
 		this.settings = settings;
 	}
 
+	/** Manual skips count only inside the slot they were made in. */
+	private skipsAt(wallSec: number): number {
+		return slotOf(wallSec) === this.skipSlot ? this.manualSkips : 0;
+	}
+
 	/** The destination this pane should be showing at `wallSec`. */
 	destinationFor(wallSec: number): Location {
-		return destinationAt(wallSec, rotationSeedFor(wallSec) + this.manualSkips);
+		return destinationAt(wallSec, rotationSeedFor(wallSec) + this.skipsAt(wallSec));
 	}
 
 	/**
@@ -82,7 +101,12 @@ export class FlightDirector {
 	 * Takes wall-clock seconds, NOT a frame delta. Passing `dt` was the bug.
 	 */
 	tick(wallSec: number): void {
-		if (!this.enabled) return;
+		// The gate reads the setting directly. It used to be an `enabled` $state
+		// on this class AND `config.rotate` checked by the caller -- two switches
+		// for one behaviour, of which only the settings one was ever written by
+		// anything but a test. Asking the settings object is also what makes
+		// `?place=` and `?preset=` pin the rotation without telling the director.
+		if (!this.settings.rotate) return;
 		const next = this.destinationFor(wallSec);
 		if (next.id !== this.settings.place.id) this.settings.setPlace(next);
 	}
@@ -96,13 +120,14 @@ export class FlightDirector {
 	 * Denver and put the camera inside the Front Range.
 	 */
 	advanceDestination(wallSec: number = Date.now() / 1000): Location {
+		const slot = slotOf(wallSec);
+		if (slot !== this.skipSlot) {
+			this.skipSlot = slot;
+			this.manualSkips = 0;
+		}
 		this.manualSkips += 1;
 		const next = this.destinationFor(wallSec);
 		this.settings.setPlace(next);
 		return next;
-	}
-
-	reset(): void {
-		this.manualSkips = 0;
 	}
 }

@@ -95,11 +95,17 @@ describe('the director moves the whole envelope, not just the place', () => {
 		expect(settings.place.id).toBe(after);
 	});
 
-	it('respects the enabled flag', () => {
+	/**
+	 * The gate is `settings.rotate`, and it is the ONLY gate. The director also
+	 * carried its own `enabled` flag, which nothing outside this file's own test
+	 * ever wrote -- two switches for one behaviour, so an operator turning one
+	 * off could be quietly overruled by the other.
+	 */
+	it('holds the destination when the settings say not to rotate', () => {
 		const settings = createSettings();
+		settings.rotate = false;
 		const director = new FlightDirector(settings);
 		const before = settings.place.id;
-		director.enabled = false;
 		director.tick(DWELL_SEC * 5);
 		expect(settings.place.id).toBe(before);
 	});
@@ -128,7 +134,13 @@ describe('a manual advance is local and temporary', () => {
 		solo.advanceDestination(0);
 		expect(solo.destinationFor(0).id).not.toBe(wall.destinationFor(0).id);
 
-		solo.reset();
-		expect(solo.destinationFor(0).id).toBe(wall.destinationFor(0).id);
+		/**
+		 * And rejoins on its own at the next slot boundary, with nothing reset
+		 * and nothing synced -- which is what the class always claimed and did
+		 * not do. `manualSkips` only went up and was added to the seed on every
+		 * derivation, so one press of "next" left this pane permanently one city
+		 * ahead of the other two on a wall that is meant to be one view.
+		 */
+		expect(solo.destinationFor(DWELL_SEC).id).toBe(wall.destinationFor(DWELL_SEC).id);
 	});
 });
