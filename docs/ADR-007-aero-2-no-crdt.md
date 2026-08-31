@@ -1,7 +1,10 @@
 # ADR-007 — aero-2 Config Sync: A Versioned Snapshot, Not a CRDT
 
-> Status: **Accepted** (2026-08-31). Scope: `aero-2/` only. Does not change v1,
-> which ships `CRDTStore` today and should keep it until v1 is retired.
+> Status: **Accepted** (2026-08-31) for the negative half — aero-2 does not build
+> a CRDT. The positive half below (versioned snapshot, `applyAtWallSec`) is a
+> **sketch**: aero-2 has no ops layer yet, and nothing here has been built or
+> measured. Scope: `aero-2/` only. Does not change v1, which ships `CRDTStore`
+> today and should keep it until v1 is retired.
 >
 > Relates to ADR-005 (Threlte renderer) — same argument shape: v1 bought
 > general-purpose infrastructure for a problem this product does not have.
@@ -39,9 +42,20 @@ From `config-tree.svelte.ts`:
 
 The machinery was introduced to fix a bug caused by **two mutation paths into a
 mutable config tree**. It is an architectural patch wearing a distributed-systems
-hat. And it did not hold: `parallax.svelte.ts` deliberately bypasses the stamp,
-and `applyConfigPatch` takes a `stamp: false` option for boot and restore. Three
-write paths, one of which the merge cannot see.
+hat.
+
+More telling is what had to be carved back out of it. `applyConfigPatch` takes a
+`stamp: false` option for boot and restore, and `setParallaxRole`
+(`config-tree.svelte.ts:234`) bypasses the stamp entirely:
+
+> Deliberately bypasses `applyConfigPatch` / the CRDT stamp: the parallax role
+> is device-local (each Pi knows which pane it is), so broadcasting it to peers
+> would be wrong.
+
+That bypass is correct — and it is v1 discovering the wall-state / pane-state
+split by hand, one field at a time, as an escape hatch from the merge rather
+than as the structure. The distinction the CRDT could not express is the one
+that makes the CRDT unnecessary.
 
 aero-2 already has one mutation gate — `setPlace` exists precisely because
 partial writes regressed four times. The root cause the CRDT was papering over
