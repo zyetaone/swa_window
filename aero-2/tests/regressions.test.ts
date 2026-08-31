@@ -358,8 +358,17 @@ describe('invariant 5 reaches the renderer, not just the tile templates', () => 
 			const raw = readFileSync(file, 'utf8');
 			// A comment naming a dead host is documentation, not a fetch.
 			const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\s\*).*$/gm, '');
-			const m = /https?:\/\/[a-z0-9.-]+/i.exec(code);
-			if (m) offenders.push(`${file.replace(/^src\/lib\//, '')} (${m[0]})`);
+			// The bare protocol, not `https?://[a-z0-9.-]+`. A host is usually
+			// interpolated -- `https://${host}/x` and `'https://' + host` both
+			// fail a character class right after the slashes, and a template
+			// literal is exactly how a tile URL gets built. Nothing under
+			// display/ has any business naming a protocol at all, so the
+			// stricter test is also the simpler one.
+			const m = /https?:\/\//i.exec(code);
+			if (m) {
+				const line = code.slice(0, m.index).split('\n').length;
+				offenders.push(`${file.replace(/^src\/lib\//, '')}:${line}`);
+			}
 		}
 		expect(offenders, 'route it through /api/tiles and name the host in server/tiles.ts').toEqual(
 			[]

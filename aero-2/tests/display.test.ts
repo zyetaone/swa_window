@@ -933,7 +933,7 @@ describe('mean ground elevation is not a terrain clearance', () => {
 	 * The MapLibre camera is safe because it asks the renderer for the ground
 	 * under the aircraft and uses the mean only as a floor. This test exists so
 	 * that if anyone reverts to `aglM + groundElevationM`, or writes a second
-	 * engine that does (the Cesium path currently does), the reason is on record
+	 * engine that does — the deleted Cesium bridge did — the reason is on record
 	 * rather than rediscovered from a screenshot of a hillside.
 	 */
 	it('records the locations where mean + floor is below real terrain', () => {

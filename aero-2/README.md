@@ -10,9 +10,10 @@ bun run dev      # http://0.0.0.0:5173
 bun run check && bun run test
 ```
 
-Layout and invariants: `docs/ARCHITECTURE.md`. Cesium was the ship path
-until 2026-08-25; its code was removed, not archived — see
-`docs/ADR-005-aero-2-threlte-renderer.md` for why and what a reversal costs.
+Layout and invariants: `docs/ARCHITECTURE.md`. One renderer: MapLibre GL.
+Cesium was a selectable second engine and was deleted on 2026-08-31 — removed,
+not archived. See `docs/ADR-005-aero-2-threlte-renderer.md` for the renderer
+direction and what a reversal costs.
 
 ## Offline tiles
 

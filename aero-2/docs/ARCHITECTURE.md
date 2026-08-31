@@ -19,8 +19,8 @@ server/     the offline tile proxy; imports nothing from the two above
 **There is deliberately no file listing here.** The previous version of this
 document enumerated the tree, and by the time anyone read it the tree had
 `Relief.svelte` and `Air.svelte` in it — files that were renamed a long time
-ago — while `Clouds`, `Blind`, `RainGlass`, the media stage, the director and
-the whole Cesium subtree were missing. A diagram that has to be hand-updated on
+ago — while `Clouds`, `Blind`, `RainGlass`, the media stage and the director
+were missing. A diagram that has to be hand-updated on
 every rename is a diagram that will be wrong, and a wrong map is worse than no
 map. `ls` is accurate; this file holds the rules `ls` cannot show you.
 
@@ -63,11 +63,11 @@ says the _pure_ modules stay pure: `flight-path`, `view`, `parallax`,
 `atmosphere`, `sun`, `settings`, `locations`. That layer is what a second
 renderer reuses unchanged, and what the suite can exercise without a GPU. One
 renderer import in any of them and a swappable engine quietly stops being
-swappable. `import type` is exempt — it is erased at build time, which is why
-the Cesium subsystem files can name Cesium types and still cost nothing.
+swappable. `import type` is exempt — it is erased at build time, so a renderer
+bridge can name its engine's types and still cost the pure layer nothing.
 
 **#8 is what makes #2 hold at the edges.** `AeroDisplay.advanceTo(wallSec)` is
-the only place a pose comes from. Everything downstream — both stages, the
+the only place a pose comes from. Everything downstream — the stage, the
 clouds, the wing, the rain, the HUD — reads `display.view` and draws it. The
 moment a component reaches for `Date.now()` itself it has become a second
 clock, and two clocks on one pane cannot be made to agree by making each of
@@ -89,16 +89,30 @@ a three-line source scan alongside the two already in `integration.test.ts`.
 
 ## 3. Engines
 
-`config.engine` picks MapLibre or Cesium; `Display.svelte` switches on it.
-Cesium is reached through a runtime `import('cesium')`, so the engine you are
-not running costs nothing to boot. `three` — the cloud deck and the wing — is a
-static import and is always in the main chunk. That asymmetry was not a
-decision; measure it on a Pi before treating it as one.
+**There is one.** MapLibre GL, mounted unconditionally by `Display.svelte`.
+
+There were two until 2026-08-31. `config.engine` switched between MapLibre and
+Cesium, and Cesium came in through a runtime `import('cesium')` so the engine
+you were not running cost nothing to boot. It was deleted rather than fixed:
+no terrain provider was ever set, so it flew the regional mean — below the
+local peak at five of eleven locations — and it named two upstream tile hosts
+directly, which invariant 5 forbids and the scan of the day could not see.
+`docs/ADR-005` proposes Threlte as the eventual second renderer; Cesium was a
+third option that was nobody's plan.
+
+What survives the deletion is the shape, and it is worth keeping if a second
+renderer arrives: the bridge owns the engine, `import type` keeps the pure
+layer clean, and a source scan asserts the new stage advances the clock —
+mounting a stage is not the same as driving one.
+
+`three` — the cloud deck and the wing — is a static import and is always in the
+main chunk. That asymmetry was not a decision; measure it on a Pi before
+treating it as one.
 
 ## 4. Layers, outside in
 
 ```text
-Stage / CesiumStage    the world              inside <svelte:boundary>
+Stage                  the world              inside <svelte:boundary>
 Clouds                 the deck               inside <svelte:boundary>
 Wing                   the airframe           z 5
 RainGlass, Frame, Blind  the cabin            z 10
