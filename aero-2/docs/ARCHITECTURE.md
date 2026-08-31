@@ -37,15 +37,15 @@ Naming, so `ls` reads well:
 Eight rules. Six are enforced by something that fails; two are not, and are
 marked so, because an unenforced invariant is an aspiration.
 
-| #   | Invariant                                                                                  | Enforced by                                                           |
-| --- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| 1   | No import cycles                                                                           | `tools/check-cycles.mjs`, in `check` and `test`                       |
-| 2   | The world is a pure function of (wall clock, place, `daySeed`)                             | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt` |
-| 3   | Context DI: `createDisplay()` at the root, `useDisplay()` below                            | —                                                                     |
-| 4   | The pure simulation modules import no renderer                                             | `tests/integration.test.ts`                                           |
-| 5   | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts`                    |
-| 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                     |
-| 7   | No barrel files (`index.ts`)                                                               | —                                                                     |
+| #   | Invariant                                                                                  | Enforced by                                                            |
+| --- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 1   | No import cycles                                                                           | `tools/check-cycles.mjs`, in `check` and `test`                        |
+| 2   | The world is a pure function of (wall clock, place, `daySeed`)                             | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt`  |
+| 3   | Context DI: `createDisplay()` at the root, `useDisplay()` below                            | —                                                                      |
+| 4   | The pure simulation modules import no renderer                                             | `tests/integration.test.ts`                                            |
+| 5   | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts`                     |
+| 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                      |
+| 7   | No barrel files (`index.ts`)                                                               | —                                                                      |
 | 8   | A renderer projects the pose; it never sources it                                          | `tests/regressions.test.ts` — same second ⇒ same pose, on a cold model |
 
 **#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded

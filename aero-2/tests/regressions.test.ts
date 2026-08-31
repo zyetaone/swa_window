@@ -337,6 +337,36 @@ describe('fog mapping', () => {
 	});
 });
 
+describe('invariant 5 reaches the renderer, not just the tile templates', () => {
+	/**
+	 * The scan in `tile URL shape` reads `tileTemplates()` -- the MapLibre tile
+	 * SSOT -- and asserts none of those names an upstream. It passed for months
+	 * while `world/cesium/imagery.ts` hardcoded `tiles.maps.eox.at` and
+	 * `tile.openstreetmap.org`, because a template scan cannot see a renderer
+	 * that builds its own provider. The invariant read as held; it was not.
+	 *
+	 * Cesium is deleted, so this starts green with an EMPTY allowlist -- which
+	 * is the point. It is not a record of today's offenders, it is the thing
+	 * that fails when the next renderer reaches past `/api/tiles`. Media
+	 * playlists in `settings/` legitimately name hosts (Unsplash, sample video)
+	 * and are out of scope: the rule is about the world, not about demo assets.
+	 */
+	it('no file under display/ names a network host', () => {
+		const offenders: string[] = [];
+		for (const file of allSources()) {
+			if (!file.includes('lib/display')) continue;
+			const raw = readFileSync(file, 'utf8');
+			// A comment naming a dead host is documentation, not a fetch.
+			const code = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\s\*).*$/gm, '');
+			const m = /https?:\/\/[a-z0-9.-]+/i.exec(code);
+			if (m) offenders.push(`${file.replace(/^src\/lib\//, '')} (${m[0]})`);
+		}
+		expect(offenders, 'route it through /api/tiles and name the host in server/tiles.ts').toEqual(
+			[]
+		);
+	});
+});
+
 describe('the clamp table is the only range', () => {
 	/**
 	 * Four sliders carried hardcoded bounds that disagreed with KNOB_RANGE:
