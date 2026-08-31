@@ -148,7 +148,16 @@ export class AeroDisplay {
 	 */
 	hasAdvanced = false;
 
-	advanceTo(wallSec: number = Date.now() / 1000): CameraView {
+	/**
+	 * `wallSec` is required, and was a defaulted `Date.now() / 1000` until the
+	 * default turned out to be doing real work: `Stage.svelte` passed the clock
+	 * explicitly and `CesiumStage.svelte` rode the default, so the two renderers
+	 * sourced the same quantity two different ways. That is invariant 8 leaking
+	 * -- a renderer projects the pose, it never sources it -- and a defaulted
+	 * clock is how a third renderer would leak it again without anyone noticing.
+	 * Required means the type checker asks the question at every call site.
+	 */
+	advanceTo(wallSec: number): CameraView {
 		this.hasAdvanced = true;
 		if (typeof performance !== 'undefined') {
 			const now = performance.now();

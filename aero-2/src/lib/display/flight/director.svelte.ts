@@ -119,7 +119,7 @@ export class FlightDirector {
 	 * the location you just left — so Mumbai's 500 m floor followed you to
 	 * Denver and put the camera inside the Front Range.
 	 */
-	advanceDestination(wallSec: number = Date.now() / 1000): Location {
+	advanceDestination(wallSec: number): Location {
 		const slot = slotOf(wallSec);
 		if (slot !== this.skipSlot) {
 			this.skipSlot = slot;

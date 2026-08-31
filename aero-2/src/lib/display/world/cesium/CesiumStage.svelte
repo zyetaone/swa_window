@@ -78,7 +78,7 @@
 					// it nothing calls `advanceTo` while `engine === 'cesium'` -- the
 					// pose stays at the one computed in the constructor and the window
 					// is a still photograph that renders at 60fps.
-					display.advanceTo();
+					display.advanceTo(Date.now() / 1000);
 					imagery.setNightAlpha(display.night * display.config.cesiumViirsBrightness);
 					const groundElev = display.config.place?.groundElevationM ?? 0;
 					syncCesiumCamera(Cesium, viewer, display.view, groundElev, (ok) =>
