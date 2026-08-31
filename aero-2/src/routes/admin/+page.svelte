@@ -8,7 +8,6 @@
 	import { SCENE_PRESETS } from '#lib/settings/presets.js';
 	import { fetchStatus, type KioskStatus } from '#lib/status.js';
 
-
 	let status = $state<KioskStatus | null>(null);
 	let statusError = $state<string | null>(null);
 	let activeRole = $state('center');

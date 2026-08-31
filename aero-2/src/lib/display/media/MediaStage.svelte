@@ -48,9 +48,7 @@
 			: Math.floor(display.view.wallSec / SLIDE_SEC) % playableImages.length
 	);
 
-	const currentImageUrl = $derived(
-		playableImages.length > 0 ? playableImages[slideIndex] : ''
-	);
+	const currentImageUrl = $derived(playableImages.length > 0 ? playableImages[slideIndex] : '');
 
 	function markFailed(url: string) {
 		if (!url || failedUrls.includes(url)) return;
@@ -65,7 +63,6 @@
 			display.config.videoIndex = (display.config.videoIndex + 1) % videoList.length;
 		}
 	}
-
 </script>
 
 {#if mode !== 'flight'}

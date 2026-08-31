@@ -60,9 +60,7 @@
 	const aglM = $derived(Math.round(display.view.aglM));
 	const aglFt = $derived(Math.round(aglM * 3.28084));
 	const heading = $derived(Math.round(display.view.planeHeadingDeg));
-	const bank = $derived(
-		display.view.bankDeg.toFixed(1)
-	);
+	const bank = $derived(display.view.bankDeg.toFixed(1));
 	const localTime = $derived(formatTime(display.view.timeOfDay ?? 12));
 	const utcLabel = $derived(formatUtcOffset(display.config.place.utcOffset));
 	const sunElev = $derived(display.sun.elevationDeg);

@@ -267,8 +267,7 @@ describe('cache headers', () => {
  * IPv4 literals. The one topology it was written for was the one it rejected.
  */
 describe('LAN CORS admits the fleet and nothing else', () => {
-	const allow = (origin: string) =>
-		Object.keys(lanCorsHeaders(origin)).length > 0;
+	const allow = (origin: string) => Object.keys(lanCorsHeaders(origin)).length > 0;
 
 	it('admits the addresses panes actually use', () => {
 		for (const o of [
