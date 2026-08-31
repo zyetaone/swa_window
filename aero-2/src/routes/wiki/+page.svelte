@@ -38,10 +38,9 @@
 			<div class="card">
 				<h3>1. One 3D Viewport</h3>
 				<p>
-					MapLibre GL over DEM terrain (GIBS imagery + Terrarium elevation), with VIIRS night
-					lights ramped into the ground grade. A second engine lived here and was deleted: it
-					never sampled terrain, so it flew the regional mean straight through five of the
-					eleven locations.
+					MapLibre GL over DEM terrain (GIBS imagery + Terrarium elevation), with VIIRS night lights
+					ramped into the ground grade. A second engine lived here and was deleted: it never sampled
+					terrain, so it flew the regional mean straight through five of the eleven locations.
 				</p>
 			</div>
 			<div class="card">
