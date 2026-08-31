@@ -9,16 +9,18 @@
  * the ground really is, and the mean is only the floor.
  *
  * That policy lived twice, once in each renderer bridge, and the two engines
- * disagreeing about where the ground is has already been a documented
- * regression: the same location flew clean on MapLibre and through a mountain
- * on Cesium. One policy, one place, two callers.
+ * disagreeing about where the ground is was a documented regression: the same
+ * location flew clean on MapLibre and through a mountain on Cesium. The Cesium
+ * bridge is deleted now and MapLibre is the only caller, so this is one policy
+ * with one caller — kept, not inlined, because `sampled` is the provenance flag
+ * `AeroDisplay.terrain` counts and that has to live somewhere both the caller
+ * and the counter can see.
  *
- * WHAT THIS DELIBERATELY DOES NOT DO is convert between vertical frames. The
- * two engines sample in different ones — MapLibre's `queryTerrainElevation`
- * returns the DRAWN height with exaggeration already applied, Cesium's
- * `globe.getHeight` returns real metres MSL — so each caller passes its mean
- * and its sample already in its own frame. Folding exaggeration in here would
- * silently scale Cesium's floor by a factor it never applied.
+ * It also still owns a vertical-frame rule worth not relearning: MapLibre's
+ * `queryTerrainElevation` returns the DRAWN height with exaggeration already
+ * applied, so the mean and the sample must arrive in the SAME frame. Any second
+ * renderer sampling real metres MSL has to convert before it calls this, not
+ * after.
  */
 
 export interface Clearance {

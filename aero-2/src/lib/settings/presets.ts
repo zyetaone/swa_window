@@ -5,8 +5,6 @@
 
 import type { Weather } from '../display/flight/view.js';
 
-import type { Engine } from '../display/world/engines.js';
-
 export interface ScenePreset {
 	readonly id: string;
 	readonly name: string;
@@ -15,7 +13,6 @@ export interface ScenePreset {
 	readonly badge: string;
 	readonly config: {
 		placeId?: string;
-		engine?: Engine;
 		/**
 		 * Local hour to compose the scene at, 0-24.
 		 *
@@ -34,9 +31,6 @@ export interface ScenePreset {
 		exaggeration?: number;
 		shade?: number;
 		weather?: Weather;
-		cesiumLighting?: boolean;
-		cesiumAtmosphere?: boolean;
-		cesiumViirsBrightness?: number;
 		audioEnabled?: boolean;
 		audioVolume?: number;
 		pitchDeg?: number;
@@ -66,7 +60,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -12,
 			azimuthDeg: 5,
 			speed: 3.5,
-			cesiumLighting: true,
 			audioEnabled: true,
 			audioVolume: 0.45
 		}
@@ -90,7 +83,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -22,
 			azimuthDeg: -10,
 			speed: 4.0,
-			cesiumLighting: true,
 			audioEnabled: true,
 			audioVolume: 0.5
 		}
@@ -115,8 +107,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -18,
 			azimuthDeg: 0,
 			speed: 3.0,
-			cesiumLighting: true,
-			cesiumViirsBrightness: 3.5,
 			audioEnabled: true,
 			audioVolume: 0.4
 		}
@@ -141,7 +131,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -15,
 			azimuthDeg: 15,
 			speed: 4.5,
-			cesiumLighting: true,
 			audioEnabled: true,
 			audioVolume: 0.5
 		}
@@ -165,7 +154,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -10,
 			azimuthDeg: 0,
 			speed: 6.0,
-			cesiumLighting: true,
 			audioEnabled: true,
 			audioVolume: 0.6
 		}
@@ -189,7 +177,6 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 			pitchDeg: -16,
 			azimuthDeg: 0,
 			speed: 5.0,
-			cesiumLighting: true,
 			audioEnabled: true,
 			audioVolume: 0.7
 		}

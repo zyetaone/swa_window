@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Display — Top-level parent feature component for the kiosk window display.
-	 * Composes the outside 3D world (Stage / CesiumStage), aircraft wing silhouette (Wing),
+	 * Composes the outside 3D world (Stage), aircraft wing silhouette (Wing),
 	 * inside cabin chrome (Frame), minimap (MiniMap), and telemetry status band (Hud).
 	 *
 	 * Uses Svelte 5 <svelte:boundary> to isolate 3D WebGL runtime errors from taking
@@ -12,7 +12,6 @@
 	// commit here picked the line up mid-edit -- so main pointed at a directory
 	// git has never seen and a clean clone could not build.
 	import Stage from './world/Stage.svelte';
-	import CesiumStage from './world/cesium/CesiumStage.svelte';
 	import Clouds from './world/Clouds.svelte';
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
@@ -125,11 +124,7 @@
 <div class="aero-display">
 	<!-- 3D World protected by Svelte 5 Error Boundary -->
 	<svelte:boundary onerror={onStageError}>
-		{#if display.config.engine === 'cesium'}
-			<CesiumStage />
-		{:else}
-			<Stage />
-		{/if}
+		<Stage />
 
 		<!-- Inside the boundary, like the rest of the 3D world: Clouds runs its
 		     own WebGL context and can lose it exactly the way Stage can. It sat

@@ -102,10 +102,16 @@ describe('cache headers match what the artifact actually is', () => {
 	it('never sends immutable for a .pmtiles archive', () => {
 		const src = findSource('+server.ts', 'api/tiles');
 		const immutableAt = src.indexOf('IMMUTABLE_CACHE =');
-		expect(immutableAt, 'the immutable constant should still exist for raster tiles')
-			.toBeGreaterThan(-1);
-		expect(src, 'pmtiles must be recognised as mutable').toMatch(/MUTABLE_ARCHIVE\s*=\s*\/\\\.pmtiles/);
-		expect(src, 'a mutable archive must revalidate').toContain("REVALIDATE_CACHE = 'public, no-cache'");
+		expect(
+			immutableAt,
+			'the immutable constant should still exist for raster tiles'
+		).toBeGreaterThan(-1);
+		expect(src, 'pmtiles must be recognised as mutable').toMatch(
+			/MUTABLE_ARCHIVE\s*=\s*\/\\\.pmtiles/
+		);
+		expect(src, 'a mutable archive must revalidate').toContain(
+			"REVALIDATE_CACHE = 'public, no-cache'"
+		);
 		expect(src, 'and must carry a validator to revalidate against').toContain('fileEtag');
 	});
 });
@@ -126,8 +132,9 @@ describe('Sky', () => {
 	 */
 	it('masks the starfield against the pitch actually rendered', () => {
 		const src = findSource('Sky.svelte');
-		expect(src, 'the horizon must track the drawn camera, not the setting')
-			.toContain('display.view.cameraPitchDeg');
+		expect(src, 'the horizon must track the drawn camera, not the setting').toContain(
+			'display.view.cameraPitchDeg'
+		);
 		const code = src.replace(/\/\*[\s\S]*?\*\//g, '');
 		expect(code, 'config.pitchDeg does not contain the bank').not.toMatch(
 			/horizonPct[\s\S]{0,200}config\.pitchDeg/
@@ -147,12 +154,8 @@ describe('Sky', () => {
 		// Comments stripped: this file DESCRIBES the old lattice, and a guard
 		// that trips on the explanation of a bug is a guard on prose.
 		const code = findSource('Sky.svelte').replace(/\/\*[\s\S]*?\*\//g, '');
-		expect(code, 're-seeding from the loop index produces a lattice').not.toMatch(
-			/i \* 9301/
-		);
-		expect(code, 'the generator must carry state between stars').toMatch(
-			/seed = \(seed \*/
-		);
+		expect(code, 're-seeding from the loop index produces a lattice').not.toMatch(/i \* 9301/);
+		expect(code, 'the generator must carry state between stars').toMatch(/seed = \(seed \*/);
 	});
 
 	/**
@@ -189,16 +192,20 @@ describe('the plane actually flies', () => {
 	});
 
 	/**
-	 * The guard above reads one stage. `engine === 'cesium'` mounts the other
-	 * one INSTEAD, so the loop above is not running at all -- and Cesium renders
-	 * continuously whether or not anyone advances the pose, which is how it sat
-	 * frozen at its constructor view while looking perfectly alive.
+	 * The guard above reads Stage.svelte because Stage.svelte is now the only
+	 * renderer. Its twin used to read CesiumStage, which mounted INSTEAD and so
+	 * ran none of the loop above -- and Cesium renders continuously whether or
+	 * not anyone advances the pose, which is how it sat frozen at its
+	 * constructor view while looking perfectly alive.
+	 *
+	 * That trap belongs to any second renderer, not to Cesium. If one is added,
+	 * restore a guard like this one for it: mounting a stage is not the same as
+	 * advancing the clock, and only a source scan can tell the difference.
 	 */
-	it('advances the same clock on the alternate engine', () => {
-		const src = findSource('CesiumStage.svelte');
-		expect(src, 'the Cesium frame hook must advance the simulation clock').toMatch(
-			/advanceTo\s*\(/
-		);
+	it('mounts exactly one stage, so the guard above covers the whole world', () => {
+		const src = findSource('Display.svelte');
+		expect(src.match(/<Stage\s*\/>/g) ?? [], 'one Stage, unconditionally').toHaveLength(1);
+		expect(src, 'a second stage needs its own frame-loop guard').not.toMatch(/Stage\b.*engine/);
 	});
 
 	it('does not let map controls fight the frame loop', () => {
@@ -330,19 +337,6 @@ describe('fog mapping', () => {
 	});
 });
 
-describe('engine decoupling', () => {
-	it('supports switching 3D engines in PaneSettings', () => {
-		const p = new PaneSettings();
-		expect(p.engine).toBe('maplibre');
-
-		p.engine = 'cesium';
-		expect(p.engine).toBe('cesium');
-
-		p.reset();
-		expect(p.engine).toBe('maplibre');
-	});
-});
-
 describe('the clamp table is the only range', () => {
 	/**
 	 * Four sliders carried hardcoded bounds that disagreed with KNOB_RANGE:
@@ -447,9 +441,9 @@ describe('three panes stay in step', () => {
 		};
 
 		const a = pose(new AeroDisplay(readSettings(new URL('http://kiosk.local/?place=denver'))));
-		const b = new AeroDisplay(
-			readSettings(new URL('http://kiosk.local/?place=denver'))
-		).advanceTo(at);
+		const b = new AeroDisplay(readSettings(new URL('http://kiosk.local/?place=denver'))).advanceTo(
+			at
+		);
 
 		expect(b).toEqual(a);
 	});

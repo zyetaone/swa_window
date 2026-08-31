@@ -20,7 +20,6 @@ describe('Scene Composition Presets', () => {
 		settings.applyPreset('gulf-midnight');
 		expect(settings.place.id).toBe('dubai');
 		expect(settings.weather).toBe('rain');
-		expect(settings.cesiumViirsBrightness).toBe(3.5);
 	});
 
 	it('gracefully handles unknown preset ids', () => {

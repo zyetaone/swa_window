@@ -26,7 +26,7 @@
 		<div class="meta-tags">
 			{#if PRODUCT_STAGE}<span class="badge stage">{PRODUCT_STAGE}</span>{/if}
 			<span class="badge">Svelte 5 Runes</span>
-			<span class="badge">MapLibre + Cesium WGS84</span>
+			<span class="badge">MapLibre GL</span>
 			<span class="badge">Bun Runtime</span>
 			<span class="badge">Raspberry Pi 5 Kiosk</span>
 		</div>
@@ -36,10 +36,12 @@
 		<h2>System Architecture</h2>
 		<div class="grid">
 			<div class="card">
-				<h3>1. Dual 3D Viewport Engines</h3>
+				<h3>1. One 3D Viewport</h3>
 				<p>
-					Symmetrical subfolders supporting lightweight MapLibre DEM (GIBS/USGS + Terrarium) and
-					high-fidelity Cesium WGS84 (Sentinel-2 10m Cloudless + VIIRS night lights radiance).
+					MapLibre GL over DEM terrain (GIBS imagery + Terrarium elevation), with VIIRS night
+					lights ramped into the ground grade. A second engine lived here and was deleted: it
+					never sampled terrain, so it flew the regional mean straight through five of the
+					eleven locations.
 				</p>
 			</div>
 			<div class="card">

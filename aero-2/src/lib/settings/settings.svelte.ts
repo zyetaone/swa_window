@@ -14,7 +14,6 @@ import {
 	type Weather
 } from '../display/flight/view.js';
 import { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
-import { ENGINES, type Engine } from '../display/world/engines.js';
 import { resolveLocalHours } from '../display/world/sun.js';
 
 export { Location } from './locations.js';
@@ -22,11 +21,10 @@ export { SCENE_PRESETS, type ScenePreset } from './presets.js';
 export { tileTemplates } from './tiles.js';
 export { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
 export { WEATHERS, type Weather } from '../display/flight/view.js';
-export { ENGINES, type Engine } from '../display/world/engines.js';
 
 /**
  * Where cabin sound comes from. Declared here rather than in a leaf because,
- * unlike ENGINES, nothing outside this module and its own picker reads it.
+ * nothing outside this module and its own picker reads it.
  */
 export const AUDIO_MODES = ['synth', 'playlist'] as const;
 export type AudioMode = (typeof AUDIO_MODES)[number];
@@ -68,8 +66,7 @@ export const KNOB_RANGE = {
 	cloudSpeed: [0, 5.0],
 	cloudAltitudeM: [500, 12_000],
 	cloudOpacity: [0.1, 1.0],
-	audioVolume: [0, 1.0],
-	cesiumViirsBrightness: [0, 5.0]
+	audioVolume: [0, 1.0]
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type NumericKnob = keyof typeof KNOB_RANGE;
@@ -173,13 +170,6 @@ export class PaneSettings {
 
 	/** Multi-Pi Fleet Parallax Role */
 	fleetRole = $state<FleetRole>('solo');
-
-	/** 3D Geospatial Engine (maplibre | cesium) */
-	engine = $state<Engine>('maplibre');
-	cesiumProvider = $state<'sentinel' | 'gibs' | 'osm'>('sentinel');
-	cesiumLighting = $state<boolean>(false);
-	cesiumAtmosphere = $state<boolean>(true);
-	cesiumViirsBrightness = $state<number>(0.85);
 
 	/** Cabin Ambient Soundscape & Audio Playlist */
 	audioEnabled = $state<boolean>(false);
@@ -286,11 +276,6 @@ export class PaneSettings {
 			this.fleetRole = roleParam as FleetRole;
 		}
 
-		const engineParam = url.searchParams.get('engine');
-		if (engineParam && (ENGINES as readonly string[]).includes(engineParam)) {
-			this.engine = engineParam as Engine;
-		}
-
 		/**
 		 * Last, because every assignment above is unconditional — `clockOffsetH`
 		 * falls back to 0, `speed` to 4.0 — so a preset applied first would be
@@ -341,7 +326,6 @@ export class PaneSettings {
 		this.blindOpen = true;
 		this.weather = 'clear';
 		this.displayMode = 'flight';
-		this.engine = 'maplibre';
 	}
 
 	set(key: NumericKnob, value: number): void {

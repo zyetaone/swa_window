@@ -6,7 +6,7 @@
 	import { useDisplay } from '../display/display.svelte.js';
 	import { Location, LOCATIONS } from './locations.js';
 	import { SCENE_PRESETS } from './presets.js';
-	import { WEATHERS, ENGINES, FLEET_ROLES, AUDIO_MODES } from './settings.svelte.js';
+	import { WEATHERS, FLEET_ROLES, AUDIO_MODES } from './settings.svelte.js';
 	import { fetchStatus, type KioskStatus } from '#lib/status.js';
 	import Knob from './Knob.svelte';
 	import Toggle from './Toggle.svelte';
@@ -342,13 +342,6 @@
 						onchange={(val) => (config.colorRelief = val)}
 					/>
 				</section>
-
-				<Segmented
-					label="Rendering Engine"
-					options={ENGINES}
-					isActive={(eng) => config.engine === eng}
-					onselect={(eng) => (config.engine = eng)}
-				/>
 			{:else if activeTab === 'cabin'}
 				<section class="section">
 					<h4>Cabin Chrome & Soundscape</h4>
@@ -435,10 +428,6 @@
 							{display.terrainSampledPct.toFixed(0)}% ({display.terrain.sampled}/{display.terrain
 								.sampled + display.terrain.fallback})
 						</span>
-					</div>
-					<div class="diag-item">
-						<span class="diag-label">Engine:</span>
-						<span class="diag-value">{config.engine.toUpperCase()}</span>
 					</div>
 					<div class="diag-item">
 						<span class="diag-label">Altitude:</span>
