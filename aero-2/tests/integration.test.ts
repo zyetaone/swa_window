@@ -367,4 +367,38 @@ describe('every tile source the client names, the server can serve', () => {
 			).toBeGreaterThan(0);
 		}
 	});
+
+	/**
+	 * The PACKAGER has to write the extension the client asks for.
+	 *
+	 * `tools/download-tiles.ts` chose it with
+	 * `layer === 'terrarium' ? 'png' : 'jpg'`, so `viirs` — a PNG layer,
+	 * because city lights need alpha over the base imagery — was written as
+	 * `.jpg`. GIBS ignores the extension in the request, so every fetch
+	 * SUCCEEDED: the tool reported "542 downloaded, 0 failed" while writing
+	 * 4,534 files at paths the server never looks up. The kiosk 404'd on all
+	 * of them and the packager said the pack was complete.
+	 *
+	 * A third failure of the same shape as the two above it in this file: an
+	 * absence that reports as success. Read out of the source rather than
+	 * re-declared here, because a copy of the table would agree with itself.
+	 */
+	it('the packager writes the extension each layer is requested with', () => {
+		const src = readFileSync('tools/download-tiles.ts', 'utf8');
+		const table = /const LAYER_EXT = \{([^}]*)\}/.exec(src);
+		expect(table, 'download-tiles.ts no longer declares LAYER_EXT').toBeTruthy();
+
+		const packed = Object.fromEntries(
+			[...table![1].matchAll(/(\w+):\s*'(\w+)'/g)].map((m) => [m[1], m[2]])
+		);
+
+		for (const [slug, urls] of Object.entries(tileTemplates())) {
+			const wanted = /\.(jpg|jpeg|png)$/.exec(urls[0])?.[1];
+			expect(packed[slug], `packager has no extension for "${slug}"`).toBeTruthy();
+			expect(
+				packed[slug],
+				`packager writes ${slug} as .${packed[slug]} but the client requests .${wanted}`
+			).toBe(wanted);
+		}
+	});
 });

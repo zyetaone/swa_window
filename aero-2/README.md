@@ -33,10 +33,16 @@ What a complete pack holds, and what each absence costs:
 kiosk requests. A pack holding only terrarium draws nothing.
 
 ```sh
-bun tools/download-tiles.ts gibs <lat> <lon> <radiusKm> 3 9   # per location
+bun tools/download-tiles.ts gibs  <lat> <lon> 1500 7 8   # per location
+bun tools/download-tiles.ts viirs <lat> <lon> 1500 7 8
 bun tools/pack-pmtiles.ts terrarium data/tiles/terrain.pmtiles
 bun run build && node build/index.js
 ```
+
+**1500 km, not 50.** At cruise altitude on a globe projection the camera sees
+most of a continent, so a city-sized radius leaves holes that appear only at
+certain points in the orbit. Global z0–6 plus these corridors is ~240 MB and
+covers every location with zero 404s, measured by driving all eleven.
 
 `GET /api/tiles/health` answers `ok` / `degraded` / `error` and names what is
 absent in `missing[]`. It asserts the assets above rather than counting

@@ -31,7 +31,27 @@ const lon = Number(lonStr);
 const radiusKm = Number(radiusKmStr);
 const minZoom = Number(minZoomStr);
 const maxZoom = Number(maxZoomStr);
-const ext = layer === 'terrarium' ? 'png' : 'jpg';
+/**
+ * The extension is part of the LAYER, not a default with one exception.
+ *
+ * This read `layer === 'terrarium' ? 'png' : 'jpg'`, so `viirs` — which is
+ * PNG, because city lights need an alpha channel over the base imagery — was
+ * fetched and written as `.jpg`. The upstream request still succeeded (GIBS
+ * ignores the extension), so the tool reported hundreds downloaded and zero
+ * failed while writing files at paths the server never looks up. The kiosk
+ * 404'd on every one of them and the packager said it was done.
+ *
+ * Keyed off the layer explicitly so a new layer has to declare its own format
+ * rather than inherit a guess.
+ */
+const LAYER_EXT = { gibs: 'jpg', viirs: 'png', terrarium: 'png' } as const;
+const ext = LAYER_EXT[layer as keyof typeof LAYER_EXT];
+if (!ext) {
+	console.error(
+		`unknown layer '${layer}' — add it to LAYER_EXT. Known: ${Object.keys(LAYER_EXT).join(', ')}`
+	);
+	process.exit(1);
+}
 const TILE_DIR = process.env.TILE_DIR ?? 'data/tiles';
 const CONCURRENCY = 6;
 

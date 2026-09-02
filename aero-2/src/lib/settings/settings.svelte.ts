@@ -153,20 +153,27 @@ export class PaneSettings {
 
 	/** Display Modes (flight, video, screensaver, standby) */
 	displayMode = $state<'flight' | 'video' | 'screensaver' | 'standby'>('flight');
-	videoUrl = $state<string>(
-		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-	);
+
+	/**
+	 * Media playlists ship EMPTY, and the emptiness is the honest state.
+	 *
+	 * These carried Big Buck Bunny, Elephants Dream, three Unsplash photographs
+	 * and two Google sound effects until 2026-09-03 — third-party CDNs, on a
+	 * device whose entire premise is that it works with no internet. Every one
+	 * of them was also blocked by the CSP (there was no `media-src` at all), so
+	 * all three non-flight modes rendered "Media failed to load" out of the box.
+	 * The defaults made a broken feature look configured.
+	 *
+	 * Empty renders "No media specified", which is the truth and is what an
+	 * operator needs to see. Point them at files served from the Pi, or add the
+	 * origin to `AERO_MEDIA_ORIGINS` at build time — see vite.config.ts, and
+	 * note that a remote URL means the wall goes blank when the WiFi does.
+	 */
+	videoUrl = $state<string>('');
 	/** Raw for the same reason as `place`: assigned wholesale, never spliced. */
-	videoPlaylist = $state.raw<string[]>([
-		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-		'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
-	]);
+	videoPlaylist = $state.raw<string[]>([]);
 	videoIndex = $state<number>(0);
-	screensaverUrls = $state.raw<string[]>([
-		'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&q=80',
-		'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&q=80',
-		'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1920&q=80'
-	]);
+	screensaverUrls = $state.raw<string[]>([]);
 
 	/** Multi-Pi Fleet Parallax Role */
 	fleetRole = $state<FleetRole>('solo');
@@ -174,11 +181,14 @@ export class PaneSettings {
 	/** Cabin Ambient Soundscape & Audio Playlist */
 	audioEnabled = $state<boolean>(false);
 	audioVolume = $state<number>(0.5);
+	/**
+	 * `synth`, because it is the only mode that works with no files.
+	 *
+	 * The playlist below is empty by default for the same reason as the video
+	 * one; the synthesised cabin rumble needs nothing but the Web Audio API.
+	 */
 	audioMode = $state<AudioMode>('synth');
-	audioPlaylist = $state.raw<string[]>([
-		'https://actions.google.com/sounds/v1/weather/rain_heavy.ogg',
-		'https://actions.google.com/sounds/v1/weather/wind_breeze.ogg'
-	]);
+	audioPlaylist = $state.raw<string[]>([]);
 	audioTrackIndex = $state<number>(0);
 
 	constructor(initial?: Partial<PaneSettings>) {
@@ -269,6 +279,30 @@ export class PaneSettings {
 			modeParam === 'standby'
 		) {
 			this.displayMode = modeParam;
+		}
+
+		/**
+		 * The media playlist, from the URL — `?media=a.mp4,b.mp4`.
+		 *
+		 * Every other knob on this class can be set from the URL and `?mode=`
+		 * already existed, so the display MODE was addressable while the thing it
+		 * displays was not: `?mode=video` could only ever play whatever was
+		 * hardcoded as a default. That is also why the CSP block went unnoticed —
+		 * there was no way to point the feature at a URL and watch it work, so
+		 * nobody did.
+		 *
+		 * One param feeds both video and slideshow because a pane is in one mode
+		 * at a time, and two lists that must not disagree is one list.
+		 */
+		const mediaParam = url.searchParams.get('media');
+		if (mediaParam !== null) {
+			const urls = mediaParam
+				.split(',')
+				.map((u) => u.trim())
+				.filter(Boolean);
+			this.videoPlaylist = urls;
+			this.screensaverUrls = urls;
+			this.videoUrl = urls[0] ?? '';
 		}
 
 		const roleParam = url.searchParams.get('role');

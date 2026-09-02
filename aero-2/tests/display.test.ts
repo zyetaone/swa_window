@@ -61,6 +61,49 @@ describe('readSettings', () => {
 	});
 
 	/**
+	 * The non-flight display modes have to be reachable from a URL.
+	 *
+	 * `?mode=` existed while the thing it displays did not, so `?mode=video`
+	 * could only ever play a hardcoded default — which is a large part of why
+	 * nobody noticed the CSP was blocking all three modes outright. A feature
+	 * you cannot point at a file is a feature nobody exercises.
+	 */
+	it('takes the media playlist from the URL', () => {
+		const p = paramsFor('?mode=screensaver&media=/a.webp,/b.webp');
+		expect(p.displayMode).toBe('screensaver');
+		expect(p.screensaverUrls).toEqual(['/a.webp', '/b.webp']);
+		// Both lists, because a pane is in one mode at a time and two lists
+		// that must not disagree is one list.
+		expect(p.videoPlaylist).toEqual(['/a.webp', '/b.webp']);
+		expect(p.videoUrl).toBe('/a.webp');
+	});
+
+	it('ignores blanks and stray whitespace in the media list', () => {
+		// `?media=a,,b` and a trailing comma are what a hand-typed operator URL
+		// actually looks like; an empty string would render as a broken element.
+		const p = paramsFor('?media=%20/a.webp%20,,/b.webp,');
+		expect(p.screensaverUrls).toEqual(['/a.webp', '/b.webp']);
+	});
+
+	/**
+	 * Media ships EMPTY, and that is load-bearing.
+	 *
+	 * The defaults pointed at commondatastorage.googleapis.com,
+	 * images.unsplash.com and actions.google.com -- third-party CDNs, on a
+	 * device whose premise is that it works with no internet, and every one of
+	 * them blocked by the CSP. The result was a feature that was 100% broken
+	 * out of the box while LOOKING configured. Empty renders "No media
+	 * specified", which is the truth.
+	 */
+	it('ships no remote media defaults', () => {
+		const p = paramsFor();
+		expect(p.videoUrl).toBe('');
+		expect(p.videoPlaylist).toEqual([]);
+		expect(p.screensaverUrls).toEqual([]);
+		expect(p.audioPlaylist).toEqual([]);
+	});
+
+	/**
 	 * Changing place must carry everything the place DEFINES with it.
 	 *
 	 * The climb envelope is the case with teeth: Mumbai's 500 m floor following

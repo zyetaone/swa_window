@@ -160,6 +160,24 @@ duplicating those knobs, of which its single caller passed one.
   as it counted directories rather than asserting named assets. If you add a
   raster source, add it to `REQUIRED_TILE_ASSETS` in `server/tiles.ts` or
   nothing will ever tell you it is missing.
+- **The packager must write the extension the client asks for.** GIBS ignores
+  the extension in the request, so fetching `viirs` as `.jpg` returns 200 and
+  writes a valid PNG at a path the server never looks up: "542 downloaded, 0
+  failed", 4,534 dead files, and a kiosk that 404s on every one. `LAYER_EXT` in
+  `download-tiles.ts` is the SSOT, and `integration.test.ts` asserts it against
+  `tileTemplates()`.
+- **A kiosk-visible tile radius is ~1,250 km, not ~50.** At cruise altitude on
+  a globe projection the camera reaches most of a continent, so per-location
+  corridors packed at a city radius leave holes that only appear at certain
+  points in the orbit. Measure it — drive every location and log 404s — rather
+  than reasoning about the bounding box.
+- **Media modes need `media-src`, and it must be declared even when empty.**
+  Without the directive, `<video>`/`<audio>` fall back to `default-src` and are
+  blocked silently: the element fires `onerror`, MediaStage catches it, and the
+  pane renders a tidy "Media failed to load" that reads as handled absence. All
+  three non-flight modes shipped 100% broken this way. Extra origins go in
+  `AERO_MEDIA_ORIGINS` at build time; the defaults are empty on purpose,
+  because a kiosk that needs a CDN is a kiosk that goes blank with the WiFi.
 - **`raster-opacity: 0` still fetches.** A faded-out source keeps requesting
   tiles at full rate; only unmounting stops it. `Ground.svelte` gates the VIIRS
   night-lights source behind `{#if nightLightOpacity > 0.01}` for that reason —

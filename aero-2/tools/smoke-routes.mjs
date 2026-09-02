@@ -62,7 +62,32 @@ const ROUTES = [
 	// regression here looks exactly like success.
 	{ path: '/?blind=closed', minChars: 0, canvas: true, flying: true },
 	{ path: '/admin', expect: 'Fleet', minChars: 200 },
-	{ path: '/wiki', minChars: 200 }
+	{ path: '/wiki', minChars: 200 },
+	/**
+	 * The non-flight display modes, which are the easiest thing in this repo
+	 * to ship broken: all three were, until 2026-09-03, because the CSP had no
+	 * `media-src` and the defaults pointed at third-party CDNs. Nothing failed
+	 * loudly — `<video>` fired `onerror`, MediaStage caught it, and the pane
+	 * rendered a tidy "Media failed to load" that reads as handled absence
+	 * rather than a header bug.
+	 *
+	 * What this route DOES cover: `?mode=` and `?media=` are parsed,
+	 * MediaStage mounts, and the element decodes. Emptying the playlist
+	 * parser turns it red — verified.
+	 *
+	 * What it does NOT cover, and this was measured rather than assumed: the
+	 * CSP itself. The asset is same-origin, so `default-src 'self'` admits it
+	 * whether or not `media-src` and the `blob:`/origin entries exist —
+	 * deleting them leaves this route green. Covering the directive needs a
+	 * SECOND HTTP origin, which is more machinery than a route smoke test
+	 * should carry. That half was verified by hand, both ways: a cross-origin
+	 * image is blocked with `AERO_MEDIA_ORIGINS` unset and loads with it set.
+	 *
+	 * Only the slideshow, because video needs a real playable file and adding
+	 * an mp4 fixture to `static/` would ship it in every production build. The
+	 * two modes share one MediaStage, one parser and one directive.
+	 */
+	{ path: '/?mode=screensaver&media=/cloud.webp', minChars: 0, mediaLoaded: true }
 ];
 
 // ── tiny CDP client ──────────────────────────────────────────────────────────
@@ -257,6 +282,26 @@ try {
 		}
 		if (route.expect && !text.includes(route.expect)) {
 			problems.push(`missing expected text ${JSON.stringify(route.expect)}`);
+		}
+		/**
+		 * Did the media element actually take the source, and decode it?
+		 *
+		 * A DECODED pixel, not rendered text. The first draft asserted the
+		 * ABSENCE of "Media failed to load", which was worth nothing: MediaStage
+		 * has a second empty state reading "No media specified", so emptying the
+		 * playlist entirely still passed. Verified by emptying it.
+		 */
+		if (route.mediaLoaded) {
+			const found = await evaluate(
+				"(() => { const e = document.querySelector('.media-stage img');" +
+					'return e ? JSON.stringify({ src: e.getAttribute("src"), decoded: e.naturalWidth > 0 }) : null; })()'
+			);
+			if (!found) {
+				problems.push('no media element mounted — MediaStage fell through to an empty state');
+			} else {
+				const el = JSON.parse(found);
+				if (!el.decoded) problems.push(`media mounted but never decoded (src=${el.src})`);
+			}
 		}
 		if (route.canvas && canvases < 1) problems.push('no canvas mounted');
 
