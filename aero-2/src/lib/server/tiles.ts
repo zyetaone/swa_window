@@ -136,6 +136,21 @@ export interface TileHealth {
 	layers: string[];
 	/** Named assets from REQUIRED_TILE_ASSETS that are absent. Says what to pack. */
 	missing: string[];
+	/**
+	 * Directories on disk that the kiosk never requests, largest first.
+	 *
+	 * Dead weight is invisible otherwise, and it is not small: `_s2-hyderabad`
+	 * is 2.7 GB of raw Sentinel GeoTIFFs left behind by an abandoned warp, and
+	 * `terrarium/` is 3.6 GB of build INPUT that `pack-pmtiles` already turned
+	 * into `terrain.pmtiles`. Together that is 6.3 GB — more than half the pack
+	 * — on a device whose whole budget is an SD card. Both previously counted
+	 * as `layers`, so the health readout presented them as assets.
+	 *
+	 * Reported, never deleted: this endpoint has no business removing 6 GB
+	 * because it did not recognise a name, and `terrarium/` is genuinely needed
+	 * on whatever machine repacks the DEM.
+	 */
+	unused: { name: string; bytes: number }[];
 	remoteFallback: boolean;
 }
 
@@ -184,6 +199,36 @@ export function resolveTileHealth(root: string, env: NodeJS.ProcessEnv = process
 	const fallback = remoteFallbackEnabled(env);
 
 	/**
+	 * Anything on disk that no requested layer maps to.
+	 *
+	 * Shallow: it sums the immediate children of each directory rather than
+	 * walking the whole tree, because this runs on a health check against a
+	 * 10 GB archive and an exact byte count is not worth a full stat walk. The
+	 * figure is for spotting gigabytes, not for accounting.
+	 */
+	const known = new Set<string>(REQUIRED_TILE_ASSETS.map((a) => a.path));
+	// Build input, not a served layer: pack-pmtiles reads it to make the DEM.
+	known.add('terrarium');
+	const unused = layers
+		.filter((name) => !known.has(name))
+		.map((name) => {
+			let bytes = 0;
+			try {
+				for (const entry of readdirSync(resolve(dir, name), { withFileTypes: true })) {
+					try {
+						bytes += entry.isFile() ? statSync(resolve(dir, name, entry.name)).size : 0;
+					} catch {
+						/* vanished mid-scan */
+					}
+				}
+			} catch {
+				/* unreadable */
+			}
+			return { name, bytes };
+		})
+		.sort((a, b) => b.bytes - a.bytes);
+
+	/**
 	 * A dev box with the remote fallback on draws the world without a single
 	 * local tile, so `error` there would be a false alarm on the one machine
 	 * where nothing is actually broken. It reports `degraded` — the pack IS
@@ -197,7 +242,7 @@ export function resolveTileHealth(root: string, env: NodeJS.ProcessEnv = process
 			? 'degraded'
 			: 'ok';
 
-	return { status, hasTiles: !fatalMissing, layers, missing, remoteFallback: fallback };
+	return { status, hasTiles: !fatalMissing, layers, missing, unused, remoteFallback: fallback };
 }
 
 // ── Remote Fallback (Dev Only) ────────────────────────────────────────────────

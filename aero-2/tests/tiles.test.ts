@@ -186,6 +186,34 @@ describe('resolveTileHealth', () => {
 		expect(h.layers).toEqual([]);
 	});
 
+	/**
+	 * Dead weight is invisible unless something counts it.
+	 *
+	 * The pack carried 2.7 GB of raw Sentinel GeoTIFFs (`_s2-hyderabad`, left
+	 * by an abandoned warp) that nothing requests, and the health readout
+	 * listed it as a `layer` — presenting half a spare gigabyte-scale directory
+	 * as an asset. `terrarium` is deliberately NOT flagged: it is build input
+	 * `pack-pmtiles` reads to produce the DEM, so it is unused by the kiosk and
+	 * still wanted on the machine that repacks.
+	 */
+	it('names directories the kiosk never requests, without flagging build input', () => {
+		const root = pack({
+			dirs: ['gibs', 'viirs', 'terrarium', '_s2-hyderabad'],
+			files: [['terrain.pmtiles', 'PMTiles-body']]
+		});
+		const h = resolveTileHealth(root, OFFLINE);
+		expect(h.status).toBe('ok');
+		expect(h.unused.map((u) => u.name)).toEqual(['_s2-hyderabad']);
+	});
+
+	it('reports no dead weight for a clean pack', () => {
+		const h = resolveTileHealth(
+			pack({ dirs: ['gibs', 'viirs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			OFFLINE
+		);
+		expect(h.unused).toEqual([]);
+	});
+
 	it('softens to degraded when the dev remote fallback can cover the gap', () => {
 		// On a workstation proxying GIBS the world draws correctly, so `error`
 		// would be a false alarm on the one machine where nothing is wrong.

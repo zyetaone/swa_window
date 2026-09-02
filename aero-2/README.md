@@ -50,6 +50,26 @@ directories — it reported `{"status":"ok","hasTiles":true}` over a pack with n
 imagery at all until 2026-09-03, which is the only reason the blank ground took
 so long to spot. **`error` means the window will not draw the world.**
 
+It also reports `unused[]`: directories the kiosk never requests, largest
+first. On an SD-card budget that is worth watching — the pack here carries
+2.8 GB of raw Sentinel GeoTIFFs (`_s2-hyderabad`) left by an abandoned warp,
+which the health readout used to present as a `layer`. Nothing is ever deleted
+automatically. `terrarium/` is not flagged: it is build input for
+`pack-pmtiles`, so it is dead weight on a Pi but wanted on the machine that
+repacks the DEM.
+
+### Imagery is ~38% cloud, and that is not a bug you can fix here
+
+`GIBS_DATE` pins one MODIS day. MODIS true colour is a same-day swath, so at
+the z6 tiles the window actually draws at the horizon, every candidate day
+measures 37-42% near-white — swapping dates moves it about five points. If the
+ground looks washed out, that is the photograph.
+
+`python3 tools/survey-gibs-date.py <dates...>` scores candidates on coverage
+(a gate) and clarity (the tiebreak). The structural fix is a cloudless
+composite: EOX s2cloudless measures 2.9% on the same metric, but it is
+CC BY-NC-SA and unusable on a paid install. See the note above `GIBS_DATE`.
+
 ### Dev with a sparse cache
 
 `bun run dev` enables **remote tile fallback** when `NODE_ENV=development`
