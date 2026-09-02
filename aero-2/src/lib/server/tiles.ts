@@ -230,24 +230,42 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
  * Sahara; 08-20 misses Mumbai. Both scored 10/11.
  *
  * CLARITY is the tiebreak, and is what 08-23 missed. It was 11/11 and pinned
- * on that basis, but a covered tile can still be solid cloud: measuring mean
- * luminance over a 5x5 z8 window at every location, 24.4% of its tiles came
- * back above 170 — near-white. Over Denver that read as a north-south band
- * brightening monotonically with longitude, which is a swath edge, and it
- * looked exactly like a broken imagery grade. The fog colour, the hillshade,
- * the raster grade and the CSS layers were all investigated before the
- * measurement said the tiles themselves were white.
+ * on that basis, but a covered tile can still be solid CLOUD, and that is what
+ * made the window white. It took a while to believe: the fog colour, the
+ * hillshade, the raster grade, the cloud deck and the CSS overlays were each
+ * disabled in turn with no effect, and the ground stayed white even with
+ * `setSky(null)`, terrain off and every layer but the base raster hidden.
+ * White that survives deleting the sky, and has ground texture in it, is the
+ * photograph. Sampling the packed tiles confirmed it — over Denver the tile
+ * directly overhead was dark (lum 66) while the ones a few hundred km west,
+ * which fill most of the frame, were 145-157.
  *
- * Sweep, same metric, coverage checked separately:
- *   08-22 23.2%   08-23 24.4%   08-24 27.3%   08-30 25.3%
- *   09-01 18.9%   07-15 13.1%   06-20 13.1%   06-15  6.2%
+ * Sweep at z6, which is the zoom the window actually DRAWS at the horizon
+ * (the camera reports zoom ~10 at 85 deg pitch, but this source is capped at
+ * maxzoom 9 and the tiles filling the frame resolve to z6):
  *
- * 06-15 is the clearest by some way and is NOT the pin: it has no tile over
- * Dubai. 06-20 is the clearest day that is also 11/11.
+ *   06-19 37.5%   06-20 38.5%   08-23 40.0%   07-15 42.2%   09-01 42.5%
  *
- * To re-pin: sweep candidates against every catalog entry, discard any that is
- * not 11/11, then take the lowest washed-out percentage. Adding a location can
- * invalidate the pin on either bar.
+ * 06-20 is the pin, and the number next to it is the point: EVERY single day
+ * is 37-42% cloud over a continent-scale view. A first pass sampled z8 near
+ * each location centre and made 06-20 look like a 13.1% fix; at the zoom the
+ * window really draws, choosing a different day moves this by ~5 points and
+ * cannot do better. MODIS true colour is a same-day swath, so there is no
+ * clear day to find — this is the wrong instrument for the job, not a badly
+ * chosen date.
+ *
+ * The RIGHT fix is a cloudless COMPOSITE. EOX s2cloudless-2024 measures 2.9%
+ * washed at 11/11 coverage on this same z6 metric — a 13x difference, verified
+ * by pointing this switch at it and re-rendering. It is not used because it is
+ * CC BY-NC-SA (non-commercial) and this is a paid installation; the parent repo
+ * accepts that licence, we cannot. The commercial-safe route is the same
+ * Sentinel-2 data from the public AWS `sentinel-cogs` bucket under Copernicus,
+ * which needs a packaging pipeline rather than a URL swap.
+ *
+ * To re-pin: `python3 tools/survey-gibs-date.py <dates...>`, discard anything
+ * that is not 11/11, then take the lowest washed percentage. Expect ~38%; if a
+ * candidate looks dramatically better, check the tool is still sampling the
+ * zoom the renderer draws.
  */
 export const GIBS_DATE = '2026-06-20';
 

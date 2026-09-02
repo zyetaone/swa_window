@@ -171,6 +171,20 @@ duplicating those knobs, of which its single caller passed one.
   corridors packed at a city radius leave holes that only appear at certain
   points in the orbit. Measure it — drive every location and log 404s — rather
   than reasoning about the bounding box.
+- **The ground is ~38% cloud, and no date fixes it.** `GIBS_DATE` pins a single
+  MODIS day, and MODIS true colour is a same-day swath: at the z6 tiles the
+  window actually draws at the horizon, every candidate day scores 37-42%
+  near-white. Swapping dates moves it ~5 points. If the window looks washed
+  out, that is the photograph, not the haze — verified by disabling the fog,
+  the hillshade, the grade, the cloud deck, the CSS layers, the terrain and the
+  sky itself and finding the ground still white. The real fix is a cloudless
+  COMPOSITE (EOX s2cloudless measures 2.9% on the same metric) and is blocked
+  on licensing, not on engineering. See the note above `GIBS_DATE`.
+- **Rate imagery at the zoom the window DRAWS.** The camera reports zoom ~10 at
+  85° pitch, but `gibs` is capped at maxzoom 9 and the tiles filling the frame
+  resolve to z6, spanning ~1,300 km. A survey sampled near a location centre at
+  z8 rates ground the window barely looks at: it scored one day at 13.1% that
+  is really 38.5%.
 - **Media modes need `media-src`, and it must be declared even when empty.**
   Without the directive, `<video>`/`<audio>` fall back to `default-src` and are
   blocked silently: the element fires `onerror`, MediaStage catches it, and the

@@ -63,14 +63,24 @@ URL = (
     "GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg"
 )
 
-ZOOM = 8
-# +/-2 tiles: at cruise the camera sees far past the orbit, so judging a day on
-# the centre tile alone rates the one pixel the window spends least time over.
+# z6 +/-2 tiles, NOT z8, and this was measured rather than assumed.
+#
+# The first version sampled z8 near each location centre, which sounds tighter
+# and is in fact the wrong question: at an 85-degree pitch the camera reports
+# zoom ~10 but MapLibre caps `gibs` at maxzoom 9 and, for the tiles filling the
+# horizon, actually samples z6. Checked in the browser — bounds spanned
+# 33.7N..45.6N over Denver, roughly 1,300 km, drawn from z6/15/22..26.
+#
+# So a day can score well here and still render a white window: the z8 tiles
+# over Denver itself were dark (lum 66) while the z6 tiles a few hundred km
+# west, which fill most of the frame, were 145-157. Rate the tiles the window
+# DRAWS, not the ones nearest the pin.
+ZOOM = 6
 WINDOW = 2
-# Mean luminance above which a tile is cloud rather than ground. Calibrated
-# against tiles inspected by eye: clear Denver land sits near 82, solid cloud
-# above 200.
-WASHED_OUT = 170
+# Mean luminance above which a tile reads as cloud rather than ground.
+# Calibrated against tiles inspected by eye: clear Denver land sits near 66,
+# the cloud band west of it 145-157, solid overcast above 200.
+WASHED_OUT = 140
 
 
 def lonlat_to_tile(lat: float, lon: float, z: int) -> tuple[int, int]:
