@@ -15,7 +15,8 @@
 		"test": "node tools/check-cycles.mjs && vitest run",
 		"test:watch": "vitest",
 		"lint": "prettier --check .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"smoke": "node tools/smoke-routes.mjs"
 	},
 	"dependencies": {
 		"@svelte-maplibre-gl/pmtiles": "^2.0.1",

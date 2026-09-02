@@ -34,7 +34,7 @@ Naming, so `ls` reads well:
 
 ## 2. The invariants
 
-Eight rules. Six are enforced by something that fails; two are not, and are
+Nine rules. Seven are enforced by something that fails; two are not, and are
 marked so, because an unenforced invariant is an aspiration.
 
 | #   | Invariant                                                                                  | Enforced by                                                                                    |
@@ -47,6 +47,7 @@ marked so, because an unenforced invariant is an aspiration.
 | 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                                              |
 | 7   | No barrel files (`index.ts`)                                                               | —                                                                                              |
 | 8   | A renderer projects the pose; it never sources it                                          | `tests/regressions.test.ts` — same second ⇒ same pose, on a cold model                         |
+| 9   | Every page route renders, and the kiosk is actually flying                                 | `tools/smoke-routes.mjs` (`bun run smoke`)                                                     |
 
 **#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded
 randomness anywhere the window can see. Both failure shapes have bitten:
@@ -81,6 +82,27 @@ the DEM — and that is exactly why the clearance policy lives in
 diagnostics readout in the admin drawer; a `0% sampled` reading means the
 window is flying over a mean, not over ground.
 
+**#9 is the only check that loads a page.** Everything above reasons about
+source or calls a function; none of it mounts a route, so a component that
+throws during init is green in `check`, green in the suite, and serves an empty
+`<body>` with a 200. The parent repo shipped `/admin` in exactly that state with
+489 passing tests. `curl` cannot see it either — `ssr = false` means the static
+shell returns 200 whether or not the app boots inside it, so the guard on
+`/admin` has to be checked on `__data.json`.
+
+It also asserts the pose CHANGED between two samples, because a frozen window
+is the failure that survives every other check: a stalled render loop leaves a
+live canvas holding its last frame at a plausible altitude with a clean
+console, which is a photograph of an aeroplane window and indistinguishable
+from the product in a screenshot. Both assertions were verified by breaking the
+code they cover — an init throw in `/admin`, and a disabled
+`requestAnimationFrame` in `Stage` — and confirming the run goes red.
+
+`bun run smoke` runs the built server with `NODE_ENV` UNSET, which is the Pi's
+own configuration: the dev-only remote tile fallback is off, so the run sees
+the real offline archive instead of quietly proxying NASA and passing on any
+machine with internet.
+
 **#6 and #7 are unenforced.** Both were violated within a day of being written
 down: `Clouds` ran its own WebGL context outside the boundary until 2026-08-26,
 so a Three.js context loss took the page down while the identical MapLibre
@@ -97,7 +119,7 @@ you were not running cost nothing to boot. It was deleted rather than fixed:
 no terrain provider was ever set, so it flew the regional mean — below the
 local peak at five of eleven locations — and it named two upstream tile hosts
 directly, which invariant 5 forbids and the scan of the day could not see.
-`docs/ADR-005` proposes Threlte as the eventual second renderer; Cesium was a
+`../docs/ADR-005` proposes Threlte as the eventual second renderer; Cesium was a
 third option that was nobody's plan.
 
 What survives the deletion is the shape, and it is worth keeping if a second
@@ -127,9 +149,22 @@ duplicating those knobs, of which its single caller passed one.
 ## 5. Known-sharp edges
 
 - **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
-- **`raster-opacity: 0` still fetches.** Outside NAIP coverage `Ground.svelte`
-  _unmounts_ the USGS source rather than fading it, which is what stops several
-  hundred 404s per minute.
+- **The tile archive lives in `data/`, never `static/`.** Under `static/` Vite
+  copies and brotli-compresses all ~56k files into `build/` on every build
+  (3.5 min, 11 GB) AND the adapter serves them directly, so
+  `GET /tiles/terrain.pmtiles` answers 200 without the path guard, the symlink
+  check or the Range logic — which quietly makes invariant 5 optional.
+- **A present archive is not a working one.** `terrarium/` is build INPUT for
+  `pack-pmtiles`; the kiosk never requests it. A pack holding only terrarium
+  renders a white sheet, and the health endpoint called that `ok` for as long
+  as it counted directories rather than asserting named assets. If you add a
+  raster source, add it to `REQUIRED_TILE_ASSETS` in `server/tiles.ts` or
+  nothing will ever tell you it is missing.
+- **`raster-opacity: 0` still fetches.** A faded-out source keeps requesting
+  tiles at full rate; only unmounting stops it. `Ground.svelte` gates the VIIRS
+  night-lights source behind `{#if nightLightOpacity > 0.01}` for that reason —
+  it used to do the same for a USGS/NAIP layer that was deleted on 2026-08-26,
+  where it was worth several hundred 404s a minute outside US coverage.
 - **A DEM source without `minzoom`/`maxzoom` reads as sea level.** MapLibre
   assumes z0–22, requests tiles the archive does not hold, never decodes one,
   and `queryTerrainElevation` returns a literal `0` — indistinguishable from
