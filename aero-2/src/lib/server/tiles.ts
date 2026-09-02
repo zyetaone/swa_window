@@ -222,25 +222,34 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
  * 3. Determinism. Three Pis booting either side of the GIBS daily update would
  *    fetch different rasters, and the panorama would disagree across the seam.
  *
- * Chosen by sweeping candidate days over EVERY location in the catalog and
- * checking each one actually returns a tile.
+ * TWO bars, and every earlier pin cleared only the first.
  *
- * 2026-04-15 was picked when the catalog held only Hyderabad and Denver, and it
- * is genuinely clear over both. It does NOT cover the eleven-location catalog:
- * MODIS is a swath instrument, so a single day has gaps between passes, and on
- * that date the Sahara tile 404s — as did the Pacific at the zoom the window
- * flies. An ocean location with no tile renders as a black void under a lit
- * sky, which is what surfaced this.
+ * COVERAGE is the gate: a day with no tile over a location renders a black
+ * void under a lit sky. 2026-04-15 was picked when the catalog held only
+ * Hyderabad and Denver and is genuinely clear over both, but it 404s over the
+ * Sahara; 08-20 misses Mumbai. Both scored 10/11.
  *
- * 2026-08-23 returns a tile for all eleven. Verified per location, not assumed:
- * 04-15 scored 10/11 (missing desert), 08-20 10/11 (missing mumbai),
- * 08-22/23/24 all 11/11.
+ * CLARITY is the tiebreak, and is what 08-23 missed. It was 11/11 and pinned
+ * on that basis, but a covered tile can still be solid cloud: measuring mean
+ * luminance over a 5x5 z8 window at every location, 24.4% of its tiles came
+ * back above 170 — near-white. Over Denver that read as a north-south band
+ * brightening monotonically with longitude, which is a swath edge, and it
+ * looked exactly like a broken imagery grade. The fog colour, the hillshade,
+ * the raster grade and the CSS layers were all investigated before the
+ * measurement said the tiles themselves were white.
  *
- * To re-pin: sweep candidate days against every catalog entry at z9 and take
- * one that is 11/11. A day that is clear over one city is routinely a gap over
- * another, and adding a location can invalidate the pin.
+ * Sweep, same metric, coverage checked separately:
+ *   08-22 23.2%   08-23 24.4%   08-24 27.3%   08-30 25.3%
+ *   09-01 18.9%   07-15 13.1%   06-20 13.1%   06-15  6.2%
+ *
+ * 06-15 is the clearest by some way and is NOT the pin: it has no tile over
+ * Dubai. 06-20 is the clearest day that is also 11/11.
+ *
+ * To re-pin: sweep candidates against every catalog entry, discard any that is
+ * not 11/11, then take the lowest washed-out percentage. Adding a location can
+ * invalidate the pin on either bar.
  */
-export const GIBS_DATE = '2026-08-23';
+export const GIBS_DATE = '2026-06-20';
 
 /**
  * VIIRS day/night band — the city-lights raster, for night.
