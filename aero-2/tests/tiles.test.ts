@@ -5,7 +5,8 @@ import {
 	remoteFallbackEnabled,
 	remoteTileUrl,
 	resolveLocalTile,
-	resolveTileDir
+	resolveTileDir,
+	resolveTileHealth
 } from '#lib/server/tiles.js';
 import { terrainPmtilesUrl } from '#lib/settings/tiles.js';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -24,9 +25,7 @@ describe('resolveTileDir', () => {
 	});
 
 	it('resolves a relative TILE_DIR against cwd', () => {
-		expect(resolveTileDir({ TILE_DIR: 'static/tiles' }, CWD, () => false)).toBe(
-			`${CWD}/static/tiles`
-		);
+		expect(resolveTileDir({ TILE_DIR: 'data/tiles' }, CWD, () => false)).toBe(`${CWD}/data/tiles`);
 	});
 
 	it('picks the Pi install path when it exists', () => {
@@ -35,8 +34,8 @@ describe('resolveTileDir', () => {
 		);
 	});
 
-	it('falls back to local static/tiles when it has layer subdirectories', () => {
-		const local = `${CWD}/static/tiles`;
+	it('falls back to local data/tiles when it has layer subdirectories', () => {
+		const local = `${CWD}/data/tiles`;
 		expect(
 			resolveTileDir(
 				{},
@@ -47,8 +46,8 @@ describe('resolveTileDir', () => {
 		).toBe(local);
 	});
 
-	it('falls back to parent ../static/tiles when it has content and local does not', () => {
-		const parent = resolve(CWD, '../static/tiles');
+	it('falls back to parent ../data/tiles when it has content and local does not', () => {
+		const parent = resolve(CWD, '../data/tiles');
 		expect(
 			resolveTileDir(
 				{},
@@ -59,7 +58,7 @@ describe('resolveTileDir', () => {
 		).toBe(parent);
 	});
 
-	it('defaults to local static/tiles when nothing exists yet', () => {
+	it('defaults to local data/tiles when nothing exists yet', () => {
 		expect(
 			resolveTileDir(
 				{},
@@ -67,7 +66,7 @@ describe('resolveTileDir', () => {
 				() => false,
 				() => false
 			)
-		).toBe(`${CWD}/static/tiles`);
+		).toBe(`${CWD}/data/tiles`);
 	});
 });
 
@@ -105,6 +104,95 @@ describe('resolveLocalTile - path guard', () => {
 	it('rejects absolute paths escaping root', () => {
 		const res = resolveLocalTile(sandbox, '/etc/passwd');
 		expect(res.forbidden).toBe(true);
+	});
+});
+
+describe('resolveTileHealth', () => {
+	/**
+	 * Every case here is the same failure wearing a different hat: an archive
+	 * that is present but cannot draw the world, reported as healthy.
+	 *
+	 * The version this replaces answered `{status:'ok', hasTiles:true}` for a
+	 * directory containing nothing but `terrarium/` — build INPUT the kiosk
+	 * never requests — while every ground tile 404'd and the window rendered a
+	 * white sheet. It was structurally unable to say otherwise: it asked
+	 * whether any subdirectory was non-empty. So the first test below is the
+	 * exact archive this repo shipped on 2026-09-03.
+	 *
+	 * `AERO_TILE_REMOTE_FALLBACK: '0'` on every case, because the answer is
+	 * about the ARCHIVE. Without pinning it, an env that happens to say
+	 * `development` turns every `error` into `degraded` and the suite passes
+	 * for a reason that has nothing to do with what it is testing.
+	 */
+	const OFFLINE = { AERO_TILE_REMOTE_FALLBACK: '0' };
+
+	function pack(assets: { dirs?: string[]; files?: [string, string][] }): string {
+		const root = mkdtempSync(join(tmpdir(), 'aero-test-health-'));
+		for (const d of assets.dirs ?? []) {
+			mkdirSync(join(root, d, '5', '10'), { recursive: true });
+			writeFileSync(join(root, d, '5', '10', '20.png'), 'tile');
+		}
+		for (const [name, body] of assets.files ?? []) writeFileSync(join(root, name), body);
+		return root;
+	}
+
+	it('reports error for the terrarium-only pack that shipped as ok', () => {
+		const h = resolveTileHealth(pack({ dirs: ['terrarium'] }), OFFLINE);
+		expect(h.status).toBe('error');
+		expect(h.hasTiles).toBe(false);
+		expect(h.missing).toContain('gibs');
+		expect(h.missing).toContain('terrain.pmtiles');
+		// The old signal said this archive was fine BECAUSE this list is non-empty.
+		expect(h.layers).toEqual(['terrarium']);
+	});
+
+	it('reports ok for a complete pack', () => {
+		const h = resolveTileHealth(
+			pack({ dirs: ['gibs', 'viirs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			OFFLINE
+		);
+		expect(h.status).toBe('ok');
+		expect(h.hasTiles).toBe(true);
+		expect(h.missing).toEqual([]);
+	});
+
+	it('reports degraded, not error, when only the night lights are absent', () => {
+		// viirs adds city lights after dark. Missing, the window is dimmer at
+		// night and correct all day, which is not the same emergency as no
+		// ground at all — and the old single boolean could not say so.
+		const h = resolveTileHealth(
+			pack({ dirs: ['gibs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			OFFLINE
+		);
+		expect(h.status).toBe('degraded');
+		expect(h.hasTiles).toBe(true);
+		expect(h.missing).toEqual(['viirs']);
+	});
+
+	it('treats an empty layer directory and a zero-byte archive as absent', () => {
+		// Both exist. Both draw nothing. `existsSync` would call this healthy,
+		// which is the same class of mistake as counting directories.
+		const root = pack({ files: [['terrain.pmtiles', '']] });
+		mkdirSync(join(root, 'gibs'), { recursive: true });
+		const h = resolveTileHealth(root, OFFLINE);
+		expect(h.status).toBe('error');
+		expect(h.missing).toContain('gibs');
+		expect(h.missing).toContain('terrain.pmtiles');
+	});
+
+	it('reports error, not a throw, when TILE_DIR does not exist at all', () => {
+		const h = resolveTileHealth('/definitely/not/a/tile/dir', OFFLINE);
+		expect(h.status).toBe('error');
+		expect(h.layers).toEqual([]);
+	});
+
+	it('softens to degraded when the dev remote fallback can cover the gap', () => {
+		// On a workstation proxying GIBS the world draws correctly, so `error`
+		// would be a false alarm on the one machine where nothing is wrong.
+		// The Pi runs with the fallback off and still gets `error`.
+		const empty = pack({});
+		expect(resolveTileHealth(empty, { AERO_TILE_REMOTE_FALLBACK: '1' }).status).toBe('degraded');
+		expect(resolveTileHealth(empty, OFFLINE).status).toBe('error');
 	});
 });
 

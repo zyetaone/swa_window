@@ -24,9 +24,13 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 
-# Tile packs — 11 GB, rebuilt by tools/download-tiles.ts + pack-pmtiles.ts.
+# Tile packs — ~10 GB, rebuilt by tools/download-tiles.ts + pack-pmtiles.ts.
 # Never commit these; the Pi gets them out of band, not through git.
-static/tiles/
+#
+# `data/`, not `static/`: under static/ Vite copies and brotli-compresses all
+# ~56k of them into build/ on every build, and serves them outside the
+# /api/tiles guard. Moved 2026-09-03.
+data/tiles/
 
 # Python bytecode — a survey script imported tools/*.py and this got swept in.
 __pycache__/

@@ -17,7 +17,7 @@
  *
  * Usage:
  *   bun tools/pack-pmtiles.ts <layer> [outPath]
- *   bun tools/pack-pmtiles.ts terrarium static/tiles/hyderabad-terrain.pmtiles
+ *   bun tools/pack-pmtiles.ts terrarium data/tiles/hyderabad-terrain.pmtiles
  */
 import { Database } from 'bun:sqlite';
 import { readdirSync, existsSync, rmSync, statSync } from 'node:fs';
@@ -29,7 +29,7 @@ if (!layer) {
 	process.exit(1);
 }
 
-const TILE_DIR = process.env.TILE_DIR ?? 'static/tiles';
+const TILE_DIR = process.env.TILE_DIR ?? 'data/tiles';
 const SRC = resolve(TILE_DIR, layer);
 const OUT = resolve(outArg ?? `${TILE_DIR}/${layer}.pmtiles`);
 const MBTILES = `${OUT}.mbtiles`;

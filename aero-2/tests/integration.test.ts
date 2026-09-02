@@ -21,13 +21,13 @@ import {
 	readdirSync,
 	statSync
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
 import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
-import { remoteTileUrl } from '#lib/server/tiles.js';
+import { remoteTileUrl, resolveTileDir } from '#lib/server/tiles.js';
 
 /** Comments name these hazards to explain them; only real code counts. */
 function stripComments(src: string): string {
@@ -288,7 +288,12 @@ function readPmtilesHeader(path: string) {
  * CI is legible and a skip on a workstation is a prompt to build the archive.
  */
 describe('the packed DEM covers every location that needs it', () => {
-	const ARCHIVE = 'static/tiles/terrain.pmtiles';
+	// Through `resolveTileDir`, not a literal path. This was `static/tiles/…`
+	// and kept working by coincidence until the archive moved to `data/`, at
+	// which point both assertions started SKIPPING rather than failing — the
+	// quietest way for a coverage test to stop covering anything. Asking the
+	// resolver means the suite looks wherever the server looks.
+	const ARCHIVE = resolve(resolveTileDir(), 'terrain.pmtiles');
 	const present = existsSync(ARCHIVE);
 
 	it.skipIf(!present)('reaches every location in the catalog', () => {

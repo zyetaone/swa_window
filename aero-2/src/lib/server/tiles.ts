@@ -6,6 +6,23 @@ import { resolve } from 'node:path';
 
 // ── TILE_DIR Discovery ────────────────────────────────────────────────────────
 
+/**
+ * `data/tiles`, NOT `static/tiles`.
+ *
+ * The pack lived under `static/` until 2026-09-03, which handed 56,182 files
+ * and 9.7 GB to Vite's static copy: every build duplicated and brotli-
+ * compressed the whole archive into `build/client/tiles`, taking 3.5 minutes
+ * and leaving an 11 GB build directory beside the 9.7 GB source — two copies
+ * of the same tiles on a Pi's SD card.
+ *
+ * The subtler cost was that it made invariant 5 optional. A copy under
+ * `static/` is served by the adapter's own file handler, so
+ * `GET /tiles/terrain.pmtiles` answered 200 without passing the path guard,
+ * the symlink check, the Range parser or the CORS policy in this file. The
+ * archive has to sit somewhere Vite does not walk for /api/tiles to be the
+ * only door.
+ */
+
 function dirHasLayers(dir: string): boolean {
 	try {
 		return readdirSync(dir, { withFileTypes: true })
@@ -32,10 +49,10 @@ export function resolveTileDir(
 	const piPath = '/opt/zyeta-aero/tiles';
 	if (piDirExists(piPath)) return piPath;
 
-	const local = resolve(cwd, 'static/tiles');
+	const local = resolve(cwd, 'data/tiles');
 	if (dirHasContent(local)) return local;
 
-	const parent = resolve(cwd, '../static/tiles');
+	const parent = resolve(cwd, '../data/tiles');
 	if (dirHasContent(parent)) return parent;
 
 	return local;
@@ -70,6 +87,117 @@ export function resolveLocalTile(root: string, subPath: string): ResolvedTile {
 		return { filePath, notFound: true, forbidden: false };
 	}
 	return { filePath, notFound: false, forbidden: false };
+}
+
+// ── Archive Health ────────────────────────────────────────────────────────────
+
+/**
+ * What the archive must actually CONTAIN for the window to draw the world.
+ *
+ * This is deliberately NOT the same list as `settings/tiles.ts`'s
+ * `tileTemplates`, and the difference is the whole point. `terrarium/` is a
+ * directory of raw PNG heightmaps that `tools/pack-pmtiles.ts` reads to BUILD
+ * `terrain.pmtiles`; the running kiosk never requests it. So a pack shipping
+ * terrarium and nothing else is 3.6 GB of build input with no ground colour and
+ * no DEM — exactly the state this repo was in on 2026-09-03, while
+ * `/api/tiles/health` reported `{"status":"ok","hasTiles":true}` because it
+ * counted any non-empty directory.
+ *
+ * `fatal` separates a blank window from a dimmer one: without `gibs` the ground
+ * is a white sheet, without the DEM the world is a flat ellipsoid. `viirs` only
+ * adds city lights after dark, so its absence is worth REPORTING and not worth
+ * failing over.
+ *
+ * It lives HERE rather than beside the templates because `server/` imports
+ * nothing from `settings/` or `display/` (architecture §1), and because the
+ * templates describe URLs while this describes disk. They will drift only if a
+ * new raster source is added, which is the moment to read both.
+ */
+export const REQUIRED_TILE_ASSETS = [
+	{ name: 'gibs', path: 'gibs', kind: 'dir', fatal: true },
+	{ name: 'terrain.pmtiles', path: 'terrain.pmtiles', kind: 'file', fatal: true },
+	{ name: 'viirs', path: 'viirs', kind: 'dir', fatal: false }
+] as const satisfies readonly {
+	name: string;
+	path: string;
+	kind: 'dir' | 'file';
+	fatal: boolean;
+}[];
+
+export interface TileHealth {
+	/**
+	 * Three states, not a boolean, because "no night lights" and "no ground"
+	 * are not the same emergency and were previously the same word.
+	 */
+	status: 'ok' | 'degraded' | 'error';
+	/** No FATAL asset is missing — i.e. the window can draw a world. */
+	hasTiles: boolean;
+	/** What is actually on disk. Diagnostic; not what correctness is judged on. */
+	layers: string[];
+	/** Named assets from REQUIRED_TILE_ASSETS that are absent. Says what to pack. */
+	missing: string[];
+	remoteFallback: boolean;
+}
+
+/**
+ * Does the archive hold what the running style requests?
+ *
+ * Takes `root` rather than reading the module-level TILE_DIR so the suite can
+ * point it at a temp directory containing a deliberately incomplete pack. The
+ * bug being prevented here is precisely one of "the check could not fail", so
+ * a check that cannot be tested against a broken archive is not an improvement.
+ */
+export function resolveTileHealth(root: string, env: NodeJS.ProcessEnv = process.env): TileHealth {
+	const dir = root.replace(/\/+$/, '') + '/';
+
+	let layers: string[] = [];
+	try {
+		layers = readdirSync(dir, { withFileTypes: true })
+			.filter((e) => e.isDirectory())
+			.map((e) => e.name)
+			.filter((name) => {
+				try {
+					return readdirSync(resolve(dir, name)).length > 0;
+				} catch {
+					return false;
+				}
+			});
+	} catch {
+		/* TILE_DIR absent entirely — every asset reports missing below. */
+	}
+
+	const present = (asset: (typeof REQUIRED_TILE_ASSETS)[number]): boolean => {
+		try {
+			const stats = statSync(resolve(dir, asset.path));
+			// A zero-byte terrain.pmtiles and an empty gibs/ both exist and both
+			// draw nothing. Existence is not the question; content is.
+			return asset.kind === 'dir'
+				? stats.isDirectory() && readdirSync(resolve(dir, asset.path)).length > 0
+				: stats.isFile() && stats.size > 0;
+		} catch {
+			return false;
+		}
+	};
+
+	const missing = REQUIRED_TILE_ASSETS.filter((a) => !present(a)).map((a) => a.name);
+	const fatalMissing = REQUIRED_TILE_ASSETS.some((a) => a.fatal && missing.includes(a.name));
+	const fallback = remoteFallbackEnabled(env);
+
+	/**
+	 * A dev box with the remote fallback on draws the world without a single
+	 * local tile, so `error` there would be a false alarm on the one machine
+	 * where nothing is actually broken. It reports `degraded` — the pack IS
+	 * incomplete — while the Pi, where the fallback is off, reports `error`.
+	 */
+	const status: TileHealth['status'] = fatalMissing
+		? fallback
+			? 'degraded'
+			: 'error'
+		: missing.length > 0
+			? 'degraded'
+			: 'ok';
+
+	return { status, hasTiles: !fatalMissing, layers, missing, remoteFallback: fallback };
 }
 
 // ── Remote Fallback (Dev Only) ────────────────────────────────────────────────

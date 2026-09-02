@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Download-tiles — pre-fetch one layer for a bounding box into static/tiles/,
+ * Download-tiles — pre-fetch one layer for a bounding box into data/tiles/,
  * the layout server/tiles.ts already serves (WMTS: {layer}/{z}/{y}/{x}.{ext}).
  * Reuses remoteTileUrl so the upstream host stays named in exactly one file.
  *
@@ -32,7 +32,7 @@ const radiusKm = Number(radiusKmStr);
 const minZoom = Number(minZoomStr);
 const maxZoom = Number(maxZoomStr);
 const ext = layer === 'terrarium' ? 'png' : 'jpg';
-const TILE_DIR = process.env.TILE_DIR ?? 'static/tiles';
+const TILE_DIR = process.env.TILE_DIR ?? 'data/tiles';
 const CONCURRENCY = 6;
 
 function lonToX(lonDeg: number, z: number): number {

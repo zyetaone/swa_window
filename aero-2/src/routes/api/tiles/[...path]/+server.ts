@@ -16,7 +16,9 @@ import {
 	remoteFallbackEnabled,
 	remoteTileUrl,
 	resolveLocalTile,
-	resolveTileDir
+	resolveTileDir,
+	resolveTileHealth,
+	type TileHealth
 } from '#lib/server/tiles.js';
 
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
@@ -177,33 +179,24 @@ function serveLocalFile(
 	);
 }
 
-function tileHealth(): {
-	status: string;
-	hasTiles: boolean;
-	layers: string[];
-	remoteFallback: boolean;
-} {
-	let layers: string[] = [];
-	try {
-		layers = readdirSync(TILE_DIR, { withFileTypes: true })
-			.filter((e) => e.isDirectory())
-			.map((e) => e.name)
-			.filter((name) => {
-				try {
-					return readdirSync(`${TILE_DIR}${name}`).length > 0;
-				} catch {
-					return false;
-				}
-			});
-	} catch {
-		/* TILE_DIR absent */
-	}
-	return {
-		status: 'ok',
-		hasTiles: layers.length > 0,
-		layers,
-		remoteFallback: remoteFallbackEnabled()
-	};
+/**
+ * Is the offline archive actually able to draw the world?
+ *
+ * The previous version answered `{status:'ok', hasTiles:true}` whenever ANY
+ * subdirectory of TILE_DIR was non-empty, and that is how a pack holding only
+ * `terrarium/` (build INPUT — the kiosk never requests it) and a folder of raw
+ * Sentinel GeoTIFFs reported green while every `gibs` tile 404'd and the ground
+ * rendered as a white sheet. The one dashboard meant to catch a missing pack
+ * was structurally incapable of seeing one: it asked "is there something here",
+ * and the question is "is what the style requests here".
+ *
+ * The body lives in `server/tiles.ts` and takes its directory as an argument,
+ * so the suite can point it at a temp dir holding a deliberately incomplete
+ * pack. This module resolves TILE_DIR once at import, which is right for a
+ * server that serves thousands of tiles and useless for a test.
+ */
+function tileHealth(): TileHealth {
+	return resolveTileHealth(TILE_DIR);
 }
 
 async function resolveTileResponse(

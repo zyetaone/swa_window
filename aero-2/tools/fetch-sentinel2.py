@@ -258,7 +258,7 @@ def main() -> None:
     ap.add_argument("--max-cloud", type=float, default=5.0)
     ap.add_argument("--min-zoom", type=int, default=DEFAULT_MIN_ZOOM)
     ap.add_argument("--max-zoom", type=int, default=DEFAULT_MAX_ZOOM)
-    ap.add_argument("--out", default="static/tiles")
+    ap.add_argument("--out", default="data/tiles")
     a = ap.parse_args()
 
     if a.max_zoom > DEFAULT_MAX_ZOOM:
@@ -404,7 +404,7 @@ def main() -> None:
             "licence": "Copernicus Sentinel data — commercial use permitted"}
     (tiles_dir / f"source-{a.place}.json").write_text(json.dumps(meta, indent=1))
     print(f"done. {tiles_dir}/source-{a.place}.json records the scene and licence.")
-    print(f"next: bun tools/pack-pmtiles.ts sentinel2 static/tiles/sentinel2.pmtiles")
+    print(f"next: bun tools/pack-pmtiles.ts sentinel2 data/tiles/sentinel2.pmtiles")
     print(f"the warp scratch in {work} is safe to delete once packed.")
 
 
