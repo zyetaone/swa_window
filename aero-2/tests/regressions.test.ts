@@ -627,3 +627,48 @@ describe('an explicit ?place= is not overridden by the rotation', () => {
 		expect(free.rotate).toBe(true);
 	});
 });
+
+describe('a served dataset has a renderer', () => {
+	/**
+	 * `data/roads/` was 46 MB of packed OSM geometry, served by
+	 * `/api/roads/[city]` with ETag validation and covered by `geojson.test.ts`
+	 * — and drawn by NOTHING. Every part worked except that no component ever
+	 * asked for it, so nothing anywhere could go red: the endpoint answered
+	 * 200, the tests passed, the health check does not look at `data/`, and the
+	 * kiosk rendered a city with no lights on it and no error.
+	 *
+	 * That is the recurring shape in this repo (ARCHITECTURE §5): an asset that
+	 * is present, plausible and inert. `REQUIRED_TILE_ASSETS` fixed it for the
+	 * raster archive by asserting NAMED assets rather than counting
+	 * directories; this is the same assertion pointed the other way, at the
+	 * GeoJSON endpoints — if the server offers a dataset kind, some component
+	 * under `display/` must fetch it.
+	 *
+	 * Deliberately a source scan and not a mount: the point is to fail when the
+	 * NEXT dataset is packaged and wired up to nothing, which is a question
+	 * about the tree, not about a running frame. `probe-roads.mjs` is what
+	 * proves the layer actually paints.
+	 */
+	it('every /api/<kind>/[city] endpoint has a consumer under display/', () => {
+		const kinds = allSources()
+			.filter((f) => /routes\/api\/[a-z]+\/\[city\]\/\+server\.ts$/.test(f))
+			.map((f) => f.match(/routes\/api\/([a-z]+)\//)![1]);
+		expect(kinds.length, 'expected the buildings and roads endpoints').toBeGreaterThan(1);
+
+		// Comments stripped, exactly as the upstream-host scan above does and
+		// for the same reason: this file's own docstring NAMES `/api/roads/`
+		// while explaining the bug, which made the test pass against a
+		// deliberately broken fetch. A doc reference is not a consumer.
+		const display = allSources()
+			.filter((f) => f.includes('lib/display'))
+			.map((f) =>
+				readFileSync(f, 'utf8')
+					.replace(/\/\*[\s\S]*?\*\//g, '')
+					.replace(/^\s*(\/\/|\s\*).*$/gm, '')
+			)
+			.join('\n');
+
+		const orphans = kinds.filter((kind) => !display.includes(`/api/${kind}/`));
+		expect(orphans, 'packed, served, and drawn by nothing — give it a layer').toEqual([]);
+	});
+});
