@@ -147,12 +147,25 @@ Three assets, and they are not equally portable:
 | `terrain.pmtiles` | Built from `terrarium/` by `tools/pack-pmtiles.ts`. Needs the 3.6 GB source, so realistically built off-device.                   |
 | `sentinel2/`      | `tools/fetch-sentinel2.py` needs **GDAL and Pillow**, ~7 GB of transient scratch and 10–20 min per location. Build it off-device. |
 
-So the practical routes are: bake `data/tiles/` into the SD card image, or
-`rsync` it to `${INSTALL_DIR}/data/tiles` after install. `install.sh` sets
-`TILE_DIR` to that path and `data/` survives the updater's `git reset`, so a
-pack copied once stays put across upgrades.
+So the pack is shipped, not fetched. `tools/ship-tiles.sh` does it:
 
-`GET /api/tiles/health` is how a fielded device tells you which it got:
+```sh
+bash tools/ship-tiles.sh pi@aero-display-00.local
+bash tools/ship-tiles.sh pi@10.0.0.31 --dir /opt/aero-window/data/tiles --dry-run
+```
+
+It refuses to send a pack that is already broken, skips `terrarium/` (3.6 GB of
+build input the kiosk never requests — the transfer is 4.0 GB, not 7.6), and
+verifies afterwards by asking the DEVICE's own `/api/tiles/health` rather than
+trusting rsync's exit code. rsync exiting 0 means bytes moved; it says nothing
+about whether the running server can see them.
+
+The alternative is baking `data/tiles/` into the SD card image. Either way
+`install.sh` points `TILE_DIR` at `${INSTALL_DIR}/data/tiles` and `data/`
+survives the updater's `git reset`, so a pack copied once stays put across
+upgrades.
+
+`GET /api/tiles/health` is how a fielded device tells you what it got:
 `error` means the window cannot draw the world.
 
 ### Dev with a sparse cache

@@ -259,8 +259,11 @@ duplicating those knobs, of which its single caller passed one.
   copied once persists — but nothing copies it the first time. Same in v1;
   ADR-002 lists OTA tile delivery as an open question. This matters more now
   than it did: `sentinel2/` needs GDAL and ~7 GB of scratch to build, so unlike
-  `gibs`/`viirs` a device cannot self-provision it. `GET /api/tiles/health`
-  reporting `error` is how a fielded Pi says it never arrived.
+  `gibs`/`viirs` a device cannot self-provision it. `tools/ship-tiles.sh` is
+  the manual route: it refuses a broken pack, skips build input, and verifies
+  through the device's own `/api/tiles/health` rather than rsync's exit code.
+  `GET /api/tiles/health` reporting `error` is how a fielded Pi says it never
+  arrived.
 - **The DEM's header bbox is not its coverage, and `terrainSampledPct` is.**
   `terrain.pmtiles` is a set of per-location boxes (~±1° around each pin), but
   its header is ONE rectangle around all of them — spanning 179°W–88°E and
