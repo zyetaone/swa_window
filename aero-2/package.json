@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "AERO_ADMIN_UI=1 vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
 		"serve": "bun run server.ts",

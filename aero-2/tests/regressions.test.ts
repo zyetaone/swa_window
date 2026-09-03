@@ -557,36 +557,71 @@ describe('routes render something', () => {
 	});
 });
 
-describe('/admin is not public in production', () => {
+describe('/admin is not public by default', () => {
 	/**
 	 * /admin renders the kiosk hostname, LAN addresses, memory and uptime, and
 	 * links every pane role — a device fingerprint plus a remote control, with
-	 * no auth. It is gated to non-production by a server load.
+	 * no auth. It is gated by a server load, opt-in via AERO_ADMIN_UI.
 	 *
 	 * Easy to mis-test: `ssr = false` means GET /admin returns 200 regardless,
 	 * because that is the static shell served before any load runs. The guard
 	 * fires on the data request. Test the load function directly.
+	 *
+	 * THIS BLOCK USED TO ASSERT THE BUG. It set `NODE_ENV=production`, checked
+	 * the throw, then set `development` and checked the page rendered — both
+	 * green against a guard that read `NODE_ENV === 'production'` and therefore
+	 * served the full cockpit for every OTHER value, including unset, which is
+	 * what a Pi boots with and what `smoke-routes.mjs` calls "the Pi's own
+	 * configuration". The test covered the two configurations someone thought
+	 * of and never the default, so a fail-open guard read as tested.
+	 *
+	 * The table is the fix: enumerate what a device can actually boot with, and
+	 * assert the surface is CLOSED for all of it bar one explicit opt-in.
 	 */
-	it('throws 404 when NODE_ENV is production', async () => {
-		const { load } = await import('../src/routes/admin/+page.server.js');
-		const prev = process.env.NODE_ENV;
-		process.env.NODE_ENV = 'production';
-		try {
-			expect(() => load()).toThrow();
-		} finally {
-			process.env.NODE_ENV = prev;
-		}
-	});
+	const load = async () => (await import('../src/routes/admin/+page.server.js')).load;
 
-	it('renders normally outside production', async () => {
-		const { load } = await import('../src/routes/admin/+page.server.js');
-		const prev = process.env.NODE_ENV;
-		process.env.NODE_ENV = 'development';
-		try {
-			expect(() => load()).not.toThrow();
-		} finally {
-			process.env.NODE_ENV = prev;
+	const withEnv = async (env: Record<string, string | undefined>, fn: () => void) => {
+		const prev: Record<string, string | undefined> = {};
+		for (const [k, v] of Object.entries(env)) {
+			prev[k] = process.env[k];
+			if (v === undefined) delete process.env[k];
+			else process.env[k] = v;
 		}
+		try {
+			fn();
+		} finally {
+			for (const [k, v] of Object.entries(prev)) {
+				if (v === undefined) delete process.env[k];
+				else process.env[k] = v;
+			}
+		}
+	};
+
+	// Everything a fielded device can plausibly boot with. Unset is first
+	// because it is the one that was open.
+	const CLOSED: [string, Record<string, string | undefined>][] = [
+		['nothing set at all', { NODE_ENV: undefined, AERO_ADMIN_UI: undefined }],
+		['NODE_ENV=production', { NODE_ENV: 'production', AERO_ADMIN_UI: undefined }],
+		['NODE_ENV=development', { NODE_ENV: 'development', AERO_ADMIN_UI: undefined }],
+		['the flag explicitly off', { NODE_ENV: undefined, AERO_ADMIN_UI: '0' }],
+		['the flag set to a truthy-looking string', { NODE_ENV: undefined, AERO_ADMIN_UI: 'true' }],
+		['the flag empty', { NODE_ENV: undefined, AERO_ADMIN_UI: '' }]
+	];
+
+	for (const [label, env] of CLOSED) {
+		it(`404s with ${label}`, async () => {
+			const fn = await load();
+			await withEnv(env, () => {
+				expect(() => fn(), 'the cockpit must be closed unless opted in').toThrow();
+			});
+		});
+	}
+
+	it('renders only with AERO_ADMIN_UI=1', async () => {
+		const fn = await load();
+		await withEnv({ NODE_ENV: undefined, AERO_ADMIN_UI: '1' }, () => {
+			expect(() => fn()).not.toThrow();
+		});
 	});
 
 	it('does not leak every interface from /api/status', async () => {

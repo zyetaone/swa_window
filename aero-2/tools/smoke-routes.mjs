@@ -164,13 +164,16 @@ if (!chromePath) {
  * archive rather than quietly proxying NASA — which would make a smoke test
  * pass on any machine with internet and say nothing about a fielded device.
  *
- * It also leaves /admin RENDERING, which matters because /admin is the exact
- * page the parent repo shipped blank. Under `production` the route 404s by
- * design, so smoking it there asserts the guard and abandons the cockpit to
- * the failure this tool exists to catch. The guard is checked separately
- * below, against a second server that does set production.
+ * /admin is opened here with AERO_ADMIN_UI=1, which matters because /admin is
+ * the exact page the parent repo shipped blank. Without the flag the route
+ * 404s by design, so smoking it that way asserts the guard and abandons the
+ * cockpit to the failure this tool exists to catch. The guard is checked
+ * separately below, against a second server that omits the flag.
  */
-const kioskEnv = { ...process.env, PORT: String(PORT) };
+// AERO_ADMIN_UI=1 so /admin RENDERS here and the blank-cockpit check has
+// something to look at. The inverse — that it 404s WITHOUT the flag — is a
+// separate server at the bottom of this file.
+const kioskEnv = { ...process.env, PORT: String(PORT), AERO_ADMIN_UI: '1' };
 // `NODE_ENV: undefined` inside the spread would still hand the child the key;
 // only deleting it reproduces an unprovisioned Pi.
 delete kioskEnv.NODE_ENV;
@@ -368,30 +371,44 @@ try {
 	}
 
 	/**
-	 * /admin must 404 in production, and GET /admin does NOT test that: with
-	 * `ssr = false` the static shell returns 200 whether the guard fires or
-	 * not. The guard runs in the load function, so the DATA request is the
-	 * only place its absence is visible.
+	 * /admin must 404 for a server given NO admin flag, and GET /admin does NOT
+	 * test that: with `ssr = false` the static shell returns 200 whether the
+	 * guard fires or not. The guard runs in the load function, so the DATA
+	 * request is the only place its absence is visible.
 	 *
-	 * Its own server, because the guard reads `NODE_ENV` and the run above
-	 * deliberately leaves it unset so /admin renders. One process cannot
-	 * answer both questions, and dropping either loses a real failure: the
-	 * cockpit shipping blank, or the cockpit shipping to a client LAN.
+	 * The env here is the DEFAULT one — nothing added, `NODE_ENV` still
+	 * deleted — because that is the state a fielded Pi boots in and therefore
+	 * the state the guard has to hold in. It previously set
+	 * `NODE_ENV=production` to make a `!== 'production'` guard fire, which
+	 * asserted the one configuration that was already safe and said nothing
+	 * about the default. Under that default /admin served its full cockpit
+	 * data node, and this check passed.
+	 *
+	 * Its own server, because the run above sets AERO_ADMIN_UI=1 so the
+	 * cockpit RENDERS and can be checked for the blank-page failure. One
+	 * process cannot answer both questions, and dropping either loses a real
+	 * failure: the cockpit shipping blank, or the cockpit shipping to a client
+	 * LAN.
 	 */
+	const guardEnv = { ...process.env, PORT: String(PORT + 1) };
+	delete guardEnv.NODE_ENV;
+	delete guardEnv.AERO_ADMIN_UI;
 	const guardServer = spawn(process.execPath, ['build/index.js'], {
-		env: { ...process.env, PORT: String(PORT + 1), NODE_ENV: 'production' },
+		env: guardEnv,
 		stdio: 'ignore'
 	});
 	try {
 		const guardBase = `http://127.0.0.1:${PORT + 1}`;
-		await waitFor('production server', async () => (await fetch(guardBase + '/api/status')).ok);
+		await waitFor('unprovisioned server', async () => (await fetch(guardBase + '/api/status')).ok);
 		const body = await (await fetch(guardBase + '/admin/__data.json')).text();
 		if (!body.includes('"status":404')) {
 			failed++;
 			console.log('FAIL  /admin/__data.json');
-			console.log('        production guard did not fire — /admin is reachable on the LAN');
+			console.log(
+				'        guard did not fire with AERO_ADMIN_UI unset — /admin is open on the LAN'
+			);
 		} else {
-			console.log('ok    /admin/__data.json  (404 guard fires under NODE_ENV=production)');
+			console.log('ok    /admin/__data.json  (404 by default; AERO_ADMIN_UI unset)');
 		}
 	} finally {
 		guardServer.kill();
