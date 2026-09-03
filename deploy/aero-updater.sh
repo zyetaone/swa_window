@@ -129,6 +129,29 @@ probe_health() {
     return 1
 }
 
+# Snapshot / restore the last known-good build.
+#
+# `bun run build` DESTROYS build/ before it writes: @sveltejs/adapter-node
+# calls `builder.rimraf(out)` as its first act (verified against 5.5.7,
+# index.js line 32). So the old rollback log line — "previous build/ still on
+# disk" — was false. A failed rollback build left the device with NO build at
+# all, which server.ts answers with exit 1, which under Restart=always is a
+# crash loop with nothing to recover to.
+#
+# 34 MB for v1, 5.7 MB for aero-2. Cheap insurance.
+snapshot_build() {
+    [[ -d "${REPO_DIR}/build" ]] || return 0
+    rm -rf "${REPO_DIR}/build.prev"
+    cp -a "${REPO_DIR}/build" "${REPO_DIR}/build.prev" 2>/dev/null \
+        || log "WARN: could not snapshot build/ — rollback will have no fallback"
+}
+
+restore_build() {
+    [[ -d "${REPO_DIR}/build.prev" ]] || return 1
+    rm -rf "${REPO_DIR}/build"
+    cp -a "${REPO_DIR}/build.prev" "${REPO_DIR}/build"
+}
+
 # Full rollback: previous commit + reinstall + rebuild + restart + verify.
 # Wired to EVERY failure class (install, build, post-restart probe) — the
 # old build-only rollback let a builds-fine-crashes-at-runtime commit ship,
@@ -138,8 +161,13 @@ rollback() {
     log "ERROR: $1 — rolling back to ${LOCAL:0:8}"
     git reset --hard "${LOCAL}" 2>&1 | tee -a "${LOG_FILE}"
     "${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || true
-    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" \
-        || log "WARN: rollback build failed — previous build/ still on disk"
+    if ! "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}"; then
+        if restore_build; then
+            log "WARN: rollback build failed — restored the pre-update build/"
+        else
+            log "CRITICAL: rollback build failed and no build.prev to restore — device has no build/"
+        fi
+    fi
     restart_services
     if probe_health; then
         log "Rollback verified — serving ${LOCAL:0:8}"
@@ -156,6 +184,8 @@ git reset --hard "origin/${BRANCH}" 2>&1 | tee -a "${LOG_FILE}"
 log "Updated to $(git rev-parse --short HEAD): $(git log -1 --format='%s')"
 
 # ─── 3. Install dependencies ─────────────────────────────────────────────
+
+snapshot_build
 
 log "Installing dependencies..."
 "${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || {

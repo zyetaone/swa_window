@@ -4,6 +4,14 @@ Documentation=https://github.com/zyetaone/z-aero-window
 After=network-online.target
 Wants=network-online.target
 
+# Bound any restart loop. Restart=always with no limit turns a permanent
+# failure — port already bound, bad EnvironmentFile, missing interpreter —
+# into an invisible 10s heartbeat that never resolves and never reports.
+# With these, systemd gives up after 5 starts in 5 minutes and parks the unit
+# in `failed`, where `systemctl status` says so.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=__AERO_USER__
@@ -17,8 +25,19 @@ Environment=PORT=3000
 # Serve-only — the unit must NEVER build. Building here meant a bad commit
 # put the Pi in a build-fail → Restart=always crash loop with a dark kiosk.
 # Builds happen exactly twice: install.sh (initial) and aero-updater.sh
-# (updates, with rollback + health probe). If build/ is missing, server.ts
-# serves a 503 instead of crashing — degraded, not looping.
+# (updates, with rollback + health probe). If build/ is missing, v1's
+# server.ts serves a 503 instead of crashing — degraded, not looping.
+#
+# NOTE: that last sentence is true of v1 ONLY. aero-2/server.ts deliberately
+# exits 1 on a missing build, on the argument that a 503 keeps the unit green
+# while the kiosk shows an error page, so nothing ever restarts and nothing
+# ever reports. Both positions are defensible; they need different units.
+# When WorkingDirectory is repointed at aero-2 (see the migration plan,
+# Phase 4), add:
+#     ConditionPathExists=__AERO_APP_DIR__/build/index.js
+# so systemd skips a start it knows will fail — a clean "Condition check
+# failed" line rather than a crash entry. Not added now, because on v1 it
+# would override the degrade-don't-crash behaviour this comment describes.
 ExecStart=__BUN_BIN__ run serve
 
 Restart=always
