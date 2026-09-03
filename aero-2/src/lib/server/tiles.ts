@@ -58,36 +58,10 @@ export function resolveTileDir(
 	return local;
 }
 
-// ── Path Guard & Local Resolution ─────────────────────────────────────────────
-
-export interface ResolvedTile {
-	filePath: string;
-	notFound: boolean;
-	forbidden: boolean;
-}
+// ── Tile Path Shape ───────────────────────────────────────────────────────────
 
 const WMTS_TILE_PATH =
 	/^(?<layer>[a-z0-9-]+)\/(?<z>\d+)\/(?<y>\d+)\/(?<x>\d+)\.(?<ext>jpg|jpeg|png)$/;
-
-/**
- * Resolve a request path to a file INSIDE `root`, preventing traversal and symlink escapes.
- */
-export function resolveLocalTile(root: string, subPath: string): ResolvedTile {
-	const rootDir = root.replace(/\/+$/, '') + '/';
-	const filePath = resolve(rootDir, subPath);
-	if (!filePath.startsWith(rootDir)) return { filePath, notFound: false, forbidden: true };
-	if (!existsSync(filePath)) return { filePath, notFound: true, forbidden: false };
-	try {
-		const realRoot = realpathSync(rootDir);
-		const real = realpathSync(filePath);
-		if (real !== realRoot && !real.startsWith(realRoot + '/')) {
-			return { filePath, notFound: false, forbidden: true };
-		}
-	} catch {
-		return { filePath, notFound: true, forbidden: false };
-	}
-	return { filePath, notFound: false, forbidden: false };
-}
 
 // ── Archive Health ────────────────────────────────────────────────────────────
 
@@ -418,49 +392,4 @@ export function parseRange(
 	const end = rawEnd === '' ? size - 1 : Math.min(Number(rawEnd), size - 1);
 	if (end < start) return 'unsatisfiable';
 	return { start, end };
-}
-
-// ── LAN CORS (Multi-Pi Fleet) ─────────────────────────────────────────────────
-
-/**
- * Origins allowed to read tiles cross-origin: the other panes on the wall.
- *
- * mDNS names and `localhost` only, until now -- which excluded the addresses
- * the fleet actually uses. `/api/status` advertises `lanIps` and
- * `primaryLanIp`, and those are IPv4 literals, so the one deployment this
- * allowlist exists for (one Pi serving 3.7 GB of tiles to its two neighbours)
- * was the one it rejected. Avahi is also not guaranteed on a kiosk image.
- *
- * Private ranges only, enumerated rather than pattern-matched on "looks
- * local": 10/8, 172.16-31/12, 192.168/16, 127/8 loopback, 169.254/16
- * link-local, and 100.64/10 -- the CGNAT block Tailscale assigns, which is how
- * these machines reach each other when they are not on the same switch. A
- * public address must never match: this header is what lets another origin
- * read a response.
- */
-const LAN_HOST =
-	/^(?:[a-zA-Z0-9-]+\.local|localhost|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3})$/;
-
-const LAN_ORIGIN = new RegExp(`^https?://${LAN_HOST.source.slice(1, -1)}(?::[0-9]{1,5})?$`);
-
-export function lanCorsHeaders(requestOrigin: string | null | undefined): Record<string, string> {
-	if (!requestOrigin || !LAN_ORIGIN.test(requestOrigin)) {
-		return {};
-	}
-	return {
-		'Access-Control-Allow-Origin': requestOrigin,
-		'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
-		Vary: 'Origin'
-	};
-}
-
-export function corsPreflight(methods: string): (event: { request: Request }) => Response {
-	return ({ request }) => {
-		const cors = lanCorsHeaders(request.headers.get('origin'));
-		return new Response(null, {
-			status: 204,
-			headers:
-				Object.keys(cors).length === 0 ? {} : { ...cors, 'Access-Control-Allow-Methods': methods }
-		});
-	};
 }

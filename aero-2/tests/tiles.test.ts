@@ -1,10 +1,8 @@
 import {
 	GIBS_DATE,
-	lanCorsHeaders,
 	parseRange,
 	remoteFallbackEnabled,
 	remoteTileUrl,
-	resolveLocalTile,
 	resolveTileDir,
 	resolveTileHealth
 } from '#lib/server/tiles.js';
@@ -67,43 +65,6 @@ describe('resolveTileDir', () => {
 				() => false
 			)
 		).toBe(`${CWD}/data/tiles`);
-	});
-});
-
-describe('resolveLocalTile - path guard', () => {
-	let sandbox: string;
-
-	beforeEach(() => {
-		sandbox = mkdtempSync(join(tmpdir(), 'aero-test-tiles-'));
-		mkdirSync(join(sandbox, 'gibs', '5', '10'), { recursive: true });
-		writeFileSync(join(sandbox, 'gibs', '5', '10', '20.jpg'), 'fake-jpeg');
-	});
-
-	afterEach(() => {
-		// cleanup temp dir
-	});
-
-	it('resolves an existing file inside root', () => {
-		const res = resolveLocalTile(sandbox, 'gibs/5/10/20.jpg');
-		expect(res.notFound).toBe(false);
-		expect(res.forbidden).toBe(false);
-		expect(res.filePath).toBe(join(sandbox, 'gibs/5/10/20.jpg'));
-	});
-
-	it('flags a missing file as notFound (not forbidden)', () => {
-		const res = resolveLocalTile(sandbox, 'gibs/5/10/999.jpg');
-		expect(res.notFound).toBe(true);
-		expect(res.forbidden).toBe(false);
-	});
-
-	it('rejects directory traversal (../)', () => {
-		const res = resolveLocalTile(sandbox, '../../../etc/passwd');
-		expect(res.forbidden).toBe(true);
-	});
-
-	it('rejects absolute paths escaping root', () => {
-		const res = resolveLocalTile(sandbox, '/etc/passwd');
-		expect(res.forbidden).toBe(true);
 	});
 });
 
@@ -396,45 +357,6 @@ describe('cache headers', () => {
 		await first.body?.cancel();
 		const ranged = await req('terrain.pmtiles', { 'If-None-Match': etag, Range: 'bytes=0-127' });
 		expect(ranged.status).toBe(206);
-	});
-});
-
-/**
- * The wall is three panes. One of them can hold the 3.7 GB DEM and serve it to
- * the other two, which is what PUBLIC_TILE_SERVER_URL and the LAN CORS
- * allowlist exist for -- but the allowlist admitted only `*.local` and
- * `localhost`, while `/api/status` advertises `lanIps` and `primaryLanIp` as
- * IPv4 literals. The one topology it was written for was the one it rejected.
- */
-describe('LAN CORS admits the fleet and nothing else', () => {
-	const allow = (origin: string) => Object.keys(lanCorsHeaders(origin)).length > 0;
-
-	it('admits the addresses panes actually use', () => {
-		for (const o of [
-			'http://aero-1.local:3000',
-			'http://localhost:5173',
-			'http://192.168.1.42:3000',
-			'http://172.20.10.3:3000',
-			'http://10.0.0.5:3000',
-			'http://127.0.0.1:3000',
-			'http://100.98.156.5:3000' // Tailscale CGNAT — how the Pis reach each other off-switch
-		]) {
-			expect(allow(o), `${o} should be allowed`).toBe(true);
-		}
-	});
-
-	it('refuses anything routable from outside the wall', () => {
-		for (const o of [
-			'https://evil.com',
-			'http://8.8.8.8',
-			'http://172.32.0.1', // just outside 172.16/12
-			'http://100.63.0.1', // just below the CGNAT block
-			'http://100.128.0.1', // just above it
-			'http://aero.local.evil.com', // suffix attack on the mDNS branch
-			'http://192.168.1.42.evil.com' // suffix attack on the IPv4 branch
-		]) {
-			expect(allow(o), `${o} must NOT be allowed`).toBe(false);
-		}
 	});
 });
 

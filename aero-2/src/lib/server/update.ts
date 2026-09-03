@@ -1,5 +1,5 @@
 /**
- * Server OTA Updater & Privileged Service Execution.
+ * Server OTA updater.
  *
  * Fire-and-forget triggering of the Pi's systemd updater unit
  * (`aero-updater.service`).
@@ -16,52 +16,9 @@
  * just escaping.
  */
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
-/**
- * Fire-and-forget execution of a privileged command.
- *
- * Runs after a short delay so the HTTP response (202 Accepted) can be cleanly
- * transmitted before the process is terminated/restarted by the systemd service.
- *
- * @param argv Command and arguments array (e.g. `['sudo', '-n', 'systemctl', 'start', 'aero-updater.service']`)
- * @param delayMs Milliseconds to wait before spawning the detached process (default: 500ms)
- * @param label Logging prefix for diagnostics
- * @returns boolean `true` if scheduled successfully or in non-Linux dev mode; `false` if `sudo -n` preflight failed.
- */
-export function schedulePrivileged(
-	argv: string[],
-	delayMs = 500,
-	label = '[server/update]'
-): boolean {
-	if (process.platform !== 'linux') {
-		console.info(`${label} Non-Linux platform (${process.platform}) — simulated update trigger`);
-		return true;
-	}
-
-	// Preflight non-interactive sudo capability (/etc/sudoers.d/aero)
-	const preflight = spawnSync('sudo', ['-n', 'true'], { stdio: 'ignore' });
-	if (preflight.status !== 0) {
-		console.warn(
-			`${label} sudo -n preflight failed. Verify /etc/sudoers.d/aero is installed. Command NOT scheduled.`
-		);
-		return false;
-	}
-
-	setTimeout(() => {
-		try {
-			const child = spawn(argv[0], argv.slice(1), {
-				detached: true,
-				stdio: 'ignore'
-			});
-			child.unref();
-		} catch (err) {
-			console.error(`${label} Failed to spawn privileged process:`, err);
-		}
-	}, delayMs);
-
-	return true;
-}
+import { schedulePrivileged } from '#lib/server/privileged.js';
 
 /**
  * Triggers the on-demand fleet OTA updater on Raspberry Pi.

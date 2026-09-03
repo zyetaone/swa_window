@@ -10,16 +10,15 @@
 import { createReadStream, readdirSync, statSync } from 'node:fs';
 import type { RequestHandler } from './$types';
 import {
-	corsPreflight,
-	lanCorsHeaders,
 	parseRange,
 	remoteFallbackEnabled,
 	remoteTileUrl,
-	resolveLocalTile,
 	resolveTileDir,
 	resolveTileHealth,
 	type TileHealth
 } from '#lib/server/tiles.js';
+import { corsPreflight, lanCorsHeaders } from '#lib/server/cors.js';
+import { safeResolveWithin } from '#lib/server/fs-guard.js';
 
 const TILE_DIR = resolveTileDir().replace(/\/$/, '') + '/';
 
@@ -205,7 +204,7 @@ async function resolveTileResponse(
 	rangeHeader: string | null = null,
 	ifNoneMatch: string | null = null
 ): Promise<Response | 'forbidden' | null> {
-	const local = resolveLocalTile(TILE_DIR, path);
+	const local = safeResolveWithin(TILE_DIR, path);
 	if (local.forbidden) return 'forbidden';
 	if (!local.notFound) return serveLocalFile(local.filePath, cors, rangeHeader, ifNoneMatch);
 

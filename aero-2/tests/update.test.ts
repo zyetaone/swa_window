@@ -1,12 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { schedulePrivileged, triggerOtaUpdate, getAppCommit } from '#lib/server/update.js';
+import { triggerOtaUpdate, getAppCommit } from '#lib/server/update.js';
 
 describe('server/update', () => {
-	it('schedulePrivileged returns true on non-linux systems', () => {
-		const res = schedulePrivileged(['echo', 'test'], 10, '[test]');
-		expect(res).toBe(true);
-	});
-
 	it('triggerOtaUpdate is a no-op off Linux, and reports it', () => {
 		// Deliberately NOT calling this unguarded. On a Pi this function really
 		// does schedule `sudo systemctl start aero-updater.service`, so a test
