@@ -171,6 +171,19 @@ duplicating those knobs, of which its single caller passed one.
   corridors packed at a city radius leave holes that only appear at certain
   points in the orbit. Measure it — drive every location and log 404s — rather
   than reasoning about the bounding box.
+- **Two colour photographs, deliberately.** `sentinel2` (10 m/px, cloudless,
+  per-location boxes) is laid over `gibs` (306 m/px, global, ~40% cloud). The
+  overlay is what the window shows wherever it is packed; MODIS is the
+  everywhere-layer beneath it, so a Sentinel-2 gap degrades instead of punching
+  a hole. This is NOT the USGS/NAIP mistake that was deleted in 2026-08: that
+  layer was a second photograph at a resolution the screen could not resolve.
+  A 30x resolution gain is a different proposition.
+- **Sentinel-2 imagery is licence-critical.** The convenient source (EOX
+  s2cloudless) is CC BY-NC-SA and cannot ship on a paid install; v1 uses it and
+  its own `upstream.ts` flags that as an open question. aero-2 builds the same
+  pixels from `sentinel-cogs` under Copernicus terms, which permit commercial
+  use AND REQUIRE attribution. `remoteTileUrl` returns null for this layer on
+  purpose — a remote fallback would silently proxy the non-commercial service.
 - **The ground is ~30% cloud, and no date fixes it.** `GIBS_DATE` pins a single
   MODIS day, and MODIS true colour is a same-day swath: across the z6–z9 tiles
   the window requests, the best eligible day measures ~30% near-white and most

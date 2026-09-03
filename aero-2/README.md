@@ -27,6 +27,7 @@ What a complete pack holds, and what each absence costs:
 | ----------------- | ---------------------- | -------------------------------- |
 | `gibs/`           | WMTS `{z}/{y}/{x}.jpg` | no ground colour — a white sheet |
 | `terrain.pmtiles` | PMTiles v3             | flat ellipsoid, no relief        |
+| `sentinel2/`      | WMTS `{z}/{y}/{x}.jpg` | ground drops to 306 m/px MODIS   |
 | `viirs/`          | WMTS `{z}/{y}/{x}.png` | no city lights after dark        |
 
 `terrarium/` is build INPUT for `tools/pack-pmtiles.ts`, not something the
@@ -36,6 +37,7 @@ kiosk requests. A pack holding only terrarium draws nothing.
 bun tools/download-tiles.ts gibs  <lat> <lon> 1500 7 8   # per location
 bun tools/download-tiles.ts viirs <lat> <lon> 1500 7 8
 bun tools/pack-pmtiles.ts terrarium data/tiles/terrain.pmtiles
+python3 tools/fetch-sentinel2.py <place> --min-zoom 8 --max-zoom 13
 bun run build && node build/index.js
 ```
 
@@ -43,6 +45,42 @@ bun run build && node build/index.js
 most of a continent, so a city-sized radius leaves holes that appear only at
 certain points in the orbit. Global z0–6 plus these corridors is ~240 MB and
 covers every location with zero 404s, measured by driving all eleven.
+
+### The sharp basemap
+
+`sentinel2/` is what makes the window look like a window: 10 m/px against
+MODIS's 306, and effectively cloudless. It is laid **over** MODIS rather than
+replacing it — the pack is a box around each location, and Sentinel-2 produces
+no scenes over open ocean at all, so a missing tile reveals the layer
+underneath instead of punching a hole.
+
+Built by `tools/fetch-sentinel2.py` from the public `sentinel-cogs` bucket.
+Needs **GDAL** (`brew install gdal`) and Pillow. Budget 10-20 minutes and ~7 GB
+of scratch per location; the scratch (`data/tiles/_s2-<place>/`) is safe to
+delete once tiled, and each finished pack is ~50 MB.
+
+Two boxes, both sized by measurement: wide-and-coarse (1.2 deg, z8-11) for the
+far field, tight-and-sharp (0.65 deg, z12-13) near the aircraft, which is where
+the browser asks for the high zooms. Going wider is not a budget question —
+3.0 deg pulled 60 scenes and ~20 GB of scratch per location, AND pushed
+worst-case cloud from 0.07% to 4.91%, because one clear day across a wider box
+is strictly harder to find.
+
+The tool refuses rather than shipping something wrong. Both refusals mean what
+they say:
+
+- _"mosaic is N% empty — refusing to tile"_: the chosen scenes leave black
+  wedges. Widen `--start`/`--end`.
+- _"No 15-day window covers every tile"_: no single clear acquisition spans the
+  visible box. Widen the dates, or raise `--max-cloud`.
+
+It insists on ONE acquisition date across every scene because a per-tile "best"
+date mosaics different seasons together and shows as colour steps at the seams.
+
+**Licence: Copernicus** — free, full and open, commercial use permitted,
+**attribution required**. The required wording is in `TILE_ATTRIBUTION`. Do not
+swap in EOX s2cloudless, which serves this same imagery far more conveniently
+and is CC BY-NC-SA, i.e. non-commercial.
 
 `GET /api/tiles/health` answers `ok` / `degraded` / `error` and names what is
 absent in `missing[]`. It asserts the assets above rather than counting
