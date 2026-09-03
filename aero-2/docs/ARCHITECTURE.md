@@ -135,6 +135,27 @@ so a Three.js context loss took the page down while the identical MapLibre
 failure was caught and offered a retry. If either matters enough to keep, it is
 a three-line source scan alongside the two already in `integration.test.ts`.
 
+**#9's blind spot was the operator UI, and it cost two bugs.** Every check in
+this repo reaches a page by URL, and the settings drawer is not reachable that
+way — it is component state behind an `s` keypress. So the entire panel sat
+outside `check` (a runtime throw is invisible to it), outside the suite
+(nothing mounts it) and outside smoke (which loaded `/` and pressed nothing).
+Both failures found there were of the shape this document keeps naming: the
+kiosk rendered perfectly, and the operator surface was broken one keystroke
+away. `smoke` now presses `s` and `a` and asserts each drawer rendered its own
+contents.
+
+**A live value is not a wired one.** `cloudDensity` was a `$derived` read by
+exactly one consumer that was not reactive — `buildCloudDeck()`, called once
+from inside a texture-loader callback — so the deck was fixed at mount and the
+slider moved nothing. Reads inside an async callback are outside the
+attachment's tracking scope AND outside any effect: no rune, no dependency, no
+re-run. When an attachment owns a long-lived resource, the resource's lifetime
+and its CONTENTS are different lifetimes and need different mechanisms; taking
+the value as an attachment argument would rebuild the WebGL context on every
+slider tick. `tools/probe-layers.mjs` measures this the only way it can be
+measured, by driving the real input and counting what changed.
+
 ## 3. Engines
 
 **There is one.** MapLibre GL, mounted unconditionally by `Display.svelte`.
