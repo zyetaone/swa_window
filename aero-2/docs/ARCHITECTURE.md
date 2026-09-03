@@ -252,6 +252,21 @@ duplicating those knobs, of which its single caller passed one.
   night-lights source behind `{#if nightLightOpacity > 0.01}` for that reason —
   it used to do the same for a USGS/NAIP layer that was deleted on 2026-08-26,
   where it was worth several hundred 404s a minute outside US coverage.
+- **The DEM's header bbox is not its coverage, and `terrainSampledPct` is.**
+  `terrain.pmtiles` is a set of per-location boxes (~±1° around each pin), but
+  its header is ONE rectangle around all of them — spanning 179°W–88°E and
+  16–85°N while being empty across nearly all of it. The integration test
+  checks the header, so it passes whatever the archive actually holds.
+  Verified 2026-09-03 and the archive is fine: the running kiosk reports
+  **100% terrain sampled** at every location tested. But note how that was
+  established, because two cheaper checks both lied. Probing
+  `queryTerrainElevation` at hand-picked points returned 0 for the Himalayas
+  and read as a packaging gap — those points were simply outside the render
+  frustum, and an absent tile is indistinguishable from sea level at the call
+  site. Probing right after load also returns 0, because the DEM streams over
+  range requests and decodes late. The runtime counter is the only signal that
+  is neither: it counts real samples against fallbacks over thousands of
+  frames. Press `a` for the diagnostics drawer.
 - **A DEM source without `minzoom`/`maxzoom` reads as sea level.** MapLibre
   assumes z0–22, requests tiles the archive does not hold, never decodes one,
   and `queryTerrainElevation` returns a literal `0` — indistinguishable from

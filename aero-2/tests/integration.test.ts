@@ -316,6 +316,17 @@ describe('the packed DEM covers every location that needs it', () => {
 		// so the DEM was simply absent there and the window showed no relief.
 		// It looked like a rendering bug for hours. It was a packaging gap, and
 		// this is the one line that would have said so.
+		//
+		// NOTE what this cannot see. The header is one rectangle around every
+		// tile in the archive, and the archive is a set of per-location BOXES —
+		// so the bbox spans -179.7..88.2E and 16..85N while being empty across
+		// almost all of it. A location inside the bbox may have no tile at all.
+		// The DEM is packed to roughly +/-1 deg around each pin, and the camera
+		// roams further than that, so this passing means very little on its own.
+		// `queryTerrainElevation` returns 0 for an absent tile, which reads as
+		// sea level and is invisible. Coverage is measured properly by the
+		// pmtiles reader, not here; see AeroDisplay.terrain / terrainSampledPct
+		// for the runtime signal.
 		expect(missing, `outside archive bounds — repack: bun tools/pack-pmtiles.ts terrarium`).toEqual(
 			[]
 		);
