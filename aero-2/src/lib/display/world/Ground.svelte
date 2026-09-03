@@ -10,6 +10,7 @@
 	import {
 		IMAGERY_GRADE,
 		TILE_ATTRIBUTION,
+		SENTINEL2_MINZOOM,
 		TILE_MAXZOOM,
 		TILE_SIZE,
 		tileTemplates
@@ -84,6 +85,35 @@
 	tileSize={TILE_SIZE}
 	maxzoom={TILE_MAXZOOM.gibs}
 	attribution={TILE_ATTRIBUTION}
+>
+	<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
+</RasterTileSource>
+
+<!-- SENTINEL-2, the sharp basemap, laid OVER the MODIS wash.
+
+     30x the detail (10 m vs 306 m/px) and effectively cloudless, because it is
+     built from a per-location scene chosen for <5% cloud rather than whatever
+     the weather did on one pinned day. MODIS at z9 is a brown smear at cruise
+     altitude; this resolves fields, roads and coastline.
+
+     An OVERLAY, not a replacement, and that is the whole design. The pack is a
+     box around each location, not a global layer, because fetching eleven
+     cities at z8-13 is affordable and fetching the planet is not. Over open
+     ocean Sentinel-2 produces no scenes at all. So MODIS stays underneath as
+     the everywhere-layer and this covers the ground the window actually spends
+     its time over; where it has no tile, the 404 simply reveals the layer below
+     instead of punching a hole.
+
+     `minzoom` matters as much as `maxzoom` here: without it MapLibre would
+     request z0-z7 tiles that were never packed, which is hundreds of 404s a
+     minute for imagery that does not exist. Same trap as the DEM's missing
+     zoom range, and the same fix -- declare what the archive actually holds. -->
+<RasterTileSource
+	id="sentinel2"
+	tiles={tiles.sentinel2}
+	tileSize={TILE_SIZE}
+	minzoom={SENTINEL2_MINZOOM}
+	maxzoom={TILE_MAXZOOM.sentinel2}
 >
 	<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
 </RasterTileSource>

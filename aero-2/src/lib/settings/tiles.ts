@@ -5,13 +5,37 @@
 export const TILE_SIZE = 256;
 
 export const TILE_MAXZOOM = {
+	/**
+	 * Sentinel-2 is 10 m and a z14 web-mercator pixel is 9.55 m, so z14 is the
+	 * last zoom backed by real source pixels. Packed to z13 today; raising this
+	 * beyond 14 only upscales.
+	 */
+	sentinel2: 13,
 	gibs: 9,
 	/** VIIRS ships GoogleMapsCompatible_Level8 — there is no z9 to ask for. */
 	viirs: 8,
 	terrarium: 13
 } as const;
 
-export const TILE_ATTRIBUTION = 'Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
+/**
+ * Below this, Sentinel-2 is not packed and MODIS carries the picture.
+ *
+ * The packs are per-location boxes, not a global layer: fetching every city at
+ * z8-13 is affordable, fetching the planet is not. So the source is mounted
+ * with its own minzoom and MapLibre simply requests nothing below it.
+ */
+export const SENTINEL2_MINZOOM = 8;
+
+/**
+ * Both sources are credited because both are drawn: Sentinel-2 over the eleven
+ * locations, MODIS everywhere else and under the gaps.
+ *
+ * The Copernicus notice is not decoration — the licence REQUIRES attribution,
+ * and "Contains modified Copernicus Sentinel data" is the exact wording it
+ * specifies for data that has been reprojected and retiled, which this has.
+ */
+export const TILE_ATTRIBUTION =
+	'Contains modified Copernicus Sentinel data 2026 · Imagery: NASA EOSDIS GIBS · Elevation: Mapzen / AWS Open Data';
 
 /**
  * The DEM archive URL, under whatever tile origin this pane is configured for.
@@ -55,11 +79,13 @@ export const IMAGERY_GRADE = {
 };
 
 export function tileTemplates(prefix = '/api/tiles'): {
+	sentinel2: string[];
 	gibs: string[];
 	viirs: string[];
 	terrarium: string[];
 } {
 	return {
+		sentinel2: [`${prefix}/xyz/sentinel2/{z}/{x}/{y}.jpg`],
 		gibs: [`${prefix}/xyz/gibs/{z}/{x}/{y}.jpg`],
 		viirs: [`${prefix}/xyz/viirs/{z}/{x}/{y}.png`],
 		terrarium: [`${prefix}/xyz/terrarium/{z}/{x}/{y}.png`]

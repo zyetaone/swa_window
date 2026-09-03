@@ -148,7 +148,10 @@ describe('resolveTileHealth', () => {
 
 	it('reports ok for a complete pack', () => {
 		const h = resolveTileHealth(
-			pack({ dirs: ['gibs', 'viirs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			pack({
+				dirs: ['gibs', 'viirs', 'sentinel2'],
+				files: [['terrain.pmtiles', 'PMTiles-body']]
+			}),
 			OFFLINE
 		);
 		expect(h.status).toBe('ok');
@@ -161,7 +164,7 @@ describe('resolveTileHealth', () => {
 		// night and correct all day, which is not the same emergency as no
 		// ground at all — and the old single boolean could not say so.
 		const h = resolveTileHealth(
-			pack({ dirs: ['gibs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			pack({ dirs: ['gibs', 'sentinel2'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
 			OFFLINE
 		);
 		expect(h.status).toBe('degraded');
@@ -198,7 +201,7 @@ describe('resolveTileHealth', () => {
 	 */
 	it('names directories the kiosk never requests, without flagging build input', () => {
 		const root = pack({
-			dirs: ['gibs', 'viirs', 'terrarium', '_s2-hyderabad'],
+			dirs: ['gibs', 'viirs', 'sentinel2', 'terrarium', '_s2-hyderabad'],
 			files: [['terrain.pmtiles', 'PMTiles-body']]
 		});
 		const h = resolveTileHealth(root, OFFLINE);
@@ -208,7 +211,10 @@ describe('resolveTileHealth', () => {
 
 	it('reports no dead weight for a clean pack', () => {
 		const h = resolveTileHealth(
-			pack({ dirs: ['gibs', 'viirs'], files: [['terrain.pmtiles', 'PMTiles-body']] }),
+			pack({
+				dirs: ['gibs', 'viirs', 'sentinel2'],
+				files: [['terrain.pmtiles', 'PMTiles-body']]
+			}),
 			OFFLINE
 		);
 		expect(h.unused).toEqual([]);

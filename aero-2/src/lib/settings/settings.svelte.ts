@@ -305,6 +305,29 @@ export class PaneSettings {
 			this.videoUrl = urls[0] ?? '';
 		}
 
+		/**
+		 * The cabin audio playlist — `?audio=/rain.ogg,/wind.ogg`.
+		 *
+		 * Same reasoning as `?media=` above, and the same blind spot: without it
+		 * the audio playlist could only ever be whatever was hardcoded, so the
+		 * `media-src` block that silenced it had no way of being noticed. Setting
+		 * a track implies `playlist` mode, because a URL naming files and a mode
+		 * still set to `synth` is two switches for one intent.
+		 */
+		const audioParam = url.searchParams.get('audio');
+		if (audioParam !== null) {
+			const urls = audioParam
+				.split(',')
+				.map((u) => u.trim())
+				.filter(Boolean);
+			this.audioPlaylist = urls;
+			this.audioTrackIndex = 0;
+			if (urls.length > 0) {
+				this.audioMode = 'playlist';
+				this.audioEnabled = true;
+			}
+		}
+
 		const roleParam = url.searchParams.get('role');
 		if (roleParam && (FLEET_ROLES as readonly string[]).includes(roleParam)) {
 			this.fleetRole = roleParam as FleetRole;

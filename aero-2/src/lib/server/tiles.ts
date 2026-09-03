@@ -116,7 +116,14 @@ export function resolveLocalTile(root: string, subPath: string): ResolvedTile {
 export const REQUIRED_TILE_ASSETS = [
 	{ name: 'gibs', path: 'gibs', kind: 'dir', fatal: true },
 	{ name: 'terrain.pmtiles', path: 'terrain.pmtiles', kind: 'file', fatal: true },
-	{ name: 'viirs', path: 'viirs', kind: 'dir', fatal: false }
+	{ name: 'viirs', path: 'viirs', kind: 'dir', fatal: false },
+	/**
+	 * The sharp basemap. Non-fatal because MODIS still draws a world without it
+	 * — just a 306 m/px one — and because it is packed per location, so a device
+	 * provisioned for a subset of the catalog is a legitimate state rather than
+	 * a broken pack.
+	 */
+	{ name: 'sentinel2', path: 'sentinel2', kind: 'dir', fatal: false }
 ] as const satisfies readonly {
 	name: string;
 	path: string;
@@ -285,34 +292,51 @@ export function remoteFallbackEnabled(env: NodeJS.ProcessEnv = process.env): boo
  * directly overhead was dark (lum 66) while the ones a few hundred km west,
  * which fill most of the frame, were 145-157.
  *
- * Sweep at z6, which is the zoom the window actually DRAWS at the horizon
- * (the camera reports zoom ~10 at 85 deg pitch, but this source is capped at
- * maxzoom 9 and the tiles filling the frame resolve to z6):
+ * Sweep over z6-z9, weighted by how many tiles the window requests at each
+ * level (logged from a real orbit: roughly 1:2:3:3), +/-3 tiles out. Three
+ * earlier passes each measured too narrow a slice, and each produced a
+ * confident wrong answer:
  *
- *   06-19 37.5%   06-20 38.5%   08-23 40.0%   07-15 42.2%   09-01 42.5%
+ *   z8 near the centre  -> scored a day 13.1% that is really ~40%
+ *   z6 alone            -> rated only the widest tiles
+ *   +/-1 tile           -> passed 06-19 at 11/11, which rendered a BLACK WEDGE
+ *                          over the Pacific from six missing z9 tiles a few
+ *                          hundred km off the pin
  *
- * 06-20 is the pin, and the number next to it is the point: EVERY single day
- * is 37-42% cloud over a continent-scale view. A first pass sampled z8 near
- * each location centre and made 06-20 look like a 13.1% fix; at the zoom the
- * window really draws, choosing a different day moves this by ~5 points and
- * cannot do better. MODIS true colour is a same-day swath, so there is no
- * clear day to find — this is the wrong instrument for the job, not a badly
- * chosen date.
+ * On the current metric:
  *
- * The RIGHT fix is a cloudless COMPOSITE. EOX s2cloudless-2024 measures 2.9%
- * washed at 11/11 coverage on this same z6 metric — a 13x difference, verified
- * by pointing this switch at it and re-rendering. It is not used because it is
+ *   07-02 42.2% ELIGIBLE   06-19 REJECT (ocean)   07-15 REJECT (hyderabad)
+ *   07-03 REJECT (desert, mumbai)   06-20 REJECT (hyderabad)
+ *   08-23 REJECT (las vegas)
+ *
+ * The REJECTs are the point. Coverage holes are common, narrow, and off-centre,
+ * and a missing tile is a black void under a lit sky — strictly worse than
+ * cloud. 07-02 is the only candidate swept so far that is clean everywhere the
+ * window looks; it is NOT the clearest, and that is the gate working.
+ *
+ * ~42% is the honest state of the source. MODIS true colour is a same-day
+ * swath, so there is no clear day to find; changing dates moves this a few
+ * points and cannot do better.
+ *
+ * The RIGHT fix is a cloudless COMPOSITE. EOX s2cloudless-2024 measures 4.6%
+ * washed at 11/11 coverage on this same weighted z6-z9 metric — 6x better than
+ * the best eligible MODIS day, verified by pointing this switch at it and
+ * re-rendering Denver/Dallas/Chicago (Dallas ground luminance 171 -> 122). It is not used because it is
  * CC BY-NC-SA (non-commercial) and this is a paid installation; the parent repo
  * accepts that licence, we cannot. The commercial-safe route is the same
  * Sentinel-2 data from the public AWS `sentinel-cogs` bucket under Copernicus,
  * which needs a packaging pipeline rather than a URL swap.
  *
  * To re-pin: `python3 tools/survey-gibs-date.py <dates...>`, discard anything
- * that is not 11/11, then take the lowest washed percentage. Expect ~38%; if a
- * candidate looks dramatically better, check the tool is still sampling the
- * zoom the renderer draws.
+ * that is not 11/11, then take the lowest washed percentage. Expect ~40%; a
+ * candidate that looks dramatically better usually means the tool has stopped
+ * sampling the zooms or the area the renderer draws. Run a date TWICE before
+ * rejecting it — a timed-out tile used to be reported as missing imagery, which
+ * fabricated coverage gaps and scored 07-01 both 11/11 and 10/11 minutes apart.
+ * After re-pinning, repack and drive every location: the survey samples a grid,
+ * the orbit does not.
  */
-export const GIBS_DATE = '2026-06-20';
+export const GIBS_DATE = '2026-07-02';
 
 /**
  * VIIRS day/night band — the city-lights raster, for night.
@@ -340,6 +364,21 @@ export function remoteTileUrl(subPath: string): string | null {
 			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${GIBS_DATE}/GoogleMapsCompatible_Level9/${z}/${y}/${x}.jpg`;
 		case 'viirs':
 			return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${VIIRS_LAYER}/default/${VIIRS_DATE}/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
+		/**
+		 * `sentinel2` has NO upstream, deliberately.
+		 *
+		 * There is no public XYZ endpoint serving the Sentinel-2 pixels under a
+		 * commercially usable licence — EOX serves exactly this imagery and is
+		 * CC BY-NC-SA, which is the whole reason this layer is built locally from
+		 * `sentinel-cogs` by `tools/fetch-sentinel2.py`. Returning null means a
+		 * missing tile stays a 404 rather than silently falling back to a source
+		 * we are not licensed for, which is the failure mode worth engineering
+		 * against: a dev box quietly proxying non-commercial imagery would look
+		 * perfect right up until it shipped.
+		 *
+		 * The consequence is intended: outside the packed boxes the window draws
+		 * MODIS, and `Ground.svelte` mounts sentinel2 as an overlay above it.
+		 */
 		default:
 			return null;
 	}

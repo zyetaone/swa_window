@@ -30,6 +30,7 @@ import concurrent.futures as cf
 import io
 import math
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -63,24 +64,39 @@ URL = (
     "GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg"
 )
 
-# z6 +/-2 tiles, NOT z8, and this was measured rather than assumed.
+# Which zooms, and why more than one.
 #
-# The first version sampled z8 near each location centre, which sounds tighter
-# and is in fact the wrong question: at an 85-degree pitch the camera reports
-# zoom ~10 but MapLibre caps `gibs` at maxzoom 9 and, for the tiles filling the
-# horizon, actually samples z6. Checked in the browser — bounds spanned
-# 33.7N..45.6N over Denver, roughly 1,300 km, drawn from z6/15/22..26.
+# The first version sampled z8 near each location centre. That was the wrong
+# question: at 85-degree pitch the camera reports zoom ~10, `gibs` is capped at
+# maxzoom 9, and the tiles filling the HORIZON resolve as low as z4 — so a day
+# could score 13% here and render a white window, because the z8 tile over
+# Denver was dark (lum 66) while the z6 tiles a few hundred km west, which fill
+# most of the frame, were 145-157.
 #
-# So a day can score well here and still render a white window: the z8 tiles
-# over Denver itself were dark (lum 66) while the z6 tiles a few hundred km
-# west, which fill most of the frame, were 145-157. Rate the tiles the window
-# DRAWS, not the ones nearest the pin.
-ZOOM = 6
-WINDOW = 2
+# The correction overshot: sampling z6 alone rates only the widest tiles. Logged
+# what the kiosk actually requests over a full orbit and the spread is wide, with
+# the count concentrated at the high end:
+#
+#   denver     z4:2  z5:4  z6:5  z7:8  z8:11 z9:10
+#   hyderabad        z5:3  z6:7  z7:14 z8:18 z9:31
+#   ocean                        z7:1  z8:16 z9:14
+#
+# So sweep z6-z9 and weight each level by roughly how many tiles it contributes.
+# Neither "near the centre at one zoom" nor "widest zoom only" describes the
+# window; this does.
+ZOOM_WEIGHTS = {6: 1, 7: 2, 8: 3, 9: 3}
+# +/-3 tiles, not +/-1, because a swath gap is narrow and off-centre.
+# 2026-06-19 passed an 11/11 sweep at +/-1 and still rendered a BLACK WEDGE over
+# the Pacific: six z9 tiles were missing a few hundred km from the pin, which is
+# well inside what the window draws. A coverage gate that only looks next to the
+# centre is not a gate.
+WINDOW = 3
 # Mean luminance above which a tile reads as cloud rather than ground.
 # Calibrated against tiles inspected by eye: clear Denver land sits near 66,
 # the cloud band west of it 145-157, solid overcast above 200.
 WASHED_OUT = 140
+# Transient failures get this many attempts before being called an error.
+RETRIES = 3
 
 
 def lonlat_to_tile(lat: float, lon: float, z: int) -> tuple[int, int]:
@@ -92,58 +108,90 @@ def lonlat_to_tile(lat: float, lon: float, z: int) -> tuple[int, int]:
 
 
 def fetch_luminance(job) -> tuple[str, str, float | None]:
-    """Returns (location, status, mean luminance). status is ok | missing."""
-    name, date, z, y, x = job
-    try:
-        with urllib.request.urlopen(URL.format(date=date, z=z, y=y, x=x), timeout=30) as r:
-            image = Image.open(io.BytesIO(r.read())).convert("RGB")
-    except urllib.error.HTTPError:
-        return name, "missing", None
-    except Exception:
-        return name, "missing", None
-    pixels = list(image.getdata())
-    return name, "ok", sum(sum(p) / 3 for p in pixels) / len(pixels)
+    """Returns (location, status, mean luminance). status is ok | missing | error.
+
+    A 404 (genuinely no tile) and a timeout are NOT the same answer, and
+    collapsing them fabricates coverage gaps: two runs over 2026-07-01 minutes
+    apart scored it 11/11 and then 10/11, because one request happened to time
+    out and was counted as absent imagery. Coverage is the gate this tool
+    exists to enforce, so a flaky network must not be able to reject a date.
+
+    Transient failures are retried, then reported separately as `error` so a
+    run with real network trouble says so rather than quietly blaming the day.
+    """
+    name, date, z, y, x, _weight = job
+    for attempt in range(RETRIES):
+        try:
+            with urllib.request.urlopen(URL.format(date=date, z=z, y=y, x=x), timeout=30) as r:
+                image = Image.open(io.BytesIO(r.read())).convert("RGB")
+            pixels = list(image.getdata())
+            return name, "ok", sum(sum(p) / 3 for p in pixels) / len(pixels)
+        except urllib.error.HTTPError as e:
+            # 404 is the archive saying "no tile here" — authoritative, no retry.
+            if e.code == 404:
+                return name, "missing", None
+            # 5xx and rate limits are transport, not absence.
+            if attempt == RETRIES - 1:
+                return name, "error", None
+        except Exception:
+            if attempt == RETRIES - 1:
+                return name, "error", None
+        time.sleep(1 + attempt)
+    return name, "error", None
 
 
 def survey(date: str) -> None:
     jobs = []
     for name, lat, lon in LOCATIONS:
-        x, y = lonlat_to_tile(lat, lon, ZOOM)
-        for dx in range(-WINDOW, WINDOW + 1):
-            for dy in range(-WINDOW, WINDOW + 1):
-                jobs.append((name, date, ZOOM, y + dy, x + dx))
+        for zoom, weight in ZOOM_WEIGHTS.items():
+            x, y = lonlat_to_tile(lat, lon, zoom)
+            for dx in range(-WINDOW, WINDOW + 1):
+                for dy in range(-WINDOW, WINDOW + 1):
+                    jobs.append((name, date, zoom, y + dy, x + dx, weight))
 
     with cf.ThreadPoolExecutor(16) as pool:
         results = list(pool.map(fetch_luminance, jobs))
 
     gaps: dict[str, int] = {}
-    values: list[float] = []
-    for name, status, lum in results:
-        if status != "ok":
+    errors = 0
+    # (luminance, weight) — a z9 tile counts for more than a z6 one because the
+    # window requests roughly three times as many of them.
+    scored: list[tuple[float, int]] = []
+    for (name, _d, _z, _y, _x, weight), (_n, status, lum) in zip(jobs, results):
+        if status == "missing":
             gaps[name] = gaps.get(name, 0) + 1
+        elif status == "error":
+            errors += 1
         else:
-            values.append(lum)
+            scored.append((lum, weight))
 
-    if not values:
+    if not scored:
         print(f"{date}  no data at all")
         return
 
-    washed = 100 * sum(1 for v in values if v > WASHED_OUT) / len(values)
+    total = sum(w for _, w in scored)
+    washed = 100 * sum(w for lum, w in scored if lum > WASHED_OUT) / total
+    mean = sum(lum * w for lum, w in scored) / total
     covered = len(LOCATIONS) - len(gaps)
     verdict = "REJECT (coverage)" if gaps else "eligible"
     detail = ", ".join(f"{k}:{v} missing" for k, v in sorted(gaps.items())) or "none"
     print(
         f"{date}  {covered}/{len(LOCATIONS)} covered  "
-        f"washed={washed:5.1f}%  mean={sum(values) / len(values):6.1f}  "
+        f"washed={washed:5.1f}%  mean={mean:6.1f}  "
         f"{verdict}  gaps=[{detail}]"
     )
+    if errors:
+        # Loud, because an unreliable run must not be read as a verdict on the
+        # day: these are tiles that neither loaded nor 404'd after RETRIES.
+        print(f"          !! {errors} tile(s) failed on transport — rerun before trusting this")
 
 
 if __name__ == "__main__":
     dates = sys.argv[1:]
     if not dates:
         sys.exit(__doc__.strip().split("Usage")[1].strip())
-    print(f"z{ZOOM}, +/-{WINDOW} tiles around each of {len(LOCATIONS)} locations")
+    zooms = ",".join(f"z{z}x{w}" for z, w in ZOOM_WEIGHTS.items())
+    print(f"{zooms} (weighted), +/-{WINDOW} tiles around each of {len(LOCATIONS)} locations")
     print("coverage is a GATE; clarity is the tiebreak\n")
     for d in dates:
         survey(d)

@@ -76,15 +76,33 @@ describe('GroundLayers', () => {
 	/**
 	 * The guard this replaces asserted the USGS source sat inside an `{#if}` so
 	 * it could not fetch while invisible. Refactors removed it three separate
-	 * times, which is why it existed at all. The layer itself is now deleted --
-	 * one colour photograph of the ground, everywhere, at every latitude -- so
-	 * the invariant that remains is simply that it does not come back.
+	 * times, which is why it existed at all.
+	 *
+	 * It then counted `<RasterTileSource>` and demanded exactly two, which was
+	 * the right idea measured the wrong way: what killed USGS/NAIP was that it
+	 * was a SECOND photograph of the same ground at a resolution the screen
+	 * could not resolve, not that it was a third element. Sentinel-2 is also a
+	 * second photograph and is emphatically worth having — 10 m against MODIS's
+	 * 306 m, and effectively cloudless — so a count is now the wrong question.
+	 *
+	 * What still matters is that any overlaid source declares the zoom range it
+	 * actually holds. USGS's real cost was fetching tiles nobody could see;
+	 * Sentinel-2 is packed as per-location boxes, so without `minzoom` MapLibre
+	 * would request z0-z7 worldwide and 404 every one. Same failure, so the
+	 * guard now checks the thing that prevents it.
 	 */
-	it('mounts exactly one colour photograph of the ground', () => {
+	it('never brings back a redundant high-zoom photograph of the ground', () => {
 		const src = findSource('Ground.svelte');
 		expect(src).not.toContain('usgs');
-		// gibs + viirs. A third would be a second photograph of the same ground.
-		expect(src.match(/<RasterTileSource/g) ?? []).toHaveLength(2);
+		expect(src).not.toContain('naip');
+	});
+
+	it('declares a zoom range for the overlaid basemap', () => {
+		const src = findSource('Ground.svelte');
+		// The sharp layer is a per-location pack, not a global one. Undeclared,
+		// its absent zooms become hundreds of 404s a minute.
+		expect(src).toMatch(/id="sentinel2"[\s\S]*?minzoom=/);
+		expect(src).toMatch(/id="sentinel2"[\s\S]*?maxzoom=/);
 	});
 });
 

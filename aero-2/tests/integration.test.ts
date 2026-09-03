@@ -342,6 +342,19 @@ describe('the packed DEM covers every location that needs it', () => {
  * 404s by the hundred over Hyderabad.
  */
 describe('every tile source the client names, the server can serve', () => {
+	/**
+	 * Layers with no upstream, and why that is correct rather than an omission.
+	 *
+	 * `sentinel2` is built offline from the `sentinel-cogs` bucket by
+	 * `tools/fetch-sentinel2.py`. There IS a public XYZ service for this exact
+	 * imagery — EOX s2cloudless — and it is CC BY-NC-SA, so wiring it as a
+	 * fallback would mean a dev box silently proxying non-commercial pixels and
+	 * looking perfect right up until it shipped. `remoteTileUrl` returning null
+	 * is the licence boundary, so this list is a deliberate exemption, not a
+	 * hole in the check.
+	 */
+	const NO_UPSTREAM = new Set(['sentinel2']);
+
 	it('resolves each template slug to an upstream URL', () => {
 		const templates = tileTemplates();
 		for (const [slug, urls] of Object.entries(templates)) {
@@ -354,6 +367,10 @@ describe('every tile source the client names, the server can serve', () => {
 			expect(ext, `${slug} template declares no image extension`).toBeTruthy();
 
 			const built = remoteTileUrl(`${slug}/4/3/2.${ext}`);
+			if (NO_UPSTREAM.has(slug)) {
+				expect(built, `"${slug}" is packed offline and must NOT have a remote fallback`).toBeNull();
+				continue;
+			}
 			expect(built, `server cannot resolve slug "${slug}"`).toBeTruthy();
 			expect(built, `"${slug}" must resolve to an absolute upstream`).toMatch(/^https?:\/\//);
 		}
@@ -393,6 +410,11 @@ describe('every tile source the client names, the server can serve', () => {
 		);
 
 		for (const [slug, urls] of Object.entries(tileTemplates())) {
+			// `sentinel2` is not fetched tile-by-tile from an XYZ host; it is warped
+			// and cut from COGs by `tools/fetch-sentinel2.py`, which writes .jpg
+			// through gdal2tiles. Demanding an entry in a table that only describes
+			// WMTS downloads would be asserting the wrong tool owns it.
+			if (NO_UPSTREAM.has(slug)) continue;
 			const wanted = /\.(jpg|jpeg|png)$/.exec(urls[0])?.[1];
 			expect(packed[slug], `packager has no extension for "${slug}"`).toBeTruthy();
 			expect(
@@ -400,5 +422,23 @@ describe('every tile source the client names, the server can serve', () => {
 				`packager writes ${slug} as .${packed[slug]} but the client requests .${wanted}`
 			).toBe(wanted);
 		}
+	});
+
+	/**
+	 * The offline packager must write the layout the server reads.
+	 *
+	 * `gdal2tiles --xyz` emits `{z}/{x}/{y}`; `WMTS_TILE_PATH` in
+	 * `server/tiles.ts` reads `{z}/{y}/{x}`. Both get called "XYZ", and on a
+	 * square grid the two are indistinguishable by eye — the first Denver pack
+	 * came out transposed, so every tile 404'd while the directory looked
+	 * perfectly plausible and the tool reported success.
+	 */
+	it('the sentinel-2 packager transposes gdal2tiles output to the served layout', () => {
+		const src = readFileSync('tools/fetch-sentinel2.py', 'utf8');
+		expect(src, 'gdal2tiles still emits {z}/{x}/{y}').toContain('--xyz');
+		expect(
+			src.includes('transpose_to_wmts(tiles_dir'),
+			'tiles are left in gdal2tiles order, which the server cannot read'
+		).toBe(true);
 	});
 });

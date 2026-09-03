@@ -171,20 +171,26 @@ duplicating those knobs, of which its single caller passed one.
   corridors packed at a city radius leave holes that only appear at certain
   points in the orbit. Measure it — drive every location and log 404s — rather
   than reasoning about the bounding box.
-- **The ground is ~38% cloud, and no date fixes it.** `GIBS_DATE` pins a single
-  MODIS day, and MODIS true colour is a same-day swath: at the z6 tiles the
-  window actually draws at the horizon, every candidate day scores 37-42%
-  near-white. Swapping dates moves it ~5 points. If the window looks washed
-  out, that is the photograph, not the haze — verified by disabling the fog,
-  the hillshade, the grade, the cloud deck, the CSS layers, the terrain and the
-  sky itself and finding the ground still white. The real fix is a cloudless
-  COMPOSITE (EOX s2cloudless measures 2.9% on the same metric) and is blocked
-  on licensing, not on engineering. See the note above `GIBS_DATE`.
-- **Rate imagery at the zoom the window DRAWS.** The camera reports zoom ~10 at
-  85° pitch, but `gibs` is capped at maxzoom 9 and the tiles filling the frame
-  resolve to z6, spanning ~1,300 km. A survey sampled near a location centre at
-  z8 rates ground the window barely looks at: it scored one day at 13.1% that
-  is really 38.5%.
+- **The ground is ~30% cloud, and no date fixes it.** `GIBS_DATE` pins a single
+  MODIS day, and MODIS true colour is a same-day swath: across the z6–z9 tiles
+  the window requests, the best eligible day measures ~30% near-white and most
+  measure 38–54%. Swapping dates moves it a few points. If the window looks
+  washed out, that is the photograph, not the haze — verified by disabling the
+  fog, the hillshade, the grade, the cloud deck, the CSS layers, the terrain and
+  the sky itself and finding the ground still white. The real fix is a cloudless
+  COMPOSITE (EOX s2cloudless measures 4.6% on the same metric) and is blocked on
+  licensing, not on engineering. See the note above `GIBS_DATE`.
+- **Rate imagery across every zoom the window DRAWS.** The camera reports zoom
+  ~10 at 85° pitch, but `gibs` caps at maxzoom 9 and the frame is filled from
+  z4–z9 at once. Two survey passes each measured the wrong slice — z8 near a
+  location centre, then z6 alone — and the first scored a day at 13.1% that is
+  really ~38%. Sampling z9 for the first time also revealed coverage holes that
+  every earlier sweep missed: the previously pinned 2026-06-20 has no z9 tile
+  east of Hyderabad, the fielded kiosk home.
+- **A timeout is not a missing tile.** The survey counted both as absent
+  imagery, so a flaky network fabricated coverage gaps and scored the same day
+  11/11 and 10/11 minutes apart. 404 is authoritative; everything else is
+  retried and reported separately.
 - **Media modes need `media-src`, and it must be declared even when empty.**
   Without the directive, `<video>`/`<audio>` fall back to `default-src` and are
   blocked silently: the element fires `onerror`, MediaStage catches it, and the

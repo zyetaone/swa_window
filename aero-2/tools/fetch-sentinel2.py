@@ -97,10 +97,49 @@ def mercator(lon: float, lat: float) -> tuple[float, float]:
     return x, y
 
 
-def view_bbox(lat: float, lon: float) -> list[float]:
-    dlat = ORBIT_MAJOR_DEG + VIEW_MARGIN_DEG
-    dlon = ORBIT_MAJOR_DEG * ORBIT_ASPECT + VIEW_MARGIN_DEG
+def view_bbox(lat: float, lon: float, margin_deg: float = VIEW_MARGIN_DEG) -> list[float]:
+    dlat = ORBIT_MAJOR_DEG + margin_deg
+    dlon = ORBIT_MAJOR_DEG * ORBIT_ASPECT + margin_deg
     return [lon - dlon, lat - dlat, lon + dlon, lat + dlat]
+
+
+# Two boxes, because "how far can the camera see" and "how much detail is worth
+# storing out there" have different answers.
+#
+# At cruise on a globe projection the horizon is ~1,250 km away (measured by
+# logging what the kiosk requests over a full orbit). Packing 10 m imagery to
+# that radius at z13 is ~23 GB PER LOCATION — not a trade, just impossible on
+# an SD card. But the far field is also where a tile covers the most screen and
+# the least detail: the browser asks for z8-11 out there and z12-13 only near
+# the aircraft.
+#
+# So: a wide box for the low zooms, a tight one for the high. Measured on
+# Denver, sentinel2 requests split {8:17, 9:7, 10:10, 11:19, 12:98, 13:96} —
+# the high zooms dominate by count and are all close in.
+#
+#   wide  z8-11 at 1.2 deg (~130 km)
+#   tight z12-13 at 0.65 deg (~72 km)
+#
+# The first pass used ONE 0.65 deg box for every zoom, which left 18 of 34
+# sentinel2 requests 404ing over Denver. Those 404s are harmless — MODIS shows
+# through underneath, which is why this is an overlay — but they were coverage
+# the same byte budget could have bought.
+#
+# 1.2 deg rather than the 3.0 deg the horizon would justify, and BOTH limits
+# were measured rather than guessed:
+#
+#   SCRATCH. Each MGRS scene is a ~700 MB COG that gdalwarp streams to local
+#   disk. A 3.0 deg box pulled 60 scenes for Denver alone (~20 GB of scratch,
+#   x11 locations) — the warp stage, not the tiles, is what does not fit.
+#
+#   CLOUD. A wider box spans more weather, so requiring one clear acquisition
+#   across all of it gets strictly harder: worst-cloud over Denver went 0.07%
+#   at 0.65 deg to 4.91% at 3.0 deg, right at the --max-cloud limit. Past some
+#   width there is no clear day at all.
+#
+# So the far field beyond ~130 km stays MODIS. That is the layer's job.
+WIDE_MARGIN_DEG = 1.2
+WIDE_MAX_ZOOM = 11
 
 
 def post(body: dict, attempts: int = 4) -> dict:
@@ -248,6 +287,50 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def transpose_to_wmts(tiles_dir: Path, min_zoom: int, max_zoom: int) -> None:
+    """gdal2tiles --xyz writes {z}/{x}/{y}; this server reads {z}/{y}/{x}.
+
+    Both are called "XYZ" in the wild, and the two orderings are indistinguishable
+    on a square grid near the equator, which is exactly why this is worth a
+    function rather than a comment. `WMTS_TILE_PATH` in src/lib/server/tiles.ts
+    is the authority: `layer/{z}/{y}/{x}.ext`, and the `gibs` and `terrarium`
+    layers on disk already follow it.
+
+    Written the wrong way round, every tile 404s while the packager reports
+    success and the directory looks plausible — the same absence-that-reports-
+    as-success shape as the viirs `.jpg` bug. Transposing here rather than
+    teaching the server a second layout keeps one convention on disk.
+
+    Idempotent by construction: it moves into a fresh sibling directory and
+    swaps, so a partial run cannot leave a half-transposed tree that a rerun
+    would then transpose back.
+    """
+    import shutil
+
+    for z in range(min_zoom, max_zoom + 1):
+        src = tiles_dir / str(z)
+        if not src.is_dir():
+            continue
+        dst = tiles_dir / f"{z}.wmts"
+        if dst.exists():
+            shutil.rmtree(dst)
+        moved = 0
+        for xdir in src.iterdir():
+            if not xdir.is_dir():
+                continue
+            for tile in xdir.iterdir():
+                if tile.suffix != ".jpg":
+                    continue
+                # xdir is X, tile stem is Y -> write {y}/{x}
+                out = dst / tile.stem
+                out.mkdir(parents=True, exist_ok=True)
+                tile.rename(out / f"{xdir.name}{tile.suffix}")
+                moved += 1
+        shutil.rmtree(src)
+        dst.rename(src)
+        print(f"  z{z}: {moved} tiles -> {{z}}/{{y}}/{{x}}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("place", help="a name from PLACES, or any label when --lat/--lon are given")
@@ -273,9 +356,11 @@ def main() -> None:
         sys.exit(f"unknown place {a.place!r}; pass --lat/--lon, or use one of: "
                  + ", ".join(sorted(PLACES)))
     bbox = view_bbox(lat, lon)
-    print(f"{a.place}: visible bbox {[round(v, 3) for v in bbox]}")
+    wide_bbox = view_bbox(lat, lon, WIDE_MARGIN_DEG)
+    print(f"{a.place}: near bbox {[round(v, 3) for v in bbox]}")
+    print(f"{a.place}: far  bbox {[round(v, 3) for v in wide_bbox]}")
 
-    day, worst, grids, tiles = pick_date(bbox, a.start, a.end, a.max_cloud)
+    day, worst, grids, tiles = pick_date(wide_bbox, a.start, a.end, a.max_cloud)
     print(f"date {day}: {len(grids)} MGRS tiles, worst cloud {worst:.2f}%")
 
     work = Path(a.out) / f"_s2-{a.place}"
@@ -385,18 +470,36 @@ def main() -> None:
         print(f"coverage OK: {100 - holes:.2f}% of the visible area has pixels")
 
     # One flat layer dir for every place, NOT sentinel2/<place>/. Two reasons:
-    # `pack-pmtiles.ts <layer>` and /api/tiles both expect layer/{z}/{x}/{y},
-    # and separate archives per city would mean per-place routing in the app
-    # for no gain. Cities this far apart share no tile at z8-14, so running
-    # this for a second place merges into the same tree without collision.
+    # `pack-pmtiles.ts <layer>` and /api/tiles both read layer/{z}/{y}/{x}, and
+    # separate archives per city would mean per-place routing in the app for no
+    # gain. Cities this far apart share no tile at z8-14, so running this for a
+    # second place merges into the same tree without collision.
     tiles_dir = Path(a.out) / "sentinel2"
-    print(f"tiling z{a.min_zoom}-{a.max_zoom} -> {tiles_dir}")
-    run([
-        "gdal2tiles.py", "--xyz", "-w", "none", "--processes", "8",
-        "--tiledriver", "JPEG", "--jpeg-quality", "85",
-        "-z", f"{a.min_zoom}-{a.max_zoom}", "-r", "cubic",
-        str(vrt), str(tiles_dir),
-    ])
+
+    # Two passes, wide-and-coarse then tight-and-sharp. See WIDE_MARGIN_DEG.
+    # Both write into the same layer tree; they cover different zoom ranges so
+    # they cannot collide.
+    wide_zmax = min(a.max_zoom, WIDE_MAX_ZOOM)
+    passes: list[tuple[str, int, int, Path]] = []
+    if a.min_zoom <= wide_zmax:
+        wx0, wy0 = mercator(wide_bbox[0], wide_bbox[1])
+        wx1, wy1 = mercator(wide_bbox[2], wide_bbox[3])
+        wide_vrt = work / "mosaic-wide.vrt"
+        run(["gdalbuildvrt", "-q", "-te", str(wx0), str(wy0), str(wx1), str(wy1),
+             str(wide_vrt), *warped])
+        passes.append(("far field", a.min_zoom, wide_zmax, wide_vrt))
+    if a.max_zoom > WIDE_MAX_ZOOM:
+        passes.append(("near field", max(a.min_zoom, WIDE_MAX_ZOOM + 1), a.max_zoom, vrt))
+
+    for label, zmin, zmax, source in passes:
+        print(f"tiling {label} z{zmin}-{zmax} -> {tiles_dir}")
+        run([
+            "gdal2tiles.py", "--xyz", "-w", "none", "--processes", "8",
+            "--tiledriver", "JPEG", "--jpeg-quality", "85",
+            "-z", f"{zmin}-{zmax}", "-r", "cubic",
+            str(source), str(tiles_dir),
+        ])
+        transpose_to_wmts(tiles_dir, zmin, zmax)
 
     meta = {"place": a.place, "date": day, "mgrs": grids,
             "worstCloudPct": round(worst, 3), "bbox": bbox,

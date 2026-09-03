@@ -58,17 +58,21 @@ automatically. `terrarium/` is not flagged: it is build input for
 `pack-pmtiles`, so it is dead weight on a Pi but wanted on the machine that
 repacks the DEM.
 
-### Imagery is ~38% cloud, and that is not a bug you can fix here
+### Imagery is ~30% cloud, and that is not a bug you can fix here
 
-`GIBS_DATE` pins one MODIS day. MODIS true colour is a same-day swath, so at
-the z6 tiles the window actually draws at the horizon, every candidate day
-measures 37-42% near-white — swapping dates moves it about five points. If the
-ground looks washed out, that is the photograph.
+`GIBS_DATE` pins one MODIS day. MODIS true colour is a same-day swath, so
+across the z6–z9 tiles the window requests, the best eligible day still
+measures ~30% near-white and most measure 38–54%. Swapping dates moves it a few
+points. If the ground looks washed out, that is the photograph.
 
 `python3 tools/survey-gibs-date.py <dates...>` scores candidates on coverage
-(a gate) and clarity (the tiebreak). The structural fix is a cloudless
-composite: EOX s2cloudless measures 2.9% on the same metric, but it is
-CC BY-NC-SA and unusable on a paid install. See the note above `GIBS_DATE`.
+(a gate) and clarity (the tiebreak), sampling every zoom the renderer draws.
+Run a date twice before rejecting it — the network can fail a tile, and a
+rejection on one run that clears on the next was transport, not the archive.
+
+The structural fix is a cloudless composite: EOX s2cloudless measures 4.6% on
+the same metric, but it is CC BY-NC-SA and unusable on a paid install. See the
+note above `GIBS_DATE`.
 
 ### Dev with a sparse cache
 

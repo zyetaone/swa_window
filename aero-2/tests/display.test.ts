@@ -104,6 +104,34 @@ describe('readSettings', () => {
 	});
 
 	/**
+	 * Audio needs its own param for the same reason video did.
+	 *
+	 * `?media=` was added first and covers video and the slideshow; the cabin
+	 * audio playlist stayed unreachable from a URL, which is exactly the state
+	 * that let the CSP silence it unnoticed. Verified end to end afterwards
+	 * against a real served .wav, cross-origin, both with and without
+	 * AERO_MEDIA_ORIGINS.
+	 */
+	it('takes the audio playlist from the URL and switches to playlist mode', () => {
+		const p = paramsFor('?audio=/rain.ogg,/wind.ogg');
+		expect(p.audioPlaylist).toEqual(['/rain.ogg', '/wind.ogg']);
+		expect(p.audioTrackIndex).toBe(0);
+		// A URL naming files with the mode still on `synth` is two switches for
+		// one intent, and the files would never be heard.
+		expect(p.audioMode).toBe('playlist');
+		expect(p.audioEnabled).toBe(true);
+	});
+
+	it('leaves audio on synth when the param names no usable track', () => {
+		// `?audio=` with nothing in it must not enable a playlist of nothing:
+		// that swaps working synth rumble for silence.
+		const p = paramsFor('?audio=');
+		expect(p.audioPlaylist).toEqual([]);
+		expect(p.audioMode).toBe('synth');
+		expect(p.audioEnabled).toBe(false);
+	});
+
+	/**
 	 * Changing place must carry everything the place DEFINES with it.
 	 *
 	 * The climb envelope is the case with teeth: Mumbai's 500 m floor following
