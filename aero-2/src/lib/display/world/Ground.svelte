@@ -11,6 +11,7 @@
 		IMAGERY_GRADE,
 		TILE_ATTRIBUTION,
 		SENTINEL2_MINZOOM,
+		SENTINEL2_PLACES,
 		TILE_MAXZOOM,
 		TILE_SIZE,
 		tileTemplates
@@ -23,6 +24,15 @@
 	const tiles = tileTemplates(PUBLIC_TILE_SERVER_URL);
 
 	const night = $derived(display.night);
+
+	/**
+	 * Only mount the sharp layer where it is packed.
+	 *
+	 * See SENTINEL2_PLACES: unconditional, the Pacific fired 203 requests in
+	 * 16 seconds and 404'd every one. `{#if}` unmounts the source entirely,
+	 * which is the only thing that stops MapLibre asking.
+	 */
+	const hasSentinel2 = $derived(SENTINEL2_PLACES.has(display.config.place.id));
 
 	/**
 	 * Pull the white out of the texture.
@@ -108,15 +118,17 @@
      request z0-z7 tiles that were never packed, which is hundreds of 404s a
      minute for imagery that does not exist. Same trap as the DEM's missing
      zoom range, and the same fix -- declare what the archive actually holds. -->
-<RasterTileSource
-	id="sentinel2"
-	tiles={tiles.sentinel2}
-	tileSize={TILE_SIZE}
-	minzoom={SENTINEL2_MINZOOM}
-	maxzoom={TILE_MAXZOOM.sentinel2}
->
-	<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
-</RasterTileSource>
+{#if hasSentinel2}
+	<RasterTileSource
+		id="sentinel2"
+		tiles={tiles.sentinel2}
+		tileSize={TILE_SIZE}
+		minzoom={SENTINEL2_MINZOOM}
+		maxzoom={TILE_MAXZOOM.sentinel2}
+	>
+		<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
+	</RasterTileSource>
+{/if}
 
 <!-- NIGHT LIGHTS, on top of the base colour.
 

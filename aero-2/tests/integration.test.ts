@@ -26,7 +26,7 @@ import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
 import { Location } from '#lib/settings/locations.js';
-import { tileTemplates, TILE_MAXZOOM } from '#lib/settings/tiles.js';
+import { tileTemplates, TILE_MAXZOOM, SENTINEL2_PLACES } from '#lib/settings/tiles.js';
 import { remoteTileUrl, resolveTileDir } from '#lib/server/tiles.js';
 
 /** Comments name these hazards to explain them; only real code counts. */
@@ -433,6 +433,41 @@ describe('every tile source the client names, the server can serve', () => {
 	 * came out transposed, so every tile 404'd while the directory looked
 	 * perfectly plausible and the tool reported success.
 	 */
+	/**
+	 * The gate must match the archive.
+	 *
+	 * `SENTINEL2_PLACES` decides whether the source mounts at all, and it is a
+	 * hand-kept list beside a directory of `source-<place>.json` files. A name
+	 * in the list with no pack behind it is a request storm — unmounted, the
+	 * Pacific was firing 203 sentinel2 requests in 16 seconds and 404ing every
+	 * one. A pack with no name is 50 MB of imagery nothing ever draws.
+	 *
+	 * Skipped rather than failed when `data/` is absent, like the DEM checks
+	 * above: the archive is gitignored, so a hard requirement would take CI red
+	 * for a file CI is not supposed to have.
+	 */
+	const s2Dir = resolve(resolveTileDir(), 'sentinel2');
+	const s2Packed = existsSync(s2Dir);
+
+	it.skipIf(!s2Packed)('gates the sharp basemap on what is actually packed', () => {
+		const onDisk = readdirSync(s2Dir)
+			.map((f) => /^source-(.+)\.json$/.exec(f)?.[1])
+			.filter((v): v is string => Boolean(v))
+			.sort();
+		expect(onDisk.length, 'no sentinel2 packs found at all').toBeGreaterThan(0);
+		expect([...SENTINEL2_PLACES].sort()).toEqual(onDisk);
+	});
+
+	it.skipIf(!s2Packed)('records the commercial licence with every pack', () => {
+		// The Copernicus terms permit commercial use and REQUIRE attribution.
+		// EOX s2cloudless serves these same pixels and is CC BY-NC-SA, so a pack
+		// that cannot say where it came from is a pack nobody can clear.
+		for (const f of readdirSync(s2Dir).filter((n) => n.startsWith('source-'))) {
+			const meta = JSON.parse(readFileSync(resolve(s2Dir, f), 'utf8'));
+			expect(meta.licence, `${f} records no licence`).toMatch(/Copernicus/i);
+		}
+	});
+
 	it('the sentinel-2 packager transposes gdal2tiles output to the served layout', () => {
 		const src = readFileSync('tools/fetch-sentinel2.py', 'utf8');
 		expect(src, 'gdal2tiles still emits {z}/{x}/{y}').toContain('--xyz');

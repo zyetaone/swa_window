@@ -27,6 +27,39 @@ export const TILE_MAXZOOM = {
 export const SENTINEL2_MINZOOM = 8;
 
 /**
+ * Locations the Sentinel-2 layer is actually packed for.
+ *
+ * Mounting the source unconditionally costs real traffic where it has no
+ * tiles: over the Pacific the kiosk fired 203 requests in 16 seconds and 404'd
+ * every one. Harmless to look at — MODIS is underneath, which is the point of
+ * an overlay — but it is a request storm for imagery that cannot exist, the
+ * same waste `raster-opacity: 0` used to cause and that unmounting fixed.
+ *
+ * Four of the eleven are absent, and for two different reasons worth keeping
+ * straight:
+ *
+ *   ocean          Sentinel-2 does not image open water. No date helps.
+ *   dubai, desert, mumbai
+ *                  the visible box straddles a gap between satellite passes,
+ *                  so no SINGLE acquisition covers it. Verified against a full
+ *                  year at 12% cloud: the mosaic came out 17-35% empty every
+ *                  time and the packager refused to tile it, which is correct
+ *                  — black wedges are worse than a soft basemap.
+ *
+ * Keep this in step with `data/tiles/sentinel2/source-*.json`; a name here with
+ * no pack behind it is exactly the request storm above.
+ */
+export const SENTINEL2_PLACES: ReadonlySet<string> = new Set([
+	'chicago_midway',
+	'dallas',
+	'denver',
+	'himalayas',
+	'hyderabad',
+	'las_vegas',
+	'phoenix'
+]);
+
+/**
  * Both sources are credited because both are drawn: Sentinel-2 over the eleven
  * locations, MODIS everywhere else and under the gaps.
  *
