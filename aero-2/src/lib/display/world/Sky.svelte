@@ -71,13 +71,61 @@
 		return lerpRgb(duskBlended, nightHorizon, night);
 	});
 
+	/**
+	 * Where the sun is relative to where the window is POINTING, -180..180.
+	 *
+	 * Declared up here because two different things need it: the fog tint just
+	 * below, and the dusk glare's screen position further down. It used to be
+	 * defined next to the glare, which is why the fog never had it.
+	 */
+	const sunHeadingDelta = $derived(
+		((sunAzimuth - display.view.cameraBearingDeg + 540) % 360) - 180
+	);
+
+	/**
+	 * How much the window is facing INTO the sun, 0 (away) to 1 (straight at it).
+	 *
+	 * `cos` of the heading delta, rectified. Smooth by construction, and it
+	 * costs nothing that a pane facing away gets exactly zero.
+	 */
+	const facingSun = $derived(Math.max(0, Math.cos((sunHeadingDelta * Math.PI) / 180)));
+
 	const fogColor = $derived.by(() => {
 		const base = display.atmosphere.skyHorizon;
 		const dayFog: readonly [number, number, number] = [0.76, 0.86, 0.96];
 		const nightFog: readonly [number, number, number] = [0.04, 0.07, 0.15];
 
 		const blendedDay = lerpRgb(base, dayFog, 0.45);
-		return lerpRgb(blendedDay, nightFog, night);
+
+		/**
+		 * Haze brightens TOWARDS the sun. This is the single most recognisable
+		 * thing about looking out of an aeroplane, and it was missing.
+		 *
+		 * Atmospheric haze is forward-scattering — the same Mie term the cloud
+		 * deck already models per-sprite — so the horizon ahead of the sun is
+		 * pale and washed out while the horizon behind it stays saturated and
+		 * blue. Sitting on the sunward side of the aircraft is a completely
+		 * different view from the shaded side, and that asymmetry is most of
+		 * why a window seat looks like a window seat.
+		 *
+		 * The fog was one flat colour for the whole dome, so both sides of the
+		 * aeroplane got the identical horizon. Worse on this product than on a
+		 * normal map: the three panes of the wall point at three different
+		 * bearings, so the ONE cue that would distinguish them was the one not
+		 * being drawn, and the panorama read as three copies of the same haze.
+		 *
+		 * Deliberately subtle. This tints an existing colour rather than adding
+		 * a glare — `dusk-radiance` already owns the low-sun flare, and two
+		 * layers competing to draw the same sun is how the horizon turns to
+		 * mud. Scaled by `(1 - night)` because there is nothing to forward-
+		 * scatter after dark, and by elevation because a high sun scatters far
+		 * less into the horizon than a low one.
+		 */
+		const lowSun = 1 - Math.max(0, Math.min(1, sunElev / 40));
+		const scatter = facingSun * lowSun * (1 - night) * 0.42;
+		const sunwardHaze: readonly [number, number, number] = [0.94, 0.88, 0.78];
+
+		return lerpRgb(lerpRgb(blendedDay, sunwardHaze, scatter), nightFog, night);
 	});
 
 	/**
@@ -152,9 +200,6 @@
 	})();
 
 	const duskFactor = $derived(Math.max(0, Math.min(1, (12 - Math.abs(sunElev)) / 12)));
-	const sunHeadingDelta = $derived(
-		((sunAzimuth - display.view.cameraBearingDeg + 540) % 360) - 180
-	);
 	const sunScreenX = $derived(50 + (sunHeadingDelta / 180) * 50);
 
 	/**

@@ -62,7 +62,12 @@
      not a photograph of a lit surface, which is also why it is mounted here
      rather than beneath the hillshade. -->
 {#if nightLightOpacity > 0.01}
-	<RasterTileSource id="viirs" tiles={tiles.viirs} tileSize={TILE_SIZE} maxzoom={TILE_MAXZOOM.viirs}>
+	<RasterTileSource
+		id="viirs"
+		tiles={tiles.viirs}
+		tileSize={TILE_SIZE}
+		maxzoom={TILE_MAXZOOM.viirs}
+	>
 		<RasterLayer
 			paint={{
 				'raster-opacity': nightLightOpacity,
