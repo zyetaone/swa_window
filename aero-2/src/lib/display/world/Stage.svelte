@@ -20,6 +20,7 @@
 	import Ground from './Ground.svelte';
 	import Terrain from './Terrain.svelte';
 	import Buildings from './Buildings.svelte';
+	import NightLights from './NightLights.svelte';
 	import Roads from './Roads.svelte';
 	import Sky from './Sky.svelte';
 	import LookControls from '../flight/LookControls.svelte';
@@ -131,6 +132,10 @@
 
 		<Ground />
 		<Terrain />
+		<!-- Above Terrain, deliberately: the hillshade shades the ground
+		     PHOTOGRAPH, and city lights are emitted, not reflected. See
+		     NightLights.svelte. -->
+		<NightLights />
 		<Roads />
 		<Buildings />
 		<Sky />

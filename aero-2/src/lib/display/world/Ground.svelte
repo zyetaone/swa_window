@@ -54,12 +54,6 @@
 	const groundBrightnessMax = $derived(DAY_HIGHLIGHT_CEIL - night * 0.62);
 	const groundBrightnessMin = $derived(0.01 * (1 - night) ** 2);
 
-	/**
-	 * How strongly the city-lights raster shows. Ramped on night^1.5 so it stays
-	 * out of dusk — a linear fade puts lights on a sky that is still blue.
-	 */
-	const nightLightOpacity = $derived(Math.min(0.9, night ** 1.5));
-
 	/** Lift contrast into the night so features separate crisply. */
 	const groundContrast = $derived(IMAGERY_GRADE.contrast + 0.06 + night * 0.38);
 
@@ -129,30 +123,5 @@
 		maxzoom={TILE_MAXZOOM.sentinel2}
 	>
 		<RasterLayer paint={{ ...grade, 'raster-opacity': 1.0 }} />
-	</RasterTileSource>
-{/if}
-
-<!-- NIGHT LIGHTS, on top of the base colour.
-
-     VIIRS is a black frame with bright cities, so at `raster-opacity: night`
-     over ground the grade has already crushed toward black, the dark parts
-     change nothing and the lit parts read as towns. It only starts to matter
-     once the ground is dark, hence the ramp on night^1.5 rather than a linear
-     fade that would wash out dusk. It carries no grade of its own: it is
-     emitted light, not a photograph of a lit surface. -->
-{#if nightLightOpacity > 0.01}
-	<RasterTileSource
-		id="viirs"
-		tiles={tiles.viirs}
-		tileSize={TILE_SIZE}
-		maxzoom={TILE_MAXZOOM.viirs}
-	>
-		<RasterLayer
-			paint={{
-				'raster-opacity': nightLightOpacity,
-				'raster-fade-duration': IMAGERY_GRADE.fadeDuration,
-				'raster-resampling': IMAGERY_GRADE.resampling
-			}}
-		/>
 	</RasterTileSource>
 {/if}
