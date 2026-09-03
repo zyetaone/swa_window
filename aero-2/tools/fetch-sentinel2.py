@@ -162,6 +162,23 @@ def post(body: dict, attempts: int = 4) -> dict:
 # pixels only, so a tile that is 98.79% empty reports ~0% cloud and looks like
 # the clearest thing available. Ranking on cloud alone selects the emptiest
 # scene on offer, every time, and the mosaic comes out as black wedges.
+#
+# TRIED AND REVERTED (2026-09-03): treating this as a PREFERENCE rather than a
+# rejection — keep partial scenes, rank full ones first, let a tile with no
+# full coverage contribute its best partial. The reasoning was sound and the
+# result was worse. Mumbai's inland hole is caused by 43QCB/43QCC being
+# 10-57% nodata on every pass in a month, so admitting partials did fill it and
+# raised the tile count 17 -> 20 at 0.00% cloud. But each partial brings its own
+# diagonal swath edge, and those edges displaced scenes that had been covering
+# the coast: the mosaic went from 17.8% to 37.3% empty overall, and the NEAR box
+# — the part the window actually looks at — from 8.3% to 55.2%.
+#
+# The lesson is that nodata is not a per-tile property to be optimised
+# independently. Adjacent partials do not reliably tile into a whole; they
+# overlap along their own orbit geometry, and choosing them tile-by-tile
+# rearranges which regions are covered rather than adding coverage. A real fix
+# would compose the mosaic by measured area coverage, not by per-tile ranking.
+# That is a different algorithm, not a threshold change.
 MAX_NODATA_PCT = 5.0
 
 # How far apart the scenes in one mosaic may be acquired.
