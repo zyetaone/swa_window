@@ -59,9 +59,7 @@ describe('corsPreflight advertises the headers a gated route needs', () => {
 		corsPreflight('GET, OPTIONS')({ request: { headers: new Headers({ origin }) } as Request });
 
 	it('allows Authorization and Content-Type from a fleet origin', () => {
-		const allow = preflight('http://192.168.1.42:3000').headers.get(
-			'access-control-allow-headers'
-		);
+		const allow = preflight('http://192.168.1.42:3000').headers.get('access-control-allow-headers');
 		expect(allow).toBeTruthy();
 		expect(allow!.toLowerCase()).toContain('authorization');
 		expect(allow!.toLowerCase()).toContain('content-type');

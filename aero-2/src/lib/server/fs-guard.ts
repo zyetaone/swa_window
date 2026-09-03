@@ -27,7 +27,6 @@ export interface SafeResolveResult {
 	forbidden: boolean;
 }
 
-
 /** Resolve `subPath` to a file INSIDE `root`, rejecting traversal and symlink escapes. */
 export function safeResolveWithin(root: string, subPath: string): SafeResolveResult {
 	const rootDir = root.replace(/\/+$/, '') + '/';
