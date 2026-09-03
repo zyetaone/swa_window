@@ -101,10 +101,12 @@
 
 <!-- SENTINEL-2, the sharp basemap, laid OVER the MODIS wash.
 
-     30x the detail (10 m vs 306 m/px) and effectively cloudless, because it is
-     built from a per-location scene chosen for <5% cloud rather than whatever
-     the weather did on one pinned day. MODIS at z9 is a brown smear at cruise
-     altitude; this resolves fields, roads and coastline.
+     16x the detail and effectively cloudless, because it is built from a
+     per-location scene chosen for <5% cloud rather than whatever the weather
+     did on one pinned day. MODIS caps at z9 (306 m/px); this is packed to z13
+     (19 m/px). The SENSOR is 10 m, so z14 would be the last honest zoom — z13
+     is where the storage budget landed, not a limit of the data. MODIS at
+     cruise is a brown smear; this resolves fields, roads and coastline.
 
      An OVERLAY, not a replacement, and that is the whole design. The pack is a
      box around each location, not a global layer, because fetching eleven

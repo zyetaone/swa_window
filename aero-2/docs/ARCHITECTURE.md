@@ -171,13 +171,22 @@ duplicating those knobs, of which its single caller passed one.
   corridors packed at a city radius leave holes that only appear at certain
   points in the orbit. Measure it — drive every location and log 404s — rather
   than reasoning about the bounding box.
-- **Two colour photographs, deliberately.** `sentinel2` (10 m/px, cloudless,
-  per-location boxes) is laid over `gibs` (306 m/px, global, ~40% cloud). The
+- **Two colour photographs, deliberately.** `sentinel2` (packed to z13, 19 m/px,
+  cloudless, per-location boxes) is laid over `gibs` (z9, 306 m/px, global,
+  ~40% cloud). The
   overlay is what the window shows wherever it is packed; MODIS is the
   everywhere-layer beneath it, so a Sentinel-2 gap degrades instead of punching
   a hole. This is NOT the USGS/NAIP mistake that was deleted in 2026-08: that
   layer was a second photograph at a resolution the screen could not resolve.
-  A 30x resolution gain is a different proposition.
+  A 16x resolution gain is a different proposition.
+- **Measured against v1, which is where this came from.** The parent repo's
+  Cesium build looked better than aero-2 and the renderer was not the reason —
+  it drew EOX s2cloudless while aero-2 drew MODIS. aero-2's pack is now the
+  larger one: 16,352 tiles to z13 against v1's fielded 755 tiles to z12
+  (`data/tiles/eox-sentinel2`, 15 MB). v1's code permits z14, but only from the
+  REMOTE EOX service; its local path is capped at z12 and its offline pack
+  stops there. Below z8 aero-2 has no Sentinel-2 and does not need it — MODIS
+  is global to z9 and covers z0-7 outright.
 - **Sentinel-2 imagery is licence-critical.** The convenient source (EOX
   s2cloudless) is CC BY-NC-SA and cannot ship on a paid install; v1 uses it and
   its own `upstream.ts` flags that as an open question. aero-2 builds the same

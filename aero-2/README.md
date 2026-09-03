@@ -48,8 +48,10 @@ covers every location with zero 404s, measured by driving all eleven.
 
 ### The sharp basemap
 
-`sentinel2/` is what makes the window look like a window: 10 m/px against
-MODIS's 306, and effectively cloudless. It is laid **over** MODIS rather than
+`sentinel2/` is what makes the window look like a window: packed to z13
+(19 m/px) against MODIS's z9 (306 m/px), and effectively cloudless. The sensor
+is 10 m, so z14 is the last zoom backed by real pixels — z13 is where the
+storage budget landed, not a limit of the data. It is laid **over** MODIS rather than
 replacing it — the pack is a box around each location, and Sentinel-2 produces
 no scenes over open ocean at all, so a missing tile reveals the layer
 underneath instead of punching a hole.
