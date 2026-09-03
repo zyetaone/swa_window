@@ -512,6 +512,68 @@ describe('every tile source the client names, the server can serve', () => {
 		expect(missing, 'packs with no tile over their own centre').toEqual([]);
 	});
 
+	/**
+	 * A pack must be COMPLETE, not merely present at its centre.
+	 *
+	 * The check above samples one tile per pack, and that is exactly as much as
+	 * it caught: after the transposed packs were repaired it went green while
+	 * three of them were still missing ~75% of their z8-11 tier. The repair had
+	 * filtered by the near bbox recorded in the metadata, so it re-filed the
+	 * high zooms and left the wide ones where the server could not see them —
+	 * a hole in the far field, which is most of the frame at cruise.
+	 *
+	 * So sample the CORNERS as well as the centre, at both tiers. Cheap, and it
+	 * fails on exactly the shape a partial repair leaves behind.
+	 */
+	it.skipIf(!s2Packed)('packs cover their whole declared extent, not just the centre', () => {
+		// Mirrors WIDE_MARGIN_DEG / WIDE_MAX_ZOOM and the near box in
+		// tools/fetch-sentinel2.py. Duplicated because the tool is standalone
+		// Python; if those change, this is the second place to look.
+		const ORBIT = 0.25;
+		const ASPECT = 1.7;
+		const tiers: [number, number][] = [
+			[10, 1.2],
+			[13, 0.4]
+		];
+		const holes: string[] = [];
+
+		for (const f of readdirSync(s2Dir).filter((x) => x.startsWith('source-'))) {
+			const meta = JSON.parse(readFileSync(resolve(s2Dir, f), 'utf8'));
+			const [w, s2, e, n2] = meta.bbox as number[];
+			const clon = (w + e) / 2;
+			const clat = (s2 + n2) / 2;
+
+			for (const [z, margin] of tiers) {
+				const n = 2 ** z;
+				const dlat = ORBIT + margin;
+				const dlon = ORBIT * ASPECT + margin;
+				const tile = (lon: number, lat: number) => {
+					const rad = (lat * Math.PI) / 180;
+					return {
+						x: Math.floor(((lon + 180) / 360) * n),
+						y: Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n)
+					};
+				};
+				// Inset one tile: the extreme edge can legitimately fall outside
+				// what gdal2tiles emitted for a bbox that lands mid-tile.
+				const lo = tile(clon - dlon, clat - dlat);
+				const hi = tile(clon + dlon, clat + dlat);
+				const xs = [Math.min(lo.x, hi.x) + 1, Math.max(lo.x, hi.x) - 1];
+				const ys = [Math.min(lo.y, hi.y) + 1, Math.max(lo.y, hi.y) - 1];
+
+				for (const x of xs) {
+					for (const y of ys) {
+						if (!existsSync(resolve(s2Dir, String(z), String(y), `${x}.jpg`))) {
+							holes.push(`${meta.place} z${z} ${y}/${x}`);
+						}
+					}
+				}
+			}
+		}
+
+		expect(holes, 'packs missing tiles at the corners of their declared extent').toEqual([]);
+	});
+
 	it('the sentinel-2 packager transposes gdal2tiles output to the served layout', () => {
 		const src = readFileSync('tools/fetch-sentinel2.py', 'utf8');
 		expect(src, 'gdal2tiles still emits {z}/{x}/{y}').toContain('--xyz');
