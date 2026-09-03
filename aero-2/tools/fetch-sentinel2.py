@@ -323,6 +323,13 @@ def transpose_to_wmts(tiles_dir: Path, min_zoom: int, max_zoom: int, staging: Pa
     In-place transposition of a shared tree cannot be made idempotent — the
     tiles carry no record of which way round they are — so the fix is to never
     transpose the shared tree at all.
+
+    Verified end to end after the fix, because every pack in the archive had
+    been hand-repaired by then and none of them proved the PACKER worked:
+    las_vegas and then phoenix were packed into an empty tree at z8-10, and
+    both came out complete and correctly filed, with the second run leaving the
+    first untouched. That second run is the whole test — a single clean pack
+    would have passed before this bug existed.
     """
     import shutil
 
