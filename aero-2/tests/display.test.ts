@@ -1076,3 +1076,62 @@ describe('slotNoise keeps three panes in step', () => {
 		}
 	});
 });
+
+describe('the sightline stays below the horizon through a turn', () => {
+	/**
+	 * Bank used to be added to pitch in DEGREES, and the numbers hid how bad
+	 * that was. Peak bank is 18 deg at BANK_VIEW_GAIN 0.85, so the offset swings
+	 * +/-15.3 deg against a default pitch of -10 — every turn drove the
+	 * effective pitch positive, the camera asked to look UP, and the 0.5 deg
+	 * depression clamp caught it. The sightline was pinned at that clamp for
+	 * 28.6% of every roll cycle: not moving at all, for a quarter of each turn.
+	 *
+	 * Because depression and range are related by a tangent, the cost showed up
+	 * as distance rather than as angle. At 4,500 m AGL the look-at point ran
+	 * from 10 km at the bottom of the roll to 516 km at the top — past the
+	 * horizon, over ground no tile pack covers — so the window panned from a
+	 * city block to half a continent and back, every turn. That is the single
+	 * biggest reason the output did not read as an aeroplane window.
+	 *
+	 * This asserts the PROPERTY rather than the formula: whatever the bank, the
+	 * camera looks down, is not sitting on its own clamp, and the range stays
+	 * within a believable band. A future re-tune is free to change the curve and
+	 * must not reintroduce a sightline that crosses the horizon.
+	 */
+	const sweep = (pitchDeg: number) => {
+		const out: { dep: number; km: number }[] = [];
+		for (let i = 0; i < 360; i++) {
+			const bankDeg = 18 * Math.sin((2 * Math.PI * i) / 360);
+			const cam = new FlightCamera(0, pitchDeg).viewOptions(
+				{ lat: 40, lon: -105, headingDeg: 90, aglM: 4500, bankDeg },
+				40,
+				-105
+			);
+			const dep = 90 - cam.cameraPitchDeg;
+			out.push({ dep, km: 4500 / Math.tan((dep * Math.PI) / 180) / 1000 });
+		}
+		return out;
+	};
+
+	it('never pins the depression clamp, at any bank angle', () => {
+		for (const pitch of [-4, -10, -20, -45]) {
+			const pinned = sweep(pitch).filter((s) => s.dep <= 0.51).length;
+			expect(pinned, `pitch ${pitch} sits on the 0.5deg clamp`).toBe(0);
+		}
+	});
+
+	it('keeps the look-at range within one order of magnitude', () => {
+		const km = sweep(-10).map((s) => s.km);
+		const ratio = Math.max(...km) / Math.min(...km);
+		// Was ~50x. A real window holds a roughly constant slant range while the
+		// ground rotates past it; some swing is the bank being legible.
+		expect(ratio, `look-at range swings ${ratio.toFixed(1)}x across a turn`).toBeLessThan(10);
+		expect(Math.max(...km), 'looking past the packed tile radius').toBeLessThan(200);
+	});
+
+	it('always looks DOWN, never at or above the horizon', () => {
+		for (const pitch of [-1, -10, -30]) {
+			for (const s of sweep(pitch)) expect(s.dep).toBeGreaterThan(0);
+		}
+	});
+});

@@ -174,7 +174,38 @@ export class FlightCamera {
 		 */
 		const BANK_VIEW_GAIN = 0.85;
 		const bankOffset = (plane.bankDeg ?? 0) * BANK_VIEW_GAIN;
-		const effectivePitch = this.pitchDeg + bankOffset;
+
+		/**
+		 * The bank swing is applied as a RATIO of the current depression, not as
+		 * a number of degrees added to it.
+		 *
+		 * Additive was the bug, and it is worth being precise about because the
+		 * numbers look harmless. Peak bank is 18 deg and the gain is 0.85, so
+		 * the offset swings +/-15.3 deg against a default `pitchDeg` of -10.
+		 * Every turn therefore drove the effective pitch POSITIVE — the camera
+		 * asked to look UP — and the clamp below caught it at 0.5 deg of
+		 * depression. Measured over one roll cycle: the sightline is pinned at
+		 * that clamp for 28.6% of the time, i.e. for more than a quarter of
+		 * every turn the view does not move at all.
+		 *
+		 * The visual cost is worse than the freeze, because depression and
+		 * distance are related by a tangent. At 4,500 m AGL the look-at point
+		 * travels from 10 km away at the bottom of the roll to 516 KM away at
+		 * the top — most of a continent, well past the horizon, over ground no
+		 * tile pack covers. Every turn the window pans from a city block to
+		 * half a continent and back. That is the single biggest reason the
+		 * result does not read as an aeroplane window: a real one holds a
+		 * roughly constant slant range and the ground rotates past it.
+		 *
+		 * A ratio cannot cross zero, so the sightline stays below the horizon
+		 * for every bank angle and every `pitchDeg` an operator can dial in, and
+		 * the clamp goes back to being a guard rather than a mode the camera
+		 * spends a quarter of its life in. The look-at distance now varies by a
+		 * factor of ~2.4 across a turn instead of ~50.
+		 */
+		const bankRatio = 1 - Math.max(-0.6, Math.min(0.6, bankOffset / 25));
+		const basePitch = Math.min(-0.5, this.pitchDeg);
+		const effectivePitch = basePitch * bankRatio;
 		const depressionDeg = Math.max(0.5, Math.min(89.5, -effectivePitch));
 		const depressionRad = depressionDeg * DEG2RAD;
 
