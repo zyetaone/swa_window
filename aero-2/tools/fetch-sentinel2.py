@@ -287,33 +287,32 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def transpose_to_wmts(tiles_dir: Path, min_zoom: int, max_zoom: int) -> None:
-    """gdal2tiles --xyz writes {z}/{x}/{y}; this server reads {z}/{y}/{x}.
+def transpose_to_wmts(tiles_dir: Path, min_zoom: int, max_zoom: int, staging: Path) -> None:
+    """Move gdal2tiles output into the served layout, transposing as it goes.
 
-    Both are called "XYZ" in the wild, and the two orderings are indistinguishable
-    on a square grid near the equator, which is exactly why this is worth a
-    function rather than a comment. `WMTS_TILE_PATH` in src/lib/server/tiles.ts
-    is the authority: `layer/{z}/{y}/{x}.ext`, and the `gibs` and `terrarium`
-    layers on disk already follow it.
+    `gdal2tiles --xyz` writes {z}/{x}/{y}; this server reads {z}/{y}/{x}.
+    Both are called "XYZ" in the wild and the two orderings are
+    indistinguishable on a square grid, which is exactly why this is a function
+    rather than a comment: written the wrong way round, every tile 404s while
+    the packager reports success and the directory looks plausible — the same
+    absence-that-reports-as-success shape as the viirs `.jpg` bug.
 
-    Written the wrong way round, every tile 404s while the packager reports
-    success and the directory looks plausible — the same absence-that-reports-
-    as-success shape as the viirs `.jpg` bug. Transposing here rather than
-    teaching the server a second layout keeps one convention on disk.
-
-    Idempotent by construction: it moves into a fresh sibling directory and
-    swaps, so a partial run cannot leave a half-transposed tree that a rerun
-    would then transpose back.
+    It takes a STAGING dir and merges into `tiles_dir`, and that is the whole
+    correctness argument. The first version transposed `tiles_dir` in place, so
+    running it for a second place re-transposed the FIRST place's already-
+    correct tiles back into gdal2tiles order. Three of seven packs shipped that
+    way: Hyderabad had a complete archive on disk and served 129 404s and zero
+    hits, because its tiles were filed under x/y while the server asked y/x.
+    In-place transposition of a shared tree cannot be made idempotent — the
+    tiles carry no record of which way round they are — so the fix is to never
+    transpose the shared tree at all.
     """
     import shutil
 
     for z in range(min_zoom, max_zoom + 1):
-        src = tiles_dir / str(z)
+        src = staging / str(z)
         if not src.is_dir():
             continue
-        dst = tiles_dir / f"{z}.wmts"
-        if dst.exists():
-            shutil.rmtree(dst)
         moved = 0
         for xdir in src.iterdir():
             if not xdir.is_dir():
@@ -321,14 +320,13 @@ def transpose_to_wmts(tiles_dir: Path, min_zoom: int, max_zoom: int) -> None:
             for tile in xdir.iterdir():
                 if tile.suffix != ".jpg":
                     continue
-                # xdir is X, tile stem is Y -> write {y}/{x}
-                out = dst / tile.stem
+                # xdir is X, tile stem is Y -> file it under {y}/{x}
+                out = tiles_dir / str(z) / tile.stem
                 out.mkdir(parents=True, exist_ok=True)
                 tile.rename(out / f"{xdir.name}{tile.suffix}")
                 moved += 1
-        shutil.rmtree(src)
-        dst.rename(src)
         print(f"  z{z}: {moved} tiles -> {{z}}/{{y}}/{{x}}")
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def main() -> None:
@@ -491,15 +489,20 @@ def main() -> None:
     if a.max_zoom > WIDE_MAX_ZOOM:
         passes.append(("near field", max(a.min_zoom, WIDE_MAX_ZOOM + 1), a.max_zoom, vrt))
 
+    # gdal2tiles writes into a per-run STAGING dir, never straight into the
+    # shared layer tree. See transpose_to_wmts: the shared tree holds every
+    # place, already in served order, and re-walking it would flip tiles a
+    # previous run had put right.
     for label, zmin, zmax, source in passes:
+        staging = work / f"tiles-{zmin}-{zmax}"
         print(f"tiling {label} z{zmin}-{zmax} -> {tiles_dir}")
         run([
             "gdal2tiles.py", "--xyz", "-w", "none", "--processes", "8",
             "--tiledriver", "JPEG", "--jpeg-quality", "85",
             "-z", f"{zmin}-{zmax}", "-r", "cubic",
-            str(source), str(tiles_dir),
+            str(source), str(staging),
         ])
-        transpose_to_wmts(tiles_dir, zmin, zmax)
+        transpose_to_wmts(tiles_dir, zmin, zmax, staging)
 
     meta = {"place": a.place, "date": day, "mgrs": grids,
             "worstCloudPct": round(worst, 3), "bbox": bbox,

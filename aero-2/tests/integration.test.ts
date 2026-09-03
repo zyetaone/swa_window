@@ -468,6 +468,50 @@ describe('every tile source the client names, the server can serve', () => {
 		}
 	});
 
+	/**
+	 * Every pack must be REACHABLE at its own coordinates.
+	 *
+	 * The two checks above passed while three of seven packs were unusable:
+	 * they confirm a pack is listed and licensed, not that the server can find
+	 * a single tile of it. `transpose_to_wmts` used to flip the whole shared
+	 * layer tree, so packing a second place re-transposed the first place back
+	 * into gdal2tiles order — Hyderabad had a complete archive on disk and
+	 * served 129 404s and zero hits.
+	 *
+	 * Nothing in the suite could see it, because the failure is a filename
+	 * convention: `11/923/1469.jpg` and `11/1469/923.jpg` both look like tiles.
+	 * So compute the tile the location actually sits on and require it to exist
+	 * the way the server asks for it.
+	 */
+	it.skipIf(!s2Packed)('files every pack at coordinates the server can resolve', () => {
+		const Z = 11;
+		const n = 2 ** Z;
+		const wrongWayRound: string[] = [];
+		const missing: string[] = [];
+
+		for (const f of readdirSync(s2Dir).filter((x) => x.startsWith('source-'))) {
+			const meta = JSON.parse(readFileSync(resolve(s2Dir, f), 'utf8'));
+			const [w, s2, e, n2] = meta.bbox as number[];
+			const lon = (w + e) / 2;
+			const lat = (s2 + n2) / 2;
+			const x = Math.floor(((lon + 180) / 360) * n);
+			const rad = (lat * Math.PI) / 180;
+			const y = Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n);
+
+			// {z}/{y}/{x} is what WMTS_TILE_PATH reads.
+			if (existsSync(resolve(s2Dir, String(Z), String(y), `${x}.jpg`))) continue;
+			// {z}/{x}/{y} means the transpose was skipped or applied twice.
+			if (existsSync(resolve(s2Dir, String(Z), String(x), `${y}.jpg`))) {
+				wrongWayRound.push(meta.place);
+			} else {
+				missing.push(meta.place);
+			}
+		}
+
+		expect(wrongWayRound, 'packs stored {z}/{x}/{y}; the server reads {z}/{y}/{x}').toEqual([]);
+		expect(missing, 'packs with no tile over their own centre').toEqual([]);
+	});
+
 	it('the sentinel-2 packager transposes gdal2tiles output to the served layout', () => {
 		const src = readFileSync('tools/fetch-sentinel2.py', 'utf8');
 		expect(src, 'gdal2tiles still emits {z}/{x}/{y}').toContain('--xyz');
