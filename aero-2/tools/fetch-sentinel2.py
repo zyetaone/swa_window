@@ -459,10 +459,18 @@ def main() -> None:
                   f"haze, which STAC's cloud mask does not report. Look at "
                   f"{work}/coverage-proof.png before shipping it.")
     if report is not None and holes > MAX_GAP_PCT:
+        # Name the proof image. The failure message used to describe the hole
+        # without saying where to look at it, and the scratch dir is the first
+        # thing anyone deletes after a failed run — so the one artefact that
+        # explains WHY was routinely thrown away. It is worth keeping: Mumbai's
+        # proof showed the Arabian Sea imaged perfectly and the hole sitting
+        # inland to the north-east, which is the opposite of what "coastal
+        # location, empty mosaic" leads you to assume.
         sys.exit(
             f"mosaic is {holes:.1f}% empty over the visible area — refusing to tile.\n"
-            "Black wedges mean the chosen scenes do not cover the box. Re-run with\n"
-            "a wider --start/--end so a better date is available."
+            f"Look at {work}/coverage-proof.png: it shows exactly where the hole is.\n"
+            "A gap between satellite passes cannot be fixed by a wider date range;\n"
+            "weather can. Try --start/--end first, then --max-cloud."
         )
     else:
         print(f"coverage OK: {100 - holes:.2f}% of the visible area has pixels")

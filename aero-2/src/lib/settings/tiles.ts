@@ -40,18 +40,23 @@ export const SENTINEL2_MINZOOM = 8;
  *
  *   ocean          Sentinel-2 does not image open water. No date helps.
  *   dubai, desert, mumbai
- *                  the visible box straddles a gap between satellite passes,
- *                  so no SINGLE acquisition covers it. Verified against a full
- *                  year at 12% cloud: the mosaic came out 17-35% empty every
- *                  time and the packager refused to tile it, which is correct
- *                  — black wedges are worse than a soft basemap.
+ *                  no SINGLE acquisition covers the visible box. Verified
+ *                  against a full year at 12% cloud: the mosaic came out
+ *                  17-35% empty every time and the packager refused to tile
+ *                  it, which is correct — black wedges are worse than a soft
+ *                  basemap.
  *
  *                  Two of the three are coastal, so the obvious suspicion is
- *                  that the "empty" area is SEA and the check is miscounting
- *                  water as nodata. It is not: a packed Lake Michigan tile
- *                  measures 0.14% of pixels below the nodata threshold, and
- *                  `desert` has no water at all and still fails. The gaps are
- *                  real.
+ *                  that the "empty" area is SEA being miscounted as nodata.
+ *                  It is not, checked two ways: a packed Lake Michigan tile
+ *                  measures 0.14% below the nodata threshold, and Mumbai's
+ *                  own coverage proof shows the Arabian Sea imaged cleanly
+ *                  while the hole sits INLAND to the north-east, around
+ *                  73.5-74.5E. `desert` has no water at all and still fails.
+ *
+ *                  Nor is it only the far field: clipped to the near box
+ *                  alone, Mumbai is still 8.3% empty against a 1% budget. The
+ *                  gaps are real, and they are where the window looks.
  *
  * Keep this in step with `data/tiles/sentinel2/source-*.json`; a name here with
  * no pack behind it is exactly the request storm above.
