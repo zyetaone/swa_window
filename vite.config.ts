@@ -75,5 +75,13 @@ export default defineConfig({
 		environment: 'happy-dom',
 		include: ['tests/**/*.{test,spec}.{ts,svelte.ts}'],
 		globals: false,
+		/**
+		 * 5s is not enough for the exhaustive sweeps. `roads-geojson`'s flicker
+		 * check walks 18 phases x 2400 steps and asserts twice per step —
+		 * ~86k `expect` calls, which is the cost, not the maths. It passes in
+		 * isolation and times out when the suite shares a CPU with a build,
+		 * which on a loaded CI runner flakes the branch `promote` gates on.
+		 */
+		testTimeout: 30_000,
 	},
 });

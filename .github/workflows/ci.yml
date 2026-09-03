@@ -118,6 +118,40 @@ jobs:
       - name: Test
         run: bun run test
 
+      - name: Build
+        run: bun run build
+
+      # Same reasoning as the root job's smoke step: `check` and `test` both
+      # reason about source and never mount anything, so a component that
+      # throws during init is green in both and serves an empty body with a
+      # 200. aero-2's own ARCHITECTURE.md records the parent repo shipping
+      # /admin in exactly that state with 489 passing tests.
+      #
+      # NODE_ENV is left unset on purpose — that is the Pi's own configuration,
+      # and it is what keeps the dev-only remote tile fallback off, so this runs
+      # against the real offline behaviour instead of quietly proxying NASA.
+      #
+      # /api/tiles/health is expected to report a FATAL missing archive here
+      # (data/ is gitignored, so there is no pack in CI) — the assertion is
+      # that the endpoint answers and says so, not that it is happy. An
+      # archive that is absent must look absent; that is the whole point of
+      # REQUIRED_TILE_ASSETS.
+      - name: Smoke test built server
+        env:
+          PORT: '3000'
+        run: |
+          bun run serve &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 2 http://localhost:3000/api/status >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS --max-time 5 http://localhost:3000/api/status
+          curl -fsS --max-time 5 -o /dev/null http://localhost:3000/
+          # Second request proves the process survived the first.
+          curl -fsS --max-time 5 http://localhost:3000/api/tiles/health
+          kill "$SERVER_PID"
+
   # ── Release promotion ────────────────────────────────────────────────────
   # The Pi fleet's daily updater tracks the `release` branch, NOT main.
   # This job is the deploy gate: only a green main run moves `release`.
