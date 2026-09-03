@@ -9,7 +9,7 @@ import {
 	resolveTileHealth
 } from '#lib/server/tiles.js';
 import { terrainPmtilesUrl } from '#lib/settings/tiles.js';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { GET as TILES_GET } from '../src/routes/api/tiles/[...path]/+server.js';
@@ -332,6 +332,24 @@ describe('parseRange (PMTiles Range Requests)', () => {
 });
 
 describe('cache headers', () => {
+	/**
+	 * These read the REAL archive, and `data/` is gitignored.
+	 *
+	 * Without this guard the four assertions below fail with `expected 404 to
+	 * be 200` on any machine that has not built the tile pack — which is every
+	 * CI runner, and CI is what gates the `release` branch the fleet updater
+	 * tracks. A test that is red on a clean checkout does not protect anything;
+	 * it just teaches people that red is normal.
+	 *
+	 * Skipped rather than rewritten against a temp fixture on purpose: what
+	 * these check is the cache-control and etag behaviour of the code path that
+	 * streams a multi-gigabyte PMTiles archive over byte ranges, and a
+	 * synthetic stand-in would exercise a different branch than the one that
+	 * matters. Same trade the DEM checks in integration.test.ts make.
+	 */
+	const ARCHIVE = resolve(resolveTileDir(), 'terrain.pmtiles');
+	const packed = existsSync(ARCHIVE);
+
 	const req = (path: string, headers: Record<string, string> = {}) =>
 		TILES_GET({
 			params: { path },
@@ -350,21 +368,21 @@ describe('cache headers', () => {
 	 * without someone clearing a browser cache by hand.
 	 */
 
-	it('raster tiles are immutable', async () => {
+	it.skipIf(!packed)('raster tiles are immutable', async () => {
 		const r = await req('xyz/terrarium/9/361/226.png');
 		expect(r.status).toBe(200);
 		expect(r.headers.get('cache-control')).toContain('immutable');
 		expect(r.headers.get('etag')).toBeNull();
 	});
 
-	it('pmtiles archives revalidate and carry an etag', async () => {
+	it.skipIf(!packed)('pmtiles archives revalidate and carry an etag', async () => {
 		const r = await req('terrain.pmtiles', { Range: 'bytes=0-127' });
 		expect(r.status).toBe(206);
 		expect(r.headers.get('cache-control')).toBe('public, no-cache');
 		expect(r.headers.get('etag')).toMatch(/^W\//);
 	});
 
-	it('a matching etag on the whole file gives 304', async () => {
+	it.skipIf(!packed)('a matching etag on the whole file gives 304', async () => {
 		const first = await req('terrain.pmtiles');
 		const etag = first.headers.get('etag')!;
 		await first.body?.cancel();
@@ -372,7 +390,7 @@ describe('cache headers', () => {
 		expect(second.status).toBe(304);
 	});
 
-	it('a range request is never answered with 304', async () => {
+	it.skipIf(!packed)('a range request is never answered with 304', async () => {
 		const first = await req('terrain.pmtiles');
 		const etag = first.headers.get('etag')!;
 		await first.body?.cancel();
