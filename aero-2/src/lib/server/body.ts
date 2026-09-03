@@ -30,8 +30,9 @@ export async function readLimited(
 			if (done) break;
 			received += value.byteLength;
 			if (received > maxBytes) {
-				// Cancel rather than drain: the sender stops, and nothing past the cap
-				// is ever held.
+				// Cancel rather than drain, so the sender is told to stop instead of
+				// being read to completion. Peak memory is maxBytes plus the one chunk
+				// that crossed it — that chunk is already in hand, and is not kept.
 				await reader.cancel();
 				return fail(413, `request body too large: >${received} bytes, limit is ${maxBytes}`);
 			}

@@ -20,8 +20,11 @@ import { timingSafeEqual } from 'node:crypto';
 /**
  * Validates `Authorization: Bearer <token>` against `expected`.
  *
- * `label` names the gate in the 503 body, so an operator seeing the refusal
- * knows which token is missing when several gates coexist.
+ * `label` names the gate in the 503 body. Because the token value is injected,
+ * this module cannot name the env var that should have held it the way v1 did —
+ * so the label is the only diagnostic an operator gets. Pass the variable name
+ * in it: `requireBearer(req, env.AERO_ADMIN_TOKEN, 'admin endpoint
+ * (AERO_ADMIN_TOKEN)')`.
  */
 export function requireBearer(
 	request: Request,

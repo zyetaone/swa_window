@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { safeResolveWithin } from '#lib/server/fs-guard.js';
@@ -14,7 +14,7 @@ describe('safeResolveWithin', () => {
 	});
 
 	afterEach(() => {
-		// cleanup temp dir
+		rmSync(sandbox, { recursive: true, force: true });
 	});
 
 	it('resolves an existing file inside root', () => {
@@ -48,9 +48,19 @@ describe('safeResolveWithin', () => {
  * kind of thing that writes one.
  */
 describe('safeResolveWithin - symlink escape', () => {
+	const dirs: string[] = [];
+	const sandboxIn = (prefix: string) => {
+		const d = mkdtempSync(join(tmpdir(), prefix));
+		dirs.push(d);
+		return d;
+	};
+	afterEach(() => {
+		for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+	});
+
 	it('rejects a symlink inside root that points outside it', () => {
-		const sandbox = mkdtempSync(join(tmpdir(), 'aero-test-symlink-'));
-		const outside = mkdtempSync(join(tmpdir(), 'aero-test-outside-'));
+		const sandbox = sandboxIn('aero-test-symlink-');
+		const outside = sandboxIn('aero-test-outside-');
 		writeFileSync(join(outside, 'secret.txt'), 'not yours');
 		symlinkSync(join(outside, 'secret.txt'), join(sandbox, 'escape.txt'));
 
@@ -59,7 +69,7 @@ describe('safeResolveWithin - symlink escape', () => {
 	});
 
 	it('allows a symlink whose target stays inside root', () => {
-		const sandbox = mkdtempSync(join(tmpdir(), 'aero-test-symlink-ok-'));
+		const sandbox = sandboxIn('aero-test-symlink-ok-');
 		mkdirSync(join(sandbox, 'real'));
 		writeFileSync(join(sandbox, 'real', 'tile.jpg'), 'fake-jpeg');
 		symlinkSync(join(sandbox, 'real', 'tile.jpg'), join(sandbox, 'link.jpg'));
