@@ -128,6 +128,33 @@ The structural fix is a cloudless composite: EOX s2cloudless measures 4.6% on
 the same metric, but it is CC BY-NC-SA and unusable on a paid install. See the
 note above `GIBS_DATE`.
 
+### Getting the pack onto a device
+
+`data/` is gitignored, so **nothing in the deploy path delivers tiles**. The
+updater tracks a git branch; the archive is not in git. This is not an
+oversight of aero-2's — v1 is the same, its `install.sh` only _migrates_ an
+existing `data/tiles` from a previous install, and ADR-002 records
+"one-time ~15 min tile download per SD card image" with OTA tile delivery
+listed as an open question. Worth stating plainly here because a 312 MB
+imagery pack that never reaches a Pi looks exactly like a working one in
+every check that runs on a laptop.
+
+Three assets, and they are not equally portable:
+
+| Layer             | How a device can get it                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `gibs/`, `viirs/` | `tools/download-tiles.ts` on the device. Plain HTTP, no native deps, resumable — it skips what is already there.                  |
+| `terrain.pmtiles` | Built from `terrarium/` by `tools/pack-pmtiles.ts`. Needs the 3.6 GB source, so realistically built off-device.                   |
+| `sentinel2/`      | `tools/fetch-sentinel2.py` needs **GDAL and Pillow**, ~7 GB of transient scratch and 10–20 min per location. Build it off-device. |
+
+So the practical routes are: bake `data/tiles/` into the SD card image, or
+`rsync` it to `${INSTALL_DIR}/data/tiles` after install. `install.sh` sets
+`TILE_DIR` to that path and `data/` survives the updater's `git reset`, so a
+pack copied once stays put across upgrades.
+
+`GET /api/tiles/health` is how a fielded device tells you which it got:
+`error` means the window cannot draw the world.
+
 ### Dev with a sparse cache
 
 `bun run dev` enables **remote tile fallback** when `NODE_ENV=development`

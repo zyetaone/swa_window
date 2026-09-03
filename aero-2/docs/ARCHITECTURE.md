@@ -252,6 +252,15 @@ duplicating those knobs, of which its single caller passed one.
   night-lights source behind `{#if nightLightOpacity > 0.01}` for that reason —
   it used to do the same for a USGS/NAIP layer that was deleted on 2026-08-26,
   where it was worth several hundred 404s a minute outside US coverage.
+- **Nothing in the deploy path delivers tiles.** The updater tracks a git
+  branch and `data/` is gitignored, so the archive reaches a device only by SD
+  image or by rsync after install. `install.sh` points `TILE_DIR` at
+  `${INSTALL_DIR}/data/tiles` and that survives the updater's reset, so a pack
+  copied once persists — but nothing copies it the first time. Same in v1;
+  ADR-002 lists OTA tile delivery as an open question. This matters more now
+  than it did: `sentinel2/` needs GDAL and ~7 GB of scratch to build, so unlike
+  `gibs`/`viirs` a device cannot self-provision it. `GET /api/tiles/health`
+  reporting `error` is how a fielded Pi says it never arrived.
 - **The DEM's header bbox is not its coverage, and `terrainSampledPct` is.**
   `terrain.pmtiles` is a set of per-location boxes (~±1° around each pin), but
   its header is ONE rectangle around all of them — spanning 179°W–88°E and
