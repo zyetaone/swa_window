@@ -34,7 +34,7 @@ Naming, so `ls` reads well:
 
 ## 2. The invariants
 
-Nine rules. Seven are enforced by something that fails; two are not, and are
+Ten rules. Eight are enforced by something that fails; two are not, and are
 marked so, because an unenforced invariant is an aspiration.
 
 | #   | Invariant                                                                                  | Enforced by                                                                                    |
@@ -48,6 +48,7 @@ marked so, because an unenforced invariant is an aspiration.
 | 7   | No barrel files (`index.ts`)                                                               | —                                                                                              |
 | 8   | A renderer projects the pose; it never sources it                                          | `tests/regressions.test.ts` — same second ⇒ same pose, on a cold model                         |
 | 9   | Every page route renders, and the kiosk is actually flying                                 | `tools/smoke-routes.mjs` (`bun run smoke`)                                                     |
+| 10  | A dataset the server offers has a renderer that asks for it                                | `tests/regressions.test.ts` — every `/api/<kind>/[city]` has a consumer under `display/`       |
 
 **#2 is the product.** No accumulated `dt`, no per-process epoch, no unseeded
 randomness anywhere the window can see. Both failure shapes have bitten:
@@ -103,6 +104,31 @@ own configuration: the dev-only remote tile fallback is off, so the run sees
 the real offline archive instead of quietly proxying NASA and passing on any
 machine with internet.
 
+That sentence is also what exposed the `/admin` guard. It read
+`NODE_ENV === 'production'` — open by DEFAULT, closed only on one string — so
+either this line was wrong or the cockpit was public on every unprovisioned
+device. It was the latter, verified against the built server. The gate is now
+`AERO_ADMIN_UI=1`, fail-closed like every other one here, and smoke asserts it
+with the DEFAULT env rather than forcing production, which only ever tested
+the configuration that was already safe.
+
+**#10 is the packaged-and-inert rule.** `data/roads/` was 46 MB of OSM
+geometry, served by `/api/roads/[city]` with ETags and covered by its own
+endpoint test, and drawn by nothing — no component under `display/` ever
+referenced it. Every part worked except that no one asked, so nothing could go
+red: the endpoint answered 200, the suite passed, the health check does not
+look at `data/`, and the kiosk drew a city with no lights on it and no error.
+This is `REQUIRED_TILE_ASSETS` pointed at the GeoJSON endpoints — assert NAMED
+assets, never count directories. It is a source scan, so it strips comments
+first: the first version passed against a deliberately broken fetch because the
+test's own docstring named the path.
+
+Roads now draw as vector night lights, which is the same fix twice over: VIIRS
+caps at z8 (~468 m/px at lat 40), so the raster blurs exactly as the window
+descends, and a road network is the shape of city lighting from the air.
+`tools/probe-roads.mjs` is what proves it paints — smoke would stay green with
+the source 404ing or the layer at zero opacity.
+
 **#6 and #7 are unenforced.** Both were violated within a day of being written
 down: `Clouds` ran its own WebGL context outside the boundary until 2026-08-26,
 so a Three.js context loss took the page down while the identical MapLibre
@@ -149,6 +175,19 @@ duplicating those knobs, of which its single caller passed one.
 ## 5. Known-sharp edges
 
 - **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
+- **`data/tiles/water/` is packed and wired to NOTHING.** Built by
+  `tools/fetch-water-mask.py` from Sentinel-2 SCL class 6, to give MapLibre the
+  water bit Terrarium does not carry (v1 got it from Cesium's
+  `requestWaterMask`). It serves correctly through `/api/tiles/xyz/water/...`
+  and is honestly reported under `unused` by the health check, but no component
+  mounts it, no `WATER_PLACES` set exists, and it is not in
+  `REQUIRED_TILE_ASSETS`. Invariant 10 does NOT cover it — that scan is over
+  the GeoJSON endpoints, and this is a raster layer. Same bug class as roads,
+  still open, deliberately recorded rather than half-wired.
+  Two caveats if it is picked up: only `chicago_midway` is packed, and its
+  manifest says `maxZoom: 11` while the tool defaults to 13, so the mask
+  vanishes on close approach while the imagery keeps going to z13.
+  `_water-work/` is 12 MB of build intermediates left in the archive.
 - **The tile archive lives in `data/`, never `static/`.** Under `static/` Vite
   copies and brotli-compresses all ~56k files into `build/` on every build
   (3.5 min, 11 GB) AND the adapter serves them directly, so

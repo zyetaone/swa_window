@@ -62,8 +62,7 @@ export const ORBIT = {
 	 * to THETA rather than to time, so the loop still closes on itself — a
 	 * time-keyed wobble would leave a seam where the track met its own start.
 	 */
-	pathWanderFrac: 0.06,
-	flightSpeed: 6.0
+	pathWanderFrac: 0.06
 } as const;
 
 /**
@@ -117,8 +116,6 @@ export interface OrbitPose {
 	 */
 	bankDeg: number;
 }
-
-export type FlightPose = OrbitPose;
 
 /**
  * A small, stable per-day offset so the flight path is not pinned to the same patch
