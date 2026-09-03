@@ -73,6 +73,29 @@
 			textures.length = 0;
 			textures.push(...loaded);
 			buildCloudDeck();
+			/**
+			 * `$state`, so publishing the hook re-runs the effect below.
+			 *
+			 * The textures load asynchronously, so this assignment happens AFTER
+			 * the effect's first run — with a plain `let` the effect would have
+			 * captured `null`, and nothing would re-run it until the operator
+			 * next moved the slider. That is a real window, not a theoretical
+			 * one: a density set by URL, or by a preset applied during texture
+			 * load, would be silently ignored until the next unrelated change.
+			 */
+			rebuild = buildCloudDeck;
+			/**
+			 * Sprite count, for `tools/probe-layers.mjs`.
+			 *
+			 * The same escape hatch `Stage.svelte` opens with `__stage`, and for
+			 * the same reason: the property this publishes cannot be observed
+			 * from outside the WebGL context, and the bug it guards (a knob that
+			 * silently stops reaching its consumer) is invisible to every check
+			 * that does not measure the scene itself.
+			 */
+			(globalThis as unknown as { __cloudSprites?: () => number }).__cloudSprites = () =>
+				sprites.length;
+			(globalThis as unknown as { __probe?: () => number }).__probe = () => sprites.length;
 		}
 
 		TEXTURE_URLS.forEach((url, i) => {
@@ -393,11 +416,48 @@
 
 		return () => {
 			cancelAnimationFrame(raf);
+			rebuild = null;
+			delete (globalThis as { __cloudSprites?: () => number }).__cloudSprites;
 			materials.forEach((m) => m.dispose());
 			renderer.dispose();
 			scene.clear();
 		};
 	}
+
+	/**
+	 * Rebuilding the deck is a SEPARATE concern from owning the canvas, and
+	 * that separation is what was missing.
+	 *
+	 * `buildCloudDeck` had exactly one call site: inside the texture loader's
+	 * completion callback, which fires once. So the sprite population was fixed
+	 * at load — measured at 140 sprites for `cloudDensity=0.05` and 351 for
+	 * `1.0`, but only when passed in the URL before mount. Moving the operator
+	 * slider afterwards changed nothing at all, because the only code that
+	 * reads `density` had already run and nothing could call it again.
+	 *
+	 * The reads look reactive and are not, which is why review missed it: they
+	 * sit inside an async callback, so they are outside the attachment's
+	 * tracking scope AND outside any effect. `$derived` on line 23 makes
+	 * `density` a live value that precisely one non-reactive consumer reads
+	 * once.
+	 *
+	 * Deliberately NOT solved by taking arguments — `{@attach f(density)}` would
+	 * re-run the whole attachment, tearing down the WebGL context, re-parsing
+	 * three textures and rebuilding a 351-sprite scene on every slider tick.
+	 * The canvas' lifetime and the deck's contents are different lifetimes, so
+	 * they get different mechanisms: an attachment for the context, an effect
+	 * for the population.
+	 */
+	let rebuild = $state<(() => void) | null>(null);
+
+	$effect(() => {
+		// The two inputs `buildCloudDeck` actually reads. `phase` is in here
+		// because it seeds the RNG: at a UTC day boundary the deck must re-roll,
+		// or three panes that booted on different days show different weather.
+		void density;
+		void display.phase;
+		rebuild?.();
+	});
 </script>
 
 {#if isVisible}

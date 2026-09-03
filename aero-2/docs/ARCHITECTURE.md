@@ -126,7 +126,7 @@ test's own docstring named the path.
 Roads now draw as vector night lights, which is the same fix twice over: VIIRS
 caps at z8 (~468 m/px at lat 40), so the raster blurs exactly as the window
 descends, and a road network is the shape of city lighting from the air.
-`tools/probe-roads.mjs` is what proves it paints — smoke would stay green with
+`tools/probe-layers.mjs` is what proves it paints — smoke would stay green with
 the source 404ing or the layer at zero opacity.
 
 **#6 and #7 are unenforced.** Both were violated within a day of being written

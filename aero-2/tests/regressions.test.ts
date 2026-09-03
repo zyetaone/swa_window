@@ -681,7 +681,7 @@ describe('a served dataset has a renderer', () => {
 	 *
 	 * Deliberately a source scan and not a mount: the point is to fail when the
 	 * NEXT dataset is packaged and wired up to nothing, which is a question
-	 * about the tree, not about a running frame. `probe-roads.mjs` is what
+	 * about the tree, not about a running frame. `probe-layers.mjs` is what
 	 * proves the layer actually paints.
 	 */
 	it('every /api/<kind>/[city] endpoint has a consumer under display/', () => {

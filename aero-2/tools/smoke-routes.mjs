@@ -56,7 +56,7 @@ const CHROME_CANDIDATES = [
  * selector, and that is the failure being hunted.
  */
 const ROUTES = [
-	{ path: '/', minChars: 40, canvas: true, flying: true },
+	{ path: '/', minChars: 40, canvas: true, flying: true, drawers: true },
 	// The kiosk with the blind DOWN. Same route, and the one state where a
 	// blank screen is correct — so `minChars` alone cannot judge it, and a
 	// regression here looks exactly like success.
@@ -345,6 +345,59 @@ try {
 			} else {
 				await sleep(1200);
 				if ((await pose()) === before) problems.push(`pose frozen at ${before}`);
+			}
+		}
+
+		/**
+		 * Press the operator's keys and check the panel actually rendered.
+		 *
+		 * Everything above loads a URL, and the operator UI is not reachable by
+		 * URL — `showSettings` is component state behind an `s` keypress. So the
+		 * entire settings drawer and admin panel were outside every gate in the
+		 * repo: `svelte-check` cannot see a runtime throw, no unit test mounts
+		 * them, and the kiosk route renders perfectly with a drawer that dies
+		 * the instant it opens.
+		 *
+		 * It did. `Segmented` keyed its `{#each}` on `String(option)`, which is
+		 * `"[object Object]"` for all eleven Locations, so opening the panel
+		 * threw `each_key_duplicate` and rendered "Internal Error". Found by
+		 * hand, not by any check — this is that check.
+		 *
+		 * Asserts a control that only exists BELOW the failure: a labelled
+		 * range input inside the drawer. Presence of the drawer element alone
+		 * would pass on the error card, which replaces the contents rather than
+		 * the container.
+		 */
+		if (route.drawers) {
+			/**
+			 * Each drawer is asserted on what IT contains, not on a shared
+			 * shape. The settings panel is controls; the admin panel is a
+			 * read-only telemetry readout with no inputs at all, so demanding a
+			 * slider there fails an entirely healthy page. A smoke check that
+			 * has to be loosened to pass stops meaning anything.
+			 */
+			for (const [k, label, probe] of [
+				['s', 'settings', "document.querySelectorAll('input[type=range], button.opt').length"],
+				['a', 'admin', "document.querySelectorAll('.diag-item').length"]
+			]) {
+				await evaluate(
+					`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(k)},bubbles:true}))`
+				);
+				await sleep(700);
+				const state = await evaluate(
+					'(() => {' +
+						"const err = document.body.innerText.includes('Internal Error');" +
+						`const inputs = ${probe};` +
+						'return JSON.stringify({ err, inputs }); })()'
+				);
+				const { err, inputs } = JSON.parse(state);
+				if (err) problems.push(`${label} drawer threw during render (Internal Error)`);
+				else if (inputs === 0) problems.push(`${label} drawer opened but rendered no controls`);
+				// Close it again so the next key lands on a clean panel.
+				await evaluate(
+					`window.dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(k)},bubbles:true}))`
+				);
+				await sleep(300);
 			}
 		}
 

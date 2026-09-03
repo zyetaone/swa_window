@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * probe-roads — does the vector night-lights layer actually DRAW?
+ * probe-layers — do the operator-facing layers actually DRAW, and RESPOND?
  *
  * One-off, kept because the failure it hunts is invisible to everything else.
  * `smoke-routes` proves the page rendered and is flying; it would stay green
@@ -13,8 +13,16 @@
  *   2. did the GeoJSON source actually load features (not an empty collection)
  *   3. is the computed paint opacity above zero
  *
- * Usage (server + chrome already up, as for smoke):
- *   node tools/probe-roads.mjs --base http://127.0.0.1:5399 --cdp-port 9455
+ * The cloud check is the same question one step further on: not "did it
+ * render" but "does the knob that names it still reach it". `cloudDensity` was
+ * a live `$derived` whose only consumer sat inside a one-shot async callback,
+ * so the deck was built once at load and the slider moved nothing for the rest
+ * of the session. Measured, not inspected: sprite count before and after
+ * driving the real range input.
+ *
+ * Both checks need a browser, a GPU and a mounted kiosk, which is why they are
+ * a probe rather than a unit test. Run against a built server:
+ *   node tools/probe-layers.mjs --base http://127.0.0.1:5399 --cdp-port 9455
  */
 const arg = (n, d) => {
 	const i = process.argv.indexOf(`--${n}`);
@@ -80,11 +88,57 @@ const report = await evalJs(`(async () => {
   return { layers: has, hasSource: !!src, feats, paint };
 })()`);
 
-console.log(JSON.stringify(report, null, 1));
+console.log('roads:', JSON.stringify(report));
 
 // Independently of the map, is the endpoint serving real geometry?
 const gj = await (await fetch(`${BASE}/api/roads/denver`)).json();
-console.log('endpoint features:', gj.features.length);
+console.log('roads: endpoint features:', gj.features.length);
+
+/**
+ * Does the cloud-density slider still reach the deck?
+ *
+ * Drives the REAL range input through the operator's own path — open the
+ * drawer with `s`, select the Atmosphere tab, set the slider, dispatch `input`
+ * — because the bug being guarded was precisely that the value was live and
+ * the consumer was not. Setting `config.cloudDensity` directly would prove
+ * nothing about the wiring in between.
+ */
+await send('Page.navigate', {
+	url: `${BASE}/?place=denver&clouds=1&cloudDensity=0.05`
+});
+await sleep(9000);
+
+const sprites = () => evalJs('globalThis.__cloudSprites ? globalThis.__cloudSprites() : -1');
+
+await evalJs(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'s',bubbles:true}))`);
+await sleep(700);
+await evalJs(
+	"(() => { const b = [...document.querySelectorAll('button')].find(b => /atmos/i.test(b.textContent)); b && b.click(); return 1; })()"
+);
+await sleep(700);
+
+const before = await sprites();
+const moved = await evalJs(`(() => {
+  const el = [...document.querySelectorAll('input[type=range]')]
+    .find(i => /cloud density/i.test(i.getAttribute('aria-label') || ''));
+  if (!el) return false;
+  const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  set.call(el, '1');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+})()`);
+await sleep(2500);
+const after = await sprites();
+
+console.log('clouds:', JSON.stringify({ sliderFound: moved, before, after }));
+
+const roadsOk = report.layers?.length === 2 && report.feats > 0 && gj.features.length > 0;
+// -1 means the build carries no probe hook; treat that as "not measured" rather
+// than as a pass, or this check quietly stops meaning anything.
+const cloudsOk = moved && before > 0 && after > before;
+if (!roadsOk) console.log('FAIL  roads layer did not draw');
+if (!cloudsOk)
+	console.log(`FAIL  cloud density slider did not rebuild the deck (${before} -> ${after})`);
 
 ws.close();
-process.exit(report.layers?.length === 2 && report.feats > 0 && gj.features.length > 0 ? 0 : 1);
+process.exit(roadsOk && cloudsOk ? 0 : 1);
