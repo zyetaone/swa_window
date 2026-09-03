@@ -193,8 +193,44 @@ Component visibility is gated in exactly one place: the config knob the
 component itself reads. `Display.svelte` briefly had five boolean props
 duplicating those knobs, of which its single caller passed one.
 
+## 4b. The night stack, and why order is physics
+
+Layer order in MapLibre follows MOUNT order, so `Stage.svelte`'s child order
+is the compositing order. It is not cosmetic:
+
+```text
+gibs / sentinel2   the photograph          shaded by hillshade
+hillshade          how the ground faces the sun
+viirs              emitted light           NOT shaded  (NightLights.svelte)
+roads              emitted light, sharp    vector, below the z8 VIIRS blur
+buildings          extrusions
+```
+
+The rule that fixes the ordering questions is **reflected vs emitted**.
+Hillshade models how a surface reflects sunlight, so it belongs over the
+photographs, which are exactly that. City lights are emitted and do not dim
+because the slope under them faces away from a sun that set hours ago. VIIRS
+sat inside `Ground` and therefore under the hillshade, which removed 15% of the
+luminance of every lit city — unevenly, according to terrain invisible at
+night. That is why `NightLights.svelte` is its own file: the split is the fix,
+and merging it back into `Ground` would silently undo it.
+
+Two layers share the `night ** 1.5` ramp on purpose. `roads` sharpens `viirs`
+where VIIRS runs out of resolution, and two lighting layers on different ramps
+read as one of them lagging.
+
 ## 5. Known-sharp edges
 
+- **The sightline must never cross the horizon.** Bank was folded into pitch
+  additively (+/-15.3 deg against a default -10), so every turn drove the
+  effective pitch positive and the 0.5 deg depression clamp caught it — pinned
+  for 28.6% of each roll cycle. Depression and range are related by a tangent,
+  so the visible cost was distance: the look-at point ran from 10 km to 516 km
+  at 4,500 m AGL, panning from a city block to half a continent and back, over
+  ground no tile pack covers. A real window holds a roughly constant slant
+  range while the ground rotates past it. The swing is a RATIO now, which
+  cannot cross zero; `tests/display.test.ts` asserts the property rather than
+  the formula, so a re-tune is free but cannot leave the world.
 - **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
 - **`data/tiles/water/` is packed and wired to NOTHING.** Built by
   `tools/fetch-water-mask.py` from Sentinel-2 SCL class 6, to give MapLibre the
