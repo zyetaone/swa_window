@@ -187,6 +187,18 @@ duplicating those knobs, of which its single caller passed one.
   REMOTE EOX service; its local path is capped at z12 and its offline pack
   stops there. Below z8 aero-2 has no Sentinel-2 and does not need it — MODIS
   is global to z9 and covers z0-7 outright.
+- **The sharp basemap costs ~3-5 fps on a slow CPU, and the pack costs 312 MB.**
+  Measured, because adding a second full-screen raster layer to a Pi kiosk is
+  not obviously free. A/B at the same location under 6x CPU throttling (a rough
+  Pi 5 stand-in): 17 fps with the layer visible, 22 with it hidden, repeated
+  three times. Unthrottled it is 60 either way.
+  Do NOT read the cross-location numbers as the layer's cost — packed locations
+  measured 9-17 fps against 20-24 for unpacked ones, but that gap is mostly
+  terrain: Denver and Phoenix are mountainous, Dubai and the Pacific are flat.
+  Only the same-location A/B isolates the layer.
+  Disk: 312 MB across 7 locations, against a 4.0 GB served total that the
+  3.5 GB DEM dominates. If the SD budget ever binds, the DEM is the place to
+  look, not the imagery.
 - **Sentinel-2 imagery is licence-critical.** The convenient source (EOX
   s2cloudless) is CC BY-NC-SA and cannot ship on a paid install; v1 uses it and
   its own `upstream.ts` flags that as an open question. aero-2 builds the same

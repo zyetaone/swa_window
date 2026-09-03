@@ -33,6 +33,20 @@ What a complete pack holds, and what each absence costs:
 `terrarium/` is build INPUT for `tools/pack-pmtiles.ts`, not something the
 kiosk requests. A pack holding only terrarium draws nothing.
 
+What a fielded Pi actually carries, measured:
+
+| Asset             |   Size |
+| ----------------- | -----: |
+| `terrain.pmtiles` | 3.5 GB |
+| `sentinel2/`      | 312 MB |
+| `gibs/`           | 123 MB |
+| `viirs/`          | 102 MB |
+| **served total**  | 4.0 GB |
+
+`terrarium/` (3.6 GB) is not in that total — it stays on the machine that
+repacks the DEM. If the SD budget ever binds, the DEM is what to attack; the
+imagery is a tenth of it.
+
 ```sh
 bun tools/download-tiles.ts gibs  <lat> <lon> 1500 7 8   # per location
 bun tools/download-tiles.ts viirs <lat> <lon> 1500 7 8
