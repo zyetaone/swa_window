@@ -264,7 +264,23 @@ try {
 				errors.push(msg.params.exceptionDetails?.exception?.description ?? 'exception');
 			}
 			if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
-				errors.push(String(msg.params.args?.[0]?.value ?? 'console.error'));
+				/**
+				 * Take the WHOLE argument list, and never substitute a placeholder.
+				 *
+				 * This read `args[0].value ?? 'console.error'`, and MapLibre logs
+				 * its tile failures as a structured Error object whose first arg
+				 * has a `description` but no `value` — so every one of them became
+				 * the literal string "console.error", which contains "Error" and
+				 * matched the fatal filter below. On a machine with no tile pack
+				 * that turned a legitimately degraded archive into three failed
+				 * routes: the smoke test reported the kiosk broken when it was
+				 * merely showing a blank basemap.
+				 */
+				const text = (msg.params.args ?? [])
+					.map((a) => a.value ?? a.description ?? a.unserializableValue ?? '')
+					.join(' ')
+					.trim();
+				errors.push(text || '(empty console.error)');
 			}
 		};
 		cdp.on(onEvent);
@@ -331,8 +347,13 @@ try {
 
 		// An init throw is the /admin failure mode. Tile 404s over a sparse
 		// archive are expected and are reported by the health note above.
+		// Tile misses are not a broken page — an incomplete archive is a
+		// legitimate state that `note tile archive ...` above already reports.
+		// What matters is a throw during init, which is the /admin failure mode.
 		const fatal = errors.filter(
-			(e) => !/Failed to load resource|404/.test(e) && /Error|not a function|undefined/i.test(e)
+			(e) =>
+				!/Failed to load resource|404|AJAXError|Unable to parse|tile/i.test(e) &&
+				/Error|not a function|undefined/i.test(e)
 		);
 		if (fatal.length) problems.push(`init error: ${fatal[0].slice(0, 140)}`);
 
