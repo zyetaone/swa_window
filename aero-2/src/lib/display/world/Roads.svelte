@@ -60,10 +60,7 @@
 	 * resolves anyway; drawing 30,000 line features up there would cost a Pi
 	 * real frames to add nothing a photograph is not already saying. The
 	 * vectors earn their keep on the way DOWN, so they arrive as the raster
-	 * runs out of pixels. 9,000 m to 4,000 m is the descent window: above it
-	 * the layer is unmounted entirely, not merely transparent — the same
-	 * lesson as `raster-opacity: 0` in SENTINEL2_PLACES, where an invisible
-	 * source still cost a request storm.
+	 * runs out of pixels. 9,000 m to 4,000 m is the descent window.
 	 */
 	const altitudeFade = $derived(Math.max(0, Math.min(1, (9000 - aglM) / 5000)));
 
@@ -80,6 +77,34 @@
 	 * if a third consumer appears the gate belongs on `Location`.
 	 */
 	const hasRoads = $derived(!place.isFeature);
+
+	/**
+	 * ALTITUDE drives opacity; only DARKNESS drives mounting. They look like
+	 * the same knob and they are not, because the two change on wildly
+	 * different timescales.
+	 *
+	 * `CLIMB_PERIOD_SEC` is 900, and the climb curve spends ~62% of each cycle
+	 * below 9,000 m — so an altitude-gated `{#if}` mounts and unmounts this
+	 * source FOUR TIMES AN HOUR, every hour, forever. Each mount re-fetches and
+	 * re-parses the city's GeoJSON: Denver is 4.4 MB and 19,838 features, which
+	 * measures 29 ms of `JSON.parse` on an M-series Mac and is roughly 160 ms on
+	 * a Pi 5, on the main thread, in a window whose entire job is to move
+	 * smoothly. A periodic stutter with no visible cause is exactly the class of
+	 * fault that gets called "the Pi is slow" and never gets found.
+	 *
+	 * Night is the right mount gate because it is monotonic over hours: the
+	 * source mounts at dusk, stays for the night, and leaves at dawn. Two
+	 * transitions a day instead of ninety-six.
+	 *
+	 * This is NOT a reversal of the `raster-opacity: 0` lesson in
+	 * SENTINEL2_PLACES. That was about a source that could never have tiles
+	 * anywhere, firing a request storm of 404s forever. This is one finite
+	 * document that is already in memory and will be needed again in minutes;
+	 * holding it at zero opacity costs a paint of nothing, while unmounting it
+	 * costs a re-parse. Same syntax, opposite economics — the question is always
+	 * whether the mounted-but-invisible thing is doing WORK.
+	 */
+	const mounted = $derived(hasRoads && lightUp > 0.01);
 
 	/**
 	 * Width by class, in screen pixels, interpolated across zoom.
@@ -160,7 +185,7 @@
 	] as never);
 </script>
 
-{#if hasRoads && glow > 0.01}
+{#if mounted}
 	<GeoJSONSource id="city-roads" data="/api/roads/{place.id}">
 		<!-- Two passes: a wide soft bloom, then the filament on top.
 		     One line at one width reads as a wire diagram — the give-away that
