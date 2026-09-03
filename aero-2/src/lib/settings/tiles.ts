@@ -46,6 +46,13 @@ export const SENTINEL2_MINZOOM = 8;
  *                  time and the packager refused to tile it, which is correct
  *                  — black wedges are worse than a soft basemap.
  *
+ *                  Two of the three are coastal, so the obvious suspicion is
+ *                  that the "empty" area is SEA and the check is miscounting
+ *                  water as nodata. It is not: a packed Lake Michigan tile
+ *                  measures 0.14% of pixels below the nodata threshold, and
+ *                  `desert` has no water at all and still fails. The gaps are
+ *                  real.
+ *
  * Keep this in step with `data/tiles/sentinel2/source-*.json`; a name here with
  * no pack behind it is exactly the request storm above.
  */

@@ -184,6 +184,21 @@ duplicating those knobs, of which its single caller passed one.
   pixels from `sentinel-cogs` under Copernicus terms, which permit commercial
   use AND REQUIRE attribution. `remoteTileUrl` returns null for this layer on
   purpose — a remote fallback would silently proxy the non-commercial service.
+- **`{z}/{x}/{y}` and `{z}/{y}/{x}` are both called "XYZ".** `WMTS_TILE_PATH`
+  in `server/tiles.ts` is the authority and reads `{z}/{y}/{x}`; `gdal2tiles
+--xyz` emits the other one. On a square grid the two are indistinguishable by
+  eye, and a wrongly-filed pack 404s every tile while the directory looks
+  perfectly plausible and the packager reports success. Three of seven
+  Sentinel-2 packs shipped this way — Hyderabad served 129 requests and 0 tiles
+  with a complete archive on disk.
+- **Never transpose a SHARED tile tree in place.** The layer directory holds
+  every location, so a transpose that walks the whole tree flips the tiles a
+  previous run already put right: with three places packed, whether any given
+  one worked came down to parity. Tiles carry no record of their own
+  orientation, so this cannot be made idempotent — stage per-run output
+  elsewhere and MOVE it in. The test that catches it computes the tile each
+  pack's own centre falls on and asks for it the way the server does;
+  "listed" and "licensed" checks cannot see this.
 - **The ground is ~30% cloud, and no date fixes it.** `GIBS_DATE` pins a single
   MODIS day, and MODIS true colour is a same-day swath: across the z6–z9 tiles
   the window requests, the best eligible day measures ~30% near-white and most
