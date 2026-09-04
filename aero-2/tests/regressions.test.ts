@@ -547,8 +547,18 @@ describe('routes render something', () => {
 		const src = findSource('+page.svelte', 'admin')
 			.replace(/\/\*[\s\S]*?\*\//g, '')
 			.replace(/\/\/.*$/gm, '')
-			// ...and imports, or the module path `#lib/status.js` reads as a field
-			// access on `status` and the guard fails on its own fix.
+			/**
+			 * ...and imports, or the module path `#lib/status.js` reads as a field
+			 * access on `status` and the guard fails on its own fix.
+			 *
+			 * Spans lines. The single-line form missed a MULTI-LINE import — the
+			 * closing `} from '#lib/status.js';` survived on its own and matched
+			 * as `status?.js`, so adding one more named import to that statement
+			 * failed this test with an invented field called "js". A false
+			 * positive on a backstop is worse than none: it trains the next
+			 * person to widen the filter rather than read the failure.
+			 */
+			.replace(/^\s*import\b[\s\S]*?from\s*['"][^'"]*['"];?$/gm, '')
 			.replace(/^\s*import .*$/gm, '');
 		const read = [...src.matchAll(/status[?]?\.([a-zA-Z_][a-zA-Z0-9_]*)/g)].map((m) => m[1]);
 

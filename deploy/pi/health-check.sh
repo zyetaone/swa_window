@@ -60,6 +60,35 @@ if [[ -r /sys/class/thermal/thermal_zone0/temp ]]; then
 	TEMP_C=$(( TEMP_MILLI / 1000 ))
 fi
 
+# ─── Clock synchronisation ───────────────────────────────────────────────────
+# The ENTIRE panorama is a function of the wall clock. Pose, sun position, the
+# director's rotation slot, the cloud gusts and the scheduled `applyAtWallSec`
+# of a wall push are all derived from `Date.now()` on each Pi independently —
+# that is the design (ADR-007: no bus, no shared state, agree by deriving). It
+# only holds while the three clocks agree.
+#
+# An unsynced Pi therefore does not fail loudly. It flies a different part of
+# the orbit, lights a different time of day, and applies an operator's push
+# seconds early or late, while every other check here reports green. On a
+# continuous three-pane window that reads as "the middle screen is broken",
+# with nothing in any log to say why.
+#
+# `display-dim-schedule.sh` already waits for NTP before trusting the hour, for
+# a strictly smaller reason (dimming at the wrong time). The heartbeat did not
+# report it at all, so the fleet had no way to see the condition that matters
+# most to the product. Reported, not enforced: this script observes, and a
+# device that has genuinely lost NTP still shows a window.
+CLOCK_SYNCED=0
+if command -v timedatectl >/dev/null 2>&1; then
+	if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" == "yes" ]]; then
+		CLOCK_SYNCED=1
+	fi
+else
+	# No timedatectl (a container, a non-systemd image): unknowable rather than
+	# false. -1 so a dashboard can tell "not synced" from "cannot tell".
+	CLOCK_SYNCED=-1
+fi
+
 # ─── Thermal / power throttle (vcgencmd get_throttled) ───────────────────────
 # Bitfield: 0 under-voltage, 1 freq-capped, 2 throttled, 3 soft-temp (live);
 # 16–19 sticky "has occurred since boot". Policy matches src/lib/server/fleet/throttle.ts:
@@ -139,7 +168,7 @@ fi
 # ─── POST to admin ───────────────────────────────────────────────────────────
 
 PAYLOAD=$(cat <<EOF
-{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}","mode":"${MODE}","throttledRaw":${THROTTLED_RAW},"thermalAction":"${THERMAL_ACTION}"}
+{"deviceId":"${DEVICE_ID}","role":"${AERO_ROLE}","groupId":"${AERO_GROUP}","fps":${FPS},"temp":${TEMP_C},"uptime":${UPTIME},"crashCount":${CRASH_COUNT},"commit":"${COMMIT}","lastError":"${LAST_ERROR}","mode":"${MODE}","throttledRaw":${THROTTLED_RAW},"thermalAction":"${THERMAL_ACTION}","clockSynced":${CLOCK_SYNCED}}
 EOF
 )
 

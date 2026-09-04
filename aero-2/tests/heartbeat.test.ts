@@ -165,3 +165,55 @@ describe('the heartbeat route', () => {
 		expect(await (await call('?summary')).json()).toMatchObject({ total: 1, online: 1 });
 	});
 });
+
+describe('clock sync is telemetry too', () => {
+	beforeEach(() => clearHeartbeats());
+
+	/**
+	 * The one field here that is about CORRECTNESS rather than health. The whole
+	 * panorama is a function of the wall clock — pose, sun, the director's
+	 * rotation slot and a wall push's `applyAtWallSec` are each derived
+	 * independently per pane, which only agrees while the clocks do. An unsynced
+	 * Pi flies a different part of the orbit and lights a different time of day
+	 * while every other check reports green.
+	 *
+	 * `display-dim-schedule.sh` already waited for NTP before trusting the hour,
+	 * for the strictly smaller reason of dimming at the wrong time. The
+	 * heartbeat did not carry it at all.
+	 */
+	it('records an explicit synced / unsynced flag', () => {
+		expect(recordHeartbeat({ deviceId: 'a', clockSynced: 1 })?.clockSynced).toBe(true);
+		expect(recordHeartbeat({ deviceId: 'b', clockSynced: 0 })?.clockSynced).toBe(false);
+		expect(recordHeartbeat({ deviceId: 'c', clockSynced: true })?.clockSynced).toBe(true);
+		expect(recordHeartbeat({ deviceId: 'd', clockSynced: false })?.clockSynced).toBe(false);
+	});
+
+	/**
+	 * -1 is health-check.sh's "cannot tell" — an image with no `timedatectl`.
+	 * That must stay undefined rather than collapsing to false, because a
+	 * dashboard rendering "unknown" as "DRIFT" sends someone to a site visit for
+	 * a device that is fine.
+	 */
+	it('an unknowable clock is undefined, never false', () => {
+		expect(recordHeartbeat({ deviceId: 'e', clockSynced: -1 })?.clockSynced).toBeUndefined();
+		expect(recordHeartbeat({ deviceId: 'f' })?.clockSynced).toBeUndefined();
+		expect(recordHeartbeat({ deviceId: 'g', clockSynced: 'yes' })?.clockSynced).toBeUndefined();
+	});
+
+	it('counts only devices that positively reported drift', () => {
+		recordHeartbeat({ deviceId: 'ok1', clockSynced: 1 });
+		recordHeartbeat({ deviceId: 'bad', clockSynced: 0 });
+		recordHeartbeat({ deviceId: 'unknown' });
+		recordHeartbeat({ deviceId: 'cannot-tell', clockSynced: -1 });
+		expect(summarize().clockUnsynced, 'an unknown clock was counted as drift').toBe(1);
+	});
+
+	it('counts panes actively shedding GPU work', () => {
+		recordHeartbeat({ deviceId: 'cool', thermalAction: 'ok' });
+		recordHeartbeat({ deviceId: 'hot', thermalAction: 'shed', tempC: 82 });
+		recordHeartbeat({ deviceId: 'quiet' });
+		const s = summarize();
+		expect(s.shedding).toBe(1);
+		expect(s.maxTempC).toBe(82);
+	});
+});

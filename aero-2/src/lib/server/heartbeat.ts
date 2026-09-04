@@ -45,6 +45,18 @@ export interface HeartbeatSample {
 	mode?: string;
 	throttledRaw?: number;
 	thermalAction?: 'ok' | 'shed';
+	/**
+	 * Whether this device's clock is NTP-synced. Undefined means the device did
+	 * not say — an older health-check.sh, or an image with no `timedatectl`.
+	 *
+	 * This is the one telemetry field that is about CORRECTNESS rather than
+	 * health. The whole panorama is a function of the wall clock: pose, sun,
+	 * the director's rotation slot and a wall push's `applyAtWallSec` are each
+	 * derived independently per pane, which only agrees while the clocks do. An
+	 * unsynced Pi flies a different part of the orbit and lights a different
+	 * time of day while every other check on this page reports green.
+	 */
+	clockSynced?: boolean;
 	/** One journal line of WHY. Never served to an unauthenticated reader. */
 	lastError?: string;
 	receivedAtMs: number;
@@ -59,6 +71,14 @@ export interface FleetSummary {
 	/** How many of `total` contributed to avgFps, so a dashboard can say so. */
 	fpsSampled: number;
 	maxTempC: number | null;
+	/** Devices actively shedding GPU work. */
+	shedding: number;
+	/**
+	 * Devices that reported an UNSYNCED clock. Not the same as "did not report":
+	 * a device that cannot tell is excluded, because an unknown must not be
+	 * rendered as a fault.
+	 */
+	clockUnsynced: number;
 }
 
 const latest = new Map<string, HeartbeatSample>();
@@ -84,6 +104,16 @@ export function recordHeartbeat(body: unknown, nowMs: number = Date.now()): Hear
 		throttledRaw: nonNegative(b.throttledRaw),
 		thermalAction:
 			b.thermalAction === 'shed' ? 'shed' : b.thermalAction === 'ok' ? 'ok' : undefined,
+		// health-check.sh sends 1 / 0 / -1, where -1 is "cannot tell" (no
+		// timedatectl). Only an explicit 1 or 0 becomes a boolean; -1 and a
+		// missing field both stay undefined, so "unknown" never renders as
+		// "not synced".
+		clockSynced:
+			b.clockSynced === 1 || b.clockSynced === true
+				? true
+				: b.clockSynced === 0 || b.clockSynced === false
+					? false
+					: undefined,
 		// Capped: it is a journal line from an untrusted-ish source that ends up
 		// in a JSON response and, on a hub, in a Map that lives for weeks.
 		lastError: str(b.lastError)?.slice(0, 200),
@@ -115,7 +145,9 @@ export function summarize(nowMs: number = Date.now()): FleetSummary {
 		offline: all.length - online,
 		avgFps: fps.length ? fps.reduce((a, b) => a + b, 0) / fps.length : null,
 		fpsSampled: fps.length,
-		maxTempC: temps.length ? Math.max(...temps) : null
+		maxTempC: temps.length ? Math.max(...temps) : null,
+		shedding: all.filter((s) => s.thermalAction === 'shed').length,
+		clockUnsynced: all.filter((s) => s.clockSynced === false).length
 	};
 }
 

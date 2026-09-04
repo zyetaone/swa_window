@@ -6,7 +6,13 @@
 	import { PRODUCT_NAME, PRODUCT_OWNER, ENGINEERED_BY, PRODUCT_STAGE } from '#lib/credits.js';
 	import { LOCATIONS } from '#lib/settings/locations.js';
 	import { SCENE_PRESETS } from '#lib/settings/presets.js';
-	import { fetchStatus, type KioskStatus } from '#lib/status.js';
+	import {
+		fetchStatus,
+		fetchFleet,
+		FLEET_ONLINE_WINDOW_MS,
+		type KioskStatus,
+		type FleetDevice
+	} from '#lib/status.js';
 
 	let status = $state<KioskStatus | null>(null);
 	let statusError = $state<string | null>(null);
@@ -14,6 +20,23 @@
 	let activeMode = $state('flight');
 	let activePreset = $state('');
 	let copiedLink = $state<string | null>(null);
+
+	/**
+	 * The fleet rollup.
+	 *
+	 * Every layer under this was already built and tested — health-check.sh
+	 * scrapes temperature and the throttle bitfield every 60 s, `throttle.ts`
+	 * decodes it, `POST /api/fleet/heartbeat` records it per device, and
+	 * `summarize()` computes the maxima. Nothing rendered any of it, so the one
+	 * page an operator opens showed memory and uptime for the single Pi it
+	 * happened to be served from, and nothing at all about the other two.
+	 *
+	 * `null` means "not fetched yet", `[]` means "fetched, no device has ever
+	 * reported" — which is the normal state of a single-Pi install and must not
+	 * read as a fault.
+	 */
+	let fleet = $state<FleetDevice[] | null>(null);
+	let fleetError = $state<string | null>(null);
 
 	const origin = $derived(
 		typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'
@@ -31,7 +54,62 @@
 				status = null;
 				statusError = err instanceof Error ? err.message : 'unreachable';
 			});
+
+		/**
+		 * Poll, because heartbeats arrive every 60 s from three devices
+		 * independently and a page opened between beats would otherwise show a
+		 * stale wall until someone refreshed. 20 s is a third of the beat, so a
+		 * device that has just reported shows up promptly without this becoming a
+		 * meaningful load on a Pi that is also flying.
+		 */
+		const load = () =>
+			fetchFleet()
+				.then((d) => {
+					fleet = d;
+					fleetError = null;
+				})
+				.catch((err: unknown) => {
+					// Keep the last good list: a dropped poll is not evidence the wall
+					// went away, and blanking the table on one failed fetch is how a
+					// dashboard trains people to ignore it.
+					fleetError = err instanceof Error ? err.message : 'unreachable';
+				});
+		void load();
+		const id = setInterval(load, 20_000);
+		return () => clearInterval(id);
 	});
+
+	const now = $state({ ms: Date.now() });
+	$effect(() => {
+		const id = setInterval(() => (now.ms = Date.now()), 5_000);
+		return () => clearInterval(id);
+	});
+
+	const isOnline = (d: FleetDevice) => now.ms - d.receivedAtMs < FLEET_ONLINE_WINDOW_MS;
+
+	/**
+	 * Rolled up here rather than by calling `?summary`, so the table and the
+	 * headline can never disagree — one fetch, one source, and the counts are
+	 * derived from the rows the operator is looking at.
+	 */
+	const roll = $derived.by(() => {
+		const all = fleet ?? [];
+		const temps = all.map((d) => d.tempC).filter((v): v is number => v !== undefined);
+		return {
+			total: all.length,
+			online: all.filter(isOnline).length,
+			maxTempC: temps.length ? Math.max(...temps) : null,
+			shedding: all.filter((d) => d.thermalAction === 'shed').length,
+			// `=== false` only. A device that did not report its clock is unknown,
+			// and an unknown must never be rendered as a fault.
+			clockUnsynced: all.filter((d) => d.clockSynced === false).length
+		};
+	});
+
+	const ago = (ms: number) => {
+		const s = Math.max(0, Math.round((now.ms - ms) / 1000));
+		return s < 90 ? `${s}s ago` : `${Math.round(s / 60)}m ago`;
+	};
 
 	function copyToClipboard(text: string, label: string) {
 		if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -158,6 +236,83 @@
 			</div>
 		</section>
 	</div>
+
+	<!-- Fleet Health — every pane on the wall, not just this one -->
+	<section class="card telemetry-section">
+		<h2>🌡️ Fleet Health</h2>
+
+		{#if fleet === null && !fleetError}
+			<p class="fleet-note">Loading…</p>
+		{:else if fleet !== null && fleet.length === 0}
+			<!-- The normal state of a single-Pi install. Said out loud, because an
+			     empty table and a broken endpoint look identical otherwise. -->
+			<p class="fleet-note">
+				No device has reported a heartbeat. That is expected on a standalone kiosk —
+				<code>health-check.sh</code> posts every 60 s once a fleet token is provisioned.
+			</p>
+		{:else}
+			<div class="telemetry-grid">
+				<div class="telem-item">
+					<span class="label">Panes online</span>
+					<span
+						class="val"
+						class:green={roll.online === roll.total}
+						class:warn={roll.online < roll.total}
+					>
+						{roll.online} / {roll.total}
+					</span>
+				</div>
+				<div class="telem-item">
+					<span class="label">Hottest pane</span>
+					<span class="val" class:warn={(roll.maxTempC ?? 0) >= 78}>
+						{roll.maxTempC === null ? '—' : `${Math.round(roll.maxTempC)} °C`}
+					</span>
+				</div>
+				<div class="telem-item">
+					<span class="label">Shedding GPU work</span>
+					<span class="val" class:warn={roll.shedding > 0}>{roll.shedding}</span>
+				</div>
+				<div class="telem-item">
+					<!-- The one field here that is about CORRECTNESS, not health. The
+					     whole panorama is a function of the wall clock, so an unsynced
+					     pane flies a different part of the orbit and lights a different
+					     time of day while every other number on this page reads green. -->
+					<span class="label">Clock unsynced</span>
+					<span class="val" class:warn={roll.clockUnsynced > 0}>{roll.clockUnsynced}</span>
+				</div>
+			</div>
+
+			<table class="fleet-table">
+				<thead>
+					<tr
+						><th>Device</th><th>Role</th><th>Temp</th><th>FPS</th><th>Clock</th><th>Last beat</th
+						></tr
+					>
+				</thead>
+				<tbody>
+					{#each fleet as d (d.deviceId)}
+						<tr class:offline={!isOnline(d)}>
+							<td>{d.deviceId}</td>
+							<td>{d.role}</td>
+							<td class:warn={(d.tempC ?? 0) >= 78}>
+								{d.tempC === undefined ? '—' : `${Math.round(d.tempC)}°`}
+								{#if d.thermalAction === 'shed'}<span class="chip">SHED</span>{/if}
+							</td>
+							<td>{d.fps === undefined ? '—' : Math.round(d.fps)}</td>
+							<td class:warn={d.clockSynced === false}>
+								{d.clockSynced === false ? 'DRIFT' : d.clockSynced === true ? 'ok' : '—'}
+							</td>
+							<td>{isOnline(d) ? ago(d.receivedAtMs) : `offline · ${ago(d.receivedAtMs)}`}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		{/if}
+
+		{#if fleetError}
+			<p class="fleet-note warn">Last poll failed: {fleetError} — showing the last known state.</p>
+		{/if}
+	</section>
 
 	<!-- System Telemetry & Health -->
 	<section class="card telemetry-section">
@@ -472,6 +627,40 @@
 	.dest-elev {
 		font-size: 0.65rem;
 		color: #94a3b8;
+	}
+	.fleet-note {
+		font-size: 0.85rem;
+		color: var(--text-muted, #94a3b8);
+		line-height: 1.5;
+	}
+	.fleet-table {
+		width: 100%;
+		border-collapse: collapse;
+		margin-top: 16px;
+		font-size: 0.85rem;
+	}
+	.fleet-table th {
+		text-align: left;
+		font-weight: 600;
+		color: #94a3b8;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+		padding: 6px 8px;
+	}
+	.fleet-table td {
+		padding: 6px 8px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		font-variant-numeric: tabular-nums;
+	}
+	.fleet-table tr.offline {
+		opacity: 0.45;
+	}
+	.chip {
+		margin-left: 6px;
+		padding: 1px 5px;
+		border-radius: 3px;
+		background: rgba(245, 158, 11, 0.2);
+		color: #f59e0b;
+		font-size: 0.7rem;
 	}
 	.telemetry-section {
 		margin-bottom: 32px;

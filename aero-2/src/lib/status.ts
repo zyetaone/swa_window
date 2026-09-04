@@ -36,3 +36,39 @@ export async function fetchStatus(signal?: AbortSignal): Promise<KioskStatus> {
 	if (!res.ok) throw new Error(`/api/status returned ${res.status}`);
 	return (await res.json()) as KioskStatus;
 }
+
+/**
+ * One device's line in the fleet rollup, as `GET /api/fleet/heartbeat` serves
+ * it. Mirrors `HeartbeatSample` minus `lastError`, which that route withholds
+ * from unauthenticated readers.
+ *
+ * Declared here rather than imported from `lib/server/heartbeat.ts` because a
+ * browser bundle must not pull in a module that reads `process.env` and holds
+ * the fleet's Map. `status.ts` is already the shared shape file for exactly
+ * this reason — see the note above `KioskStatus`, where three hand-copied
+ * declarations of one response drifted and rendered /admin blank.
+ */
+export interface FleetDevice {
+	deviceId: string;
+	role: string;
+	groupId: string;
+	fps?: number;
+	tempC?: number;
+	uptimeSec: number;
+	crashCount: number;
+	commit?: string;
+	mode?: string;
+	throttledRaw?: number;
+	thermalAction?: 'ok' | 'shed';
+	clockSynced?: boolean;
+	receivedAtMs: number;
+}
+
+/** Two missed 60 s beats plus slack — must match ONLINE_WINDOW_MS server-side. */
+export const FLEET_ONLINE_WINDOW_MS = 150_000;
+
+export async function fetchFleet(signal?: AbortSignal): Promise<FleetDevice[]> {
+	const res = await fetch('/api/fleet/heartbeat', { signal });
+	if (!res.ok) throw new Error(`/api/fleet/heartbeat returned ${res.status}`);
+	return (await res.json()) as FleetDevice[];
+}
