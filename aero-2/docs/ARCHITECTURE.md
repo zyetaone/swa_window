@@ -265,6 +265,24 @@ Two lessons from getting it wrong first:
   cannot cross zero; `tests/display.test.ts` asserts the property rather than
   the formula, so a re-tune is free but cannot leave the world.
 - **Tile URL shape is load-bearing:** `/api/tiles/xyz/{layer}/{z}/{x}/{y}.{ext}`.
+- **"Packaged and inert" is this repo's recurring failure, four times over.**
+  `data/roads/` (46 MB, served, drawn by nothing), `data/tiles/water/` (packs,
+  serves, mounted by nothing), `/api/internal/thermal` (endpoint + decoder +
+  policy + writer, consumed by nothing) and `/api/fleet/heartbeat` (records and
+  summarises the whole wall, rendered by nothing). Every one is present,
+  plausible and inert: each part works in isolation, so no check can go red,
+  and the gap is invisible to `check`, to the suite and to smoke. Three are now
+  wired; water is still open. **When adding a producer, add its consumer in the
+  same change** — a docstring in the present tense is a claim, and
+  `/api/internal/thermal`'s said "the display polls this" for as long as it took
+  someone to look.
+- **Clock sync is correctness telemetry, not health telemetry.** Pose, sun, the
+  director's slot and a wall push's `applyAtWallSec` are each derived per pane
+  from `Date.now()`; that only agrees while the clocks do. An unsynced Pi flies
+  a different part of the orbit and lights a different hour while every other
+  number reads green. The heartbeat carries `clockSynced` and `/admin` counts
+  it. Note the tri-state: health-check sends `-1` for "no timedatectl", which
+  must stay UNKNOWN rather than collapsing to "drift".
 - **`data/tiles/water/` is packed and wired to NOTHING.** Built by
   `tools/fetch-water-mask.py` from Sentinel-2 SCL class 6, to give MapLibre the
   water bit Terrarium does not carry (v1 got it from Cesium's
