@@ -12,16 +12,30 @@
 	const display = useDisplay();
 	const synthAudio = new AmbientAudioEngine();
 
-	let initialized = false;
 	let audioElement = $state<HTMLAudioElement | null>(null);
 
+	/**
+	 * Web Audio needs a user gesture, so this is called from any click or key.
+	 *
+	 * The gate is the ENGINE's own `init()` — which already no-ops once a
+	 * context exists — and not a local `initialized` latch. The latch was the
+	 * bug: it was set on the first gesture whatever the mode, but only called
+	 * `synthAudio.init()` when the mode was already `synth`. So a kiosk that
+	 * booted in `playlist`, took one click, and was later switched to `synth`
+	 * had a permanently latched flag and no audio context — `setVolume` returns
+	 * early on `!this.ctx`, so the result is silence, forever, with the drawer
+	 * reading "synth" and nothing in the console.
+	 *
+	 * `?audio=playlist` is a real URL path into that state, and switching mode
+	 * from the drawer is the obvious operator action, so this was reachable
+	 * rather than theoretical.
+	 *
+	 * Calling `init()` unconditionally is the smaller fix than tracking which
+	 * mode was live at gesture time: creating a suspended AudioContext costs
+	 * nothing until `setVolume` resumes it, and the engine is idempotent.
+	 */
 	function ensureInit() {
-		if (!initialized) {
-			initialized = true;
-			if (display.config.audioMode === 'synth') {
-				synthAudio.init();
-			}
-		}
+		synthAudio.init();
 	}
 
 	const currentTrackUrl = $derived(

@@ -74,10 +74,22 @@ export class AmbientAudioEngine {
 		this.engineFilter.frequency.setTargetAtTime(targetHz, this.ctx.currentTime, 0.5);
 	}
 
+	/**
+	 * Close the context AND drop every node that belonged to it.
+	 *
+	 * Nulling `ctx` alone happened to work, because `init()` reassigns all three
+	 * node fields — but only because it reassigns ALL of them. `init()` catches
+	 * its own failures, so a context that dies partway through construction
+	 * leaves this object holding live-looking nodes from a closed context, and
+	 * every method here guards on `ctx` or `masterGain` rather than on both.
+	 * Explicit is cheaper than the invariant "every field is reassigned on the
+	 * happy path and the unhappy path never happens".
+	 */
 	destroy(): void {
-		if (this.ctx) {
-			this.ctx.close().catch(() => {});
-			this.ctx = null;
-		}
+		this.ctx?.close().catch(() => {});
+		this.ctx = null;
+		this.masterGain = null;
+		this.engineFilter = null;
+		this.noiseNode = null;
 	}
 }
