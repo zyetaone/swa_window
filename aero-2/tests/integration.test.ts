@@ -28,6 +28,7 @@ import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
 import { Location } from '#lib/settings/locations.js';
 import { tileTemplates, TILE_MAXZOOM, SENTINEL2_PLACES } from '#lib/settings/tiles.js';
 import { remoteTileUrl, resolveTileDir } from '#lib/server/tiles.js';
+import { WALL_KEYS } from '#lib/wall.js';
 
 /** Comments name these hazards to explain them; only real code counts. */
 function stripComments(src: string): string {
@@ -182,6 +183,68 @@ describe('the world is a pure function of (wallclock, place, daySeed)', () => {
 			if (/Math\.random\s*\(/.test(code)) offenders.push(rel);
 		}
 		expect(offenders, 'seed from daySeed, or add to ALLOWED with a reason').toEqual([]);
+	});
+});
+
+/**
+ * ADR-007's actual thesis, made enforceable.
+ *
+ * The ADR's root-cause finding was TWO MUTATION PATHS: a control that wrote
+ * config locally AND pushed, so the two could disagree and something had to
+ * merge them. The fix is not a better merge, it is one path — and "one path" is
+ * a property of where code lives, which no unit test can see. Same technique as
+ * the `Math.random` and `+= dt` scans above.
+ *
+ * A wall key assigned anywhere but the two files that own it is that second
+ * path reappearing. `Settings.svelte` is the operator drawer and is allowed to
+ * write pane-local knobs; the moment it writes a WALL key directly instead of
+ * drafting and pushing, this fails.
+ */
+describe("ADR-007's one mutation path is structural, not documented", () => {
+	const OWNERS = ['settings/wall.svelte.ts', 'settings/settings.svelte.ts'];
+
+	/**
+	 * The four that exist today, and what each one means.
+	 *
+	 * None is a bug right now — nothing pushes a wall snapshot yet, so each is
+	 * the ONLY writer of its key and there is nothing to disagree with. They
+	 * become the second path the moment the Wall drawer tab ships, and each then
+	 * needs a decision rather than a refactor:
+	 *
+	 *   use-blind / MediaStage — a touch on the glass and a video reaching its
+	 *     end are local events with an immediate local answer. Probably stay,
+	 *     with last-writer-wins against a push, which ADR-007 already accepts.
+	 *   Settings.svelte — the operator drawer writing a wall key directly is the
+	 *     exact shape ADR-007 named as root cause. These two move into the Wall
+	 *     tab's local draft, which POSTs instead of assigning.
+	 *
+	 * Listed rather than allowed: a new entry fails this test, and removing one
+	 * means editing this list on purpose. The Math.random scan above carried a
+	 * KNOWN list the same way until its debt was paid, then dropped it.
+	 */
+	const KNOWN = [
+		'display/cabin/use-blind.svelte.ts (blindOpen)',
+		'display/media/MediaStage.svelte (displayMode)',
+		'settings/Settings.svelte (weather)',
+		'settings/Settings.svelte (blindOpen)'
+	];
+
+	it('writes a wall key onto config nowhere but its owners and the known four', () => {
+		const offenders: string[] = [];
+		for (const file of simSources()) {
+			const rel = file.replace(/^src\/lib\//, '');
+			if (OWNERS.some((o) => rel.endsWith(o))) continue;
+			const code = stripComments(readFileSync(file, 'utf8'));
+			for (const key of WALL_KEYS) {
+				// `config.weather =` — an assignment onto the shared sink. `==`, `===`
+				// and `>=` must not match; a component's own local state is not this.
+				if (new RegExp(`config\\.${key}\\s*=(?!=)`).test(code)) offenders.push(`${rel} (${key})`);
+			}
+		}
+		expect(
+			offenders.sort(),
+			'draft locally and POST /api/wall — do not assign a wall key onto config'
+		).toEqual([...KNOWN].sort());
 	});
 });
 

@@ -17,7 +17,7 @@ describe('Scene Composition Presets', () => {
 
 	it('successfully applies preset to PaneSettings instance', () => {
 		const settings = new PaneSettings();
-		settings.applyPreset('gulf-midnight');
+		settings.applyPreset('gulf-midnight', 0);
 		expect(settings.place.id).toBe('dubai');
 		expect(settings.weather).toBe('rain');
 	});
@@ -25,7 +25,7 @@ describe('Scene Composition Presets', () => {
 	it('gracefully handles unknown preset ids', () => {
 		const settings = new PaneSettings();
 		const initialPlace = settings.place.id;
-		settings.applyPreset('nonexistent-preset');
+		settings.applyPreset('nonexistent-preset', 0);
 		expect(settings.place.id).toBe(initialPlace);
 	});
 
@@ -62,14 +62,14 @@ describe('Scene Composition Presets', () => {
 	 */
 	it('lets a storm preset actually be a storm', () => {
 		const s = new PaneSettings();
-		s.applyPreset('storm-transit');
+		s.applyPreset('storm-transit', 0);
 		expect(s.weather).toBe('storm');
 	});
 
 	it('names a place the card would recognise', () => {
 		for (const preset of SCENE_PRESETS) {
 			const s = new PaneSettings();
-			s.applyPreset(preset.id);
+			s.applyPreset(preset.id, 0);
 			expect(preset.config.placeId, preset.id).toBe(s.place.id);
 		}
 	});

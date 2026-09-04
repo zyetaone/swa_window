@@ -9,11 +9,14 @@ import { FlightDirector } from './flight/director.svelte.js';
 import { resolveAtmosphere, type AtmosphereState } from './world/atmosphere.js';
 import { nightAmount, sunPosition, type SunPosition } from './world/sun.js';
 import { createSettings, type PaneSettings } from '#lib/settings/settings.svelte.js';
+import { WallSync } from '#lib/settings/wall.svelte.js';
 
 const DISPLAY_KEY = Symbol('AERO_DISPLAY');
 
 export class AeroDisplay {
 	readonly config: PaneSettings;
+	/** Buffered wall pushes. Emptied only by `advanceTo`, never by the fetch. */
+	readonly wall = new WallSync();
 	readonly director: FlightDirector;
 	/**
 	 * Overwritten in the constructor before anything can read it.
@@ -172,6 +175,18 @@ export class AeroDisplay {
 				this.#lastFpsUpdate = now;
 			}
 		}
+
+		/**
+		 * BEFORE the tick, and that ordering is load-bearing: a snapshot may pin a
+		 * place and clear `rotate`, and `director.tick` already early-returns on
+		 * `!rotate`. Applying after would let the director rotate past the pinned
+		 * place for exactly one frame on the pane that applied first.
+		 *
+		 * This is also the only place a wall snapshot is ever applied. The fetch
+		 * fills a buffer; if the assignment happened when the fetch resolved,
+		 * network jitter would be an input to the pose.
+		 */
+		this.wall.applyDue(wallSec, this.config);
 
 		// Wall clock, not a frame delta: the destination is derived from the
 		// second, so every pane lands on the same place without being told.

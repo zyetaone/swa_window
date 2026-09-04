@@ -1,0 +1,143 @@
+import { describe, it, expect } from 'vitest';
+import { WallSync, applyWallState } from '#lib/settings/wall.svelte.js';
+import { createSettings } from '#lib/settings/settings.svelte.js';
+import type { WallSnapshot, WallState } from '#lib/wall.js';
+
+const state = (over: Partial<WallState> = {}): WallState => ({
+	placeId: 'denver',
+	presetId: '',
+	weather: 'rain',
+	clockOffsetH: 3,
+	displayMode: 'flight',
+	blindOpen: false,
+	rotate: false,
+	...over
+});
+
+const snap = (
+	version: number,
+	applyAtWallSec: number,
+	over: Partial<WallState> = {}
+): WallSnapshot => ({
+	version,
+	applyAtWallSec,
+	state: state(over)
+});
+
+describe('WallSync', () => {
+	it('buffers a snapshot without applying it', () => {
+		const sync = new WallSync();
+		const config = createSettings();
+		const before = config.weather;
+
+		sync.receive(snap(1, 100));
+		expect(sync.pending?.version).toBe(1);
+		expect(config.weather).toBe(before);
+		expect(sync.appliedVersion).toBe(0);
+	});
+
+	/**
+	 * The bug this class exists for. Two panes that received the same snapshot
+	 * at different instants must reach identical config at the same wallSec —
+	 * otherwise fetch latency is an input to the pose, which is `+= dt` arriving
+	 * over the network.
+	 */
+	it('applies at the named second, not at the moment of receipt', () => {
+		const early = new WallSync();
+		const late = new WallSync();
+		const a = createSettings();
+		const b = createSettings();
+
+		early.receive(snap(1, 100));
+		// `late` receives 4 wall-seconds later, as a slow pane would.
+		for (let t = 96; t < 100; t++) early.applyDue(t, a);
+		late.receive(snap(1, 100));
+
+		expect(a.weather).not.toBe('rain'); // not yet due for either
+		early.applyDue(100, a);
+		late.applyDue(100, b);
+
+		expect(a.weather).toBe('rain');
+		expect(b.weather).toBe('rain');
+		expect(a.clockOffsetH).toBe(b.clockOffsetH);
+		expect(a.place.id).toBe(b.place.id);
+	});
+
+	it('applies once, then has nothing left to apply', () => {
+		const sync = new WallSync();
+		const config = createSettings();
+		sync.receive(snap(1, 100));
+		sync.applyDue(100, config);
+
+		expect(sync.pending).toBeNull();
+		expect(sync.appliedVersion).toBe(1);
+
+		config.weather = 'clear';
+		sync.applyDue(200, config);
+		expect(config.weather).toBe('clear');
+	});
+
+	it('ignores a version it has already applied, or an older one', () => {
+		const sync = new WallSync();
+		const config = createSettings();
+		sync.receive(snap(2, 100));
+		sync.applyDue(100, config);
+
+		sync.receive(snap(2, 200));
+		sync.receive(snap(1, 200));
+		expect(sync.pending).toBeNull();
+	});
+
+	/**
+	 * An operator changing their mind inside the lead time: only the last push
+	 * should land, not both in sequence.
+	 */
+	it('supersedes a pending snapshot with a newer one', () => {
+		const sync = new WallSync();
+		const config = createSettings();
+		sync.receive(snap(1, 100, { weather: 'rain' }));
+		sync.receive(snap(2, 100, { weather: 'storm' }));
+		sync.applyDue(100, config);
+
+		expect(config.weather).toBe('storm');
+		expect(sync.appliedVersion).toBe(2);
+	});
+});
+
+describe('applyWallState', () => {
+	it('assigns every wall key', () => {
+		const config = createSettings();
+		applyWallState(state(), config, 0);
+		expect(config).toMatchObject({
+			weather: 'rain',
+			clockOffsetH: 3,
+			displayMode: 'flight',
+			blindOpen: false,
+			rotate: false
+		});
+		expect(config.place.id).toBe('denver');
+	});
+
+	/**
+	 * applyPreset rewrites place and clockOffsetH, so an explicit value in the
+	 * same snapshot has to land after it and win — otherwise the snapshot means
+	 * something different depending on whether a preset happened to be set.
+	 */
+	it('lets explicit keys win over the preset that also sets them', () => {
+		const config = createSettings();
+		applyWallState(
+			state({ presetId: 'gulf-midnight', clockOffsetH: 5, placeId: 'denver' }),
+			config,
+			0
+		);
+		expect(config.clockOffsetH).toBe(5);
+		expect(config.place.id).toBe('denver');
+	});
+
+	it('treats an empty id as "nothing pinned" rather than as a lookup', () => {
+		const config = createSettings();
+		const before = config.place.id;
+		applyWallState(state({ placeId: '', presetId: '' }), config, 0);
+		expect(config.place.id).toBe(before);
+	});
+});

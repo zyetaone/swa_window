@@ -345,7 +345,7 @@ export class PaneSettings {
 		 */
 		const presetParam = url.searchParams.get('preset');
 		if (presetParam) {
-			this.applyPreset(presetParam);
+			this.applyPreset(presetParam, Date.now() / 1000);
 			/**
 			 * A preset that names a place pins the rotation, exactly as `?place=`
 			 * does, and for a sharper version of the same reason.
@@ -413,7 +413,7 @@ export class PaneSettings {
 	 * operator action on a pane, not a derived quantity, so that ceiling is
 	 * accepted rather than engineered away.
 	 */
-	applyPreset(presetOrId: ScenePreset | string, wallSec: number = Date.now() / 1000): void {
+	applyPreset(presetOrId: ScenePreset | string, wallSec: number): void {
 		const preset =
 			typeof presetOrId === 'string' ? SCENE_PRESETS.find((p) => p.id === presetOrId) : presetOrId;
 		if (!preset) return;

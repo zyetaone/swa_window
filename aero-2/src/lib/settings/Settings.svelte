@@ -124,7 +124,7 @@
 					<h4>Scene Composition Presets</h4>
 					<div class="preset-grid">
 						{#each SCENE_PRESETS as preset}
-							<button type="button" class="preset-card" onclick={() => config.applyPreset(preset)}>
+							<button type="button" class="preset-card" onclick={() => config.applyPreset(preset, Date.now() / 1000)}>
 								<div class="preset-top">
 									<span class="preset-icon">{preset.icon}</span>
 									<span class="preset-badge">{preset.badge}</span>
