@@ -271,11 +271,10 @@ Two lessons from getting it wrong first:
   policy + writer, consumed by nothing) and `/api/fleet/heartbeat` (records and
   summarises the whole wall, rendered by nothing). Every one is present,
   plausible and inert: each part works in isolation, so no check can go red,
-  and the gap is invisible to `check`, to the suite and to smoke. Three are now
-  wired; water is still open. **When adding a producer, add its consumer in the
+  and the gap is invisible to `check`, to the suite and to smoke. **When adding a producer, add its consumer in the
   same change** — a docstring in the present tense is a claim, and
   `/api/internal/thermal`'s said "the display polls this" for as long as it took
-  someone to look.
+  someone to look. All four are wired as of 2026-09-04.
 - **Clock sync is correctness telemetry, not health telemetry.** Pose, sun, the
   director's slot and a wall push's `applyAtWallSec` are each derived per pane
   from `Date.now()`; that only agrees while the clocks do. An unsynced Pi flies
@@ -283,24 +282,21 @@ Two lessons from getting it wrong first:
   number reads green. The heartbeat carries `clockSynced` and `/admin` counts
   it. Note the tri-state: health-check sends `-1` for "no timedatectl", which
   must stay UNKNOWN rather than collapsing to "drift".
-- **`data/tiles/water/` is packed and wired to NOTHING.** Built by
-  `tools/fetch-water-mask.py` from Sentinel-2 SCL class 6, to give MapLibre the
-  water bit Terrarium does not carry (v1 got it from Cesium's
-  `requestWaterMask`). It serves correctly through `/api/tiles/xyz/water/...`
-  and is honestly reported under `unused` by the health check, but no component
-  mounts it, no `WATER_PLACES` set exists, and it is not in
-  `REQUIRED_TILE_ASSETS`. Invariant 10 does NOT cover it — that scan is over
-  the GeoJSON endpoints, and this is a raster layer. Same bug class as roads,
-  still open, deliberately recorded rather than half-wired.
-  Two caveats if it is picked up: only `chicago_midway` is packed, and its
-  manifest says `maxZoom: 11` while the tool defaults to 13, so the mask
-  vanishes on close approach while the imagery keeps going to z13.
-  `_water-work/` is 12 MB of build intermediates left in the archive.
-- **The tile archive lives in `data/`, never `static/`.** Under `static/` Vite
-  copies and brotli-compresses all ~56k files into `build/` on every build
-  (3.5 min, 11 GB) AND the adapter serves them directly, so
-  `GET /tiles/terrain.pmtiles` answers 200 without the path guard, the symlink
-  check or the Range logic — which quietly makes invariant 5 optional.
+- **Water is a GLINT, not a tint.** `data/tiles/water/` is a Sentinel-2 Scene
+  Classification mask (class 6), white on water and transparent elsewhere,
+  because MapLibre draws a photograph of water where Cesium drew a surface — and
+  a raster grade cannot recover that. `Water.svelte` drives its opacity from
+  `specularGlint`, so it is bright only when the sun is LOW and the pane is
+  pointed at it, and unmounted otherwise. That per-pane response is the point on
+  a wall: the three panes face different bearings, so one can look across a
+  blazing lake while another sees the same water dark. It shares
+  `facingSunAmount` with the sunward haze deliberately — two components
+  deriving the same specular geometry independently is how a sheen and a haze
+  end up disagreeing about where the sun is.
+  Only `chicago_midway` is packed, to z11 (the manifest, not the tool's z13
+  default — z12/z13 are empty and declaring 13 would 404 every tile on
+  approach). `_water-work/` is 12 MB of build intermediates, gitignored and
+  reported under `unused`.
 - **A present archive is not a working one.** `terrarium/` is build INPUT for
   `pack-pmtiles`; the kiosk never requests it. A pack holding only terrarium
   renders a white sheet, and the health endpoint called that `ok` for as long
