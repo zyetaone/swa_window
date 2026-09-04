@@ -8,6 +8,7 @@
 	import { SCENE_PRESETS } from './presets.js';
 	import { WEATHERS, FLEET_ROLES, AUDIO_MODES } from './settings.svelte.js';
 	import { fetchStatus, type KioskStatus } from '#lib/status.js';
+	import { formatClock } from '#lib/format.js';
 	import Knob from './Knob.svelte';
 	import Toggle from './Toggle.svelte';
 	import Segmented from './Segmented.svelte';
@@ -28,11 +29,11 @@
 	type TabId = 'presets' | 'camera' | 'wing' | 'atmosphere' | 'terrain' | 'cabin' | 'wall';
 	let activeTab = $state<TabId>('presets');
 
+	// `formatClock`, not a private stamp: this drawer's copy ROUNDED the
+	// minutes while the Hud floored them, so the two clocks on one pane could
+	// disagree by a minute for thirty seconds at a time.
 	const clockLabel = $derived.by(() => {
-		const h = display.view.timeOfDay;
-		const hh = Math.floor(h);
-		const mm = Math.round((h - hh) * 60);
-		const stamp = `${String(hh % 24).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
+		const stamp = formatClock(display.view.timeOfDay);
 		const off = config.clockOffsetH;
 		return off === 0 ? `${stamp} local` : `${stamp} · ${off > 0 ? '+' : ''}${off}h`;
 	});
@@ -568,7 +569,7 @@
 
 	.trigger-btn.active {
 		background: rgba(56, 189, 248, 0.35);
-		border-color: #38bdf8;
+		border-color: var(--accent-cyan);
 		color: #ffffff;
 	}
 
@@ -584,12 +585,12 @@
 		width: 380px;
 		background: rgba(11, 17, 30, 0.88);
 		backdrop-filter: blur(16px);
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--glass-border);
 		z-index: 100;
 		display: flex;
 		flex-direction: column;
 		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-		color: #f8fafc;
+		color: var(--text-primary);
 	}
 	.glass-pane.right {
 		right: 0;
@@ -616,7 +617,7 @@
 	.close-btn {
 		background: none;
 		border: none;
-		color: #94a3b8;
+		color: var(--text-muted);
 		font-size: 1.2rem;
 		cursor: pointer;
 		padding: 4px;
@@ -629,7 +630,7 @@
 		display: flex;
 		overflow-x: auto;
 		background: rgba(0, 0, 0, 0.25);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		border-bottom: 1px solid var(--glass-border-subtle);
 		padding: 4px 8px;
 		gap: 4px;
 		scrollbar-width: none;
@@ -638,7 +639,7 @@
 		background: none;
 		border: none;
 		padding: 6px 10px;
-		color: #94a3b8;
+		color: var(--text-muted);
 		font-size: 0.78rem;
 		font-weight: 500;
 		border-radius: 4px;
@@ -647,7 +648,7 @@
 		transition: all 0.15s ease;
 	}
 	.tab-btn:hover {
-		color: #f8fafc;
+		color: var(--text-primary);
 		background: rgba(255, 255, 255, 0.05);
 	}
 	.tab-btn.active {
@@ -675,8 +676,8 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: #94a3b8;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		color: var(--text-muted);
+		border-bottom: 1px solid var(--glass-border-subtle);
 		padding-bottom: 0.4rem;
 	}
 
@@ -696,7 +697,7 @@
 		color: inherit;
 	}
 	.preset-card:hover {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--glass-border-subtle);
 		border-color: rgba(56, 189, 248, 0.4);
 		transform: translateY(-1px);
 	}
@@ -713,7 +714,7 @@
 		font-size: 0.65rem;
 		padding: 2px 6px;
 		background: rgba(56, 189, 248, 0.15);
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		border-radius: 4px;
 		text-transform: uppercase;
 		font-weight: 600;
@@ -726,7 +727,7 @@
 	}
 	.preset-desc {
 		font-size: 0.72rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 		line-height: 1.3;
 	}
 
@@ -757,7 +758,7 @@
 		background: rgba(0, 0, 0, 0.3);
 		padding: 10px;
 		border-radius: 6px;
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		border: 1px solid var(--glass-border-subtle);
 	}
 	.diag-item {
 		display: flex;
@@ -765,14 +766,14 @@
 		font-size: 0.8rem;
 	}
 	.diag-label {
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.diag-value.warn {
 		color: #ffb454;
 	}
 
 	.diag-value {
-		color: #f8fafc;
+		color: var(--text-primary);
 		font-family: monospace;
 	}
 
@@ -796,7 +797,7 @@
 		font-weight: 600;
 	}
 	.glass-btn.secondary {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--glass-border-subtle);
 		color: #ffffff;
 	}
 	.glass-btn:hover {

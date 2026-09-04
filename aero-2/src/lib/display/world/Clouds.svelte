@@ -14,7 +14,31 @@
 	 * - 100% deterministic 3-Pi panorama alignment via seeded RNG.
 	 */
 	import { useDisplay } from '../display.svelte.js';
-	import * as THREE from 'three';
+	/**
+	 * Named imports, not `import * as THREE`.
+	 *
+	 * MEASURED to be style, not size: the kiosk chunk is 423KB gz either way,
+	 * because three ships proper ESM and Rollup already treeshakes through the
+	 * namespace object — and what survives (SkinnedMesh, InstancedMesh, ...)
+	 * is retained by GLTFLoader, which must be able to load any glTF content.
+	 * Kept because an explicit list is the honest statement of what this file
+	 * uses, and because the next reader should not have to re-run that
+	 * measurement to know the namespace was not the problem.
+	 */
+	import {
+		AmbientLight,
+		Color,
+		Group,
+		PerspectiveCamera,
+		SRGBColorSpace,
+		Scene,
+		Sprite,
+		SpriteMaterial,
+		Texture,
+		TextureLoader,
+		Vector3,
+		WebGLRenderer
+	} from 'three';
 	import { mulberry32 } from '../flight/flight-path.js';
 	import { weatherLightLoss } from './atmosphere.js';
 
@@ -39,9 +63,9 @@
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 
 	// Scratch math vectors
-	const _spriteWorld = new THREE.Vector3();
-	const _viewVec = new THREE.Vector3();
-	const _sunDir = new THREE.Vector3();
+	const _spriteWorld = new Vector3();
+	const _viewVec = new Vector3();
+	const _sunDir = new Vector3();
 
 	/**
 	 * The deck's whole life, attached to the canvas that owns it. Same shape as
@@ -50,7 +74,7 @@
 	 * hundreds of sprites.
 	 */
 	function cloudScene(c: HTMLCanvasElement) {
-		const renderer = new THREE.WebGLRenderer({
+		const renderer = new WebGLRenderer({
 			canvas: c,
 			alpha: true,
 			antialias: true,
@@ -59,18 +83,18 @@
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		renderer.setSize(c.clientWidth, c.clientHeight, false);
 
-		const scene = new THREE.Scene();
-		const camera = new THREE.PerspectiveCamera(50, c.clientWidth / c.clientHeight, 10, 900_000);
+		const scene = new Scene();
+		const camera = new PerspectiveCamera(50, c.clientWidth / c.clientHeight, 10, 900_000);
 		camera.position.set(0, 0, 0);
 
-		const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+		const ambient = new AmbientLight(0xffffff, 0.9);
 		scene.add(ambient);
 
-		const cloudGroup = new THREE.Group();
+		const cloudGroup = new Group();
 		scene.add(cloudGroup);
 
-		const textureLoader = new THREE.TextureLoader();
-		const textures: THREE.Texture[] = [];
+		const textureLoader = new TextureLoader();
+		const textures: Texture[] = [];
 		let settled = 0;
 
 		/** Build once every load has finished, with whatever survived. */
@@ -113,7 +137,7 @@
 			textureLoader.load(
 				url,
 				(tex) => {
-					tex.colorSpace = THREE.SRGBColorSpace;
+					tex.colorSpace = SRGBColorSpace;
 					textures[i] = tex;
 					done();
 				},
@@ -129,8 +153,8 @@
 			);
 		});
 
-		const sprites: THREE.Sprite[] = [];
-		const materials: THREE.SpriteMaterial[] = [];
+		const sprites: Sprite[] = [];
+		const materials: SpriteMaterial[] = [];
 		const rotSpeeds: number[] = [];
 		const shearFactors: number[] = [];
 		/**
@@ -189,7 +213,7 @@
 		}
 
 		function emitCluster(
-			texList: THREE.Texture[],
+			texList: Texture[],
 			radiusMin: number,
 			radiusSpan: number,
 			scaleMin: number,
@@ -248,12 +272,12 @@
 				const baseBrightness = 0.65 + ySoft * 0.15;
 				const baseOpacity = 0.22 + rand() * 0.26;
 
-				const mat = new THREE.SpriteMaterial({
+				const mat = new SpriteMaterial({
 					map: tex,
 					transparent: true,
 					opacity: baseOpacity * opacityScale,
 					depthWrite: false,
-					color: new THREE.Color(baseBrightness, baseBrightness, baseBrightness),
+					color: new Color(baseBrightness, baseBrightness, baseBrightness),
 					rotation: rand() * Math.PI * 2
 				});
 
@@ -272,7 +296,7 @@
 				};
 				materials.push(mat);
 
-				const sprite = new THREE.Sprite(mat);
+				const sprite = new Sprite(mat);
 				sprite.position.set(ox, oy, oz);
 				sprite.scale.set(sprScale, sprScale, 1);
 

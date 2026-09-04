@@ -50,7 +50,7 @@
 	}
 	.toggle-desc {
 		font-size: 0.72rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.toggle-checkbox {
 		position: absolute;

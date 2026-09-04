@@ -15,6 +15,7 @@ import {
 } from '../display/flight/view.js';
 import { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
 import { localHourAtSunElevation, resolveLocalHours } from '../display/world/sun.js';
+import { wrapSigned } from '#lib/angles.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
@@ -70,11 +71,6 @@ export const KNOB_RANGE = {
 } as const satisfies Record<string, readonly [number, number]>;
 
 export type NumericKnob = keyof typeof KNOB_RANGE;
-
-/** Wrap into -180..180 — the shortest signed bearing, not 0..360. */
-function wrapSigned(deg: number): number {
-	return ((((deg + 180) % 360) + 360) % 360) - 180;
-}
 
 const DEFAULT_WING_SCALE = 0.65;
 const DEFAULT_WING_OFFSET_X = 0;

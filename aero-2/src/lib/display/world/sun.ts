@@ -14,8 +14,7 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 	return t * t * (3 - 2 * t);
 }
 
-const DEG2RAD = Math.PI / 180;
-const RAD2DEG = 180 / Math.PI;
+import { DEG2RAD, RAD2DEG, signedDelta } from '#lib/angles.js';
 
 /** Day of year, 1..366, from a wall-clock epoch in seconds. */
 function dayOfYear(wallSec: number): number {
@@ -187,8 +186,7 @@ export function localHourAtSunElevation(
  * which on one continuous window reads as a seam.
  */
 export function facingSunAmount(cameraBearingDeg: number, sunAzimuthDeg: number): number {
-	const delta = ((sunAzimuthDeg - cameraBearingDeg + 540) % 360) - 180;
-	return Math.max(0, Math.cos(delta * DEG2RAD));
+	return Math.max(0, Math.cos(signedDelta(cameraBearingDeg, sunAzimuthDeg) * DEG2RAD));
 }
 
 /**

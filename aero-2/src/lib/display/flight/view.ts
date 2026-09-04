@@ -34,7 +34,7 @@ export interface CameraParams {
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
 export const DEFAULT_PITCH_DEG = -10;
 
-const DEG2RAD = Math.PI / 180;
+import { DEG2RAD } from '#lib/angles.js';
 const M_PER_DEG_LAT = 111_320;
 
 /** Written out in five places before this existed. */

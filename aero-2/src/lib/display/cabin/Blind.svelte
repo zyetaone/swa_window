@@ -89,8 +89,8 @@
 		inset: 0;
 		background: repeating-linear-gradient(
 			180deg,
-			rgba(255, 255, 255, 0.12) 0px,
-			rgba(255, 255, 255, 0.12) 2px,
+			var(--glass-border) 0px,
+			var(--glass-border) 2px,
 			rgba(230, 227, 221, 0.55) 2px,
 			rgba(220, 217, 211, 0.55) 10px,
 			rgba(0, 0, 0, 0.12) 10px,

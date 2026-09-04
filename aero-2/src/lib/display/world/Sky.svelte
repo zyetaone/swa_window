@@ -12,6 +12,7 @@
 	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
 	import { duskHorizonMix, duskVaultMix, facingSunAmount } from './sun.js';
+	import { signedDelta } from '#lib/angles.js';
 	import { cssRgb, lerpRgb, weatherLightLoss, cloudedRgb } from './atmosphere.js';
 
 	const display = useDisplay();
@@ -91,9 +92,7 @@
 	 * below, and the dusk glare's screen position further down. It used to be
 	 * defined next to the glare, which is why the fog never had it.
 	 */
-	const sunHeadingDelta = $derived(
-		((sunAzimuth - display.view.cameraBearingDeg + 540) % 360) - 180
-	);
+	const sunHeadingDelta = $derived(signedDelta(display.view.cameraBearingDeg, sunAzimuth));
 
 	/** Shared with the water sheen — see `facingSunAmount`. */
 	const facingSun = $derived(facingSunAmount(display.view.cameraBearingDeg, sunAzimuth));

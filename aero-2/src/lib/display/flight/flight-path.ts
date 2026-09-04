@@ -86,10 +86,10 @@ export const BREATHE_PERIOD_SEC = ORBIT_PERIOD_SEC / ORBIT.petals;
  */
 export const TURN_RATE_REF_DEG_PER_SEC = 0.25;
 
-/** Signed shortest difference between two bearings, -180..180. */
-function normalizeSigned(deg: number): number {
-	return ((((deg + 180) % 360) + 360) % 360) - 180;
-}
+import {
+	normalizeHeading as _normalizeHeading,
+	wrapSigned as normalizeSigned
+} from '#lib/angles.js';
 
 export const ALTITUDE_FLOOR_M = 400;
 export const ALTITUDE_CEILING_M = 13_000;
@@ -98,9 +98,8 @@ export const CLIMB_PERIOD_SEC = 900;
 const TWO_PI = Math.PI * 2;
 const M_PER_DEG_LAT = 111_320;
 
-export function normalizeHeading(deg: number): number {
-	return ((deg % 360) + 360) % 360;
-}
+/** Re-exported from `#lib/angles` — kept so this module's many importers do not churn. */
+export const normalizeHeading = _normalizeHeading;
 
 export interface OrbitPose {
 	lat: number;

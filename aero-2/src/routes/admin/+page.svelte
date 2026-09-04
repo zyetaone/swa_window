@@ -372,20 +372,20 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		border-bottom: 1px solid var(--glass-border-subtle);
 		padding-bottom: 24px;
 		margin-bottom: 32px;
 	}
 	h1 {
 		font-size: 1.85rem;
 		margin: 0 0 6px;
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		letter-spacing: -0.02em;
 	}
 	.subtitle {
 		margin: 0;
 		font-size: 0.95rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.header-badges {
 		display: flex;
@@ -397,7 +397,7 @@
 		border-radius: 9999px;
 		background: rgba(56, 189, 248, 0.1);
 		border: 1px solid rgba(56, 189, 248, 0.3);
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		font-weight: 500;
 	}
 	.badge.stage {
@@ -424,18 +424,18 @@
 	.card {
 		padding: 24px;
 		background: rgba(255, 255, 255, 0.03);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		border: 1px solid var(--glass-border-subtle);
 		border-radius: 14px;
 		backdrop-filter: blur(12px);
 	}
 	h2 {
 		font-size: 1.25rem;
 		margin: 0 0 8px;
-		color: #f8fafc;
+		color: var(--text-primary);
 	}
 	.card-desc {
 		font-size: 0.85rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 		margin: 0 0 20px;
 		line-height: 1.4;
 	}
@@ -448,7 +448,7 @@
 	.role-card {
 		padding: 14px;
 		background: rgba(255, 255, 255, 0.02);
-		border: 1px solid rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--glass-bg-subtle);
 		border-radius: 10px;
 		display: flex;
 		flex-direction: column;
@@ -469,7 +469,7 @@
 	}
 	.role-desc {
 		font-size: 0.7rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.role-url-box {
 		background: rgba(0, 0, 0, 0.3);
@@ -479,7 +479,7 @@
 	}
 	.role-url-box code {
 		font-size: 0.7rem;
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		white-space: nowrap;
 	}
 	.role-actions {
@@ -507,7 +507,7 @@
 		background: #0369a1;
 	}
 	.btn.secondary {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--glass-border-subtle);
 		color: #e2e8f0;
 		border: 1px solid rgba(255, 255, 255, 0.15);
 	}
@@ -517,12 +517,12 @@
 	.btn.xs {
 		padding: 2px 8px;
 		font-size: 0.7rem;
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--glass-border-subtle);
 		color: #e2e8f0;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--glass-border);
 	}
 	.network-interfaces {
-		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		border-top: 1px solid var(--glass-border-subtle);
 		padding-top: 16px;
 	}
 	.network-interfaces h3 {
@@ -530,7 +530,7 @@
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.ip-list {
 		display: flex;
@@ -548,10 +548,10 @@
 	}
 	.iface-name {
 		font-weight: 600;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.ip-row code {
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		flex: 1;
 	}
 	.presets-list {
@@ -562,7 +562,7 @@
 	.preset-card-admin {
 		padding: 10px;
 		background: rgba(255, 255, 255, 0.02);
-		border: 1px solid rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--glass-bg-subtle);
 		border-radius: 8px;
 		text-decoration: none;
 		color: inherit;
@@ -572,7 +572,7 @@
 		transition: all 0.15s ease;
 	}
 	.preset-card-admin:hover {
-		background: rgba(255, 255, 255, 0.06);
+		background: var(--glass-bg-subtle);
 		border-color: rgba(56, 189, 248, 0.4);
 		transform: translateY(-1px);
 	}
@@ -595,7 +595,7 @@
 	}
 	.preset-desc {
 		font-size: 0.65rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 		line-height: 1.3;
 	}
 	.destinations-grid {
@@ -610,14 +610,14 @@
 		padding: 8px 12px;
 		border-radius: 6px;
 		background: rgba(255, 255, 255, 0.02);
-		border: 1px solid rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--glass-bg-subtle);
 		text-decoration: none;
 		color: inherit;
 		font-size: 0.75rem;
 		transition: background 0.15s;
 	}
 	.dest-btn:hover {
-		background: rgba(255, 255, 255, 0.06);
+		background: var(--glass-bg-subtle);
 		border-color: rgba(56, 189, 248, 0.3);
 	}
 	.dest-name {
@@ -626,7 +626,7 @@
 	}
 	.dest-elev {
 		font-size: 0.65rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.fleet-note {
 		font-size: 0.85rem;
@@ -642,13 +642,13 @@
 	.fleet-table th {
 		text-align: left;
 		font-weight: 600;
-		color: #94a3b8;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+		color: var(--text-muted);
+		border-bottom: 1px solid var(--glass-border);
 		padding: 6px 8px;
 	}
 	.fleet-table td {
 		padding: 6px 8px;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		border-bottom: 1px solid var(--glass-bg-subtle);
 		font-variant-numeric: tabular-nums;
 	}
 	.fleet-table tr.offline {
@@ -680,7 +680,7 @@
 	}
 	.telem-item .label {
 		font-size: 0.7rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
@@ -693,7 +693,7 @@
 		color: #22c55e;
 	}
 	.footer {
-		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		border-top: 1px solid var(--glass-border-subtle);
 		padding-top: 24px;
 		color: #64748b;
 		font-size: 0.85rem;
@@ -704,7 +704,7 @@
 		gap: 12px;
 	}
 	.footer a {
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		text-decoration: none;
 	}
 	.footer a:hover {

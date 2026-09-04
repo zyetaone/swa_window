@@ -87,7 +87,7 @@
 		background: rgba(0, 0, 0, 0.35);
 		border: 1px solid rgba(255, 255, 255, 0.18);
 		border-radius: 4px;
-		color: #f8fafc;
+		color: var(--text-primary);
 		font-size: 0.78rem;
 		font-family: monospace;
 		text-align: right;

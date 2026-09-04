@@ -114,7 +114,7 @@
 		position: absolute;
 		inset: 12px;
 		border-radius: 42px;
-		border: 1.5px solid rgba(255, 255, 255, 0.08);
+		border: 1.5px solid var(--glass-border-subtle);
 		box-shadow:
 			inset 0 0 30px rgba(0, 0, 0, 0.6),
 			0 0 0 12px rgba(18, 22, 28, 0.95);

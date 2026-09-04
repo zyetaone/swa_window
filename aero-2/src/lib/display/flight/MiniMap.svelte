@@ -339,7 +339,7 @@
 		border: 1px solid rgba(255, 255, 255, 0.25);
 		box-shadow:
 			0 8px 28px rgba(0, 0, 0, 0.65),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+			inset 0 0 0 1px var(--glass-border-subtle);
 		background: #04070d;
 		z-index: 30;
 		user-select: none;
@@ -363,7 +363,7 @@
 
 	.track-path {
 		fill: none;
-		stroke: #38bdf8;
+		stroke: var(--accent-cyan);
 		stroke-width: 1.8;
 		stroke-linecap: round;
 		stroke-linejoin: round;
@@ -383,8 +383,8 @@
 	}
 
 	.target-dot {
-		fill: #38bdf8;
-		filter: drop-shadow(0 0 4px #38bdf8);
+		fill: var(--accent-cyan);
+		filter: drop-shadow(0 0 4px var(--accent-cyan));
 	}
 
 	.target-pulse {
@@ -442,7 +442,7 @@
 	.reverse:hover {
 		background: rgba(56, 189, 248, 0.3);
 		color: #fff;
-		border-color: #38bdf8;
+		border-color: var(--accent-cyan);
 	}
 
 	.elevation-profile {
@@ -465,10 +465,10 @@
 	}
 
 	.elev-dot {
-		fill: #38bdf8;
+		fill: var(--accent-cyan);
 		stroke: #ffffff;
 		stroke-width: 1;
-		filter: drop-shadow(0 0 4px #38bdf8);
+		filter: drop-shadow(0 0 4px var(--accent-cyan));
 	}
 
 	.elev-pulse {

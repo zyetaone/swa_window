@@ -138,12 +138,12 @@
 	h1 {
 		font-size: 2.25rem;
 		margin: 0 0 8px;
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		letter-spacing: -0.02em;
 	}
 	.subtitle {
 		font-size: 1.1rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 		margin: 0 0 16px;
 	}
 	.blurb {
@@ -163,7 +163,7 @@
 		border-radius: 9999px;
 		background: rgba(56, 189, 248, 0.1);
 		border: 1px solid rgba(56, 189, 248, 0.3);
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		font-weight: 500;
 	}
 	.badge.stage {
@@ -176,8 +176,8 @@
 	}
 	h2 {
 		font-size: 1.4rem;
-		color: #f8fafc;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		color: var(--text-primary);
+		border-bottom: 1px solid var(--glass-border-subtle);
 		padding-bottom: 10px;
 		margin-bottom: 20px;
 	}
@@ -194,19 +194,19 @@
 	.card {
 		padding: 20px;
 		background: rgba(255, 255, 255, 0.03);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		border: 1px solid var(--glass-border-subtle);
 		border-radius: 12px;
 	}
 	.card h3 {
 		margin: 0 0 8px;
 		font-size: 1rem;
-		color: #38bdf8;
+		color: var(--accent-cyan);
 	}
 	.card p {
 		margin: 0;
 		font-size: 0.85rem;
 		line-height: 1.5;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.table-wrap {
 		overflow-x: auto;
@@ -220,10 +220,10 @@
 	td {
 		padding: 12px 16px;
 		text-align: left;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		border-bottom: 1px solid var(--glass-bg-subtle);
 	}
 	th {
-		color: #94a3b8;
+		color: var(--text-muted);
 		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -236,7 +236,7 @@
 		background: rgba(255, 255, 255, 0.1);
 		border: 1px solid rgba(255, 255, 255, 0.2);
 		border-radius: 4px;
-		color: #38bdf8;
+		color: var(--accent-cyan);
 	}
 	.footer {
 		border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -250,7 +250,7 @@
 		gap: 12px;
 	}
 	.footer a {
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		text-decoration: none;
 	}
 	.footer a:hover {

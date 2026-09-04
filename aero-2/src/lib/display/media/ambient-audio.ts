@@ -5,9 +5,9 @@
  * without any audio files, licensing, or network transfer overhead.
  */
 
-export function clamp01(n: number): number {
-	return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
-}
+import { clamp01 } from '#lib/angles.js';
+// Re-exported: tests and future callers may reach it through either module.
+export { clamp01 };
 
 export function engineCutoffHz(altitudeM: number): number {
 	if (!Number.isFinite(altitudeM)) return 220;

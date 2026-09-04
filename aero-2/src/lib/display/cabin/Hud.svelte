@@ -5,6 +5,7 @@
 	 */
 	import { useDisplay } from '../display.svelte.js';
 	import { TILE_ATTRIBUTION } from '#lib/settings/tiles.js';
+	import { formatClock, formatUtcOffset } from '#lib/format.js';
 
 	interface Props {
 		visible?: boolean;
@@ -32,21 +33,6 @@
 		document.documentElement.style.setProperty('--hud-height', `${visible ? ribbonHeight : 0}px`);
 	});
 
-	function formatTime(hours: number): string {
-		const totalMinutes = Math.floor(hours * 60);
-		const h = Math.floor(totalMinutes / 60) % 24;
-		const m = totalMinutes % 60;
-		return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-	}
-
-	function formatUtcOffset(offset: number): string {
-		const sign = offset >= 0 ? '+' : '-';
-		const abs = Math.abs(offset);
-		const h = Math.floor(abs);
-		const m = Math.round((abs - h) * 60);
-		return m === 0 ? `UTC${sign}${h}` : `UTC${sign}${h}:${m.toString().padStart(2, '0')}`;
-	}
-
 	/** 17.4435, 78.3772 -> "17.44N 78.38E". Signed degrees read as data; a
 	 *  hemisphere letter reads as a position, which is what a window shows. */
 	function formatCoord(lat: number, lon: number): string {
@@ -61,7 +47,7 @@
 	const aglFt = $derived(Math.round(aglM * 3.28084));
 	const heading = $derived(Math.round(display.view.planeHeadingDeg));
 	const bank = $derived(display.view.bankDeg.toFixed(1));
-	const localTime = $derived(formatTime(display.view.timeOfDay ?? 12));
+	const localTime = $derived(formatClock(display.view.timeOfDay ?? 12));
 	/**
 	 * The zone label must include `clockOffsetH`, because the CLOCK beside it
 	 * already does.
@@ -173,7 +159,7 @@
 		background: rgba(15, 23, 42, 0.82);
 		backdrop-filter: blur(14px);
 		-webkit-backdrop-filter: blur(14px);
-		border-top: 1px solid rgba(255, 255, 255, 0.12);
+		border-top: 1px solid var(--glass-border);
 		z-index: 20;
 		user-select: none;
 		font-family: var(--font-sans);
@@ -238,7 +224,7 @@
 	}
 
 	.seg-val {
-		color: #f8fafc;
+		color: var(--text-primary);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
@@ -249,13 +235,13 @@
 		padding: 1px 4px;
 		border-radius: 4px;
 		background: rgba(56, 189, 248, 0.15);
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		border: 1px solid rgba(56, 189, 248, 0.25);
 		margin-left: 2px;
 	}
 
 	.band-val {
-		color: #38bdf8;
+		color: var(--accent-cyan);
 		text-transform: uppercase;
 		font-size: 0.68rem;
 		letter-spacing: 0.03em;

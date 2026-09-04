@@ -186,14 +186,14 @@
 		gap: 4px;
 		margin: 10px 0;
 		font-size: 0.8rem;
-		color: #94a3b8;
+		color: var(--text-muted);
 	}
 	.media-field input {
 		padding: 6px 8px;
 		background: rgba(0, 0, 0, 0.35);
 		border: 1px solid rgba(255, 255, 255, 0.18);
 		border-radius: 4px;
-		color: #f8fafc;
+		color: var(--text-primary);
 		font-size: 0.8rem;
 		font-family: monospace;
 	}

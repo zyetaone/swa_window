@@ -7,7 +7,31 @@
 	 * Responds dynamically to airframe banking, solar lighting transitions, and operator alignment knobs.
 	 */
 	import { useDisplay } from '../display.svelte.js';
-	import * as THREE from 'three';
+	/**
+	 * Named imports, not `import * as THREE`.
+	 *
+	 * MEASURED to be style, not size: the kiosk chunk is 423KB gz either way,
+	 * because three ships proper ESM and Rollup already treeshakes through the
+	 * namespace object — and what survives (SkinnedMesh, InstancedMesh, ...)
+	 * is retained by GLTFLoader, which must be able to load any glTF content.
+	 * Kept because an explicit list is the honest statement of what this file
+	 * uses, and because the next reader should not have to re-run that
+	 * measurement to know the namespace was not the problem.
+	 */
+	import {
+		ACESFilmicToneMapping,
+		AmbientLight,
+		Color,
+		DirectionalLight,
+		DoubleSide,
+		Group,
+		Mesh,
+		Object3D,
+		PerspectiveCamera,
+		PointLight,
+		Scene,
+		WebGLRenderer
+	} from 'three';
 	import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 	const display = useDisplay();
@@ -37,7 +61,7 @@
 	 * cost nothing.
 	 */
 	function wingScene(c: HTMLCanvasElement) {
-		const renderer = new THREE.WebGLRenderer({
+		const renderer = new WebGLRenderer({
 			canvas: c,
 			alpha: true,
 			antialias: true,
@@ -45,12 +69,12 @@
 		});
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		renderer.setSize(c.clientWidth, c.clientHeight, false);
-		renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		renderer.toneMapping = ACESFilmicToneMapping;
 		renderer.toneMappingExposure = 1.15;
 
-		const scene = new THREE.Scene();
+		const scene = new Scene();
 		// Expanded frustum and depth bounds: zero edge clipping across all aspect ratios
-		const camera = new THREE.PerspectiveCamera(52, c.clientWidth / c.clientHeight, 0.001, 1000);
+		const camera = new PerspectiveCamera(52, c.clientWidth / c.clientHeight, 0.001, 1000);
 		camera.position.set(0, 0, 6.2);
 
 		/**
@@ -67,32 +91,32 @@
 		 * starfield already ramp on, so the wing goes out with the sky rather
 		 * than on a schedule of its own.
 		 */
-		const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+		const ambient = new AmbientLight(0xffffff, 0.9);
 		scene.add(ambient);
 
-		const sunKey = new THREE.DirectionalLight(0xffeedd, 2.2);
+		const sunKey = new DirectionalLight(0xffeedd, 2.2);
 		sunKey.position.set(6, 9, 5);
 		scene.add(sunKey);
 
 		/** Warm noon key vs. cold moonlight, and the ambient that survives dusk. */
-		const SUN_COLOR = new THREE.Color(0xffeedd);
-		const MOON_COLOR = new THREE.Color(0x9fb6da);
+		const SUN_COLOR = new Color(0xffeedd);
+		const MOON_COLOR = new Color(0x9fb6da);
 
-		const wingHolder = new THREE.Group();
+		const wingHolder = new Group();
 		// Base positioning: Root in lower right, wing sweeping into camera depth
 		wingHolder.position.set(1.1, -1.1, 0);
 		scene.add(wingHolder);
 
 		// Wingtip Strobe & Nav Light in 3D
-		const strobeLight = new THREE.PointLight(0xffffff, 0, 15);
+		const strobeLight = new PointLight(0xffffff, 0, 15);
 		strobeLight.position.set(-2.6, 0.85, -1.6);
 		wingHolder.add(strobeLight);
 
-		const navLight = new THREE.PointLight(0x22c55e, 1.5, 4); // Green starboard nav light
+		const navLight = new PointLight(0x22c55e, 1.5, 4); // Green starboard nav light
 		navLight.position.set(-2.6, 0.85, -1.6);
 		wingHolder.add(navLight);
 
-		let wingMesh: THREE.Object3D | null = null;
+		let wingMesh: Object3D | null = null;
 		const loader = new GLTFLoader();
 
 		loader.load(
@@ -103,8 +127,8 @@
 				wingMesh.rotation.set(0.02, 1.68, 0.18);
 				wingMesh.scale.set(1.11, 1.11, -1.11);
 				wingMesh.traverse((child) => {
-					if (child instanceof THREE.Mesh && child.material) {
-						child.material.side = THREE.DoubleSide;
+					if (child instanceof Mesh && child.material) {
+						child.material.side = DoubleSide;
 					}
 				});
 				wingHolder.add(wingMesh);
