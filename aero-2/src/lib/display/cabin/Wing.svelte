@@ -7,6 +7,7 @@
 	 * Responds dynamically to airframe banking, solar lighting transitions, and operator alignment knobs.
 	 */
 	import { useDisplay } from '../display.svelte.js';
+	import { WORLD_ROLL_GAIN } from '../flight/view.js';
 	/**
 	 * Named imports, not `import * as THREE`.
 	 *
@@ -190,8 +191,31 @@
 				const aeroFlexDeg = bank * 0.04 * rollFactor;
 				const currentPitchRad = ((pitchOffset + aeroFlexDeg) * Math.PI) / 180;
 
+				/**
+				 * The wing is RIGIDLY mounted, so it must roll with the airframe.
+				 *
+				 * It used to move by the aeroelastic flex term alone — 0.72 deg at
+				 * a full 18 deg bank — while the camera swung 6 deg of depression.
+				 * A wing that barely moves while the view swings reads as pasted
+				 * onto the glass, which is the loudest tell that this is a map.
+				 *
+				 * The world now rolls at WORLD_ROLL_GAIN (one home, in flight/view).
+				 * This is
+				 * the OPPOSITE sign and the same gain: the wing is fixed to the
+				 * aircraft, so in cabin space the horizon rotates one way and the
+				 * airframe stays put — which on screen means the wing counter-
+				 * rotates against the tilting world by exactly what the world
+				 * moved. Any other gain and the wing drifts against its own
+				 * horizon through every turn.
+				 *
+				 * `screenSign` mirrors it for a reversed loop, as with everything
+				 * else here: the window is on the inside of the turn either way,
+				 * so the wing hangs off the other side of the frame.
+				 */
+				const worldRollRad = (bank * WORLD_ROLL_GAIN * Math.PI) / 180;
+
 				// Rigid cabin airframe lock with aeroelastic lift flex
-				wingHolder.rotation.z = -currentPitchRad * screenSign;
+				wingHolder.rotation.z = -currentPitchRad * screenSign + worldRollRad * screenSign;
 				wingHolder.scale.set(scale * screenSign, scale, scale);
 
 				// Locked 3D translation inside cabin reference frame with high-frequency aero-flutter

@@ -60,6 +60,21 @@
 	 */
 	const overcast = $derived(weatherLightLoss(display.config.weather));
 
+	/**
+	 * The deck is the biggest GPU cost in the window, and it was the one thing
+	 * the thermal shed did not touch.
+	 *
+	 * `Display.svelte` drops `qualityMode` to `performance` when the Pi reports
+	 * live throttling, and until now only RainGlass read it — so a device
+	 * cooking at 82 C shed fourteen rain droplets and kept every one of ~300
+	 * cloud sprites. Halving the deck is the shed that actually buys frames.
+	 *
+	 * Read here rather than in `buildCloudDeck` so it joins `density` in the
+	 * rebuild effect: a thermal event rebuilds the deck once, it does not
+	 * re-light it per frame.
+	 */
+	const qualityScale = $derived(display.config.qualityMode === 'performance' ? 0.5 : 1);
+
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 
 	// Scratch math vectors
@@ -183,19 +198,33 @@
 			const rng = mulberry32(seed);
 
 			// ── 1. Distant Horizon Cloud Systems (40 km - 260 km) ──────────────────
-			const distantCount = Math.round(8 + density * 16);
+			/**
+			 * Counts raised from 8+16d / 5+10d / 4+6d.
+			 *
+			 * At the default density of 0.75 the old deck was 20 distant clusters,
+			 * 13 near cumulus and 9 cirrus — roughly 240 sprites spread over a
+			 * 260 km horizon, which reads as scattered puffs rather than weather.
+			 * The distant tier does most of the work for "there is a sky out
+			 * there" and is also the cheapest (high albedo, low overdraw, far
+			 * plane), so it gains the most.
+			 *
+			 * `qualityScale` halves everything when the Pi is throttling — see
+			 * above. Floors of 1 keep a deck present at any setting: an empty sky
+			 * where there should be cloud reads as broken, not as clear weather.
+			 */
+			const distantCount = Math.max(1, Math.round((12 + density * 26) * qualityScale));
 			for (let c = 0; c < distantCount; c++) {
 				emitCluster(textures, 40_000, 220_000, 8_000, 16_000, 6, 8, 0.05, rng, 0);
 			}
 
 			// ── 2. Near & Mid-Deck Cumulus Puffs (2 km - 35 km) ─────────────────────
-			const nearCount = Math.round(5 + density * 10);
+			const nearCount = Math.max(1, Math.round((7 + density * 15) * qualityScale));
 			for (let c = 0; c < nearCount; c++) {
 				emitCluster(textures, 2_500, 32_000, 2_000, 4_500, 4, 6, 0.12, rng, 0);
 			}
 
 			// ── 3. High-Altitude Cirrus Veil Bands (40 km - 180 km, +3500m) ─────────
-			const cirrusCount = Math.round(4 + density * 6);
+			const cirrusCount = Math.max(1, Math.round((6 + density * 9) * qualityScale));
 			for (let c = 0; c < cirrusCount; c++) {
 				emitCluster(
 					[textures[2] || textures[0]],
@@ -491,6 +520,7 @@
 		// because it seeds the RNG: at a UTC day boundary the deck must re-roll,
 		// or three panes that booted on different days show different weather.
 		void density;
+		void qualityScale;
 		void display.phase;
 		rebuild?.();
 	});

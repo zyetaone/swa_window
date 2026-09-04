@@ -31,6 +31,22 @@ export interface CameraParams {
 	weather?: Weather;
 }
 
+/**
+ * How much of the airframe's bank reaches the horizon as roll.
+ *
+ * ONE home, because two renderers read it and they must not disagree: the
+ * MapLibre camera rolls the world by this, and the Three wing counter-rotates
+ * by the same amount so it stays fixed to the aircraft. A copy in each file
+ * drifts the moment someone tunes one, and the symptom — a wing that slides
+ * against its own horizon through a turn — is subtle enough to survive review.
+ *
+ * Not 1.0. From a window seat the horizon does tilt with the aircraft, but the
+ * passenger's head tilts too, so the felt rotation is smaller than the
+ * instrument reading; at full gain an 18 deg bank also swings the horizon far
+ * enough to show the frame's corners on a wide pane.
+ */
+export const WORLD_ROLL_GAIN = 0.55;
+
 export const DEFAULT_WINDOW_AZIMUTH_DEG = 0;
 export const DEFAULT_PITCH_DEG = -10;
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
 	ORBIT,
 	ORBIT_PERIOD_SEC,
@@ -7,7 +8,12 @@ import {
 	daySeed,
 	CLIMB_PERIOD_SEC
 } from '#lib/display/flight/flight-path.js';
-import { calculateCameraView, FlightCamera, WEATHERS } from '#lib/display/flight/view.js';
+import {
+	calculateCameraView,
+	FlightCamera,
+	WEATHERS,
+	WORLD_ROLL_GAIN
+} from '#lib/display/flight/view.js';
 import { resolveAtmosphere, weatherLightLoss, cloudedRgb } from '#lib/display/world/atmosphere.js';
 import { slotNoise, phaseFor } from '#lib/display/flight/flight-path.js';
 import {
@@ -1311,6 +1317,75 @@ describe('water glint is specular, not a wash', () => {
 			const facing = facingSunAmount(bearing, az);
 			const glint = specularGlint(bearing, az, 0.0001);
 			expect(Math.abs(glint - facing), `bearing ${bearing} az ${az}`).toBeLessThan(1e-3);
+		}
+	});
+});
+
+describe('the wing is attached to the aircraft', () => {
+	/**
+	 * THE MISMATCH. Bank reached the world only as a pitch offset, so the
+	 * horizon stayed dead level through every turn while the sightline dipped
+	 * and lifted. The wing meanwhile rolled by its aeroelastic FLEX term alone —
+	 * `bank * 0.04`, which is 0.72 deg at a full 18 deg bank, against roughly
+	 * 6 deg of camera depression. A wing that barely moves while the view swings
+	 * reads as pasted onto the glass, and that is the loudest tell that this is
+	 * a map rather than a window.
+	 *
+	 * `Sky.svelte` had already reasoned this out and deferred it, on the
+	 * grounds that bank was "already spent on pitch". Both now apply: pitch
+	 * (which reveals ground on the inside of a turn) and roll at
+	 * WORLD_ROLL_GAIN.
+	 */
+	it('rolls the world by a real fraction of the bank, not a token amount', () => {
+		expect(WORLD_ROLL_GAIN).toBeGreaterThan(0.2);
+		expect(WORLD_ROLL_GAIN, 'a full-gain horizon shows the frame corners').toBeLessThanOrEqual(1);
+		// The old flex-only coupling was 0.04. Anything near it is the bug back.
+		expect(WORLD_ROLL_GAIN).toBeGreaterThan(0.04 * 4);
+	});
+
+	/**
+	 * ONE home for the gain. Two renderers read it — the MapLibre camera rolls
+	 * the world, the Three wing counter-rotates to stay fixed to the airframe —
+	 * and a copy in each drifts the moment someone tunes one. The symptom, a
+	 * wing sliding against its own horizon through a turn, is subtle enough to
+	 * survive review, which is exactly why this is asserted rather than trusted.
+	 */
+	it('both renderers read the gain from flight/view, not their own copy', () => {
+		for (const file of [
+			'src/lib/display/world/Stage.svelte',
+			'src/lib/display/cabin/Wing.svelte'
+		]) {
+			const src = readFileSync(file, 'utf8');
+			expect(src, `${file} must import WORLD_ROLL_GAIN`).toMatch(/import\s*\{[^}]*WORLD_ROLL_GAIN/);
+			expect(
+				src.replace(/\/\*[\s\S]*?\*\//g, ''),
+				`${file} declares its own WORLD_ROLL_GAIN`
+			).not.toMatch(/const\s+WORLD_ROLL_GAIN\s*=/);
+		}
+	});
+
+	/**
+	 * Sign, checked geometrically rather than by reading it back — the same
+	 * method that caught the inverted bank. A left (counterclockwise) turn drops
+	 * the left wing, and MapLibre rotates the camera so the world
+	 * counter-rotates: the roll passed to the map must be POSITIVE.
+	 */
+	it('a left turn tips the horizon the correct way', () => {
+		const track = new FlightTrack(40, -105, 400, 13_000, 1, 0);
+		const cosLat = Math.cos((40 * Math.PI) / 180);
+		for (const s of [0, 600, 1200, 1800, 2400]) {
+			const p0 = track.positionAt(s - 10);
+			const p1 = track.positionAt(s);
+			const p2 = track.positionAt(s + 10);
+			const v1 = [(p1.lon - p0.lon) * cosLat, p1.lat - p0.lat];
+			const v2 = [(p2.lon - p1.lon) * cosLat, p2.lat - p1.lat];
+			const cross = v1[0] * v2[1] - v1[1] * v2[0];
+			const bank = track.bankAt(s);
+			if (Math.abs(bank) < 0.05) continue;
+			const mapRoll = -bank * WORLD_ROLL_GAIN;
+			expect(Math.sign(mapRoll), `t=${s} turning ${cross > 0 ? 'left' : 'right'}`).toBe(
+				cross > 0 ? 1 : -1
+			);
 		}
 	});
 });

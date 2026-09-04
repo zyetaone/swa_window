@@ -17,6 +17,7 @@
 
 	import { useDisplay } from '../display.svelte.js';
 	import { resolveClearance } from './clearance.js';
+	import { WORLD_ROLL_GAIN } from '../flight/view.js';
 	import Ground from './Ground.svelte';
 	import Terrain from './Terrain.svelte';
 	import Buildings from './Buildings.svelte';
@@ -99,7 +100,33 @@
 				targetAt,
 				atTarget.groundM
 			);
-			m.jumpTo(cam);
+
+			/**
+			 * Bank rolls the WORLD. This is what makes the wing look attached.
+			 *
+			 * `calculateCameraOptionsFromTo` derives bearing and pitch from
+			 * geometry and has nothing to derive roll from, so until now bank
+			 * reached the world only as a pitch offset (BANK_VIEW_GAIN) — the
+			 * sightline dipped and lifted through a turn while the horizon stayed
+			 * dead level. Meanwhile the wing rolled by its aeroelastic FLEX term
+			 * alone: 0.72 deg at a full 18 deg bank, against 6 deg of camera
+			 * depression. A wing that barely moves while the view swings is a wing
+			 * pasted onto the glass, and that mismatch is the single loudest tell
+			 * that this is a map and not a window.
+			 *
+			 * `roll` is negated because MapLibre rotates the camera and the world
+			 * appears to counter-rotate: banking left (negative bankDeg, left wing
+			 * down) must tip the horizon so the left side rises in frame.
+			 *
+			 * `Sky.svelte` already reasoned this out and deferred it — "probably
+			 * the better-looking one ... but bank is already spent on pitch, so it
+			 * needs that double-count resolved first". That is resolved here: the
+			 * pitch coupling stays (it is what reveals ground on the inside of a
+			 * turn, and the ratio form cannot cross the horizon), and roll is
+			 * added on top at a fraction, so the two read as one aircraft rather
+			 * than double-counting into a barrel roll.
+			 */
+			m.jumpTo({ ...cam, roll: -v.bankDeg * WORLD_ROLL_GAIN });
 			raf = requestAnimationFrame(loop);
 		};
 
