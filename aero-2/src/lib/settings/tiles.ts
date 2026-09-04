@@ -14,7 +14,16 @@ export const TILE_MAXZOOM = {
 	gibs: 9,
 	/** VIIRS ships GoogleMapsCompatible_Level8 — there is no z9 to ask for. */
 	viirs: 8,
-	terrarium: 13
+	terrarium: 13,
+	/**
+	 * Packed to z11 today, not the tool's z13 default.
+	 *
+	 * The manifest is the authority — `data/tiles/water/source-*.json` records
+	 * what actually got written, and z12/z13 are empty. Declaring 13 here would
+	 * ask MapLibre for tiles the archive does not hold and 404 every one on
+	 * approach, which is the same trap the DEM's missing zoom range set.
+	 */
+	water: 11
 } as const;
 
 /**
@@ -61,6 +70,21 @@ export const SENTINEL2_MINZOOM = 8;
  * Keep this in step with `data/tiles/sentinel2/source-*.json`; a name here with
  * no pack behind it is exactly the request storm above.
  */
+/**
+ * Locations the water mask is packed for.
+ *
+ * Same gate as SENTINEL2_PLACES and for the same measured reason: an unmounted
+ * source costs nothing, a mounted one with no tiles is a request storm of 404s.
+ * Only Chicago is packed — it is the one location in the catalogue whose window
+ * is dominated by water (Lake Michigan), which is why it was built first.
+ *
+ * Keep in step with `data/tiles/water/source-*.json`.
+ */
+export const WATER_PLACES: ReadonlySet<string> = new Set(['chicago_midway']);
+
+/** Below this the mask is not packed, and the coastline is not resolvable anyway. */
+export const WATER_MINZOOM = 8;
+
 export const SENTINEL2_PLACES: ReadonlySet<string> = new Set([
 	'chicago_midway',
 	'dallas',
@@ -128,11 +152,15 @@ export function tileTemplates(prefix = '/api/tiles'): {
 	gibs: string[];
 	viirs: string[];
 	terrarium: string[];
+	water: string[];
 } {
 	return {
 		sentinel2: [`${prefix}/xyz/sentinel2/{z}/{x}/{y}.jpg`],
 		gibs: [`${prefix}/xyz/gibs/{z}/{x}/{y}.jpg`],
 		viirs: [`${prefix}/xyz/viirs/{z}/{x}/{y}.png`],
-		terrarium: [`${prefix}/xyz/terrarium/{z}/{x}/{y}.png`]
+		terrarium: [`${prefix}/xyz/terrarium/{z}/{x}/{y}.png`],
+		// PNG, not JPEG: this is a MASK, and compression ringing at a shoreline
+		// paints sheen onto the beach.
+		water: [`${prefix}/xyz/water/{z}/{x}/{y}.png`]
 	};
 }

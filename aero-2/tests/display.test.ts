@@ -15,7 +15,9 @@ import {
 	nightAmount,
 	sunPosition,
 	duskHorizonMix,
-	duskVaultMix
+	duskVaultMix,
+	facingSunAmount,
+	specularGlint
 } from '#lib/display/world/sun.js';
 import { ATMOSPHERE_BANDS } from '#lib/display/world/atmosphere.js';
 import { ALTITUDE_CEILING_M, ALTITUDE_FLOOR_M } from '#lib/display/flight/flight-path.js';
@@ -1241,5 +1243,74 @@ describe('weather changes the light, not just the glass', () => {
 		const c: [number, number, number] = [0.8, 0.5, 0.2];
 		const spread = (v: readonly [number, number, number]) => Math.max(...v) - Math.min(...v);
 		expect(spread(cloudedRgb(c, 0.85))).toBeLessThan(spread(c) * 0.5);
+	});
+});
+
+describe('water glint is specular, not a wash', () => {
+	/**
+	 * The mask exists because MapLibre draws a PHOTOGRAPH of water while Cesium
+	 * drew a SURFACE, which is why v1 shimmered and this reads flat. A grade
+	 * cannot recover that — it operates on a still image — so the fix is a
+	 * specular layer, and a specular layer is only worth having if it behaves
+	 * specularly.
+	 *
+	 * These pin the geometry rather than the constant: bright when the sun is
+	 * LOW and the window is pointed at it, gone at a high sun or facing away.
+	 * That is what makes a lake a mirror at 18:00 and a grey sheet at noon, and
+	 * it is also what makes the layer worth its bytes on a three-Pi wall — the
+	 * panes point different ways, so one can be looking across a blazing lake
+	 * while another sees the same water dark.
+	 */
+	it('peaks looking into a low sun', () => {
+		expect(specularGlint(90, 90, 5)).toBeGreaterThan(0.8);
+	});
+
+	it('is zero facing away, whatever the elevation', () => {
+		for (const elev of [1, 5, 15, 30, 60]) {
+			expect(specularGlint(0, 180, elev), `elev ${elev} glinted facing away`).toBe(0);
+		}
+	});
+
+	it('fades out as the sun climbs, and is gone by 40 deg', () => {
+		const low = specularGlint(90, 90, 5);
+		const mid = specularGlint(90, 90, 20);
+		const high = specularGlint(90, 90, 45);
+		expect(mid).toBeLessThan(low);
+		expect(high).toBe(0);
+	});
+
+	/** Below the horizon there is no sun to reflect. */
+	it('is zero at night', () => {
+		for (const elev of [-0.1, -6, -18, -40]) {
+			expect(specularGlint(90, 90, elev)).toBe(0);
+		}
+	});
+
+	it('is continuous across the bearing sweep — no seam on a panorama', () => {
+		let prev = specularGlint(0, 90, 10);
+		for (let b = 1; b <= 360; b++) {
+			const g = specularGlint(b, 90, 10);
+			expect(Math.abs(g - prev), `jump at bearing ${b}`).toBeLessThan(0.05);
+			prev = g;
+		}
+	});
+
+	/**
+	 * `facingSunAmount` is shared with the sunward haze in `Sky.svelte`. Two
+	 * components deriving the same specular geometry from the same two angles is
+	 * how a sheen and a haze end up disagreeing about where the sun is, which on
+	 * one continuous window reads as a seam.
+	 */
+	it('agrees with the haze about which way the sun is', () => {
+		for (const [bearing, az] of [
+			[0, 0],
+			[45, 90],
+			[180, 10],
+			[270, 275]
+		]) {
+			const facing = facingSunAmount(bearing, az);
+			const glint = specularGlint(bearing, az, 0.0001);
+			expect(Math.abs(glint - facing), `bearing ${bearing} az ${az}`).toBeLessThan(1e-3);
+		}
 	});
 });

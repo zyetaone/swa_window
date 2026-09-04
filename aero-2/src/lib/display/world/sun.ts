@@ -173,3 +173,38 @@ export function localHourAtSunElevation(
 	const hourAngle = (Math.acos(cosH) * RAD2DEG) / 15;
 	return evening ? 12 + hourAngle : 12 - hourAngle;
 }
+
+/**
+ * How strongly the window is looking INTO the sun, 0 (away) to 1 (straight at
+ * it), for a camera bearing and a sun azimuth.
+ *
+ * `cos` of the heading delta, rectified — smooth by construction, and it costs
+ * nothing that a pane facing away gets exactly zero.
+ *
+ * Hoisted out of `Sky.svelte` when a second caller appeared. Two components
+ * computing the same specular geometry from the same two angles is how the
+ * water sheen and the sunward haze end up disagreeing about where the sun is,
+ * which on one continuous window reads as a seam.
+ */
+export function facingSunAmount(cameraBearingDeg: number, sunAzimuthDeg: number): number {
+	const delta = ((sunAzimuthDeg - cameraBearingDeg + 540) % 360) - 180;
+	return Math.max(0, Math.cos(delta * DEG2RAD));
+}
+
+/**
+ * Specular response for a horizontal surface: bright when the sun is LOW and
+ * the window is pointed at it, gone when the sun is high or behind.
+ *
+ * The low-sun term is the physical half — a high sun reflects its glint
+ * straight back down rather than along the sightline, which is why a lake is a
+ * mirror at 18:00 and a flat grey sheet at noon.
+ */
+export function specularGlint(
+	cameraBearingDeg: number,
+	sunAzimuthDeg: number,
+	sunElevationDeg: number
+): number {
+	if (sunElevationDeg <= 0) return 0;
+	const lowSun = 1 - Math.max(0, Math.min(1, sunElevationDeg / 40));
+	return facingSunAmount(cameraBearingDeg, sunAzimuthDeg) * lowSun;
+}

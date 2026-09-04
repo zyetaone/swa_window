@@ -11,7 +11,7 @@
 	 */
 	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
-	import { duskHorizonMix, duskVaultMix } from './sun.js';
+	import { duskHorizonMix, duskVaultMix, facingSunAmount } from './sun.js';
 	import { cssRgb, lerpRgb, weatherLightLoss, cloudedRgb } from './atmosphere.js';
 
 	const display = useDisplay();
@@ -95,13 +95,8 @@
 		((sunAzimuth - display.view.cameraBearingDeg + 540) % 360) - 180
 	);
 
-	/**
-	 * How much the window is facing INTO the sun, 0 (away) to 1 (straight at it).
-	 *
-	 * `cos` of the heading delta, rectified. Smooth by construction, and it
-	 * costs nothing that a pane facing away gets exactly zero.
-	 */
-	const facingSun = $derived(Math.max(0, Math.cos((sunHeadingDelta * Math.PI) / 180)));
+	/** Shared with the water sheen — see `facingSunAmount`. */
+	const facingSun = $derived(facingSunAmount(display.view.cameraBearingDeg, sunAzimuth));
 
 	const fogColor = $derived.by(() => {
 		const base = display.atmosphere.skyHorizon;

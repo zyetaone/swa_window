@@ -97,7 +97,19 @@ export const REQUIRED_TILE_ASSETS = [
 	 * provisioned for a subset of the catalog is a legitimate state rather than
 	 * a broken pack.
 	 */
-	{ name: 'sentinel2', path: 'sentinel2', kind: 'dir', fatal: false }
+	{ name: 'sentinel2', path: 'sentinel2', kind: 'dir', fatal: false },
+	/**
+	 * The water mask. Non-fatal for the same reason as `sentinel2`: it is packed
+	 * per location, so a device provisioned for a subset of the catalogue is a
+	 * legitimate state rather than a broken pack, and without it the window
+	 * simply draws water as the flat photograph it always did.
+	 *
+	 * Listed at all because of the note above: an archive can only report a
+	 * missing asset it has been told to look for. This layer spent a week
+	 * packed, served and mounted by nothing precisely because no check knew it
+	 * should exist.
+	 */
+	{ name: 'water', path: 'water', kind: 'dir', fatal: false }
 ] as const satisfies readonly {
 	name: string;
 	path: string;

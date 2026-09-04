@@ -426,8 +426,16 @@ describe('every tile source the client names, the server can serve', () => {
 	 * looking perfect right up until it shipped. `remoteTileUrl` returning null
 	 * is the licence boundary, so this list is a deliberate exemption, not a
 	 * hole in the check.
+	 *
+	 * `water` is the same shape for a different reason: it is DERIVED, not
+	 * fetched. `tools/fetch-water-mask.py` reclassifies the Sentinel-2 Scene
+	 * Classification band into a binary mask, so there is no upstream serving
+	 * these pixels to fall back to — nobody publishes "class 6 of this scene as
+	 * a PNG". It is also not in `download-tiles.ts`'s LAYER_EXT for the same
+	 * reason `sentinel2` is not: that table describes tile-by-tile WMTS
+	 * downloads, and this layer is warped and cut by GDAL.
 	 */
-	const NO_UPSTREAM = new Set(['sentinel2']);
+	const NO_UPSTREAM = new Set(['sentinel2', 'water']);
 
 	it('resolves each template slug to an upstream URL', () => {
 		const templates = tileTemplates();

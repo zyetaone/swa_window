@@ -20,6 +20,7 @@
 	import Ground from './Ground.svelte';
 	import Terrain from './Terrain.svelte';
 	import Buildings from './Buildings.svelte';
+	import Water from './Water.svelte';
 	import NightLights from './NightLights.svelte';
 	import Roads from './Roads.svelte';
 	import Sky from './Sky.svelte';
@@ -132,6 +133,11 @@
 
 		<Ground />
 		<Terrain />
+		<!-- Above the hillshade, below the lights. The glint is REFLECTED light,
+		     so unlike the city lights it belongs on the same side of the shading
+		     as the photograph it sits on — but it must not be dimmed by relief
+		     that has nothing to do with a lake surface, so it goes after. -->
+		<Water />
 		<!-- Above Terrain, deliberately: the hillshade shades the ground
 		     PHOTOGRAPH, and city lights are emitted, not reflected. See
 		     NightLights.svelte. -->
