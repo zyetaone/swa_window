@@ -88,7 +88,10 @@
 	 * not an oversight — and it is pane-local by nature, observing this process
 	 * rather than deriving anything three panes must agree on.
 	 */
-	let probe = $state({ started: false, lastFrameSec: 0, nowSec: mountedAtSec });
+	// `$state.raw` — replaced wholesale once a second, never mutated. Same
+	// rationale as `AeroDisplay.view`, at 1/60th the rate; consistency is the
+	// point more than the microseconds.
+	let probe = $state.raw({ started: false, lastFrameSec: 0, nowSec: mountedAtSec });
 
 	$effect(() => {
 		const id = setInterval(() => {

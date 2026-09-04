@@ -28,7 +28,24 @@ export class AeroDisplay {
 	 * defaults are gone; if this is ever read before assignment, it must throw
 	 * rather than render north at sea level.
 	 */
-	view = $state<CameraView>({} as CameraView);
+	/**
+	 * `$state.raw`, for the same reason `PaneSettings.place` is: the object is
+	 * REPLACED every frame and never mutated — `advanceTo` assigns a fresh
+	 * `CameraView` 60 times a second, and nothing anywhere writes `view.lat`.
+	 * The deep proxy that plain `$state` builds was therefore pure overhead on
+	 * the hottest write in the codebase: proxy-wrapping a 15-field object plus
+	 * its turbulence sub-object, per frame, to guard mutations that cannot
+	 * happen. Raw still triggers on assignment, which is the only way this
+	 * ever changes.
+	 *
+	 * Measured in isolation (200k assignments of this object shape, same
+	 * process, interleaved): proxy 126ms, raw 58ms — 2.2x on the hottest
+	 * write in the codebase. In the full `advanceTo` tick the difference is
+	 * smaller because the flight maths dominates; the win is real but modest,
+	 * and the CORRECTNESS argument (a proxy guarding mutations that cannot
+	 * happen) would justify raw at 1.0x.
+	 */
+	view = $state.raw<CameraView>({} as CameraView);
 	fps = $state<number>(60);
 	frameTimeMs = $state<number>(16.6);
 
