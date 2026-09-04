@@ -20,7 +20,8 @@ export const WALL_KEYS = [
 	'clockOffsetH',
 	'displayMode',
 	'blindOpen',
-	'rotate'
+	'rotate',
+	'mediaUrls'
 ] as const;
 
 export type WallKey = (typeof WALL_KEYS)[number];
@@ -33,6 +34,21 @@ export interface WallState {
 	displayMode: string;
 	blindOpen: boolean;
 	rotate: boolean;
+	/**
+	 * What `video` and `screensaver` mode actually SHOW.
+	 *
+	 * Without this the wall could push a display mode but not its content: the
+	 * only writers of the playlist fields were `?media=` URL params parsed at
+	 * boot, so an operator switching the wall to video put "No media specified"
+	 * on every pane — a mode switch shipped without the thing it switches to.
+	 * The mode and its media travel in one snapshot so they cannot arrive
+	 * separately.
+	 *
+	 * Empty is legal and means "keep whatever the pane booted with", so a wall
+	 * that only ever changes flight settings never clobbers a URL-provisioned
+	 * playlist.
+	 */
+	mediaUrls: string[];
 }
 
 /** One push. `version` and `applyAtWallSec` are the server's to set, never a client's. */
@@ -89,6 +105,9 @@ export function parseWallState(input: unknown): WallState | null {
 		return null;
 	}
 
+	const mediaUrls = parseMediaUrls(b.mediaUrls);
+	if (mediaUrls === null) return null;
+
 	return {
 		placeId,
 		presetId,
@@ -96,8 +115,33 @@ export function parseWallState(input: unknown): WallState | null {
 		clockOffsetH,
 		displayMode: b.displayMode as string,
 		blindOpen: b.blindOpen,
-		rotate: b.rotate
+		rotate: b.rotate,
+		mediaUrls
 	};
+}
+
+/**
+ * A bounded list of same-origin-or-http(s) media paths.
+ *
+ * Bounded twice — 12 entries, 300 chars each — because this crosses the wire
+ * into a file the server rewrites and every pane polls; MAX_WALL_BYTES is the
+ * backstop, not the policy. Only path-absolute (`/cabin.mp4`) and http(s) URLs
+ * pass: a `javascript:` or `data:` URL in a `<video src>` is inert in modern
+ * browsers, but "inert in modern browsers" is not a contract worth shipping on
+ * a kiosk that runs one browser build for years. Rejected, not filtered — a
+ * push with one bad URL should fail loudly at the admin's screen, not land
+ * quietly minus a track nobody noticed was dropped.
+ */
+function parseMediaUrls(v: unknown): string[] | null {
+	if (v === undefined) return null;
+	if (!Array.isArray(v) || v.length > 12) return null;
+	const out: string[] = [];
+	for (const u of v) {
+		if (typeof u !== 'string' || u.length === 0 || u.length > 300) return null;
+		if (!/^(\/[^\/]|https?:\/\/)/.test(u)) return null;
+		out.push(u);
+	}
+	return out;
 }
 
 /** Empty string is legal — it means "no preset pinned". */

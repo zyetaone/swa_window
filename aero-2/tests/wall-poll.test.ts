@@ -13,7 +13,8 @@ const snapshot = (version: number) => ({
 		clockOffsetH: 0,
 		displayMode: 'flight',
 		blindOpen: true,
-		rotate: true
+		rotate: true,
+		mediaUrls: []
 	}
 });
 

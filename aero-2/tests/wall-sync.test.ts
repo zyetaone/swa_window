@@ -11,6 +11,7 @@ const state = (over: Partial<WallState> = {}): WallState => ({
 	displayMode: 'flight',
 	blindOpen: false,
 	rotate: false,
+	mediaUrls: [],
 	...over
 });
 
@@ -139,5 +140,45 @@ describe('applyWallState', () => {
 		const before = config.place.id;
 		applyWallState(state({ placeId: '', presetId: '' }), config, 0);
 		expect(config.place.id).toBe(before);
+	});
+});
+
+describe('mediaUrls on the receive side', () => {
+	it('a push with media fills all three playlist fields', () => {
+		const config = createSettings();
+		applyWallState(state({ mediaUrls: ['/a.mp4', '/b.mp4'], displayMode: 'video' }), config, 100);
+		expect(config.videoPlaylist).toEqual(['/a.mp4', '/b.mp4']);
+		expect(config.screensaverUrls).toEqual(['/a.mp4', '/b.mp4']);
+		expect(config.videoUrl).toBe('/a.mp4');
+		expect(config.videoIndex, 'a new playlist must start at its first track').toBe(0);
+		expect(config.displayMode).toBe('video');
+	});
+
+	/**
+	 * Empty means "keep what the pane booted with". A wall that only ever
+	 * changes flight settings must not clobber a URL-provisioned playlist —
+	 * otherwise every weather push blanks the media on a pane someone
+	 * deliberately configured with ?media=.
+	 */
+	it('an empty list leaves a boot-provisioned playlist alone', () => {
+		const config = createSettings();
+		config.videoPlaylist = ['/boot.mp4'];
+		config.videoUrl = '/boot.mp4';
+		applyWallState(state({ mediaUrls: [] }), config, 100);
+		expect(config.videoPlaylist).toEqual(['/boot.mp4']);
+		expect(config.videoUrl).toBe('/boot.mp4');
+	});
+
+	/**
+	 * A pre-upgrade snapshot — buffered across the deploy that added the field —
+	 * has no mediaUrls at all. It must apply rather than throw: a schema
+	 * addition has to tolerate its own rollout.
+	 */
+	it('a snapshot from before the field existed still applies', () => {
+		const config = createSettings();
+		const legacy = state();
+		delete (legacy as Partial<WallState>).mediaUrls;
+		expect(() => applyWallState(legacy, config, 100)).not.toThrow();
+		expect(config.weather).toBe('rain');
 	});
 });

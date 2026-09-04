@@ -14,7 +14,8 @@ const good: WallState = {
 	clockOffsetH: -2.5,
 	displayMode: 'flight',
 	blindOpen: false,
-	rotate: false
+	rotate: false,
+	mediaUrls: []
 };
 
 const dirs: string[] = [];
@@ -183,5 +184,50 @@ describe('/api/wall', () => {
 		const body = await res.json();
 		expect(body.version).toBe(1);
 		expect(body.applyAtWallSec).toBeGreaterThan(1);
+	});
+});
+
+describe('mediaUrls — the mode and its content travel together', () => {
+	/**
+	 * The wall could push `displayMode: 'video'` while the only writers of the
+	 * playlist fields were `?media=` URL params parsed at boot — so the switch
+	 * put "No media specified" on every pane. The list rides in the snapshot
+	 * now, and the parser owns its bounds.
+	 */
+	it('accepts a legal list', () => {
+		expect(
+			parseWallState({ ...good, mediaUrls: ['/cabin.mp4', 'https://cdn.x/y.webm'] })
+		).not.toBeNull();
+	});
+
+	it('rejects a push missing the field — a whole snapshot means whole', () => {
+		const { mediaUrls: _drop, ...partial } = good;
+		expect(parseWallState(partial)).toBeNull();
+	});
+
+	/**
+	 * `javascript:` in a `<video src>` is inert in modern browsers, but "inert
+	 * in modern browsers" is not a contract worth shipping on a kiosk that runs
+	 * one browser build for years. Rejected loudly rather than filtered
+	 * quietly: a push with one bad URL should fail at the admin's screen, not
+	 * land minus a track nobody noticed was dropped.
+	 */
+	it('rejects non-path, non-http urls', () => {
+		for (const bad of [
+			['javascript:alert(1)'],
+			['data:text/html,x'],
+			['relative.mp4'],
+			['//protocol-relative.example/x.mp4'],
+			[''],
+			['/ok.mp4', 'ftp://x/y']
+		]) {
+			expect(parseWallState({ ...good, mediaUrls: bad }), JSON.stringify(bad)).toBeNull();
+		}
+	});
+
+	it('bounds the list and each entry', () => {
+		expect(parseWallState({ ...good, mediaUrls: Array(13).fill('/a.mp4') })).toBeNull();
+		expect(parseWallState({ ...good, mediaUrls: ['/' + 'a'.repeat(300)] })).toBeNull();
+		expect(parseWallState({ ...good, mediaUrls: 'not-an-array' })).toBeNull();
 	});
 });

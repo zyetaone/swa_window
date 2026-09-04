@@ -47,7 +47,8 @@
 			clockOffsetH: config.clockOffsetH,
 			displayMode: config.displayMode,
 			blindOpen: config.blindOpen,
-			rotate: config.rotate
+			rotate: config.rotate,
+			mediaUrls: config.videoPlaylist.slice()
 		}))
 	);
 
@@ -120,6 +121,26 @@
 		onselect={(m: string) => (draft.displayMode = m)}
 	/>
 
+	{#if draft.displayMode === 'video' || draft.displayMode === 'screensaver'}
+		<!-- The mode and its content travel in one snapshot. Before this field
+		     existed the wall could push `video` but the only writers of the
+		     playlist were `?media=` URL params parsed at boot — so the switch
+		     put "No media specified" on every pane. -->
+		<label class="media-field">
+			<span>Media URLs (comma-separated)</span>
+			<input
+				type="text"
+				placeholder="/cabin.mp4, /alps.webp"
+				value={draft.mediaUrls.join(', ')}
+				oninput={(e) =>
+					(draft.mediaUrls = e.currentTarget.value
+						.split(',')
+						.map((u) => u.trim())
+						.filter(Boolean))}
+			/>
+		</label>
+	{/if}
+
 	<!--
 		A native range rather than the Knob control: Knob takes `config` and writes
 		`config[key]` directly, which is precisely what this tab must not do. The
@@ -159,6 +180,24 @@
 </div>
 
 <style>
+	.media-field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin: 10px 0;
+		font-size: 0.8rem;
+		color: #94a3b8;
+	}
+	.media-field input {
+		padding: 6px 8px;
+		background: rgba(0, 0, 0, 0.35);
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 4px;
+		color: #f8fafc;
+		font-size: 0.8rem;
+		font-family: monospace;
+	}
+
 	.wall-tab {
 		display: flex;
 		flex-direction: column;
