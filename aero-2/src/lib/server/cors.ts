@@ -60,3 +60,25 @@ export function corsPreflight(methods: string): (event: { request: Request }) =>
 		});
 	};
 }
+
+/**
+ * Copy CORS headers onto a Response that was built without them.
+ *
+ * `requireBearer` and `readLimitedJson` return bare refusals — they are shared
+ * helpers and know nothing about the origin policy of the route that called
+ * them. Returning one of those directly gives a cross-origin caller a response
+ * with no `Access-Control-Allow-Origin`, and the browser then refuses to show
+ * it: the operator gets an opaque network error where a 401 "invalid token" or
+ * a 413 "body too large" was waiting. Same class of bug as a preflight that
+ * omits Allow-Headers — the exchange completes and the answer is unreadable.
+ */
+export function withCors(response: Response, cors: Record<string, string>): Response {
+	if (Object.keys(cors).length === 0) return response;
+	const headers = new Headers(response.headers);
+	for (const [k, v] of Object.entries(cors)) headers.set(k, v);
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
+}

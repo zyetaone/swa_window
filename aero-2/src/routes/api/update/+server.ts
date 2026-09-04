@@ -19,7 +19,7 @@
 import { json } from '@sveltejs/kit';
 
 import { requireBearer } from '#lib/server/auth.js';
-import { corsPreflight, lanCorsHeaders } from '#lib/server/cors.js';
+import { corsPreflight, lanCorsHeaders, withCors } from '#lib/server/cors.js';
 import { triggerOtaUpdate } from '#lib/server/update.js';
 import type { RequestHandler } from './$types';
 
@@ -31,9 +31,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		process.env.AERO_ADMIN_TOKEN,
 		'update endpoint (AERO_ADMIN_TOKEN)'
 	);
-	if (refusal) return refusal;
-
 	const cors = lanCorsHeaders(request.headers.get('origin'));
+	if (refusal) return withCors(refusal, cors);
 
 	// triggerOtaUpdate preflights `sudo -n`. If the hatch is unavailable, say so
 	// with a 503 rather than a 202 that promises an update which will not happen.

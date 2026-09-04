@@ -15,7 +15,7 @@ import { json } from '@sveltejs/kit';
 
 import { requireBearer } from '#lib/server/auth.js';
 import { readLimitedJson } from '#lib/server/body.js';
-import { corsPreflight, lanCorsHeaders } from '#lib/server/cors.js';
+import { corsPreflight, lanCorsHeaders, withCors } from '#lib/server/cors.js';
 import { latestAll, recordHeartbeat, summarize } from '#lib/server/heartbeat.js';
 import type { RequestHandler } from './$types';
 
@@ -33,12 +33,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		process.env.AERO_FLEET_TOKEN,
 		'fleet heartbeat (AERO_FLEET_TOKEN)'
 	);
-	if (refusal) return refusal;
-
 	const cors = lanCorsHeaders(request.headers.get('origin'));
+	if (refusal) return withCors(refusal, cors);
 
 	const body = await readLimitedJson<unknown>(request, MAX_HEARTBEAT_BYTES);
-	if (!body.ok) return body.response;
+	if (!body.ok) return withCors(body.response, cors);
 
 	const sample = recordHeartbeat(body.value);
 	if (!sample) return json({ error: 'invalid heartbeat payload' }, { status: 400, headers: cors });

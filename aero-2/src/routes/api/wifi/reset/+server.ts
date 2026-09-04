@@ -14,7 +14,7 @@
 import { json } from '@sveltejs/kit';
 
 import { requireBearer } from '#lib/server/auth.js';
-import { corsPreflight, lanCorsHeaders } from '#lib/server/cors.js';
+import { corsPreflight, lanCorsHeaders, withCors } from '#lib/server/cors.js';
 import { schedulePrivileged } from '#lib/server/privileged.js';
 import { wifiRecoveryAvailable } from '#lib/server/wifi.js';
 import type { RequestHandler } from './$types';
@@ -43,9 +43,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		process.env.AERO_WIFI_RESET_TOKEN,
 		'wifi reset endpoint (AERO_WIFI_RESET_TOKEN)'
 	);
-	if (refusal) return refusal;
-
 	const cors = lanCorsHeaders(request.headers.get('origin'));
+	if (refusal) return withCors(refusal, cors);
 
 	const recovery = wifiRecoveryAvailable();
 	if (!recovery.ok) {

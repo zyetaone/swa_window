@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { corsPreflight, lanCorsHeaders } from '#lib/server/cors.js';
+import { corsPreflight, lanCorsHeaders, withCors } from '#lib/server/cors.js';
 
 /**
  * The wall is three panes. One of them can hold the 3.7 GB DEM and serve it to
@@ -70,5 +70,33 @@ describe('corsPreflight advertises the headers a gated route needs', () => {
 		expect(res.status).toBe(204);
 		expect(res.headers.get('access-control-allow-origin')).toBeNull();
 		expect(res.headers.get('access-control-allow-headers')).toBeNull();
+	});
+});
+
+/**
+ * A refusal a browser cannot read is a refusal that never happened. The shared
+ * gates build their 401/503/413 without an origin policy, so the route has to
+ * put one on before returning it — otherwise the operator's laptop shows an
+ * opaque network error and the actual status is invisible.
+ */
+describe('withCors', () => {
+	const fleet = lanCorsHeaders('http://192.168.1.42:3000');
+
+	it('carries the origin onto a bare refusal, keeping status and body', async () => {
+		const refusal = new Response(JSON.stringify({ error: 'invalid bearer token' }), {
+			status: 401,
+			headers: { 'content-type': 'application/json' }
+		});
+		const res = withCors(refusal, fleet);
+
+		expect(res.status).toBe(401);
+		expect(res.headers.get('access-control-allow-origin')).toBe('http://192.168.1.42:3000');
+		expect(res.headers.get('content-type')).toBe('application/json');
+		expect(await res.json()).toMatchObject({ error: 'invalid bearer token' });
+	});
+
+	it('leaves the response untouched for an origin off the fleet', () => {
+		const refusal = new Response(null, { status: 401 });
+		expect(withCors(refusal, lanCorsHeaders('https://evil.example.com'))).toBe(refusal);
 	});
 });
