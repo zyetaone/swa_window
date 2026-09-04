@@ -178,6 +178,7 @@
 						isActive={(loc) => config.place.id === loc.id}
 						onselect={(loc) => config.setPlace(loc)}
 						format={(loc) => loc.name}
+						key={(loc) => loc.id}
 					/>
 				</section>
 			{:else if activeTab === 'camera'}
