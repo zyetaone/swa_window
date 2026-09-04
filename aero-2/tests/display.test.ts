@@ -552,6 +552,47 @@ describe('banking', () => {
 	});
 
 	/**
+	 * WHICH wing drops — the half of the question the test above cannot see.
+	 *
+	 * That one asserts the two directions disagree, which is true of a correct
+	 * sign AND of an inverted one. `bankAt` was inverted, so the aircraft banked
+	 * AWAY from every turn, and this suite was green on it under a heading that
+	 * says "banks INTO the turn". A test named for a property it does not test
+	 * is worse than no test: it is why nobody looked.
+	 *
+	 * The check owes nothing to any bearing convention, which is where the bug
+	 * came from — `headingAt` is a COMPASS bearing and increases clockwise, so
+	 * a left turn gives a negative rate, and the old `-norm` flipped that into
+	 * right-wing-down. Instead take the 2D cross product of successive velocity
+	 * vectors along the real ground track: positive is counterclockwise, i.e. a
+	 * left turn, which must drop the LEFT wing (negative by this file's
+	 * convention).
+	 */
+	it('drops the wing on the INSIDE of the turn', () => {
+		for (const dir of [1, -1] as const) {
+			const t = track(dir);
+			const cosLat = Math.cos((17.385 * Math.PI) / 180);
+			for (let i = 1; i < 16; i++) {
+				const s = (i / 16) * ORBIT_PERIOD_SEC;
+				const p0 = t.positionAt(s - 10);
+				const p1 = t.positionAt(s);
+				const p2 = t.positionAt(s + 10);
+				const v1 = [(p1.lon - p0.lon) * cosLat, p1.lat - p0.lat];
+				const v2 = [(p2.lon - p1.lon) * cosLat, p2.lat - p1.lat];
+				// z of the cross product: > 0 is a counterclockwise (left) turn.
+				const cross = v1[0] * v2[1] - v1[1] * v2[0];
+				const bank = t.bankAt(s);
+				if (Math.abs(cross) < 1e-12 || Math.abs(bank) < 0.05) continue;
+				expect(
+					Math.sign(bank),
+					`dir=${dir} t=${Math.round(s)} turning ${cross > 0 ? 'left' : 'right'} with ` +
+						`${bank < 0 ? 'left' : 'right'} wing down — banking away from the turn`
+				).toBe(cross > 0 ? -1 : 1);
+			}
+		}
+	});
+
+	/**
 	 * Heading must agree with where the aircraft actually goes next.
 	 *
 	 * The old analytic velocity divided the east component by cosLat and then

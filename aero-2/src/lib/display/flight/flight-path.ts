@@ -291,7 +291,29 @@ export class FlightTrack {
 		const rate =
 			normalizeSigned(this.headingAt(wallSec + dt) - this.headingAt(wallSec - dt)) / (2 * dt);
 		const norm = Math.max(-1, Math.min(1, rate / TURN_RATE_REF_DEG_PER_SEC));
-		return -norm * ORBIT.maxBankDeg;
+		/**
+		 * NOT negated. The sign here was inverted, so the aircraft banked AWAY
+		 * from every turn — the exact failure the docstring on `OrbitPose.bankDeg`
+		 * says must not happen, sitting four lines from the code that caused it.
+		 *
+		 * `headingAt` returns a COMPASS bearing, which increases clockwise. A
+		 * left turn therefore DECREASES heading, giving a negative rate; the old
+		 * `-norm` turned that into a positive bank, and positive is right-wing-
+		 * down by this file's own convention. Left turn, right wing down.
+		 *
+		 * Verified geometrically rather than by reading the sign back: take the
+		 * 2D cross product of successive velocity vectors along the real ground
+		 * track, which is positive for a counterclockwise (left) turn and owes
+		 * nothing to any bearing convention. Every sample of the orbit came back
+		 * turning LEFT with the RIGHT wing down.
+		 *
+		 * It reaches the passenger three ways, all of them wrong together, which
+		 * is presumably why it survived: the wing model rolls the wrong way, the
+		 * sightline pitches down when it should lift (`BANK_VIEW_GAIN`), and the
+		 * cloud deck counter-rotates. Nothing looks broken frame-to-frame — it
+		 * just never feels like an aircraft.
+		 */
+		return norm * ORBIT.maxBankDeg;
 	}
 
 	/**
