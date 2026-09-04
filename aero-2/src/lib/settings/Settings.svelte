@@ -11,6 +11,7 @@
 	import Knob from './Knob.svelte';
 	import Toggle from './Toggle.svelte';
 	import Segmented from './Segmented.svelte';
+	import Wall from './Wall.svelte';
 
 	interface Props {
 		showSettings?: boolean;
@@ -24,7 +25,7 @@
 	const cities = Location.cities();
 	const features = Location.features();
 
-	type TabId = 'presets' | 'camera' | 'wing' | 'atmosphere' | 'terrain' | 'cabin' | 'fleet';
+	type TabId = 'presets' | 'camera' | 'wing' | 'atmosphere' | 'terrain' | 'cabin' | 'wall';
 	let activeTab = $state<TabId>('presets');
 
 	const clockLabel = $derived.by(() => {
@@ -115,6 +116,12 @@
 				class="tab-btn"
 				class:active={activeTab === 'cabin'}
 				onclick={() => (activeTab = 'cabin')}>🎛️ Cabin</button
+			>
+			<button
+				type="button"
+				class="tab-btn"
+				class:active={activeTab === 'wall'}
+				onclick={() => (activeTab = 'wall')}>🧱 Wall</button
 			>
 		</nav>
 
@@ -387,6 +394,8 @@
 					isActive={(role) => config.fleetRole === role}
 					onselect={(role) => (config.fleetRole = role)}
 				/>
+			{:else if activeTab === 'wall'}
+				<Wall {config} wall={display.wall} nowSec={() => display.view.wallSec} />
 			{/if}
 		</div>
 	</aside>

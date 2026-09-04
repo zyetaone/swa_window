@@ -23,6 +23,8 @@
 	import AudioHost from './media/AudioHost.svelte';
 	import { useDisplay } from './display.svelte.js';
 	import type { Snippet } from 'svelte';
+	import { createWallPoller } from '#lib/settings/wall-poll.js';
+	import { PUBLIC_WALL_ORIGIN } from '$app/env/public';
 
 	/**
 	 * `hud` is the only switch here, because it is the only one with a caller.
@@ -118,6 +120,25 @@
 	 */
 	$effect(() => {
 		if (stalled && frozenSec > RELOAD_SEC && import.meta.env.PROD) location.reload();
+	});
+
+	/**
+	 * Poll the shared wall state.
+	 *
+	 * Here rather than in Stage, because the buffer belongs to the display and
+	 * outlives any one renderer — Stage remounts on a WebGL context loss and a
+	 * poll that remounted with it would drop the pending snapshot.
+	 *
+	 * It only fills `display.wall`; `advanceTo` is what applies it, at the second
+	 * the snapshot names. An empty PUBLIC_WALL_ORIGIN means this pane polls
+	 * itself, which is the correct single-pane behaviour.
+	 */
+	$effect(() => {
+		const poller = createWallPoller(display.wall, PUBLIC_WALL_ORIGIN);
+		// First poll now rather than one interval from now: a pane that just booted
+		// should pick up a wall that was set before it did.
+		void poller.poll();
+		return () => poller.stop();
 	});
 </script>
 

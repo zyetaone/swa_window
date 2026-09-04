@@ -21,5 +21,16 @@ export const variables = defineEnvVars({
 		static: true,
 		description: 'Client tile base URL. Trailing slash stripped. Default: /api/tiles',
 		schema: (value) => value?.replace(/\/$/, '') || '/api/tiles'
+	},
+	PUBLIC_WALL_ORIGIN: {
+		public: true,
+		static: true,
+		description:
+			'Origin holding the shared wall state. Empty (the default) means this pane polls itself, which is the correct single-pane behaviour. Point all three panes at one origin to make them a wall.',
+		// Empty default rather than a guessed peer: a pane that polls itself has
+		// its own wall.json and simply never disagrees with anyone. A wrong
+		// default would have two panes silently following a third that is not the
+		// writer.
+		schema: (value) => value?.replace(/\/$/, '') || ''
 	}
 });
