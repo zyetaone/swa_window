@@ -62,7 +62,22 @@
 	const heading = $derived(Math.round(display.view.planeHeadingDeg));
 	const bank = $derived(display.view.bankDeg.toFixed(1));
 	const localTime = $derived(formatTime(display.view.timeOfDay ?? 12));
-	const utcLabel = $derived(formatUtcOffset(display.config.place.utcOffset));
+	/**
+	 * The zone label must include `clockOffsetH`, because the CLOCK beside it
+	 * already does.
+	 *
+	 * `timeOfDay` is derived from `place.utcOffset + clockOffsetH`, so with a
+	 * tuning offset dialled in the HUD read a shifted time next to the
+	 * destination's real zone — "21:00 UTC-6" for a moment that is not 21:00 in
+	 * UTC-6. Two halves of one readout disagreeing is the sort of thing that
+	 * gets believed, since neither half looks wrong on its own.
+	 *
+	 * The operator drawer already got this right (`clockLabel` appends the
+	 * offset); this is the passenger-facing copy of the same readout.
+	 */
+	const utcLabel = $derived(
+		formatUtcOffset(display.config.place.utcOffset + display.config.clockOffsetH)
+	);
 	const sunElev = $derived(display.sun.elevationDeg);
 	const solarPhase = $derived.by(() => {
 		if (sunElev > 15) return '☀️ DAY';
