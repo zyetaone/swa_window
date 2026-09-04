@@ -1,8 +1,18 @@
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { defaultServerConditions } from 'vite';
 import { defineConfig } from 'vitest/config';
 
-// Under `vitest`, resolve Svelte's BROWSER entry so components can be mounted in tests.
+/**
+ * Under `vitest`, resolve Svelte's BROWSER entry so components can be mounted.
+ *
+ * The defaults are spread back in, and that is the whole point. `conditions`
+ * REPLACES Vite's list rather than extending it, so `['browser']` alone dropped
+ * `module` and `development|production` — and on a clean Linux checkout the
+ * rolldown dep optimizer then could not resolve `node:module` in its own
+ * runtime, failing every CI run from 2026-08-28 with a startup error. It passed
+ * on the author's machine, which is the failure mode this job exists to catch.
+ */
 const IS_TEST = process.env.VITEST !== undefined;
 
 /**
@@ -29,7 +39,7 @@ const IS_TEST = process.env.VITEST !== undefined;
 const MEDIA_ORIGINS = (process.env.AERO_MEDIA_ORIGINS ?? '').split(/\s+/).filter(Boolean);
 
 export default defineConfig({
-	...(IS_TEST ? { resolve: { conditions: ['browser'] } } : {}),
+	...(IS_TEST ? { resolve: { conditions: ['browser', ...defaultServerConditions] } } : {}),
 	plugins: [
 		sveltekit({
 			adapter: adapter(),
