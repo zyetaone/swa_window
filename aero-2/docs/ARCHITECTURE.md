@@ -219,8 +219,41 @@ Two layers share the `night ** 1.5` ramp on purpose. `roads` sharpens `viirs`
 where VIIRS runs out of resolution, and two lighting layers on different ramps
 read as one of them lagging.
 
+## 4c. Weather is a light model, not an overlay
+
+`weather` used to reach the window twice: turbulence, and droplets on the
+glass. Everything photometric was identical between `clear` and `storm`.
+`weatherLightLoss` is now the one scalar behind all of it, and the three things
+it drives are the three things cloud does to light: it **dims**, it
+**flattens** (diffuse light casts no shadows, so the hillshade goes with it),
+and it **desaturates**.
+
+Two lessons from getting it wrong first:
+
+- **Cloud colour must be relative to the current light.** A fixed grey is the
+  obvious implementation and it measured backwards — it is used as fog, fog
+  thickens with the weather, so at storm strength the constant was most of the
+  lower frame and _brighter_ than the night scene it was dimming. A storm came
+  out 32% brighter than clear. `cloudedRgb` desaturates toward the colour's own
+  luma and multiplies, so it is circadian for free and can only subtract.
+- **Measure by row band, with the clock frozen.** A frame mean averages a
+  collapsing sky against a foreground that correctly stays lit, and reports
+  "no effect". And without freezing `Date.now`, the sun moves between samples,
+  so the measurement is of sunset rather than of weather.
+
 ## 5. Known-sharp edges
 
+- **Bank sign is not self-evident; check it geometrically.** `bankAt` negated
+  its own result, so the aircraft banked AWAY from every turn. `headingAt`
+  returns a COMPASS bearing (clockwise-positive), so a left turn gives a
+  negative rate and the negation made it right-wing-down. It reaches the
+  passenger three ways at once — wing model, sightline pitch, cloud counter-
+  rotation — so nothing looks broken frame to frame, it just never feels like
+  an aircraft. The suite had a test named "banks INTO the turn" that was green
+  throughout, because it only asserted the two directions DISAGREE, which an
+  inverted sign also satisfies. Verify with the 2D cross product of successive
+  velocity vectors on the real ground track: positive is counterclockwise, and
+  owes nothing to any bearing convention.
 - **The sightline must never cross the horizon.** Bank was folded into pitch
   additively (+/-15.3 deg against a default -10), so every turn drove the
   effective pitch positive and the 0.5 deg depression clamp caught it — pinned
