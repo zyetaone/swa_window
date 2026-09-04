@@ -75,7 +75,23 @@ export default defineConfig({
 	// Without this the dev server either refuses to boot or, worse, boots and
 	// silently renders a map that builds a canvas and never fetches a tile.
 	optimizeDeps: {
-		exclude: ['svelte-maplibre-gl', 'maplibre-gl']
+		exclude: ['svelte-maplibre-gl', 'maplibre-gl'],
+		/**
+		 * Under vitest the optimizer must bundle for NODE, not for a browser.
+		 *
+		 * The tests run in happy-dom, so the optimizer defaults to a browser
+		 * platform and treats `node:` specifiers as unresolvable — including the
+		 * `import { createRequire } from 'node:module'` that rolldown injects into
+		 * its OWN runtime when it has to interop a CJS dependency. That is a
+		 * startup error before a single test runs, and it is the failure that has
+		 * held this job red since 2026-08-28.
+		 *
+		 * It only ever appeared on the Linux runner, never on darwin at the same
+		 * lockfile and the same bun — both of which were checked before this. The
+		 * platform is not a variable worth leaving implicit either way: vitest
+		 * runs in node, so say node.
+		 */
+		...(IS_TEST ? { rollupOptions: { platform: 'node' as const } } : {})
 	},
 	server: {
 		// Bind to 0.0.0.0 for LAN/kiosk access (Raspberry Pi deployment).
