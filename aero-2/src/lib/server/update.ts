@@ -4,10 +4,11 @@
  * Fire-and-forget triggering of the Pi's systemd updater unit
  * (`aero-updater.service`).
  *
- * NOT YET REACHABLE, and that is deliberate. Nothing imports this: aero-2 has
- * no `/api/update` route, because it has no auth layer yet. v1's equivalent is
- * bearer-gated with `requireAdminToken(request)` against AERO_ADMIN_TOKEN, and
- * this must not be exposed on any route until aero-2 has the same. An
+ * STILL NOT REACHABLE. No `/api/update` route exists yet. The reason used to be
+ * that aero-2 had no auth layer; since Phase 1 it has one, so the remaining
+ * condition is explicit: the route that exposes this must call
+ * `requireBearer(request, env.AERO_ADMIN_TOKEN, 'update (AERO_ADMIN_TOKEN)')`
+ * and return its Response when non-null, before touching anything here. An
  * unauthenticated endpoint that runs `sudo systemctl` is a remote restart for
  * anyone on the LAN.
  *

@@ -34,6 +34,16 @@ describe('readLimited', () => {
 		expect(!res.ok && res.response.status).toBe(413);
 	});
 
+	/**
+	 * The cap is `received > maxBytes`, so a body of exactly maxBytes must pass.
+	 * Off by one in either direction is silent: too strict rejects a legal
+	 * payload at the boundary, too loose admits one byte past every limit.
+	 */
+	it('admits exactly maxBytes and rejects one byte more', async () => {
+		expect((await readLimited(stream(['abcde']), 5)).ok).toBe(true);
+		expect((await readLimited(stream(['abcdef']), 5)).ok).toBe(false);
+	});
+
 	it('treats a missing body as 400, not as empty', async () => {
 		const res = await readLimited(null, 100);
 		expect(!res.ok && res.response.status).toBe(400);
