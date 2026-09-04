@@ -16,6 +16,7 @@
 	import { useDisplay } from '../display.svelte.js';
 	import * as THREE from 'three';
 	import { mulberry32 } from '../flight/flight-path.js';
+	import { weatherLightLoss } from './atmosphere.js';
 
 	const display = useDisplay();
 
@@ -24,6 +25,16 @@
 	const driftSpeed = $derived(display.config.cloudSpeed);
 	const cloudAltM = $derived(display.config.cloudAltitudeM);
 	const opacityScale = $derived(display.config.cloudOpacity);
+
+	/**
+	 * Weather darkens the deck's own bases.
+	 *
+	 * Read inside the render loop (untracked there, like every other knob), so
+	 * changing the weather does not rebuild the sprite population — only how it
+	 * is lit. A storm cloud is not a fair-weather cumulus with more of it; it
+	 * is the same shape with a much darker base.
+	 */
+	const overcast = $derived(weatherLightLoss(display.config.weather));
 
 	const TEXTURE_URLS = ['/cloud.webp', '/cloud-dark.webp', '/cloud-smoke.webp'];
 
@@ -354,9 +365,10 @@
 				)
 				.normalize();
 
-			const mieGain = dayFactor * (sunElev > 0 && sunElev < 25 ? 1.4 : 0.6);
+			// No sun disc through an overcast, so no forward-scatter halo either.
+			const mieGain = dayFactor * (sunElev > 0 && sunElev < 25 ? 1.4 : 0.6) * (1 - overcast);
 			const liveSunBoost = Math.max(0, Math.sin(sunElevRad)) * dayFactor * 0.6;
-			const nightDark = 1 - night * 0.78;
+			const nightDark = (1 - night * 0.78) * (1 - overcast * 0.45);
 			const coolG = 1 - night * 0.22;
 			const coolB = 1 - night * 0.08;
 			const moonLit = night * 0.08;

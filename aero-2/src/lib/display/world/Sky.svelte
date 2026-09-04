@@ -12,11 +12,17 @@
 	import { Sky as SkyDome } from 'svelte-maplibre-gl';
 	import { useDisplay } from '../display.svelte.js';
 	import { duskHorizonMix, duskVaultMix } from './sun.js';
-	import { cssRgb, lerpRgb } from './atmosphere.js';
+	import { cssRgb, lerpRgb, weatherLightLoss, cloudedRgb } from './atmosphere.js';
 
 	const display = useDisplay();
 
 	const night = $derived(display.night);
+
+	/**
+	 * How much light the weather has taken out. Shared with Ground, Terrain and
+	 * Clouds so the sky cannot disagree with the ground about the weather.
+	 */
+	const overcast = $derived(weatherLightLoss(display.config.weather));
 	const sunElev = $derived(display.sun.elevationDeg);
 	const sunAzimuth = $derived(display.sun.azimuthDeg);
 	const bank = $derived(display.view.bankDeg);
@@ -44,7 +50,11 @@
 		const nightSky: readonly [number, number, number] = [0.01, 0.02, 0.06];
 
 		const duskBlended = lerpRgb(base, duskSky, dusk * 0.55);
-		return lerpRgb(duskBlended, nightSky, night);
+		// Under cloud there is no blue vault to see, only the underside of the
+		// deck. Applied BEFORE the night blend so a storm at night stays black
+		// rather than being lifted to grey.
+		const clouded = cloudedRgb(duskBlended, overcast);
+		return lerpRgb(clouded, nightSky, night);
 	});
 
 	const skyHorizon = $derived.by(() => {
@@ -67,8 +77,11 @@
 		const duskHorizon: readonly [number, number, number] = [0.85, 0.42, 0.18];
 		const nightHorizon: readonly [number, number, number] = [0.03, 0.06, 0.14];
 
-		const duskBlended = lerpRgb(base, duskHorizon, dusk * (1 - night));
-		return lerpRgb(duskBlended, nightHorizon, night);
+		// A sunset needs a clear western sky; under an overcast the orange is the
+		// first thing to go, so the dusk mix is scaled down before it is applied.
+		const duskBlended = lerpRgb(base, duskHorizon, dusk * (1 - night) * (1 - overcast));
+		const clouded = cloudedRgb(duskBlended, overcast);
+		return lerpRgb(clouded, nightHorizon, night);
 	});
 
 	/**
@@ -95,7 +108,7 @@
 		const dayFog: readonly [number, number, number] = [0.76, 0.86, 0.96];
 		const nightFog: readonly [number, number, number] = [0.04, 0.07, 0.15];
 
-		const blendedDay = lerpRgb(base, dayFog, 0.45);
+		const blendedDay = cloudedRgb(lerpRgb(base, dayFog, 0.45), overcast);
 
 		/**
 		 * Haze brightens TOWARDS the sun. This is the single most recognisable
@@ -122,7 +135,10 @@
 		 * less into the horizon than a low one.
 		 */
 		const lowSun = 1 - Math.max(0, Math.min(1, sunElev / 40));
-		const scatter = facingSun * lowSun * (1 - night) * 0.42;
+		// Forward scatter needs a sun disc to scatter FROM. Under thick cloud the
+		// light is diffuse and the sunward horizon stops being brighter than any
+		// other, so the whole term fades out with the weather.
+		const scatter = facingSun * lowSun * (1 - night) * (1 - overcast) * 0.42;
 		const sunwardHaze: readonly [number, number, number] = [0.94, 0.88, 0.78];
 
 		return lerpRgb(lerpRgb(blendedDay, sunwardHaze, scatter), nightFog, night);
@@ -149,7 +165,16 @@
 	const groundBlend = $derived.by(() => {
 		const t =
 			(display.atmosphere.fogDensity - FOG_MIN_DENSITY) / (FOG_MAX_DENSITY - FOG_MIN_DENSITY);
-		return 0.18 + 0.68 * Math.max(0, Math.min(1, t));
+		const byAltitude = 0.18 + 0.68 * Math.max(0, Math.min(1, t));
+		/**
+		 * Weather thickens the air on top of altitude.
+		 *
+		 * Visibility is the cue a passenger reads first: in rain the far ridge
+		 * goes, in a storm the middle distance goes too. Pushed toward the
+		 * ceiling rather than added, so it cannot exceed the range MapLibre
+		 * accepts however the band table is later tuned.
+		 */
+		return byAltitude + (0.97 - byAltitude) * overcast * 0.75;
 	});
 
 	// ── 2. Celestial Starfield & Solar Radiance ──────────────────────────────

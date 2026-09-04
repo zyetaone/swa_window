@@ -16,6 +16,7 @@
 		TILE_SIZE,
 		tileTemplates
 	} from '#lib/settings/tiles.js';
+	import { weatherLightLoss } from './atmosphere.js';
 	import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 	import { useDisplay } from '../display.svelte.js';
 
@@ -24,6 +25,14 @@
 	const tiles = tileTemplates(PUBLIC_TILE_SERVER_URL);
 
 	const night = $derived(display.night);
+
+	/**
+	 * Thick cloud dims the ground and pulls the colour out of it.
+	 *
+	 * Same scalar the sky, the hillshade and the cloud deck read, so the four
+	 * cannot drift apart. See `weatherLightLoss`.
+	 */
+	const overcast = $derived(weatherLightLoss(display.config.weather));
 
 	/**
 	 * Only mount the sharp layer where it is packed.
@@ -51,7 +60,7 @@
 	 * — fields, water, bare ground — is crushed to deep nocturnal tones, while the brightest
 	 * pixels survive the squeeze and remain distinct.
 	 */
-	const groundBrightnessMax = $derived(DAY_HIGHLIGHT_CEIL - night * 0.62);
+	const groundBrightnessMax = $derived((DAY_HIGHLIGHT_CEIL - night * 0.62) * (1 - overcast * 0.45));
 	const groundBrightnessMin = $derived(0.01 * (1 - night) ** 2);
 
 	/** Lift contrast into the night so features separate crisply. */
@@ -62,7 +71,9 @@
 	 * daylight photograph; leaving it colour-saturated at low brightness reads
 	 * as murky brown rather than as darkness.
 	 */
-	const groundSaturation = $derived(IMAGERY_GRADE.saturation - night * 0.35);
+	const groundSaturation = $derived(
+		IMAGERY_GRADE.saturation - night * 0.35 - overcast * 0.4 * (1 - night)
+	);
 
 	/** One grade, applied to every colour source. */
 	const grade = $derived({

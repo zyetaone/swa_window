@@ -7,8 +7,8 @@ import {
 	daySeed,
 	CLIMB_PERIOD_SEC
 } from '#lib/display/flight/flight-path.js';
-import { calculateCameraView, FlightCamera } from '#lib/display/flight/view.js';
-import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
+import { calculateCameraView, FlightCamera, WEATHERS } from '#lib/display/flight/view.js';
+import { resolveAtmosphere, weatherLightLoss, cloudedRgb } from '#lib/display/world/atmosphere.js';
 import { slotNoise, phaseFor } from '#lib/display/flight/flight-path.js';
 import {
 	resolveLocalHours,
@@ -1174,5 +1174,72 @@ describe('the sightline stays below the horizon through a turn', () => {
 		for (const pitch of [-1, -10, -30]) {
 			for (const s of sweep(pitch)) expect(s.dep).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe('weather changes the light, not just the glass', () => {
+	/**
+	 * `weather` reached the window in exactly two places: turbulence, and
+	 * droplets on the glass. So a storm was a shaky window with rain on it over
+	 * SUNLIT ground under a BLUE sky — every photometric property identical to
+	 * `clear`. From a cabin window that is the wrong way round: you cannot see
+	 * the turbulence and the droplets are a few pixels, while the thing you
+	 * cannot miss is that the world has gone grey and flat.
+	 *
+	 * One scalar drives dimming, flattening and desaturation across the four
+	 * components that consume it, so the sky cannot disagree with the ground
+	 * about the weather.
+	 */
+	it('loses light monotonically from clear to storm', () => {
+		const seq = WEATHERS.map((w) => weatherLightLoss(w));
+		expect(seq[0]).toBe(0);
+		for (let i = 1; i < seq.length; i++) {
+			expect(
+				seq[i],
+				`${WEATHERS[i]} does not lose more light than ${WEATHERS[i - 1]}`
+			).toBeGreaterThan(seq[i - 1]);
+		}
+		expect(seq[seq.length - 1]).toBeLessThan(1);
+	});
+
+	it('an unknown weather is clear, never a crash or a black window', () => {
+		expect(weatherLightLoss('typo')).toBe(0);
+	});
+
+	/**
+	 * The cloud tint must be RELATIVE to the light it replaces.
+	 *
+	 * The first version used a fixed grey, which is the natural way to write it
+	 * and is measurably wrong: it is used as fog, fog thickens with the weather,
+	 * so at storm strength the constant became most of the lower frame —
+	 * brighter than the night scene it was meant to be dimming. With the clock
+	 * frozen so the sun could not move between samples, a storm rendered 32%
+	 * BRIGHTER than a clear sky. A cloud layer can only ever take light away.
+	 */
+	it('never brightens the colour it clouds, at any time of day', () => {
+		const luma = (c: readonly [number, number, number]) =>
+			0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+		const samples: [number, number, number][] = [
+			[0.75, 0.82, 0.9], // bright day horizon
+			[0.35, 0.55, 0.85], // day vault
+			[0.03, 0.06, 0.14], // night horizon
+			[0.01, 0.02, 0.06] // deep night
+		];
+		for (const c of samples) {
+			let prev = luma(c);
+			for (const loss of [0, 0.14, 0.52, 0.68, 0.85]) {
+				const out = luma(cloudedRgb(c, loss));
+				expect(out, `clouding ${JSON.stringify(c)} at ${loss} added light`).toBeLessThanOrEqual(
+					prev + 1e-9
+				);
+				prev = out;
+			}
+		}
+	});
+
+	it('desaturates toward grey rather than toward a colour cast', () => {
+		const c: [number, number, number] = [0.8, 0.5, 0.2];
+		const spread = (v: readonly [number, number, number]) => Math.max(...v) - Math.min(...v);
+		expect(spread(cloudedRgb(c, 0.85))).toBeLessThan(spread(c) * 0.5);
 	});
 });

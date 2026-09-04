@@ -22,6 +22,7 @@
 	} from '#lib/settings/tiles.js';
 	import { PUBLIC_TILE_SERVER_URL } from '$app/env/public';
 	import { useDisplay } from '../display.svelte.js';
+	import { weatherLightLoss } from './atmosphere.js';
 
 	const display = useDisplay();
 
@@ -89,7 +90,16 @@
 	});
 
 	// Soften relief highlights at night so nocturnal terrain stays dark and moody
-	const effectiveHillshade = $derived(display.config.shade * (0.2 + 0.8 * dayFactor));
+	/**
+	 * Overcast light is DIFFUSE — it arrives from the whole sky rather than from
+	 * one disc, so terrain relief stops casting and the hillshade must go with
+	 * it. Leaving crisp sun-angled shading under a storm is the single most
+	 * obvious tell that the weather is only a rain overlay.
+	 */
+	const overcast = $derived(weatherLightLoss(display.config.weather));
+	const effectiveHillshade = $derived(
+		display.config.shade * (0.2 + 0.8 * dayFactor) * (1 - overcast * 0.8)
+	);
 </script>
 
 <!-- Registers the pmtiles:// scheme. Must come BEFORE any source that uses it. -->

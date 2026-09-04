@@ -144,3 +144,67 @@ export function resolveAtmosphere(aglM: number): AtmosphereState {
 		skyHorizon: lerpRgb(lo.skyHorizon, hi.skyHorizon, t)
 	};
 }
+
+/**
+ * How much the weather takes OUT of the light, 0 (clear) to 1 (storm).
+ *
+ * `weather` reached the window in exactly two places: turbulence, and droplets
+ * on the glass. So a storm was a shaky window with rain on it, over sunlit
+ * ground under a blue sky — every photometric property of the scene identical
+ * to `clear`. That is the wrong way round: from altitude you cannot feel the
+ * turbulence and the droplets are a few pixels, while the thing you cannot
+ * miss is that the world has gone grey and flat.
+ *
+ * Cloud does three things to the light below it, and they are separable:
+ *   - it DIMS, because less flux arrives;
+ *   - it FLATTENS, because the light arrives from the whole sky rather than
+ *     from one disc, which is why shadows and hillshade soften to nothing;
+ *   - it DESATURATES toward the neutral grey of the cloud base.
+ *
+ * One scalar drives all three, so the look cannot drift apart across the four
+ * components that consume it. Deliberately NOT a colour or a set of curves:
+ * this is the tuning surface the band table already is, and a second colour
+ * table would be a second place for the sky to disagree with the ground.
+ *
+ * Values are the shape of the sky, not a linear ramp on `WEATHERS` — `cloudy`
+ * is a bright day with cumulus and barely dims at all, while the step from
+ * `rain` to `overcast` is the sky closing over.
+ */
+export const WEATHER_LIGHT_LOSS = {
+	clear: 0,
+	cloudy: 0.14,
+	rain: 0.52,
+	overcast: 0.68,
+	storm: 0.85
+} as const satisfies Record<string, number>;
+
+export function weatherLightLoss(weather: string): number {
+	return (WEATHER_LIGHT_LOSS as Record<string, number>)[weather] ?? 0;
+}
+
+/**
+ * The same colour under cloud: desaturated toward its own grey, and darker.
+ *
+ * This replaced a FIXED grey, and the fix is worth keeping written down because
+ * the fixed version measured backwards. Cloud colour is not an absolute — a
+ * storm at noon is mid-grey and a storm at midnight is nearly black — but
+ * `OVERCAST_GREY` was one constant for both. Because it is used as fog, and fog
+ * thickens with the weather, at storm strength that constant became most of the
+ * lower frame: brighter than the night scene it was supposed to be dimming.
+ * Measured with the clock frozen so the sun could not move between samples, a
+ * storm came out 32% BRIGHTER than clear.
+ *
+ * Deriving it from the colour it is replacing keeps it circadian for nothing.
+ * Luma-preserving desaturation, then a straight multiply: exactly the two
+ * things a cloud layer does to the light beneath it, and both relative.
+ */
+export function cloudedRgb(c: Rgb, loss: number): Rgb {
+	const luma = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+	const dim = 1 - loss * 0.55;
+	// Toward its own luma (grey) by `loss`, then dimmed by the same scalar.
+	return [
+		lerp(c[0], luma, loss * 0.8) * dim,
+		lerp(c[1], luma, loss * 0.8) * dim,
+		lerp(c[2], luma, loss * 0.8) * dim
+	];
+}
