@@ -106,6 +106,53 @@
 		};
 	});
 
+	/**
+	 * The on-demand OTA trigger.
+	 *
+	 * The endpoint existed with no UI — an operator pushing a fix had to know
+	 * to curl POST /api/update with a bearer token, which on a headless fleet
+	 * means "had to read the source". The timer remains the delivery path
+	 * (every ~15 min, rollback included); this is the same unit started now.
+	 *
+	 * The token is asked for PER USE and held in memory only. /admin has no
+	 * authentication of its own — AERO_ADMIN_UI is a deployment gate, not an
+	 * identity — so persisting the admin token in this page (localStorage, a
+	 * cookie) would promote "can see the cockpit" into "can restart the wall".
+	 * A field the operator pastes into keeps the credential where it belongs:
+	 * with the operator.
+	 */
+	let updateToken = $state('');
+	let updateStatus = $state<string | null>(null);
+	let updateBusy = $state(false);
+
+	async function triggerUpdate() {
+		if (!updateToken || updateBusy) return;
+		updateBusy = true;
+		updateStatus = null;
+		try {
+			const res = await fetch('/api/update', {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${updateToken}`,
+					// SvelteKit's CSRF guard rejects a same-origin POST whose
+					// content-type looks form-like; without an explicit JSON type this
+					// fetch answered 403 "Cross-site POST forbidden" from INSIDE the
+					// admin page. Found by driving the real button, not by reading.
+					'content-type': 'application/json'
+				},
+				body: '{}'
+			});
+			const body = (await res.json()) as { message?: string; error?: string };
+			updateStatus = res.ok
+				? (body.message ?? 'Update triggered.')
+				: `${res.status}: ${body.error ?? body.message ?? 'refused'}`;
+		} catch (err) {
+			updateStatus = err instanceof Error ? err.message : 'unreachable';
+		} finally {
+			updateBusy = false;
+		}
+	}
+
 	const ago = (ms: number) => {
 		const s = Math.max(0, Math.round((now.ms - ms) / 1000));
 		return s < 90 ? `${s}s ago` : `${Math.round(s / 60)}m ago`;
@@ -311,6 +358,29 @@
 
 		{#if fleetError}
 			<p class="fleet-note warn">Last poll failed: {fleetError} — showing the last known state.</p>
+		{/if}
+
+		<!-- On-demand OTA. The timer updates every ~15 min regardless; this is for
+		     "I just pushed a fix and want the wall on it now". Same unit, same
+		     rollback, same health probe. -->
+		<div class="update-row">
+			<input
+				type="password"
+				placeholder="AERO_ADMIN_TOKEN"
+				bind:value={updateToken}
+				aria-label="Admin token for update trigger"
+			/>
+			<button
+				type="button"
+				class="glass-btn"
+				disabled={!updateToken || updateBusy}
+				onclick={triggerUpdate}
+			>
+				{updateBusy ? 'Triggering…' : 'Update fleet now'}
+			</button>
+		</div>
+		{#if updateStatus}
+			<p class="fleet-note">{updateStatus}</p>
 		{/if}
 	</section>
 
@@ -627,6 +697,25 @@
 	.dest-elev {
 		font-size: 0.65rem;
 		color: var(--text-muted);
+	}
+	.update-row {
+		display: flex;
+		gap: 8px;
+		margin-top: 14px;
+	}
+	.update-row input {
+		flex: 1;
+		padding: 6px 10px;
+		background: rgba(0, 0, 0, 0.35);
+		border: 1px solid var(--glass-border);
+		border-radius: 6px;
+		color: var(--text-primary);
+		font-family: monospace;
+		font-size: 0.8rem;
+	}
+	.update-row button:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 	.fleet-note {
 		font-size: 0.85rem;
