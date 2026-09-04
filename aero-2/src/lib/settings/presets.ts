@@ -24,6 +24,25 @@ export interface ScenePreset {
 		 * offset the camera actually takes.
 		 */
 		localHour?: number;
+		/**
+		 * Compose at a SUN ELEVATION instead, in degrees above the horizon.
+		 *
+		 * Takes precedence over `localHour` when the sun reaches it that day.
+		 *
+		 * An hour holds all day but not all YEAR: sunset at Las Vegas moves about
+		 * three hours between June and December, so `golden-hour`'s authored
+		 * 18:25 measured +10.5 deg in midsummer and -15.2 in midwinter — a
+		 * correct sunset for roughly four months, and full dark from October to
+		 * February. A preset whose whole promise is the QUALITY of the light has
+		 * to name the light, not the clock.
+		 *
+		 * `localHour` stays for the presets that genuinely mean a time — midnight
+		 * is midnight — and as the fallback for the polar case where the
+		 * requested elevation does not occur.
+		 */
+		sunElevationDeg?: number;
+		/** Which side of solar noon to take. Defaults to the evening solution. */
+		sunRising?: boolean;
 		cloudDensity?: number;
 		cloudOpacity?: number;
 		cloudSpeed?: number;
@@ -49,7 +68,11 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 		badge: 'Cinematic',
 		config: {
 			placeId: 'las_vegas',
-			localHour: 18.25, // low amber sun, just before the horizon
+			// The card promises amber light, so the preset names the LIGHT. 4 deg
+			// above the horizon is the middle of golden hour at any latitude and
+			// on any date; the authored 18:25 was full dark for five months.
+			sunElevationDeg: 4,
+			localHour: 18.25, // fallback if the sun never reaches 4 deg that day
 			cloudDensity: 0.35,
 			cloudOpacity: 0.65,
 			cloudSpeed: 0.8,
@@ -72,7 +95,12 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
 		badge: 'High Relief',
 		config: {
 			placeId: 'himalayas',
-			localHour: 8.5, // crisp morning light, long shadows down the ridges
+			// "Long shadows" is a sun-angle claim, not a clock claim. 15 deg on the
+			// RISING side gives raking light on the ridges year-round; 08:30 in the
+			// Himalayas ranges 18-42 deg, which is overhead by summer.
+			sunElevationDeg: 15,
+			sunRising: true,
+			localHour: 8.5, // fallback
 			cloudDensity: 0.2,
 			cloudOpacity: 0.5,
 			cloudSpeed: 0.5,

@@ -125,3 +125,51 @@ export function duskHorizonMix(sunElevationDeg: number): number {
 	const notYetDay = 1 - smoothstep(-4, 8, sunElevationDeg);
 	return Math.min(lit, notYetDay);
 }
+
+/**
+ * The local hour at which the sun sits at `targetElevationDeg`, on this day.
+ *
+ * WHY A PRESET CANNOT JUST NAME AN HOUR. Sunset is not a time of day. At Las
+ * Vegas the sun is +10.6 deg at 18:25 in June and -16.4 deg at the same hour in
+ * December, so the "Golden Hour Cruise" preset — authored as `localHour: 18.25,
+ * // low amber sun, just before the horizon` — was a correct sunset for about
+ * four months of the year and pitch dark from October to February. Measured
+ * across a full year, its sun elevation ranged +10.5 to -15.2.
+ *
+ * That is the same class of bug the `localHour` field itself was introduced to
+ * fix: the presets were originally authored as `clockOffsetH` deltas, which
+ * held only when the real local hour happened to match. This is one layer
+ * further out — an hour holds all day but not all YEAR.
+ *
+ * Solves the standard hour-angle equation for the requested elevation:
+ *
+ *     sin(elev) = sin(lat)sin(dec) + cos(lat)cos(dec)cos(H)
+ *
+ * `evening` picks which of the two daily solutions to take; the sun passes
+ * every elevation twice, once climbing and once descending.
+ *
+ * Returns null when the elevation is unreachable that day, which is a real
+ * case rather than an error: above the Arctic circle in midsummer the sun
+ * never sets, so there is no hour at which it sits at -6. The caller decides
+ * what to do, and `applyPreset` falls back to the authored clock hour.
+ */
+export function localHourAtSunElevation(
+	targetElevationDeg: number,
+	wallSec: number,
+	lat: number,
+	evening = true
+): number | null {
+	const declination = 23.44 * Math.sin((360 / 365) * (dayOfYear(wallSec) - 81) * DEG2RAD);
+	const latRad = lat * DEG2RAD;
+	const decRad = declination * DEG2RAD;
+
+	const cosH =
+		(Math.sin(targetElevationDeg * DEG2RAD) - Math.sin(latRad) * Math.sin(decRad)) /
+		(Math.cos(latRad) * Math.cos(decRad));
+
+	// |cosH| > 1 means the sun does not reach that elevation today at all.
+	if (!Number.isFinite(cosH) || cosH < -1 || cosH > 1) return null;
+
+	const hourAngle = (Math.acos(cosH) * RAD2DEG) / 15;
+	return evening ? 12 + hourAngle : 12 - hourAngle;
+}

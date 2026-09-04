@@ -14,7 +14,7 @@ import {
 	type Weather
 } from '../display/flight/view.js';
 import { FLEET_ROLES, type FleetRole } from '../display/flight/parallax.js';
-import { resolveLocalHours } from '../display/world/sun.js';
+import { localHourAtSunElevation, resolveLocalHours } from '../display/world/sun.js';
 
 export { Location } from './locations.js';
 export { SCENE_PRESETS, type ScenePreset } from './presets.js';
@@ -418,18 +418,35 @@ export class PaneSettings {
 			typeof presetOrId === 'string' ? SCENE_PRESETS.find((p) => p.id === presetOrId) : presetOrId;
 		if (!preset) return;
 
-		const { localHour, placeId, wingVisible, ...rest } = preset.config;
+		const { localHour, sunElevationDeg, sunRising, placeId, wingVisible, ...rest } = preset.config;
 
 		if (placeId) {
 			const loc = LOCATIONS.find((l) => l.id === placeId);
 			if (loc) this.setPlace(loc);
 		}
 
+		/**
+		 * A sun elevation beats a clock hour, because the light is what the card
+		 * actually promises.
+		 *
+		 * Sunset moves ~3 h across the year, so `golden-hour`'s authored 18:25
+		 * was a correct sunset for about four months and full dark from October
+		 * to February. Solving for the elevation instead makes the claim hold on
+		 * every date. Falls back to `localHour` when the sun never reaches the
+		 * requested angle that day — the polar case, and a real one for a
+		 * catalogue that includes the Himalayas.
+		 */
+		const hour =
+			sunElevationDeg !== undefined
+				? (localHourAtSunElevation(sunElevationDeg, wallSec, this.place.lat, !sunRising) ??
+					localHour)
+				: localHour;
+
 		// setPlace first: the offset is relative to the DESTINATION's local time.
-		if (localHour !== undefined) {
+		if (hour !== undefined) {
 			const nowH = resolveLocalHours(wallSec, this.place.utcOffset);
 			// Wrap to shortest signed offset in [-12, 12] on a 15-minute grid
-			const rawDelta = ((((localHour - nowH) % 24) + 36) % 24) - 12;
+			const rawDelta = ((((hour - nowH) % 24) + 36) % 24) - 12;
 			this.clockOffsetH = Math.round(rawDelta * 4) / 4;
 		}
 
