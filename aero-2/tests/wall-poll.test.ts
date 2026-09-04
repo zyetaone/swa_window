@@ -70,12 +70,25 @@ describe('createWallPoller', () => {
 			return ok(1);
 		});
 
+		/**
+		 * Both calls are started WITHOUT awaiting, because an overlapping
+		 * `poll()` now returns the in-flight promise rather than resolving
+		 * immediately — awaiting the second here would block on the gate the
+		 * test has not opened yet.
+		 *
+		 * That change is the point: `await poll()` means "a round trip has
+		 * completed", unconditionally. The previous contract was "…unless one
+		 * happened to be running, in which case nothing", which reads fine and
+		 * fails intermittently.
+		 */
 		const first = poller.poll();
-		await poller.poll();
-		expect(calls).toBe(1);
+		const second = poller.poll();
+		await Promise.resolve();
+		expect(calls, 'the second call started its own request').toBe(1);
 
 		release();
-		await first;
+		await Promise.all([first, second]);
+		expect(calls, 'the gate release started an extra request').toBe(1);
 		poller.stop();
 	});
 

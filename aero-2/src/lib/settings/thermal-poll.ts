@@ -19,6 +19,7 @@
  */
 
 import { thermalAction, type ThermalAction, type ThermalState } from '#lib/throttle.js';
+import { createPoller, type Poller } from '#lib/poll.js';
 
 /**
  * 15 s. `health-check.sh` writes every 60 s, so polling faster than that only
@@ -28,11 +29,7 @@ import { thermalAction, type ThermalAction, type ThermalState } from '#lib/throt
  */
 export const THERMAL_POLL_MS = 15_000;
 
-export interface ThermalPoller {
-	/** One round trip. Exposed so a test can drive it without a timer. */
-	poll(): Promise<void>;
-	stop(): void;
-}
+export type ThermalPoller = Poller;
 
 export interface ThermalSink {
 	/** Called only when the action CHANGES, so a caller cannot thrash on it. */
@@ -56,12 +53,10 @@ export function createThermalPoller(
 	fetchFn: typeof fetch = fetch,
 	origin = ''
 ): ThermalPoller {
-	let stopped = false;
-
-	const poll = async () => {
-		if (stopped) return;
-		try {
+	return createPoller(
+		async (signal) => {
 			const res = await fetchFn(`${origin}/api/internal/thermal`, {
+				signal,
 				headers: { accept: 'application/json' }
 			});
 			if (!res.ok) return;
@@ -74,19 +69,9 @@ export function createThermalPoller(
 			// has no memory of what this display is currently doing.
 			const next = thermalAction(tempC, flags ?? { livePressure: false }, sink.action);
 			if (next !== sink.action) sink.setAction(next);
-		} catch {
-			/* Offline, 403 off-loopback, or malformed: stay as we are. */
-		}
-	};
-
-	const timer = setInterval(poll, THERMAL_POLL_MS);
-	void poll();
-
-	return {
-		poll,
-		stop() {
-			stopped = true;
-			clearInterval(timer);
-		}
-	};
+		},
+		// Immediate: a pane that just booted onto a hot Pi should shed now, not
+		// in fifteen seconds. Nothing else holds this poller's guard.
+		{ intervalMs: THERMAL_POLL_MS, immediate: true }
+	);
 }
