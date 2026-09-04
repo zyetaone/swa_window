@@ -22,8 +22,11 @@
 	import MediaStage from './media/MediaStage.svelte';
 	import AudioHost from './media/AudioHost.svelte';
 	import { useDisplay } from './display.svelte.js';
+	import { untrack } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { createWallPoller } from '#lib/settings/wall-poll.js';
+	import { createThermalPoller } from '#lib/settings/thermal-poll.js';
+	import type { ThermalAction } from '#lib/throttle.js';
 	import { PUBLIC_WALL_ORIGIN } from '$app/env/public';
 
 	/**
@@ -138,6 +141,72 @@
 		// First poll now rather than one interval from now: a pane that just booted
 		// should pick up a wall that was set before it did.
 		void poller.poll();
+		return () => poller.stop();
+	});
+
+	/**
+	 * Shed GPU work when this Pi is actually throttling.
+	 *
+	 * LOCAL, never the wall: one hot edge pane must not dim the other two, which
+	 * is why `/api/internal/thermal` is loopback-only. It drives `qualityMode`,
+	 * the knob the render path already reads, rather than adding a second
+	 * quality concept beside it.
+	 *
+	 * The operator's own choice wins. If someone has explicitly asked for
+	 * `ultra` or `performance` this leaves it alone: shedding is for the default
+	 * `balanced` case, where nobody has expressed a preference and the device is
+	 * telling us it cannot keep up. Restoring puts back exactly what was taken,
+	 * so a thermal event cannot permanently downgrade a pane.
+	 *
+	 * THE STATE LIVES OUTSIDE THE EFFECT, and that is the whole design.
+	 *
+	 * The first version kept `shedFrom` in a closure created inside the effect,
+	 * and the effect both wrote `qualityMode` and — through the poller's `get
+	 * action()` — read it. So the write invalidated the effect that made it, the
+	 * effect re-ran, the closure was rebuilt with `shedFrom` back to null, and
+	 * the new poller's immediate first poll shed again. On a device held at a
+	 * constant 88 C that oscillated: shed, restore, shed, once per cycle,
+	 * flipping the render quality of a kiosk that nobody is looking at.
+	 * `untrack` around the CONSTRUCTOR did not fix it, because the callbacks run
+	 * later and re-enter the effect's scope on every poll.
+	 *
+	 * Hoisting the state out makes the effect own one thing — the poller's
+	 * lifetime — and gives the sink somewhere to remember across re-runs, which
+	 * is what "only report on change" needs to mean anything.
+	 *
+	 * A plain `let`, NOT `$state`, for the same reason `hasAdvanced` on
+	 * AeroDisplay is plain: nothing renders it, and the effect reads it through
+	 * `get action()` — so making it reactive would mean every write re-ran the
+	 * effect that made it, tearing down the poller and rebuilding one whose
+	 * immediate first poll sheds again. That is the oscillation above, reached
+	 * by a second route.
+	 */
+	let shedFrom: 'ultra' | 'balanced' | 'performance' | null = null;
+
+	const thermalSink = {
+		get action(): ThermalAction {
+			return shedFrom === null ? 'ok' : 'shed';
+		},
+		setAction(next: ThermalAction) {
+			untrack(() => {
+				if (next === 'shed') {
+					if (shedFrom !== null || display.config.qualityMode !== 'balanced') return;
+					shedFrom = display.config.qualityMode;
+					display.config.qualityMode = 'performance';
+					console.warn('[thermal] throttling — dropped to performance quality');
+					return;
+				}
+				if (shedFrom === null) return;
+				// Only restore what we took. An operator who changed it meanwhile owns it.
+				if (display.config.qualityMode === 'performance') display.config.qualityMode = shedFrom;
+				shedFrom = null;
+				console.info('[thermal] recovered — quality restored');
+			});
+		}
+	};
+
+	$effect(() => {
+		const poller = createThermalPoller(thermalSink);
 		return () => poller.stop();
 	});
 </script>

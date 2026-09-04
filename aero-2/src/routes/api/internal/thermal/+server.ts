@@ -1,9 +1,17 @@
 /**
  * GET /api/internal/thermal — loopback-only thermal state for this kiosk.
  *
- * health-check.sh writes /run/aero/thermal.json every 60 s. The display polls
- * this and sheds its own GPU work when the action is `shed`. Deliberately not
- * shared between panes: one hot edge pane must not dim the whole wall.
+ * health-check.sh writes /run/aero/thermal.json every 60 s;
+ * `settings/thermal-poll.ts` reads this from `Display.svelte` and drops
+ * `qualityMode` to `performance` while the action is `shed`. Deliberately not
+ * shared between panes: one hot edge pane must not dim the whole wall, which is
+ * the whole reason this is loopback-only rather than part of the wall state.
+ *
+ * That consumer did not exist until 2026-09-04, and this comment claimed it did
+ * — the endpoint, the decoder, the hysteresis policy and the writer were all
+ * built and tested with nothing on the other end. Worth stating plainly: a
+ * docstring in the present tense is a claim, and this one was false for as long
+ * as it took someone to check.
  *
  * Loopback is the entire security boundary here, so it is checked strictly and
  * the answer for anything else is 403 with no detail.
