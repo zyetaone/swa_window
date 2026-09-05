@@ -49,6 +49,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -72,12 +73,32 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def stac_search(body: dict) -> list[dict]:
+def stac_search(body: dict, attempts: int = 4) -> list[dict]:
+    """One STAC query, retried.
+
+    The sibling tool already learned this — `fetch-sentinel2.py:post` carries
+    the comment "STAC 502s under load; retry rather than lose the whole sweep"
+    — and this one did not, so a single Bad Gateway killed a run outright after
+    it had already spent minutes warping. Observed on Hyderabad: HTTP 502 from
+    earth-search, traceback, nothing packed.
+
+    Same shape as the sibling deliberately: 4 attempts, linear 3 s backoff. Not
+    factored into a shared module because these two scripts are run by hand,
+    independently, and a tools/ package for one function would cost more than
+    it saves.
+    """
     req = urllib.request.Request(
         STAC, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req) as r:
-        return json.load(r)["features"]
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.load(r)["features"]
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(3 * (i + 1))
+    raise AssertionError("unreachable")
 
 
 def pick_scenes(bbox: list[float], start: str, end: str, max_cloud: float) -> dict[str, str]:
@@ -89,13 +110,31 @@ def pick_scenes(bbox: list[float], start: str, end: str, max_cloud: float) -> di
     class, so per-tile best-date is not only allowed but strictly better
     coverage. That is the one place this tool may diverge from its sibling.
     """
-    feats = stac_search({
-        "collections": ["sentinel-2-l2a"],
-        "bbox": bbox,
-        "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z",
-        "query": {"eo:cloud_cover": {"lt": max_cloud}},
-        "limit": 500,
-    })
+    # Paginated at 100, not one shot at 500.
+    #
+    # `limit: 500` 502s outright on a large bbox. Reproduced against
+    # earth-search with Hyderabad's real box [77.55, 16.79, 79.20, 18.09]:
+    # limit=500 gives HTTP 502 every time, limit=100 returns 100 features and a
+    # link to the next page. It is not load and it is not transient, so the
+    # retry added alongside this fix could never have helped — four attempts at
+    # an impossible request is still zero results, just slower.
+    #
+    # The sibling packer already pages (`fetch-sentinel2.py`, 50 at a time, up
+    # to 7 pages). This does the same, and stops when a short page says the
+    # results are exhausted.
+    feats: list[dict] = []
+    for page in range(1, 12):
+        chunk = stac_search({
+            "collections": ["sentinel-2-l2a"],
+            "bbox": bbox,
+            "datetime": f"{start}T00:00:00Z/{end}T23:59:59Z",
+            "query": {"eo:cloud_cover": {"lt": max_cloud}},
+            "limit": 100,
+            "page": page,
+        })
+        feats.extend(chunk)
+        if len(chunk) < 100:
+            break
     best: dict[str, tuple[float, str]] = {}
     for f in feats:
         p = f["properties"]
