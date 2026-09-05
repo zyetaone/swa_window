@@ -227,6 +227,35 @@ log "App directory: ${APP_DIR}"
 
 # ─── 3. Install dependencies ─────────────────────────────────────────────
 
+# Refuse to start on a nearly-full card.
+#
+# Nothing in this pipeline checked free space, and this device is unusually
+# good at running out of it: a ~4 GB tile pack, a 2 GB Chromium disk cache that
+# grows to its cap, node_modules, and `snapshot_build` deliberately keeping a
+# SECOND copy of build/ for rollback. On a 16 GB card that is most of it.
+#
+# The failure mode is what makes this worth a guard rather than a log line.
+# `bun install` and `vite build` on a full disk fail PARTWAY: adapter-node has
+# already rimraf'd build/ before it writes, so a truncated build leaves the
+# device with no servable output. That triggers rollback — which also builds,
+# on the same full disk, and fails the same way. The rollback path cannot
+# recover from the condition that caused it, so the kiosk goes dark and stays
+# dark until someone drives to the site.
+#
+# Checking first turns an unrecoverable state into a skipped update: the device
+# keeps serving the build it already has, and says why in the log and to the
+# fleet.
+MIN_FREE_MB="${AERO_MIN_FREE_MB:-1500}"
+free_mb=$(df -Pm "${APP_DIR}" | awk 'NR==2 {print $4}')
+if [[ -n "${free_mb}" ]] && (( free_mb < MIN_FREE_MB )); then
+    log "SKIP: only ${free_mb} MB free at ${APP_DIR}, need ${MIN_FREE_MB} MB."
+    log "      A build that runs out of disk deletes build/ before it fails, and"
+    log "      the rollback build would hit the same wall — so the safe move is"
+    log "      to keep serving ${LOCAL:0:8} and let an operator reclaim space."
+    log "      Biggest consumers are usually the Chromium cache and data/tiles."
+    exit 0
+fi
+
 snapshot_build
 
 log "Installing dependencies..."
