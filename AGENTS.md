@@ -8,6 +8,10 @@
 > | `aero-2/` | The rewrite — MapLibre + Three, ADR-007 wall-sync. Pre-ship. |
 > | `data/`, `deploy/`, `docs/` | Shared at the root. `data/` is symlinked into `aero-1/`. |
 >
+> A measured comparison of the two — size, reactivity shape, enforcement,
+> dead weight, and what each predicts on the Pi — is in
+> `docs/AERO-1-VS-AERO-2.md`, with the commands to re-derive every number.
+>
 > **The repo root has no `package.json`.** Every `bun run ...` below must be run
 > from `aero-1/` or `aero-2/`. This document describes **aero-1** unless a
 > section says otherwise; aero-2 has its own `aero-2/AGENTS.md`.
