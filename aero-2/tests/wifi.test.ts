@@ -1,5 +1,31 @@
-import { describe, it, expect } from 'vitest';
-import { PORTAL_BIN, PORTAL_UNIT, wifiRecoveryAvailable } from '#lib/server/wifi.js';
+import { describe, it, expect, vi } from 'vitest';
+
+/**
+ * Both OS-facing dependencies are mocked for the ROUTE suite below, which tests
+ * the auth gate rather than the machine.
+ *
+ * Unmocked, each one asserts a property of the host instead of the code. On
+ * darwin `wifiRecoveryAvailable` is vacuously true and `schedulePrivileged`
+ * no-ops to true, so the gate opens and the test passes. On Linux the portal
+ * files do not exist in a container and `sudo -n` fails, so the route correctly
+ * refuses with 503 — and the test failed on CI while the route, the guard and
+ * the helper were all behaving exactly as designed.
+ *
+ * The real branching logic keeps its coverage: `wifiRecoveryAvailable` is
+ * exercised directly with injected platform/exists in the first describe below
+ * (which is why it is imported through `importActual`), and the privileged
+ * helper is covered in privileged.test.ts.
+ */
+vi.mock('#lib/server/privileged.js', () => ({ schedulePrivileged: () => true }));
+vi.mock('#lib/server/wifi.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/server/wifi.js')>()),
+	wifiRecoveryAvailable: vi.fn(() => ({ ok: true }))
+}));
+
+const { PORTAL_BIN, PORTAL_UNIT, wifiRecoveryAvailable } = await vi.importActual<
+	typeof import('#lib/server/wifi.js')
+>('#lib/server/wifi.js');
+
 import { POST } from '../src/routes/api/wifi/reset/+server.js';
 
 describe('wifiRecoveryAvailable', () => {

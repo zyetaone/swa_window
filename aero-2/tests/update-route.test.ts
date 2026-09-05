@@ -1,4 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+/**
+ * `schedulePrivileged` is mocked because this suite tests the AUTH GATE, not the
+ * OS hatch. Unmocked it consults the ambient machine: on darwin it no-ops and
+ * returns true, on Linux it runs a real `sudo -n true` preflight that fails in
+ * any container, and the route then correctly answers 503 instead of 202. So
+ * the 202 assertion below passed on the author's laptop and failed on the CI
+ * runner while both the route and the helper were entirely correct — a test
+ * asserting a property of the host rather than of the code.
+ *
+ * The helper keeps its own coverage in privileged.test.ts, which is where the
+ * platform branch belongs.
+ */
+vi.mock('#lib/server/privileged.js', () => ({ schedulePrivileged: () => true }));
+
 import { POST } from '../src/routes/api/update/+server.js';
 
 const FLEET_ORIGIN = 'http://192.168.1.9:3000';
