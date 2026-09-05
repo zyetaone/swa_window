@@ -181,6 +181,15 @@ def post(body: dict, attempts: int = 4) -> dict:
 # That is a different algorithm, not a threshold change.
 MAX_NODATA_PCT = 5.0
 
+# Concurrent gdalwarp processes.
+#
+# Each one streams a remote COG, so this is network-bound rather than CPU-bound
+# and 6 is comfortably more than the core count. It is also the knob that fails:
+# under load, gdalwarp can exhaust its retries, exit 0, and write an EMPTY
+# raster — caught by has_pixels() below, which is why that check exists. Mumbai
+# hit it on 43QCV at 6 workers and packed cleanly at 3.
+DEFAULT_WORKERS = 6
+
 # How far apart the scenes in one mosaic may be acquired.
 #
 # Requiring a single EXACT date is the obvious rule and it is too strict. The
@@ -401,6 +410,9 @@ def main() -> None:
     # could not be packed at the default.
     ap.add_argument("--max-nodata", type=float, default=MAX_NODATA_PCT,
                     help=f"max %% nodata per scene (default {MAX_NODATA_PCT:g})")
+    ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS,
+                    help=f"concurrent gdalwarp streams (default {DEFAULT_WORKERS}; "
+                         f"lower this if a tile comes back empty)")
     ap.add_argument("--min-zoom", type=int, default=DEFAULT_MIN_ZOOM)
     ap.add_argument("--max-zoom", type=int, default=DEFAULT_MAX_ZOOM)
     ap.add_argument("--out", default="data/tiles")
@@ -489,12 +501,13 @@ def main() -> None:
             raise RuntimeError(
                 f"{mgrs}: gdalwarp exited 0 but wrote an empty raster "
                 f"(scene {href.rsplit('/', 2)[-2]}). Retry exhaustion under "
-                f"load is the usual cause -- lower MAX_WORKERS and rerun."
+                f"load is the usual cause -- rerun with --workers below "
+                f"{DEFAULT_WORKERS} (the tiles already fetched are cached)."
             )
         print(f"[{i}/{len(tiles)}] {mgrs} done", flush=True)
         return str(dst)
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=a.workers) as pool:
         warped = list(pool.map(warp, enumerate(sorted(tiles.items()), 1)))
 
     vrt = work / "mosaic.vrt"
