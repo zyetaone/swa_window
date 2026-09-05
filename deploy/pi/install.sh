@@ -361,10 +361,32 @@ echo "[6/7] Installing systemd units + cron..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Copy units, rewriting placeholder paths for this install.
+#
+# __AERO_APP_DIR__ is distinct from __AERO_INSTALL_DIR__ because the repo now
+# holds two applications (aero-1/, aero-2/) and shared assets at the root.
+# INSTALL_DIR is where the GIT REPO is; APP_DIR is the directory that has a
+# package.json and a build/. They were the same path for v1's whole life, and
+# a unit that assumes they still are runs `bun run serve` somewhere with no
+# package.json.
+#
+# Detected, not hardcoded, so re-running the installer on an already-fielded
+# Pi does the right thing whichever layout that Pi is on.
+if [[ -n "${AERO_APP_SUBDIR:-}" ]]; then
+	APP_DIR="${INSTALL_DIR}/${AERO_APP_SUBDIR}"
+elif [[ -f "${INSTALL_DIR}/package.json" ]]; then
+	APP_DIR="${INSTALL_DIR}"
+elif [[ -f "${INSTALL_DIR}/aero-1/package.json" ]]; then
+	APP_DIR="${INSTALL_DIR}/aero-1"
+else
+	APP_DIR="${INSTALL_DIR}"
+fi
+echo "  app directory: ${APP_DIR}"
+
 for unit in aero-xserver.service aero-app.service aero-kiosk.service aero-updater.service; do
 	sed \
 		-e "s|__AERO_USER__|${PI_USER}|g" \
 		-e "s|__AERO_INSTALL_DIR__|${INSTALL_DIR}|g" \
+		-e "s|__AERO_APP_DIR__|${APP_DIR}|g" \
 		-e "s|__BUN_BIN__|${BUN_BIN}|g" \
 		"${SCRIPT_DIR}/${unit}" > "/etc/systemd/system/${unit}"
 	chmod 644 "/etc/systemd/system/${unit}"

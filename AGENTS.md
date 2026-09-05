@@ -1,5 +1,22 @@
 # Repository Guidelines
 
+> **Repository layout: this repo holds TWO applications.**
+>
+> | Path | What it is |
+> |---|---|
+> | `aero-1/` | v1 — Cesium + Threlte. Feature-complete and **what the Pi fleet runs today**. |
+> | `aero-2/` | The rewrite — MapLibre + Three, ADR-007 wall-sync. Pre-ship. |
+> | `data/`, `deploy/`, `docs/` | Shared at the root. `data/` is symlinked into `aero-1/`. |
+>
+> **The repo root has no `package.json`.** Every `bun run ...` below must be run
+> from `aero-1/` or `aero-2/`. This document describes **aero-1** unless a
+> section says otherwise; aero-2 has its own `aero-2/AGENTS.md`.
+>
+> v1 lived at the root for its whole life, so anything that assumed git root ==
+> app root needed fixing when it moved: the fleet updater, the installer, the
+> systemd unit's `WorkingDirectory`, and the root-anchored `.gitignore` patterns.
+> If you add tooling, resolve the app directory rather than assuming the root.
+
 > See `docs/ARCHITECTURE.md` for the canonical engine-stack architecture
 > (five layers, single-Viewer rule, reactive-feature pattern, manager →
 > feature migration map). New features must follow the pattern:
@@ -102,9 +119,15 @@ orbit ──flyTo()──→ cruise_departure ──(~2s)──→ cruise_transi
 | `src/lib/credits.ts` | Product attribution SSOT — Zyeta · engineered by rdtect |
 | `content/` | Authored artifacts — Rule 0 content/control split |
 | `tests/` | Mirrors `src/` + `content/` |
-| `docs/` | Architecture, ADRs, CODEMAPS |
+| `docs/` | Architecture, ADRs, CODEMAPS (shared, at the repo root) |
+
+Paths in this table are relative to `aero-1/`, except `data/`, `deploy/` and
+`docs/`, which are shared and live at the repo root.
 
 ## Development Commands
+
+**Run these from `aero-1/`** (or `aero-2/` for the rewrite). There is no root
+`package.json`, so `bun run test` at the top level fails with "Script not found".
 
 | Command | What it does |
 |---|---|

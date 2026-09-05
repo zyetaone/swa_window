@@ -3,9 +3,27 @@ import { defineConfig } from 'vitest/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { normalizePath } from 'vite';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 
-const cesiumSource = 'node_modules/cesium/Build/Cesium';
+
+/**
+ * Resolved, not a hardcoded `node_modules/...` path.
+ *
+ * Bun hoists dependencies to the workspace root, so since v1 moved into
+ * `aero-1/` the package no longer sits under this directory and a literal
+ * relative path silently found nothing. vite-plugin-static-copy then failed
+ * the build with "No file was found to copy" — and the failure mode when it
+ * does NOT fail the build is worse: a kiosk that boots to a black canvas
+ * because Cesium's Workers and Assets were never emitted.
+ *
+ * `require.resolve` asks node where the package actually is, which is correct
+ * whether it is hoisted, nested, linked, or vendored.
+ */
+const cesiumSource = path.join(
+	path.dirname(createRequire(import.meta.url).resolve('cesium/package.json')),
+	'Build/Cesium'
+);
 const cesiumBaseUrl = 'cesiumStatic';
 
 // Build-time commit stamp — surfaced fleet-wide via /api/status so an

@@ -58,6 +58,40 @@ else
     REPO_DIR="${INSTALL_DIR}/app"
 fi
 
+# WHERE THE BUILDABLE APP LIVES, which is no longer the git root.
+#
+# The repo used to hold exactly one application at its top level, so git root
+# and app root were the same directory and this script simply cd'd once. Then
+# v1 moved into aero-1/ and the rewrite into aero-2/, and the root kept only
+# shared assets (data/, tools/, deploy/) with no package.json at all. An
+# updater that still built at the git root would run `bun install` in a
+# directory with nothing to install, fail, and roll back — on every device, on
+# every daily timer, forever.
+#
+# Resolved rather than hardcoded so one script serves a fleet mid-migration:
+# an explicit AERO_APP_SUBDIR wins, then whichever candidate actually has a
+# package.json, and finally the git root itself for a Pi still on the old
+# single-app layout that has not been re-provisioned yet.
+#
+# A FUNCTION, not a one-shot assignment, because the layout is itself part of
+# what an update changes. The commit that moves v1 into aero-1/ flips this
+# answer, so a value resolved once at startup would be stale by the time the
+# build runs — and stale in the specific direction that builds the old path.
+# Every consumer below re-resolves after the working tree has settled, and
+# rollback re-resolves again because reverting can flip it back.
+resolve_app_dir() {
+    if [[ -n "${AERO_APP_SUBDIR:-}" ]]; then
+        APP_DIR="${REPO_DIR}/${AERO_APP_SUBDIR}"
+    elif [[ -f "${REPO_DIR}/package.json" ]]; then
+        APP_DIR="${REPO_DIR}"
+    elif [[ -f "${REPO_DIR}/aero-1/package.json" ]]; then
+        APP_DIR="${REPO_DIR}/aero-1"
+    else
+        APP_DIR="${REPO_DIR}"
+    fi
+}
+resolve_app_dir
+
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}"; }
 
 CHECK_ONLY=false
@@ -140,16 +174,16 @@ probe_health() {
 #
 # 34 MB for v1, 5.7 MB for aero-2. Cheap insurance.
 snapshot_build() {
-    [[ -d "${REPO_DIR}/build" ]] || return 0
-    rm -rf "${REPO_DIR}/build.prev"
-    cp -a "${REPO_DIR}/build" "${REPO_DIR}/build.prev" 2>/dev/null \
+    [[ -d "${APP_DIR}/build" ]] || return 0
+    rm -rf "${APP_DIR}/build.prev"
+    cp -a "${APP_DIR}/build" "${APP_DIR}/build.prev" 2>/dev/null \
         || log "WARN: could not snapshot build/ — rollback will have no fallback"
 }
 
 restore_build() {
-    [[ -d "${REPO_DIR}/build.prev" ]] || return 1
-    rm -rf "${REPO_DIR}/build"
-    cp -a "${REPO_DIR}/build.prev" "${REPO_DIR}/build"
+    [[ -d "${APP_DIR}/build.prev" ]] || return 1
+    rm -rf "${APP_DIR}/build"
+    cp -a "${APP_DIR}/build.prev" "${APP_DIR}/build"
 }
 
 # Full rollback: previous commit + reinstall + rebuild + restart + verify.
@@ -160,8 +194,11 @@ restore_build() {
 rollback() {
     log "ERROR: $1 — rolling back to ${LOCAL:0:8}"
     git reset --hard "${LOCAL}" 2>&1 | tee -a "${LOG_FILE}"
-    "${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || true
-    if ! "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}"; then
+    # The revert may have moved the app back to the git root, so ask again
+    # rather than trusting the answer from before the reset.
+    resolve_app_dir
+    ( cd "${APP_DIR}" && "${BUN_BIN}" install --frozen-lockfile ) 2>&1 | tee -a "${LOG_FILE}" || true
+    if ! ( cd "${APP_DIR}" && "${BUN_BIN}" run build ) 2>&1 | tee -a "${LOG_FILE}"; then
         if restore_build; then
             log "WARN: rollback build failed — restored the pre-update build/"
         else
@@ -183,21 +220,26 @@ log "Pulling changes..."
 git reset --hard "origin/${BRANCH}" 2>&1 | tee -a "${LOG_FILE}"
 log "Updated to $(git rev-parse --short HEAD): $(git log -1 --format='%s')"
 
+# The pull is what can relocate the app (the aero-1/ split is one such commit),
+# so the layout question has to be re-asked against the tree we just landed.
+resolve_app_dir
+log "App directory: ${APP_DIR}"
+
 # ─── 3. Install dependencies ─────────────────────────────────────────────
 
 snapshot_build
 
 log "Installing dependencies..."
-"${BUN_BIN}" install --frozen-lockfile 2>&1 | tee -a "${LOG_FILE}" || {
+( cd "${APP_DIR}" && "${BUN_BIN}" install --frozen-lockfile ) 2>&1 | tee -a "${LOG_FILE}" || {
     log "WARN: bun install failed — trying without frozen lockfile"
-    "${BUN_BIN}" install 2>&1 | tee -a "${LOG_FILE}" || rollback "bun install failed"
+    ( cd "${APP_DIR}" && "${BUN_BIN}" install ) 2>&1 | tee -a "${LOG_FILE}" || rollback "bun install failed"
 }
 
 # ─── 4. Build ────────────────────────────────────────────────────────────
 
-if [[ -f "package.json" ]] && command grep -q '"build"' package.json; then
+if [[ -f "${APP_DIR}/package.json" ]] && command grep -q '"build"' "${APP_DIR}/package.json"; then
     log "Building app..."
-    "${BUN_BIN}" run build 2>&1 | tee -a "${LOG_FILE}" || rollback "build failed"
+    ( cd "${APP_DIR}" && "${BUN_BIN}" run build ) 2>&1 | tee -a "${LOG_FILE}" || rollback "build failed"
 fi
 
 # ─── 4b. Reinstall deploy config when it changed ─────────────────────────

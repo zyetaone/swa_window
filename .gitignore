@@ -5,8 +5,13 @@ node_modules
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
+# Unanchored, because there is no longer a single app at the repo root: v1
+# lives in aero-1/ and the rewrite in aero-2/, each with its own generated
+# .svelte-kit/ and build/. The leading-slash forms matched ONLY the root, so
+# the moment v1 moved, 8000+ generated files became stageable — and `git add
+# -A` duly staged them.
+.svelte-kit/
+build/
 
 # OS
 .DS_Store
@@ -69,6 +74,13 @@ data/*
 # ⚠ `data/*` above is ROOT-ANCHORED — a pattern with an internal slash is —
 # while the bare `data/` it replaced matched at ANY depth. This path silently
 # stopped being covered and 18k packager tiles turned up untracked. Re-stated.
+#
+# Re-stated a SECOND time when v1 moved into aero-1/, which changed this path
+# again and re-armed the identical trap: `git add -A` staged 6000 CARTO raster
+# tiles we are not licensed to redistribute. Listing every depth by hand is
+# what keeps failing, so match the packager's output directory wherever it
+# sits, and keep the old path for anyone with a stale working tree.
+**/tile-packager/data/
 tools/tile-packager/data/
 
 # graphify knowledge-graph output (regenerable)

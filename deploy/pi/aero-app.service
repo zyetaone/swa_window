@@ -15,7 +15,12 @@ StartLimitBurst=5
 [Service]
 Type=simple
 User=__AERO_USER__
-WorkingDirectory=__AERO_INSTALL_DIR__
+# The APP directory, not the install/git root. Since the repo split into
+# aero-1/ and aero-2/ with shared assets at the top, the git root has no
+# package.json — so `bun run serve` from there fails instantly, and under
+# Restart=always that is a permanent 10s crash loop with a dark kiosk.
+# install.sh resolves this placeholder by finding the package.json.
+WorkingDirectory=__AERO_APP_DIR__
 
 EnvironmentFile=-/etc/aero/config.env
 Environment=NODE_ENV=production
