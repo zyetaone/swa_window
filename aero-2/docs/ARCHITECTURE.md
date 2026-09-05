@@ -437,3 +437,71 @@ Two lessons from getting it wrong first:
   the ocean at the call site. Declare the range every time.
 - **Altitude is metres above ground, and terrain is drawn at `exaggeration`×.**
   Mixing raw and drawn metres flies the camera through mountains.
+
+## 6. Reactivity and memory — what was audited, and why there is no event bus
+
+Audited against Svelte 5 guidance on 2026-09-05. Recorded here because the
+useful output was mostly "this is already right, and here is the evidence",
+which is exactly the kind of finding that gets re-litigated otherwise.
+
+### Communication: context and callback props, not a bus
+
+The natural instinct on a codebase this size is to reach for an event bus. It
+would be wrong here, and the numbers say why:
+
+| mechanism | count |
+|---|---|
+| `useDisplay()` — context | 50 components |
+| callback props (`onselect`) | the Segmented control and its 5 call sites |
+| `$bindable` | 1 (drawer open/closed) |
+| `dispatchEvent` / `CustomEvent` / emitters | **0** |
+| mutable global singletons | **0** (only debug hooks) |
+
+Nothing dispatches an event because nothing needs to. A bus solves "A must tell
+B something happened when A does not know B exists". This app has no such
+relationship: every component reads one context object and derives from it, so
+B already sees the change without being told. Adding a bus would introduce the
+one thing the architecture is built to avoid — a second path by which state can
+change, with its own ordering and its own subscription lifetimes to leak.
+
+`$bindable` is used once, for drawer visibility, which is genuinely two-way UI
+state. Everything else flows one direction: context down, callback props up.
+That is the Svelte 5 idiom that replaced `createEventDispatcher`, and it is
+already what this code does.
+
+### Effects: 15, and each one owns a resource
+
+Effects are an escape hatch, so the count matters. All 15 are lifecycle —
+`requestAnimationFrame` loops (3), pollers (2), intervals (3), canvas and audio
+mount, the cloud rebuild. Every one returns a teardown, and the teardowns were
+verified by counting allocations against frees: 6 `setInterval` against 4
+`clearInterval` (two are inside `createPoller`, which owns its own), 3 rAF loops
+against 3 `cancelAnimationFrame`.
+
+The rule that keeps this number low is elsewhere in this document: derive, do
+not synchronise. The `$effect : $derived` ratio is 0.11 here against 0.60 in v1.
+
+### `$state.raw` where the object is replaced, not mutated
+
+Every hot or wholesale-replaced value: the per-frame `view` (with the measured
+2.2x write cost recorded beside it), `place`, the three playlists, the buffered
+wall snapshot, the liveness probe. The two plain `$state` objects left are
+`terrain` and an admin clock, both genuinely mutated field-by-field.
+
+### GPU memory is not JS memory
+
+The one real defect the audit found, and the reason it survived so long:
+
+> Measured across ten mount/unmount cycles driven through the real operator
+> toggle, the JS heap held flat at ~40 MB and the canvas count stayed at 4.
+> That is precisely the reading a CORRECT teardown gives.
+
+`Clouds` disposed its materials but not its three textures; `Wing` disposed
+nothing of its glTF. `scene.clear()` detaches children from the graph and frees
+no GPU buffer. None of it appears in `performance.memory` or a heap snapshot,
+so the only symptom is a WebGL context loss weeks later on a device that never
+reboots — which reads as "the Pi crashed".
+
+**If you add a renderer-owning component, dispose geometries, materials AND
+every texture slot, and walk the scene with `traverse` — a glTF is a tree, and a
+flat loop over `scene.children` misses the nested nodes that hold the data.**
