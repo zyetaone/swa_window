@@ -26,7 +26,12 @@ import { calculateCameraView } from '#lib/display/flight/view.js';
 import { resolveAtmosphere } from '#lib/display/world/atmosphere.js';
 import { sunPosition, nightAmount } from '#lib/display/world/sun.js';
 import { Location } from '#lib/settings/locations.js';
-import { tileTemplates, TILE_MAXZOOM, SENTINEL2_PLACES } from '#lib/settings/tiles.js';
+import {
+	tileTemplates,
+	TILE_MAXZOOM,
+	SENTINEL2_PLACES,
+	WATER_PLACES
+} from '#lib/settings/tiles.js';
 import { remoteTileUrl, resolveTileDir } from '#lib/server/tiles.js';
 import { WALL_KEYS } from '#lib/wall.js';
 
@@ -538,6 +543,28 @@ describe('every tile source the client names, the server can serve', () => {
 			.sort();
 		expect(onDisk.length, 'no sentinel2 packs found at all').toBeGreaterThan(0);
 		expect([...SENTINEL2_PLACES].sort()).toEqual(onDisk);
+	});
+
+	/**
+	 * Same rule for the water mask, which had no such check.
+	 *
+	 * `SENTINEL2_PLACES` has been guarded since it was written; `WATER_PLACES`
+	 * sat one export below it with only a "keep in step with data/tiles/water/"
+	 * comment, and a comment is not a check. Packing Dubai and Mumbai meant
+	 * editing both lists, and only one of them could tell me I had forgotten.
+	 * The failure it prevents is identical: a name with no pack is a 404 storm,
+	 * a pack with no name is a layer nothing draws.
+	 */
+	const waterDir = resolve(resolveTileDir(), 'water');
+	const waterPacked = existsSync(waterDir);
+
+	it.skipIf(!waterPacked)('gates the water mask on what is actually packed', () => {
+		const onDisk = readdirSync(waterDir)
+			.map((f) => /^source-(.+)\.json$/.exec(f)?.[1])
+			.filter((v): v is string => Boolean(v))
+			.sort();
+		expect(onDisk.length, 'no water packs found at all').toBeGreaterThan(0);
+		expect([...WATER_PLACES].sort()).toEqual(onDisk);
 	});
 
 	it.skipIf(!s2Packed)('records the commercial licence with every pack', () => {

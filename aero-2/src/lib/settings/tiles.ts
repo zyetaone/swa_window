@@ -75,12 +75,28 @@ export const SENTINEL2_MINZOOM = 8;
  *
  * Same gate as SENTINEL2_PLACES and for the same measured reason: an unmounted
  * source costs nothing, a mounted one with no tiles is a request storm of 404s.
- * Only Chicago is packed — it is the one location in the catalogue whose window
- * is dominated by water (Lake Michigan), which is why it was built first.
+ * Chicago came first — Lake Michigan dominates its window — and Dubai and
+ * Mumbai followed, both coastal and both measuring ~46-49% water over the
+ * visible area, which is where a glint earns its place.
+ *
+ * The Pacific show is NOT here and cannot be: the mask derives from Sentinel-2's
+ * scene classification, and Sentinel-2 does not image open water. The tiles
+ * around Honolulu come back 77-100% nodata at any cloud threshold. Open ocean
+ * keeps the MODIS basemap, which is the honest answer rather than a gap.
+ *
+ * Mumbai's mask is packed from a JANUARY-APRIL window, not the summer default:
+ * the monsoon leaves no scene under 15% cloud between July and September. The
+ * mask is a coastline, and coastlines do not move between seasons — which is
+ * exactly why fetch-water-mask.py picks its own date independently of the
+ * basemap's.
  *
  * Keep in step with `data/tiles/water/source-*.json`.
  */
-export const WATER_PLACES: ReadonlySet<string> = new Set(['chicago_midway']);
+export const WATER_PLACES: ReadonlySet<string> = new Set([
+	'chicago_midway',
+	'dubai',
+	'mumbai'
+]);
 
 /** Below this the mask is not packed, and the coastline is not resolvable anyway. */
 export const WATER_MINZOOM = 8;
@@ -93,6 +109,7 @@ export const SENTINEL2_PLACES: ReadonlySet<string> = new Set([
 	'himalayas',
 	'hyderabad',
 	'las_vegas',
+	'mumbai',
 	'phoenix'
 ]);
 

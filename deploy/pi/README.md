@@ -132,20 +132,20 @@ global VIIRS night-lights z0–8 (0.96 GB), roads z0–14 (0.09 GB), terrain z0�
 
 > **These figures are aero-1's, and aero-2 is bigger.** The rewrite ships a
 > quantized-mesh replacement — a single 3.5 GB `terrain.pmtiles` — plus
-> per-location Sentinel-2, so a full aero-2 pack measures **~4.2 GB today** and
+> per-location Sentinel-2, so a full aero-2 pack measures **~4.3 GB today** and
 > grows with each location added:
 >
 > | Asset | Size | Scope |
 > | --- | --- | --- |
 > | `terrain.pmtiles` | 3.57 GB | global DEM |
-> | `sentinel2/` | 396 MB | per location (8 of 11 packed) |
+> | `sentinel2/` | 473 MB | per location (9 of 11 packed) |
 > | `gibs/` | 123 MB | global MODIS z0–9 |
 > | `viirs/` | 102 MB | global night-lights z0–8 |
-> | `water/` | 1 MB | per location |
+> | `water/` | 11 MB | per location (3 packed) |
 >
 > `terrarium/` (3.6 GB) is build INPUT for `pack-pmtiles` and must **not** be
 > shipped — `tools/ship-tiles.sh` already excludes it, which is most of why it
-> exists. Budget the card accordingly: 4.2 GB of tiles, a 2 GB Chromium cache
+> exists. Budget the card accordingly: 4.3 GB of tiles, a 2 GB Chromium cache
 > at its cap, plus the OS. **16 GB is tight, 32 GB is comfortable.** The
 > updater now refuses to build below 1.5 GB free rather than half-writing a
 > build it cannot roll back from.
