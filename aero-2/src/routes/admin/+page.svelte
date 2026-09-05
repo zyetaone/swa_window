@@ -228,7 +228,12 @@
 				<div class="network-interfaces">
 					<h3>Local LAN Access IP Addresses:</h3>
 					<div class="ip-list">
-						{#each status.lanIps as net}
+					<!-- Keyed: this list is refetched every 20 s and interfaces come and
+					     go (WiFi associating, a tunnel raising utun). Unkeyed, Svelte
+					     patches in place, so a removed interface leaves the row below it
+					     wearing the wrong copy-button target. The other `{#each}` blocks
+					     on this page iterate module constants and cannot reorder. -->
+						{#each status.lanIps as net (net.name + net.address)}
 							{@const ipUrl = `http://${net.address}:5173/`}
 							<div class="ip-row">
 								<span class="iface-name">{net.name}:</span>

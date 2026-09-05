@@ -238,6 +238,48 @@
 
 		return () => {
 			cancelAnimationFrame(raf);
+			/**
+			 * A glTF is geometries, materials AND textures, and `scene.clear()`
+			 * frees none of them.
+			 *
+			 * `clear()` detaches children from the graph; the GPU buffers behind
+			 * them live until something calls `dispose()` on each one. So every
+			 * remount of this component orphaned a full wing model — vertex
+			 * buffers, materials, and whatever textures the asset carries.
+			 *
+			 * None of that shows up in `performance.memory` or a heap snapshot,
+			 * because it is GPU memory. Measured across ten mount/unmount cycles
+			 * the JS heap was flat and the canvas count constant, which is the
+			 * same reading a correct teardown gives — the leak is only visible as
+			 * a context loss weeks later on a device that never reboots.
+			 *
+			 * `traverse` rather than a flat loop because a glTF scene is a TREE:
+			 * `wing.glb` puts its meshes under nested nodes, so iterating
+			 * `scene.children` would miss the ones that actually hold the data.
+			 */
+			scene.traverse((obj) => {
+				if (!(obj instanceof Mesh)) return;
+				obj.geometry?.dispose?.();
+				const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+				for (const m of mats) {
+					if (!m) continue;
+					// Every texture-ish slot a standard glTF material can carry.
+					for (const slot of [
+						'map',
+						'normalMap',
+						'roughnessMap',
+						'metalnessMap',
+						'emissiveMap',
+						'aoMap',
+						'alphaMap'
+					] as const) {
+						(m as unknown as Record<string, { dispose?: () => void } | null>)[
+							slot
+						]?.dispose?.();
+					}
+					m.dispose();
+				}
+			});
 			renderer.dispose();
 			scene.clear();
 		};

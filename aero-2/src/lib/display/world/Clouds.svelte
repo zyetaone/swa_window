@@ -541,6 +541,26 @@
 			rebuild = null;
 			delete (globalThis as { __cloudSprites?: () => number }).__cloudSprites;
 			materials.forEach((m) => m.dispose());
+			/**
+			 * Textures too, and they are the ones no JS metric will show you.
+			 *
+			 * `materials.dispose()` frees the material; it does NOT free the
+			 * `map` each one points at. These three come from a `TextureLoader`
+			 * and live in GPU memory, so a leaked texture is invisible to
+			 * `performance.memory` and to a heap snapshot — measured across ten
+			 * mount/unmount cycles the JS heap held flat at ~40 MB and the canvas
+			 * count stayed at 4, which is exactly the reading you get whether or
+			 * not this line exists.
+			 *
+			 * It matters here because this component really is remounted on a
+			 * fielded device: the operator toggles the deck, the thermal shed
+			 * flips `qualityMode`, and Stage remounts on a WebGL context loss.
+			 * On a kiosk that runs for weeks between reboots, three RGBA textures
+			 * per remount is a slow GPU-memory bleed ending in a context loss
+			 * that reads as "the Pi crashed".
+			 */
+			textures.forEach((t) => t.dispose());
+			textures.length = 0;
 			renderer.dispose();
 			scene.clear();
 		};

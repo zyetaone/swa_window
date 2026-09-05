@@ -2,7 +2,7 @@
  * AeroDisplay — Svelte 5 root display simulation state container & Context DI.
  * Owns the reactive aircraft view pose, reactive PaneSettings, and simulation tick loop.
  */
-import { getContext, setContext, untrack } from 'svelte';
+import { createContext, untrack } from 'svelte';
 import { calculateCameraView, type CameraView } from './flight/view.js';
 import { phaseFor } from './flight/flight-path.js';
 import { FlightDirector } from './flight/director.svelte.js';
@@ -11,7 +11,21 @@ import { nightAmount, sunPosition, type SunPosition } from './world/sun.js';
 import { createSettings, type PaneSettings } from '#lib/settings/settings.svelte.js';
 import { WallSync } from '#lib/settings/wall.svelte.js';
 
-const DISPLAY_KEY = Symbol('AERO_DISPLAY');
+/**
+ * Type-safe context, rather than a Symbol key plus two casts.
+ *
+ * `createContext<T>()` returns its own getter/setter pair bound to a private
+ * key, so the type is declared once here instead of being asserted at every
+ * `getContext<AeroDisplay>(...)` call site. The old form compiled fine while
+ * lying: `getContext<T>` casts whatever it finds, so a mismatched key returned
+ * `undefined` typed as `AeroDisplay` and failed later, somewhere else, as a
+ * property access on undefined.
+ *
+ * The runtime guard below is kept anyway. `createContext` types the value, it
+ * does not promise a provider exists above you — and "called outside the
+ * provider" is a mistake worth naming at the point it happens.
+ */
+const [getDisplayContext, setDisplayContext] = createContext<AeroDisplay>();
 
 export class AeroDisplay {
 	readonly config: PaneSettings;
@@ -217,12 +231,12 @@ export class AeroDisplay {
 
 export function createDisplay(configOrParams?: PaneSettings | (() => PaneSettings)): AeroDisplay {
 	const display = new AeroDisplay(configOrParams);
-	setContext(DISPLAY_KEY, display);
+	setDisplayContext(display);
 	return display;
 }
 
 export function useDisplay(): AeroDisplay {
-	const ctx = getContext<AeroDisplay>(DISPLAY_KEY);
+	const ctx = getDisplayContext();
 	if (!ctx) {
 		throw new Error('useDisplay() called outside of AeroDisplay provider context');
 	}
