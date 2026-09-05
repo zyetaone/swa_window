@@ -717,3 +717,68 @@ describe('a served dataset has a renderer', () => {
 		expect(orphans, 'packed, served, and drawn by nothing — give it a layer').toEqual([]);
 	});
 });
+
+/**
+ * The three invariants ARCHITECTURE.md marked "—" for enforcement.
+ *
+ * All three were TRUE when this was written, and none of them was checked. That
+ * is the most expensive state for a rule to be in: it reads as settled, so it
+ * gets cited in review and relied on in design, while nothing stops the commit
+ * that ends it. This repo has already recorded the same shape twice — "no
+ * import cycles" was documented while `sim` and `stage` imported each other,
+ * and determinism was claimed in a docstring by a cloud deck integrating frame
+ * deltas in three places. A rule nobody enforces is a rule nobody keeps.
+ *
+ * These are cheap because the codebase already complies; they exist to keep it
+ * that way.
+ */
+describe('architecture invariants that were documented but unenforced', () => {
+	/** #7 — no barrel files. */
+	it('has no index.ts barrels', () => {
+		const barrels = allSources().filter((f) => /(^|\/)index\.ts$/.test(f));
+		expect(
+			barrels,
+			'a barrel re-exports a whole directory, so one import pulls the lot and ' +
+				'tree-shaking stops working — and it hides where a symbol actually lives'
+		).toEqual([]);
+	});
+
+	/**
+	 * #3 — context DI, one root.
+	 *
+	 * `createDisplay()` builds the model; `useDisplay()` reads it from context.
+	 * A second `createDisplay()` call site is a second model: two poses, two
+	 * clocks, and a pane whose HUD disagrees with its own window. Components
+	 * must take the context, never construct their own.
+	 */
+	it('constructs the display model in exactly one place', () => {
+		const callers = allSources().filter((f) => {
+			// The module that DEFINES it is not a caller of it.
+			if (f.endsWith('lib/display/display.svelte.ts')) return false;
+			const src = readFileSync(f, 'utf8')
+				.replace(/\/\*[\s\S]*?\*\//g, '')
+				.replace(/^\s*(\/\/|\s\*).*$/gm, '');
+			// An import names it; a call invokes it. Only the call makes a model.
+			return /\bcreateDisplay\s*\(/.test(src.replace(/^\s*import[\s\S]*?;$/gm, ''));
+		});
+		expect(callers, 'exactly one root may construct the model').toEqual([
+			'src/routes/+page.svelte'
+		]);
+	});
+
+	/**
+	 * #6 — the 3D world runs inside an error boundary.
+	 *
+	 * Without it a WebGL throw during init takes the whole page down to an empty
+	 * <body> served with a 200 — the exact failure `smoke-routes` exists to
+	 * catch, and the one the parent repo shipped on /admin with 489 green tests.
+	 * The boundary is what turns a dead kiosk into a degraded one.
+	 */
+	it('wraps the stage in a svelte:boundary', () => {
+		const display = readFileSync('src/lib/display/Display.svelte', 'utf8');
+		const body = display.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\s\*).*$/gm, '');
+		expect(body, 'a WebGL throw must degrade the pane, not blank the page').toContain(
+			'<svelte:boundary'
+		);
+	});
+});

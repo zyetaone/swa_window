@@ -34,18 +34,27 @@ Naming, so `ls` reads well:
 
 ## 2. The invariants
 
-Ten rules. Eight are enforced by something that fails; two are not, and are
-marked so, because an unenforced invariant is an aspiration.
+Ten rules, and all ten are now enforced by something that fails.
+
+Three of them (#3, #6, #7) were marked "—" for most of this project's life.
+All three were TRUE the whole time, which is the most expensive state for a
+rule to be in: it reads as settled, so it gets cited in review and relied on in
+design, while nothing stops the commit that ends it. This repo has recorded
+that exact shape twice already — "no import cycles" was documented while `sim`
+and `stage` imported each other, and determinism was claimed in a docstring by
+a cloud deck integrating frame deltas in three places. An unenforced invariant
+is an aspiration; these three are now checks, each verified by breaking the
+code it covers and confirming the run goes red.
 
 | #   | Invariant                                                                                  | Enforced by                                                                                    |
 | --- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | 1   | No import cycles                                                                           | `tools/check-cycles.mjs`, in `check` and `test`                                                |
 | 2   | The world is a pure function of (wall clock, place, `daySeed`)                             | `tests/integration.test.ts` — scans for `Math.random` and for `+= dt`                          |
-| 3   | Context DI: `createDisplay()` at the root, `useDisplay()` below                            | —                                                                                              |
+| 3   | Context DI: `createDisplay()` at the root, `useDisplay()` below                            | `tests/regressions.test.ts` — exactly one call site may construct the model                    |
 | 4   | The pure simulation modules import no renderer                                             | `tests/integration.test.ts`                                                                    |
 | 5   | All tiles flow through `/api/tiles`; `server/tiles.ts` is the only file naming an upstream | `tests/tiles.test.ts`, `tests/regressions.test.ts` — templates AND every file under `display/` |
-| 6   | The 3D world runs inside `<svelte:boundary>`                                               | —                                                                                              |
-| 7   | No barrel files (`index.ts`)                                                               | —                                                                                              |
+| 6   | The 3D world runs inside `<svelte:boundary>`                                               | `tests/regressions.test.ts` — a WebGL throw must degrade the pane, not blank the page          |
+| 7   | No barrel files (`index.ts`)                                                               | `tests/regressions.test.ts` — no `index.ts` anywhere under `src/`                              |
 | 8   | A renderer projects the pose; it never sources it                                          | `tests/regressions.test.ts` — same second ⇒ same pose, on a cold model                         |
 | 9   | Every page route renders, and the kiosk is actually flying                                 | `tools/smoke-routes.mjs` (`bun run smoke`)                                                     |
 | 10  | A dataset the server offers has a renderer that asks for it                                | `tests/regressions.test.ts` — every `/api/<kind>/[city]` has a consumer under `display/`       |
