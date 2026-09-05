@@ -100,10 +100,24 @@ jobs:
             sleep 1
           done
           # ubuntu-latest ships Chrome at /usr/bin/google-chrome.
+          #
+          # SwiftShader, not --disable-gpu: the kiosk is a WebGL app, and a
+          # runner has no GPU for the real path to bind to. SwiftShader is a
+          # genuine WebGL2 implementation in software, so the page actually
+          # initialises instead of failing in a way that looks like the blank
+          # page this check exists to catch.
           google-chrome --headless=new --remote-debugging-port=9335 \
-            --no-sandbox --disable-gpu --enable-webgl about:blank &
+            --no-sandbox --disable-dev-shm-usage \
+            --enable-webgl --use-gl=swiftshader --enable-unsafe-swiftshader \
+            about:blank &
           CHROME_PID=$!
-          sleep 5
+          # POLL for the debugger rather than sleeping at it. A flat `sleep 5`
+          # is a race that this job lost on its second run: ECONNREFUSED on
+          # 127.0.0.1:9335 because Chrome had not finished binding the port.
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 2 http://127.0.0.1:9335/json/version >/dev/null 2>&1 && break
+            sleep 1
+          done
           bun run smoke --base http://127.0.0.1:5401 --port 9335
           STATUS=$?
           kill "$CHROME_PID" "$SERVER_PID" 2>/dev/null || true

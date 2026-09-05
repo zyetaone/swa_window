@@ -279,6 +279,32 @@ try {
 		(await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result
 			.value;
 
+	/**
+	 * Warm the shader cache before anything is GRADED.
+	 *
+	 * Under SwiftShader the first MapLibre load compiles every shader in
+	 * software, and on a GitHub runner that first compile can fail outright
+	 * ("Could not compile fragment shader") where the second succeeds — the
+	 * observed signature was `/` failing while `/?blind=closed`, the same map
+	 * seconds later, mounted four canvases. Whichever route happened to be
+	 * first paid a cost that had nothing to do with that route.
+	 *
+	 * So pay it once, deliberately, outside the loop, and let the graded routes
+	 * all start from the same warm state. This does NOT weaken the check: every
+	 * route below still has to render, mount its canvas and prove it is flying.
+	 * It only stops the FIRST of them from also having to prove that a cold
+	 * software GL stack can bootstrap.
+	 */
+	if (process.env.CI) {
+		await send('Page.navigate', { url: BASE + '/' });
+		await waitFor(
+			'shader warm-up',
+			async () => ((await evaluate("document.querySelectorAll('canvas').length")) ?? 0) > 0,
+			60_000
+		).catch(() => console.log('note  warm-up did not reach a canvas; grading anyway'));
+		await sleep(3_000);
+	}
+
 	for (const route of ROUTES) {
 		const errors = [];
 		const onEvent = (msg) => {
