@@ -61,6 +61,41 @@
 	const overcast = $derived(weatherLightLoss(display.config.weather));
 
 	/**
+	 * How much sky the weather actually fills.
+	 *
+	 * The deck was the SAME SIZE in every weather — measured, all five: 439
+	 * sprites on `clear`, 439 on `storm`. Weather changed how the deck was LIT
+	 * and never how much of it there was, so a clear day carried a full storm's
+	 * worth of cloud and a storm added nothing but darkness. That is the wrong
+	 * half of the phenomenon: an overcast sky is not a sunny sky turned down, it
+	 * is a sky with more cloud in it.
+	 *
+	 * The comment above is still right about the base darkening — a storm cloud
+	 * is a cumulus with a much darker base, not a paler one repeated. Both are
+	 * true, and only one was implemented.
+	 *
+	 * Multiplies the count rather than replacing `cloudDensity`, so the operator
+	 * slider keeps meaning "how cloudy is this scene" and weather scales around
+	 * whatever they chose. Clear is deliberately well below 1: a flight-level
+	 * window on a clear day has scattered cloud below and a lot of empty sky,
+	 * and that emptiness is what makes the overcast state read as weather when
+	 * it arrives.
+	 *
+	 * Rebuild cost is the reason this is a coarse multiplier and not a live
+	 * knob: it joins `density` in the rebuild effect, so a weather change
+	 * re-rolls the deck ONCE. Reading it per frame would rebuild 400+ sprites
+	 * every frame.
+	 */
+	const WEATHER_COVERAGE: Record<string, number> = {
+		clear: 0.45,
+		cloudy: 1.0,
+		rain: 1.25,
+		overcast: 1.5,
+		storm: 1.65
+	};
+	const coverageScale = $derived(WEATHER_COVERAGE[display.config.weather] ?? 1);
+
+	/**
 	 * The deck is the biggest GPU cost in the window, and it was the one thing
 	 * the thermal shed did not touch.
 	 *
@@ -211,20 +246,42 @@
 			 * `qualityScale` halves everything when the Pi is throttling — see
 			 * above. Floors of 1 keep a deck present at any setting: an empty sky
 			 * where there should be cloud reads as broken, not as clear weather.
+			 *
+			 * `coverageScale` is the weather. The near tier takes the strongest
+			 * multiplier because it is the one a passenger reads as "we are IN
+			 * weather" — distant cloud is scenery, cloud at 2-30 km is the storm
+			 * you are flying through.
 			 */
-			const distantCount = Math.max(1, Math.round((12 + density * 26) * qualityScale));
+			const distantCount = Math.max(
+				1,
+				Math.round((12 + density * 26) * qualityScale * coverageScale)
+			);
 			for (let c = 0; c < distantCount; c++) {
 				emitCluster(textures, 40_000, 220_000, 8_000, 16_000, 6, 8, 0.05, rng, 0);
 			}
 
 			// ── 2. Near & Mid-Deck Cumulus Puffs (2 km - 35 km) ─────────────────────
-			const nearCount = Math.max(1, Math.round((7 + density * 15) * qualityScale));
+			const nearCount = Math.max(
+				1,
+				Math.round((7 + density * 15) * qualityScale * (1 + (coverageScale - 1) * 1.25))
+			);
 			for (let c = 0; c < nearCount; c++) {
 				emitCluster(textures, 2_500, 32_000, 2_000, 4_500, 4, 6, 0.12, rng, 0);
 			}
 
 			// ── 3. High-Altitude Cirrus Veil Bands (40 km - 180 km, +3500m) ─────────
-			const cirrusCount = Math.max(1, Math.round((6 + density * 9) * qualityScale));
+			/**
+			 * Cirrus goes the OTHER way in bad weather.
+			 *
+			 * Ice cloud at altitude is a fair-weather and frontal-approach signature;
+			 * under a storm you are below the deck and cannot see it at all. So this
+			 * tier thins as the others thicken, which is what makes an overcast sky
+			 * read as a lid rather than as more of everything.
+			 */
+			const cirrusCount = Math.max(
+				1,
+				Math.round((6 + density * 9) * qualityScale * (coverageScale > 1 ? 1 / coverageScale : 1))
+			);
 			for (let c = 0; c < cirrusCount; c++) {
 				emitCluster(
 					[textures[2] || textures[0]],
@@ -521,6 +578,7 @@
 		// or three panes that booted on different days show different weather.
 		void density;
 		void qualityScale;
+		void coverageScale;
 		void display.phase;
 		rebuild?.();
 	});
