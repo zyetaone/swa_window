@@ -32,6 +32,20 @@ vite.config.ts.timestamp-*
 # /api/tiles guard. Moved 2026-09-03.
 data/tiles/
 
+# The persisted wall snapshot — RUNTIME state, not source.
+#
+# `pushWall` writes this on every operator push and `readWall` loads it at boot,
+# so it is per-device state that happens to live under data/. Committing one
+# would ship whatever place, weather and display mode the last developer pushed
+# as every device's boot state.
+#
+# It also outranks the URL, which is what makes a stray copy expensive to
+# diagnose: a wall snapshot applies over `readSettings`, so a leftover
+# `displayMode: 'flight'` silently beat `?mode=screensaver` and the smoke test
+# reported "no media element mounted — MediaStage fell through to an empty
+# state". The component was fine; the state underneath it was not.
+data/wall.json
+
 # Python bytecode — a survey script imported tools/*.py and this got swept in.
 __pycache__/
 *.pyc

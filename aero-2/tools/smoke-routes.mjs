@@ -364,6 +364,31 @@ try {
 			await sleep(4_000);
 		}
 
+		/**
+		 * A media route needs its IMAGE decoded, which a canvas wait does not
+		 * imply and a flat sleep does not guarantee.
+		 *
+		 * This was a fixed 4 s and it was enough on a developer machine and not
+		 * on a CI runner: under SwiftShader the screensaver route reported "no
+		 * media element mounted" while every other route passed, purely because
+		 * decoding lost a race the assertion then read as a broken MediaStage.
+		 * Same lesson as the canvas wait above — poll the condition, do not
+		 * encode one machine's speed as a number.
+		 */
+		if (route.mediaLoaded) {
+			await waitFor(
+				`${route.path} media`,
+				async () =>
+					(await evaluate(
+						"(() => { const e = document.querySelector('.media-stage img');" +
+							'return !!(e && e.naturalWidth > 0); })()'
+					)) === true,
+				30_000
+			).catch(() => {
+				/* Fall through: the assertion below says what is actually missing. */
+			});
+		}
+
 		const text = (await evaluate('document.body.innerText')) ?? '';
 		const canvases = await evaluate("document.querySelectorAll('canvas').length");
 		const problems = [];
