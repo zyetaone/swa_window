@@ -222,9 +222,20 @@ jobs:
   # `release` is exclusively CI-owned — never push to it by hand. force=true
   # is correct here: the fleet consumes it with `git reset --hard`, so
   # non-fast-forward moves (e.g. after a main history rewrite) are absorbed.
+  #
+  # Gated on BOTH apps, not just v1.
+  #
+  # This used to need only `build-and-check`, on the reasoning that aero-2 was
+  # pre-ship and a red rewrite must not hold back a green v1 deploy. That was
+  # true while the fleet could only ever run v1 from the repo root. It stopped
+  # being true when the updater learned to resolve an app directory: a device
+  # with AERO_APP_SUBDIR=aero-2 now pulls `release` and builds the rewrite, so
+  # a `release` blessed without aero-2 passing is a branch that can deploy code
+  # CI never proved builds. The whole point of the gate is that a red commit
+  # never reaches a Pi.
   promote:
     name: Promote to release
-    needs: build-and-check
+    needs: [build-and-check, aero-2]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

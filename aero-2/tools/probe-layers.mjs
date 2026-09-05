@@ -67,11 +67,24 @@ const evalJs = async (expr) => {
 	return r.result.value;
 };
 
-// Denver at a deep-night clock offset: roads packed, and `night` near 1 so the
-// glow ramp is open. `speed=0` is not a thing, so altitude is whatever the
-// orbit gives — the fade window is 9,000-4,000 m and the ceiling is 13,000, so
-// poll rather than assume we caught a low pass.
-const url = `${BASE}/?place=denver&clock=12&hud=0`;
+/**
+ * Denver, at a clock offset that is ACTUALLY night when the probe runs.
+ *
+ * `clock` is an offset applied to UTC, not an absolute local hour, so a fixed
+ * value only lands at night for part of the real day. Hardcoded at 12 this
+ * probe reported "roads layer did not draw" when run in the morning UTC —
+ * Denver read as late afternoon, `lightUp` was still ~0, and the layer was
+ * correctly unmounted. A false failure on a check whose whole job is telling
+ * you a layer is silently absent is worse than no check.
+ *
+ * So aim for ~02:00 local and let the caller override with --clock.
+ * Verified across offsets: at local dusk the layer mounts at 0.15 opacity and
+ * by deep night 0.85, with ~29k features loaded.
+ */
+const DENVER_UTC_OFFSET = -6;
+const nowUtcH = new Date().getUTCHours();
+const autoClock = (((2 - DENVER_UTC_OFFSET - nowUtcH) % 24) + 24) % 24;
+const url = `${BASE}/?place=denver&clock=${arg('clock', String(autoClock))}&hud=0`;
 await send('Page.navigate', { url });
 await sleep(9000);
 
