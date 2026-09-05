@@ -31,11 +31,24 @@ export class WallSync {
 	/**
 	 * Buffer a snapshot. Deliberately does nothing else — receiving is not
 	 * applying, and that separation is the whole design.
+	 *
+	 * Monotonic in version against BOTH what has applied and what is already
+	 * waiting. The applied check alone left a hole: two pushes inside the 5 s
+	 * lead are both un-applied, so `appliedVersion` is still behind both, and a
+	 * v1 arriving after a v2 replaced the newer snapshot and landed the
+	 * operator's abandoned choice on the wall. Nothing in `receive`'s contract
+	 * promised ordered delivery — the poller's `inFlight` guard makes it
+	 * unlikely on one pane, not impossible across a retry, a caching
+	 * intermediary, or a future caller — and a rule that depends on an
+	 * undocumented property of one call site is a rule waiting to break.
+	 *
+	 * A newer push still supersedes an older one still waiting: the operator
+	 * changed their mind inside the lead time, and only the last should land.
 	 */
 	receive(snapshot: WallSnapshot | null | undefined): void {
-		if (!snapshot || snapshot.version <= this.appliedVersion) return;
-		// A newer push supersedes an older one still waiting: the operator changed
-		// their mind inside the lead time, and only the last one should land.
+		if (!snapshot) return;
+		const floor = Math.max(this.appliedVersion, this.pending?.version ?? 0);
+		if (snapshot.version <= floor) return;
 		this.pending = snapshot;
 	}
 
