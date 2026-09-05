@@ -308,8 +308,35 @@ try {
 		cdp.on(onEvent);
 
 		await send('Page.navigate', { url: BASE + route.path });
-		// The kiosk boots MapLibre, a DEM and four canvases; give it room.
-		await sleep(route.canvas ? 12_000 : 4_000);
+		/**
+		 * POLL for readiness rather than sleeping a fixed 12s.
+		 *
+		 * A flat sleep encodes one machine's speed. It was tuned on a GPU, and
+		 * under SwiftShader on a CI runner the FIRST canvas route needs longer:
+		 * the software driver compiles MapLibre's shaders from cold, which the
+		 * later routes then get for free from the program cache. CI failed on `/`
+		 * with "Could not compile fragment shader" while `/?blind=closed` — the
+		 * same map, moments later — passed, and a 5-of-6 result whose only
+		 * failure is the first route is the signature of a warm-up cost, not a
+		 * broken page.
+		 *
+		 * Waiting on the condition is both faster on a fast machine and correct
+		 * on a slow one. The ceiling stays generous because being wrong here
+		 * costs a false red on the one check that guards blank pages.
+		 */
+		if (route.canvas) {
+			await waitFor(
+				`${route.path} canvas`,
+				async () => ((await evaluate("document.querySelectorAll('canvas').length")) ?? 0) > 0,
+				45_000
+			).catch(() => {
+				/* Fall through: the assertions below report what is actually wrong. */
+			});
+			// The canvas exists; give the first frames a moment to land.
+			await sleep(2_000);
+		} else {
+			await sleep(4_000);
+		}
 
 		const text = (await evaluate('document.body.innerText')) ?? '';
 		const canvases = await evaluate("document.querySelectorAll('canvas').length");
