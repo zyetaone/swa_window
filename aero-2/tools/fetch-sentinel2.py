@@ -199,7 +199,8 @@ MAX_NODATA_PCT = 5.0
 WINDOW_DAYS = 15
 
 
-def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
+def pick_date(bbox: list[float], start: str, end: str, max_cloud: float,
+              max_nodata: float = MAX_NODATA_PCT):
     """The clearest set of scenes covering every MGRS tile, within one window.
 
     Returns the anchor date, the worst per-tile cloud, the tiles, and the chosen
@@ -209,6 +210,19 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
     """
     # mgrs -> list of (date_ordinal, nodata, cloud, href, date_str)
     per_tile: dict[str, list[tuple[int, float, float, str, str]]] = defaultdict(list)
+    # Every MGRS tile the bbox intersects, BEFORE the nodata filter thins it.
+    #
+    # `grids` below is built from what survives filtering, so a tile that is
+    # partial on every pass simply vanishes and the run reports success over a
+    # mosaic with a hole in it. That is what happened to Dubai: 40RBN and 39RZH
+    # are cloud-free all August and sit at ~28% and ~34% nodata on every single
+    # date, so both were dropped, `grids` never knew they were wanted, and the
+    # coverage guard failed 35% empty with a message blaming a satellite gap.
+    # The scenes were there the whole time.
+    #
+    # Tracking the unfiltered set separately costs nothing and lets the failure
+    # name its real cause.
+    seen_any: set[str] = set()
     for page in range(1, 8):
         r = post({
             "collections": ["sentinel-2-l2a"],
@@ -221,7 +235,8 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
         feats = r.get("features", [])
         for f in feats:
             nodata = f["properties"].get("s2:nodata_pixel_percentage", 0.0)
-            if nodata > MAX_NODATA_PCT:
+            seen_any.add(f["id"].split("_")[1])
+            if nodata > max_nodata:
                 continue
             day = f["properties"]["datetime"][:10]
             per_tile[f["id"].split("_")[1]].append((
@@ -237,6 +252,25 @@ def pick_date(bbox: list[float], start: str, end: str, max_cloud: float):
     grids = sorted(per_tile)
     if not grids:
         sys.exit("No Sentinel-2 scenes at all for that bbox and window.")
+
+    # Say which tiles the nodata filter removed entirely.
+    #
+    # These are the ones that produce a hole: cloud-free, genuinely available,
+    # and partial on every pass, so no anchor date can ever include them. Left
+    # silent, the run proceeds over a bbox it cannot fill and the coverage guard
+    # blames a satellite gap 20 minutes later. Named here, the operator can see
+    # the cause immediately and decide — raise MAX_NODATA_PCT and accept a
+    # seamier mosaic, or pick a different date range.
+    dropped = sorted(seen_any - set(grids))
+    if dropped:
+        print(
+            f"! {len(dropped)} tile(s) intersect this view but are >"
+            f"{max_nodata:g}% nodata on every clear pass: {', '.join(dropped)}\n"
+            f"  They will be MISSING from the mosaic. If the coverage check then\n"
+            f"  fails, this is why — not weather, and not a gap between passes.\n"
+            f"  --max-nodata 35 admits them, at the cost of seamier edges.",
+            file=sys.stderr,
+        )
 
     anchors = sorted({o for v in per_tile.values() for o, *_ in v})
     best = None
@@ -361,6 +395,12 @@ def main() -> None:
     ap.add_argument("--start", default="2026-01-01")
     ap.add_argument("--end", default="2026-06-30")
     ap.add_argument("--max-cloud", type=float, default=5.0)
+    # Escape hatch for the coastal case. See MAX_NODATA_PCT: 5% is right when
+    # whole scenes are available, and impossible where the orbit only ever
+    # clips the corner of a tile — which is most coastlines, and is why Dubai
+    # could not be packed at the default.
+    ap.add_argument("--max-nodata", type=float, default=MAX_NODATA_PCT,
+                    help=f"max %% nodata per scene (default {MAX_NODATA_PCT:g})")
     ap.add_argument("--min-zoom", type=int, default=DEFAULT_MIN_ZOOM)
     ap.add_argument("--max-zoom", type=int, default=DEFAULT_MAX_ZOOM)
     ap.add_argument("--out", default="data/tiles")
@@ -382,7 +422,7 @@ def main() -> None:
     print(f"{a.place}: near bbox {[round(v, 3) for v in bbox]}")
     print(f"{a.place}: far  bbox {[round(v, 3) for v in wide_bbox]}")
 
-    day, worst, grids, tiles = pick_date(wide_bbox, a.start, a.end, a.max_cloud)
+    day, worst, grids, tiles = pick_date(wide_bbox, a.start, a.end, a.max_cloud, a.max_nodata)
     print(f"date {day}: {len(grids)} MGRS tiles, worst cloud {worst:.2f}%")
 
     work = Path(a.out) / f"_s2-{a.place}"
