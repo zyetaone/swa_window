@@ -195,7 +195,26 @@ const chrome = spawn(
 		'--disable-extensions',
 		// The kiosk is a WebGL app; software rendering would be a different test.
 		'--enable-webgl',
-		'--use-gl=angle',
+		/**
+		 * ANGLE locally, SwiftShader on a headless CI runner.
+		 *
+		 * MapLibre v6 hard-requires WebGL2 and throws GPUInitializationError
+		 * without it — no map, no canvas, and every kiosk assertion below fails.
+		 * `--use-gl=angle` needs a GPU to bind to, which a GitHub runner does not
+		 * have, so on CI it produces exactly the blank page this tool exists to
+		 * detect and the failure looks like a real regression.
+		 *
+		 * SwiftShader is a genuine WebGL2 implementation in software, so the app
+		 * really does initialise, really does mount a map, and really does fly.
+		 * What it cannot vouch for is GPU-specific behaviour or frame rate —
+		 * neither of which this check ever claimed to measure.
+		 *
+		 * `--no-sandbox` for the same reason: unprivileged user namespaces are
+		 * unavailable in most containers, and Chrome refuses to start without it.
+		 */
+		...(process.env.CI
+			? ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage']
+			: ['--use-gl=angle']),
 		`--remote-debugging-port=${CDP_PORT}`,
 		`--user-data-dir=${profile}`,
 		'about:blank'
