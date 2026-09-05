@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "applyAtWallSec": 1788632961,
+  "state": {
+    "placeId": "denver",
+    "presetId": "d",
+    "weather": "clear",
+    "clockOffsetH": 0,
+    "displayMode": "flight",
+    "blindOpen": true,
+    "rotate": true,
+    "mediaUrls": []
+  }
+}
