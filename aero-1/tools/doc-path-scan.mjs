@@ -15,6 +15,23 @@ import fs from 'node:fs';
 const tracked = new Set(execSync('git ls-files').toString().trim().split('\n'));
 const docs = execSync('git ls-files docs AGENTS.md README.md').toString().trim().split('\n').filter(Boolean);
 
+// The repo holds two apps, and the docs at the root predate that.
+//
+// `docs/`, `AGENTS.md` and `README.md` sit at the repo root and describe v1,
+// which now lives in `aero-1/`. Every `src/lib/...` reference in them is
+// therefore correct prose about a real file at a path that no longer resolves
+// from the root — 28 of them the moment the reorg landed. Rewriting several
+// hundred doc references to `aero-1/src/...` would be churn that makes the
+// prose worse to read, and it would have to be redone if v1 is retired.
+//
+// So resolve a bare path against each app root as well as the root itself. A
+// path is "live" if it exists in ANY of them, which is what a reader following
+// the reference actually needs. It costs a little precision — a path that
+// exists only in aero-2 satisfies an aero-1 doc — and that is the right trade
+// against the alternative of a scanner nobody runs because it is always red.
+const APP_ROOTS = ['', 'aero-1/', 'aero-2/'];
+const exists = (p) => APP_ROOTS.some((prefix) => tracked.has(prefix + p));
+
 // Path-ish tokens: contain a slash and end in a known source extension.
 const PATH_RE = /\b((?:src|content|tools|tests|docs)\/[\w./[\]-]*\.(?:ts|js|svelte|md|json|glsl))\b/g;
 
@@ -38,13 +55,13 @@ let excused = 0;
 for (const doc of docs) {
 	const text = fs.readFileSync(doc, 'utf8');
 	if (IMMUTABLE_DOC.test(doc) || ARCHIVE_BANNER.test(text.slice(0, 1200))) {
-		for (const m of text.matchAll(PATH_RE)) if (!tracked.has(m[1])) excused++;
+		for (const m of text.matchAll(PATH_RE)) if (!exists(m[1])) excused++;
 		continue;
 	}
 	const misses = new Set();
 	for (const line of text.split('\n')) {
 		for (const m of line.matchAll(PATH_RE)) {
-			if (tracked.has(m[1])) continue;
+			if (exists(m[1])) continue;
 			if (REMOVAL_MARKER.test(line)) { excused++; continue; }
 			misses.add(m[1]);
 		}
