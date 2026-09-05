@@ -22,6 +22,13 @@ jobs:
   build-and-check:
     name: Type-check & Build
     runs-on: ubuntu-latest
+    # v1 moved from the repo root into aero-1/ when the tree split into two
+    # applications with shared assets (data/, deploy/) at the top. Every step
+    # in this job runs against that app, not the root, which no longer has a
+    # package.json at all.
+    defaults:
+      run:
+        working-directory: aero-1
 
     steps:
       - name: Checkout
@@ -74,10 +81,38 @@ jobs:
           curl -fsS --max-time 5 -o /dev/null http://localhost:3000/api/devices
           kill "$SERVER_PID"
 
+      # The curls above prove the SERVER works. They cannot prove a PAGE does:
+      # `ssr = false` means the static shell returns 200 whether or not the app
+      # boots inside it, so /admin once shipped as an empty <body> with a green
+      # check, 489 green tests and a perfect-looking kiosk route. This step is
+      # the only thing in the pipeline that loads a route in a real browser and
+      # asserts it rendered. AGENTS.md has required it before shipping UI or
+      # state changes since that incident; it just was never wired up here.
+      - name: Smoke test routes in a real browser
+        env:
+          AERO_DISABLE_LAN_PROXY: '1'
+          PORT: '5401'
+        run: |
+          bun run serve --port 5401 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 2 http://127.0.0.1:5401/api/status >/dev/null 2>&1 && break
+            sleep 1
+          done
+          # ubuntu-latest ships Chrome at /usr/bin/google-chrome.
+          google-chrome --headless=new --remote-debugging-port=9335 \
+            --no-sandbox --disable-gpu --enable-webgl about:blank &
+          CHROME_PID=$!
+          sleep 5
+          bun run smoke --base http://127.0.0.1:5401 --port 9335
+          STATUS=$?
+          kill "$CHROME_PID" "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS
+
   # ── aero-2 ───────────────────────────────────────────────────────────────
-  # The rewrite in aero-2/ had no CI of any kind. Everything above runs at the
-  # repo root, which is v1, so aero-2 could be — and on 1a6c77e was — committed
-  # in a state that cannot build from a clean clone: Settings.svelte imported
+  # The rewrite in aero-2/ had no CI of any kind. The job above covers v1 (now
+  # in aero-1/), so aero-2 could be — and on 1a6c77e was — committed in a state
+  # that cannot build from a clean clone: Settings.svelte imported
   # SCENE_PRESETS and applyPreset from a module that had not been committed yet.
   # It typechecked on the author's machine because the file was sitting
   # uncommitted in the working tree.
@@ -156,6 +191,14 @@ jobs:
           # Second request proves the process survived the first.
           curl -fsS --max-time 5 http://localhost:3000/api/tiles/health
           kill "$SERVER_PID"
+
+      # Loads every route in a real browser and asserts it rendered — the check
+      # no typecheck and no non-mounting unit test can perform. aero-2's own
+      # tool starts the server and Chrome itself, so this is one command.
+      - name: Smoke test routes in a real browser
+        run: bun run smoke
+        env:
+          CHROME: /usr/bin/google-chrome
 
   # ── Release promotion ────────────────────────────────────────────────────
   # The Pi fleet's daily updater tracks the `release` branch, NOT main.
