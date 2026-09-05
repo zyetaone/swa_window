@@ -89,6 +89,7 @@ export const SENTINEL2_PLACES: ReadonlySet<string> = new Set([
 	'chicago_midway',
 	'dallas',
 	'denver',
+	'dubai',
 	'himalayas',
 	'hyderabad',
 	'las_vegas',
