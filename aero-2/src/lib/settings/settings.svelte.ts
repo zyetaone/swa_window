@@ -34,15 +34,42 @@ export interface SearchParamsSource {
 	searchParams: { get(key: string): string | null };
 }
 
+/**
+ * Read a numeric URL param, CLAMPED to the knob's declared range.
+ *
+ * The clamp is the point. `KNOB_RANGE` below calls itself "the SSOT for
+ * clamping" and `set()` honoured it, but URL parsing assigned straight to the
+ * field and bypassed it entirely — so every bound the UI enforces was optional
+ * to anyone who could type a query string, which on a kiosk provisioned by URL
+ * is the normal way settings arrive.
+ *
+ * Not hypothetical, and not only a robustness nicety:
+ *   ?floor=-999999   put the aircraft below sea level, under Denver's floor,
+ *                    which the Location docstring requires to clear local peaks
+ *   ?pitch=-9999     aimed the window through the fuselage
+ *   ?speed=100000    is not a window anyone can watch
+ *   ?exaggeration=500 renders terrain as a wall of spikes
+ *
+ * Every one produced a pane that looks broken with no way to tell why, and the
+ * bad value persists — `readSettings` runs at boot, so a mistyped provisioning
+ * URL is a permanently wrong wall until someone finds the typo.
+ *
+ * Takes the knob key rather than a range so the bound cannot drift from the one
+ * the slider uses; that was the failure being fixed, not a shape to repeat.
+ */
 function parseNum(
 	params: { get(key: string): string | null },
 	key: string,
-	fallback: number
+	fallback: number,
+	knob?: NumericKnob
 ): number {
 	const raw = params.get(key);
 	if (raw === null || raw.trim() === '') return fallback;
 	const n = Number(raw);
-	return Number.isFinite(n) ? n : fallback;
+	if (!Number.isFinite(n)) return fallback;
+	if (!knob) return n;
+	const [lo, hi] = KNOB_RANGE[knob];
+	return Math.min(hi, Math.max(lo, n));
 }
 
 /**
@@ -229,29 +256,29 @@ export class PaneSettings {
 		const placeParam = url.searchParams.get('place');
 		this.rotate = placeParam === null;
 		this.setPlace(Location.byId(placeParam));
-		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG);
-		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG);
-		this.floorM = parseNum(url.searchParams, 'floor', this.floorM);
-		this.ceilingM = parseNum(url.searchParams, 'ceiling', this.ceilingM);
-		this.clockOffsetH = parseNum(url.searchParams, 'clock', 0);
-		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT);
-		this.exaggeration = parseNum(url.searchParams, 'exaggeration', TERRAIN_EXAGGERATION);
+		this.azimuthDeg = parseNum(url.searchParams, 'azimuth', DEFAULT_WINDOW_AZIMUTH_DEG, 'azimuthDeg');
+		this.pitchDeg = parseNum(url.searchParams, 'pitch', DEFAULT_PITCH_DEG, 'pitchDeg');
+		this.floorM = parseNum(url.searchParams, 'floor', this.floorM, 'floorM');
+		this.ceilingM = parseNum(url.searchParams, 'ceiling', this.ceilingM, 'ceilingM');
+		this.clockOffsetH = parseNum(url.searchParams, 'clock', 0, 'clockOffsetH');
+		this.shade = parseNum(url.searchParams, 'shade', HILLSHADE_DEFAULT, 'shade');
+		this.exaggeration = parseNum(url.searchParams, 'exaggeration', TERRAIN_EXAGGERATION, 'exaggeration');
 		const crParam = url.searchParams.get('colorRelief');
 		if (crParam !== null) this.colorRelief = crParam === '1' || crParam === 'true';
 		const rampParam = url.searchParams.get('ramp');
 		if (rampParam === 'LINZ' || rampParam === 'geographical') this.reliefRamp = rampParam;
-		this.speed = parseNum(url.searchParams, 'speed', 4.0);
-		this.wingScale = parseNum(url.searchParams, 'wingScale', DEFAULT_WING_SCALE);
-		this.wingOffsetX = parseNum(url.searchParams, 'wingX', DEFAULT_WING_OFFSET_X);
-		this.wingOffsetY = parseNum(url.searchParams, 'wingY', DEFAULT_WING_OFFSET_Y);
-		this.wingPitchDeg = parseNum(url.searchParams, 'wingPitch', 0);
-		this.wingRollFactor = parseNum(url.searchParams, 'wingRoll', 1.0);
+		this.speed = parseNum(url.searchParams, 'speed', 4.0, 'speed');
+		this.wingScale = parseNum(url.searchParams, 'wingScale', DEFAULT_WING_SCALE, 'wingScale');
+		this.wingOffsetX = parseNum(url.searchParams, 'wingX', DEFAULT_WING_OFFSET_X, 'wingOffsetX');
+		this.wingOffsetY = parseNum(url.searchParams, 'wingY', DEFAULT_WING_OFFSET_Y, 'wingOffsetY');
+		this.wingPitchDeg = parseNum(url.searchParams, 'wingPitch', 0, 'wingPitchDeg');
+		this.wingRollFactor = parseNum(url.searchParams, 'wingRoll', 1.0, 'wingRollFactor');
 		const cloudsParam = url.searchParams.get('clouds');
 		if (cloudsParam !== null) this.clouds = cloudsParam !== '0' && cloudsParam !== 'false';
-		this.cloudDensity = parseNum(url.searchParams, 'cloudDensity', 0.75);
-		this.cloudSpeed = parseNum(url.searchParams, 'cloudSpeed', 1.0);
-		this.cloudAltitudeM = parseNum(url.searchParams, 'cloudAlt', 3500);
-		this.cloudOpacity = parseNum(url.searchParams, 'cloudOpacity', 0.85);
+		this.cloudDensity = parseNum(url.searchParams, 'cloudDensity', 0.75, 'cloudDensity');
+		this.cloudSpeed = parseNum(url.searchParams, 'cloudSpeed', 1.0, 'cloudSpeed');
+		this.cloudAltitudeM = parseNum(url.searchParams, 'cloudAlt', 3500, 'cloudAltitudeM');
+		this.cloudOpacity = parseNum(url.searchParams, 'cloudOpacity', 0.85, 'cloudOpacity');
 
 		const blindParam = url.searchParams.get('blind');
 		if (blindParam !== null)
