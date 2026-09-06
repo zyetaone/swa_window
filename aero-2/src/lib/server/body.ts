@@ -30,10 +30,33 @@ export async function readLimited(
 			if (done) break;
 			received += value.byteLength;
 			if (received > maxBytes) {
-				// Cancel rather than drain, so the sender is told to stop instead of
-				// being read to completion. Peak memory is maxBytes plus the one chunk
-				// that crossed it — that chunk is already in hand, and is not kept.
-				await reader.cancel();
+				/**
+				 * Stop reading, but do NOT cancel the stream.
+				 *
+				 * This was `await reader.cancel()`, on the reasoning that cancelling
+				 * tells the sender to stop rather than reading it to completion. The
+				 * reasoning is sound and the mechanism backfires: adapter-node builds
+				 * the body as a ReadableStream whose `cancel` is
+				 * `req.destroy(reason)`, so cancelling destroys the SOCKET — and the
+				 * 413 we return next has nowhere to be written. Measured over real
+				 * HTTP, an over-limit POST got an empty `200` with `Connection:
+				 * close`, on this route and on `/api/wall`, which had shipped that way.
+				 *
+				 * A unit test cannot see it. A bare `new Request(...)` has no socket
+				 * to destroy, so the handler returns a clean 413 and the suite is
+				 * green while the wire says 200. That gap is why this is verified with
+				 * curl against a built server, not only with vitest.
+				 *
+				 * Releasing the lock instead leaves the stream intact; adapter-node's
+				 * own `drain_request` discards the rest once the response is sent, so
+				 * the connection stays usable and the status is truthful. The bytes
+				 * already read are dropped either way.
+				 *
+				 * The `finally` below releases too, which is fine: a second
+				 * `releaseLock()` on an already-released reader is a documented no-op,
+				 * verified rather than assumed.
+				 */
+				reader.releaseLock();
 				return fail(413, `request body too large: >${received} bytes, limit is ${maxBytes}`);
 			}
 			chunks.push(value);

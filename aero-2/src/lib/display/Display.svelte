@@ -282,6 +282,44 @@
 		}, 1000);
 		return () => clearInterval(id);
 	});
+
+	/**
+	 * Tell this device's own server what frame rate the tab is seeing.
+	 *
+	 * The measurement lives in the render loop, in the browser. Everything that
+	 * wants it lives outside: `health-check.sh` scrapes `GET /api/status` every
+	 * 60 s and POSTs to the admin, which averages it across the wall. Without
+	 * this one fetch that entire chain reports nothing — and it did.
+	 * `HeartbeatSample.fps` is declared, parsed, averaged and rendered, and the
+	 * cockpit showed an em-dash for every device, permanently, because nothing
+	 * ever produced the number. Built end to end except for the wire.
+	 *
+	 * Every 5 s against a 30 s staleness window, so a pane has six chances to be
+	 * counted before its reading is dropped, and a tab that dies stops being
+	 * reported rather than freezing at its last healthy value.
+	 *
+	 * Fire-and-forget, and errors are swallowed on purpose: this is an
+	 * instrument, and an instrument that can break the thing it measures is
+	 * worse than no instrument. Same reason it does not run in dev — a
+	 * development machine reporting fps to itself is noise.
+	 */
+	$effect(() => {
+		if (!import.meta.env.PROD) return;
+		const id = setInterval(() => {
+			const body = untrack(() =>
+				JSON.stringify({ fps: display.fps, frameTimeMs: display.frameTimeMs })
+			);
+			void fetch('/api/internal/vitals', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body,
+				keepalive: true
+			}).catch(() => {
+				/* An unreachable local server is its own symptom; do not add a second. */
+			});
+		}, 5000);
+		return () => clearInterval(id);
+	});
 </script>
 
 <div class="aero-display">

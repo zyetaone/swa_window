@@ -21,6 +21,19 @@ export interface KioskStatus {
 	lanIps: { name: string; address: string; family: string }[];
 	primaryLanIp: string;
 	port: number;
+	/**
+	 * Frames per second, as measured by THIS pane's browser.
+	 *
+	 * Optional because the server cannot observe a frame: it is populated only
+	 * once the tab has POSTed to `/api/internal/vitals`, and goes away again if
+	 * the tab stops reporting. `health-check.sh` scrapes this field and
+	 * `HeartbeatSample.fps` carries it to the cockpit.
+	 *
+	 * Absent is NOT zero. Zero means a stalled renderer, which is a real and
+	 * alarming measurement; absent means nobody has said yet.
+	 */
+	fps?: number;
+	frameTimeMs?: number;
 }
 
 /**

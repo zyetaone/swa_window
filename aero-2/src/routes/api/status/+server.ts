@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import os from 'node:os';
 import type { KioskStatus } from '#lib/status.js';
+import { readVitals } from '#lib/server/vitals.js';
 
 /**
  * GET /api/status — kiosk telemetry for the /admin cockpit.
@@ -32,6 +33,11 @@ export const GET: RequestHandler = () => {
 
 	const lanIps = ipAddresses.filter((ip) => !ip.address.startsWith('127.'));
 
+	// Whatever the tab last reported, if it is recent. Spread so the keys are
+	// ABSENT rather than undefined when there is no reading — `health-check.sh`
+	// greps for `"fps":` and a literal `undefined` is not valid JSON anyway.
+	const vitals = readVitals();
+
 	return json({
 		online: true,
 		hostname: os.hostname(),
@@ -41,6 +47,7 @@ export const GET: RequestHandler = () => {
 		lanIps,
 		primaryLanIp: lanIps[0]?.address ?? 'localhost',
 		// server.ts reads PORT; hardcoding 5173 here made the two disagree.
-		port: Number(process.env.PORT ?? 5173)
+		port: Number(process.env.PORT ?? 5173),
+		...(vitals ?? {})
 	} satisfies KioskStatus);
 };

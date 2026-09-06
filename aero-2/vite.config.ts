@@ -43,6 +43,29 @@ export default defineConfig({
 	plugins: [
 		sveltekit({
 			adapter: adapter(),
+			/**
+			 * ABSOLUTE asset paths. SvelteKit's default is relative, and relative
+			 * breaks every route below the root.
+			 *
+			 * With `paths.relative` left at its default, the HTML shell links
+			 * `./_app/immutable/...`. A browser resolves that against the CURRENT
+			 * path, so `/` asks for `/_app/...` and works, while `/admin` asks for
+			 * `/admin/_app/...` and gets a 404. The page then renders an empty
+			 * `<body>` with a 200 and NOTHING in the console — no exception, no
+			 * failed-module log — because the module that would have reported the
+			 * error is the one that failed to load.
+			 *
+			 * That is the exact blank-cockpit failure `tools/smoke-routes.mjs` was
+			 * written for, and it caught this one: `/` and `/wiki` passed while
+			 * `/admin` rendered 14 characters. Every other check in the repo was
+			 * green — 416 unit tests, a clean typecheck, no import cycles — because
+			 * none of them loads a page below the root.
+			 *
+			 * Absolute is correct for this app regardless: it is served by
+			 * adapter-node from a known origin, never from a subdirectory, so the
+			 * portability relative paths buy is worth nothing here.
+			 */
+			paths: { relative: false },
 			csp: {
 				directives: {
 					// GIBS and terrarium are fetched server-side, through /api/tiles —

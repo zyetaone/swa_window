@@ -563,6 +563,31 @@ try {
 	} finally {
 		guardServer.kill();
 	}
+
+	/**
+	 * An over-limit POST must answer 413 ON THE WIRE.
+	 *
+	 * `readLimitedJson` has unit tests asserting exactly this, and they passed
+	 * while every real request got an empty `200`. A bare `new Request(...)` has
+	 * no socket, so `reader.cancel()` had nothing to destroy; over HTTP it
+	 * destroyed the connection adapter-node needed to write the 413 to. The
+	 * suite was green and the wire was wrong, on `/api/wall` as shipped.
+	 *
+	 * Only a real request can see that, which is what this file is for.
+	 */
+	const oversized = JSON.stringify({ pad: 'x'.repeat(8000) });
+	const res = await fetch(`${BASE}/api/wall`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: oversized
+	});
+	if (res.status !== 413) {
+		failed++;
+		console.log('FAIL  POST /api/wall (oversized body)');
+		console.log(`        expected 413, got ${res.status} — the size guard cannot answer`);
+	} else {
+		console.log('ok    POST /api/wall  (oversized body -> 413)');
+	}
 } catch (err) {
 	failed++;
 	console.error(`FAIL  harness: ${err.message}`);
