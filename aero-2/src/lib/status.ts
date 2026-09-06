@@ -85,3 +85,26 @@ export async function fetchFleet(signal?: AbortSignal): Promise<FleetDevice[]> {
 	if (!res.ok) throw new Error(`/api/fleet/heartbeat returned ${res.status}`);
 	return (await res.json()) as FleetDevice[];
 }
+
+/**
+ * Where this device's admin cockpit can be reached from another machine.
+ *
+ * Lives here, not in the component that shows it, because `lib/display/` is
+ * forbidden from naming a protocol at all — `regressions.test.ts` scans it for
+ * a bare `http://` and fails. That rule exists because a renderer building its
+ * own URL is how `world/cesium/imagery.ts` came to hardcode two tile hosts
+ * while the template scan reported the invariant as held.
+ *
+ * The rule is about tile providers and this is a LAN self-address, so the
+ * letter of it is stricter than the spirit. Following it anyway is still right:
+ * the check is deliberately blunt precisely so nobody has to adjudicate that
+ * distinction under pressure, and this is where the IP and port already live.
+ *
+ * Null when the device has no LAN address. `primaryLanIp` falls back to the
+ * string `localhost`, which is a real answer meaning "nothing to scan" — and a
+ * QR pointing at localhost would send a phone to itself.
+ */
+export function adminUrl(status: KioskStatus): string | null {
+	if (!status.primaryLanIp || status.primaryLanIp === 'localhost') return null;
+	return `http://${status.primaryLanIp}:${status.port}/admin`;
+}

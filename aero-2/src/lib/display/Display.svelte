@@ -16,6 +16,7 @@
 	import Wing from './cabin/Wing.svelte';
 	import Frame from './cabin/Frame.svelte';
 	import Blind from './cabin/Blind.svelte';
+	import AdminQr from './cabin/AdminQr.svelte';
 	import RainGlass from './cabin/RainGlass.svelte';
 	import Hud from './cabin/Hud.svelte';
 	import MiniMap from './flight/MiniMap.svelte';
@@ -371,6 +372,9 @@
 	<Hud visible={hud} />
 	<MediaStage />
 	<AudioHost />
+	<!-- Last, so its overlay sits above the cabin chrome when it opens. The
+	     hotspot itself is an invisible corner and takes no space until held. -->
+	<AdminQr />
 	{@render children?.()}
 </div>
 
