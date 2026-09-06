@@ -25,6 +25,7 @@
 	import { untrack } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import { createWallPoller } from '#lib/settings/wall-poll.js';
+	import { tryConsumeReloadBudget } from './reload-budget.js';
 	import { createThermalPoller } from '#lib/settings/thermal-poll.js';
 	import type { ThermalAction } from '#lib/throttle.js';
 	import { PUBLIC_WALL_ORIGIN } from '$app/env/public';
@@ -116,16 +117,26 @@
 	 * There is no fleet layer yet: no heartbeat, no operator alert, no console
 	 * anyone reads, so detection alone would change nothing on the wall. A
 	 * reload is crude and that is the point — if it reloads and stalls again it
-	 * keeps reloading, which is at least visibly broken rather than invisibly
-	 * frozen.
+	 * keeps reloading, up to the hourly cap, which is at least visibly broken
+	 * rather than invisibly frozen. Past the cap it stops and stays frozen: a
+	 * wall strobing white every minute is a worse failure than a still one, and
+	 * the nightly reboot is the honest escalation.
 	 *
 	 * Production only. `vite dev` serves maplibre unbundled, so a cold start can
 	 * legitimately take longer than BOOT_SEC, and a development machine that
 	 * reloads itself every minute is not a development machine. The banner still
 	 * shows in dev — the diagnosis is useful there, the reboot is not.
+	 *
+	 * BUDGETED, because a reload only helps a TRANSIENT fault and the two are
+	 * indistinguishable here. A Pi whose GPU cannot initialise at all comes back
+	 * from the reload into exactly this state, so uncapped it strobes the wall
+	 * white every sixty seconds until someone drives to the site. Three per hour,
+	 * then leave it frozen for the nightly reboot — v1's rule, which the rewrite
+	 * inherited the watchdog from and not the cap.
 	 */
 	$effect(() => {
-		if (stalled && frozenSec > RELOAD_SEC && import.meta.env.PROD) location.reload();
+		if (!stalled || frozenSec <= RELOAD_SEC || !import.meta.env.PROD) return;
+		if (tryConsumeReloadBudget()) location.reload();
 	});
 
 	/**
@@ -211,6 +222,65 @@
 	$effect(() => {
 		const poller = createThermalPoller(thermalSink);
 		return () => poller.stop();
+	});
+
+	/**
+	 * Shed on sustained low FPS too, not only on a thermal signal.
+	 *
+	 * The thermal path above reads `/api/internal/thermal`, which reads
+	 * `vcgencmd`. That is a Pi telling us it is HOT. A device can be perfectly
+	 * cool and still too slow — a weaker GPU, a 4K panel, a driver falling back
+	 * to software — and the thermal poller never fires, so nothing sheds and the
+	 * wall runs at 6 fps indefinitely.
+	 *
+	 * v1 hit exactly this and wrote `lifecycle-overlay-recovery.ts` for it,
+	 * whose docstring is worth quoting because it names the gap precisely: "The
+	 * liveness watchdog only catches fps == 0 (stall/death). A Pi 5 that can
+	 * handle Cesium at ~8 fps but drops to ~3 fps with the Three overlay is
+	 * never 'dead' — just silently degraded." The rewrite inherited the stall
+	 * watchdog and the thermal shed, and neither covers slow-but-alive.
+	 *
+	 * SUSTAINED, so a tile burst or a GC pause cannot trigger it: five
+	 * consecutive one-second samples under the threshold, which is the same
+	 * shape as v1's three 30-second checks scaled to the sampler that already
+	 * exists here. 20 fps because the window is a moving image — below that the
+	 * flight reads as a slideshow, and `performance` mode halves the cloud deck,
+	 * which is the single biggest GPU cost.
+	 *
+	 * Shares `shedFrom` with the thermal path deliberately. Two independent shed
+	 * mechanisms writing one knob is how you get the oscillation the comment
+	 * above describes; one piece of state means whichever fires first owns the
+	 * restore, and the other sees `shedFrom !== null` and leaves it alone.
+	 */
+	const FPS_SHED_THRESHOLD = 20;
+	const FPS_SHED_SAMPLES = 5;
+	let lowFpsRun = 0;
+
+	$effect(() => {
+		const id = setInterval(() => {
+			untrack(() => {
+				// Not before the loop has started: `fps` holds its constructor
+				// default of 60 until the first sample, and a pre-boot reading is
+				// not evidence of anything.
+				if (!display.hasAdvanced) return;
+
+				if (display.fps >= FPS_SHED_THRESHOLD) {
+					lowFpsRun = 0;
+					return;
+				}
+				if (++lowFpsRun < FPS_SHED_SAMPLES) return;
+
+				// Same guards as the thermal path: only shed from the default, and
+				// never twice.
+				if (shedFrom !== null || display.config.qualityMode !== 'balanced') return;
+				shedFrom = display.config.qualityMode;
+				display.config.qualityMode = 'performance';
+				console.warn(
+					`[perf] ${display.fps} fps for ${FPS_SHED_SAMPLES}s — dropped to performance quality`
+				);
+			});
+		}, 1000);
+		return () => clearInterval(id);
 	});
 </script>
 
