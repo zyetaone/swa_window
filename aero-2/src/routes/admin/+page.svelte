@@ -3,7 +3,7 @@
 	 * /admin — Fleet Management, Multi-Screen Remote Control Cockpit & Diagnostics.
 	 */
 	import { onMount } from 'svelte';
-	import { PRODUCT_NAME, PRODUCT_OWNER, ENGINEERED_BY, PRODUCT_STAGE } from '#lib/credits.js';
+	import { PRODUCT_NAME, PRODUCT_OWNER, ENGINEERED_BY, PRODUCT_STAGE, PRODUCT_PARTNERS } from '#lib/credits.js';
 	import { LOCATIONS } from '#lib/settings/locations.js';
 	import { SCENE_PRESETS } from '#lib/settings/presets.js';
 	import {
@@ -424,6 +424,7 @@
 
 	<footer class="footer">
 		<p>{PRODUCT_NAME} &copy; 2026 {PRODUCT_OWNER} · Engineered by {ENGINEERED_BY}.</p>
+		<p class="partners">In partnership with {PRODUCT_PARTNERS.join(' · ')}.</p>
 		<p><a href="/">← Return to Main Window Display</a> | <a href="/wiki">System Wiki →</a></p>
 	</footer>
 </main>
@@ -800,6 +801,11 @@
 	.footer a {
 		color: var(--accent-cyan);
 		text-decoration: none;
+	}
+	/* Quieter than the copyright line above it: an install partner is context,
+	   not a claim on the product. */
+	.footer .partners {
+		opacity: 0.72;
 	}
 	.footer a:hover {
 		text-decoration: underline;

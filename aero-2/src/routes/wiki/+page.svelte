@@ -4,6 +4,7 @@
 		PRODUCT_SHORT,
 		PRODUCT_OWNER,
 		ENGINEERED_BY,
+		PRODUCT_PARTNERS,
 		PRODUCT_STAGE,
 		PRODUCT_YEAR,
 		PRODUCT_CREDIT_BLURB
@@ -111,6 +112,7 @@
 
 	<footer class="footer">
 		<p>{PRODUCT_NAME} &copy; {PRODUCT_YEAR} {PRODUCT_OWNER}. Engineered by {ENGINEERED_BY}.</p>
+		<p class="partners">In partnership with {PRODUCT_PARTNERS.join(' · ')}.</p>
 		<p><a href="/">← Return to Kiosk Flight Display</a></p>
 	</footer>
 </main>
@@ -252,6 +254,11 @@
 	.footer a {
 		color: var(--accent-cyan);
 		text-decoration: none;
+	}
+	/* Quieter than the copyright line above it: an install partner is context,
+	   not a claim on the product. */
+	.footer .partners {
+		opacity: 0.72;
 	}
 	.footer a:hover {
 		text-decoration: underline;
